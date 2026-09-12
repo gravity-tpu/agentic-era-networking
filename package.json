@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "engines": {
-    "node": ">=20.12.0"
+    "node": "22.x"
   },
   "scripts": {
     "build": "tsc",
