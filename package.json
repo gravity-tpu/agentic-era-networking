@@ -1,0 +1,38 @@
+{
+  "name": "agentic-era-networking",
+  "version": "0.1.0",
+  "description": "Agentic Era Networking: Autonomous monitoring, DNS, Software Defined Networking (SDN), and telemetry",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "review": "node scripts/ai-reviewer.mjs",
+    "review:staged": "node scripts/ai-reviewer.mjs",
+    "review:last": "node scripts/ai-reviewer.mjs --last",
+    "review:head": "node scripts/ai-reviewer.mjs --head",
+    "setup-hooks": "bash scripts/install-hooks.sh"
+  },
+  "keywords": [
+    "networking",
+    "sdn",
+    "dns",
+    "monitoring",
+    "agentic-ai",
+    "determinism",
+    "telemetry"
+  ],
+  "author": "gravity-tpu",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  }
+}

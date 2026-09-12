@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build Outputs & Bundles
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Environment variables & secrets (CRITICAL: Never commit)
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.production
+
+# Institutional & Local Audit Logs
+.agents/.local-push.log
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing & Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+vitest.log
+*.tsbuildinfo

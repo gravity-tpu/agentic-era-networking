@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Agentic Era Networking — Senior Staff Overseer: Pre-Push Gate
+# ==============================================================================
+# Enforces determinism, type-safety, and alignment invariants before any push
+# reaches the remote repository.
+#
+# Install: npm run setup-hooks
+# Bypass (emergencies only, with documented justification):
+#   git push --no-verify
+# ==============================================================================
+
+set -euo pipefail
+
+RESET="\033[0m"
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+BOLD="\033[1m"
+CYAN="\033[0;36m"
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LOCAL_LOG="$REPO_ROOT/.agents/.local-push.log"
+TIMESTAMP="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo 'detached')"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'initial')"
+
+echo ""
+echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}${BOLD}║   Agentic Networking Senior Staff Overseer Pre-Push Gate ║${RESET}"
+echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
+echo -e "  Branch: ${BOLD}$BRANCH${RESET}  Commit: ${BOLD}$COMMIT${RESET}"
+echo ""
+
+# ── Read refs being pushed from stdin (standard Git pre-push protocol) ──
+FILES_TO_SCAN=()
+
+if [ ! -t 0 ]; then
+  while read -t 1 -r local_ref local_sha remote_ref remote_sha 2>/dev/null || [ -n "${local_ref:-}" ]; do
+    [ -z "${local_sha:-}" ] && break
+
+    if [[ "$local_sha" =~ ^0+$ ]]; then
+      continue
+    fi
+
+    if [[ "$remote_sha" =~ ^0+$ ]]; then
+      RANGE="$local_sha --not --remotes"
+    else
+      RANGE="$remote_sha..$local_sha"
+    fi
+
+    CHANGED=$(git diff --name-only $RANGE 2>/dev/null || git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+    if [ -n "$CHANGED" ]; then
+      while IFS= read -r f; do
+        [ -n "$f" ] && FILES_TO_SCAN+=("$f")
+      done <<< "$CHANGED"
+    fi
+  done
+fi
+
+if [ ${#FILES_TO_SCAN[@]} -eq 0 ]; then
+  CHANGED=$(git diff --name-only @{u}...HEAD 2>/dev/null || git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+  if [ -n "$CHANGED" ]; then
+    while IFS= read -r f; do
+      [ -n "$f" ] && FILES_TO_SCAN+=("$f")
+    done <<< "$CHANGED"
+  fi
+fi
+
+UNIQUE_FILES=()
+if [ ${#FILES_TO_SCAN[@]} -gt 0 ]; then
+  while IFS= read -r f; do
+    [ -n "$f" ] && UNIQUE_FILES+=("$f")
+  done < <(printf '%s\n' "${FILES_TO_SCAN[@]}" | sort -u)
+fi
+
+PASS_COUNT=0
+FAIL_COUNT=0
+FAILURES=()
+
+# ── Gate 1: TypeScript ─────────────────────────────────────
+echo -e "${BOLD}[Gate 1/3] TypeScript — Zero suppressions, zero errors${RESET}"
+if npm run check-types --silent 2>&1; then
+  echo -e "  ${GREEN}✓ Type check passed across all packages${RESET}"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo -e "  ${RED}✗ Type check FAILED${RESET}"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  FAILURES+=("TypeScript check-types failed")
+fi
+echo ""
+
+# ── Gate 2: Invariant Test Suite ──────────────────────────
+echo -e "${BOLD}[Gate 2/3] Test Suite — All systems & invariants must hold${RESET}"
+if npm run test --silent 2>&1; then
+  echo -e "  ${GREEN}✓ All invariant and unit test suites passed${RESET}"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo -e "  ${RED}✗ Tests FAILED${RESET}"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  FAILURES+=("Invariant test suite failed")
+fi
+echo ""
+
+# ── Gate 3: Determinism & Anti-Pattern Scan ───────────────
+echo -e "${BOLD}[Gate 3/3] Determinism — Scanning pushed files for banned patterns${RESET}"
+
+SUSPICIOUS_FINDINGS=""
+UNIQUE_COUNT=${#UNIQUE_FILES[@]}
+
+if [ "$UNIQUE_COUNT" -gt 0 ]; then
+  for file in "${UNIQUE_FILES[@]}"; do
+    [ -z "$file" ] && continue
+    [ -f "$REPO_ROOT/$file" ] || continue
+    case "$file" in
+      *.ts|*.js|*.mjs)
+        # Check for float arithmetic in packet/bandwidth/counter math
+        FLOAT_MATCHES=$(grep -nE "(\bparseFloat\([^)]*(packet|byte|bandwidth|counter|rate|bps|pps|flow)|\b(packet|byte|bandwidth|counter|rate|bps|pps)[A-Za-z0-9_]*\s*(\*|\/)\s*0\.[0-9]+)" "$REPO_ROOT/$file" 2>/dev/null || true)
+        if [ -n "$FLOAT_MATCHES" ]; then
+          SUSPICIOUS_FINDINGS+="\n  ${BOLD}$file (Potential float arithmetic on packet/byte counters):${RESET}\n"
+          while IFS= read -r m; do
+            SUSPICIOUS_FINDINGS+="    $m\n"
+          done <<< "$FLOAT_MATCHES"
+        fi
+
+        # Check for unvetted @ts-ignore
+        TS_IGNORE=$(grep -nE "@ts-ignore" "$REPO_ROOT/$file" 2>/dev/null || true)
+        if [ -n "$TS_IGNORE" ]; then
+          SUSPICIOUS_FINDINGS+="\n  ${BOLD}$file (Forbidden @ts-ignore suppression):${RESET}\n"
+          while IFS= read -r m; do
+            SUSPICIOUS_FINDINGS+="    $m\n"
+          done <<< "$TS_IGNORE"
+        fi
+        ;;
+    esac
+  done
+fi
+
+if [ -z "$SUSPICIOUS_FINDINGS" ]; then
+  echo -e "  ${GREEN}✓ No banned anti-patterns detected in pushed files ($UNIQUE_COUNT inspected)${RESET}"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo -e "  ${YELLOW}⚠ Determinism or suppression warnings found:${RESET}"
+  echo -e "$SUSPICIOUS_FINDINGS"
+  PASS_COUNT=$((PASS_COUNT + 1))
+fi
+echo ""
+
+# ── Summary ───────────────────────────────────────────────
+echo -e "${BOLD}Results: ${GREEN}$PASS_COUNT passed${RESET} ${BOLD}/ ${RED}$FAIL_COUNT failed${RESET}"
+echo ""
+
+mkdir -p "$(dirname "$LOCAL_LOG")"
+FAIL_STR="${FAILURES[*]:-none}"
+echo "[$TIMESTAMP] branch=$BRANCH commit=$COMMIT passed=$PASS_COUNT failed=$FAIL_COUNT failures='$FAIL_STR'" >> "$LOCAL_LOG"
+
+if [ "$FAIL_COUNT" -gt 0 ]; then
+  echo -e "${RED}${BOLD}✗ Pre-push gate BLOCKED${RESET}"
+  echo -e "  Failures: $FAIL_STR"
+  echo ""
+  echo -e "  Fix the above failures before pushing."
+  echo -e "  Emergency bypass (audited): ${YELLOW}git push --no-verify${RESET}"
+  exit 1
+fi
+
+echo -e "${GREEN}${BOLD}✓ All gates passed. Push proceeding.${RESET}"
+echo ""

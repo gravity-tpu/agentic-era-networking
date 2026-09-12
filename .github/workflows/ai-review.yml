@@ -1,0 +1,86 @@
+name: AI Code Review & Deploy
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+      - 'scratch/**'
+      - '.env*'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+      - 'scratch/**'
+      - '.env*'
+
+jobs:
+  review:
+    name: Typecheck, Invariant Tests & AI Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Verify TypeScript Invariants (Zero Suppressions)
+        run: npm run check-types
+
+      - name: Run Invariant & Unit Test Suite
+        run: npm run test
+
+      - name: Run Senior Staff AI Code Reviewer
+        timeout-minutes: 8
+        run: npm run review:last
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_BEFORE: ${{ github.event.before }}
+
+  deploy:
+    name: Deploy to Vercel
+    needs: review
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy to Vercel (Self-Skipping if Unconfigured)
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ vars.VERCEL_PROJECT_ID }}" ]; then
+            echo "::notice::VERCEL_TOKEN or VERCEL_PROJECT_ID secret/var not set — skipping deployment. Configure them in repository settings to enable production auto-deploy."
+            exit 0
+          fi
+          npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
