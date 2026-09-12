@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentic Era Networking — Autonomous & Verifiable Systems</title>
+  <meta name="description" content="Autonomous, verifiable networking infrastructure for the agentic era: telemetry, DNS resolution, and Software Defined Networking governed by the Senior Staff Council.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(14, 18, 28, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(0, 229, 255, 0.35);
+      --text: #f0f4fc;
+      --text-muted: #8a99ad;
+      --cyan: #00e5ff;
+      --cyan-glow: rgba(0, 229, 255, 0.2);
+      --emerald: #00e676;
+      --emerald-glow: rgba(0, 230, 118, 0.2);
+      --purple: #7c4dff;
+      --purple-glow: rgba(124, 77, 255, 0.2);
+      --rose: #ff1744;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 229, 255, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(124, 77, 255, 0.08) 0%, transparent 40%),
+        linear-gradient(to bottom, rgba(7, 9, 14, 0.8), rgba(7, 9, 14, 1));
+      background-attachment: fixed;
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    header {
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(7, 9, 14, 0.7);
+    }
+
+    .header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      background-color: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.7; }
+    }
+
+    .logo-text {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge-org {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      color: var(--cyan);
+      border-radius: 4px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--cyan); }
+
+    .btn-gh {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.9rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-gh:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px var(--cyan-glow);
+    }
+
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 3.5rem 2rem;
+    }
+
+    .hero {
+      text-align: center;
+      max-width: 840px;
+      margin: 0 auto 4rem auto;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      padding: 0.35rem 0.85rem;
+      background: rgba(124, 77, 255, 0.12);
+      border: 1px solid rgba(124, 77, 255, 0.3);
+      border-radius: 20px;
+      color: #b388ff;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.25rem;
+      background: linear-gradient(135deg, #ffffff 40%, #80deea 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .lead {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .section-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .section-title::before {
+      content: "";
+      width: 4px;
+      height: 20px;
+      background: var(--cyan);
+      border-radius: 2px;
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    /* Council Grid */
+    .council-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 4rem;
+    }
+
+    .council-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .council-card:hover {
+      border-color: var(--card-border-hover);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px var(--cyan-glow);
+    }
+
+    .council-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .council-card:hover::before { opacity: 1; }
+
+    .council-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.25rem;
+    }
+
+    .council-domain {
+      font-size: 0.78rem;
+      color: var(--cyan);
+      font-family: var(--font-mono);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .council-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Interactive Live Test Console */
+    .interactive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+
+    .widget-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .widget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .widget-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .status-tag.active {
+      background: rgba(0, 230, 118, 0.15);
+      color: var(--emerald);
+      border: 1px solid rgba(0, 230, 118, 0.3);
+    }
+
+    .status-tag.alert {
+      background: rgba(255, 23, 68, 0.15);
+      color: var(--rose);
+      border: 1px solid rgba(255, 23, 68, 0.3);
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.9rem;
+    }
+
+    .metric-label { color: var(--text-muted); }
+    .metric-val { font-family: var(--font-mono); font-weight: 600; color: #fff; }
+
+    .btn-action {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.75rem;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      color: var(--cyan);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-action:hover {
+      background: var(--cyan);
+      color: #000;
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .console-box {
+      margin-top: 1rem;
+      background: #030407;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      padding: 0.85rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: #b0bec5;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .console-box .success { color: var(--emerald); }
+    .console-box .danger { color: var(--rose); }
+
+    /* Latency Hierarchy Table */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      margin-bottom: 4rem;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    td.code { font-family: var(--font-mono); color: var(--cyan); }
+
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 2.5rem 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    footer a { color: var(--cyan); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo-group">
+        <div class="pulse-dot"></div>
+        <span class="logo-text">AGENTIC NETWORKING</span>
+        <span class="badge-org">gravity-tpu</span>
+      </div>
+      <div class="nav-links">
+        <a href="#council">Council</a>
+        <a href="#playground">Invariants</a>
+        <a href="#latency">Latency Budgets</a>
+        <a class="btn-gh" href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">
+          <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-badge">Autonomous · Deterministic · Fail-Closed</div>
+      <h1>Agentic Era Networking</h1>
+      <p class="lead">
+        Next-generation networking infrastructure for autonomous agents. Telemetry, DNS resolution engines, and Software Defined Networking governed by formal mathematical invariants.
+      </p>
+    </section>
+
+    <!-- Council Section -->
+    <h2 class="section-title" id="council">The Senior Staff Council</h2>
+    <div class="council-grid">
+      <div class="council-card">
+        <div class="council-name">Jeff Dean</div>
+        <div class="council-domain">Scale & Latency Budgets</div>
+        <div class="council-desc">
+          Nanosecond-to-WAN latency hierarchy, BigInt packet counter determinism, and zero synchronous blocking in packet loops.
+        </div>
+      </div>
+
+      <div class="council-card">
+        <div class="council-name">Sanjay Ghemawat</div>
+        <div class="council-domain">Radical Simplicity</div>
+        <div class="council-desc">
+          The Ghemawat Razor: Flat cache-aligned state models, zero bloat abstractions, and fail-closed isolation by construction.
+        </div>
+      </div>
+
+      <div class="council-card">
+        <div class="council-name">Quoc Le</div>
+        <div class="council-domain">Adaptive Control</div>
+        <div class="council-desc">
+          Banning brittle handcoded magic constants. Self-tuning flow window controllers that adapt continuously to empirical traffic.
+        </div>
+      </div>
+
+      <div class="council-card">
+        <div class="council-name">Oriol Vinyals</div>
+        <div class="council-domain">Graph Routing</div>
+        <div class="council-desc">
+          Combinatorial graph sequences for SDN flow tables. Multi-agent coordination with anti-flapping hysteresis damping.
+        </div>
+      </div>
+
+      <div class="council-card">
+        <div class="council-name">Demis Hassabis</div>
+        <div class="council-domain">Verification Asymmetry</div>
+        <div class="council-desc">
+          The AlphaProof Paradigm: Probabilistic AI proposals are cheap; deterministic symbolic DAG verifiers formally prove loop-free routing.
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Invariant Playground -->
+    <h2 class="section-title" id="playground">Live Invariant Verification Playground</h2>
+    <div class="interactive-grid">
+      
+      <!-- Widget 1: Telemetry Counter -->
+      <div class="widget-card">
+        <div class="widget-header">
+          <div class="widget-title">Dean & Ghemawat Telemetry</div>
+          <span class="status-tag active" id="telemetry-status">LIVE MONITOR</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Monotonic integer packet accounting. Banish IEEE-754 floats.
+        </p>
+        <div class="metric-row">
+          <span class="metric-label">Ingress Packets (BigInt)</span>
+          <span class="metric-val" id="val-packets">10,482,920</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Ingress Bytes (BigInt)</span>
+          <span class="metric-val" id="val-bytes">15,871,140,880</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Monotonic Timestamp</span>
+          <span class="metric-val code" id="val-clock">842,910,241 ns</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Throughput (bytes/sec)</span>
+          <span class="metric-val" id="val-rate">982,410,000 B/s</span>
+        </div>
+        <button class="btn-action" id="btn-burst">⚡ Ingest 100k Packet Burst</button>
+      </div>
+
+      <!-- Widget 2: Neuro-Symbolic Loop Verifier -->
+      <div class="widget-card">
+        <div class="widget-header">
+          <div class="widget-title">Hassabis & Vinyals Symbolic Verifier</div>
+          <span class="status-tag active" id="dag-status">DAG LOOP-FREE</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Autonomous SDN routing proposals gated by formal cycle detection.
+        </p>
+        <div class="metric-row">
+          <span class="metric-label">Active Hops</span>
+          <span class="metric-val" id="val-hops">edge-1 → spine-a → core-1</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Cycle Invariant</span>
+          <span class="metric-val" style="color: var(--emerald);">Acyclic Verified</span>
+        </div>
+        <button class="btn-action" id="btn-inject-loop" style="border-color: rgba(255,23,68,0.4); color: var(--rose);">
+          Inject Autonomous Agent Loop (core-1 → edge-1)
+        </button>
+        <div class="console-box" id="dag-log">
+          <span class="success">✓ Symbolic Verifier: Verified 3 hops as strictly loop-free DAG.</span>
+        </div>
+      </div>
+
+      <!-- Widget 3: Fail-Closed DNS Resolver -->
+      <div class="widget-card">
+        <div class="widget-header">
+          <div class="widget-title">Fail-Closed DNS Engine</div>
+          <span class="status-tag active">DEFAULT DROP</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Unrecognized hostnames fail closed immediately without plaintext leak.
+        </p>
+        <div class="metric-row">
+          <span class="metric-label">Authoritative Zone</span>
+          <span class="metric-val">dns.cluster.internal</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Fail-Closed Default</span>
+          <span class="metric-val" style="color: var(--cyan);">NXDOMAIN Exception</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
+          <button class="btn-action" id="btn-resolve-valid" style="margin-top: 0;">Resolve Valid</button>
+          <button class="btn-action" id="btn-resolve-invalid" style="margin-top: 0; border-color: rgba(255,23,68,0.4); color: var(--rose);">Resolve Unknown</button>
+        </div>
+        <div class="console-box" id="dns-log">
+          <span class="success">✓ DNS Engine ready (Fail-Closed Default Active).</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Latency Numbers Hierarchy -->
+    <h2 class="section-title" id="latency">The Dean Latency Numbers</h2>
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Operation</th>
+            <th>Latency</th>
+            <th>Engineering Implication</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>L1 cache reference</td>
+            <td class="code">0.5 ns</td>
+            <td>Keep packet headers in contiguous flat structs.</td>
+          </tr>
+          <tr>
+            <td>Branch mispredict</td>
+            <td class="code">5.0 ns</td>
+            <td>Avoid polymorphic dispatch on critical packet paths.</td>
+          </tr>
+          <tr>
+            <td>Main memory reference</td>
+            <td class="code">100.0 ns</td>
+            <td>Zero heap allocations in packet dispatch loops.</td>
+          </tr>
+          <tr>
+            <td>1K bytes over 10 Gbps network</td>
+            <td class="code">1,000.0 ns (1 µs)</td>
+            <td>Line-rate processing target for agentic flow controllers.</td>
+          </tr>
+          <tr>
+            <td>Datacenter roundtrip (LAN)</td>
+            <td class="code">500,000.0 ns (0.5 ms)</td>
+            <td>East-West SDN state convergence budget.</td>
+          </tr>
+          <tr>
+            <td>WAN cross-continent roundtrip</td>
+            <td class="code">150,000,000.0 ns (150 ms)</td>
+            <td>Asynchronous peering with bounded retry backoff.</td>
+          </tr>
+          <tr>
+            <td>LLM Time-To-First-Token (TTFT)</td>
+            <td class="code">1,000,000,000.0 ns (1.0 s)</td>
+            <td>Generative agents must operate out-of-band from data plane.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      Governed by the Senior Staff Council · Hosted on <a href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">GitHub</a> · Built for the Agentic Era
+    </p>
+  </footer>
+
+  <script>
+    // Live Telemetry Simulation
+    let packets = 10482920n;
+    let bytes = 15871140880n;
+
+    document.getElementById('btn-burst').addEventListener('click', () => {
+      packets += 100000n;
+      bytes += 151400000n;
+      document.getElementById('val-packets').innerText = packets.toLocaleString();
+      document.getElementById('val-bytes').innerText = bytes.toLocaleString();
+      document.getElementById('val-clock').innerText = `${Date.now() * 1000000} ns`;
+    });
+
+    // Symbolic DAG Verifier
+    let loopInjected = false;
+    const dagLog = document.getElementById('dag-log');
+    const dagStatus = document.getElementById('dag-status');
+    const btnInject = document.getElementById('btn-inject-loop');
+
+    btnInject.addEventListener('click', () => {
+      if (!loopInjected) {
+        loopInjected = true;
+        dagStatus.innerText = 'CYCLE REJECTED';
+        dagStatus.className = 'status-tag alert';
+        btnInject.innerText = 'Reset Loop';
+        btnInject.style.color = 'var(--cyan)';
+        btnInject.style.borderColor = 'var(--cyan)';
+        dagLog.innerHTML = '<span class="danger">✗ RoutingLoopDetectedError: Symbolic Verifier Rejected cycle: [edge-1 → spine-a → core-1 → edge-1]. Route quarantined.</span>';
+      } else {
+        loopInjected = false;
+        dagStatus.innerText = 'DAG LOOP-FREE';
+        dagStatus.className = 'status-tag active';
+        btnInject.innerText = 'Inject Autonomous Agent Loop (core-1 → edge-1)';
+        btnInject.style.color = 'var(--rose)';
+        btnInject.style.borderColor = 'rgba(255,23,68,0.4)';
+        dagLog.innerHTML = '<span class="success">✓ Symbolic Verifier: Verified 3 hops as strictly loop-free DAG.</span>';
+      }
+    });
+
+    // DNS Resolution Simulator
+    const dnsLog = document.getElementById('dns-log');
+    document.getElementById('btn-resolve-valid').addEventListener('click', () => {
+      dnsLog.innerHTML = '<span class="success">✓ [A] dns.cluster.internal → 192.168.1.53 (TTL: 300s, Valid)</span>';
+    });
+
+    document.getElementById('btn-resolve-invalid').addEventListener('click', () => {
+      dnsLog.innerHTML = '<span class="danger">✗ DnsResolutionError: NXDOMAIN (Name does not exist in authoritative zone). Default Drop Triggered.</span>';
+    });
+  </script>
+</body>
+</html>
