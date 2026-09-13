@@ -2,20 +2,20 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Only the current active release line on `main` receives security patches and automated dependency audits.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 0.1.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Security and determinism are paramount to the Senior Staff Council invariants governing this repository.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+If you discover a security vulnerability, please do **not** open a public issue.
+
+Instead, report vulnerabilities via:
+1. **GitHub Private Vulnerability Reporting**: Submit an advisory directly via the [Security Advisories tab](https://github.com/gravity-tpu/agentic-era-networking/security/advisories/new).
+2. **Direct Contact**: Email `sekyereandy@gmail.com` with full reproduction steps, impacted components, and proof-of-concept payloads.
+
+All valid security reports will receive an initial response within 24 hours and patches will be prioritized through automated verification gates.
