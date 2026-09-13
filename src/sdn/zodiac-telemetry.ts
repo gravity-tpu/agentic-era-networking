@@ -1,0 +1,257 @@
+/**
+ * zodiac-telemetry.ts
+ * Comprehensive Telemetry Snapshot & Parser for Zodiac FX Switch
+ *
+ * Council Invariants Enforced:
+ * - Dean & Ghemawat: 64-bit integer units (BigInt) for all packet and byte counters.
+ * - Anti-Shortcut Law: Zero field suppression; parses all hardware-exported counters.
+ */
+
+export interface ZodiacPortTelemetry {
+  readonly port: number;
+  readonly name: string;
+  readonly status: 'UP' | 'DOWN';
+  readonly vlanType: string;
+  readonly vlanId: number;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxDropped: bigint;
+  readonly txDropped: bigint;
+  readonly rxCrcErrors: bigint;
+  readonly physicalLocation: string;
+}
+
+export interface ZodiacSystemTelemetry {
+  readonly deviceName: string;
+  readonly macAddress: string;
+  readonly ipAddress: string;
+  readonly netmask: string;
+  readonly defaultGateway: string;
+  readonly openFlowController: string;
+  readonly openFlowPort: number;
+  readonly failstate: string;
+  readonly cpuTemperatureC: number;
+  readonly cpuUid: string;
+  readonly firmwareVersion: string;
+  readonly uptime: string;
+  readonly timestampNs: bigint;
+}
+
+export interface ZodiacOpenFlowTelemetry {
+  readonly status: 'Connected' | 'Disconnected' | 'Handshake';
+  readonly version: string;
+  readonly datapathId: string;
+  readonly activeTables: number;
+  readonly activeFlows: number;
+  readonly tableLookups: bigint;
+  readonly tableMatches: bigint;
+  readonly lastHeartbeatLatencyNs: bigint;
+}
+
+export interface ZodiacFullTelemetrySnapshot {
+  readonly system: ZodiacSystemTelemetry;
+  readonly ports: ZodiacPortTelemetry[];
+  readonly openflow: ZodiacOpenFlowTelemetry;
+  readonly source: 'live_hardware' | 'cloud_snapshot';
+}
+
+/**
+ * Parses raw HTML exported by the Zodiac FX /d_ports.htm into structured port telemetry.
+ */
+export function parseZodiacPortsHtml(html: string): ZodiacPortTelemetry[] {
+  const ports: ZodiacPortTelemetry[] = [];
+  
+  // Extract rows from table
+  const statusMatch = html.match(/Status:<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td>/i);
+  const typeMatch = html.match(/VLAN Type:<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td>/i);
+  const rxBytesMatch = html.match(/RX Bytes:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+  const txBytesMatch = html.match(/TX Bytes:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+  const rxPacketsMatch = html.match(/RX Packets:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+  const txPacketsMatch = html.match(/TX Packets:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+  const rxDropMatch = html.match(/RX Dropped Packets:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+  const txDropMatch = html.match(/TX Dropped Packets:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+  const crcMatch = html.match(/RX CRC Errors:<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td><td>(\d+)<\/td>/i);
+
+  // Extract selected VLAN IDs
+  const vlanIds = [100, 100, 100, 200];
+  const vlanIdMatches = Array.from(html.matchAll(/<option selected value="(\d+)">/g));
+  if (vlanIdMatches.length >= 4) {
+    for (let i = 0; i < 4; i++) {
+      vlanIds[i] = parseInt(vlanIdMatches[i]![1]!, 10);
+    }
+  }
+
+  const locations = [
+    'Opposite Micro-USB connector (Leftmost)',
+    'OpenFlow Data Plane Port 2',
+    'OpenFlow Data Plane Port 3',
+    'SDN Controller / Native Port (Rightmost)',
+  ];
+
+  for (let i = 0; i < 4; i++) {
+    const idx = i + 1;
+    ports.push({
+      port: idx,
+      name: `Port ${idx}`,
+      status: (statusMatch?.[idx]?.trim().toUpperCase() === 'UP' ? 'UP' : 'DOWN'),
+      vlanType: typeMatch?.[idx]?.trim() ?? (idx === 4 ? 'Native' : 'OpenFlow'),
+      vlanId: vlanIds[i] ?? (idx === 4 ? 200 : 100),
+      rxBytes: BigInt(rxBytesMatch?.[idx] ?? '0'),
+      txBytes: BigInt(txBytesMatch?.[idx] ?? '0'),
+      rxPackets: BigInt(rxPacketsMatch?.[idx] ?? '0'),
+      txPackets: BigInt(txPacketsMatch?.[idx] ?? '0'),
+      rxDropped: BigInt(rxDropMatch?.[idx] ?? '0'),
+      txDropped: BigInt(txDropMatch?.[idx] ?? '0'),
+      rxCrcErrors: BigInt(crcMatch?.[idx] ?? '0'),
+      physicalLocation: locations[i]!,
+    });
+  }
+
+  return ports;
+}
+
+/**
+ * Creates a default/baseline telemetry snapshot matching physical Zodiac FX defaults.
+ */
+export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
+  return {
+    source: 'cloud_snapshot',
+    system: {
+      deviceName: 'Zodiac_FX',
+      macAddress: '70:B3:D5:87:40:BC',
+      ipAddress: '10.0.1.99',
+      netmask: '255.255.255.0',
+      defaultGateway: '10.0.1.1',
+      openFlowController: '10.0.1.8',
+      openFlowPort: 6633,
+      failstate: 'Secure',
+      cpuTemperatureC: 31,
+      cpuUid: '1396191488-826951736-875574576-892547120',
+      firmwareVersion: '0.86',
+      uptime: '01:24:12',
+      timestampNs: process.hrtime.bigint(),
+    },
+    ports: [
+      {
+        port: 1,
+        name: 'Port 1',
+        status: 'DOWN',
+        vlanType: 'OpenFlow',
+        vlanId: 100,
+        rxBytes: 42104n,
+        txBytes: 0n,
+        rxPackets: 336n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'Opposite Micro-USB connector (Leftmost)',
+      },
+      {
+        port: 2,
+        name: 'Port 2',
+        status: 'DOWN',
+        vlanType: 'OpenFlow',
+        vlanId: 100,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'OpenFlow Data Plane Port 2',
+      },
+      {
+        port: 3,
+        name: 'Port 3',
+        status: 'DOWN',
+        vlanType: 'OpenFlow',
+        vlanId: 100,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'OpenFlow Data Plane Port 3',
+      },
+      {
+        port: 4,
+        name: 'Port 4',
+        status: 'UP',
+        vlanType: 'Native',
+        vlanId: 200,
+        rxBytes: 259843n,
+        txBytes: 169427n,
+        rxPackets: 1982n,
+        txPackets: 1540n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'SDN Controller / Native Port (Rightmost)',
+      },
+    ],
+    openflow: {
+      status: 'Connected',
+      version: '1.3',
+      datapathId: '0x70b3d58740bc',
+      activeTables: 10,
+      activeFlows: 0,
+      tableLookups: 0n,
+      tableMatches: 0n,
+      lastHeartbeatLatencyNs: 495625n, // 0.496 ms
+    },
+  };
+}
+
+/**
+ * Deterministic BigInt byte counter formatting using integer division and modulo math.
+ * Banishes IEEE-754 floating-point arithmetic.
+ */
+export function formatBytesDeterministic(bytes: bigint): string {
+  const ONE_KB = 1024n;
+  const ONE_MB = 1048576n;       // 1024 * 1024
+  const ONE_GB = 1073741824n;    // 1024 * 1024 * 1024
+
+  if (bytes < ONE_KB) {
+    return `${bytes} B`;
+  }
+  if (bytes < ONE_MB) {
+    const kb = bytes / ONE_KB;
+    const frac = ((bytes % ONE_KB) * 100n) / ONE_KB;
+    const fracStr = frac < 10n ? `0${frac}` : `${frac}`;
+    return `${kb}.${fracStr} KB`;
+  }
+  if (bytes < ONE_GB) {
+    const mb = bytes / ONE_MB;
+    const frac = ((bytes % ONE_MB) * 100n) / ONE_MB;
+    const fracStr = frac < 10n ? `0${frac}` : `${frac}`;
+    return `${mb}.${fracStr} MB`;
+  }
+  const gb = bytes / ONE_GB;
+  const frac = ((bytes % ONE_GB) * 1000n) / ONE_GB;
+  let fracStr = `${frac}`;
+  if (frac < 10n) fracStr = `00${frac}`;
+  else if (frac < 100n) fracStr = `0${frac}`;
+  return `${gb}.${fracStr} GB`;
+}
+
+/**
+ * Deterministic BigInt nanosecond latency formatting using integer division and modulo math.
+ */
+export function formatLatencyNsDeterministic(ns: bigint): string {
+  if (ns === 0n) return '< 500 µs';
+  const micros = ns / 1000n;
+  if (micros < 1000n) {
+    const frac = (ns % 1000n) / 100n;
+    return `${micros}.${frac} µs`;
+  }
+  const millis = micros / 1000n;
+  const frac = (micros % 1000n) / 10n;
+  const fracStr = frac < 10n ? `0${frac}` : `${frac}`;
+  return `${millis}.${fracStr} ms`;
+}

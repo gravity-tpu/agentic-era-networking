@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agentic Era Networking — Autonomous & Verifiable Systems</title>
-  <meta name="description" content="Autonomous, verifiable networking infrastructure for the agentic era: telemetry, DNS resolution, and Software Defined Networking governed by the Senior Staff Council.">
+  <title>Agentic Era Networking — Zodiac FX Hardware Monitor & SDN Architecture</title>
+  <meta name="description" content="Autonomous, verifiable networking infrastructure for the agentic era: physical Zodiac FX switch telemetry, OpenFlow 1.3 control plane, and formal invariant verifiers.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="zodiac.css">
   <style>
     :root {
       --bg: #07090e;
@@ -140,13 +141,13 @@
     main {
       max-width: 1280px;
       margin: 0 auto;
-      padding: 3.5rem 2rem;
+      padding: 2.5rem 2rem 4rem 2rem;
     }
 
     .hero {
       text-align: center;
       max-width: 840px;
-      margin: 0 auto 4rem auto;
+      margin: 0 auto 2.5rem auto;
     }
 
     .hero-badge {
@@ -160,31 +161,31 @@
       border: 1px solid rgba(124, 77, 255, 0.3);
       border-radius: 20px;
       color: #b388ff;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
     h1 {
-      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      font-size: clamp(2.2rem, 4.5vw, 3.2rem);
       font-weight: 800;
       line-height: 1.15;
       letter-spacing: -0.03em;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
       background: linear-gradient(135deg, #ffffff 40%, #80deea 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     .lead {
-      font-size: 1.15rem;
+      font-size: 1.05rem;
       color: var(--text-muted);
-      line-height: 1.7;
+      line-height: 1.6;
     }
 
     .section-title {
-      font-size: 1.4rem;
+      font-size: 1.35rem;
       font-weight: 700;
       letter-spacing: -0.02em;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
       display: flex;
       align-items: center;
       gap: 0.75rem;
@@ -193,7 +194,7 @@
     .section-title::before {
       content: "";
       width: 4px;
-      height: 20px;
+      height: 18px;
       background: var(--cyan);
       border-radius: 2px;
       box-shadow: 0 0 10px var(--cyan);
@@ -202,16 +203,16 @@
     /* Council Grid */
     .council-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 1.25rem;
-      margin-bottom: 4rem;
+      margin-bottom: 3.5rem;
     }
 
     .council-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 12px;
-      padding: 1.5rem;
+      padding: 1.4rem;
       transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       backdrop-filter: blur(12px);
       position: relative;
@@ -237,23 +238,23 @@
     .council-card:hover::before { opacity: 1; }
 
     .council-name {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
       color: #fff;
       margin-bottom: 0.25rem;
     }
 
     .council-domain {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       color: var(--cyan);
       font-family: var(--font-mono);
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
     .council-desc {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
       line-height: 1.5;
     }
@@ -261,16 +262,16 @@
     /* Interactive Live Test Console */
     .interactive-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 1.5rem;
-      margin-bottom: 4rem;
+      margin-bottom: 3.5rem;
     }
 
     .widget-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 12px;
-      padding: 1.75rem;
+      padding: 1.5rem;
       backdrop-filter: blur(12px);
     }
 
@@ -278,11 +279,11 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
     }
 
     .widget-title {
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -312,9 +313,9 @@
     .metric-row {
       display: flex;
       justify-content: space-between;
-      padding: 0.6rem 0;
+      padding: 0.5rem 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
 
     .metric-label { color: var(--text-muted); }
@@ -323,12 +324,12 @@
     .btn-action {
       margin-top: 1.25rem;
       width: 100%;
-      padding: 0.75rem;
+      padding: 0.7rem;
       background: rgba(0, 229, 255, 0.08);
       border: 1px solid rgba(0, 229, 255, 0.3);
       color: var(--cyan);
       font-family: var(--font-mono);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 600;
       border-radius: 6px;
       cursor: pointer;
@@ -342,15 +343,15 @@
     }
 
     .console-box {
-      margin-top: 1rem;
+      margin-top: 0.85rem;
       background: #030407;
       border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: 6px;
-      padding: 0.85rem;
+      padding: 0.75rem;
       font-family: var(--font-mono);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: #b0bec5;
-      max-height: 120px;
+      max-height: 110px;
       overflow-y: auto;
     }
 
@@ -362,15 +363,15 @@
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 12px;
-      padding: 1.75rem;
-      margin-bottom: 4rem;
+      padding: 1.5rem;
+      margin-bottom: 3.5rem;
       overflow-x: auto;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
 
     th {
@@ -378,13 +379,13 @@
       padding: 0.75rem 1rem;
       color: var(--text-muted);
       font-family: var(--font-mono);
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       text-transform: uppercase;
       border-bottom: 1px solid var(--card-border);
     }
 
     td {
-      padding: 0.9rem 1rem;
+      padding: 0.85rem 1rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
 
@@ -392,13 +393,53 @@
 
     footer {
       border-top: 1px solid var(--card-border);
-      padding: 2.5rem 2rem;
+      padding: 2rem;
       text-align: center;
       color: var(--text-muted);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
     }
 
     footer a { color: var(--cyan); text-decoration: none; }
+
+    .photo-modal-view {
+      display: none;
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 1rem;
+      gap: 1rem;
+    }
+
+    .photo-modal-view.active {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .photo-modal-view img {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--z-card-border);
+    }
+
+    .photo-toggle-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--z-card-border);
+      color: var(--z-muted);
+      font-family: var(--z-mono);
+      font-size: 0.75rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .photo-toggle-btn:hover {
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--z-cyan);
+      border-color: var(--z-cyan);
+    }
   </style>
 </head>
 <body>
@@ -411,9 +452,8 @@
         <span class="badge-org">gravity-tpu</span>
       </div>
       <div class="nav-links">
-        <a href="#council">Council</a>
-        <a href="#playground">Invariants</a>
-        <a href="#latency">Latency Budgets</a>
+        <a href="#tab-hardware" id="nav-hw-link">Hardware Monitor</a>
+        <a href="#tab-council" id="nav-council-link">Council Architecture</a>
         <a class="btn-gh" href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">
           <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           GitHub
@@ -424,202 +464,511 @@
 
   <main>
     <section class="hero">
-      <div class="hero-badge">Autonomous · Deterministic · Fail-Closed</div>
+      <div class="hero-badge">Phase 0 · Zodiac FX Hardware Live Telemetry · OpenFlow 1.3</div>
       <h1>Agentic Era Networking</h1>
       <p class="lead">
-        Next-generation networking infrastructure for autonomous agents. Telemetry, DNS resolution engines, and Software Defined Networking governed by formal mathematical invariants.
+        Deterministic hardware monitoring and software-defined networking for autonomous AI agents. Real-time telemetry streamed directly from Northbound Networks Zodiac FX.
       </p>
     </section>
 
-    <!-- Council Section -->
-    <h2 class="section-title" id="council">The Senior Staff Council</h2>
-    <div class="council-grid">
-      <div class="council-card">
-        <div class="council-name">Jeff Dean</div>
-        <div class="council-domain">Scale & Latency Budgets</div>
-        <div class="council-desc">
-          Nanosecond-to-WAN latency hierarchy, BigInt packet counter determinism, and zero synchronous blocking in packet loops.
-        </div>
-      </div>
-
-      <div class="council-card">
-        <div class="council-name">Sanjay Ghemawat</div>
-        <div class="council-domain">Radical Simplicity</div>
-        <div class="council-desc">
-          The Ghemawat Razor: Flat cache-aligned state models, zero bloat abstractions, and fail-closed isolation by construction.
-        </div>
-      </div>
-
-      <div class="council-card">
-        <div class="council-name">Quoc Le</div>
-        <div class="council-domain">Adaptive Control</div>
-        <div class="council-desc">
-          Banning brittle handcoded magic constants. Self-tuning flow window controllers that adapt continuously to empirical traffic.
-        </div>
-      </div>
-
-      <div class="council-card">
-        <div class="council-name">Oriol Vinyals</div>
-        <div class="council-domain">Graph Routing</div>
-        <div class="council-desc">
-          Combinatorial graph sequences for SDN flow tables. Multi-agent coordination with anti-flapping hysteresis damping.
-        </div>
-      </div>
-
-      <div class="council-card">
-        <div class="council-name">Demis Hassabis</div>
-        <div class="council-domain">Verification Asymmetry</div>
-        <div class="council-desc">
-          The AlphaProof Paradigm: Probabilistic AI proposals are cheap; deterministic symbolic DAG verifiers formally prove loop-free routing.
-        </div>
-      </div>
+    <!-- Navigation Tabs -->
+    <div class="zodiac-nav-tabs">
+      <button class="zodiac-tab-btn active" id="tab-btn-hw" onclick="switchView('hw')">
+        <span class="pulse-dot" style="width: 7px; height: 7px;"></span>
+        Zodiac FX Hardware Twin
+      </button>
+      <button class="zodiac-tab-btn" id="tab-btn-council" onclick="switchView('council')">
+        Senior Staff Council & Invariants
+      </button>
     </div>
 
-    <!-- Interactive Invariant Playground -->
-    <h2 class="section-title" id="playground">Live Invariant Verification Playground</h2>
-    <div class="interactive-grid">
+    <!-- VIEW 1: ZODIAC FX HARDWARE MONITOR -->
+    <div id="view-hw">
       
-      <!-- Widget 1: Telemetry Counter -->
-      <div class="widget-card">
-        <div class="widget-header">
-          <div class="widget-title">Dean & Ghemawat Telemetry</div>
-          <span class="status-tag active" id="telemetry-status">LIVE MONITOR</span>
+      <!-- Top Grid: Digital Twin & Metrics Column -->
+      <div class="zodiac-top-grid">
+        
+        <!-- Digital Twin PCB Card -->
+        <div class="zodiac-board-card">
+          <div class="board-header">
+            <div class="board-title">
+              <span style="color: var(--z-cyan);">Zodiac FX</span> Hardware Digital Twin
+              <span class="board-rev">REV B</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; align-items: center;">
+              <button class="photo-toggle-btn" id="btn-toggle-photo" onclick="togglePhotoView()">📷 Physical Photo</button>
+              <span class="status-pill up" id="z-source-tag">● LIVE HARDWARE LINK</span>
+            </div>
+          </div>
+
+          <!-- SVG Visualizer -->
+          <div class="board-svg-container" id="svg-board-box">
+            <svg class="board-svg" viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <filter id="glow-emerald" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="5" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+                <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+
+              <!-- PCB Substrate -->
+              <rect x="20" y="20" width="760" height="440" rx="14" class="pcb-substrate" />
+
+              <!-- Ground Plane & Traces -->
+              <circle cx="45" cy="45" r="12" fill="#080b12" stroke="#2a364f" stroke-width="2" />
+              <circle cx="755" cy="45" r="12" fill="#080b12" stroke="#2a364f" stroke-width="2" />
+              <circle cx="45" cy="435" r="12" fill="#080b12" stroke="#2a364f" stroke-width="2" />
+              <circle cx="755" cy="435" r="12" fill="#080b12" stroke="#2a364f" stroke-width="2" />
+
+              <!-- Silk Screen Markings -->
+              <text x="50" y="85" fill="#42516f" font-family="'JetBrains Mono', monospace" font-size="14" font-weight="700">NORTHBOUND NETWORKS</text>
+              <text x="50" y="105" fill="var(--z-cyan)" font-family="'JetBrains Mono', monospace" font-size="18" font-weight="800">ZODIAC FX (Rev B)</text>
+              <text x="50" y="125" fill="#5c7094" font-family="'JetBrains Mono', monospace" font-size="11">OPENFLOW 1.3 SDN SWITCH</text>
+
+              <!-- Micro-USB CDC Serial Port (Top Left) -->
+              <rect x="35" y="145" width="45" height="30" rx="3" fill="#1b2333" stroke="#42516f" stroke-width="1.5" />
+              <text x="38" y="195" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="9">USB CDC</text>
+
+              <!-- Reset Switch -->
+              <rect x="110" y="145" width="22" height="22" rx="4" fill="#2c1a1d" stroke="#ff1744" stroke-width="1" />
+              <circle cx="121" cy="156" r="6" fill="#ff1744" opacity="0.8" />
+              <text x="105" y="185" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="9">RESET</text>
+
+              <!-- Power / Status LEDs -->
+              <circle cx="160" cy="156" r="5" fill="#00e676" filter="url(#glow-emerald)" />
+              <text x="145" y="185" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="9">PWR 3V3</text>
+
+              <!-- KSZ8995XA Switch Controller IC -->
+              <rect x="250" y="130" width="90" height="90" rx="6" class="chip-ic" />
+              <text x="260" y="170" fill="#a7b7cc" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="600">MICREL</text>
+              <text x="260" y="186" fill="#00e5ff" font-family="'JetBrains Mono', monospace" font-size="10">KSZ8995XA</text>
+              <text x="260" y="202" fill="#5c7094" font-family="'JetBrains Mono', monospace" font-size="9">5-PORT ETH</text>
+
+              <!-- Atmel SAM4E16E Cortex-M4 Microcontroller (Center-Right) -->
+              <rect x="490" y="110" width="130" height="130" rx="6" class="chip-ic" />
+              <text x="515" y="160" fill="#fff" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700">ATMEL</text>
+              <text x="505" y="180" fill="var(--z-purple)" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="600">ATSAM4E16E</text>
+              <text x="505" y="200" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="9">120MHz Cortex-M4</text>
+              <text x="505" y="218" fill="#00e676" font-family="'JetBrains Mono', monospace" font-size="9">CPU TEMP: 31°C</text>
+
+              <!-- 4 RJ45 Jacks along Bottom Edge -->
+              <!-- Port 1: Leftmost (Opposite Micro-USB) -->
+              <g onclick="handlePortClick(1)" style="cursor: pointer;">
+                <rect x="60" y="270" width="140" height="150" rx="6" class="rj45-jack" data-port="1" />
+                <rect x="80" y="375" width="100" height="35" rx="3" fill="#090c13" stroke="#252e42" />
+                <circle id="led-p1" cx="80" cy="290" r="6" class="led-indicator down" fill="#1c2434" />
+                <text x="100" y="295" fill="#fff" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700">PORT 1</text>
+                <text x="80" y="325" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="10">VLAN 100</text>
+                <text x="80" y="342" fill="#b388ff" font-family="'JetBrains Mono', monospace" font-size="9">OpenFlow Data</text>
+              </g>
+
+              <!-- Port 2 -->
+              <g onclick="handlePortClick(2)" style="cursor: pointer;">
+                <rect x="230" y="270" width="140" height="150" rx="6" class="rj45-jack" data-port="2" />
+                <rect x="250" y="375" width="100" height="35" rx="3" fill="#090c13" stroke="#252e42" />
+                <circle id="led-p2" cx="250" cy="290" r="6" class="led-indicator down" fill="#1c2434" />
+                <text x="270" y="295" fill="#fff" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700">PORT 2</text>
+                <text x="250" y="325" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="10">VLAN 100</text>
+                <text x="250" y="342" fill="#b388ff" font-family="'JetBrains Mono', monospace" font-size="9">OpenFlow Data</text>
+              </g>
+
+              <!-- Port 3 -->
+              <g onclick="handlePortClick(3)" style="cursor: pointer;">
+                <rect x="400" y="270" width="140" height="150" rx="6" class="rj45-jack" data-port="3" />
+                <rect x="420" y="375" width="100" height="35" rx="3" fill="#090c13" stroke="#252e42" />
+                <circle id="led-p3" cx="420" cy="290" r="6" class="led-indicator down" fill="#1c2434" />
+                <text x="440" y="295" fill="#fff" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700">PORT 3</text>
+                <text x="420" y="325" fill="#8a99ad" font-family="'JetBrains Mono', monospace" font-size="10">VLAN 100</text>
+                <text x="420" y="342" fill="#b388ff" font-family="'JetBrains Mono', monospace" font-size="9">OpenFlow Data</text>
+              </g>
+
+              <!-- Port 4: Rightmost (Native Management & Controller) -->
+              <g onclick="handlePortClick(4)" style="cursor: pointer;">
+                <rect x="570" y="270" width="140" height="150" rx="6" class="rj45-jack" data-port="4" style="stroke: rgba(0, 230, 118, 0.4);" />
+                <rect x="590" y="375" width="100" height="35" rx="3" fill="#090c13" stroke="#252e42" />
+                <circle id="led-p4" cx="590" cy="290" r="6" class="led-indicator up" fill="#00e676" filter="url(#glow-emerald)" />
+                <text x="610" y="295" fill="#fff" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700">PORT 4</text>
+                <text x="590" y="325" fill="var(--z-cyan)" font-family="'JetBrains Mono', monospace" font-size="10">VLAN 200 (Native)</text>
+                <text x="590" y="342" fill="#00e676" font-family="'JetBrains Mono', monospace" font-size="9">Controller Link (Active)</text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- Physical Photos Box (Toggled) -->
+          <div class="photo-modal-view" id="photo-box">
+            <img src="img/board.jpg" alt="Zodiac FX Hardware Top View">
+            <img src="img/ports.jpg" alt="Zodiac FX 4 RJ45 Ports Detail">
+          </div>
         </div>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Monotonic integer packet accounting. Banish IEEE-754 floats.
-        </p>
-        <div class="metric-row">
-          <span class="metric-label">Ingress Packets (BigInt)</span>
-          <span class="metric-val" id="val-packets">10,482,920</span>
+
+        <!-- Metrics Column -->
+        <div class="zodiac-metrics-column">
+          
+          <!-- Gauge 1: CPU Temperature -->
+          <div class="metric-widget">
+            <div class="metric-widget-header">
+              <span class="metric-widget-title">Atmel CPU Temperature</span>
+              <span class="status-pill up">Optimal Envelope</span>
+            </div>
+            <div class="metric-value-large">
+              <span id="z-cpu-temp">31°C</span>
+              <span class="metric-unit">/ 85°C Max</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill" id="z-cpu-temp-bar" style="width: 36%;"></div>
+            </div>
+            <div class="metric-subtext">
+              <span>Dean Invariant: Thermal Stability</span>
+              <span>SAM4E16E @ 120MHz</span>
+            </div>
+          </div>
+
+          <!-- Gauge 2: OpenFlow 1.3 Control Plane -->
+          <div class="metric-widget">
+            <div class="metric-widget-header">
+              <span class="metric-widget-title">OpenFlow 1.3 Control Plane</span>
+              <span class="status-pill up" id="z-of-status">Connected</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Datapath ID</span>
+              <span class="metric-val" id="z-of-dpid">0x70b3d58740bc</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Wire Echo Latency (RTT)</span>
+              <span class="metric-val" id="z-of-latency" style="color: var(--z-cyan);">< 0.5 ms</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Hardware Flow Tables</span>
+              <span class="metric-val" id="z-of-tables">10 tables</span>
+            </div>
+            <div class="metric-subtext">
+              <span>TCP Port 6633 Handshake</span>
+              <span>Wire echo validated</span>
+            </div>
+          </div>
+
+          <!-- Gauge 3: System Identity -->
+          <div class="metric-widget">
+            <div class="metric-widget-header">
+              <span class="metric-widget-title">System & Protocol State</span>
+              <span class="vlan-badge native" id="z-firmware">v0.86</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Management IP</span>
+              <span class="metric-val" id="z-ip">10.0.1.99</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Hardware MAC</span>
+              <span class="metric-val" id="z-mac">70:B3:D5:87:40:BC</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">SDN Controller</span>
+              <span class="metric-val" id="z-controller">10.0.1.8:6633</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Uptime</span>
+              <span class="metric-val" id="z-uptime">01:25:00</span>
+            </div>
+          </div>
+
         </div>
-        <div class="metric-row">
-          <span class="metric-label">Ingress Bytes (BigInt)</span>
-          <span class="metric-val" id="val-bytes">15,871,140,880</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-label">Monotonic Timestamp</span>
-          <span class="metric-val code" id="val-clock">842,910,241 ns</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-label">Throughput (bytes/sec)</span>
-          <span class="metric-val" id="val-rate">982,410,000 B/s</span>
-        </div>
-        <button class="btn-action" id="btn-burst">⚡ Ingest 100k Packet Burst</button>
+
       </div>
 
-      <!-- Widget 2: Neuro-Symbolic Loop Verifier -->
-      <div class="widget-card">
-        <div class="widget-header">
-          <div class="widget-title">Hassabis & Vinyals Symbolic Verifier</div>
-          <span class="status-tag active" id="dag-status">DAG LOOP-FREE</span>
-        </div>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Autonomous SDN routing proposals gated by formal cycle detection.
-        </p>
-        <div class="metric-row">
-          <span class="metric-label">Active Hops</span>
-          <span class="metric-val" id="val-hops">edge-1 → spine-a → core-1</span>
-        </div>
-        <div class="metric-row">
-          <span class="metric-label">Cycle Invariant</span>
-          <span class="metric-val" style="color: var(--emerald);">Acyclic Verified</span>
-        </div>
-        <button class="btn-action" id="btn-inject-loop" style="border-color: rgba(255,23,68,0.4); color: var(--rose);">
-          Inject Autonomous Agent Loop (core-1 → edge-1)
-        </button>
-        <div class="console-box" id="dag-log">
-          <span class="success">✓ Symbolic Verifier: Verified 3 hops as strictly loop-free DAG.</span>
-        </div>
+      <!-- Full Port Matrix Table -->
+      <div class="zodiac-table-card">
+        <h3 style="font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span style="color: var(--z-cyan);">Hardware Port Matrix</span>
+          <span style="font-size: 0.76rem; color: var(--z-muted); font-family: var(--z-mono);">Parsed from /d_ports.htm · Zero Field Suppression</span>
+        </h3>
+        <table class="port-matrix-table">
+          <thead>
+            <tr>
+              <th>Port & Location</th>
+              <th>Link Status</th>
+              <th>VLAN Allocation</th>
+              <th>RX Data (Dean BigInt)</th>
+              <th>TX Data (Dean BigInt)</th>
+              <th>Packets Dropped</th>
+              <th>CRC Errors</th>
+            </tr>
+          </thead>
+          <tbody id="z-port-tbody">
+            <!-- Rendered by zodiac-app.js -->
+          </tbody>
+        </table>
       </div>
 
-      <!-- Widget 3: Fail-Closed DNS Resolver -->
-      <div class="widget-card">
-        <div class="widget-header">
-          <div class="widget-title">Fail-Closed DNS Engine</div>
-          <span class="status-tag active">DEFAULT DROP</span>
+      <!-- Embedded Web Serial Console -->
+      <div class="zodiac-terminal-card">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="terminal-dot dot-red"></div>
+            <div class="terminal-dot dot-yellow"></div>
+            <div class="terminal-dot dot-green"></div>
+          </div>
+          <div class="terminal-title">Northbound Networks Zodiac FX Console (115200 8N1 · Serial CDC /dev/cu.usbmodem212201)</div>
+          <div style="font-size: 0.72rem; color: var(--z-cyan);">Interactive CLI</div>
         </div>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Unrecognized hostnames fail closed immediately without plaintext leak.
-        </p>
-        <div class="metric-row">
-          <span class="metric-label">Authoritative Zone</span>
-          <span class="metric-val">dns.cluster.internal</span>
+        <div class="terminal-output" id="z-terminal-output">
+Welcome to Zodiac FX Command Console.
+Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch state.
         </div>
-        <div class="metric-row">
-          <span class="metric-label">Fail-Closed Default</span>
-          <span class="metric-val" style="color: var(--cyan);">NXDOMAIN Exception</span>
-        </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
-          <button class="btn-action" id="btn-resolve-valid" style="margin-top: 0;">Resolve Valid</button>
-          <button class="btn-action" id="btn-resolve-invalid" style="margin-top: 0; border-color: rgba(255,23,68,0.4); color: var(--rose);">Resolve Unknown</button>
-        </div>
-        <div class="console-box" id="dns-log">
-          <span class="success">✓ DNS Engine ready (Fail-Closed Default Active).</span>
+        <form class="terminal-input-row" id="z-terminal-form">
+          <span class="terminal-prompt">Zodiac_FX&gt;</span>
+          <input type="text" class="terminal-input" id="z-terminal-input" placeholder="Enter Zodiac CLI command..." autocomplete="off">
+        </form>
+        <div class="terminal-quick-actions">
+          <button class="quick-cmd-btn" onclick="sendQuickCmd('show status')">show status</button>
+          <button class="quick-cmd-btn" onclick="sendQuickCmd('show ports')">show ports</button>
+          <button class="quick-cmd-btn" onclick="sendQuickCmd('show config')">show config</button>
+          <button class="quick-cmd-btn" onclick="sendQuickCmd('show of')">show of</button>
+          <button class="quick-cmd-btn" onclick="sendQuickCmd('clear')">clear</button>
         </div>
       </div>
 
     </div>
 
-    <!-- Latency Numbers Hierarchy -->
-    <h2 class="section-title" id="latency">The Dean Latency Numbers</h2>
-    <div class="table-card">
-      <table>
-        <thead>
-          <tr>
-            <th>Operation</th>
-            <th>Latency</th>
-            <th>Engineering Implication</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>L1 cache reference</td>
-            <td class="code">0.5 ns</td>
-            <td>Keep packet headers in contiguous flat structs.</td>
-          </tr>
-          <tr>
-            <td>Branch mispredict</td>
-            <td class="code">5.0 ns</td>
-            <td>Avoid polymorphic dispatch on critical packet paths.</td>
-          </tr>
-          <tr>
-            <td>Main memory reference</td>
-            <td class="code">100.0 ns</td>
-            <td>Zero heap allocations in packet dispatch loops.</td>
-          </tr>
-          <tr>
-            <td>1K bytes over 10 Gbps network</td>
-            <td class="code">1,000.0 ns (1 µs)</td>
-            <td>Line-rate processing target for agentic flow controllers.</td>
-          </tr>
-          <tr>
-            <td>Datacenter roundtrip (LAN)</td>
-            <td class="code">500,000.0 ns (0.5 ms)</td>
-            <td>East-West SDN state convergence budget.</td>
-          </tr>
-          <tr>
-            <td>WAN cross-continent roundtrip</td>
-            <td class="code">150,000,000.0 ns (150 ms)</td>
-            <td>Asynchronous peering with bounded retry backoff.</td>
-          </tr>
-          <tr>
-            <td>LLM Time-To-First-Token (TTFT)</td>
-            <td class="code">1,000,000,000.0 ns (1.0 s)</td>
-            <td>Generative agents must operate out-of-band from data plane.</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- VIEW 2: SENIOR STAFF COUNCIL ARCHITECTURE & INVARIANTS -->
+    <div id="view-council" style="display: none;">
+      <!-- Council Section -->
+      <h2 class="section-title" id="council">The Senior Staff Council</h2>
+      <div class="council-grid">
+        <div class="council-card">
+          <div class="council-name">Jeff Dean</div>
+          <div class="council-domain">Scale & Latency Budgets</div>
+          <div class="council-desc">
+            Nanosecond-to-WAN latency hierarchy, BigInt packet counter determinism, and zero synchronous blocking in packet loops.
+          </div>
+        </div>
+
+        <div class="council-card">
+          <div class="council-name">Sanjay Ghemawat</div>
+          <div class="council-domain">Radical Simplicity</div>
+          <div class="council-desc">
+            The Ghemawat Razor: Flat cache-aligned state models, zero bloat abstractions, and fail-closed isolation by construction.
+          </div>
+        </div>
+
+        <div class="council-card">
+          <div class="council-name">Quoc Le</div>
+          <div class="council-domain">Adaptive Control</div>
+          <div class="council-desc">
+            Banning brittle handcoded magic constants. Self-tuning flow window controllers that adapt continuously to empirical traffic.
+          </div>
+        </div>
+
+        <div class="council-card">
+          <div class="council-name">Oriol Vinyals</div>
+          <div class="council-domain">Graph Routing</div>
+          <div class="council-desc">
+            Combinatorial graph sequences for SDN flow tables. Multi-agent coordination with anti-flapping hysteresis damping.
+          </div>
+        </div>
+
+        <div class="council-card">
+          <div class="council-name">Demis Hassabis</div>
+          <div class="council-domain">Verification Asymmetry</div>
+          <div class="council-desc">
+            The AlphaProof Paradigm: Probabilistic AI proposals are cheap; deterministic symbolic DAG verifiers formally prove loop-free routing.
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Invariant Playground -->
+      <h2 class="section-title" id="playground">Live Invariant Verification Playground</h2>
+      <div class="interactive-grid">
+        
+        <!-- Widget 1: Telemetry Counter -->
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Dean & Ghemawat Telemetry</div>
+            <span class="status-tag active" id="telemetry-status">LIVE MONITOR</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Monotonic integer packet accounting. Banish IEEE-754 floats.
+          </p>
+          <div class="metric-row">
+            <span class="metric-label">Ingress Packets (BigInt)</span>
+            <span class="metric-val" id="val-packets">10,482,920</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Ingress Bytes (BigInt)</span>
+            <span class="metric-val" id="val-bytes">15,871,140,880</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Monotonic Timestamp</span>
+            <span class="metric-val code" id="val-clock">842,910,241 ns</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Throughput (bytes/sec)</span>
+            <span class="metric-val" id="val-rate">982,410,000 B/s</span>
+          </div>
+          <button class="btn-action" id="btn-burst">⚡ Ingest 100k Packet Burst</button>
+        </div>
+
+        <!-- Widget 2: Neuro-Symbolic Loop Verifier -->
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Hassabis & Vinyals Symbolic Verifier</div>
+            <span class="status-tag active" id="dag-status">DAG LOOP-FREE</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Autonomous SDN routing proposals gated by formal cycle detection.
+          </p>
+          <div class="metric-row">
+            <span class="metric-label">Active Hops</span>
+            <span class="metric-val" id="val-hops">edge-1 → spine-a → core-1</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Cycle Invariant</span>
+            <span class="metric-val" style="color: var(--emerald);">Acyclic Verified</span>
+          </div>
+          <button class="btn-action" id="btn-inject-loop" style="border-color: rgba(255,23,68,0.4); color: var(--rose);">
+            Inject Autonomous Agent Loop (core-1 → edge-1)
+          </button>
+          <div class="console-box" id="dag-log">
+            <span class="success">✓ Symbolic Verifier: Verified 3 hops as strictly loop-free DAG.</span>
+          </div>
+        </div>
+
+        <!-- Widget 3: Fail-Closed DNS Resolver -->
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Fail-Closed DNS Engine</div>
+            <span class="status-tag active">DEFAULT DROP</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Unrecognized hostnames fail closed immediately without plaintext leak.
+          </p>
+          <div class="metric-row">
+            <span class="metric-label">Authoritative Zone</span>
+            <span class="metric-val">dns.cluster.internal</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Fail-Closed Default</span>
+            <span class="metric-val" style="color: var(--cyan);">NXDOMAIN Exception</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
+            <button class="btn-action" id="btn-resolve-valid" style="margin-top: 0;">Resolve Valid</button>
+            <button class="btn-action" id="btn-resolve-invalid" style="margin-top: 0; border-color: rgba(255,23,68,0.4); color: var(--rose);">Resolve Unknown</button>
+          </div>
+          <div class="console-box" id="dns-log">
+            <span class="success">✓ DNS Engine ready (Fail-Closed Default Active).</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Latency Numbers Hierarchy -->
+      <h2 class="section-title" id="latency">The Dean Latency Numbers</h2>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th>Latency</th>
+              <th>Engineering Implication</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>L1 cache reference</td>
+              <td class="code">0.5 ns</td>
+              <td>Keep packet headers in contiguous flat structs.</td>
+            </tr>
+            <tr>
+              <td>Branch mispredict</td>
+              <td class="code">5.0 ns</td>
+              <td>Avoid polymorphic dispatch on critical packet paths.</td>
+            </tr>
+            <tr>
+              <td>Main memory reference</td>
+              <td class="code">100.0 ns</td>
+              <td>Zero heap allocations in packet dispatch loops.</td>
+            </tr>
+            <tr>
+              <td>1K bytes over 10 Gbps network</td>
+              <td class="code">1,000.0 ns (1 µs)</td>
+              <td>Line-rate processing target for agentic flow controllers.</td>
+            </tr>
+            <tr>
+              <td>Datacenter roundtrip (LAN)</td>
+              <td class="code">500,000.0 ns (0.5 ms)</td>
+              <td>East-West SDN state convergence budget.</td>
+            </tr>
+            <tr>
+              <td>WAN cross-continent roundtrip</td>
+              <td class="code">150,000,000.0 ns (150 ms)</td>
+              <td>Asynchronous peering with bounded retry backoff.</td>
+            </tr>
+            <tr>
+              <td>LLM Time-To-First-Token (TTFT)</td>
+              <td class="code">1,000,000,000.0 ns (1.0 s)</td>
+              <td>Generative agents must operate out-of-band from data plane.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
   </main>
 
   <footer>
     <p>
-      Governed by the Senior Staff Council · Hosted on <a href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">GitHub</a> · Built for the Agentic Era
+      Governed by the Senior Staff Council · Physical Switch Interface: Northbound Networks Zodiac FX · Hosted on <a href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">GitHub</a>
     </p>
   </footer>
 
+  <script src="zodiac-app.js"></script>
   <script>
-    // Live Telemetry Simulation
+    // View Switcher (Tabs)
+    function switchView(view) {
+      const hwView = document.getElementById('view-hw');
+      const councilView = document.getElementById('view-council');
+      const btnHw = document.getElementById('tab-btn-hw');
+      const btnCouncil = document.getElementById('tab-btn-council');
+
+      if (view === 'hw') {
+        hwView.style.display = 'block';
+        councilView.style.display = 'none';
+        btnHw.classList.add('active');
+        btnCouncil.classList.remove('active');
+      } else {
+        hwView.style.display = 'none';
+        councilView.style.display = 'block';
+        btnHw.classList.remove('active');
+        btnCouncil.classList.add('active');
+      }
+    }
+
+    document.getElementById('nav-hw-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      switchView('hw');
+    });
+
+    document.getElementById('nav-council-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      switchView('council');
+    });
+
+    function togglePhotoView() {
+      const box = document.getElementById('photo-box');
+      const btn = document.getElementById('btn-toggle-photo');
+      if (box.classList.contains('active')) {
+        box.classList.remove('active');
+        btn.innerText = '📷 Physical Photo';
+      } else {
+        box.classList.add('active');
+        btn.innerText = '✕ Hide Photo';
+      }
+    }
+
+    // Playground Interactive Demos
     let packets = 10482920n;
     let bytes = 15871140880n;
 
@@ -627,11 +976,10 @@
       packets += 100000n;
       bytes += 151400000n;
       document.getElementById('val-packets').innerText = packets.toLocaleString();
-      document.getElementById('val-bytes').innerText = bytes.toLocaleString();
-      document.getElementById('val-clock').innerText = `${Date.now() * 1000000} ns`;
+      const monotonicNs = BigInt(Math.floor(performance.now() * 1000000));
+      document.getElementById('val-clock').innerText = `${monotonicNs.toLocaleString()} ns`;
     });
 
-    // Symbolic DAG Verifier
     let loopInjected = false;
     const dagLog = document.getElementById('dag-log');
     const dagStatus = document.getElementById('dag-status');
@@ -657,7 +1005,6 @@
       }
     });
 
-    // DNS Resolution Simulator
     const dnsLog = document.getElementById('dns-log');
     document.getElementById('btn-resolve-valid').addEventListener('click', () => {
       dnsLog.innerHTML = '<span class="success">✓ [A] dns.cluster.internal → 192.168.1.53 (TTL: 300s, Valid)</span>';

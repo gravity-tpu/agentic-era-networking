@@ -144,6 +144,27 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'serve': {
+      const port = parseInt(process.env['PORT'] ?? process.argv[3] ?? '3000', 10);
+      const host = '0.0.0.0';
+      console.log(`\n🚀 Starting Zodiac FX Web & REST Bridge Server on http://localhost:${port}...\n`);
+      const { ZodiacBridgeServer } = await import('../dist/sdn/zodiac-bridge-server.js');
+      const bridge = new ZodiacBridgeServer(controller);
+      await bridge.start(port, host);
+      console.log(`✨ Dashboard is live at : http://localhost:${port}`);
+      console.log(`   - REST Telemetry API : http://localhost:${port}/api/zodiac`);
+      console.log(`   - OpenFlow 1.3 Daemon : 10.0.1.8:6633`);
+      console.log(`   - Serial Management   : ${controller.serialClient.path}`);
+      console.log(`   - Press Ctrl+C to exit\n`);
+
+      process.on('SIGINT', async () => {
+        console.log('\n[!] Stopping bridge server...');
+        await bridge.stop();
+        process.exit(0);
+      });
+      break;
+    }
+
     case 'help':
     default:
       console.log(`
@@ -158,6 +179,7 @@ Commands:
   listen   - Run the OpenFlow 1.3 SDN controller daemon on 10.0.1.8:6633
   ping     - High-precision ping to Zodiac switch IP (10.0.1.99)
   reboot   - Restart the Zodiac FX switch via serial command
+  serve    - Launch the local web dashboard and REST bridge on http://localhost:3000
 `);
       break;
   }

@@ -1,0 +1,451 @@
+/**
+ * zodiac.css
+ * Styling for the Zodiac FX Hardware Monitoring Console & Digital Twin
+ */
+
+:root {
+  --z-bg: #07090e;
+  --z-card: rgba(13, 17, 26, 0.75);
+  --z-card-border: rgba(255, 255, 255, 0.08);
+  --z-card-hover: rgba(0, 229, 255, 0.3);
+  --z-cyan: #00e5ff;
+  --z-cyan-glow: rgba(0, 229, 255, 0.25);
+  --z-emerald: #00e676;
+  --z-emerald-glow: rgba(0, 230, 118, 0.3);
+  --z-amber: #ffab00;
+  --z-amber-glow: rgba(255, 171, 0, 0.25);
+  --z-purple: #7c4dff;
+  --z-rose: #ff1744;
+  --z-text: #f0f4fc;
+  --z-muted: #8a99ad;
+  --z-mono: 'JetBrains Mono', monospace;
+  --z-sans: 'Inter', -apple-system, sans-serif;
+}
+
+/* Sub-Navigation Tabs */
+.zodiac-nav-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid var(--z-card-border);
+  padding-bottom: 0.75rem;
+}
+
+.zodiac-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--z-muted);
+  font-family: var(--z-mono);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.zodiac-tab-btn:hover {
+  color: var(--z-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.zodiac-tab-btn.active {
+  color: var(--z-cyan);
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 16px var(--z-cyan-glow);
+}
+
+/* Dashboard Top Grid */
+.zodiac-top-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 960px) {
+  .zodiac-top-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Hardware Visualizer Card */
+.zodiac-board-card {
+  background: var(--z-card);
+  border: 1px solid var(--z-card-border);
+  border-radius: 14px;
+  padding: 1.75rem;
+  backdrop-filter: blur(16px);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.zodiac-board-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--z-cyan), transparent);
+}
+
+.board-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.board-title {
+  font-family: var(--z-sans);
+  font-weight: 700;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.board-rev {
+  font-family: var(--z-mono);
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(124, 77, 255, 0.15);
+  border: 1px solid rgba(124, 77, 255, 0.4);
+  color: #d1c4e9;
+  border-radius: 4px;
+}
+
+/* Interactive SVG Board Container */
+.board-svg-container {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #090c13;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.board-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 380px;
+}
+
+/* SVG Elements & Styling */
+.pcb-substrate {
+  fill: #0d121c;
+  stroke: #1e2638;
+  stroke-width: 2;
+  rx: 8;
+}
+
+.pcb-trace {
+  stroke: #162033;
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.rj45-jack {
+  fill: #141a29;
+  stroke: #313c54;
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rj45-jack:hover {
+  fill: #1a2336;
+  stroke: var(--z-cyan);
+}
+
+.chip-ic {
+  fill: #080a0f;
+  stroke: #252e42;
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chip-ic:hover {
+  stroke: var(--z-purple);
+  filter: drop-shadow(0 0 8px var(--z-purple));
+}
+
+.led-indicator {
+  transition: all 0.3s ease;
+}
+
+.led-indicator.up {
+  fill: var(--z-emerald);
+  filter: drop-shadow(0 0 6px var(--z-emerald));
+}
+
+.led-indicator.down {
+  fill: #222838;
+}
+
+.led-indicator.active {
+  fill: var(--z-amber);
+  animation: blink 0.8s infinite alternate;
+}
+
+@keyframes blink {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; filter: drop-shadow(0 0 8px var(--z-amber)); }
+}
+
+/* Metric Gauges Grid */
+.zodiac-metrics-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.metric-widget {
+  background: var(--z-card);
+  border: 1px solid var(--z-card-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  backdrop-filter: blur(16px);
+  position: relative;
+}
+
+.metric-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.metric-widget-title {
+  font-family: var(--z-mono);
+  font-size: 0.82rem;
+  color: var(--z-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-value-large {
+  font-family: var(--z-mono);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--z-text);
+  line-height: 1.1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.metric-unit {
+  font-size: 0.95rem;
+  color: var(--z-cyan);
+  font-weight: 500;
+}
+
+.metric-subtext {
+  font-size: 0.78rem;
+  color: var(--z-muted);
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Progress bar / Gauge bar */
+.progress-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--z-cyan), var(--z-emerald));
+  border-radius: 3px;
+  transition: width 0.5s ease-out;
+}
+
+/* Port Matrix Table Card */
+.zodiac-table-card {
+  background: var(--z-card);
+  border: 1px solid var(--z-card-border);
+  border-radius: 14px;
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(16px);
+  overflow-x: auto;
+}
+
+.port-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--z-mono);
+  font-size: 0.86rem;
+  text-align: left;
+}
+
+.port-matrix-table th {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--z-muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.port-matrix-table td {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+}
+
+.port-matrix-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-pill.up {
+  background: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.35);
+  color: var(--z-emerald);
+}
+
+.status-pill.down {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--z-muted);
+}
+
+.vlan-badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.vlan-badge.native {
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: var(--z-cyan);
+}
+
+.vlan-badge.openflow {
+  background: rgba(124, 77, 255, 0.12);
+  border: 1px solid rgba(124, 77, 255, 0.35);
+  color: #b388ff;
+}
+
+/* Embedded Web Terminal */
+.zodiac-terminal-card {
+  background: #05070a;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 12px;
+  padding: 1.25rem;
+  font-family: var(--z-mono);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  margin-bottom: 2rem;
+}
+
+.terminal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-red { background: #ff5f56; }
+.dot-yellow { background: #ffbd2e; }
+.dot-green { background: #27c93f; }
+
+.terminal-title {
+  color: var(--z-muted);
+  font-size: 0.75rem;
+}
+
+.terminal-output {
+  height: 240px;
+  overflow-y: auto;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #a7b7cc;
+  white-space: pre-wrap;
+  margin-bottom: 1rem;
+}
+
+.terminal-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.terminal-prompt {
+  color: var(--z-cyan);
+  font-weight: 700;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: var(--z-mono);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.terminal-quick-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.quick-cmd-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--z-card-border);
+  color: var(--z-muted);
+  font-family: var(--z-mono);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-cmd-btn:hover {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: var(--z-cyan);
+  color: #fff;
+}

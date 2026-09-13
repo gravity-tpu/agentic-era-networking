@@ -12,3 +12,6 @@ export * from './dns/resolver.js';
 export * from './dns/wire.js';
 export * from './dns/server.js';
 export * from './sdn/flow-table.js';
+export * from './sdn/zodiac-controller.js';
+export * from './sdn/zodiac-telemetry.js';
+export * from './sdn/zodiac-bridge-server.js';

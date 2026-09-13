@@ -20,7 +20,9 @@
     "setup-hooks": "bash scripts/install-hooks.sh",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "zodiac": "node --experimental-strip-types scripts/zodiac-cli.ts"
+    "zodiac": "node --experimental-strip-types scripts/zodiac-cli.ts",
+    "serve": "node --experimental-strip-types scripts/zodiac-cli.ts serve",
+    "dev": "node --experimental-strip-types scripts/zodiac-cli.ts serve"
   },
   "keywords": [
     "networking",
