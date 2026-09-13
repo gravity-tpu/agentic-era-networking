@@ -122,7 +122,12 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      switchRx = Buffer.concat([switchRx, chunk]);
+      const buf = typeof chunk === 'string'
+        ? Buffer.from(chunk, 'utf-8')
+        : Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      switchRx = Buffer.concat([switchRx, buf]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
         if (switchRx.length < header.length) break;

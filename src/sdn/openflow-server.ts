@@ -173,9 +173,15 @@ export class OpenFlowServer extends EventEmitter {
     });
   }
 
-  private onData(chunk: Buffer): void {
-    this._bytesReceived += BigInt(chunk.length);
-    this.rxBuffer = Buffer.concat([this.rxBuffer, chunk]);
+  private onData(chunk: Buffer | Uint8Array | string): void {
+    const buf = typeof chunk === 'string'
+      ? Buffer.from(chunk, 'utf-8')
+      : Buffer.isBuffer(chunk)
+        ? chunk
+        : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+
+    this._bytesReceived += BigInt(buf.length);
+    this.rxBuffer = Buffer.concat([this.rxBuffer, buf]);
 
     // Frame processing loop
     while (this.rxBuffer.length >= 8) {
