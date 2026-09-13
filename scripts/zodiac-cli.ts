@@ -36,8 +36,7 @@ async function main(): Promise<void> {
       console.log(`  Firmware        : ${health.deviceStatus?.firmwareVersion ?? 'N/A'}`);
       console.log(`  CPU Temperature : ${health.deviceStatus?.cpuTempC ?? 'N/A'} °C`);
       console.log(`  Device Uptime   : ${health.deviceStatus?.uptime ?? 'N/A'}`);
-      console.log(`  CPU UID         : ${health.deviceStatus?.cpuUid ?? 'N/A'}`);
-      console.log(`  HTTP Web GUI    : ${health.httpResponsive ? '🟢 200 OK (http://10.0.1.99)' : '🔴 Unresponsive'}`);
+      console.log(`  OpenFlow Daemon : ${health.openFlowMetrics.state === 'ESTABLISHED' ? '🟢 Connected (10.0.1.8:6633)' : '⚪ Ready (10.0.1.8:6633)'}`);
       console.log('──────────────────────────────────────────────────────────────────');
       if (health.config) {
         console.log('  NETWORK CONFIGURATION:');

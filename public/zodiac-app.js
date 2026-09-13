@@ -257,7 +257,7 @@
         els.sourceTag.innerText = '⚡ Cached / Degraded Link';
         els.sourceTag.className = 'cf-pill-badge amber';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot stale';
-      } else if (snapshot.source === 'PHYSICAL_SWITCH') {
+      } else if (snapshot.source === 'PHYSICAL_SWITCH' || snapshot.source === 'live_hardware') {
         els.sourceTag.innerText = '✓ Active Link';
         els.sourceTag.className = 'cf-pill-badge green';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot';

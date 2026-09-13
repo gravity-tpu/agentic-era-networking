@@ -63,10 +63,15 @@ export class ZodiacController {
     this.ofServer.sendFlowMod(rule, outPort);
   }
 
+  private cachedConfig: ZodiacConfig | undefined;
+  private cachedStatus: ZodiacDeviceStatus | undefined;
+  private cachedPorts: ZodiacPortInfo[] | undefined;
+  private lastSerialProbeMs: number = 0;
+
   /**
-   * Probes end-to-end health across Serial, HTTP, and OpenFlow.
+   * Probes end-to-end health across Serial and OpenFlow without aggressive polling.
    */
-  public async getComprehensiveHealth(httpTargetIp: string = '10.0.1.99'): Promise<ZodiacHealthReport> {
+  public async getComprehensiveHealth(_targetIp: string = '10.0.1.99'): Promise<ZodiacHealthReport> {
     let serialDetected = false;
     let deviceStatus: ZodiacDeviceStatus | undefined;
     let ports: ZodiacPortInfo[] | undefined;
@@ -82,42 +87,41 @@ export class ZodiacController {
       serialDetected = false;
     }
 
-    if (serialDetected) {
+    const now = Date.now();
+    const shouldProbeSerial = serialDetected && (now - this.lastSerialProbeMs > 30_000 || !this.cachedConfig);
+
+    if (shouldProbeSerial) {
+      this.lastSerialProbeMs = now;
       try {
         deviceStatus = await this.serial.getStatus();
+        if (deviceStatus) this.cachedStatus = deviceStatus;
       } catch (err: unknown) {
         console.warn('[!] [ZodiacController] Serial getStatus error:', err instanceof Error ? err.message : String(err));
       }
       try {
         ports = await this.serial.getPorts();
+        if (ports && ports.length > 0) this.cachedPorts = ports;
       } catch (err: unknown) {
         console.warn('[!] [ZodiacController] Serial getPorts error:', err instanceof Error ? err.message : String(err));
       }
-      try {
-        config = await this.serial.getConfig();
-      } catch (err: unknown) {
-        console.warn('[!] [ZodiacController] Serial getConfig error:', err instanceof Error ? err.message : String(err));
+      if (!this.cachedConfig) {
+        try {
+          config = await this.serial.getConfig();
+          if (config) this.cachedConfig = config;
+        } catch (err: unknown) {
+          console.warn('[!] [ZodiacController] Serial getConfig error:', err instanceof Error ? err.message : String(err));
+        }
       }
-    }
-
-    // Check HTTP responsiveness
-    let httpResponsive = false;
-    try {
-      const resp = await fetch(`http://${httpTargetIp}/`, { signal: AbortSignal.timeout(1500) });
-      httpResponsive = resp.ok;
-    } catch (err: unknown) {
-      console.warn(`[!] [ZodiacController] HTTP probe to ${httpTargetIp} unreachable:`, err instanceof Error ? err.message : String(err));
-      httpResponsive = false;
     }
 
     return {
       serialDetected,
       serialPath: serialDetected ? this.serial.path : undefined,
-      deviceStatus,
-      ports,
-      config,
+      deviceStatus: deviceStatus ?? this.cachedStatus,
+      ports: ports ?? this.cachedPorts,
+      config: config ?? this.cachedConfig,
       openFlowMetrics: this.ofServer.metrics,
-      httpResponsive,
+      httpResponsive: false,
     };
   }
 

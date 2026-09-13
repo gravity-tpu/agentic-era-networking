@@ -68,10 +68,29 @@ export class ZodiacSerialClient {
     }
   }
 
+  private mutexPromise: Promise<void> = Promise.resolve();
+
+  private async acquireLock<T>(fn: () => Promise<T>): Promise<T> {
+    let release: () => void = () => {};
+    const nextPromise = new Promise<void>((r) => { release = r; });
+    const prevPromise = this.mutexPromise;
+    this.mutexPromise = prevPromise.then(() => nextPromise, () => nextPromise);
+    await prevPromise.catch(() => {});
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
   /**
    * Executes a command on the Zodiac FX CLI over serial and returns the raw response.
    */
   public async executeRaw(command: string, timeoutMs: number = 3000): Promise<string> {
+    return this.acquireLock(() => this._executeRaw(command, timeoutMs));
+  }
+
+  private async _executeRaw(command: string, timeoutMs: number = 3000): Promise<string> {
     return new Promise((resolve, reject) => {
       const pythonScript = `
 import serial, time, sys
@@ -173,6 +192,10 @@ except Exception as e:
    * Executes a sequence of commands on the Zodiac FX CLI over serial.
    */
   public async executeSequence(commands: string[], timeoutMs: number = 5000): Promise<string> {
+    return this.acquireLock(() => this._executeSequence(commands, timeoutMs));
+  }
+
+  private async _executeSequence(commands: string[], timeoutMs: number = 5000): Promise<string> {
     return new Promise((resolve, reject) => {
       const cmdsJson = JSON.stringify(commands);
       const pythonScript = `
