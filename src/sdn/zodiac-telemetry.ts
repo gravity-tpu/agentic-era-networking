@@ -32,7 +32,7 @@ export interface ZodiacSystemTelemetry {
   readonly openFlowController: string;
   readonly openFlowPort: number;
   readonly failstate: string;
-  readonly cpuTemperatureC: number;
+  readonly cpuTemperatureC: number | null;
   readonly cpuUid: string;
   readonly firmwareVersion: string;
   readonly uptime: string;
@@ -60,7 +60,7 @@ export interface ZodiacTimeSeriesPoint {
   readonly txRatePps: bigint;
   readonly rxRateBps: bigint;
   readonly txRateBps: bigint;
-  readonly cpuTemperatureC: number;
+  readonly cpuTemperatureC: number | null;
   readonly latencyNs: bigint;
 }
 
@@ -68,7 +68,7 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly system: ZodiacSystemTelemetry;
   readonly ports: ZodiacPortTelemetry[];
   readonly openflow: ZodiacOpenFlowTelemetry;
-  readonly source: 'live_hardware' | 'cloud_snapshot';
+  readonly source: 'live_hardware' | 'cloud_snapshot' | 'disconnected';
   readonly timeSeries?: ZodiacTimeSeriesPoint[] | undefined;
 }
 
@@ -229,6 +229,108 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
 }
 
 /**
+ * Creates a disconnected telemetry snapshot representing an unlinked or unplugged Zodiac FX switch.
+ * Invariant: Anti-Shortcut Law & Zero Suppression of Reality. Never fake live hardware metrics.
+ */
+export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
+  const base: ZodiacFullTelemetrySnapshot = {
+    source: 'disconnected',
+    system: {
+      deviceName: 'Zodiac_FX',
+      macAddress: '70:B3:D5:87:40:BC',
+      ipAddress: '10.0.1.99',
+      netmask: '255.255.255.0',
+      defaultGateway: '10.0.1.1',
+      openFlowController: '10.0.1.8',
+      openFlowPort: 6633,
+      failstate: 'Secure',
+      cpuTemperatureC: null,
+      cpuUid: 'Offline',
+      firmwareVersion: 'Offline',
+      uptime: 'Disconnected',
+      timestampNs: process.hrtime.bigint(),
+    },
+    ports: [
+      {
+        port: 1,
+        name: 'Port 1',
+        status: 'DOWN',
+        vlanType: 'OpenFlow',
+        vlanId: 100,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'Opposite Micro-USB connector (Leftmost)',
+      },
+      {
+        port: 2,
+        name: 'Port 2',
+        status: 'DOWN',
+        vlanType: 'OpenFlow',
+        vlanId: 100,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'Middle Left',
+      },
+      {
+        port: 3,
+        name: 'Port 3',
+        status: 'DOWN',
+        vlanType: 'OpenFlow',
+        vlanId: 100,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'Middle Right',
+      },
+      {
+        port: 4,
+        name: 'Port 4',
+        status: 'DOWN',
+        vlanType: 'Native',
+        vlanId: 200,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxDropped: 0n,
+        txDropped: 0n,
+        rxCrcErrors: 0n,
+        physicalLocation: 'Next to Micro-USB connector (Rightmost)',
+      },
+    ],
+    openflow: {
+      status: 'Disconnected',
+      version: '1.3',
+      datapathId: '0x000000000000',
+      activeTables: 10,
+      activeFlows: 0,
+      tableLookups: 0n,
+      tableMatches: 0n,
+      lastHeartbeatLatencyNs: 0n,
+    },
+  };
+
+  return {
+    ...base,
+    timeSeries: generateHistoricalTelemetry(base, 1, 60),
+  };
+}
+
+/**
  * Generates deterministic historical time-series points matching switch counters.
  * Complies with Dean Invariant (pure integer arithmetic, monotonic nanoseconds).
  */
@@ -240,6 +342,26 @@ export function generateHistoricalTelemetry(
   const points: ZodiacTimeSeriesPoint[] = [];
   const nowMs = Date.now();
   const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  // If hardware is disconnected, flatline to zero with null temperature (Reality Invariant)
+  if (snapshot.source === 'disconnected' || snapshot.system.cpuTemperatureC === null) {
+    for (let i = pointCount - 1; i >= 0; i--) {
+      points.push({
+        timestampMs: nowMs - i * stepMs,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxRatePps: 0n,
+        txRatePps: 0n,
+        rxRateBps: 0n,
+        txRateBps: 0n,
+        cpuTemperatureC: null,
+        latencyNs: 0n,
+      });
+    }
+    return points;
+  }
 
   // Aggregate baseline counters
   let totalRxBytes = 0n;
@@ -253,7 +375,7 @@ export function generateHistoricalTelemetry(
     totalTxPkts += p.txPackets;
   }
 
-  const baseTemp = snapshot.system.cpuTemperatureC || 31;
+  const baseTemp = snapshot.system.cpuTemperatureC ?? 31;
   const baseLatency = snapshot.openflow.lastHeartbeatLatencyNs || 495625n;
 
   for (let i = pointCount - 1; i >= 0; i--) {

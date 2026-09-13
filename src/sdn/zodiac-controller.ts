@@ -90,93 +90,79 @@ export class ZodiacController {
     const now = Date.now();
     const shouldProbeSerial = serialDetected && (now - this.lastSerialProbeMs > 30_000 || !this.cachedConfig);
 
-    if (shouldProbeSerial) {
-      this.lastSerialProbeMs = now;
-      try {
-        deviceStatus = await this.serial.getStatus();
-        if (deviceStatus) this.cachedStatus = deviceStatus;
-      } catch (err: unknown) {
-        console.warn('[!] [ZodiacController] Serial getStatus error:', err instanceof Error ? err.message : String(err));
-      }
-      try {
-        ports = await this.serial.getPorts();
-        if (ports && ports.length > 0) this.cachedPorts = ports;
-      } catch (err: unknown) {
-        console.warn('[!] [ZodiacController] Serial getPorts error:', err instanceof Error ? err.message : String(err));
-      }
-      if (!this.cachedConfig) {
+    if (serialDetected) {
+      if (shouldProbeSerial) {
+        this.lastSerialProbeMs = now;
         try {
-          config = await this.serial.getConfig();
-          if (config) this.cachedConfig = config;
+          deviceStatus = await this.serial.getStatus();
+          if (deviceStatus) this.cachedStatus = deviceStatus;
         } catch (err: unknown) {
-          console.warn('[!] [ZodiacController] Serial getConfig error:', err instanceof Error ? err.message : String(err));
+          console.warn('[!] [ZodiacController] Serial getStatus error:', err instanceof Error ? err.message : String(err));
         }
+        try {
+          ports = await this.serial.getPorts();
+          if (ports && ports.length > 0) this.cachedPorts = ports;
+        } catch (err: unknown) {
+          console.warn('[!] [ZodiacController] Serial getPorts error:', err instanceof Error ? err.message : String(err));
+        }
+        if (!this.cachedConfig) {
+          try {
+            config = await this.serial.getConfig();
+            if (config) this.cachedConfig = config;
+          } catch (err: unknown) {
+            console.warn('[!] [ZodiacController] Serial getConfig error:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      } else {
+        deviceStatus = this.cachedStatus;
+        ports = this.cachedPorts;
+        config = this.cachedConfig;
       }
+    } else {
+      // Disconnected: Do not masquerade stale cache as live hardware (Reality Invariant)
+      this.cachedStatus = undefined;
+      this.cachedPorts = undefined;
+      deviceStatus = undefined;
+      ports = undefined;
+      config = this.cachedConfig;
     }
 
     return {
       serialDetected,
       serialPath: serialDetected ? this.serial.path : undefined,
-      deviceStatus: deviceStatus ?? this.cachedStatus,
-      ports: ports ?? this.cachedPorts,
-      config: config ?? this.cachedConfig,
+      deviceStatus,
+      ports,
+      config,
       openFlowMetrics: this.ofServer.metrics,
       httpResponsive: false,
     };
   }
 
   /**
-   * Generates formatted diagnostics output for CLI commands when physical serial is unresponsive.
+   * Generates formatted diagnostics output for CLI commands when physical hardware is disconnected or unresponsive.
+   * Council Invariant: Zero Suppression of Reality. Never fake hardware metrics.
    */
   public getDiagnosticsOutput(command: string): string {
-    const cmd = command.toLowerCase().trim();
-    if (cmd === 'show status' || cmd === 'status') {
-      return `Device Status
-Name:             Zodiac_FX
-Firmware Version: 0.86
-CPU Temperature:  31 C
-CPU UID:          1396191488-826951736-875574576-892547120
-Uptime:           01:25:40
-[Mode: Diagnostics / Last Known Hardware State]`;
+    let serialPresent = false;
+    try {
+      serialPresent = Boolean(this.serial.detectDevice());
+    } catch {
+      serialPresent = false;
     }
-    if (cmd === 'show ports' || cmd === 'ports') {
-      return `Port 1:
-  Status: DOWN
-  VLAN: 100 (OpenFlow)
-  RX: 42104 Bytes (336 Pkts), TX: 0 Bytes (0 Pkts)
-Port 2:
-  Status: DOWN
-  VLAN: 100 (OpenFlow)
-  RX: 0 Bytes (0 Pkts), TX: 0 Bytes (0 Pkts)
-Port 3:
-  Status: DOWN
-  VLAN: 100 (OpenFlow)
-  RX: 0 Bytes (0 Pkts), TX: 0 Bytes (0 Pkts)
-Port 4:
-  Status: UP
-  VLAN: 200 (Native)
-  RX: 259843 Bytes (1982 Pkts), TX: 169427 Bytes (1540 Pkts)
-[Mode: Diagnostics / Last Known Hardware State]`;
+
+    const ofConnected = this.ofServer.metrics.state === 'ESTABLISHED';
+
+    if (!serialPresent && !ofConnected) {
+      return `[!] Zodiac FX Hardware Disconnected
+No serial modem detected under /dev/cu.usbmodem* and OpenFlow switch is disconnected.
+Please connect the physical switch via USB (serial CLI) or Ethernet (OpenFlow 10.0.1.8:6633) to query live device state.`;
     }
-    if (cmd === 'show config' || cmd === 'config') {
-      return `IP Address: 10.0.1.99
-Netmask:    255.255.255.0
-Gateway:    10.0.1.1
-Controller: 10.0.1.8:6633
-Failstate:  Secure
-[Mode: Diagnostics / Last Known Hardware State]`;
+
+    if (serialPresent) {
+      return `[Notice: Serial port (${this.serial.path}) was busy or timed out during '${command}'. Please retry command.]`;
     }
-    if (cmd === 'show of' || cmd === 'openflow') {
-      const metrics = this.ofServer.metrics;
-      return `OpenFlow: Enabled
-Version: 1.3
-Datapath ID: 0x70b3d58740bc
-Active Tables: 10
-Active Flows: ${metrics.state === 'ESTABLISHED' ? 1 : 0}
-Echo Latency: ${metrics.lastEchoLatencyNs} ns
-[Mode: Diagnostics / OpenFlow Control Plane State]`;
-    }
-    return `Zodiac_FX> Command '${command}' dispatched. [Notice: Physical serial link busy or unresponsive; query handled by SDN Controller Diagnostics]`;
+
+    return `[Notice: Switch connected via OpenFlow only (no serial CDC link). Command '${command}' cannot be executed over serial.]`;
   }
 
   /**

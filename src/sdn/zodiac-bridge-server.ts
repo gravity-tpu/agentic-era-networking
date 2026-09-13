@@ -20,7 +20,7 @@ import {
   ZodiacFullTelemetrySnapshot,
   ZodiacTimeSeriesPoint,
   generateHistoricalTelemetry,
-  createDefaultZodiacSnapshot,
+  createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,7 +45,7 @@ export class ZodiacBridgeServer {
   private readonly switchIp: string;
   private readonly controllerIp: string;
   private server: http.Server | null = null;
-  private cachedSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
+  private cachedSnapshot: ZodiacFullTelemetrySnapshot = createDisconnectedZodiacSnapshot();
   private timeSeries: ZodiacTimeSeriesPoint[] = [];
   private pollTimer: NodeJS.Timeout | null = null;
 
@@ -246,8 +246,72 @@ export class ZodiacBridgeServer {
   private async refreshTelemetry(): Promise<void> {
     try {
       const health = await this.controller.getComprehensiveHealth();
-      
-      // Ping OpenFlow echo to measure live nanosecond latency if connected
+      const isLive = health.serialDetected || health.openFlowMetrics.state === 'ESTABLISHED';
+
+      if (!isLive) {
+        // Hardware is physically disconnected. Reflect reality without simulation! (Council Invariant 1)
+        this.cachedSnapshot = {
+          source: 'disconnected',
+          system: {
+            deviceName: 'Zodiac_FX',
+            macAddress: '70:B3:D5:87:40:BC',
+            ipAddress: this.switchIp,
+            netmask: '255.255.255.0',
+            defaultGateway: '10.0.1.1',
+            openFlowController: this.controllerIp,
+            openFlowPort: 6633,
+            failstate: 'Secure',
+            cpuTemperatureC: null,
+            cpuUid: 'Offline',
+            firmwareVersion: 'Offline',
+            uptime: 'Disconnected',
+            timestampNs: process.hrtime.bigint(),
+          },
+          ports: [
+            { port: 1, name: 'Port 1', physicalLocation: 'Opposite Micro-USB connector (Leftmost)', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 2, name: 'Port 2', physicalLocation: 'Middle Left', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 3, name: 'Port 3', physicalLocation: 'Middle Right', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 4, name: 'Port 4', physicalLocation: 'Next to Micro-USB connector (Rightmost)', status: 'DOWN', vlanType: 'Native', vlanId: 200, rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+          ],
+          openflow: {
+            status: 'Disconnected',
+            version: '1.3',
+            datapathId: '0x000000000000',
+            activeTables: 10,
+            activeFlows: 0,
+            tableLookups: 0n,
+            tableMatches: 0n,
+            lastHeartbeatLatencyNs: 0n,
+          },
+        };
+
+        const nowMs = Date.now();
+        this.timeSeries.push({
+          timestampMs: nowMs,
+          rxBytes: 0n,
+          txBytes: 0n,
+          rxPackets: 0n,
+          txPackets: 0n,
+          rxRatePps: 0n,
+          txRatePps: 0n,
+          rxRateBps: 0n,
+          txRateBps: 0n,
+          cpuTemperatureC: null,
+          latencyNs: 0n,
+        });
+
+        if (this.timeSeries.length > 300) {
+          this.timeSeries.shift();
+        }
+
+        this.cachedSnapshot = {
+          ...this.cachedSnapshot,
+          timeSeries: this.timeSeries,
+        };
+        return;
+      }
+
+      // Hardware is live (Serial CDC or OpenFlow active)
       if (health.openFlowMetrics.state === 'ESTABLISHED') {
         this.controller.openFlow.pingEcho();
       }
@@ -262,10 +326,10 @@ export class ZodiacBridgeServer {
               status: p.status,
               vlanType: p.vlanType,
               vlanId: p.vlanId,
-              rxBytes: existing ? existing.rxBytes + 128n : 259843n,
-              txBytes: existing ? existing.txBytes + 96n : 169427n,
-              rxPackets: existing ? existing.rxPackets + 1n : 1982n,
-              txPackets: existing ? existing.txPackets + 1n : 1540n,
+              rxBytes: existing?.rxBytes ?? 0n,
+              txBytes: existing?.txBytes ?? 0n,
+              rxPackets: existing?.rxPackets ?? 0n,
+              txPackets: existing?.txPackets ?? 0n,
               rxDropped: 0n,
               txDropped: 0n,
               rxCrcErrors: 0n,
@@ -284,10 +348,10 @@ export class ZodiacBridgeServer {
           openFlowController: health.config?.controllerIp ?? this.controllerIp,
           openFlowPort: health.config?.controllerPort ?? 6633,
           failstate: health.config?.failstate ?? 'Secure',
-          cpuTemperatureC: health.deviceStatus?.cpuTempC ?? 31,
-          cpuUid: health.deviceStatus?.cpuUid ?? '1396191488-826951736-875574576-892547120',
+          cpuTemperatureC: health.deviceStatus?.cpuTempC ?? null,
+          cpuUid: health.deviceStatus?.cpuUid ?? 'N/A',
           firmwareVersion: health.deviceStatus?.firmwareVersion ?? '0.86',
-          uptime: health.deviceStatus?.uptime ?? '01:25:00',
+          uptime: health.deviceStatus?.uptime ?? '00:00:00',
           timestampNs: process.hrtime.bigint(),
         },
         ports: livePorts,
@@ -298,24 +362,18 @@ export class ZodiacBridgeServer {
             ? `0x${health.openFlowMetrics.switchFeatures.datapathId.toString(16)}`
             : '0x70b3d58740bc',
           activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
-          activeFlows: 0,
+          activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? 1 : 0,
           tableLookups: 0n,
           tableMatches: 0n,
           lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
         },
       };
 
-      // Append live point to rolling timeSeries buffer
-      let totalRxBytes = 0n;
-      let totalTxBytes = 0n;
-      let totalRxPkts = 0n;
-      let totalTxPkts = 0n;
-      for (const p of this.cachedSnapshot.ports) {
-        totalRxBytes += p.rxBytes;
-        totalTxBytes += p.txBytes;
-        totalRxPkts += p.rxPackets;
-        totalTxPkts += p.txPackets;
-      }
+      // Real rate accounting from actual OpenFlow bytes received
+      const totalRxBytes = health.openFlowMetrics.bytesReceived;
+      const totalTxBytes = 0n;
+      const totalRxPkts = health.openFlowMetrics.messagesReceived;
+      const totalTxPkts = 0n;
 
       const lastPoint = this.timeSeries[this.timeSeries.length - 1];
       const nowMs = Date.now();

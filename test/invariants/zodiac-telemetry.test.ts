@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseZodiacPortsHtml,
   createDefaultZodiacSnapshot,
+  createDisconnectedZodiacSnapshot,
   formatBytesDeterministic,
   formatLatencyNsDeterministic,
 } from '../../src/sdn/zodiac-telemetry.js';
@@ -119,6 +120,35 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
       if (i > 0) {
         expect(pt.timestampMs).toBeGreaterThan(pts[i - 1]!.timestampMs);
       }
+    }
+  });
+
+  it('generates completely flatlined zero-rate telemetry when physical hardware is disconnected (Reality Invariant)', () => {
+    const snap = createDisconnectedZodiacSnapshot();
+    expect(snap.source).toBe('disconnected');
+    expect(snap.system.cpuTemperatureC).toBeNull();
+    expect(snap.system.uptime).toBe('Disconnected');
+    expect(snap.openflow.status).toBe('Disconnected');
+    expect(snap.ports).toHaveLength(4);
+
+    for (const p of snap.ports) {
+      expect(p.status).toBe('DOWN');
+      expect(p.rxBytes).toBe(0n);
+      expect(p.txBytes).toBe(0n);
+      expect(p.rxPackets).toBe(0n);
+      expect(p.txPackets).toBe(0n);
+    }
+
+    expect(snap.timeSeries).toBeDefined();
+    for (const pt of snap.timeSeries!) {
+      expect(pt.rxBytes).toBe(0n);
+      expect(pt.txBytes).toBe(0n);
+      expect(pt.rxRatePps).toBe(0n);
+      expect(pt.txRatePps).toBe(0n);
+      expect(pt.rxRateBps).toBe(0n);
+      expect(pt.txRateBps).toBe(0n);
+      expect(pt.cpuTemperatureC).toBeNull();
+      expect(pt.latencyNs).toBe(0n);
     }
   });
 });

@@ -289,6 +289,12 @@ body {
   border: 1px solid var(--cf-border);
 }
 
+.cf-pill-badge.red {
+  background: #fef2f2;
+  color: var(--cf-red);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
 .cf-btn {
   display: inline-flex;
   align-items: center;

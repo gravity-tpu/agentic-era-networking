@@ -257,6 +257,10 @@
         els.sourceTag.innerText = '⚡ Cached / Degraded Link';
         els.sourceTag.className = 'cf-pill-badge amber';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot stale';
+      } else if (snapshot.source === 'disconnected') {
+        els.sourceTag.innerText = '🔴 Hardware Disconnected';
+        els.sourceTag.className = 'cf-pill-badge red';
+        if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot down';
       } else if (snapshot.source === 'PHYSICAL_SWITCH' || snapshot.source === 'live_hardware') {
         els.sourceTag.innerText = '✓ Active Link';
         els.sourceTag.className = 'cf-pill-badge green';
@@ -268,23 +272,34 @@
       }
     }
 
-    if (els.uptimeText) els.uptimeText.innerText = snapshot.system.uptime || '--:--:--';
-    if (els.firmwareText) els.firmwareText.innerText = `v${snapshot.system.firmwareVersion || '0.86'}`;
+    if (els.uptimeText) {
+      els.uptimeText.innerText = snapshot.source === 'disconnected' ? 'Disconnected' : (snapshot.system.uptime || '--:--:--');
+    }
+    if (els.firmwareText) {
+      els.firmwareText.innerText = snapshot.source === 'disconnected' ? 'Offline' : `v${snapshot.system.firmwareVersion || '0.86'}`;
+    }
 
     // 2. Aggregate KPI Metrics (Pure BigInt Accumulation via Reducer)
     const totals = accumulatePortCounters(snapshot.ports);
 
-    if (els.kpiRxBytes) els.kpiRxBytes.innerText = formatBytes(totals.rxBytes);
-    if (els.kpiRxPkts) els.kpiRxPkts.innerText = formatNumber(totals.rxPackets);
-    if (els.kpiTxBytes) els.kpiTxBytes.innerText = formatBytes(totals.txBytes);
-    if (els.kpiTxPkts) els.kpiTxPkts.innerText = formatNumber(totals.txPackets);
+    if (snapshot.source === 'disconnected') {
+      if (els.kpiRxBytes) els.kpiRxBytes.innerText = '0 B';
+      if (els.kpiRxPkts) els.kpiRxPkts.innerText = '0';
+      if (els.kpiTxBytes) els.kpiTxBytes.innerText = '0 B';
+      if (els.kpiTxPkts) els.kpiTxPkts.innerText = '0';
+    } else {
+      if (els.kpiRxBytes) els.kpiRxBytes.innerText = formatBytes(totals.rxBytes);
+      if (els.kpiRxPkts) els.kpiRxPkts.innerText = formatNumber(totals.rxPackets);
+      if (els.kpiTxBytes) els.kpiTxBytes.innerText = formatBytes(totals.txBytes);
+      if (els.kpiTxPkts) els.kpiTxPkts.innerText = formatNumber(totals.txPackets);
+    }
 
     // 3. CPU Temperature (Strict BigInt integer validation without IEEE-754 floats)
     const rawTemp = snapshot.system.cpuTemperatureC;
     let tempValid = false;
     let tempBigInt = 0n;
 
-    if (rawTemp !== null && rawTemp !== undefined) {
+    if (snapshot.source !== 'disconnected' && rawTemp !== null && rawTemp !== undefined) {
       const s = String(rawTemp).trim();
       if (/^-?\d+$/.test(s)) {
         try {
@@ -323,9 +338,11 @@
         els.ofStatus.className = isConn ? 'cf-pill-badge green' : 'cf-pill-badge gray';
       }
       if (els.ofLatency) {
-        els.ofLatency.innerText = formatLatencyNs(snapshot.openflow.lastHeartbeatLatencyNs);
+        els.ofLatency.innerText = snapshot.source === 'disconnected' || snapshot.openflow.status !== 'Connected'
+          ? '--'
+          : formatLatencyNs(snapshot.openflow.lastHeartbeatLatencyNs);
       }
-      if (els.ofDpid) els.ofDpid.innerText = snapshot.openflow.datapathId || '0x70b3d58740bc';
+      if (els.ofDpid) els.ofDpid.innerText = snapshot.openflow.datapathId || '0x000000000000';
       if (els.ofTables) els.ofTables.innerText = `${snapshot.openflow.activeTables || 10} tables`;
     }
 
@@ -413,8 +430,24 @@
     }
 
     // 6. Time-Series Buffer & Rolling Live Analytics Updates
-    if (snapshot.timeSeries && timeSeriesBuffer.length === 0) {
+    if (snapshot.timeSeries && snapshot.timeSeries.length > 0) {
       timeSeriesBuffer = [...snapshot.timeSeries];
+    } else if (snapshot.source === 'disconnected') {
+      const nowMs = Date.now();
+      timeSeriesBuffer.push({
+        timestampMs: nowMs,
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        rxRatePps: 0n,
+        txRatePps: 0n,
+        rxRateBps: 0n,
+        txRateBps: 0n,
+        cpuTemperatureC: null,
+        latencyNs: 0n,
+      });
+      if (timeSeriesBuffer.length > 300) timeSeriesBuffer.shift();
     } else {
       const lastPoint = timeSeriesBuffer[timeSeriesBuffer.length - 1];
       const nowMs = Date.now();
@@ -446,8 +479,8 @@
         txRatePps,
         rxRateBps,
         txRateBps,
-        cpuTemperatureC: Number(tempBigInt),
-        latencyNs: snapshot.openflow?.lastHeartbeatLatencyNs || 495625n,
+        cpuTemperatureC: tempValid ? Number(tempBigInt) : null,
+        latencyNs: snapshot.openflow?.lastHeartbeatLatencyNs || 0n,
       });
 
       if (timeSeriesBuffer.length > 300) {
@@ -467,6 +500,7 @@
 
   /**
    * Generates deterministic historical data points for any time window.
+   * If hardware is disconnected, flatlines to zero (Zero Suppression of Reality).
    */
   function generateLocalHistory(snapshot, range) {
     let durationHours = 1;
@@ -492,6 +526,25 @@
     const nowMs = Date.now();
     const durationMs = Math.round(durationHours * 3600 * 1000);
     const stepMs = Math.max(1000, Math.floor(durationMs / pointCount));
+
+    if (!snapshot || snapshot.source === 'disconnected' || snapshot.system?.cpuTemperatureC === null) {
+      for (let i = pointCount - 1; i >= 0; i--) {
+        points.push({
+          timestampMs: nowMs - (i * stepMs),
+          rxBytes: 0n,
+          txBytes: 0n,
+          rxPackets: 0n,
+          txPackets: 0n,
+          rxRatePps: 0n,
+          txRatePps: 0n,
+          rxRateBps: 0n,
+          txRateBps: 0n,
+          cpuTemperatureC: null,
+          latencyNs: 0n,
+        });
+      }
+      return points;
+    }
 
     const totals = accumulatePortCounters(snapshot.ports);
     const totalRxBytes = totals.rxBytes;
@@ -544,6 +597,10 @@
   }
 
   function getPointsForDisplay() {
+    if (currentSnapshot?.source === 'disconnected') {
+      if (timeSeriesBuffer.length > 0) return timeSeriesBuffer.slice(-30);
+      return generateLocalHistory(currentSnapshot, 'live');
+    }
     if (currentRange === 'live') {
       if (timeSeriesBuffer.length > 0) return timeSeriesBuffer.slice(-30);
       if (currentSnapshot) return generateLocalHistory(currentSnapshot, 'live');
@@ -813,8 +870,16 @@
           ? `${formatNumber(latest.txRatePps)} pps`
           : `${formatBytes(latest.txRateBps)}/s`;
       }
-      if (els.chartTempVal) els.chartTempVal.innerText = `${latest.cpuTemperatureC}°C`;
-      if (els.chartLatVal) els.chartLatVal.innerText = formatLatencyNs(latest.latencyNs);
+      if (els.chartTempVal) {
+        els.chartTempVal.innerText = currentSnapshot?.source === 'disconnected' || latest.cpuTemperatureC === null
+          ? '--°C'
+          : `${latest.cpuTemperatureC}°C`;
+      }
+      if (els.chartLatVal) {
+        els.chartLatVal.innerText = currentSnapshot?.source === 'disconnected' || latest.latencyNs === 0n
+          ? '--'
+          : formatLatencyNs(latest.latencyNs);
+      }
     }
   }
 
@@ -849,49 +914,22 @@
       } else {
         const errText = await resp.text();
         console.warn(`[!] Command dispatch returned HTTP ${resp.status}:`, errText);
-        appendTerminalLine(`[Warning: HTTP ${resp.status} — Using Switch Diagnostics]`, 'error');
         simulateCloudResponse(command);
       }
     } catch (err) {
       console.warn('[!] Terminal command dispatch error:', err);
-      appendTerminalLine(`[Notice: Local bridge offline, using cloud diagnostics (${err instanceof Error ? err.message : String(err)})]`, 'error');
       simulateCloudResponse(command);
     }
   }
 
   function simulateCloudResponse(command) {
-    const cmd = command.toLowerCase();
-    if (cmd === 'show status' || cmd === 'status') {
-      appendTerminalLine(`Device Status
-Name:             Zodiac_FX
-Firmware Version: 0.86
-CPU Temperature:  31 C
-CPU UID:          1396191488-826951736-875574576-892547120
-Uptime:           01:25:40`, 'response');
-    } else if (cmd === 'show ports' || cmd === 'ports') {
-      appendTerminalLine(`Port 1:
-  Status: DOWN
-  VLAN: 100 (OpenFlow)
-  RX: 42104 Bytes (336 Pkts), TX: 0 Bytes (0 Pkts)
-Port 4:
-  Status: UP
-  VLAN: 200 (Native)
-  RX: 259843 Bytes (1982 Pkts), TX: 169427 Bytes (1540 Pkts)`, 'response');
-    } else if (cmd === 'show config' || cmd === 'config') {
-      appendTerminalLine(`IP Address: 10.0.1.99
-Netmask:    255.255.255.0
-Gateway:    10.0.1.1
-Controller: 10.0.1.8:6633
-Failstate:  Secure`, 'response');
-    } else if (cmd === 'show of' || cmd === 'openflow') {
-      appendTerminalLine(`OpenFlow: Enabled
-Version: 1.3
-Datapath ID: 0x70b3d58740bc
-Active Tables: 10
-Active Flows: 0`, 'response');
-    } else {
-      appendTerminalLine(`[Cloud Mode] Command '${command}' dispatched. For live serial CDC interaction, run local bridge.`, 'response');
+    if (!currentSnapshot || currentSnapshot.source === 'disconnected') {
+      appendTerminalLine(`[!] Zodiac FX Hardware Disconnected
+No serial modem detected under /dev/cu.usbmodem* and OpenFlow switch is disconnected.
+Please connect the physical switch via USB to execute '${command}' on device hardware.`, 'error');
+      return;
     }
+    appendTerminalLine(`[Notice: Terminal command '${command}' routed to cloud sandbox. Connect local bridge ('npm run zodiac -- serve') for direct serial CDC execution.]`, 'response');
   }
 
   function appendTerminalLine(text, type) {
