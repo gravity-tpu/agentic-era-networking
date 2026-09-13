@@ -40,5 +40,10 @@
   },
   "dependencies": {
     "@prisma/client": "^7.10.0"
+  },
+  "allowScripts": {
+    "@prisma/engines": true,
+    "esbuild": true,
+    "prisma": true
   }
 }
