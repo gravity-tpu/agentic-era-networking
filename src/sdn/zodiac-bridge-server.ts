@@ -52,7 +52,7 @@ export class ZodiacBridgeServer {
     this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '10.0.1.8';
   }
 
-  public async start(port: number = 3000, host: string = '0.0.0.0'): Promise<void> {
+  public async start(requestedPort: number = 3000, host: string = '0.0.0.0'): Promise<number> {
     // 1. Start OpenFlow 1.3 controller in background
     try {
       await this.controller.startOpenFlow(6633, this.controllerIp);
@@ -62,16 +62,30 @@ export class ZodiacBridgeServer {
       console.error('[!] [OpenFlow Error] Control plane failed to bind on 6633. Entering DEGRADED_FAULT state:', err instanceof Error ? err.message : String(err));
     }
 
-    // 2. Start HTTP bridge server
-    return new Promise((resolve, reject) => {
-      this.server = http.createServer((req, res) => {
-        void this.handleRequest(req, res);
+    // 2. Start HTTP bridge server with automatic port hunting on EADDRINUSE
+    const tryListen = (portToTry: number): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        const srv = http.createServer((req, res) => {
+          void this.handleRequest(req, res);
+        });
+
+        srv.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE' && portToTry < requestedPort + 20) {
+            console.log(`[i] Port ${portToTry} in use, attempting next port ${portToTry + 1}...`);
+            resolve(tryListen(portToTry + 1));
+          } else {
+            reject(err);
+          }
+        });
+
+        srv.listen(portToTry, host, () => {
+          this.server = srv;
+          resolve(portToTry);
+        });
       });
-      this.server.on('error', reject);
-      this.server.listen(port, host, () => {
-        resolve();
-      });
-    });
+    };
+
+    return tryListen(requestedPort);
   }
 
   public async stop(): Promise<void> {

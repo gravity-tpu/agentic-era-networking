@@ -150,9 +150,9 @@ async function main(): Promise<void> {
       console.log(`\n🚀 Starting Zodiac FX Web & REST Bridge Server on http://localhost:${port}...\n`);
       const { ZodiacBridgeServer } = await import('../dist/sdn/zodiac-bridge-server.js');
       const bridge = new ZodiacBridgeServer(controller);
-      await bridge.start(port, host);
-      console.log(`✨ Dashboard is live at : http://localhost:${port}`);
-      console.log(`   - REST Telemetry API : http://localhost:${port}/api/zodiac`);
+      const boundPort = await bridge.start(port, host);
+      console.log(`✨ Dashboard is live at : http://localhost:${boundPort}`);
+      console.log(`   - REST Telemetry API : http://localhost:${boundPort}/api/zodiac`);
       console.log(`   - OpenFlow 1.3 Daemon : 10.0.1.8:6633`);
       console.log(`   - Serial Management   : ${controller.serialClient.path}`);
       console.log(`   - Press Ctrl+C to exit\n`);
