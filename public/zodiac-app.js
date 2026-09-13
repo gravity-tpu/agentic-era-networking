@@ -33,6 +33,7 @@
     sidebarIp: document.getElementById('cf-sidebar-ip'),
     firmwareText: document.getElementById('z-firmware'),
     uptimeText: document.getElementById('z-uptime'),
+    sandboxBanner: document.getElementById('z-sandbox-banner'),
 
     // Top KPI Cards
     kpiRxBytes: document.getElementById('kpi-rx-bytes'),
@@ -257,18 +258,22 @@
         els.sourceTag.innerText = '⚡ Cached / Degraded Link';
         els.sourceTag.className = 'cf-pill-badge amber';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot stale';
+        if (els.sandboxBanner) els.sandboxBanner.style.display = 'none';
       } else if (snapshot.source === 'disconnected') {
         els.sourceTag.innerText = '🔴 Hardware Disconnected';
         els.sourceTag.className = 'cf-pill-badge red';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot down';
+        if (els.sandboxBanner) els.sandboxBanner.style.display = 'none';
       } else if (snapshot.source === 'PHYSICAL_SWITCH' || snapshot.source === 'live_hardware') {
         els.sourceTag.innerText = '✓ Active Link';
         els.sourceTag.className = 'cf-pill-badge green';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot';
+        if (els.sandboxBanner) els.sandboxBanner.style.display = 'none';
       } else {
-        els.sourceTag.innerText = '☁ Cloud Twin';
+        els.sourceTag.innerText = '☁ Cloud Sandbox (Simulated)';
         els.sourceTag.className = 'cf-pill-badge blue';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot';
+        if (els.sandboxBanner) els.sandboxBanner.style.display = 'flex';
       }
     }
 

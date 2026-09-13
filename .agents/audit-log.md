@@ -17,6 +17,7 @@
 | 2026-09-12 | INV-006 | DB Migration Guard for Prisma | Active | Structural changes to `prisma/schema.prisma` in PRs must include SQL migrations under `prisma/migrations/`. |
 | 2026-09-12 | INV-007 | Physical Co-Design & Edge TPU Hardware Integration | Active | Zodiac FX Switch + Google Coral USB Accelerator provide physical ground-truth data plane and sub-4ms INT8 inference directly on host DisplayLink dock without intermediate SBC hops. |
 | 2026-09-13 | INV-008 | Dual-Plane Zodiac FX Hardware Controller | Active | Out-of-band Serial CDC ACM (/dev/cu.usbmodem*) + OpenFlow 1.3 TCP (10.0.1.8:6633) with BigInt wire serialization and SymbolicRouteVerifier loop gate. |
+| 2026-09-13 | INV-009 | Goodhart's Law & Epistemic Telemetry Provenance | Active | Anti-Simulation Law: Telemetry without verified physical provenance is fiction. Prohibit agents from synthesizing BigInt metrics to game UI/tests. Disconnected links must evaluate to 0 rates and null thermals; sandbox data must carry explicit disclaimers. |
 
 ---
 

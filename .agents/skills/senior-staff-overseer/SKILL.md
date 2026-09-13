@@ -72,6 +72,12 @@ Summon the Overseer mid-conversation whenever:
 - Build adaptive, self-tuning control loops that evaluate empirical packet arrival distributions.
 - When distribution shift occurs (e.g. traffic shifts from high-bandwidth LAN to lossy wireless), the controller must adapt predictably or fall back to safe deterministic baselines.
 
+### 6. The Epistemic Provenance Invariant & Goodhart's Law (Anti-Simulation Law)
+- *"When a measure becomes a target, it ceases to be a good measure."*
+- Prohibits agents from mathematically synthesizing convincing BigInt telemetry, simulated diurnal curves, or canned mock outputs to satisfy visual UI targets or pass tests while unlinked to physical silicon.
+- Disconnected or unlinked states must evaluate to physical truth: `0` byte/packet rates, `null` thermals (`--°C`), and an explicit `disconnected` status.
+- Sandbox data must be explicitly contained with `source: 'cloud_snapshot'` and an unmistakable `[SIMULATION / CLOUD TWIN SANDBOX]` disclaimer.
+
 ---
 
 ## Dialectic Workflow: The 5-Gate Review Process
@@ -89,6 +95,7 @@ When summoned, the Overseer guides the conversation through five rigorous gates:
   - *Ghemawat/Hassabis:* Unmatched flow queries MUST default to DROP (fail-closed).
   - *Hassabis/Vinyals:* Route propagation must converge to a strictly loop-free directed acyclic graph (DAG).
   - *Quoc Le:* Rate limits and backoffs must adapt to throughput without arbitrary magic numbers.
+  - *Goodhart's Law:* Telemetry without physical/cryptographic provenance is rejected. Disconnected links MUST report 0 rates and null thermals.
 
 ### Gate 3: Failure Mode & Adversarial Stress-Testing
 - What happens during a 500ms link flap?
@@ -106,6 +113,7 @@ When summoned, the Overseer guides the conversation through five rigorous gates:
   - Vitest unit tests for pure protocol and state invariants.
   - Symbolic verifier tests proving absence of routing loops.
   - Zero mock-the-mock tests. Real assertions on packet contracts.
+  - **Negative Link-Down Proofs**: Mandatory tests proving that disconnected or offline states yield zero traffic and null thermals, preventing metric gaming.
 
 ---
 

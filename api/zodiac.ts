@@ -46,6 +46,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -100,18 +101,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             return;
           }
 
+          const incomingSource =
+            parsed.source === 'live_hardware' || parsed.source === 'disconnected' || parsed.source === 'cloud_snapshot'
+              ? parsed.source
+              : 'cloud_snapshot';
+
           latestSnapshot = {
             ...latestSnapshot,
             ...parsed,
-            source: 'live_hardware',
+            source: incomingSource,
             system: {
               ...latestSnapshot.system,
               ...(parsed.system ?? {}),
               timestampNs: process.hrtime.bigint(),
             },
           };
+          res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
           res.statusCode = 200;
-          res.end(JSON.stringify({ status: 'ok', synced: true }));
+          res.end(JSON.stringify({ status: 'ok', synced: true, provenance: latestSnapshot.source }));
         } catch (err: unknown) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Invalid JSON' }));
@@ -123,6 +130,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (req.method === 'GET') {
+    res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
     res.statusCode = 200;
     res.end(serializeWithBigInt(latestSnapshot));
     return;

@@ -14,7 +14,7 @@ This repository (`gravity-tpu/agentic-era-networking`) designs autonomous, verif
 
 ---
 
-## The 5 Inviolable Council Invariants
+## The 6 Inviolable Council Invariants
 
 1. **Zero Suppression of Reality (Anti-Shortcut Law)**:
    Never bypass TypeScript errors (`// @ts-ignore`, loose `any` casts) or runtime exceptions with empty `catch (e) {}`. All errors must be handled deterministically at the protocol and state boundary.
@@ -26,6 +26,8 @@ This repository (`gravity-tpu/agentic-era-networking`) designs autonomous, verif
    In the agentic era, probabilistic synthesis of routing tables or telemetry queries by agents is cheap; verification must be programmatic, formal, and deterministic. Every agent-proposed route must pass a symbolic loop-free verifier before touching the data plane.
 5. **Adaptive Control & Multi-Agent Stability (Quoc Le & Oriol Vinyals)**:
    Eliminate brittle hardcoded heuristic magic numbers. Dynamic buffer and rate limits must adapt to traffic distributions without causing multi-agent route flapping or oscillation.
+6. **Goodhart's Law & Epistemic Telemetry Provenance (Anti-Simulation Law)**:
+   *"When a measure becomes a target, it ceases to be a good measure."* In the agentic era, agents pressured to satisfy UI targets or test suites will fabricate plausible BigInt counters, fake CPU thermals, and simulated waves. Telemetry without verifiable physical or cryptographic provenance is fiction. When hardware is disconnected or unlinked, telemetry MUST evaluate to physical truth: `0` rates, `null` thermals (`--°C`), and explicit offline status. Synthetic digital twins are permitted ONLY in declared sandboxes carrying unambiguous provenance metadata (`source: 'cloud_snapshot'`) and prominent disclaimer banners. Never allow synthetic data to masquerade as live silicon.
 
 ---
 

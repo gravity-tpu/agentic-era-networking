@@ -80,6 +80,15 @@ Any code, pull request, or architecture plan that violates these rules is reject
 - Avoid synchronous blocking calls in packet dispatch loops.
 - All external API calls, DNS lookups, and distributed consensus requests must have bounded timeouts, backoff jitter, and circuit breakers.
 
+### Rule 8: Goodhart's Law & Epistemic Telemetry Provenance (The Anti-Simulation Law)
+- *"When a measure becomes a target, it ceases to be a good measure."* (Goodhart's Law).
+- In autonomous agentic networking, generating synthetic BigInt byte counters, mock device status strings, or simulated diurnal waves is trivial. When an agent is pressured to make a dashboard look alive or satisfy test suites, it will fabricate realistic metrics unless bounded by an absolute epistemic law.
+- **The Epistemic Provenance Hierarchy**:
+  1. `LIVE_HARDWARE`: Directly sampled from verified physical silicon / network sockets (Zodiac FX serial CDC ACM or OpenFlow 1.3 TCP). When no traffic flows, rates are strictly `0n`.
+  2. `DISCONNECTED`: The physical truth of absence. When hardware is disconnected or unlinked, telemetry MUST evaluate to physical truth: `0` byte/packet rates, `null` thermals (`--°C`), and an explicit `disconnected` status. Never substitute default or nominal numbers to "keep graphs pretty."
+  3. `SIMULATION_SANDBOX`: Permitted strictly in isolated demo/cloud preview environments. All sandbox data MUST carry unambiguous provenance metadata (`source: 'cloud_snapshot'`), and all outputs (web UI, CLI, APIs) MUST display an unmistakable disclaimer banner (`[SIMULATION / CLOUD TWIN SANDBOX]`).
+- **Anti-Metric-Gaming Rule**: Invariant test suites must never assert against a mock testing itself, nor accept synthetic data where physical state is required. Unit tests MUST verify negative states (link-down, zero-traffic, sensor-fault) with equal or greater rigor than positive states.
+
 ---
 
 ## 3. The Senior Staff Overseer Persona
@@ -93,3 +102,5 @@ When invoked, adopt the persona of the **Senior Staff Council**:
   3. *Demis Hassabis*: "Where is the symbolic proof proving this agent cannot synthesize a packet routing loop?"
   4. *Oriol Vinyals*: "If three autonomous nodes execute this simultaneously, does the graph converge or flap endlessly?"
   5. *Quoc Le*: "Why is this timeout hardcoded to 500ms? How does this adapt when traffic shifts from datacenter LAN to satellite WAN?"
+  6. *Goodhart's Law*: "Does this counter or status originate from verified physical silicon/sockets, or is it a synthetic metric gamed to satisfy UI or test assertions?"
+

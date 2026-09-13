@@ -19,9 +19,11 @@ Provide an interactive, Senior Staff (Google L7+ / Fellow track) dialectic sessi
    - Are packet counters and bandwidth rates exact integers (`BigInt`) or susceptible to IEEE-754 drift?
    - Are routing rules, firewall evaluations, and DNS queries fail-closed (default DROP)?
    - Are timestamps monotonic (`hrtime`) across measurement intervals?
+   - **Goodhart's Law / Epistemic Provenance**: Does telemetry originate from verified physical silicon/sockets, or is synthetic data masquerading as live state? Do disconnected states evaluate to 0 rates and null thermals?
 2. Check for anti-patterns:
    - Are errors being swallowed (`catch (e) {}` on socket I/O)?
    - Are unbounded queues used for packet buffers without backpressure?
+   - Are mock command outputs returned without clear `[SIMULATION / CLOUD TWIN SANDBOX]` disclaimers?
 
 ### Step 3: Back-of-the-Napkin Systems Analysis
 1. Estimate:

@@ -79,7 +79,7 @@ FAIL_COUNT=0
 FAILURES=()
 
 # ── Gate 1: TypeScript ─────────────────────────────────────
-echo -e "${BOLD}[Gate 1/3] TypeScript — Zero suppressions, zero errors${RESET}"
+echo -e "${BOLD}[Gate 1/4] TypeScript — Zero suppressions, zero errors${RESET}"
 if npm run check-types --silent 2>&1; then
   echo -e "  ${GREEN}✓ Type check passed across all packages${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -91,7 +91,7 @@ fi
 echo ""
 
 # ── Gate 2: Invariant Test Suite ──────────────────────────
-echo -e "${BOLD}[Gate 2/3] Test Suite — All systems & invariants must hold${RESET}"
+echo -e "${BOLD}[Gate 2/4] Test Suite — All systems & invariants must hold${RESET}"
 if npm run test --silent 2>&1; then
   echo -e "  ${GREEN}✓ All invariant and unit test suites passed${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -103,7 +103,7 @@ fi
 echo ""
 
 # ── Gate 3: Determinism & Anti-Pattern Scan ───────────────
-echo -e "${BOLD}[Gate 3/3] Determinism — Scanning pushed files for banned patterns${RESET}"
+echo -e "${BOLD}[Gate 3/4] Determinism — Scanning pushed files for banned patterns${RESET}"
 
 SUSPICIOUS_FINDINGS=""
 UNIQUE_COUNT=${#UNIQUE_FILES[@]}
@@ -143,6 +143,58 @@ else
   echo -e "  ${YELLOW}⚠ Determinism or suppression warnings found:${RESET}"
   echo -e "$SUSPICIOUS_FINDINGS"
   PASS_COUNT=$((PASS_COUNT + 1))
+fi
+echo ""
+
+# ── Gate 4: Epistemic Provenance & Anti-Simulation Scan ──────
+echo -e "${BOLD}[Gate 4/4] Epistemic Provenance — Scanning for untagged simulations & metric gaming${RESET}"
+
+PROVENANCE_FAILURES=""
+
+if [ "$UNIQUE_COUNT" -gt 0 ]; then
+  for file in "${UNIQUE_FILES[@]}"; do
+    [ -z "$file" ] && continue
+    [ -f "$REPO_ROOT/$file" ] || continue
+    case "$file" in
+      *.ts|*.js|*.mjs)
+        case "$file" in
+          test/*|*.test.ts|*.spec.ts)
+            ;;
+          *)
+            # 1. Untagged mock hardware telemetry masquerading as live silicon
+            MOCK_LEAK=$(grep -nE "CPU Temperature:\s*[0-9]+" "$REPO_ROOT/$file" 2>/dev/null || true)
+            if [ -n "$MOCK_LEAK" ]; then
+              if ! grep -qE "(SIMULATION|SANDBOX|cloud_snapshot|disconnected)" "$REPO_ROOT/$file" 2>/dev/null; then
+                PROVENANCE_FAILURES+="\n  ${BOLD}$file (Untagged mock hardware telemetry masquerading as live silicon):${RESET}\n"
+                while IFS= read -r m; do
+                  PROVENANCE_FAILURES+="    $m\n"
+                done <<< "$MOCK_LEAK"
+              fi
+            fi
+
+            # 2. Artificial constant counter increments (violating Goodhart's Law)
+            ARTIFICIAL_INC=$(grep -nE "(rxBytes|txBytes|rxPackets|txPackets)\s*\+=\s*[0-9]+n?" "$REPO_ROOT/$file" 2>/dev/null || true)
+            if [ -n "$ARTIFICIAL_INC" ]; then
+              PROVENANCE_FAILURES+="\n  ${BOLD}$file (Artificial counter increment detected):${RESET}\n"
+              while IFS= read -r m; do
+                PROVENANCE_FAILURES+="    $m\n"
+              done <<< "$ARTIFICIAL_INC"
+            fi
+            ;;
+        esac
+        ;;
+    esac
+  done
+fi
+
+if [ -z "$PROVENANCE_FAILURES" ]; then
+  echo -e "  ${GREEN}✓ Epistemic provenance verified: no untagged simulations or artificial metric drift${RESET}"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo -e "  ${RED}✗ Epistemic provenance violation detected (Goodhart's Law):${RESET}"
+  echo -e "$PROVENANCE_FAILURES"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  FAILURES+=("Epistemic provenance violation (Goodhart's Law)")
 fi
 echo ""
 
