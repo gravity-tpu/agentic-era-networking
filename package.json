@@ -43,7 +43,8 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@prisma/client": "^7.10.0"
+    "@prisma/client": "^7.10.0",
+    "@vercel/analytics": "^2.0.1"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2",
