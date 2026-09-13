@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Invariant: Counter metrics use 64-bit integer (BigInt) precision
+model NetworkTelemetry {
+  id              String   @id @default(uuid())
+  interfaceName   String
+  packetsIngress  BigInt
+  packetsEgress   BigInt
+  bytesIngress    BigInt
+  bytesEgress     BigInt
+  droppedPackets  BigInt
+  timestampNs     BigInt
+  createdAt       DateTime @default(now())
+
+  @@index([interfaceName, createdAt])
+}
+
+// Invariant: All DNS resolutions logged with nanosecond latency and fail-closed RCODE
+model DnsQueryLog {
+  id            String   @id @default(uuid())
+  hostname      String
+  recordType    String
+  clientIp      String
+  responseCode  String   // NOERROR, NXDOMAIN, NODATA, REJECTED
+  resolvedValue String?
+  latencyNs     BigInt
+  createdAt     DateTime @default(now())
+
+  @@index([hostname, createdAt])
+  @@index([responseCode])
+}
+
+// Invariant: SDN flow rules with priority and default-drop action
+model FlowRule {
+  id         String   @id @default(uuid())
+  tenantId   String
+  priority   Int      @default(100)
+  srcCidr    String   // e.g. "10.0.0.0/24"
+  dstCidr    String   // e.g. "192.168.1.0/24"
+  protocol   String   // TCP, UDP, ICMP, ANY
+  srcPort    Int?     // null = ANY
+  dstPort    Int?     // null = ANY
+  action     String   // FORWARD, DROP, QUARANTINE
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId, priority])
+  @@index([action])
+}

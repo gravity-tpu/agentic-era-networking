@@ -39,3 +39,5 @@ yarn-error.log*
 pnpm-debug.log*
 vitest.log
 *.tsbuildinfo
+.vercel
+.env*

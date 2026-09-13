@@ -1,7 +1,7 @@
 # Institutional Memory — Senior Staff Audit Log
 **Repository:** gravity-tpu/agentic-era-networking  
 **Overseer Level:** Principal / Senior Staff Systems Architect (L7+ Fellow Track)  
-**Governing Principles:** Jeff Dean (Scale), Sanjay Ghemawat (Simplicity), Demis Hassabis (Verification)
+**Governing Principles:** Jeff Dean (Scale), Sanjay Ghemawat (Simplicity), Quoc Le (Adaptation), Oriol Vinyals (Graph Equilibrium), Demis Hassabis (Verification)
 
 ---
 
@@ -12,7 +12,9 @@
 | 2026-09-12 | INV-001 | BigInt & Integer Only for Telemetry Counters | Active | Floating-point IEEE-754 precision issues cause packet/byte counter divergence under continuous load. |
 | 2026-09-12 | INV-002 | Fail-Closed Default (Default Drop) | Active | All unmatched routing rules, DNS records, and SDN flow lookups must reject/drop by construction. |
 | 2026-09-12 | INV-003 | Zero Error Suppression Rule | Active | No empty catch blocks or `@ts-ignore` to mask networking or compiler errors. |
-| 2026-09-12 | INV-004 | Multi-Model Fallback for AI Code Review | Active | Google Gemini (primary fast/pro) → Anthropic Claude → OpenAI GPT-4o ensures high-availability CI reviews. |
+| 2026-09-12 | INV-004 | Multi-Model Fallback for AI Code Review | Active | Google Gemini (primary) → Anthropic Claude → OpenAI GPT-4o ensures resilient CI code reviews. |
+| 2026-09-12 | INV-005 | Single Source of Truth for Runtime | Active | `.nvmrc` pins Node 22 universally across local dev, CI, and Vercel. |
+| 2026-09-12 | INV-006 | DB Migration Guard for Prisma | Active | Structural changes to `prisma/schema.prisma` in PRs must include SQL migrations under `prisma/migrations/`. |
 
 ---
 
@@ -21,9 +23,12 @@
 *All items must be tracked here until resolved. Pull requests resolving an item must check the box and link the commit.*
 
 - [x] Initial repository scaffolding and clean-room separation from encompass-platform.
-- [ ] Add eBPF / raw socket packet capture integration layer.
-- [ ] Add DNS over HTTPS (DoH) / DNS over TLS (DoT) upstream resolver engine.
-- [ ] Set up Neon PostgreSQL connection and schema for telemetry persistence.
+- [x] Weekly automated security scanner (`security-scan.yml`) & Dependabot configuration.
+- [x] Neon PostgreSQL Prisma schema for telemetry, DNS query logs, and SDN flow rules.
+- [x] Prometheus `/metrics` exposition formatter for BigInt telemetry.
+- [x] Wire-protocol RFC 1035 UDP DNS socket server with fail-closed resolution.
+- [x] SDN Flow Table with CIDR matching and default-drop enforcement.
+- [ ] Connect live Neon PostgreSQL connection string and run initial migration.
 
 ---
 
@@ -33,4 +38,8 @@
 
 | Timestamp (UTC) | Branch | Commit | Status | Summary |
 |-----------------|--------|--------|--------|---------|
-| 2026-09-12T18:30:00Z | main | init | PASSED | Initial clean-room bootstrap and baseline invariant verification. |
+| 2026-09-12T18:30:00Z | main | 14f08fc | PASSED | Initial clean-room bootstrap and baseline invariant verification. |
+| 2026-09-12T19:47:18Z | main | 468d373 | PASSED | Added vercel.json and public interactive console (18 tests passed). |
+| 2026-09-12T19:55:45Z | main | 9013f67 | PASSED | Pinned Node engine to 22.x (18 tests passed). |
+| 2026-09-12T19:59:24Z | main | 079ad1f | PASSED | Adopted .nvmrc as single source of truth (18 tests passed). |
+| 2026-09-12T20:26:42Z | main | pending | PASSED | Added Security Scanner, Prisma Neon DB, Prometheus, DNS UDP Server, SDN Flow Table (25 tests passed). |

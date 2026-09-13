@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "engines": {
-    "node": "22.x"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "build": "tsc",
@@ -17,7 +17,9 @@
     "review:staged": "node scripts/ai-reviewer.mjs",
     "review:last": "node scripts/ai-reviewer.mjs --last",
     "review:head": "node scripts/ai-reviewer.mjs --head",
-    "setup-hooks": "bash scripts/install-hooks.sh"
+    "setup-hooks": "bash scripts/install-hooks.sh",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy"
   },
   "keywords": [
     "networking",
@@ -32,7 +34,11 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^22.13.9",
+    "prisma": "^7.10.0",
     "typescript": "^5.7.3",
     "vitest": "^3.0.7"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.10.0"
   }
 }

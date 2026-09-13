@@ -1,0 +1,43 @@
+name: DB Migration Guard
+
+# Ensures that any structural changes to prisma/schema.prisma are accompanied
+# by a SQL migration under prisma/migrations/, preventing runtime drift outages.
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'prisma/schema.prisma'
+
+jobs:
+  guard:
+    name: Require Migration for Schema Changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Schema Change Has a Matching Migration
+        run: |
+          set -u
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          meaningful=$(git diff "$BASE" "$HEAD" -- prisma/schema.prisma \
+            | grep -E '^[+-]' \
+            | grep -vE '^(\+\+\+|---)' \
+            | grep -vE '^[+-][[:space:]]*(//.*)?$' \
+            | wc -l | tr -d ' ')
+
+          new_migrations=$(git diff --name-only --diff-filter=A "$BASE" "$HEAD" \
+            | grep -cE '^prisma/migrations/[^/]+/migration\.sql$' || true)
+
+          echo "Structural schema changes: ${meaningful} | New migrations added: ${new_migrations}"
+
+          if [ "${meaningful}" -gt 0 ] && [ "${new_migrations}" -eq 0 ]; then
+            echo "::error::prisma/schema.prisma has structural changes but this PR adds no migration under prisma/migrations/. Deploys do NOT automatically author migrations, which causes runtime schema drift. Run 'npx prisma migrate dev --name <name>' and commit the generated SQL migration."
+            exit 1
+          fi
+
+          echo "OK — Prisma schema and migrations are in sync."
