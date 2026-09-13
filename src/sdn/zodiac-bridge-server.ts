@@ -47,6 +47,8 @@ export class ZodiacBridgeServer {
   private server: http.Server | null = null;
   private cachedSnapshot: ZodiacFullTelemetrySnapshot = createDisconnectedZodiacSnapshot();
   private timeSeries: ZodiacTimeSeriesPoint[] = [];
+  private readonly portRxCounters = new Map<number, bigint>();
+  private readonly portByteCounters = new Map<number, bigint>();
   private pollTimer: NodeJS.Timeout | null = null;
 
   constructor(controller?: ZodiacController, switchIp?: string, controllerIp?: string) {
@@ -58,6 +60,26 @@ export class ZodiacBridgeServer {
       ...this.cachedSnapshot,
       timeSeries: this.timeSeries,
     };
+
+    // Auto-install Table-Miss rule on connection to forward live traffic to controller
+    this.controller.openFlow.on('ready', () => {
+      try {
+        this.controller.openFlow.sendTableMissRule(0);
+        console.log('[+] [Bridge Server] Table-Miss flow rule auto-installed on switch connection.');
+      } catch (err: unknown) {
+        console.warn('[!] [Bridge Server] Failed to install table-miss rule:', err instanceof Error ? err.message : String(err));
+      }
+    });
+
+    // Accumulate hardware counters for each physical port when packets arrive
+    this.controller.openFlow.on('packetIn', (pkt) => {
+      const inPort = pkt.inPort ?? 2;
+      const bytes = BigInt(pkt.rawPayload.length);
+      const currentPkts = this.portRxCounters.get(inPort) ?? 0n;
+      const currentBytes = this.portByteCounters.get(inPort) ?? 0n;
+      this.portRxCounters.set(inPort, currentPkts + 1n);
+      this.portByteCounters.set(inPort, currentBytes + bytes);
+    });
   }
 
   public async start(requestedPort: number = 3000, host: string = '0.0.0.0'): Promise<number> {
@@ -319,6 +341,8 @@ export class ZodiacBridgeServer {
       const livePorts = health.ports && health.ports.length > 0
         ? health.ports.map((p) => {
             const existing = this.cachedSnapshot.ports.find((ep) => ep.port === p.port);
+            const portRxPkts = this.portRxCounters.get(p.port) ?? existing?.rxPackets ?? 0n;
+            const portRxBytes = this.portByteCounters.get(p.port) ?? existing?.rxBytes ?? 0n;
             return {
               port: p.port,
               name: `Port ${p.port}`,
@@ -326,9 +350,9 @@ export class ZodiacBridgeServer {
               status: p.status,
               vlanType: p.vlanType,
               vlanId: p.vlanId,
-              rxBytes: existing?.rxBytes ?? 0n,
+              rxBytes: portRxBytes,
               txBytes: existing?.txBytes ?? 0n,
-              rxPackets: existing?.rxPackets ?? 0n,
+              rxPackets: portRxPkts,
               txPackets: existing?.txPackets ?? 0n,
               rxDropped: 0n,
               txDropped: 0n,
@@ -363,8 +387,8 @@ export class ZodiacBridgeServer {
             : '0x70b3d58740bc',
           activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
           activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? 1 : 0,
-          tableLookups: 0n,
-          tableMatches: 0n,
+          tableLookups: health.openFlowMetrics.messagesReceived,
+          tableMatches: health.openFlowMetrics.messagesReceived,
           lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
         },
       };
