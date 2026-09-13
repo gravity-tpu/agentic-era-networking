@@ -37,10 +37,10 @@ export interface ZodiacConfig {
 }
 
 export class ZodiacSerialClient {
-  private readonly devicePath: string;
+  private readonly _explicitPath: string | undefined;
 
   constructor(devicePath?: string) {
-    this.devicePath = devicePath ?? this.detectDevice();
+    this._explicitPath = devicePath;
   }
 
   /**
@@ -57,6 +57,15 @@ export class ZodiacSerialClient {
 
   public get path(): string {
     return this.devicePath;
+  }
+
+  public get devicePath(): string {
+    if (this._explicitPath) return this._explicitPath;
+    try {
+      return this.detectDevice();
+    } catch {
+      return '/dev/cu.usbmodem212201';
+    }
   }
 
   /**

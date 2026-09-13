@@ -146,7 +146,10 @@ export class OpenFlowServer extends EventEmitter {
     const remoteAddr = `${socket.remoteAddress}:${socket.remotePort}`;
 
     socket.on('error', (err) => {
-      this.emit('error', err);
+      this.emit('clientError', err, remoteAddr);
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', err);
+      }
     });
 
     if (this.clientSocket && !this.clientSocket.destroyed) {

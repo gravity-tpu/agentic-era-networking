@@ -30,6 +30,12 @@ export class ZodiacController {
   constructor(serialDevicePath?: string) {
     this.serial = new ZodiacSerialClient(serialDevicePath);
     this.ofServer = new OpenFlowServer();
+    this.ofServer.on('error', (err: unknown) => {
+      console.warn('[!] [OpenFlowServer] Daemon error:', err instanceof Error ? err.message : String(err));
+    });
+    this.ofServer.on('clientError', (err: unknown, addr: string) => {
+      console.warn(`[!] [OpenFlowServer] Client ${addr} socket error:`, err instanceof Error ? err.message : String(err));
+    });
   }
 
   public get serialClient(): ZodiacSerialClient {
