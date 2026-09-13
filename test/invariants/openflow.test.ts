@@ -21,6 +21,8 @@ import {
   buildOfpEchoRequest,
   parseOfpFeaturesReply,
   buildOfpFlowMod,
+  buildOfpTableMissFlowMod,
+  parseOfpPacketIn,
   FlowModCommand,
 } from '../../src/sdn/openflow-types.js';
 import { OpenFlowServer } from '../../src/sdn/openflow-server.js';
@@ -87,6 +89,71 @@ describe('OpenFlow 1.3 Wire Protocol Serialization', () => {
     expect(flowMod.readUInt8(25)).toBe(FlowModCommand.OFPFC_ADD);
     expect(flowMod.readUInt16BE(30)).toBe(100); // priority
     expect(flowMod.readUInt32BE(36)).toBe(1); // outPort
+  });
+
+  it('builds an 80-byte OpenFlow 1.3 Table-Miss FlowMod with output to CONTROLLER', () => {
+    const tableMiss = buildOfpTableMissFlowMod(777, 0);
+
+    expect(tableMiss.length).toBe(80);
+    expect(tableMiss[0]).toBe(OFP_VERSION_1_3);
+    expect(tableMiss[1]).toBe(OpenFlowType.OFPT_FLOW_MOD);
+    expect(tableMiss.readUInt16BE(2)).toBe(80);
+    expect(tableMiss.readUInt32BE(4)).toBe(777); // xid
+    expect(tableMiss.readUInt16BE(30)).toBe(0); // priority 0 (table miss)
+
+    // Instructions: OFPIT_APPLY_ACTIONS at offset 56
+    expect(tableMiss.readUInt16BE(56)).toBe(4); // OFPIT_APPLY_ACTIONS
+    expect(tableMiss.readUInt16BE(58)).toBe(24); // instruction length 24
+
+    // Action: OFPAT_OUTPUT at offset 64
+    expect(tableMiss.readUInt16BE(64)).toBe(0); // OFPAT_OUTPUT
+    expect(tableMiss.readUInt16BE(66)).toBe(16); // action length 16
+    expect(tableMiss.readUInt32BE(68)).toBe(0xfffffffd); // OFPP_CONTROLLER
+  });
+
+  it('correctly parses an OFPT_PACKET_IN message and decodes ARP packet payload', () => {
+    // Construct an OFPT_PACKET_IN with an ARP frame
+    const etherFrame = Buffer.alloc(42);
+    // Dst MAC: ff:ff:ff:ff:ff:ff
+    etherFrame.fill(0xff, 0, 6);
+    // Src MAC: 00:1c:b3:11:22:33
+    Buffer.from([0x00, 0x1c, 0xb3, 0x11, 0x22, 0x33]).copy(etherFrame, 6);
+    // EtherType: 0x0806 (ARP)
+    etherFrame.writeUInt16BE(0x0806, 12);
+    // ARP Sender IP: 10.0.0.1 at offset 28
+    Buffer.from([10, 0, 0, 1]).copy(etherFrame, 28);
+    // ARP Target IP: 10.0.0.254 at offset 38
+    Buffer.from([10, 0, 0, 254]).copy(etherFrame, 38);
+
+    // Build OFPT_PACKET_IN packet: 8 (header) + 16 (body) + 12 (match with in_port) + 4 (pad) + 2 (pad) + 42 (frame)
+    // Minimal match with in_port: type=1 (2B), len=8 (2B), oxm_in_port=0x80000004 (4B), val=2 (4B) -> total 12 bytes, +4 pad = 16 bytes
+    const match = Buffer.alloc(16);
+    match.writeUInt16BE(1, 0); // type
+    match.writeUInt16BE(12, 2); // len
+    match.writeUInt32BE(0x80000004, 4); // oxm in_port
+    match.writeUInt32BE(2, 8); // port 2
+
+    const packetInHeader = Buffer.alloc(24);
+    packetInHeader.writeUInt8(OFP_VERSION_1_3, 0);
+    packetInHeader.writeUInt8(OpenFlowType.OFPT_PACKET_IN, 1);
+    const totalPktLen = 24 + match.length + 2 + etherFrame.length;
+    packetInHeader.writeUInt16BE(totalPktLen, 2);
+    packetInHeader.writeUInt32BE(1001, 4);
+    packetInHeader.writeUInt32BE(0xffffffff, 8); // buffer_id
+    packetInHeader.writeUInt16BE(etherFrame.length, 12); // total_len
+    packetInHeader.writeUInt8(0, 14); // reason = NO_MATCH
+    packetInHeader.writeUInt8(0, 15); // table_id
+
+    const pad2 = Buffer.alloc(2);
+    const fullPacket = Buffer.concat([packetInHeader, match, pad2, etherFrame]);
+
+    const decoded = parseOfpPacketIn(fullPacket);
+    expect(decoded.inPort).toBe(2);
+    expect(decoded.srcMac).toBe('00:1c:b3:11:22:33');
+    expect(decoded.dstMac).toBe('ff:ff:ff:ff:ff:ff');
+    expect(decoded.etherTypeStr).toBe('ARP');
+    expect(decoded.arpSenderIp).toBe('10.0.0.1');
+    expect(decoded.arpTargetIp).toBe('10.0.0.254');
   });
 });
 

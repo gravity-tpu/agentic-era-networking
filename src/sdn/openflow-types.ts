@@ -76,6 +76,8 @@ export enum ActionType {
 export const OFPP_ANY = 0xffffffff;
 export const OFPG_ANY = 0xffffffff;
 export const OFP_NO_BUFFER = 0xffffffff;
+export const OFPP_CONTROLLER = 0xfffffffd;
+export const OFPCML_NO_BUFFER = 0xffff;
 
 export interface OpenFlowHeader {
   readonly version: number;
@@ -100,6 +102,23 @@ export interface FlowModOptions {
   readonly cookie?: bigint | undefined;
   readonly tableId?: number | undefined;
   readonly outPort?: number | undefined;
+}
+
+export interface DecodedPacketIn {
+  readonly bufferId: number;
+  readonly totalLen: number;
+  readonly reason: number;
+  readonly tableId: number;
+  readonly inPort?: number | undefined;
+  readonly srcMac: string;
+  readonly dstMac: string;
+  readonly etherType: number;
+  readonly etherTypeStr: string;
+  readonly srcIp?: string | undefined;
+  readonly dstIp?: string | undefined;
+  readonly arpSenderIp?: string | undefined;
+  readonly arpTargetIp?: string | undefined;
+  readonly rawPayload: Buffer;
 }
 
 /**
@@ -218,4 +237,154 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
   buf.writeUInt32BE(0, 52); // pad to 8 bytes
 
   return buf;
+}
+
+/**
+ * Builds an OpenFlow 1.3 Table-Miss FlowMod (priority 0 wildcard rule with OFPAT_OUTPUT -> CONTROLLER).
+ * Total length: 48 (body) + 8 (empty match) + 24 (apply-actions instruction with output action) = 80 bytes.
+ */
+export function buildOfpTableMissFlowMod(xid: number, priority: number = 0): Buffer {
+  const totalLength = 80;
+  const buf = Buffer.alloc(totalLength);
+
+  // Header (8 bytes)
+  buf.writeUInt8(OFP_VERSION_1_3, 0);
+  buf.writeUInt8(OpenFlowType.OFPT_FLOW_MOD, 1);
+  buf.writeUInt16BE(totalLength, 2);
+  buf.writeUInt32BE(xid, 4);
+
+  // Flow Mod Body (40 bytes)
+  buf.writeBigUInt64BE(0n, 8); // cookie
+  buf.writeBigUInt64BE(0n, 16); // cookie_mask
+  buf.writeUInt8(0, 24); // table_id = 0
+  buf.writeUInt8(FlowModCommand.OFPFC_ADD, 25);
+  buf.writeUInt16BE(0, 26); // idle_timeout = 0 (infinite)
+  buf.writeUInt16BE(0, 28); // hard_timeout = 0 (infinite)
+  buf.writeUInt16BE(priority, 30); // priority = 0 (table miss)
+  buf.writeUInt32BE(OFP_NO_BUFFER, 32); // buffer_id
+  buf.writeUInt32BE(OFPP_ANY, 36); // out_port
+  buf.writeUInt32BE(OFPG_ANY, 40); // out_group
+  buf.writeUInt16BE(0, 44); // flags
+  buf.writeUInt16BE(0, 46); // pad
+
+  // Empty Match (8 bytes): type=1 (OFPMT_OXM), length=4 (header only), pad 4
+  buf.writeUInt16BE(1, 48);
+  buf.writeUInt16BE(4, 50);
+  buf.writeUInt32BE(0, 52);
+
+  // Instruction: OFPIT_APPLY_ACTIONS (type 4, len 24, pad 4)
+  buf.writeUInt16BE(InstructionType.OFPIT_APPLY_ACTIONS, 56);
+  buf.writeUInt16BE(24, 58); // instruction total length (8 + 16 action = 24)
+  buf.writeUInt32BE(0, 60); // pad
+
+  // Action: OFPAT_OUTPUT (type 0, len 16)
+  buf.writeUInt16BE(ActionType.OFPAT_OUTPUT, 64);
+  buf.writeUInt16BE(16, 66); // action length
+  buf.writeUInt32BE(OFPP_CONTROLLER, 68); // port = CONTROLLER
+  buf.writeUInt16BE(OFPCML_NO_BUFFER, 72); // max_len = send whole packet
+  buf.writeUInt16BE(0, 74); // pad
+  buf.writeUInt32BE(0, 76); // pad
+
+  return buf;
+}
+
+function formatMac(buf: Buffer): string {
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join(':');
+}
+
+/**
+ * Parses an OFPT_PACKET_IN message and decodes the embedded Layer-2/Layer-3 headers.
+ */
+export function parseOfpPacketIn(packet: Buffer): DecodedPacketIn {
+  if (packet.length < 34) {
+    throw new Error(`OFPT_PACKET_IN underflow: expected at least 34 bytes, got ${packet.length}`);
+  }
+
+  const bufferId = packet.readUInt32BE(8);
+  const totalLen = packet.readUInt16BE(12);
+  const reason = packet.readUInt8(14);
+  const tableId = packet.readUInt8(15);
+  // cookie at 16..24
+
+  // Match struct starts at 24
+  const matchLen = packet.readUInt16BE(26);
+  const matchPaddedLen = Math.max(8, Math.ceil(matchLen / 8) * 8);
+
+  let inPort: number | undefined;
+  // Parse OXM fields in match
+  let oxmOffset = 28;
+  const matchEnd = 24 + matchLen;
+  while (oxmOffset + 4 <= matchEnd) {
+    const oxmHeader = packet.readUInt32BE(oxmOffset);
+    const fieldLen = oxmHeader & 0xff;
+    // OFPXMT_OFB_IN_PORT: class=0x8000, field=0, hasmask=0 -> 0x80000004
+    if (oxmHeader === 0x80000004 && oxmOffset + 4 + fieldLen <= packet.length) {
+      inPort = packet.readUInt32BE(oxmOffset + 4);
+    }
+    oxmOffset += 4 + fieldLen;
+  }
+
+  // Raw frame data starts after match + 2 bytes padding
+  const dataOffset = 24 + matchPaddedLen + 2;
+  const rawPayload = packet.subarray(dataOffset);
+
+  if (rawPayload.length < 14) {
+    return {
+      bufferId,
+      totalLen,
+      reason,
+      tableId,
+      inPort,
+      srcMac: 'unknown',
+      dstMac: 'unknown',
+      etherType: 0,
+      etherTypeStr: 'unknown',
+      rawPayload,
+    };
+  }
+
+  const dstMac = formatMac(rawPayload.subarray(0, 6));
+  const srcMac = formatMac(rawPayload.subarray(6, 12));
+  const etherType = rawPayload.readUInt16BE(12);
+
+  let etherTypeStr = `0x${etherType.toString(16).padStart(4, '0')}`;
+  let srcIp: string | undefined;
+  let dstIp: string | undefined;
+  let arpSenderIp: string | undefined;
+  let arpTargetIp: string | undefined;
+
+  if (etherType === 0x0806) {
+    etherTypeStr = 'ARP';
+    if (rawPayload.length >= 42) {
+      arpSenderIp = `${rawPayload[28]}.${rawPayload[29]}.${rawPayload[30]}.${rawPayload[31]}`;
+      arpTargetIp = `${rawPayload[38]}.${rawPayload[39]}.${rawPayload[40]}.${rawPayload[41]}`;
+    }
+  } else if (etherType === 0x0800) {
+    etherTypeStr = 'IPv4';
+    if (rawPayload.length >= 34) {
+      srcIp = `${rawPayload[26]}.${rawPayload[27]}.${rawPayload[28]}.${rawPayload[29]}`;
+      dstIp = `${rawPayload[30]}.${rawPayload[31]}.${rawPayload[32]}.${rawPayload[33]}`;
+    }
+  } else if (etherType === 0x86dd) {
+    etherTypeStr = 'IPv6';
+  }
+
+  return {
+    bufferId,
+    totalLen,
+    reason,
+    tableId,
+    inPort,
+    srcMac,
+    dstMac,
+    etherType,
+    etherTypeStr,
+    srcIp,
+    dstIp,
+    arpSenderIp,
+    arpTargetIp,
+    rawPayload,
+  };
 }

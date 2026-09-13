@@ -22,6 +22,9 @@ import {
   buildOfpEchoRequest,
   parseOfpFeaturesReply,
   buildOfpFlowMod,
+  buildOfpTableMissFlowMod,
+  parseOfpPacketIn,
+  DecodedPacketIn,
 } from './openflow-types.js';
 import { FlowRuleEntry } from './flow-table.js';
 
@@ -32,6 +35,7 @@ export interface OpenFlowServerEvents {
   disconnected: (clientAddress: string) => void;
   error: (err: Error) => void;
   rawMessage: (type: OpenFlowType, length: number, xid: number) => void;
+  packetIn: (packet: DecodedPacketIn) => void;
 }
 
 export type SwitchState = 'DISCONNECTED' | 'HANDSHAKE' | 'ESTABLISHED';
@@ -126,6 +130,19 @@ export class OpenFlowServer extends EventEmitter {
     }, xid);
 
     this.clientSocket.write(flowModPacket);
+  }
+
+  /**
+   * Installs an OpenFlow 1.3 Table-Miss rule (priority 0 wildcard matching all packets and sending to CONTROLLER).
+   */
+  public sendTableMissRule(priority: number = 0): void {
+    if (!this.clientSocket || this.state !== 'ESTABLISHED') {
+      throw new Error(`Cannot send Table-Miss FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
+    }
+
+    const xid = this.nextXid++;
+    const packet = buildOfpTableMissFlowMod(xid, priority);
+    this.clientSocket.write(packet);
   }
 
   /**
@@ -249,8 +266,18 @@ export class OpenFlowServer extends EventEmitter {
         break;
       }
 
+      case OpenFlowType.OFPT_PACKET_IN: {
+        try {
+          const decoded = parseOfpPacketIn(packet);
+          this.emit('packetIn', decoded);
+        } catch (err) {
+          this.emit('error', new Error(`Failed to decode OFPT_PACKET_IN: ${err instanceof Error ? err.message : String(err)}`));
+        }
+        break;
+      }
+
       default:
-        // Other messages (e.g. OFPT_PACKET_IN, OFPT_PORT_STATUS) logged or handled in extensions
+        // Other messages (e.g. OFPT_PORT_STATUS) logged or handled in extensions
         break;
     }
   }
