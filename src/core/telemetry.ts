@@ -8,6 +8,8 @@
  * - Floating-point arithmetic on packet/byte quantities is strictly prohibited.
  */
 
+import process from 'node:process';
+
 export interface PacketMetric {
   readonly interfaceName: string;
   readonly packetsIngress: bigint;

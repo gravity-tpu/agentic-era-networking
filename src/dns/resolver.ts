@@ -8,6 +8,8 @@
  * - No silent fallback to unauthenticated plaintext upstreams.
  */
 
+import process from 'node:process';
+
 export type DnsRecordType = 'A' | 'AAAA' | 'CNAME' | 'TXT';
 
 export interface DnsRecord {

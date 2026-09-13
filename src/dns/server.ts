@@ -7,7 +7,8 @@
  * - Zero uncaught exceptions on malformed datagrams; packets are dropped or error-coded.
  */
 
-import dgram from 'node:dgram';
+import dgram, { type RemoteInfo } from 'node:dgram';
+import { Buffer } from 'node:buffer';
 import { DnsWireProtocol } from './wire.js';
 import { FailClosedDnsResolver, DnsResolutionError } from './resolver.js';
 
@@ -46,11 +47,11 @@ export class DnsUdpServer {
     return new Promise((resolve, reject) => {
       this.socket = dgram.createSocket('udp4');
 
-      this.socket.on('error', (err) => {
+      this.socket.on('error', (err: Error) => {
         reject(err);
       });
 
-      this.socket.on('message', (msg, rinfo) => {
+      this.socket.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
         this.handleMessage(msg, rinfo);
       });
 

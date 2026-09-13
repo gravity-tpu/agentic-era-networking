@@ -7,6 +7,8 @@
  * - Queries for non-existent domains return NXDOMAIN (RCODE = 3).
  */
 
+import { Buffer } from 'node:buffer';
+
 export interface DnsHeader {
   readonly id: number;
   readonly isResponse: boolean;

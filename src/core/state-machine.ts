@@ -7,6 +7,8 @@
  * - Illegal transitions throw explicit, typed errors rather than silent transitions.
  */
 
+import process from 'node:process';
+
 export type NetworkState = 'DOWN' | 'INITIALIZING' | 'ESTABLISHED' | 'DEGRADED' | 'TERMINATED';
 
 export type NetworkEvent =
