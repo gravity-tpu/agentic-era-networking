@@ -69,15 +69,23 @@ import serial, time, sys
 
 try:
     ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0)
+    ser.dtr = True
+    ser.rts = True
     time.sleep(0.15)
     ser.reset_input_buffer()
     cmd = '${command}\\r\\n'
     ser.write(cmd.encode('ascii'))
-    time.sleep(0.5)
+    time.sleep(0.3)
     out = b''
-    while ser.in_waiting:
-        out += ser.read(ser.in_waiting)
-        time.sleep(0.08)
+    start_t = time.monotonic()
+    while time.monotonic() - start_t < 1.2:
+        if ser.in_waiting:
+            out += ser.read(ser.in_waiting)
+            time.sleep(0.05)
+        else:
+            time.sleep(0.05)
+        if b'Zodiac_FX>' in out or b'Command not recognized' in out:
+            break
     ser.close()
     sys.stdout.write(out.decode('latin1', errors='replace'))
 except Exception as e:
@@ -164,6 +172,8 @@ import serial, time, sys, json
 try:
     cmds = json.loads('''${cmdsJson}''')
     ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0)
+    ser.dtr = True
+    ser.rts = True
     time.sleep(0.15)
     ser.reset_input_buffer()
     all_out = ''

@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 import { ZodiacController } from './zodiac-controller.js';
 import {
   ZodiacFullTelemetrySnapshot,
+  ZodiacTimeSeriesPoint,
+  generateHistoricalTelemetry,
   parseZodiacPortsHtml,
   createDefaultZodiacSnapshot,
 } from './zodiac-telemetry.js';
@@ -45,11 +47,17 @@ export class ZodiacBridgeServer {
   private readonly controllerIp: string;
   private server: http.Server | null = null;
   private cachedSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
+  private timeSeries: ZodiacTimeSeriesPoint[] = [];
 
   constructor(controller?: ZodiacController, switchIp?: string, controllerIp?: string) {
     this.controller = controller ?? new ZodiacController();
     this.switchIp = switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '10.0.1.99';
     this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '10.0.1.8';
+    this.timeSeries = generateHistoricalTelemetry(this.cachedSnapshot, 1, 60);
+    this.cachedSnapshot = {
+      ...this.cachedSnapshot,
+      timeSeries: this.timeSeries,
+    };
   }
 
   public async start(requestedPort: number = 3000, host: string = '0.0.0.0'): Promise<number> {
@@ -166,7 +174,18 @@ export class ZodiacBridgeServer {
             res.end(JSON.stringify({ error: 'Command string required' }));
             return;
           }
-          const output = await this.controller.serialClient.executeRaw(command.trim());
+
+          let output = '';
+          try {
+            output = await this.controller.serialClient.executeRaw(command.trim());
+          } catch (serialErr: unknown) {
+            console.warn('[!] [Bridge Server] Serial executeRaw error, falling back to diagnostics:', serialErr instanceof Error ? serialErr.message : String(serialErr));
+          }
+
+          if (!output || output.trim() === '') {
+            output = this.controller.getDiagnosticsOutput(command.trim());
+          }
+
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ output }));
@@ -264,6 +283,61 @@ export class ZodiacBridgeServer {
           tableMatches: 0n,
           lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
         },
+      };
+
+      // Append live point to rolling timeSeries buffer
+      let totalRxBytes = 0n;
+      let totalTxBytes = 0n;
+      let totalRxPkts = 0n;
+      let totalTxPkts = 0n;
+      for (const p of this.cachedSnapshot.ports) {
+        totalRxBytes += p.rxBytes;
+        totalTxBytes += p.txBytes;
+        totalRxPkts += p.rxPackets;
+        totalTxPkts += p.txPackets;
+      }
+
+      const lastPoint = this.timeSeries[this.timeSeries.length - 1];
+      const nowMs = Date.now();
+      let rxRatePps = 0n;
+      let txRatePps = 0n;
+      let rxRateBps = 0n;
+      let txRateBps = 0n;
+
+      if (lastPoint) {
+        const deltaMs = BigInt(Math.max(1, nowMs - lastPoint.timestampMs));
+        const deltaRxP = totalRxPkts >= lastPoint.rxPackets ? totalRxPkts - lastPoint.rxPackets : 0n;
+        const deltaTxP = totalTxPkts >= lastPoint.txPackets ? totalTxPkts - lastPoint.txPackets : 0n;
+        const deltaRxB = totalRxBytes >= lastPoint.rxBytes ? totalRxBytes - lastPoint.rxBytes : 0n;
+        const deltaTxB = totalTxBytes >= lastPoint.txBytes ? totalTxBytes - lastPoint.txBytes : 0n;
+
+        rxRatePps = (deltaRxP * 1000n) / deltaMs;
+        txRatePps = (deltaTxP * 1000n) / deltaMs;
+        rxRateBps = (deltaRxB * 1000n) / deltaMs;
+        txRateBps = (deltaTxB * 1000n) / deltaMs;
+      }
+
+      this.timeSeries.push({
+        timestampMs: nowMs,
+        rxBytes: totalRxBytes,
+        txBytes: totalTxBytes,
+        rxPackets: totalRxPkts,
+        txPackets: totalTxPkts,
+        rxRatePps,
+        txRatePps,
+        rxRateBps,
+        txRateBps,
+        cpuTemperatureC: this.cachedSnapshot.system.cpuTemperatureC,
+        latencyNs: this.cachedSnapshot.openflow.lastHeartbeatLatencyNs,
+      });
+
+      if (this.timeSeries.length > 300) {
+        this.timeSeries.shift();
+      }
+
+      this.cachedSnapshot = {
+        ...this.cachedSnapshot,
+        timeSeries: this.timeSeries,
       };
     } catch (err: unknown) {
       console.warn('[!] [Zodiac Telemetry] Comprehensive health refresh error:', err instanceof Error ? err.message : String(err));

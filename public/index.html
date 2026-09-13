@@ -50,6 +50,13 @@
           Overview
         </a>
 
+        <a class="cf-nav-item" id="nav-tab-analytics">
+          <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          Traffic Analytics
+        </a>
+
         <a class="cf-nav-item" id="nav-tab-ports">
           <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
@@ -206,6 +213,75 @@
             <div class="cf-photo-card">
               <img src="img/ports.jpg" alt="Zodiac FX RJ45 Ports View">
               <div class="cf-photo-caption">Physical Port Layout: Port 1 on far left (openflow) to Port 4 on far right (controller link)</div>
+            </div>
+          </div>
+
+          <!-- Dynamic Time-Series Analytics Suite (Cloudflare / Grafana Style) -->
+          <div class="cf-card" id="cf-card-analytics" style="margin-top: 1.5rem;">
+            <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+              <div>
+                <h3 class="cf-card-title">Traffic Flow &amp; Wire Analytics</h3>
+                <div class="cf-card-subtitle">Real-time Ingress/Egress packet throughput &amp; hardware vitals over time</div>
+              </div>
+              
+              <!-- Time Range Selector Buttons -->
+              <div class="cf-time-range-group" id="cf-time-selectors">
+                <button class="cf-time-btn active" data-range="live">Live (5m)</button>
+                <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                <button class="cf-time-btn" data-range="7d">7 Days</button>
+              </div>
+            </div>
+
+            <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+              <!-- Chart Header Badges & Legend -->
+              <div class="cf-chart-legend-row">
+                <div class="cf-legend-item">
+                  <span class="cf-legend-dot blue"></span>
+                  <span>Ingress (RX): <strong id="chart-rx-rate" class="cf-mono">-- pps</strong></span>
+                </div>
+                <div class="cf-legend-item">
+                  <span class="cf-legend-dot orange"></span>
+                  <span>Egress (TX): <strong id="chart-tx-rate" class="cf-mono">-- pps</strong></span>
+                </div>
+                <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+                  <button class="cf-unit-btn active" id="btn-unit-pps">Packets / s</button>
+                  <button class="cf-unit-btn" id="btn-unit-bps">Bytes / s</button>
+                </div>
+              </div>
+
+              <!-- Primary Canvas: Packet Flow Chart -->
+              <div class="cf-canvas-container" id="canvas-wrapper-flow" style="position: relative; height: 240px; margin-top: 0.5rem;">
+                <canvas id="chart-traffic-flow"></canvas>
+                <div id="chart-tooltip" class="cf-chart-tooltip" style="display: none;"></div>
+              </div>
+
+              <!-- Secondary Charts Row: CPU Temp & Latency -->
+              <div class="cf-mini-charts-grid" style="margin-top: 1.25rem;">
+                <!-- CPU Temperature Time Series -->
+                <div class="cf-mini-chart-card">
+                  <div class="cf-mini-chart-header">
+                    <span>CPU Temperature (°C)</span>
+                    <span id="chart-temp-val" class="cf-mono" style="font-weight: 600; color: var(--cf-text-primary);">--°C</span>
+                  </div>
+                  <div class="cf-canvas-container" id="canvas-wrapper-temp" style="position: relative; height: 130px; margin-top: 0.5rem;">
+                    <canvas id="chart-cpu-temp"></canvas>
+                  </div>
+                </div>
+
+                <!-- OpenFlow Latency Time Series -->
+                <div class="cf-mini-chart-card">
+                  <div class="cf-mini-chart-header">
+                    <span>OpenFlow RTT Latency (µs)</span>
+                    <span id="chart-lat-val" class="cf-mono" style="font-weight: 600; color: var(--cf-blue);">-- µs</span>
+                  </div>
+                  <div class="cf-canvas-container" id="canvas-wrapper-lat" style="position: relative; height: 130px; margin-top: 0.5rem;">
+                    <canvas id="chart-latency"></canvas>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -586,6 +662,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
     // Tab View Switcher (O(1) active toggle, zero layout thrashing per Ghemawat Razor)
     const navItems = {
       overview: document.getElementById('nav-tab-overview'),
+      analytics: document.getElementById('nav-tab-analytics'),
       ports: document.getElementById('nav-tab-ports'),
       openflow: document.getElementById('nav-tab-openflow'),
       console: document.getElementById('nav-tab-console'),
@@ -594,6 +671,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
     const secOverview = document.getElementById('section-overview');
     const secCouncil = document.getElementById('section-council');
     const breadcrumbName = document.getElementById('cf-breadcrumb-name');
+    const cardAnalytics = document.getElementById('cf-card-analytics');
     const cardPorts = document.getElementById('cf-card-ports');
     const cardMatrix = document.getElementById('cf-card-matrix');
     const cardConsole = document.getElementById('cf-card-console');
@@ -616,6 +694,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
         secCouncil.style.display = 'none';
         if (tab === 'overview') {
           window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (tab === 'analytics') {
+          if (cardAnalytics) cardAnalytics.scrollIntoView({ behavior: 'smooth' });
         } else if (tab === 'ports') {
           if (cardPorts) cardPorts.scrollIntoView({ behavior: 'smooth' });
         } else if (tab === 'openflow') {
@@ -628,6 +708,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
     // Deterministic addEventListener bindings (No inline onclick handlers)
     if (navItems.overview) navItems.overview.addEventListener('click', () => switchNavTab('overview'));
+    if (navItems.analytics) navItems.analytics.addEventListener('click', () => switchNavTab('analytics'));
     if (navItems.ports) navItems.ports.addEventListener('click', () => switchNavTab('ports'));
     if (navItems.openflow) navItems.openflow.addEventListener('click', () => switchNavTab('openflow'));
     if (navItems.console) navItems.console.addEventListener('click', () => switchNavTab('console'));

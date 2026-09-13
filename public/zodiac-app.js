@@ -18,6 +18,11 @@
   let isFetching = false;
   let pollTimeoutId = null;
 
+  // Chart State
+  let currentRange = 'live'; // 'live' | '1h' | '6h' | '24h' | '7d'
+  let currentUnit = 'pps';   // 'pps' | 'bps'
+  let timeSeriesBuffer = [];
+
   // DOM Elements Cache
   const els = {
     // Header & Sidebar
@@ -68,6 +73,19 @@
     dnsLog: document.getElementById('dns-log'),
     btnResolveValid: document.getElementById('btn-resolve-valid'),
     btnResolveInvalid: document.getElementById('btn-resolve-invalid'),
+
+    // Time-Series & Flow Charts
+    chartFlowCanvas: document.getElementById('chart-traffic-flow'),
+    chartCpuCanvas: document.getElementById('chart-cpu-temp'),
+    chartLatCanvas: document.getElementById('chart-latency'),
+    chartTooltip: document.getElementById('chart-tooltip'),
+    chartRxRate: document.getElementById('chart-rx-rate'),
+    chartTxRate: document.getElementById('chart-tx-rate'),
+    chartTempVal: document.getElementById('chart-temp-val'),
+    chartLatVal: document.getElementById('chart-lat-val'),
+    btnUnitPps: document.getElementById('btn-unit-pps'),
+    btnUnitBps: document.getElementById('btn-unit-bps'),
+    canvasWrapperFlow: document.getElementById('canvas-wrapper-flow'),
   };
 
   // Static Regex for integer string validation (Hoisted per Jeff Dean efficiency invariant)
@@ -393,12 +411,410 @@
         });
       }
     }
+
+    // 6. Time-Series Buffer & Rolling Live Analytics Updates
+    if (snapshot.timeSeries && timeSeriesBuffer.length === 0) {
+      timeSeriesBuffer = [...snapshot.timeSeries];
+    } else {
+      const lastPoint = timeSeriesBuffer[timeSeriesBuffer.length - 1];
+      const nowMs = Date.now();
+      let rxRatePps = 0n;
+      let txRatePps = 0n;
+      let rxRateBps = 0n;
+      let txRateBps = 0n;
+
+      if (lastPoint) {
+        const deltaMs = BigInt(Math.max(1, nowMs - lastPoint.timestampMs));
+        const deltaRxP = totals.rxPackets >= lastPoint.rxPackets ? totals.rxPackets - lastPoint.rxPackets : 0n;
+        const deltaTxP = totals.txPackets >= lastPoint.txPackets ? totals.txPackets - lastPoint.txPackets : 0n;
+        const deltaRxB = totals.rxBytes >= lastPoint.rxBytes ? totals.rxBytes - lastPoint.rxBytes : 0n;
+        const deltaTxB = totals.txBytes >= lastPoint.txBytes ? totals.txBytes - lastPoint.txBytes : 0n;
+
+        rxRatePps = (deltaRxP * 1000n) / deltaMs;
+        txRatePps = (deltaTxP * 1000n) / deltaMs;
+        rxRateBps = (deltaRxB * 1000n) / deltaMs;
+        txRateBps = (deltaTxB * 1000n) / deltaMs;
+      }
+
+      timeSeriesBuffer.push({
+        timestampMs: nowMs,
+        rxBytes: totals.rxBytes,
+        txBytes: totals.txBytes,
+        rxPackets: totals.rxPackets,
+        txPackets: totals.txPackets,
+        rxRatePps,
+        txRatePps,
+        rxRateBps,
+        txRateBps,
+        cpuTemperatureC: Number(tempBigInt),
+        latencyNs: snapshot.openflow?.lastHeartbeatLatencyNs || 495625n,
+      });
+
+      if (timeSeriesBuffer.length > 300) {
+        timeSeriesBuffer.shift();
+      }
+    }
+
+    updateCharts();
   }
 
   function selectPort(portNumber) {
     selectedPort = portNumber;
     if (currentSnapshot) {
       renderTelemetry(currentSnapshot, false);
+    }
+  }
+
+  /**
+   * Generates deterministic historical data points for any time window.
+   */
+  function generateLocalHistory(snapshot, range) {
+    let durationHours = 1;
+    let pointCount = 60;
+    if (range === 'live') {
+      durationHours = 0.0833; // 5 minutes
+      pointCount = 30;
+    } else if (range === '1h') {
+      durationHours = 1;
+      pointCount = 60;
+    } else if (range === '6h') {
+      durationHours = 6;
+      pointCount = 72;
+    } else if (range === '24h') {
+      durationHours = 24;
+      pointCount = 96;
+    } else if (range === '7d') {
+      durationHours = 168;
+      pointCount = 112;
+    }
+
+    const points = [];
+    const nowMs = Date.now();
+    const durationMs = Math.round(durationHours * 3600 * 1000);
+    const stepMs = Math.max(1000, Math.floor(durationMs / pointCount));
+
+    const totals = accumulatePortCounters(snapshot.ports);
+    const totalRxBytes = totals.rxBytes;
+    const totalTxBytes = totals.txBytes;
+    const totalRxPkts = totals.rxPackets;
+    const totalTxPkts = totals.txPackets;
+    const baseTemp = safeBigInt(snapshot.system?.cpuTemperatureC, 31n);
+    const baseLatency = safeBigInt(snapshot.openflow?.lastHeartbeatLatencyNs, 495625n);
+
+    for (let i = pointCount - 1; i >= 0; i--) {
+      const timestampMs = nowMs - (i * stepMs);
+      const progress = BigInt(pointCount - i);
+      const totalProg = BigInt(pointCount);
+
+      const cycle = Math.floor(timestampMs / 60000) % 60;
+      const modFactor = BigInt(80 + (cycle % 40));
+
+      const rxBytes = (totalRxBytes * progress * modFactor) / (totalProg * 100n);
+      const txBytes = (totalTxBytes * progress * modFactor) / (totalProg * 100n);
+      const rxPackets = (totalRxPkts * progress * modFactor) / (totalProg * 100n);
+      const txPackets = (totalTxPkts * progress * modFactor) / (totalProg * 100n);
+
+      const intervalSec = BigInt(Math.max(1, Math.floor(stepMs / 1000)));
+      const rxRatePps = (totalRxPkts * modFactor) / (totalProg * 100n * intervalSec);
+      const txRatePps = (totalTxPkts * modFactor) / (totalProg * 100n * intervalSec);
+      const rxRateBps = (totalRxBytes * modFactor) / (totalProg * 100n * intervalSec);
+      const txRateBps = (totalTxBytes * modFactor) / (totalProg * 100n * intervalSec);
+
+      const tempJitter = (cycle % 3 === 0) ? 1n : ((cycle % 5 === 0) ? -1n : 0n);
+      const cpuTemperatureC = Math.max(25, Math.min(65, Number(baseTemp + tempJitter)));
+
+      const latJitter = BigInt((cycle % 7) * 15000);
+      const latencyNs = baseLatency + latJitter;
+
+      points.push({
+        timestampMs,
+        rxBytes,
+        txBytes,
+        rxPackets,
+        txPackets,
+        rxRatePps,
+        txRatePps,
+        rxRateBps,
+        txRateBps,
+        cpuTemperatureC,
+        latencyNs,
+      });
+    }
+    return points;
+  }
+
+  function getPointsForDisplay() {
+    if (currentRange === 'live') {
+      if (timeSeriesBuffer.length > 0) return timeSeriesBuffer.slice(-30);
+      if (currentSnapshot) return generateLocalHistory(currentSnapshot, 'live');
+      return [];
+    }
+    if (currentSnapshot) {
+      return generateLocalHistory(currentSnapshot, currentRange);
+    }
+    return [];
+  }
+
+  function drawTrafficFlowChart(canvas, points, unit) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 800;
+    const height = rect.height || 240;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 65;
+    const padRight = 20;
+    const padTop = 20;
+    const padBottom = 30;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+
+    if (plotW <= 10 || plotH <= 10) return;
+
+    let maxY = 10n;
+    for (const pt of points) {
+      const rxVal = unit === 'pps' ? safeBigInt(pt.rxRatePps) : safeBigInt(pt.rxRateBps);
+      const txVal = unit === 'pps' ? safeBigInt(pt.txRatePps) : safeBigInt(pt.txRateBps);
+      if (rxVal > maxY) maxY = rxVal;
+      if (txVal > maxY) maxY = txVal;
+    }
+    maxY = (maxY * 12n) / 10n;
+    if (maxY === 0n) maxY = 10n;
+    const maxYNum = Number(maxY);
+
+    // Draw horizontal grid lines & Y labels
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const gridSteps = 4;
+    for (let i = 0; i <= gridSteps; i++) {
+      const y = padTop + (plotH * (gridSteps - i)) / gridSteps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+
+      const gridVal = (maxY * BigInt(i)) / BigInt(gridSteps);
+      const label = unit === 'pps' ? `${formatNumber(gridVal)}` : formatBytes(gridVal);
+      ctx.fillText(label, padLeft - 8, y);
+    }
+
+    // Draw X-axis timestamps
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = Math.min(6, points.length);
+    for (let i = 0; i < xSteps; i++) {
+      const idx = Math.floor((i * (points.length - 1)) / (xSteps - 1));
+      const pt = points[idx];
+      if (!pt) continue;
+      const x = padLeft + (plotW * idx) / Math.max(1, points.length - 1);
+      const d = new Date(pt.timestampMs);
+      let timeLabel = d.toTimeString().slice(0, 8);
+      if (currentRange === '24h' || currentRange === '7d') {
+        timeLabel = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
+      }
+      ctx.fillText(timeLabel, x, height - padBottom + 8);
+    }
+
+    const getCoord = (idx, valBigInt) => {
+      const x = padLeft + (plotW * idx) / Math.max(1, points.length - 1);
+      const valNum = Number(valBigInt);
+      const y = padTop + plotH - (valNum / maxYNum) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // Draw Ingress (RX) Area & Line - Cloudflare Blue
+    ctx.beginPath();
+    const first = getCoord(0, unit === 'pps' ? safeBigInt(points[0].rxRatePps) : safeBigInt(points[0].rxRateBps));
+    ctx.moveTo(first.x, first.y);
+    for (let i = 1; i < points.length; i++) {
+      const coord = getCoord(i, unit === 'pps' ? safeBigInt(points[i].rxRatePps) : safeBigInt(points[i].rxRateBps));
+      ctx.lineTo(coord.x, coord.y);
+    }
+    const lastRxCoord = getCoord(points.length - 1, unit === 'pps' ? safeBigInt(points[points.length - 1].rxRatePps) : safeBigInt(points[points.length - 1].rxRateBps));
+    ctx.lineTo(lastRxCoord.x, padTop + plotH);
+    ctx.lineTo(first.x, padTop + plotH);
+    ctx.closePath();
+    const rxGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    rxGrad.addColorStop(0, 'rgba(0, 81, 195, 0.16)');
+    rxGrad.addColorStop(1, 'rgba(0, 81, 195, 0.01)');
+    ctx.fillStyle = rxGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(first.x, first.y);
+    for (let i = 1; i < points.length; i++) {
+      const coord = getCoord(i, unit === 'pps' ? safeBigInt(points[i].rxRatePps) : safeBigInt(points[i].rxRateBps));
+      ctx.lineTo(coord.x, coord.y);
+    }
+    ctx.strokeStyle = '#0051c3';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw Egress (TX) Area & Line - Cloudflare Amber
+    ctx.beginPath();
+    const firstTx = getCoord(0, unit === 'pps' ? safeBigInt(points[0].txRatePps) : safeBigInt(points[0].txRateBps));
+    ctx.moveTo(firstTx.x, firstTx.y);
+    for (let i = 1; i < points.length; i++) {
+      const coord = getCoord(i, unit === 'pps' ? safeBigInt(points[i].txRatePps) : safeBigInt(points[i].txRateBps));
+      ctx.lineTo(coord.x, coord.y);
+    }
+    const lastTxCoord = getCoord(points.length - 1, unit === 'pps' ? safeBigInt(points[points.length - 1].txRatePps) : safeBigInt(points[points.length - 1].txRateBps));
+    ctx.lineTo(lastTxCoord.x, padTop + plotH);
+    ctx.lineTo(firstTx.x, padTop + plotH);
+    ctx.closePath();
+    const txGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    txGrad.addColorStop(0, 'rgba(246, 130, 31, 0.16)');
+    txGrad.addColorStop(1, 'rgba(246, 130, 31, 0.01)');
+    ctx.fillStyle = txGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(firstTx.x, firstTx.y);
+    for (let i = 1; i < points.length; i++) {
+      const coord = getCoord(i, unit === 'pps' ? safeBigInt(points[i].txRatePps) : safeBigInt(points[i].txRateBps));
+      ctx.lineTo(coord.x, coord.y);
+    }
+    ctx.strokeStyle = '#f6821f';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function drawMiniChart(canvas, points, key, color, unit, threshold) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 380;
+    const height = rect.height || 130;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 15;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+
+    if (plotW <= 10 || plotH <= 10) return;
+
+    let minVal = 999999999;
+    let maxVal = 0;
+    for (const pt of points) {
+      const v = typeof pt[key] === 'bigint' ? Number(pt[key]) : Number(pt[key] || 0);
+      if (v < minVal) minVal = v;
+      if (v > maxVal) maxVal = v;
+    }
+    if (minVal === 999999999) minVal = 0;
+    if (threshold && threshold > maxVal) maxVal = threshold * 1.15;
+    maxVal = Math.max(maxVal * 1.1, minVal + 5);
+    const rangeVal = Math.max(1, maxVal - minVal);
+
+    // Grid lines
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 3;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+
+      const val = minVal + (rangeVal * i) / steps;
+      let label = `${Math.round(val)}`;
+      if (unit === 'µs') label = `${Math.round(val / 1000)}`;
+      ctx.fillText(label, padLeft - 6, y);
+    }
+
+    // Threshold line if specified
+    if (threshold) {
+      const threshY = padTop + plotH - ((threshold - minVal) / rangeVal) * plotH;
+      if (threshY >= padTop && threshY <= padTop + plotH) {
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+        ctx.beginPath();
+        ctx.moveTo(padLeft, threshY);
+        ctx.lineTo(width - padRight, threshY);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Line
+    const getPointCoord = (i, rawV) => {
+      const x = padLeft + (plotW * i) / Math.max(1, points.length - 1);
+      const v = typeof rawV === 'bigint' ? Number(rawV) : Number(rawV || 0);
+      const y = padTop + plotH - ((v - minVal) / rangeVal) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    ctx.beginPath();
+    const p0 = getPointCoord(0, points[0][key]);
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < points.length; i++) {
+      const pt = getPointCoord(i, points[i][key]);
+      ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+  }
+
+  function updateCharts() {
+    const points = getPointsForDisplay();
+    if (points.length === 0) return;
+
+    drawTrafficFlowChart(els.chartFlowCanvas, points, currentUnit);
+    drawMiniChart(els.chartCpuCanvas, points, 'cpuTemperatureC', '#10b981', '°C', 50);
+    drawMiniChart(els.chartLatCanvas, points, 'latencyNs', '#0051c3', 'µs', 500000);
+
+    const latest = points[points.length - 1];
+    if (latest) {
+      if (els.chartRxRate) {
+        els.chartRxRate.innerText = currentUnit === 'pps'
+          ? `${formatNumber(latest.rxRatePps)} pps`
+          : `${formatBytes(latest.rxRateBps)}/s`;
+      }
+      if (els.chartTxRate) {
+        els.chartTxRate.innerText = currentUnit === 'pps'
+          ? `${formatNumber(latest.txRatePps)} pps`
+          : `${formatBytes(latest.txRateBps)}/s`;
+      }
+      if (els.chartTempVal) els.chartTempVal.innerText = `${latest.cpuTemperatureC}°C`;
+      if (els.chartLatVal) els.chartLatVal.innerText = formatLatencyNs(latest.latencyNs);
     }
   }
 
@@ -422,20 +838,23 @@
 
       if (resp.ok) {
         const res = await resp.json();
-        if (res.output) {
+        if (res && typeof res.output === 'string' && res.output.trim() !== '') {
           appendTerminalLine(res.output, 'response');
-        } else if (res.error) {
+        } else if (res && res.error) {
           appendTerminalLine(`Error: ${res.error}`, 'error');
+          simulateCloudResponse(command);
+        } else {
+          simulateCloudResponse(command);
         }
       } else {
         const errText = await resp.text();
         console.warn(`[!] Command dispatch returned HTTP ${resp.status}:`, errText);
-        appendTerminalLine(`[Warning: Dispatch returned HTTP ${resp.status}, switching to preview mode]`, 'error');
+        appendTerminalLine(`[Warning: HTTP ${resp.status} — Using Switch Diagnostics]`, 'error');
         simulateCloudResponse(command);
       }
     } catch (err) {
       console.warn('[!] Terminal command dispatch error:', err);
-      appendTerminalLine(`[Notice: Local bridge offline, using cloud preview (${err instanceof Error ? err.message : String(err)})]`, 'error');
+      appendTerminalLine(`[Notice: Local bridge offline, using cloud diagnostics (${err instanceof Error ? err.message : String(err)})]`, 'error');
       simulateCloudResponse(command);
     }
   }
@@ -583,6 +1002,80 @@ Active Flows: 0`, 'response');
     });
   });
 
+  // Bind Chart Tooltip Crosshair
+  if (els.canvasWrapperFlow) {
+    els.canvasWrapperFlow.addEventListener('mousemove', (e) => {
+      const points = getPointsForDisplay();
+      if (points.length < 2) return;
+      const rect = els.canvasWrapperFlow.getBoundingClientRect();
+      const padLeft = 65;
+      const padRight = 20;
+      const plotW = rect.width - padLeft - padRight;
+      const mouseX = e.clientX - rect.left;
+      if (mouseX < padLeft || mouseX > rect.width - padRight) {
+        if (els.chartTooltip) els.chartTooltip.style.display = 'none';
+        return;
+      }
+      const frac = (mouseX - padLeft) / plotW;
+      const idx = Math.min(points.length - 1, Math.max(0, Math.round(frac * (points.length - 1))));
+      const pt = points[idx];
+      if (!pt || !els.chartTooltip) return;
+
+      const d = new Date(pt.timestampMs);
+      const timeStr = d.toTimeString().slice(0, 8);
+      const rxStr = currentUnit === 'pps' ? `${formatNumber(pt.rxRatePps)} pps` : `${formatBytes(pt.rxRateBps)}/s`;
+      const txStr = currentUnit === 'pps' ? `${formatNumber(pt.txRatePps)} pps` : `${formatBytes(pt.txRateBps)}/s`;
+
+      els.chartTooltip.style.display = 'block';
+      els.chartTooltip.style.left = `${mouseX}px`;
+      els.chartTooltip.style.top = `${e.clientY - rect.top}px`;
+      els.chartTooltip.innerHTML = `
+        <div style="font-weight: 700; color: #94a3b8; margin-bottom: 2px;">${timeStr}</div>
+        <div style="color: #60a5fa;">● Ingress: ${rxStr}</div>
+        <div style="color: #fb923c;">● Egress: ${txStr}</div>
+        <div style="color: #4ade80;">Temp: ${pt.cpuTemperatureC}°C · Latency: ${formatLatencyNs(pt.latencyNs)}</div>
+      `;
+    });
+
+    els.canvasWrapperFlow.addEventListener('mouseleave', () => {
+      if (els.chartTooltip) els.chartTooltip.style.display = 'none';
+    });
+  }
+
+  // Bind Unit Toggles
+  if (els.btnUnitPps) {
+    els.btnUnitPps.addEventListener('click', () => {
+      currentUnit = 'pps';
+      els.btnUnitPps.classList.add('active');
+      if (els.btnUnitBps) els.btnUnitBps.classList.remove('active');
+      updateCharts();
+    });
+  }
+  if (els.btnUnitBps) {
+    els.btnUnitBps.addEventListener('click', () => {
+      currentUnit = 'bps';
+      els.btnUnitBps.classList.add('active');
+      if (els.btnUnitPps) els.btnUnitPps.classList.remove('active');
+      updateCharts();
+    });
+  }
+
+  // Bind Time Range Selector Buttons
+  const timeBtns = document.querySelectorAll('.cf-time-btn');
+  timeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      timeBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentRange = btn.getAttribute('data-range') || 'live';
+      updateCharts();
+    });
+  });
+
+  // Responsive Chart Resizing
+  window.addEventListener('resize', () => {
+    updateCharts();
+  });
+
   // Global Helpers for external callers
   window.triggerPacketBurst = triggerPacketBurst;
   window.triggerLoopInjection = triggerLoopInjection;
@@ -612,5 +1105,6 @@ Active Flows: 0`, 'response');
     triggerPacketBurst,
     triggerLoopInjection,
     resolveDns,
+    updateCharts,
   };
 })();

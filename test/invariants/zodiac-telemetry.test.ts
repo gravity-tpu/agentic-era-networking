@@ -95,4 +95,30 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
     expect(formatLatencyNsDeterministic(495625n)).toBe('495.6 µs');
     expect(formatLatencyNsDeterministic(1500000n)).toBe('1.50 ms');
   });
+
+  it('generates deterministic historical telemetry time-series points with BigInt rates', () => {
+    const snap = createDefaultZodiacSnapshot();
+    expect(snap.timeSeries).toBeDefined();
+    expect(snap.timeSeries?.length).toBe(60);
+
+    const pts = snap.timeSeries!;
+    for (let i = 0; i < pts.length; i++) {
+      const pt = pts[i]!;
+      expect(typeof pt.timestampMs).toBe('number');
+      expect(typeof pt.rxBytes).toBe('bigint');
+      expect(typeof pt.txBytes).toBe('bigint');
+      expect(typeof pt.rxPackets).toBe('bigint');
+      expect(typeof pt.txPackets).toBe('bigint');
+      expect(typeof pt.rxRatePps).toBe('bigint');
+      expect(typeof pt.txRatePps).toBe('bigint');
+      expect(typeof pt.rxRateBps).toBe('bigint');
+      expect(typeof pt.txRateBps).toBe('bigint');
+      expect(typeof pt.cpuTemperatureC).toBe('number');
+      expect(typeof pt.latencyNs).toBe('bigint');
+
+      if (i > 0) {
+        expect(pt.timestampMs).toBeGreaterThan(pts[i - 1]!.timestampMs);
+      }
+    }
+  });
 });

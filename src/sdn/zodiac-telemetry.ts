@@ -50,11 +50,26 @@ export interface ZodiacOpenFlowTelemetry {
   readonly lastHeartbeatLatencyNs: bigint;
 }
 
+export interface ZodiacTimeSeriesPoint {
+  readonly timestampMs: number;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxRatePps: bigint;
+  readonly txRatePps: bigint;
+  readonly rxRateBps: bigint;
+  readonly txRateBps: bigint;
+  readonly cpuTemperatureC: number;
+  readonly latencyNs: bigint;
+}
+
 export interface ZodiacFullTelemetrySnapshot {
   readonly system: ZodiacSystemTelemetry;
   readonly ports: ZodiacPortTelemetry[];
   readonly openflow: ZodiacOpenFlowTelemetry;
   readonly source: 'live_hardware' | 'cloud_snapshot';
+  readonly timeSeries?: ZodiacTimeSeriesPoint[] | undefined;
 }
 
 /**
@@ -116,7 +131,7 @@ export function parseZodiacPortsHtml(html: string): ZodiacPortTelemetry[] {
  * Creates a default/baseline telemetry snapshot matching physical Zodiac FX defaults.
  */
 export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
-  return {
+  const base: ZodiacFullTelemetrySnapshot = {
     source: 'cloud_snapshot',
     system: {
       deviceName: 'Zodiac_FX',
@@ -206,6 +221,83 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
       lastHeartbeatLatencyNs: 495625n, // 0.496 ms
     },
   };
+
+  return {
+    ...base,
+    timeSeries: generateHistoricalTelemetry(base, 1, 60),
+  };
+}
+
+/**
+ * Generates deterministic historical time-series points matching switch counters.
+ * Complies with Dean Invariant (pure integer arithmetic, monotonic nanoseconds).
+ */
+export function generateHistoricalTelemetry(
+  snapshot: ZodiacFullTelemetrySnapshot,
+  durationHours: number = 1,
+  pointCount: number = 60
+): ZodiacTimeSeriesPoint[] {
+  const points: ZodiacTimeSeriesPoint[] = [];
+  const nowMs = Date.now();
+  const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  // Aggregate baseline counters
+  let totalRxBytes = 0n;
+  let totalTxBytes = 0n;
+  let totalRxPkts = 0n;
+  let totalTxPkts = 0n;
+  for (const p of snapshot.ports) {
+    totalRxBytes += p.rxBytes;
+    totalTxBytes += p.txBytes;
+    totalRxPkts += p.rxPackets;
+    totalTxPkts += p.txPackets;
+  }
+
+  const baseTemp = snapshot.system.cpuTemperatureC || 31;
+  const baseLatency = snapshot.openflow.lastHeartbeatLatencyNs || 495625n;
+
+  for (let i = pointCount - 1; i >= 0; i--) {
+    const timestampMs = nowMs - i * stepMs;
+    const progress = BigInt(pointCount - i);
+    const totalProg = BigInt(pointCount);
+
+    // Diurnal variation wave with integer math (80% to 120%)
+    const cycle = Math.floor(timestampMs / 60000) % 60;
+    const modFactor = BigInt(80 + (cycle % 40));
+
+    const rxBytes = (totalRxBytes * progress * modFactor) / (totalProg * 100n);
+    const txBytes = (totalTxBytes * progress * modFactor) / (totalProg * 100n);
+    const rxPackets = (totalRxPkts * progress * modFactor) / (totalProg * 100n);
+    const txPackets = (totalTxPkts * progress * modFactor) / (totalProg * 100n);
+
+    const intervalSec = BigInt(Math.max(1, Math.floor(stepMs / 1000)));
+    const rxRatePps = (totalRxPkts * modFactor) / (totalProg * 100n * intervalSec);
+    const txRatePps = (totalTxPkts * modFactor) / (totalProg * 100n * intervalSec);
+    const rxRateBps = (totalRxBytes * modFactor) / (totalProg * 100n * intervalSec);
+    const txRateBps = (totalTxBytes * modFactor) / (totalProg * 100n * intervalSec);
+
+    const tempJitter = cycle % 3 === 0 ? 1 : cycle % 5 === 0 ? -1 : 0;
+    const cpuTemperatureC = Math.max(25, Math.min(65, baseTemp + tempJitter));
+
+    const latJitter = BigInt((cycle % 7) * 15000);
+    const latencyNs = baseLatency + latJitter;
+
+    points.push({
+      timestampMs,
+      rxBytes,
+      txBytes,
+      rxPackets,
+      txPackets,
+      rxRatePps,
+      txRatePps,
+      rxRateBps,
+      txRateBps,
+      cpuTemperatureC,
+      latencyNs,
+    });
+  }
+
+  return points;
 }
 
 /**
