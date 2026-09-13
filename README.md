@@ -28,7 +28,21 @@ This codebase is governed by the collective engineering rigor of five foundation
 
 ---
 
-## 2. Institutional Memory & Governance System
+## 2. Physical Hardware Co-Design: Zodiac FX Switch & Google Coral Edge TPU
+
+This repository grounds SDN invariants in physical desktop hardware:
+- **Architecture Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
+- **Data Plane Hardware**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
+- **Inference Coprocessor**: Google Coral USB Accelerator (Edge TPU) connected directly to the DisplayLink dock (4 TOPS INT8, ~2.5 ms inference latency).
+- **The 4 Architectural Roles**:
+  1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
+  2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
+  3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
+  4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
+
+---
+
+## 3. Institutional Memory & Governance System
 
 The repository embeds stateful governance directly in the codebase:
 
@@ -41,7 +55,7 @@ The repository embeds stateful governance directly in the codebase:
 
 ---
 
-## 3. Multi-Model AI Code Review Pipeline
+## 4. Multi-Model AI Code Review Pipeline
 
 Automated AI review executes both locally and in GitHub Actions CI:
 - **Council System Prompt**: Evaluates code through the combined standards of Dean, Ghemawat, Quoc Le, Vinyals, and Hassabis.
@@ -62,7 +76,7 @@ npm run review:head
 
 ---
 
-## 4. Quick Start & Verification
+## 5. Quick Start & Verification
 
 ### Prerequisites
 - Node.js >= 20.12.0
@@ -91,7 +105,7 @@ cp .env.example .env.local
 
 ---
 
-## 5. Co-Ownership & Cloud Setup
+## 6. Co-Ownership & Cloud Setup
 
 - **GitHub Repository**: [https://github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking)
   - Both collaborators have admin rights to push, manage pull requests, and configure CI secrets.

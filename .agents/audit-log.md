@@ -15,6 +15,7 @@
 | 2026-09-12 | INV-004 | Multi-Model Fallback for AI Code Review | Active | Google Gemini (primary) → Anthropic Claude → OpenAI GPT-4o ensures resilient CI code reviews. |
 | 2026-09-12 | INV-005 | Single Source of Truth for Runtime | Active | `.nvmrc` pins Node 22 universally across local dev, CI, and Vercel. |
 | 2026-09-12 | INV-006 | DB Migration Guard for Prisma | Active | Structural changes to `prisma/schema.prisma` in PRs must include SQL migrations under `prisma/migrations/`. |
+| 2026-09-12 | INV-007 | Physical Co-Design & Edge TPU Hardware Integration | Active | Zodiac FX Switch + Google Coral USB Accelerator provide physical ground-truth data plane and sub-4ms INT8 inference directly on host DisplayLink dock without intermediate SBC hops. |
 
 ---
 
