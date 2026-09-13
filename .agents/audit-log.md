@@ -16,6 +16,7 @@
 | 2026-09-12 | INV-005 | Single Source of Truth for Runtime | Active | `.nvmrc` pins Node 22 universally across local dev, CI, and Vercel. |
 | 2026-09-12 | INV-006 | DB Migration Guard for Prisma | Active | Structural changes to `prisma/schema.prisma` in PRs must include SQL migrations under `prisma/migrations/`. |
 | 2026-09-12 | INV-007 | Physical Co-Design & Edge TPU Hardware Integration | Active | Zodiac FX Switch + Google Coral USB Accelerator provide physical ground-truth data plane and sub-4ms INT8 inference directly on host DisplayLink dock without intermediate SBC hops. |
+| 2026-09-13 | INV-008 | Dual-Plane Zodiac FX Hardware Controller | Active | Out-of-band Serial CDC ACM (/dev/cu.usbmodem*) + OpenFlow 1.3 TCP (10.0.1.8:6633) with BigInt wire serialization and SymbolicRouteVerifier loop gate. |
 
 ---
 
@@ -29,6 +30,7 @@
 - [x] Prometheus `/metrics` exposition formatter for BigInt telemetry.
 - [x] Wire-protocol RFC 1035 UDP DNS socket server with fail-closed resolution.
 - [x] SDN Flow Table with CIDR matching and default-drop enforcement.
+- [x] Zodiac FX Physical Hardware Interface & OpenFlow 1.3 Controller Daemon.
 - [ ] Connect live Neon PostgreSQL connection string and run initial migration.
 
 ---

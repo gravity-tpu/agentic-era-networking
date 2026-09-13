@@ -19,7 +19,8 @@
     "review:head": "node scripts/ai-reviewer.mjs --head",
     "setup-hooks": "bash scripts/install-hooks.sh",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy"
+    "db:migrate": "prisma migrate deploy",
+    "zodiac": "node --experimental-strip-types scripts/zodiac-cli.ts"
   },
   "keywords": [
     "networking",
