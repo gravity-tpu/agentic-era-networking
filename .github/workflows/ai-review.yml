@@ -6,14 +6,14 @@ env:
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feat/**" ]
     paths-ignore:
       - '**/*.md'
       - '.gitignore'
       - 'scratch/**'
       - '.env*'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "feat/**" ]
     paths-ignore:
       - '**/*.md'
       - '.gitignore'
