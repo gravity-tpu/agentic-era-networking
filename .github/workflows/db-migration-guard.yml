@@ -14,7 +14,7 @@ jobs:
     name: Require Migration for Schema Changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
