@@ -469,3 +469,53 @@ export function formatLatencyNsDeterministic(ns: bigint): string {
   const fracStr = frac < 10n ? `0${frac}` : `${frac}`;
   return `${millis}.${fracStr} ms`;
 }
+
+export interface ProvenanceValidationContext {
+  readonly isLoopback: boolean;
+  readonly bridgeSecret?: string | undefined;
+  readonly expectedSecret?: string | undefined;
+}
+
+/**
+ * Validates telemetry snapshot source against transport origin and cryptographic credentials.
+ * Council Invariant 6: Goodhart's Law & Epistemic Telemetry Provenance (Anti-Simulation Law).
+ * Enforces Verification Asymmetry: An external caller cannot claim 'live_hardware' without
+ * loopback transport or a verified bridge secret.
+ */
+export function resolveVerifiedProvenance(
+  requestedSource: unknown,
+  ctx: ProvenanceValidationContext
+): 'live_hardware' | 'cloud_snapshot' | 'disconnected' {
+  if (requestedSource === 'disconnected') {
+    return 'disconnected';
+  }
+
+  if (requestedSource === 'live_hardware') {
+    const secretValid =
+      Boolean(ctx.expectedSecret) &&
+      ctx.bridgeSecret === ctx.expectedSecret;
+
+    if (ctx.isLoopback || secretValid) {
+      return 'live_hardware';
+    }
+
+    // Fail-Closed: Quarantine/demote unverified remote claims of live_hardware to cloud_snapshot sandbox
+    return 'cloud_snapshot';
+  }
+
+  return 'cloud_snapshot';
+}
+
+/**
+ * Asserts that a declared telemetry source possesses physical verification.
+ * Throws an Epistemic Provenance Violation error if unverified.
+ */
+export function assertVerifiedProvenance(
+  source: string,
+  isPhysicallyVerified: boolean
+): void {
+  if (source === 'live_hardware' && !isPhysicallyVerified) {
+    throw new Error('Epistemic Provenance Violation: live_hardware declared without physical link verification');
+  }
+}
+

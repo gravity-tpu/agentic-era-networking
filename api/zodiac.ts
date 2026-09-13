@@ -10,7 +10,11 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createDefaultZodiacSnapshot, type ZodiacFullTelemetrySnapshot } from '../dist/sdn/zodiac-telemetry.js';
+import {
+  createDefaultZodiacSnapshot,
+  resolveVerifiedProvenance,
+  type ZodiacFullTelemetrySnapshot,
+} from '../dist/sdn/zodiac-telemetry.js';
 
 const MAX_PAYLOAD_BYTES = 256 * 1024; // 256 KB
 
@@ -101,15 +105,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             return;
           }
 
-          const incomingSource =
-            parsed.source === 'live_hardware' || parsed.source === 'disconnected' || parsed.source === 'cloud_snapshot'
-              ? parsed.source
-              : 'cloud_snapshot';
+          const remoteIp = req.socket.remoteAddress ?? '';
+          const isLoopback =
+            remoteIp === '127.0.0.1' ||
+            remoteIp === '::1' ||
+            remoteIp === '::ffff:127.0.0.1' ||
+            req.headers.host?.startsWith('localhost') === true ||
+            req.headers.host?.startsWith('127.0.0.1') === true;
+
+          const bridgeSecret = typeof req.headers['x-zodiac-bridge-secret'] === 'string'
+            ? req.headers['x-zodiac-bridge-secret']
+            : undefined;
+
+          const verifiedSource = resolveVerifiedProvenance(parsed.source, {
+            isLoopback,
+            bridgeSecret,
+            expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
+          });
 
           latestSnapshot = {
             ...latestSnapshot,
             ...parsed,
-            source: incomingSource,
+            source: verifiedSource,
             system: {
               ...latestSnapshot.system,
               ...(parsed.system ?? {}),

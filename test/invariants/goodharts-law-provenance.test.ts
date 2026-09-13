@@ -14,7 +14,8 @@ import {
   createDisconnectedZodiacSnapshot,
   createDefaultZodiacSnapshot,
   generateHistoricalTelemetry,
-  type ZodiacFullTelemetrySnapshot,
+  resolveVerifiedProvenance,
+  assertVerifiedProvenance,
 } from '../../src/sdn/zodiac-telemetry.js';
 
 describe('Council Invariant 6: Goodhart\'s Law & Epistemic Telemetry Provenance', () => {
@@ -70,22 +71,41 @@ describe('Council Invariant 6: Goodhart\'s Law & Epistemic Telemetry Provenance'
     expect(cloudTwin.source).not.toBe('live_hardware');
   });
 
-  it('prohibits synthetic data from setting live_hardware source without physical connection', () => {
-    // A synthetic snapshot should never be accepted as live_hardware without physical verification
-    const validateProvenance = (snapshot: ZodiacFullTelemetrySnapshot, isPhysicallyVerified: boolean) => {
-      if (snapshot.source === 'live_hardware' && !isPhysicallyVerified) {
-        throw new Error('Epistemic Provenance Violation: live_hardware declared without physical link verification');
-      }
-      return true;
-    };
+  it('prohibits synthetic data from setting live_hardware source without physical connection (assertVerifiedProvenance)', () => {
+    expect(() => assertVerifiedProvenance('live_hardware', false)).toThrow(/Epistemic Provenance Violation/);
+    expect(() => assertVerifiedProvenance('live_hardware', true)).not.toThrow();
+  });
 
-    const fakeLiveSnapshot: ZodiacFullTelemetrySnapshot = {
-      ...createDefaultZodiacSnapshot(),
-      source: 'live_hardware',
-    };
+  it('verifies transport boundary and cryptographic authentication (resolveVerifiedProvenance)', () => {
+    // 1. Loopback request claiming live_hardware is accepted
+    const loopbackResult = resolveVerifiedProvenance('live_hardware', { isLoopback: true });
+    expect(loopbackResult).toBe('live_hardware');
 
-    expect(() => validateProvenance(fakeLiveSnapshot, false)).toThrow(/Epistemic Provenance Violation/);
-    expect(validateProvenance(fakeLiveSnapshot, true)).toBe(true);
+    // 2. Remote request without secret claiming live_hardware is quarantined/demoted to cloud_snapshot
+    const remoteSpoofResult = resolveVerifiedProvenance('live_hardware', {
+      isLoopback: false,
+      bridgeSecret: undefined,
+    });
+    expect(remoteSpoofResult).toBe('cloud_snapshot');
+
+    // 3. Remote request with invalid secret is demoted to cloud_snapshot
+    const invalidSecretResult = resolveVerifiedProvenance('live_hardware', {
+      isLoopback: false,
+      bridgeSecret: 'wrong-token',
+      expectedSecret: 'correct-token',
+    });
+    expect(invalidSecretResult).toBe('cloud_snapshot');
+
+    // 4. Remote request with valid bridge secret is accepted
+    const validAuthResult = resolveVerifiedProvenance('live_hardware', {
+      isLoopback: false,
+      bridgeSecret: 'correct-token',
+      expectedSecret: 'correct-token',
+    });
+    expect(validAuthResult).toBe('live_hardware');
+
+    // 5. Disconnected request remains disconnected
+    expect(resolveVerifiedProvenance('disconnected', { isLoopback: false })).toBe('disconnected');
   });
 
   it('verifies that zero rate deltas are computed when consecutive ticks have identical counters', () => {

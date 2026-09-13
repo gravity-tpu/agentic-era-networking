@@ -147,10 +147,16 @@ fi
 echo ""
 
 # ── Gate 4: Epistemic Provenance & Anti-Simulation Scan ──────
-echo -e "${BOLD}[Gate 4/4] Epistemic Provenance — Scanning for untagged simulations & metric gaming${RESET}"
+echo -e "${BOLD}[Gate 4/4] Epistemic Provenance — Programmatic audit & simulation scan${RESET}"
 
 PROVENANCE_FAILURES=""
 
+# 1. Programmatic Provenance Engine
+if ! npm run check:provenance --silent 2>&1; then
+  PROVENANCE_FAILURES+="  Programmatic check:provenance engine detected invariant violations.\n"
+fi
+
+# 2. Diff-level file scan for staged / pushed changes
 if [ "$UNIQUE_COUNT" -gt 0 ]; then
   for file in "${UNIQUE_FILES[@]}"; do
     [ -z "$file" ] && continue
@@ -158,10 +164,10 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
     case "$file" in
       *.ts|*.js|*.mjs)
         case "$file" in
-          test/*|*.test.ts|*.spec.ts)
+          test/*|*.test.ts|*.spec.ts|scripts/check-provenance.ts)
             ;;
           *)
-            # 1. Untagged mock hardware telemetry masquerading as live silicon
+            # Untagged mock hardware telemetry masquerading as live silicon
             MOCK_LEAK=$(grep -nE "CPU Temperature:\s*[0-9]+" "$REPO_ROOT/$file" 2>/dev/null || true)
             if [ -n "$MOCK_LEAK" ]; then
               if ! grep -qE "(SIMULATION|SANDBOX|cloud_snapshot|disconnected)" "$REPO_ROOT/$file" 2>/dev/null; then
@@ -172,7 +178,7 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
               fi
             fi
 
-            # 2. Artificial constant counter increments (violating Goodhart's Law)
+            # Artificial constant counter increments (violating Goodhart's Law)
             ARTIFICIAL_INC=$(grep -nE "(rxBytes|txBytes|rxPackets|txPackets)\s*\+=\s*[0-9]+n?" "$REPO_ROOT/$file" 2>/dev/null || true)
             if [ -n "$ARTIFICIAL_INC" ]; then
               PROVENANCE_FAILURES+="\n  ${BOLD}$file (Artificial counter increment detected):${RESET}\n"
@@ -188,7 +194,7 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
 fi
 
 if [ -z "$PROVENANCE_FAILURES" ]; then
-  echo -e "  ${GREEN}✓ Epistemic provenance verified: no untagged simulations or artificial metric drift${RESET}"
+  echo -e "  ${GREEN}✓ Epistemic provenance verified: zero untagged mocks, verified transport origin${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
   echo -e "  ${RED}✗ Epistemic provenance violation detected (Goodhart's Law):${RESET}"
