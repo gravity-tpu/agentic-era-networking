@@ -47,6 +47,7 @@ export class ZodiacBridgeServer {
   private server: http.Server | null = null;
   private cachedSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
   private timeSeries: ZodiacTimeSeriesPoint[] = [];
+  private pollTimer: NodeJS.Timeout | null = null;
 
   constructor(controller?: ZodiacController, switchIp?: string, controllerIp?: string) {
     this.controller = controller ?? new ZodiacController();
@@ -92,10 +93,21 @@ export class ZodiacBridgeServer {
       });
     };
 
-    return tryListen(requestedPort);
+    const boundPort = await tryListen(requestedPort);
+
+    // 3. Start decoupled asynchronous background telemetry polling loop
+    this.pollTimer = setInterval(() => {
+      void this.refreshTelemetry();
+    }, 2500);
+
+    return boundPort;
   }
 
   public async stop(): Promise<void> {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     return new Promise((resolve) => {
       if (this.server) {
         this.server.close(async () => {
@@ -123,9 +135,8 @@ export class ZodiacBridgeServer {
       return;
     }
 
-    // API: GET /api/zodiac
+    // API: GET /api/zodiac (Dean & Ghemawat Invariant: O(1) instant return of cached snapshot)
     if (url.pathname === '/api/zodiac' && req.method === 'GET') {
-      await this.refreshTelemetry();
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(this.serializeSnapshot(this.cachedSnapshot));
