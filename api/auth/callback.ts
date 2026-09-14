@@ -160,7 +160,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     // 6. Set secure session cookie & redirect to dashboard
     const sessionToken = createSessionToken(userClaims);
-    const cookieHeader = buildSessionCookieHeader(sessionToken);
+    const cookieHeader = buildSessionCookieHeader(sessionToken, undefined, req);
 
     res.statusCode = 302;
     res.setHeader('Location', '/');

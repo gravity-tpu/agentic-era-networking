@@ -137,12 +137,27 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
       expect(parsed['empty_cookie']).toBe('');
     });
 
-    it('constructs HttpOnly SameSite=Lax session cookie header', () => {
-      const cookie = buildSessionCookieHeader('sample.jwt.token');
-      expect(cookie).toContain('agentic_session=sample.jwt.token');
-      expect(cookie).toContain('HttpOnly');
-      expect(cookie).toContain('SameSite=Lax');
-      expect(cookie).toContain('Path=/');
+    it('constructs HttpOnly SameSite=Lax session cookie header with Secure by default (Fail-Closed Invariant)', () => {
+      const defaultCookie = buildSessionCookieHeader('sample.jwt.token');
+      expect(defaultCookie).toContain('agentic_session=sample.jwt.token');
+      expect(defaultCookie).toContain('HttpOnly');
+      expect(defaultCookie).toContain('SameSite=Lax');
+      expect(defaultCookie).toContain('Path=/');
+      expect(defaultCookie).toContain('; Secure'); // Fail-Closed: defaults to Secure even without env flags
+
+      // Strips Secure only when explicitly proven to be local loopback
+      const localReq = {
+        socket: { remoteAddress: '127.0.0.1' },
+      } as unknown as import('node:http').IncomingMessage;
+      const localCookie = buildSessionCookieHeader('sample.jwt.token', 600, localReq);
+      expect(localCookie).not.toContain('; Secure');
+
+      // Preserves Secure for remote requests
+      const remoteReq = {
+        socket: { remoteAddress: '203.0.113.42' },
+      } as unknown as import('node:http').IncomingMessage;
+      const remoteCookie = buildSessionCookieHeader('sample.jwt.token', 600, remoteReq);
+      expect(remoteCookie).toContain('; Secure');
     });
 
     it('constructs clear cookie header with Max-Age=0', () => {

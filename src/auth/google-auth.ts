@@ -187,13 +187,16 @@ export function getAuthenticatedUser(cookieHeader: string | undefined): GoogleUs
 
 /**
  * Builds the Set-Cookie header for an authenticated session.
+ * Fail-Closed Security (Demis Hassabis): Defaults to '; Secure' for maximum safety.
+ * The Secure flag is only omitted if an explicit IncomingMessage proves local loopback dev.
  */
 export function buildSessionCookieHeader(
   token: string,
-  maxAgeSeconds: number = DEFAULT_SESSION_EXPIRY_SECONDS
+  maxAgeSeconds: number = DEFAULT_SESSION_EXPIRY_SECONDS,
+  req?: IncomingMessage | undefined
 ): string {
-  const isProd = IS_PRODUCTION;
-  const secureFlag = isProd ? '; Secure' : '';
+  const isPlainLocal = req ? isLocalDev(req) : false;
+  const secureFlag = isPlainLocal ? '' : '; Secure';
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secureFlag}`;
 }
 
