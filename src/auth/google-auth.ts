@@ -185,19 +185,25 @@ export function getAuthenticatedUser(cookieHeader: string | undefined): GoogleUs
   return verifySessionToken(sessionToken);
 }
 
+export interface SessionCookieOptions {
+  readonly maxAgeSeconds?: number | undefined;
+  readonly req?: IncomingMessage | undefined;
+}
+
 /**
  * Builds the Set-Cookie header for an authenticated session.
+ * Sanjay Ghemawat - Radical Simplicity: Flat options object avoids positional argument brittleness.
  * Fail-Closed Security (Demis Hassabis): Defaults to '; Secure' for maximum safety.
  * The Secure flag is only omitted if an explicit IncomingMessage proves local loopback dev.
  */
 export function buildSessionCookieHeader(
   token: string,
-  maxAgeSeconds: number = DEFAULT_SESSION_EXPIRY_SECONDS,
-  req?: IncomingMessage | undefined
+  options?: SessionCookieOptions
 ): string {
-  const isPlainLocal = req ? isLocalDev(req) : false;
+  const maxAge = options?.maxAgeSeconds ?? DEFAULT_SESSION_EXPIRY_SECONDS;
+  const isPlainLocal = options?.req ? isLocalDev(options.req) : false;
   const secureFlag = isPlainLocal ? '' : '; Secure';
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secureFlag}`;
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secureFlag}`;
 }
 
 /**

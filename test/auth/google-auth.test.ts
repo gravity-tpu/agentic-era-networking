@@ -149,15 +149,17 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
       const localReq = {
         socket: { remoteAddress: '127.0.0.1' },
       } as unknown as import('node:http').IncomingMessage;
-      const localCookie = buildSessionCookieHeader('sample.jwt.token', 600, localReq);
+      const localCookie = buildSessionCookieHeader('sample.jwt.token', { maxAgeSeconds: 600, req: localReq });
       expect(localCookie).not.toContain('; Secure');
+      expect(localCookie).toContain('Max-Age=600');
 
       // Preserves Secure for remote requests
       const remoteReq = {
         socket: { remoteAddress: '203.0.113.42' },
       } as unknown as import('node:http').IncomingMessage;
-      const remoteCookie = buildSessionCookieHeader('sample.jwt.token', 600, remoteReq);
+      const remoteCookie = buildSessionCookieHeader('sample.jwt.token', { maxAgeSeconds: 600, req: remoteReq });
       expect(remoteCookie).toContain('; Secure');
+      expect(remoteCookie).toContain('Max-Age=600');
     });
 
     it('constructs clear cookie header with Max-Age=0', () => {
