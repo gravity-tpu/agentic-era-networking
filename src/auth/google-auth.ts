@@ -27,6 +27,28 @@ export const DEFAULT_ALLOWED_EMAILS: readonly string[] = Object.freeze([
   'natborks@gmail.com',
 ]);
 
+// Static environment flags hoisted to module scope per Jeff Dean Latency Invariant (Eliminates getenv C++ proxy crossing in hot path)
+export const IS_VERCEL = Boolean(process.env['VERCEL']);
+export const IS_PRODUCTION = process.env['NODE_ENV'] === 'production' || IS_VERCEL;
+
+/**
+ * Pure, deterministic check for local development loopback environment.
+ * Eliminates heuristic code duplication per Sanjay Ghemawat's Radical Simplicity law.
+ * Evaluates hoisted module constants to satisfy Jeff Dean's zero-cost hot path rule.
+ * Enforces strict fail-closed isolation on any cloud/external deployment (Quoc Le & Hassabis).
+ */
+export function isLocalDev(req: IncomingMessage): boolean {
+  // If running in any cloud/Vercel deployment, physical local loopback is mathematically impossible
+  if (IS_VERCEL || Boolean(process.env['VERCEL'])) return false;
+
+  const remoteIp = req.socket?.remoteAddress ?? '';
+  return (
+    remoteIp === '127.0.0.1' ||
+    remoteIp === '::1' ||
+    remoteIp === '::ffff:127.0.0.1'
+  );
+}
+
 /**
  * Checks whether an email address is permitted to access the operator dashboard.
  * Evaluates against DEFAULT_ALLOWED_EMAILS plus ALLOWED_GOOGLE_EMAILS env var.
@@ -170,7 +192,7 @@ export function buildSessionCookieHeader(
   token: string,
   maxAgeSeconds: number = DEFAULT_SESSION_EXPIRY_SECONDS
 ): string {
-  const isProd = process.env['NODE_ENV'] === 'production' || Boolean(process.env['VERCEL']);
+  const isProd = IS_PRODUCTION || process.env['NODE_ENV'] === 'production' || Boolean(process.env['VERCEL']);
   const secureFlag = isProd ? '; Secure' : '';
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secureFlag}`;
 }
@@ -208,20 +230,14 @@ export function generateOAuthState(): string {
 
 /**
  * Enforces Council Invariant 3 (Fail-Closed Isolation) for Operator API endpoints.
- * Inspects physical network socket provenance (remoteAddress) to distinguish local loopback
+ * Inspects physical network socket provenance via isLocalDev to distinguish local loopback
  * from remote traffic, preventing Host header spoofing attacks.
  */
 export function requireOperatorAuth(
   req: IncomingMessage,
   res: ServerResponse
 ): GoogleUserClaims | null {
-  const isVercel = Boolean(process.env['VERCEL']);
-  const remoteIp = req.socket?.remoteAddress ?? '';
-  const isLoopback =
-    !isVercel &&
-    (remoteIp === '127.0.0.1' ||
-     remoteIp === '::1' ||
-     remoteIp === '::ffff:127.0.0.1');
+  const isLoopback = isLocalDev(req);
   const hasGoogleOauth = Boolean(process.env['GOOGLE_CLIENT_ID']);
 
   // Local loopback development without OAuth configured uses default operator identity

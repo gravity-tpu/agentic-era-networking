@@ -4,7 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { getAuthenticatedUser } from '../../dist/auth/google-auth.js';
+import { getAuthenticatedUser, isLocalDev } from '../../dist/auth/google-auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,13 +25,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  const isVercel = Boolean(process.env['VERCEL']);
-  const remoteIp = req.socket?.remoteAddress ?? '';
-  const isLocal =
-    !isVercel &&
-    (remoteIp === '127.0.0.1' ||
-     remoteIp === '::1' ||
-     remoteIp === '::ffff:127.0.0.1');
+  const isLocal = isLocalDev(req);
 
   // Verify session cookie
   const user = getAuthenticatedUser(req.headers.cookie);

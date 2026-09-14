@@ -15,7 +15,7 @@ import {
   resolveVerifiedProvenance,
   type ZodiacFullTelemetrySnapshot,
 } from '../dist/sdn/zodiac-telemetry.js';
-import { requireOperatorAuth } from '../dist/auth/google-auth.js';
+import { requireOperatorAuth, isLocalDev } from '../dist/auth/google-auth.js';
 import {
   persistTelemetrySnapshot,
   getHistoricalTelemetry,
@@ -115,13 +115,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             return;
           }
 
-          const remoteIp = req.socket.remoteAddress ?? '';
-          const isLoopback =
-            remoteIp === '127.0.0.1' ||
-            remoteIp === '::1' ||
-            remoteIp === '::ffff:127.0.0.1' ||
-            req.headers.host?.startsWith('localhost') === true ||
-            req.headers.host?.startsWith('127.0.0.1') === true;
+          const isLoopback = isLocalDev(req);
 
           const bridgeSecret = typeof req.headers['x-zodiac-bridge-secret'] === 'string'
             ? req.headers['x-zodiac-bridge-secret']

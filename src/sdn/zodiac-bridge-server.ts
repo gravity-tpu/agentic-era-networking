@@ -24,6 +24,7 @@ import {
   createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
 import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
+import { isLocalDev } from '../auth/google-auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,11 +175,7 @@ export class ZodiacBridgeServer {
 
     // API: GET /api/auth/me (Council Invariant 3: Fail-Closed Socket Provenance)
     if (url.pathname === '/api/auth/me' && req.method === 'GET') {
-      const remoteIp = req.socket.remoteAddress ?? '';
-      const isLoopback =
-        remoteIp === '127.0.0.1' ||
-        remoteIp === '::1' ||
-        remoteIp === '::ffff:127.0.0.1';
+      const isLoopback = isLocalDev(req);
 
       if (!isLoopback) {
         res.statusCode = 401;
