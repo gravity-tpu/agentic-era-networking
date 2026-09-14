@@ -80,6 +80,7 @@ jobs:
             echo "::notice::VERCEL_TOKEN or VERCEL_PROJECT_ID secret/var not set — skipping deployment. Configure them in repository settings to enable production auto-deploy."
             exit 0
           fi
+          npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
           npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
