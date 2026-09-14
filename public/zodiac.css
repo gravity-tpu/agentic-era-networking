@@ -63,6 +63,7 @@ body {
 /* Sidebar */
 .cf-sidebar {
   width: 240px;
+  min-width: 240px;
   background-color: var(--cf-sidebar-bg);
   border-right: 1px solid var(--cf-border);
   display: flex;
@@ -73,6 +74,15 @@ body {
   height: 100vh;
   overflow-y: auto;
   z-index: 50;
+  transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s ease;
+  will-change: margin-left;
+}
+
+.cf-layout.sidebar-collapsed .cf-sidebar {
+  margin-left: -240px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .cf-sidebar-header {
@@ -220,6 +230,37 @@ body {
   flex-direction: column;
   min-width: 0;
   overflow-x: hidden;
+  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cf-sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--cf-border);
+  background: #ffffff;
+  color: var(--cf-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.cf-sidebar-toggle-btn:hover {
+  background: var(--cf-bg);
+  color: var(--cf-text-primary);
+  border-color: #cbd5e1;
+}
+
+.cf-sidebar-toggle-btn svg {
+  transition: transform 0.25s ease;
+}
+
+.cf-layout.sidebar-collapsed .cf-sidebar-toggle-btn svg {
+  transform: scaleX(-1);
 }
 
 /* Top Navigation Bar */
@@ -908,4 +949,168 @@ body {
   .cf-content {
     padding: 1rem;
   }
+}
+
+/* ==========================================================================
+   Per-Port Traffic Telemetry & Collapsible Cards
+   ========================================================================== */
+.cf-port-analytics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.cf-port-card {
+  background: #ffffff;
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cf-port-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
+}
+
+.cf-port-card-header {
+  padding: 0.85rem 1.15rem;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.cf-port-card-header:hover {
+  background: #f8fafc;
+}
+
+.cf-port-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.cf-port-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.cf-port-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.cf-port-card-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--cf-text-primary);
+}
+
+.cf-port-card-subtitle {
+  font-size: 0.75rem;
+  color: var(--cf-text-muted);
+}
+
+.cf-port-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.cf-collapse-chevron {
+  width: 18px;
+  height: 18px;
+  stroke: var(--cf-text-secondary);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+}
+
+.cf-port-card.collapsed {
+  box-shadow: none;
+}
+
+.cf-port-card.collapsed .cf-collapse-chevron {
+  transform: rotate(-90deg);
+}
+
+.cf-port-card.collapsed .cf-port-card-header {
+  border-bottom: none;
+  background: #fbfcfe;
+}
+
+.cf-port-card-body {
+  padding: 1rem 1.15rem;
+  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.cf-port-card.collapsed .cf-port-card-body {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  pointer-events: none;
+  overflow: hidden;
+  display: none;
+}
+
+.cf-port-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  background: #f8fafc;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #edf2f7;
+  margin-bottom: 0.75rem;
+  font-size: 0.74rem;
+}
+
+@media (max-width: 900px) {
+  .cf-port-stats-bar {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .cf-port-stats-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cf-port-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.cf-port-stat-label {
+  color: var(--cf-text-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cf-port-stat-val {
+  font-weight: 600;
+  color: var(--cf-text-primary);
+  font-family: var(--font-mono);
 }

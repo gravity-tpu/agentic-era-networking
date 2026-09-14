@@ -34,7 +34,7 @@
             <span class="cf-status-dot stale" id="cf-sidebar-dot"></span>
             <span id="cf-sidebar-devname">Zodiac_FX</span>
           </div>
-          <span class="cf-device-ip" id="cf-sidebar-ip">Awaiting Link</span>
+          <span class="cf-pill-badge green" id="cf-sidebar-status-tag" style="font-size: 0.68rem; font-weight: 600;">LINKED</span>
         </div>
       </div>
 
@@ -101,15 +101,24 @@
       
       <!-- Top Navigation Bar -->
       <header class="cf-topbar">
-        <div class="cf-breadcrumbs">
-          <span>Switches</span>
-          <span>/</span>
-          <span class="cf-breadcrumb-current" id="cf-breadcrumb-name">Zodiac_FX (Connecting...)</span>
-          <span class="cf-pill-badge gray" id="z-source-tag">Awaiting Telemetry</span>
+        <div class="cf-topbar-left" style="display: flex; align-items: center; gap: 0.85rem;">
+          <button class="cf-sidebar-toggle-btn" id="btn-toggle-sidebar" title="Toggle Navigation Sidebar (Collapse / Expand)" aria-label="Toggle Navigation Sidebar">
+            <svg id="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+              <line x1="9" x2="9" y1="3" y2="21"/>
+              <path d="m14 9-3 3 3 3"/>
+            </svg>
+          </button>
+          <div class="cf-breadcrumbs">
+            <span>Switches</span>
+            <span>/</span>
+            <span class="cf-breadcrumb-current" id="cf-breadcrumb-name">Zodiac_FX (Connecting...)</span>
+            <span class="cf-pill-badge gray" id="z-source-tag">Awaiting Telemetry</span>
+          </div>
         </div>
 
         <div class="cf-topbar-actions">
-          <span class="cf-pill-badge gray" id="cf-poll-status">● Live (2s)</span>
+          <span class="cf-pill-badge gray" id="cf-poll-status" title="Telemetry Polling Rate: 2.5s (Switch Wire Latency: <1ms)">● Live · 2.5s Polling</span>
           <button class="cf-btn" id="btn-toggle-photo">📷 Hardware Photos</button>
           <a class="cf-btn" href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -236,13 +245,25 @@
                 <div class="cf-card-subtitle">Real-time Ingress/Egress packet throughput &amp; hardware vitals over time</div>
               </div>
               
-              <!-- Time Range Selector Buttons -->
-              <div class="cf-time-range-group" id="cf-time-selectors">
-                <button class="cf-time-btn active" data-range="live">Live (5m)</button>
-                <button class="cf-time-btn" data-range="1h">1 Hour</button>
-                <button class="cf-time-btn" data-range="6h">6 Hours</button>
-                <button class="cf-time-btn" data-range="24h">24 Hours</button>
-                <button class="cf-time-btn" data-range="7d">7 Days</button>
+              <!-- Filter Controls: Port Selector & Time Range -->
+              <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <!-- Port Filter -->
+                <div class="cf-time-range-group" id="cf-port-selectors">
+                  <button class="cf-time-btn active" data-port="all">All Ports</button>
+                  <button class="cf-time-btn" data-port="1">Port 1</button>
+                  <button class="cf-time-btn" data-port="2">Port 2</button>
+                  <button class="cf-time-btn" data-port="3">Port 3</button>
+                  <button class="cf-time-btn" data-port="4">Port 4</button>
+                </div>
+
+                <!-- Time Range Selector Buttons -->
+                <div class="cf-time-range-group" id="cf-time-selectors">
+                  <button class="cf-time-btn active" data-range="live">Live (5m)</button>
+                  <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                  <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                  <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                  <button class="cf-time-btn" data-range="7d">7 Days</button>
+                </div>
               </div>
             </div>
 
@@ -296,6 +317,214 @@
 
             </div>
           </div>
+
+          <!-- Per-Port Wire Analytics (Independently Collapsible 4-Port Dashboard) -->
+          <div style="margin-top: 2rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--cf-text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+                  Per-Port Traffic Telemetry
+                </h3>
+                <div style="font-size: 0.8rem; color: var(--cf-text-muted); margin-top: 0.2rem;">
+                  Individual wire analytics for each physical interface with independent collapse controls
+                </div>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="cf-unit-btn" id="btn-expand-all-ports">Expand All</button>
+                <button class="cf-unit-btn" id="btn-collapse-all-ports">Collapse All</button>
+              </div>
+            </div>
+
+            <div class="cf-port-analytics-grid">
+              
+              <!-- Port 1 Card -->
+              <div class="cf-port-card" id="port-card-1">
+                <div class="cf-port-card-header" data-toggle-port="1">
+                  <div class="cf-port-card-title-group">
+                    <span class="cf-port-dot" id="pdot-1"></span>
+                    <div>
+                      <div class="cf-port-card-name">Port 1 — OpenFlow Standby</div>
+                      <div class="cf-port-card-subtitle">VLAN 100 · Far Left (Opposite USB)</div>
+                    </div>
+                  </div>
+                  <div class="cf-port-card-actions">
+                    <span class="cf-pill-badge gray mono" id="pbadge-ip-1">IP: Unassigned</span>
+                    <span class="cf-pill-badge gray" id="pbadge-status-1">DOWN</span>
+                    <span class="cf-mono" id="pbadge-rate-1" style="font-size: 0.8rem; font-weight: 600; color: var(--cf-blue);">0 pps</span>
+                    <svg class="cf-collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </div>
+                <div class="cf-port-card-body" id="port-body-1">
+                  <div class="cf-port-stats-bar">
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Ingress (RX)</span>
+                      <span class="cf-port-stat-val" id="pstat-rx-1">0 B (0 pps)</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Egress (TX)</span>
+                      <span class="cf-port-stat-val" id="pstat-tx-1">0 B (0 pps)</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Packets</span>
+                      <span class="cf-port-stat-val" id="pstat-pkts-1">0</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">IP / Network</span>
+                      <span class="cf-port-stat-val cf-mono" id="pstat-ip-1">Unassigned</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Errors / Drop</span>
+                      <span class="cf-port-stat-val" id="pstat-err-1">0</span>
+                    </div>
+                  </div>
+                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                    <canvas id="chart-port-1"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Port 2 Card -->
+              <div class="cf-port-card" id="port-card-2">
+                <div class="cf-port-card-header" data-toggle-port="2">
+                  <div class="cf-port-card-title-group">
+                    <span class="cf-port-dot active" id="pdot-2"></span>
+                    <div>
+                      <div class="cf-port-card-name">Port 2 — Xfinity WiFi Gateway</div>
+                      <div class="cf-port-card-subtitle">VLAN 100 · OpenFlow Data Plane (Middle Left)</div>
+                    </div>
+                  </div>
+                  <div class="cf-port-card-actions">
+                    <span class="cf-pill-badge blue mono" id="pbadge-ip-2">Gateway Uplink</span>
+                    <span class="cf-pill-badge green" id="pbadge-status-2">UP · 100M</span>
+                    <span class="cf-mono" id="pbadge-rate-2" style="font-size: 0.8rem; font-weight: 600; color: var(--cf-blue);">-- pps</span>
+                    <svg class="cf-collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </div>
+                <div class="cf-port-card-body" id="port-body-2">
+                  <div class="cf-port-stats-bar">
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Ingress (RX)</span>
+                      <span class="cf-port-stat-val" id="pstat-rx-2">--</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Egress (TX)</span>
+                      <span class="cf-port-stat-val" id="pstat-tx-2">--</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Packets</span>
+                      <span class="cf-port-stat-val" id="pstat-pkts-2">--</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">IP / Network</span>
+                      <span class="cf-port-stat-val cf-mono" id="pstat-ip-2">Gateway Uplink</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Errors / Drop</span>
+                      <span class="cf-port-stat-val" id="pstat-err-2">0</span>
+                    </div>
+                  </div>
+                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                    <canvas id="chart-port-2"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Port 3 Card -->
+              <div class="cf-port-card" id="port-card-3">
+                <div class="cf-port-card-header" data-toggle-port="3">
+                  <div class="cf-port-card-title-group">
+                    <span class="cf-port-dot" id="pdot-3"></span>
+                    <div>
+                      <div class="cf-port-card-name">Port 3 — OpenFlow Standby</div>
+                      <div class="cf-port-card-subtitle">VLAN 100 · Middle Right</div>
+                    </div>
+                  </div>
+                  <div class="cf-port-card-actions">
+                    <span class="cf-pill-badge gray mono" id="pbadge-ip-3">IP: Unassigned</span>
+                    <span class="cf-pill-badge gray" id="pbadge-status-3">DOWN</span>
+                    <span class="cf-mono" id="pbadge-rate-3" style="font-size: 0.8rem; font-weight: 600; color: var(--cf-blue);">0 pps</span>
+                    <svg class="cf-collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </div>
+                <div class="cf-port-card-body" id="port-body-3">
+                  <div class="cf-port-stats-bar">
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Ingress (RX)</span>
+                      <span class="cf-port-stat-val" id="pstat-rx-3">0 B (0 pps)</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Egress (TX)</span>
+                      <span class="cf-port-stat-val" id="pstat-tx-3">0 B (0 pps)</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Packets</span>
+                      <span class="cf-port-stat-val" id="pstat-pkts-3">0</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">IP / Network</span>
+                      <span class="cf-port-stat-val cf-mono" id="pstat-ip-3">Unassigned</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Errors / Drop</span>
+                      <span class="cf-port-stat-val" id="pstat-err-3">0</span>
+                    </div>
+                  </div>
+                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                    <canvas id="chart-port-3"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Port 4 Card -->
+              <div class="cf-port-card" id="port-card-4">
+                <div class="cf-port-card-header" data-toggle-port="4">
+                  <div class="cf-port-card-title-group">
+                    <span class="cf-port-dot active" id="pdot-4"></span>
+                    <div>
+                      <div class="cf-port-card-name">Port 4 — Native SDN Controller Link</div>
+                      <div class="cf-port-card-subtitle">VLAN 200 · Rightmost (Adjacent Micro-USB)</div>
+                    </div>
+                  </div>
+                  <div class="cf-port-card-actions">
+                    <span class="cf-pill-badge blue mono" id="pbadge-ip-4">IP: 10.0.1.99</span>
+                    <span class="cf-pill-badge blue" id="pbadge-status-4">UP · 100M</span>
+                    <span class="cf-mono" id="pbadge-rate-4" style="font-size: 0.8rem; font-weight: 600; color: var(--cf-blue);">-- pps</span>
+                    <svg class="cf-collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </div>
+                <div class="cf-port-card-body" id="port-body-4">
+                  <div class="cf-port-stats-bar">
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Ingress (RX)</span>
+                      <span class="cf-port-stat-val" id="pstat-rx-4">--</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Egress (TX)</span>
+                      <span class="cf-port-stat-val" id="pstat-tx-4">--</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Packets</span>
+                      <span class="cf-port-stat-val" id="pstat-pkts-4">--</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">IP / Network</span>
+                      <span class="cf-port-stat-val cf-mono" id="pstat-ip-4">10.0.1.99</span>
+                    </div>
+                    <div class="cf-port-stat-item">
+                      <span class="cf-port-stat-label">Errors / Drop</span>
+                      <span class="cf-port-stat-val" id="pstat-err-4">0</span>
+                    </div>
+                  </div>
+                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                    <canvas id="chart-port-4"></canvas>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
 
           <!-- Physical Port Block Layout Card -->
           <div class="cf-card" id="cf-card-ports" style="margin-top: 1.5rem;">

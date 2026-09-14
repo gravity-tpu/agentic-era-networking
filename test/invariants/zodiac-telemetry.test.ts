@@ -151,4 +151,23 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
       expect(pt.latencyNs).toBe(0n);
     }
   });
+
+  it('validates per-port series telemetry points adhere to BigInt invariant', () => {
+    const p1 = {
+      rxPackets: 150n,
+      txPackets: 0n,
+      rxBytes: 15000n,
+      txBytes: 0n,
+      rxRatePps: 3n,
+      txRatePps: 0n,
+      rxRateBps: 300n,
+      txRateBps: 0n,
+    };
+    expect(typeof p1.rxPackets).toBe('bigint');
+    expect(typeof p1.rxRatePps).toBe('bigint');
+    expect(typeof p1.rxRateBps).toBe('bigint');
+    expect(p1.rxRatePps).toBe(3n);
+    expect(p1.rxRateBps).toBe(300n);
+  });
 });
+

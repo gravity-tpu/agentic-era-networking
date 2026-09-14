@@ -13,6 +13,7 @@ export interface ZodiacPortTelemetry {
   readonly status: 'UP' | 'DOWN';
   readonly vlanType: string;
   readonly vlanId: number;
+  readonly ipAddress?: string | null;
   readonly rxBytes: bigint;
   readonly txBytes: bigint;
   readonly rxPackets: bigint;
@@ -50,6 +51,17 @@ export interface ZodiacOpenFlowTelemetry {
   readonly lastHeartbeatLatencyNs: bigint;
 }
 
+export interface ZodiacPortSeriesPoint {
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxRatePps: bigint;
+  readonly txRatePps: bigint;
+  readonly rxRateBps: bigint;
+  readonly txRateBps: bigint;
+}
+
 export interface ZodiacTimeSeriesPoint {
   readonly timestampMs: number;
   readonly rxBytes: bigint;
@@ -62,6 +74,9 @@ export interface ZodiacTimeSeriesPoint {
   readonly txRateBps: bigint;
   readonly cpuTemperatureC: number | null;
   readonly latencyNs: bigint;
+  readonly ports?: {
+    readonly [port: number]: ZodiacPortSeriesPoint;
+  } | undefined;
 }
 
 export interface ZodiacFullTelemetrySnapshot {
@@ -257,6 +272,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         status: 'DOWN',
         vlanType: 'OpenFlow',
         vlanId: 100,
+        ipAddress: 'Unassigned',
         rxBytes: 0n,
         txBytes: 0n,
         rxPackets: 0n,
@@ -272,6 +288,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         status: 'DOWN',
         vlanType: 'OpenFlow',
         vlanId: 100,
+        ipAddress: 'Gateway Uplink',
         rxBytes: 0n,
         txBytes: 0n,
         rxPackets: 0n,
@@ -287,6 +304,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         status: 'DOWN',
         vlanType: 'OpenFlow',
         vlanId: 100,
+        ipAddress: 'Unassigned',
         rxBytes: 0n,
         txBytes: 0n,
         rxPackets: 0n,
@@ -302,6 +320,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         status: 'DOWN',
         vlanType: 'Native',
         vlanId: 200,
+        ipAddress: '10.0.1.99',
         rxBytes: 0n,
         txBytes: 0n,
         rxPackets: 0n,
