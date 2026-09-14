@@ -147,14 +147,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // 4. Create operator claims & signed session token
     const userClaims: GoogleUserClaims = {
       email: userEmail!,
-      name: claims.name,
-      picture: claims.picture,
       sub: claims.sub || userEmail!,
       issuedAt: Math.floor(Date.now() / 1000),
+      ...(claims.name !== undefined ? { name: claims.name } : {}),
+      ...(claims.picture !== undefined ? { picture: claims.picture } : {}),
     };
 
     // 5. Asynchronously upsert user into database
-    void upsertUser(userClaims.email, userClaims.name, userClaims.picture);
+    upsertUser(userClaims.email, userClaims.name, userClaims.picture).catch((err: unknown) => {
+      console.warn('[!] [Auth DB] Failed to persist authenticated user:', err instanceof Error ? err.message : String(err));
+    });
 
     // 6. Set secure session cookie & redirect to dashboard
     const sessionToken = createSessionToken(userClaims);

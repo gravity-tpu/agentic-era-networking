@@ -15,8 +15,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export interface GoogleUserClaims {
   readonly email: string;
-  readonly name?: string;
-  readonly picture?: string;
+  readonly name?: string | undefined;
+  readonly picture?: string | undefined;
   readonly sub: string; // Google User ID
   readonly issuedAt: number;
 }
