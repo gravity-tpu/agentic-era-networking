@@ -520,7 +520,23 @@
 
     // 6. Time-Series Buffer & Rolling Live Analytics Updates (Strict 3600-point Client Memory Bound)
     if (snapshot.timeSeries && snapshot.timeSeries.length > 0) {
-      timeSeriesBuffer = snapshot.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      const serverPoints = snapshot.timeSeries;
+      const lastServerTimestamp = serverPoints[serverPoints.length - 1].timestampMs;
+
+      // Initialize on first load or re-sync if server clock jumped backward
+      if (timeSeriesBuffer.length === 0 || (timeSeriesBuffer[0] && lastServerTimestamp < timeSeriesBuffer[0].timestampMs)) {
+        timeSeriesBuffer = serverPoints.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        // Incrementally append newer points that haven't yet been buffered
+        const lastLocalTimestamp = timeSeriesBuffer[timeSeriesBuffer.length - 1].timestampMs;
+        const newPoints = serverPoints.filter((p) => p.timestampMs > lastLocalTimestamp);
+        if (newPoints.length > 0) {
+          timeSeriesBuffer.push(...newPoints);
+          if (timeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
+            timeSeriesBuffer = timeSeriesBuffer.slice(-MAX_FRONTEND_BUFFER_POINTS);
+          }
+        }
+      }
     } else if (snapshot.source === 'disconnected') {
       const nowMs = Date.now();
       timeSeriesBuffer.push({

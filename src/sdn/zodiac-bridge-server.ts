@@ -528,8 +528,16 @@ export class ZodiacBridgeServer {
     this.isRelaying = true;
     try {
       const endpoint = new URL('/api/zodiac', this.cloudRelayUrl).toString();
+
+      // Council Invariant 2 & 6 (Dean Latency & Epistemic Provenance):
+      // Strictly bound timeSeries sent over WAN to the latest 120 points (~5 min of live telemetry, ~91KB).
+      // Prevents WAN bloat, network latency spikes, and serverless 413 Payload Too Large limits.
+      const MAX_CLOUD_RELAY_POINTS = 120;
+      const boundedTimeSeries = snapshot.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
+
       const payload = this.serializeSnapshot({
         ...snapshot,
+        timeSeries: boundedTimeSeries,
         source: snapshot.source === 'disconnected' ? 'disconnected' : 'live_hardware',
       });
 

@@ -16,7 +16,7 @@ import {
   type ZodiacFullTelemetrySnapshot,
 } from '../dist/sdn/zodiac-telemetry.js';
 
-const MAX_PAYLOAD_BYTES = 256 * 1024; // 256 KB
+const MAX_PAYLOAD_BYTES = 512 * 1024; // 512 KB (ample headroom for 120-point live history ~91KB)
 
 // In-memory cache for cloud serverless execution
 let latestSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
@@ -39,6 +39,9 @@ function isValidTelemetryPayload(val: unknown): val is Partial<ZodiacFullTelemet
     return false;
   }
   if ('openflow' in obj && (typeof obj['openflow'] !== 'object' || obj['openflow'] === null || Array.isArray(obj['openflow']))) {
+    return false;
+  }
+  if ('timeSeries' in obj && !Array.isArray(obj['timeSeries'])) {
     return false;
   }
   return true;
@@ -126,6 +129,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           latestSnapshot = {
             ...latestSnapshot,
             ...parsed,
+            timeSeries: Array.isArray(parsed.timeSeries)
+              ? parsed.timeSeries.slice(-120)
+              : latestSnapshot.timeSeries,
             source: verifiedSource,
             system: {
               ...latestSnapshot.system,
