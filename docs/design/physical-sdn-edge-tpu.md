@@ -28,7 +28,7 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
                                                   | (Mesh WiFi)
                                                   v
                                 +-----------------------------------+
-                                |    Xfinity WiFi Extender (Pod)    |
+                                |     ISP Gateway / Mesh Node       |
                                 +-----------------+-----------------+
                                                   | 100BASE-TX Ethernet
                                                   v
@@ -37,7 +37,7 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
    |                                                                                         |
    |   [Port 1]                 [Port 2]                 [Port 3]               [Port 4]     |
    |   Local Workload /         Gateway Uplink           Hardware Tap /         Controller   |
-   |   Test Agent Subnet        (Xfinity Pod)            Port Mirror            (OpenFlow)   |
+   |   Test Agent Subnet        (ISP Gateway)            Port Mirror            (OpenFlow)   |
    |                                                                                 |       |
    |   Micro-USB: Serial CDC Telemetry Stream (/dev/ttyACM0 @ 115200 8N1) ----------+----+  |
    +--------------------------------------------------------------------------------|-----+  |

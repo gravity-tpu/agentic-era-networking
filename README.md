@@ -35,7 +35,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 - **Detailed Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
 - **Data Plane Hardware**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
 - **Autonomous Master Appliance**: NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, GbE controller link, dedicated USB serial telemetry link, 7W–15W 24/7 low-power operation, TensorRT INT8 neural engine).
-- **Gateway Transit**: Xfinity WiFi Extender (Pod) providing continuous internet uplink over 100BASE-TX.
+- **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX.
 - **Untethered Workstation**: Operator workstation (MacBook Pro) operates untethered over wireless WiFi 6/6E with zero downtime risk (closing the laptop lid or rebooting never interrupts the network data plane).
 
 ### System Architecture Diagram
@@ -47,7 +47,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
                                                   | (Mesh WiFi)
                                                   v
                                 +-----------------------------------+
-                                |    Xfinity WiFi Extender (Pod)    |
+                                |     ISP Gateway / Mesh Node       |
                                 +-----------------+-----------------+
                                                   | 100BASE-TX Ethernet
                                                   v
@@ -56,7 +56,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
    |                                                                                         |
    |   [Port 1]                 [Port 2]                 [Port 3]               [Port 4]     |
    |   Local Workload /         Gateway Uplink           Hardware Tap /         Controller   |
-   |   Test Agent Subnet        (Xfinity Pod)            Port Mirror            (OpenFlow)   |
+   |   Test Agent Subnet        (ISP Gateway)            Port Mirror            (OpenFlow)   |
    |                                                                                 |       |
    |   Micro-USB: Serial CDC Telemetry Stream (/dev/ttyACM0 @ 115200 8N1) ----------+----+  |
    +--------------------------------------------------------------------------------|-----+  |
@@ -90,7 +90,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Link 1** | Jetson Orin (GbE RJ45) | Ethernet Patch Cable | Zodiac FX Port 4 | 100BASE-TX (`10.0.1.99`) | **OpenFlow 1.3 Control Channel** |
 | **Link 2** | Zodiac FX (Micro-USB) | USB Cable | Jetson Orin (USB-A) | USB CDC (`/dev/ttyACM0`) | **Real-Time Telemetry & CDC Console** |
-| **Link 3** | Zodiac FX Port 2 | Ethernet Patch Cable | Xfinity WiFi Pod | 100BASE-TX (Home LAN) | **WAN / Internet Gateway Transit** |
+| **Link 3** | Zodiac FX Port 2 | Ethernet Patch Cable | ISP Gateway | 100BASE-TX (Home LAN) | **WAN / Internet Gateway Transit** |
 | **Link 4** | Zodiac FX Port 1 | Ethernet RJ45 | Local Workload / Agent | 100BASE-TX (`10.0.1.x`) | **Monitored Workload / Client Port** |
 | **Link 5** | Zodiac FX Port 3 | Ethernet RJ45 | Packet Tap / Sniffer | 100BASE-TX (Mirror Mode) | **Wire Snooping & Packet Capture** |
 | **Link 6** | MacBook Pro | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E (LAN) | **Untethered Dashboard & SSH Access** |

@@ -1460,7 +1460,7 @@
         cardRefs.statPkts.innerText = `${formatNumber(totalPkts)} pkts`;
       }
       if (cardRefs.statIp) {
-        cardRefs.statIp.innerText = portId === 4 ? `${portIpStr} (Native)` : (portId === 2 ? `${portIpStr} (Xfinity Pod)` : 'Unassigned');
+        cardRefs.statIp.innerText = portId === 4 ? `${portIpStr} (Native)` : (portId === 2 ? `${portIpStr} (ISP Gateway)` : 'Unassigned');
       }
       if (cardRefs.statErr) {
         const drops = (portMeta?.rxDropped ?? 0n) + (portMeta?.txDropped ?? 0n);
