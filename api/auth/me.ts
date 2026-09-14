@@ -25,11 +25,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const isVercel = Boolean(process.env['VERCEL']);
   const remoteIp = req.socket?.remoteAddress ?? '';
   const isLocal =
-    remoteIp === '127.0.0.1' ||
-    remoteIp === '::1' ||
-    remoteIp === '::ffff:127.0.0.1';
+    !isVercel &&
+    (remoteIp === '127.0.0.1' ||
+     remoteIp === '::1' ||
+     remoteIp === '::ffff:127.0.0.1');
 
   // Verify session cookie
   const user = getAuthenticatedUser(req.headers.cookie);

@@ -215,11 +215,13 @@ export function requireOperatorAuth(
   req: IncomingMessage,
   res: ServerResponse
 ): GoogleUserClaims | null {
+  const isVercel = Boolean(process.env['VERCEL']);
   const remoteIp = req.socket?.remoteAddress ?? '';
   const isLoopback =
-    remoteIp === '127.0.0.1' ||
-    remoteIp === '::1' ||
-    remoteIp === '::ffff:127.0.0.1';
+    !isVercel &&
+    (remoteIp === '127.0.0.1' ||
+     remoteIp === '::1' ||
+     remoteIp === '::ffff:127.0.0.1');
   const hasGoogleOauth = Boolean(process.env['GOOGLE_CLIENT_ID']);
 
   // Local loopback development without OAuth configured uses default operator identity
