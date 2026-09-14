@@ -10,7 +10,8 @@
   },
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && node --experimental-strip-types scripts/build-assets.ts",
+    "build:assets": "node --experimental-strip-types scripts/build-assets.ts",
     "check-types": "tsc --noEmit",
     "check:provenance": "node --experimental-strip-types scripts/check-provenance.ts",
     "test": "vitest run",

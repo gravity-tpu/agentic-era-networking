@@ -319,10 +319,21 @@ export class ZodiacBridgeServer {
         const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
         res.statusCode = 200;
         res.setHeader('Content-Type', contentType);
-        if (ext === '.html' || ext === '.js' || ext === '.css') {
+        if (ext === '.html') {
+          // Entrypoint HTML must revalidate to pick up newly hashed assets instantly
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           res.setHeader('Pragma', 'no-cache');
           res.setHeader('Expires', '0');
+        } else if (ext === '.js' || ext === '.css') {
+          // Jeff Dean Latency Optimization: Content-addressable assets (*.[a-f0-9]{10}.*)
+          // are mathematically immutable: cache indefinitely (1 year) per Dean Latency Invariant.
+          const isHashed = /\.[a-f0-9]{10}\.(js|css)$/i.test(path.basename(resolvedPath));
+          if (isHashed) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else {
+            // Unhashed fallback files (e.g. direct dev access) revalidate with server
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+          }
         }
         fs.createReadStream(resolvedPath).pipe(res);
         return;

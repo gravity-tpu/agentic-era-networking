@@ -283,21 +283,41 @@
         cache: 'no-store',
         signal: controller.signal,
       });
+
       if (resp.status === 401) {
         console.warn('[!] Telemetry stream rejected (401 Unauthorized): Operator login required.');
         const authGateEl = document.getElementById('z-auth-gate-modal');
         if (authGateEl) authGateEl.style.display = 'flex';
         return;
       }
+
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       currentSnapshot = data;
       renderTelemetry(data, false);
     } catch (err) {
-      console.warn('[!] Telemetry stream degraded, retaining cached snapshot:', err);
+      // Council Invariant 1 (Zero Suppression of Reality) & Jeff Dean Latency Budget (<4000ms)
+      const isErrObj = Boolean(err && typeof err === 'object');
+      const errName = isErrObj && 'name' in err ? String(err.name) : '';
+      const errMsg = isErrObj && 'message' in err ? String(err.message) : String(err);
+      const isAbort = errName === 'AbortError' || errMsg.includes('aborted');
+      if (isAbort) {
+        console.error('[!] [Jeff Dean Latency Invariant] Telemetry fetch aborted: 4000ms timeout budget exceeded.');
+        if (els.pollStatus) {
+          els.pollStatus.innerText = '⏱️ Timeout (>4s)';
+          els.pollStatus.title = 'Telemetry fetch exceeded 4000ms latency budget. Hardware connection or bridge daemon stalled.';
+        }
+        if (els.sourceTag) {
+          els.sourceTag.innerText = '⏱️ Stalled / Timeout';
+          els.sourceTag.className = 'cf-pill-badge amber';
+        }
+      } else {
+        console.warn('[!] Telemetry stream degraded, retaining cached snapshot:', err instanceof Error ? err.message : String(err));
+      }
+
       if (currentSnapshot) {
         renderTelemetry(currentSnapshot, true);
-      } else if (els.sourceTag) {
+      } else if (els.sourceTag && !isAbort) {
         els.sourceTag.innerText = '⚠️ Offline / Disconnected';
         els.sourceTag.className = 'cf-pill-badge amber';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot down';
