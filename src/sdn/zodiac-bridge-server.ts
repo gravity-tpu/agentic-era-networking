@@ -319,6 +319,11 @@ export class ZodiacBridgeServer {
         const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
         res.statusCode = 200;
         res.setHeader('Content-Type', contentType);
+        if (ext === '.html' || ext === '.js' || ext === '.css') {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
         fs.createReadStream(resolvedPath).pipe(res);
         return;
       }

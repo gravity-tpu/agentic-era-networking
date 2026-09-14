@@ -278,6 +278,7 @@
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
+    try {
       const resp = await fetch('/api/zodiac', { 
         cache: 'no-store',
         signal: controller.signal,

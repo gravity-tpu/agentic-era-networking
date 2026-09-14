@@ -135,7 +135,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           <div class="card">
             <h2>⛔ Access Denied (Fail-Closed Invariant)</h2>
             <p>Signed in as <code>${userEmail || 'Unknown'}</code>.</p>
-            <p>This email is not authorized on the operator allowlist for this network appliance. Only authorized operators (e.g. <code>sekyereandy@gmail.com</code>, <code>natborks@gmail.com</code>) may access hardware telemetry.</p>
+            <p>This account is not authorized to access this network appliance. Please sign in with an authorized operator account or contact the system administrator.</p>
             <a class="btn" href="/api/auth/logout">Sign Out & Try Another Account</a>
           </div>
         </body>
