@@ -76,11 +76,11 @@ jobs:
       - name: Deploy to Vercel (Self-Skipping if Unconfigured)
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ vars.VERCEL_PROJECT_ID }}" ]; then
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}" ]; then
             echo "::notice::VERCEL_TOKEN or VERCEL_PROJECT_ID secret/var not set — skipping deployment. Configure them in repository settings to enable production auto-deploy."
             exit 0
           fi
           npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
