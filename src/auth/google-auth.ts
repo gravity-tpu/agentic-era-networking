@@ -39,7 +39,7 @@ export const IS_PRODUCTION = process.env['NODE_ENV'] === 'production' || IS_VERC
  */
 export function isLocalDev(req: IncomingMessage): boolean {
   // If running in any cloud/Vercel deployment, physical local loopback is mathematically impossible
-  if (IS_VERCEL || Boolean(process.env['VERCEL'])) return false;
+  if (IS_VERCEL) return false;
 
   const remoteIp = req.socket?.remoteAddress ?? '';
   return (
@@ -192,7 +192,7 @@ export function buildSessionCookieHeader(
   token: string,
   maxAgeSeconds: number = DEFAULT_SESSION_EXPIRY_SECONDS
 ): string {
-  const isProd = IS_PRODUCTION || process.env['NODE_ENV'] === 'production' || Boolean(process.env['VERCEL']);
+  const isProd = IS_PRODUCTION;
   const secureFlag = isProd ? '; Secure' : '';
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax${secureFlag}`;
 }
