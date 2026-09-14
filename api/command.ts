@@ -10,6 +10,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { requireOperatorAuth } from '../dist/auth/google-auth.js';
 
 const MAX_PAYLOAD_BYTES = 64 * 1024; // 64 KB
 
@@ -59,6 +60,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       error: `Method Not Allowed: ${req.method ?? 'UNKNOWN'}. Invariant: Fail-Closed Default Drop.`,
     }));
     return;
+  }
+
+  // Council Invariant 3: Operator Authentication Guard (Socket Provenance, Anti-Spoofing)
+  const user = requireOperatorAuth(req, res);
+  if (!user) {
+    return; // 401 response already handled by requireOperatorAuth
   }
 
   // Await the asynchronous stream processing to prevent premature serverless context freeze

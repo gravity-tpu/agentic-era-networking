@@ -53,3 +53,38 @@ model FlowRule {
   @@index([tenantId, priority])
   @@index([action])
 }
+
+// Council Invariant 2 & 6: 64-bit integer telemetry persistence with physical provenance
+model ZodiacTelemetryPoint {
+  id              String   @id @default(uuid())
+  timestampMs     BigInt
+  source          String   // 'live_hardware' | 'cloud_snapshot' | 'disconnected'
+  cpuTemperatureC Int?
+  latencyNs       BigInt
+  totalRxBytes    BigInt
+  totalTxBytes    BigInt
+  totalRxPackets  BigInt
+  totalTxPackets  BigInt
+  rxRatePps       BigInt
+  txRatePps       BigInt
+  rxRateBps       BigInt
+  txRateBps       BigInt
+  portsJson       Json     // Full snapshot of Ports 1-4 counters and link status
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([timestampMs])
+}
+
+// Operator identity for Google SSO authentication guard
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String?
+  picture     String?
+  role        String   @default("operator") // "admin" | "operator" | "viewer"
+  lastLoginAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([email])
+}

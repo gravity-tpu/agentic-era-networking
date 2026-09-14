@@ -278,11 +278,16 @@
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-    try {
       const resp = await fetch('/api/zodiac', { 
         cache: 'no-store',
         signal: controller.signal,
       });
+      if (resp.status === 401) {
+        console.warn('[!] Telemetry stream rejected (401 Unauthorized): Operator login required.');
+        const authGateEl = document.getElementById('z-auth-gate-modal');
+        if (authGateEl) authGateEl.style.display = 'flex';
+        return;
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       currentSnapshot = data;
@@ -741,6 +746,7 @@
       case '6h':   return 6 * 60 * 60 * 1000;  // 6 hours
       case '24h':  return 24 * 60 * 60 * 1000; // 24 hours
       case '7d':   return 7 * 24 * 60 * 60 * 1000; // 7 days
+      case '30d':  return 30 * 24 * 60 * 60 * 1000; // 30 days
       default:     return 5 * 60 * 1000;
     }
   }
@@ -1680,13 +1686,41 @@ Please connect the physical switch via USB to execute '${command}' on device har
     });
   });
 
-  // Bind Time Range Selector Buttons
+  // Asynchronously query historical downsampled telemetry from Neon Postgres (up to 30 days)
+  async function fetchHistoricalRange(range) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const res = await fetch(`/api/zodiac?range=${encodeURIComponent(range)}`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        console.warn(`[!] [Historical Range] Neon DB query returned status ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      if (data && Array.isArray(data.timeSeries) && data.timeSeries.length > 0) {
+        timeSeriesBuffer = data.timeSeries;
+      }
+    } catch (err) {
+      console.warn('[!] [Historical Range] Failed to fetch historical telemetry from Neon DB:', err);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  // Bind Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d)
   const timeBtns = document.querySelectorAll('#cf-time-selectors .cf-time-btn');
   timeBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       timeBtns.forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       currentRange = btn.getAttribute('data-range') || 'live';
+
+      if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
+        await fetchHistoricalRange(currentRange);
+      }
       updateCharts();
     });
   });
@@ -1718,8 +1752,67 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Initialize interactive verification playground
   initPlayground();
 
-  // Start backpressured polling
-  fetchTelemetry();
+  // Initialize Google SSO Authentication Gate (Council Invariant 3: Fail-Closed Isolation)
+  async function initAuth() {
+    const userProfileEl = document.getElementById('z-user-profile');
+    const signInBtnEl = document.getElementById('z-btn-signin');
+    const authGateEl = document.getElementById('z-auth-gate-modal');
+    const userEmailEl = document.getElementById('z-user-email');
+    const userAvatarEl = document.getElementById('z-user-avatar');
+    const userAvatarInitialEl = document.getElementById('z-user-avatar-initial');
+
+    try {
+      const res = await fetch('/api/auth/me');
+      if (!res.ok) {
+        console.warn('[Auth] /api/auth/me rejected with status', res.status);
+        if (userProfileEl) userProfileEl.style.display = 'none';
+        if (signInBtnEl) signInBtnEl.style.display = 'inline-flex';
+        if (authGateEl) authGateEl.style.display = 'flex';
+        return;
+      }
+      const data = await res.json();
+
+      if (data.authenticated && data.user) {
+        // Authenticated operator
+        if (userProfileEl) userProfileEl.style.display = 'flex';
+        if (signInBtnEl) signInBtnEl.style.display = 'none';
+        if (authGateEl) authGateEl.style.display = 'none';
+
+        if (userEmailEl) userEmailEl.innerText = data.user.email;
+        if (data.user.picture && userAvatarEl) {
+          userAvatarEl.src = data.user.picture;
+          userAvatarEl.style.display = 'block';
+          if (userAvatarInitialEl) userAvatarInitialEl.style.display = 'none';
+        } else if (userAvatarInitialEl) {
+          const initial = (data.user.name || data.user.email || 'O')[0].toUpperCase();
+          userAvatarInitialEl.innerText = initial;
+          userAvatarInitialEl.style.display = 'flex';
+          if (userAvatarEl) userAvatarEl.style.display = 'none';
+        }
+
+        // Start real-time telemetry polling
+        fetchTelemetry();
+      } else {
+        // Unauthenticated -> present Google SSO modal gate
+        if (userProfileEl) userProfileEl.style.display = 'none';
+        if (signInBtnEl) signInBtnEl.style.display = 'inline-flex';
+        if (authGateEl) authGateEl.style.display = 'flex';
+      }
+    } catch (err) {
+      console.warn('[Auth] Operator session verification failed, falling back to local dev or displaying gate:', err);
+      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocalHost) {
+        fetchTelemetry();
+      } else {
+        if (userProfileEl) userProfileEl.style.display = 'none';
+        if (signInBtnEl) signInBtnEl.style.display = 'inline-flex';
+        if (authGateEl) authGateEl.style.display = 'flex';
+      }
+    }
+  }
+
+  // Check auth and start polling
+  initAuth();
 
   // Expose global app
   window.ZodiacApp = {

@@ -23,6 +23,7 @@ import {
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
+import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,8 +172,61 @@ export class ZodiacBridgeServer {
       return;
     }
 
+    // API: GET /api/auth/me (Council Invariant 3: Fail-Closed Socket Provenance)
+    if (url.pathname === '/api/auth/me' && req.method === 'GET') {
+      const remoteIp = req.socket.remoteAddress ?? '';
+      const isLoopback =
+        remoteIp === '127.0.0.1' ||
+        remoteIp === '::1' ||
+        remoteIp === '::ffff:127.0.0.1';
+
+      if (!isLoopback) {
+        res.statusCode = 401;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          error: 'Unauthorized: External access to local operator session denied. Invariant: Fail-Closed Default Drop.',
+        }));
+        return;
+      }
+
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        authenticated: true,
+        user: {
+          email: 'sekyereandy@gmail.com',
+          name: 'Andy Sekyere (Local Operator)',
+          picture: '',
+        },
+      }));
+      return;
+    }
+
+    // API: POST /api/auth/logout
+    if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
     // API: GET /api/zodiac (Dean & Ghemawat Invariant: O(1) instant return of cached snapshot)
     if (url.pathname === '/api/zodiac' && req.method === 'GET') {
+      const range = url.searchParams.get('range');
+      if (range && range in RANGE_CONFIGS) {
+        const config = RANGE_CONFIGS[range as keyof typeof RANGE_CONFIGS];
+        if (config) {
+          const points = downsamplePoints(this.timeSeries, config.maxPoints);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(this.serializeSnapshot({
+            ...this.cachedSnapshot,
+            timeSeries: points,
+          }));
+          return;
+        }
+      }
+
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(this.serializeSnapshot(this.cachedSnapshot));

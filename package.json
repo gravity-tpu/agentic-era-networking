@@ -38,14 +38,18 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^22.13.9",
+    "@types/ws": "^8.18.1",
     "prisma": "^7.10.0",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "@prisma/adapter-neon": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@vercel/analytics": "^2.0.1",
-    "@vercel/speed-insights": "^2.0.0"
+    "@vercel/speed-insights": "^2.0.0",
+    "ws": "^8.21.3"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2",

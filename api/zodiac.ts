@@ -15,6 +15,13 @@ import {
   resolveVerifiedProvenance,
   type ZodiacFullTelemetrySnapshot,
 } from '../dist/sdn/zodiac-telemetry.js';
+import { requireOperatorAuth } from '../dist/auth/google-auth.js';
+import {
+  persistTelemetrySnapshot,
+  getHistoricalTelemetry,
+  isValidRange,
+  isPersistingTelemetry,
+} from '../dist/db/telemetry-db.js';
 
 const MAX_PAYLOAD_BYTES = 512 * 1024; // 512 KB (ample headroom for 120-point live history ~91KB)
 
@@ -139,6 +146,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               timestampNs: process.hrtime.bigint(),
             },
           };
+
+          // Asynchronously persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
+          if (!isPersistingTelemetry()) {
+            persistTelemetrySnapshot(latestSnapshot).catch((err: unknown) => {
+              console.error('[!] [DB] Telemetry persist to Neon failed:', err instanceof Error ? err.message : String(err));
+            });
+          }
+
           res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
           res.statusCode = 200;
           res.end(JSON.stringify({ status: 'ok', synced: true, provenance: latestSnapshot.source }));
@@ -153,6 +168,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (req.method === 'GET') {
+    // Council Invariant 3: Fail-Closed Isolation & Operator Authentication Guard
+    const user = requireOperatorAuth(req, res);
+    if (!user) {
+      return; // 401 response already handled by requireOperatorAuth
+    }
+
+    // Historical Range Query from Neon Postgres (up to 30 days)
+    const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+    const range = url.searchParams.get('range');
+    if (isValidRange(range)) {
+      const historicalPoints = await getHistoricalTelemetry(range);
+      if (historicalPoints.length > 0) {
+        res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
+        res.statusCode = 200;
+        res.end(serializeWithBigInt({
+          ...latestSnapshot,
+          timeSeries: historicalPoints,
+        }));
+        return;
+      }
+    }
+
     res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
     res.statusCode = 200;
     res.end(serializeWithBigInt(latestSnapshot));
