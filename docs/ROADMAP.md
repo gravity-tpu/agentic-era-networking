@@ -23,9 +23,10 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
-| Phase 0.5: Enterprise Security & Historical Telemetry Persistence (IN PROGRESS)                   |
+| Phase 0.5: Enterprise Security & Historical Telemetry Persistence (COMPLETE)                      |
 | - Milestone 0.5A: Google SSO Authentication Guard (OAuth 2.0 / OIDC, strict email allowlist)       |
 | - Milestone 0.5B: Neon Postgres 30-Day Telemetry Persistence Engine (10s batching, downsampling)   |
+| - Content-Addressable Asset Pipeline (SHA-256 immutable edge caching, sub-ms clock precision)     |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v
@@ -81,19 +82,26 @@ Governed by the **Senior Staff Council Invariants**:
 - [x] Cloud Telemetry Relay to Vercel production with bounded rolling WAN window (HTTP 413 fix).
 
 ### Phase 0.5: Enterprise Security & Historical Telemetry Persistence
-*Status: In Progress*
-- [ ] **Milestone 0.5A: Google SSO Authentication Guard**:
+*Status: Complete (Commits `b33eb1f`, `32e102f`, `eb1dc5b`, `935b76e`, `5d1c0ba`, `e80f6d0`, `85857c2`)*
+- [x] **Milestone 0.5A: Google SSO Authentication Guard**:
   - OpenID Connect / OAuth 2.0 serverless auth flow (`/api/auth/login`, `/api/auth/callback`, `/api/auth/me`, `/api/auth/logout`).
-  - Strict operator allowlist: `sekyereandy@gmail.com`, `natborks@gmail.com` (plus `ALLOWED_GOOGLE_EMAILS` env config).
-  - Secure, signed HTTP-only session cookies (`agentic_session`).
-  - Dual authentication boundary: Machine-to-machine hardware relay via `X-Zodiac-Bridge-Secret` + Operator SSO for dashboard users.
-  - Dark-glass Google Sign-In modal gate on web UI.
-- [ ] **Milestone 0.5B: Neon Postgres 30-Day Telemetry Persistence**:
-  - Prisma models for `ZodiacTelemetryPoint` and `User` in Neon serverless Postgres.
-  - 10-second batch ingest cadence from live bridge to database (~259k records/30 days, ~40MB).
+  - Strict operator allowlist: `sekyereandy@gmail.com`, `natborks@gmail.com` with `ALLOWED_GOOGLE_EMAILS` wildcard and domain support.
+  - Fail-Closed isolation: session cookie defaults to `; Secure` flag, constant-time HMAC-SHA256 session token verification.
+  - Zero-overhead hoisted environment constants (`IS_VERCEL`, `IS_PRODUCTION`) per Jeff Dean Latency Invariant.
+  - Dual authentication boundary: Machine-to-machine hardware relay via `X-Zodiac-Bridge-Secret` + Operator SSO for dashboard operators.
+  - Dark-glass Google Sign-In modal gate & Operator profile header in Web UI.
+  - Non-revealing error messages (fail-closed, zero operator enumeration).
+  - Sanjay Ghemawat Radical Simplicity: Flat `SessionCookieOptions` configuration object.
+- [x] **Milestone 0.5B: Neon Postgres 30-Day Telemetry Persistence**:
+  - Prisma models for `ZodiacTelemetryPoint` and `User` in Neon serverless Postgres (`@prisma/adapter-pg` / `@neondatabase/serverless`).
+  - 10-second non-blocking batched persistence engine adhering to Ghemawat backpressure invariant (~259k records/30 days, ~40MB).
   - Bucketed SQL downsampling API (`/api/zodiac?range=1h|6h|24h|7d|30d`) returning bounded (<360) data points.
   - Automated 30-day data retention pruning.
-  - UI range selector extension with `30d` historical view.
+  - Sub-millisecond monotonic clock calculation preserving microsecond precision (`performance.now() * 1000000`).
+  - UI historical time range selector with explicit canvas watermark on database degradation/unreachable state (Anti-Shortcut / Anti-Simulation Law).
+- [x] **Milestone 0.5C: Content-Addressable Asset Pipeline & Edge Caching**:
+  - Automated content-addressed asset build script (`scripts/build-assets.ts`) generating SHA-256 asset hashes (`zodiac.[hash].css`, `zodiac-app.[hash].js`).
+  - Immutable edge cache headers (`Cache-Control: public, max-age=31536000, immutable`) on Vercel and local bridge server.
 
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
