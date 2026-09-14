@@ -1,65 +1,69 @@
-# Physical SDN & Edge TPU Co-Design Architecture
+# Physical SDN & Autonomous Master Appliance Architecture
 
 > **Hardware Specification & Integration Blueprint for the Agentic Era**  
-> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + Google Coral USB Accelerator (Edge TPU)  
-> **Host Interconnect:** MacBook Pro via DisplayLink Desktop Dock  
+> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super + Google Coral USB Accelerator (Edge TPU)  
+> **Autonomous Master Appliance:** NVIDIA Jetson Orin Nano Super (24/7 dedicated controller host)  
+> **Untethered Workstation:** MacBook Pro (remote operator console via wireless WiFi 6/6E)  
 > **Governing Paradigms:** Jeff Dean (Latency Budgets), Sanjay Ghemawat (Fail-Closed Simplicity), Quoc Le (Self-Tuning Control), Oriol Vinyals (Graph Routing), Demis Hassabis (Symbolic Proof Asymmetry).
 
 ---
 
-## 1. Executive Summary & Hardware Topology
+## 1. Executive Summary & The Architectural Role Inversion
 
 In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts away critical physical artifacts: hardware buffer overruns, physical link state bounces, serialization jitter, and thermal throttle events. 
 
-This architecture grounds the `gravity-tpu/agentic-era-networking` control plane in **physical desktop hardware**:
-- **Zodiac FX Switch**: A physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
-- **Google Coral USB Accelerator (Edge TPU)**: Dedicated tensor coprocessor delivering 4 TOPS of INT8 inference at ~0.5 W per TOPS over USB 3.0.
-- **Host Controller (MacBook via DisplayLink Dock)**: Unified host orchestrator running the OpenFlow 1.3 controller, the TypeScript symbolic verifier, and the telemetry ingest daemon.
-
-### Standalone Edge TPU (No Raspberry Pi Required)
-A standalone single-board computer (such as a Raspberry Pi) is **not** required. The Google Coral USB Accelerator connects directly to the USB 3.0 bus of your DisplayLink dock or MacBook USB-C hub. 
-
-Running the Coral accelerator directly on the workstation host provides substantial advantages:
-1. **Zero Intermediate Serialization Latency**: Feature vectors extracted from network telemetry are transferred directly across the high-speed local USB 3.0 / PCIe bus rather than traversing an intermediate network link to an SBC.
-2. **Superior Host CPU Preprocessing**: Apple Silicon / workstation CPUs vectorize packet headers, compute inter-arrival time deltas, and format INT8 tensors exponentially faster than low-power SBC cores.
-3. **Single Operational Pane**: All daemons—the Node/TypeScript OpenFlow 1.3 controller, serial telemetry monitor, Edge TPU inference engine, and Prometheus metrics—run within a unified, easily observable environment.
+This architecture grounds the `gravity-tpu/agentic-era-networking` control plane in **physical hardware**, elevating the compute node from a secondary peripheral into a **24/7 Autonomous Master Appliance**:
+- **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
+- **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, and line-rate TensorRT neural anomaly detection (67 TOPS INT8).
+- **Google Coral USB Accelerator (Edge TPU)**: Dedicated coprocessor delivering 4 TOPS of INT8 inference at ~0.5 W per TOPS over USB 3.0.
+- **Untethered Operator Workstation (MacBook Pro)**: Completely decoupled from physical data plane dependencies. The laptop can sleep, reboot, or travel without causing network flapping or interrupting traffic flow.
 
 ---
 
-## 2. Desktop Interconnect & Physical Wiring
+## 2. Desktop Interconnect & Physical Wiring Topology
 
 ```
-                   +-------------------------------------------------------------+
-                   |                 MacBook (Host Controller)                   |
-                   |                                                             |
-                   |  - Symbolic Route Verifier (Demis Hassabis Loop-Free Proof) |
-                   |  - Adaptive Flow Controller (Quoc Le Dynamic Window)        |
-                   |  - OpenFlow 1.3 Server (:6633) & Prometheus Telemetry       |
-                   +------------------------------+------------------------------+
-                                                  | USB 3.0 / Thunderbolt
+                                +-----------------------------------+
+                                |    Public Internet / Home LAN     |
+                                +-----------------+-----------------+
+                                                  | (Mesh WiFi)
                                                   v
-                   +-------------------------------------------------------------+
-                   |                DisplayLink Desktop Dock                     |
-                   +---------------+-----------------------------+---------------+
-                                   |                             |
-                       USB 3.0 Bus |                 Ethernet    | (Controller LAN)
-                                   v                             v
-           +-------------------------------+             +---------------+
-           |    Google Coral USB Edge TPU  |             | Zodiac Port 4 |
-           |  * 4 TOPS INT8 Inference      |             |  (Native Mgmt)|
-           |  * Sub-4ms Anomaly Detection  |             +-------+-------+
-           +-------------------------------+                     |
-                                                                 | Internal
-                                                                 v
-+---------------------------------------------------------------------------------+
-|                       Zodiac FX OpenFlow Switch (Desktop)                       |
-|                                                                                 |
-|   Micro-USB: Serial CDC CLI (/dev/cu.usbmodem* @ 115200 8N1) -> To Dock USB     |
-|   Port 1: Test Workload / Sandbox Agent Host                                    |
-|   Port 2: Outbound Gateway / Uplink                                             |
-|   Port 3: Mirror / Tap Port (Real-time packet capture)                          |
-|   Port 4: Controller Port (Connected to DisplayLink Ethernet, default 10.0.1.99)|
-+---------------------------------------------------------------------------------+
+                                +-----------------------------------+
+                                |    Xfinity WiFi Extender (Pod)    |
+                                +-----------------+-----------------+
+                                                  | 100BASE-TX (Green Cat6)
+                                                  v
+   +-----------------------------------------------------------------------------------------+
+   |                       Zodiac FX OpenFlow Switch (Data Plane)                            |
+   |                                                                                         |
+   |   [Port 1]                 [Port 2]                 [Port 3]               [Port 4]     |
+   |   Local Workload /         Gateway Uplink           Hardware Tap /         Controller   |
+   |   Test Agent Subnet        (Xfinity Pod)            Port Mirror            (Blue Cat6)  |
+   |                                                                                 |       |
+   |   Micro-USB: Serial CDC Telemetry Stream (/dev/ttyACM0 @ 115200 8N1) ----------+----+  |
+   +--------------------------------------------------------------------------------|-----+  |
+                                                                                    |     |  |
+                                           +----------------------------------------+     |  |
+                                           | OpenFlow 1.3 Control Channel (Blue Cat6)     |  |
+                                           |                                              |  |
+                                           v                                              v  v
+   +-----------------------------------------------------------------------------------------+
+   |             Autonomous Master Appliance: NVIDIA Jetson Orin Nano Super (24/7)           |
+   |                                                                                         |
+   |  * OpenFlow 1.3 Controller Plane (:6633) -- Fail-Closed FlowMod Dispatch                |
+   |  * Transparent RFC 1035 DNS Resolver (:53) with VIP Reverse Proxy Mapping               |
+   |  * Edge ML Anomaly Detection (TensorRT / Google Coral Edge TPU coprocessor)             |
+   |  * Symbolic Route Verifier (AlphaProof DAG Loop-Free Verification Invariant)            |
+   |  * Real-Time Telemetry Daemon, Neon DB Relayer & Local Bridge Server (:3003)            |
+   +-----------------------------------------------------------------------------------------+
+                                           ^
+                                           | Wireless WiFi 6 / 6E (Untethered HTTPS / SSH)
+                                           v
+   +-----------------------------------------------------------------------------------------+
+   |                      Untethered Operator Workstation (MacBook Pro)                      |
+   |  * Web UI Dashboard (https://agentic-era-networking.vercel.app / http://localhost:3003)  |
+   |  * Zero Dependency: Close lid, reboot, or travel without interrupting network services   |
+   +-----------------------------------------------------------------------------------------+
 ```
 
 ---

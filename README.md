@@ -28,17 +28,78 @@ This codebase is governed by the collective engineering rigor of five foundation
 
 ---
 
-## 2. Physical Hardware Co-Design: Zodiac FX Switch & Google Coral Edge TPU
+## 2. Physical Hardware Architecture: Autonomous Master Appliance Co-Design
 
-This repository grounds SDN invariants in physical desktop hardware:
-- **Architecture Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
+This repository grounds autonomous SDN invariants in physical hardware, elevating the appliance from a passive coprocessor into a **dedicated 24/7 Autonomous Master Controller**:
+
+- **Detailed Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
 - **Data Plane Hardware**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
-- **Inference Coprocessor**: Google Coral USB Accelerator (Edge TPU) connected directly to the DisplayLink dock (4 TOPS INT8, ~2.5 ms inference latency).
-- **The 4 Architectural Roles**:
-  1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
-  2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
-  3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
-  4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
+- **Autonomous Master Appliance**: NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, GbE controller link, dedicated USB serial telemetry link, 7W–15W 24/7 low-power operation) and Google Coral USB Accelerator (Edge TPU).
+- **Gateway Transit**: Xfinity WiFi Extender (Pod) providing continuous internet uplink over 100BASE-TX.
+- **Untethered Workstation**: Operator workstation (MacBook Pro) operates untethered over wireless WiFi 6/6E with zero downtime risk (closing the laptop lid or rebooting never interrupts the network data plane).
+
+### System Architecture Diagram
+
+```
+                                +-----------------------------------+
+                                |    Public Internet / Home LAN     |
+                                +-----------------+-----------------+
+                                                  | (Mesh WiFi)
+                                                  v
+                                +-----------------------------------+
+                                |    Xfinity WiFi Extender (Pod)    |
+                                +-----------------+-----------------+
+                                                  | 100BASE-TX (Green Cat6)
+                                                  v
+   +-----------------------------------------------------------------------------------------+
+   |                       Zodiac FX OpenFlow Switch (Data Plane)                            |
+   |                                                                                         |
+   |   [Port 1]                 [Port 2]                 [Port 3]               [Port 4]     |
+   |   Local Workload /         Gateway Uplink           Hardware Tap /         Controller   |
+   |   Test Agent Subnet        (Xfinity Pod)            Port Mirror            (Blue Cat6)  |
+   |                                                                                 |       |
+   |   Micro-USB: Serial CDC Telemetry Stream (/dev/ttyACM0 @ 115200 8N1) ----------+----+  |
+   +--------------------------------------------------------------------------------|-----+  |
+                                                                                    |     |  |
+                                           +----------------------------------------+     |  |
+                                           | OpenFlow 1.3 Control Channel (Blue Cat6)     |  |
+                                           |                                              |  |
+                                           v                                              v  v
+   +-----------------------------------------------------------------------------------------+
+   |             Autonomous Master Appliance: NVIDIA Jetson Orin Nano Super (24/7)           |
+   |                                                                                         |
+   |  * OpenFlow 1.3 Controller Plane (:6633) -- Fail-Closed FlowMod Dispatch                |
+   |  * Transparent RFC 1035 DNS Resolver (:53) with VIP Reverse Proxy Mapping               |
+   |  * Edge ML Anomaly Detection (TensorRT / Google Coral Edge TPU coprocessor)             |
+   |  * Symbolic Route Verifier (AlphaProof DAG Loop-Free Verification Invariant)            |
+   |  * Real-Time Telemetry Daemon, Neon DB Relayer & Local Bridge Server (:3003)            |
+   +-----------------------------------------------------------------------------------------+
+                                           ^
+                                           | Wireless WiFi 6 / 6E (Untethered HTTPS / SSH)
+                                           v
+   +-----------------------------------------------------------------------------------------+
+   |                      Untethered Operator Workstation (MacBook Pro)                      |
+   |  * Web UI Dashboard (https://agentic-era-networking.vercel.app / http://localhost:3003)  |
+   |  * Zero Dependency: Close lid, reboot, or travel without interrupting network services   |
+   +-----------------------------------------------------------------------------------------+
+```
+
+### Physical Interconnect Matrix
+
+| Link | Source | Cable / Interface | Destination | Protocol / Speed | Role |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Link 1** | Jetson Orin (GbE RJ45) | Blue Cat6 Patch Cable | Zodiac FX Port 4 | 100BASE-TX (`10.0.1.99`) | **OpenFlow 1.3 Control Channel** |
+| **Link 2** | Zodiac FX (Micro-USB) | Black USB Cable | Jetson Orin (USB-A) | USB CDC (`/dev/ttyACM0`) | **Real-Time Telemetry & CDC Console** |
+| **Link 3** | Zodiac FX Port 2 | Green Cat6 Patch Cable | Xfinity WiFi Pod | 100BASE-TX (Home LAN) | **WAN / Internet Gateway Transit** |
+| **Link 4** | Zodiac FX Port 1 | RJ45 Ethernet | Local Workload / Agent | 100BASE-TX (`10.0.1.x`) | **Monitored Workload / Client Port** |
+| **Link 5** | Zodiac FX Port 3 | RJ45 Ethernet | Packet Tap / Sniffer | 100BASE-TX (Mirror Mode) | **Wire Snooping & Packet Capture** |
+| **Link 6** | MacBook Pro | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E (LAN) | **Untethered Dashboard & SSH Access** |
+
+### The 4 Autonomous Appliance Invariant Roles:
+1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
+2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
+3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
+4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
 
 ---
 
