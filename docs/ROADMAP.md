@@ -26,7 +26,16 @@ Governed by the **Senior Staff Council Invariants**:
 | Phase 0.5: Enterprise Security & Historical Telemetry Persistence (COMPLETE)                      |
 | - Milestone 0.5A: Google SSO Authentication Guard (OAuth 2.0 / OIDC, strict email allowlist)       |
 | - Milestone 0.5B: Neon Postgres 30-Day Telemetry Persistence Engine (10s batching, downsampling)   |
-| - Content-Addressable Asset Pipeline (SHA-256 immutable edge caching, sub-ms clock precision)     |
+| - Milestone 0.5C: Content-Addressable Asset Pipeline (SHA-256 immutable edge caching)            |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+| Phase 0.6: Zero-Trust Cloud Edge Security & External Attack Shield (IN PROGRESS)                 |
+| - Air-Gapped Command Diode (Vercel public layer read-only; zero mutating access to switch plane)  |
+| - Edge rate limiting & anti-DDoS shield on all serverless endpoints                               |
+| - Monotonic HMAC request signatures & replay protection on cloud-to-hardware telemetry bridge     |
+| - Strict CSP, CORS fail-closed lockdown, and external vulnerability quarantine                   |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v
@@ -39,9 +48,10 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
-| Phase 2: Real-Time Flow Anomaly Detection & Jetson TensorRT Quarantine                            |
+| Phase 2: Real-Time Flow Anomaly Detection, Jetson TensorRT & Web Wireshark Packet Dissector      |
 | - NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, <1.0ms inference budget)            |
 | - Port 3 mirror tap stream analysis for rogue agent scanning and burst anomaly classification    |
+| - In-Browser Wireshark: Real-time packet dissector (L2-L7), interactive hex dump & PCAP export   |
 | - Fail-closed line-rate FlowMod quarantine (priority 65535 default drop)                          |
 +---------------------------------------------------------------------------------------------------+
                                                   |
@@ -103,6 +113,21 @@ Governed by the **Senior Staff Council Invariants**:
   - Automated content-addressed asset build script (`scripts/build-assets.ts`) generating SHA-256 asset hashes (`zodiac.[hash].css`, `zodiac-app.[hash].js`).
   - Immutable edge cache headers (`Cache-Control: public, max-age=31536000, immutable`) on Vercel and local bridge server.
 
+### Phase 0.6: Zero-Trust Cloud Edge Security & External Attack Shield
+*Status: In Progress*
+- [x] **Milestone 0.6A: Edge Command Diode (Anti-Pivoting / Zero-Ambient Mutating Access)**:
+  - Strict read-only boundary for cloud serverless execution: Vercel edge runtime is mathematically decoupled from the local hardware control plane.
+  - Zero arbitrary command injection: Remote commands evaluate strictly against mock sandbox templates with explicit simulation watermarks unless attested with verified local socket provenance.
+- [ ] **Milestone 0.6B: Token-Bucket Edge Rate Limiting & Anti-DDoS Shield**:
+  - In-memory and distributed edge rate limiters on `/api/*` (e.g., 60 req/min for telemetry reads, 10 req/min for auth callbacks) preventing denial-of-service against Neon DB and edge runtimes.
+  - Strict 429 Too Many Requests with deterministic `Retry-After` headers.
+- [ ] **Milestone 0.6C: Cryptographic Command Attestation & Replay Protection**:
+  - Monotonic nanosecond timestamp + HMAC-SHA256 signature verification on all bridge payloads (`X-Zodiac-Signature`, `X-Timestamp-Ns`) preventing replay attacks.
+  - Strict Origin and Host pinning to prevent DNS rebinding or SSRF pivot attacks into the private LAN subnet (`10.0.1.0/24`).
+- [ ] **Milestone 0.6D: Hardened Content Security Policy & Security Headers**:
+  - Strict CSP headers (`default-src 'self'`, `script-src 'self'`, `connect-src 'self' https://accounts.google.com`, `frame-ancestors 'none'`).
+  - Strict transport security (`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`).
+
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
 - [ ] Transparent RFC 1035 UDP DNS interception on Zodiac data ports without client proxy setup.
@@ -111,12 +136,18 @@ Governed by the **Senior Staff Council Invariants**:
 - [ ] OpenFlow 1.3 steering rules redirecting UDP 53 and TCP 80/443 to the host controller.
 - [ ] Formal loop-free verification before flow rule hardware deployment.
 
-### Phase 2: Real-Time Flow Anomaly Detection with Jetson TensorRT
+### Phase 2: Real-Time Flow Anomaly Detection, Jetson TensorRT & Web Wireshark Packet Dissector
 *Status: Planned*
-- [ ] NVIDIA Jetson Orin Nano Super co-design (67 TOPS INT8 Ampere GPU).
-- [ ] Zodiac Port 3 mirror tap stream ingestion.
-- [ ] Quantized TensorRT INT8 anomaly detection model (<1.0ms inference budget).
-- [ ] Fail-closed line-rate FlowMod quarantine on detected rogue agent traffic.
+- [ ] **Milestone 2A: Jetson TensorRT Line-Rate Anomaly Detection**:
+  - NVIDIA Jetson Orin Nano Super co-design (67 TOPS INT8 Ampere GPU).
+  - Zodiac Port 3 mirror tap stream ingestion.
+  - Quantized TensorRT INT8 anomaly detection model (<1.0ms inference budget).
+  - Fail-closed line-rate FlowMod quarantine on detected rogue agent traffic.
+- [ ] **Milestone 2B: In-Browser Wireshark Packet Dissector Engine**:
+  - Real-time deep packet inspection (DPI) & protocol dissection from Port 3 mirror tap and OpenFlow `PACKET_IN` streams.
+  - Multi-layer protocol decoders: Layer 2 (Ethernet, 802.1Q VLAN), Layer 3 (IPv4, IPv6, ARP, ICMP), Layer 4 (TCP, UDP), Layer 7 (DNS, HTTP/1.1, OpenFlow 1.3).
+  - Interactive Web UI Packet Inspector: Real-time packet table with colorized protocol streams, expandable protocol tree, and synchronous Hex/ASCII dump inspector.
+  - Display filter engine (BPF-like syntax, e.g., `ip.src == 10.0.1.2 && tcp.port == 80`) and one-click `.pcap` / `.pcapng` export.
 
 ### Phase 3: AlphaProof Symbolic Verification & Self-Tuning Control
 *Status: Planned*
