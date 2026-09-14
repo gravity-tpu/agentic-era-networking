@@ -91,8 +91,8 @@ describe('OpenFlow 1.3 Wire Protocol Serialization', () => {
     expect(flowMod.readUInt32BE(36)).toBe(1); // outPort
   });
 
-  it('builds an 80-byte OpenFlow 1.3 Table-Miss FlowMod with output to CONTROLLER', () => {
-    const tableMiss = buildOfpTableMissFlowMod(777, 0);
+  it('builds an 80-byte OpenFlow 1.3 Table-Miss FlowMod with output to CONTROLLER and bounded maxLen', () => {
+    const tableMiss = buildOfpTableMissFlowMod(777, 0, 'CONTROLLER', 128);
 
     expect(tableMiss.length).toBe(80);
     expect(tableMiss[0]).toBe(OFP_VERSION_1_3);
@@ -109,6 +109,19 @@ describe('OpenFlow 1.3 Wire Protocol Serialization', () => {
     expect(tableMiss.readUInt16BE(64)).toBe(0); // OFPAT_OUTPUT
     expect(tableMiss.readUInt16BE(66)).toBe(16); // action length 16
     expect(tableMiss.readUInt32BE(68)).toBe(0xfffffffd); // OFPP_CONTROLLER
+    expect(tableMiss.readUInt16BE(72)).toBe(128); // max_len = 128 (bounded header sampling)
+  });
+
+  it('builds a 56-byte fail-closed DROP Table-Miss FlowMod by default (Council Invariant 3)', () => {
+    const defaultTableMiss = buildOfpTableMissFlowMod(888, 0);
+
+    expect(defaultTableMiss.length).toBe(56);
+    expect(defaultTableMiss[0]).toBe(OFP_VERSION_1_3);
+    expect(defaultTableMiss[1]).toBe(OpenFlowType.OFPT_FLOW_MOD);
+    expect(defaultTableMiss.readUInt16BE(2)).toBe(56);
+    expect(defaultTableMiss.readUInt32BE(4)).toBe(888);
+    expect(defaultTableMiss.readUInt16BE(30)).toBe(0);
+    // No instructions appended -> hardware drops unmatched traffic
   });
 
   it('correctly parses an OFPT_PACKET_IN message and decodes ARP packet payload', () => {
@@ -154,6 +167,111 @@ describe('OpenFlow 1.3 Wire Protocol Serialization', () => {
     expect(decoded.etherTypeStr).toBe('ARP');
     expect(decoded.arpSenderIp).toBe('10.0.0.1');
     expect(decoded.arpTargetIp).toBe('10.0.0.254');
+  });
+
+  it('correctly parses an 802.1Q VLAN-tagged IPv4 packet and decodes VLAN ID, IPs, and MACs', () => {
+    // 802.1Q tagged frame:
+    // Dst MAC (6B), Src MAC (6B), TPID 0x8100 (2B), TCI (2B: PCP/DEI/VID=100), EtherType 0x0800 (2B), IPv4 Header (20B)
+    const etherFrame = Buffer.alloc(14 + 4 + 20); // 14 untagged + 4 VLAN tag + 20 IPv4 = 38 bytes
+    // Dst MAC: 00:0e:c6:11:22:33
+    Buffer.from([0x00, 0x0e, 0xc6, 0x11, 0x22, 0x33]).copy(etherFrame, 0);
+    // Src MAC: 00:1c:b3:aa:bb:cc
+    Buffer.from([0x00, 0x1c, 0xb3, 0xaa, 0xbb, 0xcc]).copy(etherFrame, 6);
+    // TPID: 0x8100
+    etherFrame.writeUInt16BE(0x8100, 12);
+    // TCI: VLAN ID 100 -> 0x0064
+    etherFrame.writeUInt16BE(100, 14);
+    // Inner EtherType: 0x0800 (IPv4)
+    etherFrame.writeUInt16BE(0x0800, 16);
+    // IPv4 Header starting at 18:
+    // Version & IHL (0x45)
+    etherFrame.writeUInt8(0x45, 18);
+    // IP Src: 192.168.1.50 at offset 18 + 12 = 30
+    Buffer.from([192, 168, 1, 50]).copy(etherFrame, 30);
+    // IP Dst: 1.1.1.1 at offset 18 + 16 = 34
+    Buffer.from([1, 1, 1, 1]).copy(etherFrame, 34);
+
+    const match = Buffer.alloc(16);
+    match.writeUInt16BE(1, 0);
+    match.writeUInt16BE(12, 2);
+    match.writeUInt32BE(0x80000004, 4); // in_port
+    match.writeUInt32BE(3, 8); // port 3
+
+    const packetInHeader = Buffer.alloc(24);
+    packetInHeader.writeUInt8(OFP_VERSION_1_3, 0);
+    packetInHeader.writeUInt8(OpenFlowType.OFPT_PACKET_IN, 1);
+    const totalPktLen = 24 + match.length + 2 + etherFrame.length;
+    packetInHeader.writeUInt16BE(totalPktLen, 2);
+    packetInHeader.writeUInt32BE(1002, 4);
+    packetInHeader.writeUInt32BE(0xffffffff, 8);
+    packetInHeader.writeUInt16BE(etherFrame.length, 12);
+    packetInHeader.writeUInt8(0, 14);
+    packetInHeader.writeUInt8(0, 15);
+
+    const pad2 = Buffer.alloc(2);
+    const fullPacket = Buffer.concat([packetInHeader, match, pad2, etherFrame]);
+
+    const decoded = parseOfpPacketIn(fullPacket);
+    expect(decoded.inPort).toBe(3);
+    expect(decoded.srcMac).toBe('00:1c:b3:aa:bb:cc');
+    expect(decoded.dstMac).toBe('00:0e:c6:11:22:33');
+    expect(decoded.vlanId).toBe(100);
+    expect(decoded.vlanIds).toEqual([100]);
+    expect(decoded.etherTypeStr).toBe('IPv4');
+    expect(decoded.srcIp).toBe('192.168.1.50');
+    expect(decoded.dstIp).toBe('1.1.1.1');
+  });
+
+  it('correctly parses an 802.1ad / 802.1Q QinQ double-tagged packet preserving full VLAN stack', () => {
+    // QinQ frame:
+    // Dst MAC (6B), Src MAC (6B), TPID 0x88a8 (2B: S-VLAN 200), TCI (2B), TPID 0x8100 (2B: C-VLAN 100), TCI (2B), EtherType 0x0800 (2B), IPv4 Header (20B)
+    const etherFrame = Buffer.alloc(14 + 4 + 4 + 20); // 42 bytes
+    Buffer.from([0x00, 0x0e, 0xc6, 0x11, 0x22, 0x33]).copy(etherFrame, 0);
+    Buffer.from([0x00, 0x1c, 0xb3, 0xaa, 0xbb, 0xcc]).copy(etherFrame, 6);
+    // Outer TPID: 0x88a8
+    etherFrame.writeUInt16BE(0x88a8, 12);
+    // Outer TCI: S-VLAN ID 200
+    etherFrame.writeUInt16BE(200, 14);
+    // Inner TPID: 0x8100
+    etherFrame.writeUInt16BE(0x8100, 16);
+    // Inner TCI: C-VLAN ID 100
+    etherFrame.writeUInt16BE(100, 18);
+    // Inner EtherType: 0x0800 (IPv4)
+    etherFrame.writeUInt16BE(0x0800, 20);
+    // IPv4 Header starting at 22:
+    etherFrame.writeUInt8(0x45, 22);
+    // IP Src: 10.10.1.1 at offset 22 + 12 = 34
+    Buffer.from([10, 10, 1, 1]).copy(etherFrame, 34);
+    // IP Dst: 10.10.2.2 at offset 22 + 16 = 38
+    Buffer.from([10, 10, 2, 2]).copy(etherFrame, 38);
+
+    const match = Buffer.alloc(16);
+    match.writeUInt16BE(1, 0);
+    match.writeUInt16BE(12, 2);
+    match.writeUInt32BE(0x80000004, 4); // in_port
+    match.writeUInt32BE(2, 8); // port 2
+
+    const packetInHeader = Buffer.alloc(24);
+    packetInHeader.writeUInt8(OFP_VERSION_1_3, 0);
+    packetInHeader.writeUInt8(OpenFlowType.OFPT_PACKET_IN, 1);
+    const totalPktLen = 24 + match.length + 2 + etherFrame.length;
+    packetInHeader.writeUInt16BE(totalPktLen, 2);
+    packetInHeader.writeUInt32BE(1003, 4);
+    packetInHeader.writeUInt32BE(0xffffffff, 8);
+    packetInHeader.writeUInt16BE(etherFrame.length, 12);
+    packetInHeader.writeUInt8(0, 14);
+    packetInHeader.writeUInt8(0, 15);
+
+    const pad2 = Buffer.alloc(2);
+    const fullPacket = Buffer.concat([packetInHeader, match, pad2, etherFrame]);
+
+    const decoded = parseOfpPacketIn(fullPacket);
+    expect(decoded.inPort).toBe(2);
+    expect(decoded.vlanId).toBe(200);
+    expect(decoded.vlanIds).toEqual([200, 100]);
+    expect(decoded.etherTypeStr).toBe('IPv4');
+    expect(decoded.srcIp).toBe('10.10.1.1');
+    expect(decoded.dstIp).toBe('10.10.2.2');
   });
 });
 

@@ -133,15 +133,24 @@ export class OpenFlowServer extends EventEmitter {
   }
 
   /**
-   * Installs an OpenFlow 1.3 Table-Miss rule (priority 0 wildcard matching all packets and sending to CONTROLLER).
+   * Installs an OpenFlow 1.3 Table-Miss rule (priority 0 wildcard matching all packets).
+   * Council Invariant 3 (Fail-Closed): Defaults to 'DROP' unless explicitly configured for telemetry sampling.
+   *
+   * @param priority Rule priority (default 0 for table-miss)
+   * @param action 'DROP' (fail-closed default) or 'CONTROLLER'
+   * @param maxLen Maximum payload bytes punted if action is 'CONTROLLER' (default 128 to prevent DoS)
    */
-  public sendTableMissRule(priority: number = 0): void {
+  public sendTableMissRule(
+    priority: number = 0,
+    action: 'DROP' | 'CONTROLLER' = 'DROP',
+    maxLen: number = 128
+  ): void {
     if (!this.clientSocket || this.state !== 'ESTABLISHED') {
       throw new Error(`Cannot send Table-Miss FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
     }
 
     const xid = this.nextXid++;
-    const packet = buildOfpTableMissFlowMod(xid, priority);
+    const packet = buildOfpTableMissFlowMod(xid, priority, action, maxLen);
     this.clientSocket.write(packet);
   }
 

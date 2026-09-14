@@ -66,8 +66,9 @@ export class ZodiacBridgeServer {
     // Auto-install Table-Miss rule on connection to forward live traffic to controller
     this.controller.openFlow.on('ready', () => {
       try {
-        this.controller.openFlow.sendTableMissRule(0);
-        console.log('[+] [Bridge Server] Table-Miss flow rule auto-installed on switch connection.');
+        // Bounded header-only packet sampling (max 128 bytes) to controller for live telemetry accounting
+        this.controller.openFlow.sendTableMissRule(0, 'CONTROLLER', 128);
+        console.log('[+] [Bridge Server] Table-Miss flow rule installed (CONTROLLER packet sampling, 128B bounded header).');
       } catch (err: unknown) {
         console.warn('[!] [Bridge Server] Failed to install table-miss rule:', err instanceof Error ? err.message : String(err));
       }

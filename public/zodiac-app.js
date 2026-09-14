@@ -22,6 +22,7 @@
   let currentRange = 'live'; // 'live' | '1h' | '6h' | '24h' | '7d'
   let currentUnit = 'pps';   // 'pps' | 'bps'
   let chartPortFilter = 'all'; // 'all' | '1' | '2' | '3' | '4'
+  const MAX_FRONTEND_BUFFER_POINTS = 3600; // Strictly bound client memory to 2.5 hours of continuous data
   let timeSeriesBuffer = [];
 
   // DOM Elements Cache
@@ -517,9 +518,9 @@
       }
     }
 
-    // 6. Time-Series Buffer & Rolling Live Analytics Updates
+    // 6. Time-Series Buffer & Rolling Live Analytics Updates (Strict 3600-point Client Memory Bound)
     if (snapshot.timeSeries && snapshot.timeSeries.length > 0) {
-      timeSeriesBuffer = [...snapshot.timeSeries];
+      timeSeriesBuffer = snapshot.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
     } else if (snapshot.source === 'disconnected') {
       const nowMs = Date.now();
       timeSeriesBuffer.push({
@@ -535,7 +536,9 @@
         cpuTemperatureC: null,
         latencyNs: 0n,
       });
-      if (timeSeriesBuffer.length > 300) timeSeriesBuffer.shift();
+      if (timeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
+        timeSeriesBuffer.shift();
+      }
     } else {
       const lastPoint = timeSeriesBuffer[timeSeriesBuffer.length - 1];
       const nowMs = Date.now();
@@ -571,7 +574,7 @@
         latencyNs: snapshot.openflow?.lastHeartbeatLatencyNs || 0n,
       });
 
-      if (timeSeriesBuffer.length > 300) {
+      if (timeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
         timeSeriesBuffer.shift();
       }
     }
@@ -595,15 +598,40 @@
     4: false,
   };
 
-  function initPortCollapse() {
+  // Resilient LocalStorage Access with single-warning telemetry guard (Council Anti-Suppression + Clean Log Invariants)
+  let hasWarnedStorage = false;
+  function safeGetStorage(key) {
     try {
-      const saved = localStorage.getItem('zodiac_port_collapse');
-      if (saved) {
+      return localStorage.getItem(key);
+    } catch (err) {
+      if (!hasWarnedStorage) {
+        console.warn(`[!] [LocalStorage] Storage access restricted or unavailable (${key}):`, err);
+        hasWarnedStorage = true;
+      }
+      return null;
+    }
+  }
+
+  function safeSetStorage(key, val) {
+    try {
+      localStorage.setItem(key, val);
+    } catch (err) {
+      if (!hasWarnedStorage) {
+        console.warn(`[!] [LocalStorage] Storage persist restricted or quota exceeded (${key}):`, err);
+        hasWarnedStorage = true;
+      }
+    }
+  }
+
+  function initPortCollapse() {
+    const saved = safeGetStorage('zodiac_port_collapse');
+    if (saved) {
+      try {
         const parsed = JSON.parse(saved);
         Object.assign(portCollapseState, parsed);
+      } catch (err) {
+        console.warn('[!] [LocalStorage] Corrupt port collapse JSON in storage:', err);
       }
-    } catch {
-      // ignore storage errors
     }
 
     for (let portId = 1; portId <= 4; portId++) {
@@ -663,11 +691,7 @@
   }
 
   function savePortCollapse() {
-    try {
-      localStorage.setItem('zodiac_port_collapse', JSON.stringify(portCollapseState));
-    } catch {
-      // ignore
-    }
+    safeSetStorage('zodiac_port_collapse', JSON.stringify(portCollapseState));
   }
 
   // =========================================================================
@@ -678,12 +702,7 @@
     const toggleBtn = document.getElementById('btn-toggle-sidebar');
     if (!layout || !toggleBtn) return;
 
-    let isCollapsed = false;
-    try {
-      isCollapsed = localStorage.getItem('zodiac_sidebar_collapsed') === 'true';
-    } catch {
-      // ignore
-    }
+    const isCollapsed = safeGetStorage('zodiac_sidebar_collapsed') === 'true';
 
     if (isCollapsed) {
       layout.classList.add('sidebar-collapsed');
@@ -691,11 +710,7 @@
 
     toggleBtn.addEventListener('click', () => {
       const nowCollapsed = layout.classList.toggle('sidebar-collapsed');
-      try {
-        localStorage.setItem('zodiac_sidebar_collapsed', String(nowCollapsed));
-      } catch {
-        // ignore
-      }
+      safeSetStorage('zodiac_sidebar_collapsed', String(nowCollapsed));
       updateCharts();
       setTimeout(() => {
         updateCharts();

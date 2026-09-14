@@ -91,11 +91,11 @@ async function main(): Promise<void> {
         console.log(`    Buffer Count : ${features.nBuffers}`);
         console.log(`    Flow Tables  : ${features.nTables}`);
         console.log(`    Capabilities : 0x${features.capabilities.toString(16)}`);
-        console.log('    Status       : Installing Table-Miss Flow Entry (Option A)...');
+        console.log('    Status       : Installing Table-Miss Flow Entry (Option A: Controller Header-Sampling)...');
 
         try {
-          of.sendTableMissRule(0);
-          console.log('    [+] Table-Miss Rule Dispatched -> Forward all unhandled packets to Controller!\n');
+          of.sendTableMissRule(0, 'CONTROLLER', 128);
+          console.log('    [+] Table-Miss Rule Dispatched -> Forward unhandled packet headers to Controller (bounded 128B)!\n');
         } catch (err) {
           console.error(`    [!] Failed to install Table-Miss rule: ${(err as Error).message}\n`);
         }
