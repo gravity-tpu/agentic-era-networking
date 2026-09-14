@@ -39,8 +39,8 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
-| Phase 2: Real-Time Flow Anomaly Detection & Edge TPU Quarantine                                    |
-| - Google Coral USB Edge TPU (4 TOPS INT8 coprocessor, <2.5ms inference budget)                    |
+| Phase 2: Real-Time Flow Anomaly Detection & Jetson TensorRT Quarantine                            |
+| - NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, <1.0ms inference budget)            |
 | - Port 3 mirror tap stream analysis for rogue agent scanning and burst anomaly classification    |
 | - Fail-closed line-rate FlowMod quarantine (priority 65535 default drop)                          |
 +---------------------------------------------------------------------------------------------------+
@@ -111,11 +111,11 @@ Governed by the **Senior Staff Council Invariants**:
 - [ ] OpenFlow 1.3 steering rules redirecting UDP 53 and TCP 80/443 to the host controller.
 - [ ] Formal loop-free verification before flow rule hardware deployment.
 
-### Phase 2: Real-Time Flow Anomaly Detection with Edge TPU
+### Phase 2: Real-Time Flow Anomaly Detection with Jetson TensorRT
 *Status: Planned*
-- [ ] Google Coral USB Accelerator co-design via host USB 3.0.
+- [ ] NVIDIA Jetson Orin Nano Super co-design (67 TOPS INT8 Ampere GPU).
 - [ ] Zodiac Port 3 mirror tap stream ingestion.
-- [ ] Quantized INT8 anomaly detection model (<2.5ms inference budget).
+- [ ] Quantized TensorRT INT8 anomaly detection model (<1.0ms inference budget).
 - [ ] Fail-closed line-rate FlowMod quarantine on detected rogue agent traffic.
 
 ### Phase 3: AlphaProof Symbolic Verification & Self-Tuning Control
