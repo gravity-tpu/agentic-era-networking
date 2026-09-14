@@ -1812,8 +1812,12 @@ Please connect the physical switch via USB to execute '${command}' on device har
     }
   }
 
-  // Check auth and start polling
-  initAuth();
+  // Check auth and start polling once DOM is fully ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAuth);
+  } else {
+    initAuth();
+  }
 
   // Expose global app
   window.ZodiacApp = {
