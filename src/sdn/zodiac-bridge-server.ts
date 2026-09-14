@@ -51,12 +51,23 @@ export class ZodiacBridgeServer {
   private timeSeries: ZodiacTimeSeriesPoint[] = [];
   private readonly portRxCounters = new Map<number, bigint>();
   private readonly portByteCounters = new Map<number, bigint>();
+  private readonly cloudRelayUrl?: string | undefined;
+  private readonly bridgeSecret?: string | undefined;
+  private isRelaying = false;
   private pollTimer: NodeJS.Timeout | null = null;
 
-  constructor(controller?: ZodiacController, switchIp?: string, controllerIp?: string) {
+  constructor(
+    controller?: ZodiacController,
+    switchIp?: string,
+    controllerIp?: string,
+    cloudRelayUrl?: string,
+    bridgeSecret?: string
+  ) {
     this.controller = controller ?? new ZodiacController();
     this.switchIp = switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '10.0.1.99';
     this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '10.0.1.8';
+    this.cloudRelayUrl = cloudRelayUrl ?? process.env['ZODIAC_CLOUD_RELAY_URL'];
+    this.bridgeSecret = bridgeSecret ?? process.env['ZODIAC_BRIDGE_SECRET'];
     this.timeSeries = generateHistoricalTelemetry(this.cachedSnapshot, 1, 60);
     this.cachedSnapshot = {
       ...this.cachedSnapshot,
@@ -496,8 +507,54 @@ export class ZodiacBridgeServer {
         ...this.cachedSnapshot,
         timeSeries: this.timeSeries,
       };
+
+      // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud
+      if (this.cloudRelayUrl && !this.isRelaying) {
+        void this.relaySnapshotToCloud(this.cachedSnapshot);
+      }
     } catch (err: unknown) {
       console.warn('[!] [Zodiac Telemetry] Comprehensive health refresh error:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /**
+   * Asynchronously streams the physical hardware telemetry snapshot to a cloud relay endpoint
+   * (e.g. Vercel) using the cryptographic ZODIAC_BRIDGE_SECRET to guarantee physical provenance.
+   *
+   * Adheres to Dean Latency Budget: bounded by a 3000ms AbortSignal so the local control loop never blocks.
+   */
+  private async relaySnapshotToCloud(snapshot: ZodiacFullTelemetrySnapshot): Promise<void> {
+    if (!this.cloudRelayUrl || this.isRelaying) return;
+    this.isRelaying = true;
+    try {
+      const endpoint = new URL('/api/zodiac', this.cloudRelayUrl).toString();
+      const payload = this.serializeSnapshot({
+        ...snapshot,
+        source: snapshot.source === 'disconnected' ? 'disconnected' : 'live_hardware',
+      });
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (this.bridgeSecret) {
+        headers['X-Zodiac-Bridge-Secret'] = this.bridgeSecret;
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: payload,
+        signal: AbortSignal.timeout(3000),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.warn(`[!] [Cloud Relay] Telemetry push returned HTTP ${res.status}: ${text}`);
+      }
+    } catch (err: unknown) {
+      console.warn('[!] [Cloud Relay] Failed to push telemetry to cloud:', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.isRelaying = false;
     }
   }
 

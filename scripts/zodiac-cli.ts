@@ -18,6 +18,14 @@
 import { ZodiacController } from '../dist/sdn/zodiac-controller.js';
 import { spawn } from 'node:child_process';
 
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile();
+  } catch (_) {
+    // Non-fatal if .env doesn't exist
+  }
+}
+
 const controller = new ZodiacController();
 
 async function main(): Promise<void> {
@@ -159,14 +167,36 @@ async function main(): Promise<void> {
     case 'serve': {
       const port = parseInt(process.env['PORT'] ?? process.argv[3] ?? '3000', 10);
       const host = '0.0.0.0';
-      console.log(`\n🚀 Starting Zodiac FX Web & REST Bridge Server on http://localhost:${port}...\n`);
+      const relayArg = process.argv.find((a) => a.startsWith('--relay=') || a === '--relay');
+      let cloudRelayUrl: string | undefined = process.env['ZODIAC_CLOUD_RELAY_URL'];
+      if (relayArg) {
+        cloudRelayUrl = relayArg.includes('=') ? relayArg.split('=')[1] : (cloudRelayUrl ?? 'https://agentic-era-networking.vercel.app');
+      }
+      const bridgeSecret = process.env['ZODIAC_BRIDGE_SECRET'];
+
+      console.log(`\n🚀 Starting Zodiac FX Web & REST Bridge Server on http://localhost:${port}...`);
+      if (cloudRelayUrl) {
+        console.log(`📡 Cloud Telemetry Relay Active: ${cloudRelayUrl} (Verified Epistemic Provenance)\n`);
+      } else {
+        console.log('');
+      }
+
       const { ZodiacBridgeServer } = await import('../dist/sdn/zodiac-bridge-server.js');
-      const bridge = new ZodiacBridgeServer(controller);
+      const bridge = new ZodiacBridgeServer(
+        controller,
+        undefined,
+        undefined,
+        cloudRelayUrl,
+        bridgeSecret
+      );
       const boundPort = await bridge.start(port, host);
       console.log(`✨ Dashboard is live at : http://localhost:${boundPort}`);
       console.log(`   - REST Telemetry API : http://localhost:${boundPort}/api/zodiac`);
       console.log(`   - OpenFlow 1.3 Daemon : 10.0.1.8:6633`);
       console.log(`   - Serial Management   : ${controller.serialClient.path}`);
+      if (cloudRelayUrl) {
+        console.log(`   - Cloud Production   : ${cloudRelayUrl}`);
+      }
       console.log(`   - Press Ctrl+C to exit\n`);
 
       process.on('SIGINT', async () => {
