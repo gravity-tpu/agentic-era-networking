@@ -1074,6 +1074,26 @@
     ctx.strokeStyle = '#f6821f';
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Anti-Shortcut Law & Goodhart's Law: Explicit Historical Telemetry Degradation Watermark
+    if (currentRange !== 'live' && historicalDataUnavailable) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.08)';
+      ctx.fillRect(padLeft, padTop, plotW, plotH);
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(padLeft, padTop, plotW, plotH);
+      ctx.fillStyle = '#ef4444';
+      ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(
+        `⚠ Historical ${currentRange.toUpperCase()} Telemetry Unavailable (Neon DB Unreachable) — Showing Live Memory Buffer`,
+        padLeft + plotW / 2,
+        padTop + plotH / 2
+      );
+      ctx.restore();
+    }
   }
 
   function drawPortMiniChart(canvas, points, portId, unit) {
@@ -1549,9 +1569,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     burstBytes += 151400000n;
     if (els.valPackets) els.valPackets.innerText = formatNumber(burstPackets);
     if (els.valBytes) els.valBytes.innerText = `${formatNumber(burstBytes)} B`;
-    // Pure integer monotonic clock (avoid float multiplication; 1ms = 1,000,000ns per Dean Invariant)
-    const ms = BigInt(Math.trunc(performance.now()));
-    const monotonicNs = ms * 1000000n;
+    // Pure integer monotonic clock (preserves microsecond precision from performance.now() per Dean Latency Invariant)
+    const monotonicNs = BigInt(Math.trunc(performance.now() * 1000000));
     if (els.valClock) els.valClock.innerText = `${formatNumber(monotonicNs)} ns`;
   }
 
@@ -1707,6 +1726,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     });
   });
 
+  let historicalDataUnavailable = false;
+
   // Asynchronously query historical downsampled telemetry from Neon Postgres (up to 30 days)
   async function fetchHistoricalRange(range) {
     const controller = new AbortController();
@@ -1718,14 +1739,19 @@ Please connect the physical switch via USB to execute '${command}' on device har
       });
       if (!res.ok) {
         console.warn(`[!] [Historical Range] Neon DB query returned status ${res.status}`);
+        historicalDataUnavailable = true;
         return;
       }
       const data = await res.json();
       if (data && Array.isArray(data.timeSeries) && data.timeSeries.length > 0) {
         timeSeriesBuffer = data.timeSeries;
+        historicalDataUnavailable = false;
+      } else {
+        historicalDataUnavailable = true;
       }
     } catch (err) {
       console.warn('[!] [Historical Range] Failed to fetch historical telemetry from Neon DB:', err);
+      historicalDataUnavailable = true;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -1741,6 +1767,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
       if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
         await fetchHistoricalRange(currentRange);
+      } else {
+        historicalDataUnavailable = false;
       }
       updateCharts();
     });
