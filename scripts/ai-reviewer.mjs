@@ -185,7 +185,6 @@ async function main() {
   // does NOT declare ✅ APPROVED or 🟡 APPROVED WITH SUGGESTIONS.
   const isApproved = outcome.result.includes('✅ APPROVED') ||
                      outcome.result.includes('APPROVED WITH SUGGESTIONS') ||
-                     outcome.result.includes('APPROVED —') ||
                      outcome.result.includes('APPROVED —');
 
   // Match the warnings section regardless of whether the 🟠 emoji rendered.
@@ -193,17 +192,18 @@ async function main() {
     /##\s*(?:🟠\s*)?Warnings?\s*\n+([\s\S]*?)(?=\n##|$)/i
   );
   const warningsBody = warningsSection?.[1]?.trim() ?? '';
-  // Non-empty + doesn't just say "None" = real warnings present
-  const hasWarnings = !isApproved &&
-                      warningsBody.length > 4 &&
-                      !/^none\.?$/i.test(warningsBody);
+  // shouldBlockForWarnings: true only when real warning content is present
+  // AND the model has not issued an APPROVED verdict.
+  const shouldBlockForWarnings = !isApproved &&
+                                 warningsBody.length > 4 &&
+                                 !/^none\.?$/i.test(warningsBody);
 
   if (hasCritical) {
     console.error('🚫 Council Review: Critical Issues must be resolved before pushing.');
     process.exit(1);
   }
 
-  if (isStrict && hasWarnings) {
+  if (isStrict && shouldBlockForWarnings) {
     console.error('🟠 Council Review (strict): Warnings must be resolved before pushing.');
     process.exit(2);
   }
