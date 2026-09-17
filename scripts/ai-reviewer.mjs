@@ -18,6 +18,11 @@ loadEnv();
 
 const FALLBACKS = buildModelFallbacks();
 
+// Bounded empty-state matching: tolerates natural language drift ('None found.', 'No warnings.')
+// and benign explanatory text ('None. The regex avoids...'), while strictly failing closed on
+// actual warnings ('No rate limiting...', 'None of the buffers...', 'Memory leak...').
+const EMPTY_STATE_REGEX = /^[-*>\s]*(none\s*([.:\x2d]|$)|none\s+(found|identified|detected|observed|at this time)\b|n\/a|nil|no\s+(warnings?|issues?)(\s+found)?\b)/i;
+
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
@@ -185,9 +190,6 @@ async function main() {
     /##\s*(?:🟠\s*)?Warnings?\s*\n+([\s\S]*?)(?=\n##|$)/i
   );
   const warningsBody = warningsSection?.[1]?.trim() ?? '';
-  // Bounded empty-state matching: tolerates natural language drift ('None found.', 'No warnings.')
-  // without using unbounded wildcards that could fail open on real warnings ('No rate limiting...')
-  const EMPTY_STATE_REGEX = /^[-*>\s]*(none(\s+(found|identified|detected|observed|at this time))?|n\/a|nil|no(\s+(warnings?|issues?))?(\s+found)?)\.?$/i;
   const shouldBlockForWarnings = warningsBody.length > 0 &&
                                  !EMPTY_STATE_REGEX.test(warningsBody);
 
