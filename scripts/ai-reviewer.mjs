@@ -1,13 +1,14 @@
 /**
- * ai-reviewer.mjs
+ * ai-reviewer.mjs  — Council Review
  * Reviews staged git changes, last commit, or uncommitted changes.
  * Governed by the Senior Staff Council: Jeff Dean, Sanjay Ghemawat, Quoc Le, Oriol Vinyals, Demis Hassabis.
  * Model priority and fallback chain are driven by config/models.json.
  *
  * Usage:
- *   npm run review              — reviews staged changes (or unstaged fallback)
- *   npm run review -- --last   — reviews the last commit
- *   npm run review -- --head   — reviews all uncommitted changes (staged + unstaged)
+ *   npm run council:review              — reviews staged changes (or unstaged fallback)
+ *   npm run council:review -- --last   — reviews the last commit
+ *   npm run council:review -- --head   — reviews all uncommitted changes (staged + unstaged)
+ *   npm run council:review -- --strict — exit(1) on Warnings as well as Critical Issues (used by pre-push hook)
  */
 
 import { execSync } from 'child_process';
@@ -20,6 +21,7 @@ const FALLBACKS = buildModelFallbacks();
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+const isStrict = args.includes('--strict'); // exit(1) on Warnings too; used by pre-push hook
 const mode = args.includes('--last') ? 'last'
            : args.includes('--head') ? 'head'
            : isCI                    ? 'last'
@@ -143,9 +145,10 @@ async function main() {
                   : 'uncommitted changes (HEAD)';
 
   console.log(`\n${'═'.repeat(70)}`);
-  console.log(`  🌐  Agentic Era Networking — Senior Staff Council Review  (${modeLabel})`);
+  console.log(`  🌐  Agentic Era Networking — Council Review  (${modeLabel})`);
   console.log(`  Governed by: Jeff Dean · Sanjay Ghemawat · Quoc Le · Oriol Vinyals · Demis Hassabis`);
   console.log(`  Fallback chain: ${FALLBACKS.map(f => f.model).join(' → ')}`);
+  if (isStrict) console.log(`  Mode: STRICT — Warnings block push, not just Critical Issues.`);
   console.log(`${'═'.repeat(70)}\n`);
 
   const diff = getDiff();
@@ -172,9 +175,20 @@ async function main() {
   console.log(outcome.result);
   console.log(`\n${'═'.repeat(70)}\n`);
 
-  if (outcome.result.includes('❌ CHANGES REQUESTED')) {
-    console.error('🚫 Senior Staff Council determined critical issues must be resolved before merging.');
+  const hasCritical = outcome.result.includes('❌ CHANGES REQUESTED');
+  // Detect whether the 🟠 Warnings section contains real content (not "None.").
+  const warningsMatch = outcome.result.match(/## 🟠 Warnings\s*([\s\S]*?)(?=##|$)/);
+  const warningsContent = warningsMatch?.[1]?.trim() ?? '';
+  const hasWarnings = warningsContent.length > 0 && !warningsMatch?.[1]?.trim().startsWith('None');
+
+  if (hasCritical) {
+    console.error('🚫 Council Review: Critical Issues must be resolved before pushing.');
     process.exit(1);
+  }
+
+  if (isStrict && hasWarnings) {
+    console.error('🟠 Council Review (strict): Warnings must be resolved before pushing.');
+    process.exit(2);
   }
 }
 

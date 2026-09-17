@@ -27,7 +27,7 @@ COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'initial')"
 
 echo ""
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}${BOLD}║   Agentic Networking Senior Staff Overseer Pre-Push Gate ║${RESET}"
+echo -e "${CYAN}${BOLD}║       Agentic Networking — Council Review Pre-Push Gate  ║${RESET}"
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
 echo -e "  Branch: ${BOLD}$BRANCH${RESET}  Commit: ${BOLD}$COMMIT${RESET}"
 echo ""
@@ -79,7 +79,7 @@ FAIL_COUNT=0
 FAILURES=()
 
 # ── Gate 1: TypeScript ─────────────────────────────────────
-echo -e "${BOLD}[Gate 1/4] TypeScript — Zero suppressions, zero errors${RESET}"
+echo -e "${BOLD}[Gate 1/5] TypeScript — Zero suppressions, zero errors${RESET}"
 if npm run check-types --silent 2>&1; then
   echo -e "  ${GREEN}✓ Type check passed across all packages${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -91,7 +91,7 @@ fi
 echo ""
 
 # ── Gate 2: Invariant Test Suite ──────────────────────────
-echo -e "${BOLD}[Gate 2/4] Test Suite — All systems & invariants must hold${RESET}"
+echo -e "${BOLD}[Gate 2/5] Test Suite — All systems & invariants must hold${RESET}"
 if npm run test --silent 2>&1; then
   echo -e "  ${GREEN}✓ All invariant and unit test suites passed${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -103,7 +103,7 @@ fi
 echo ""
 
 # ── Gate 3: Determinism & Anti-Pattern Scan ───────────────
-echo -e "${BOLD}[Gate 3/4] Determinism — Scanning pushed files for banned patterns${RESET}"
+echo -e "${BOLD}[Gate 3/5] Determinism — Scanning pushed files for banned patterns${RESET}"
 
 SUSPICIOUS_FINDINGS=""
 UNIQUE_COUNT=${#UNIQUE_FILES[@]}
@@ -147,7 +147,7 @@ fi
 echo ""
 
 # ── Gate 4: Epistemic Provenance & Anti-Simulation Scan ──────
-echo -e "${BOLD}[Gate 4/4] Epistemic Provenance — Programmatic audit & simulation scan${RESET}"
+echo -e "${BOLD}[Gate 4/5] Epistemic Provenance — Programmatic audit & simulation scan${RESET}"
 
 PROVENANCE_FAILURES=""
 
@@ -202,6 +202,70 @@ else
   FAIL_COUNT=$((FAIL_COUNT + 1))
   FAILURES+=("Epistemic provenance violation (Goodhart's Law)")
 fi
+echo ""
+
+# ── Gate 5: Council Review — AI loop until clean ─────────
+# Runs the Council Review in --strict mode (blocks on Warnings as well as
+# Critical Issues). Retries up to 3 times: if the first pass has issues,
+# the developer is expected to fix them and re-run; the hook re-evaluates
+# the diff after each fix attempt. Passes only when the reviewer exits 0.
+#
+# Exit codes from ai-reviewer.mjs:
+#   0 = clean (no Critical Issues, no Warnings)
+#   1 = Critical Issues (❌ CHANGES REQUESTED)
+#   2 = Warnings only (🟠) in strict mode
+#   non-zero but no API key = skipped gracefully (exit 0 via reviewer)
+echo -e "${BOLD}[Gate 5/5] Council Review — AI code review (strict: no warnings, no criticals)${RESET}"
+
+COUNCIL_PASS=false
+COUNCIL_ATTEMPT=0
+MAX_COUNCIL_ATTEMPTS=3
+
+while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
+  COUNCIL_ATTEMPT=$((COUNCIL_ATTEMPT + 1))
+
+  if [ "$COUNCIL_ATTEMPT" -gt 1 ]; then
+    echo ""
+    echo -e "${YELLOW}  ↻ Council Review attempt ${COUNCIL_ATTEMPT}/${MAX_COUNCIL_ATTEMPTS} — re-evaluating after fixes...${RESET}"
+    echo ""
+  fi
+
+  # Capture exit code without aborting the script (set -e is active)
+  COUNCIL_EXIT=0
+  node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
+
+  if [ "$COUNCIL_EXIT" -eq 0 ]; then
+    echo -e "  ${GREEN}✓ Council Review passed — no Critical Issues or Warnings${RESET}"
+    COUNCIL_PASS=true
+    PASS_COUNT=$((PASS_COUNT + 1))
+    break
+  elif [ "$COUNCIL_EXIT" -eq 1 ]; then
+    echo -e "  ${RED}✗ Council Review: Critical Issues detected${RESET}"
+    if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
+      echo -e "  ${YELLOW}  Fix the Critical Issues above, then run: git commit --amend && git push${RESET}"
+      echo -e "  ${YELLOW}  The hook will re-evaluate automatically on next push.${RESET}"
+    fi
+  elif [ "$COUNCIL_EXIT" -eq 2 ]; then
+    echo -e "  ${YELLOW}⚠ Council Review: Warnings detected${RESET}"
+    if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
+      echo -e "  ${YELLOW}  Resolve the Warnings above, then re-push.${RESET}"
+    fi
+  else
+    # Non-standard exit (e.g. no API key → reviewer self-exits 0; this path
+    # means an unexpected script error). Treat as skipped, not as a failure,
+    # to avoid blocking pushes when AI APIs are unavailable.
+    echo -e "  ${YELLOW}⚠ Council Review skipped (reviewer unavailable or diff empty)${RESET}"
+    COUNCIL_PASS=true
+    PASS_COUNT=$((PASS_COUNT + 1))
+    break
+  fi
+done
+
+if [ "$COUNCIL_PASS" = false ]; then
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  FAILURES+=("Council Review: unresolved Critical Issues or Warnings after ${MAX_COUNCIL_ATTEMPTS} attempts")
+fi
+
 echo ""
 
 # ── Summary ───────────────────────────────────────────────

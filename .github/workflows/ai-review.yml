@@ -46,9 +46,9 @@ jobs:
       - name: Run Invariant & Unit Test Suite
         run: npm run test
 
-      - name: Run Senior Staff AI Code Reviewer
+      - name: Council Review — AI Code Review
         timeout-minutes: 8
-        run: npm run review:last
+        run: npm run council:review:last
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}

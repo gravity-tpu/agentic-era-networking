@@ -20,7 +20,7 @@ CYAN="\033[0;36m"
 RESET="\033[0m"
 
 echo ""
-echo -e "${CYAN}${BOLD}Installing Agentic Networking Senior Staff Overseer Hooks...${RESET}"
+echo -e "${CYAN}${BOLD}Installing Agentic Networking Council Review Hooks...${RESET}"
 echo ""
 
 if [ ! -d "$HOOKS_SRC" ]; then
@@ -49,6 +49,6 @@ done
 
 echo ""
 echo -e "${GREEN}${BOLD}✓ All hooks installed successfully.${RESET}"
-echo -e "  Pre-push gate enforces: TypeScript | Test Suite | Determinism Scan"
+echo -e "  Pre-push gate enforces: TypeScript | Test Suite | Determinism Scan | Council Review"
 echo -e "  Local audit log: ${BOLD}.agents/.local-push.log (gitignored)${RESET}"
 echo ""
