@@ -206,5 +206,8 @@ async function main() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  main().catch(console.error);
+  main().catch((err) => {
+    console.error('🚫 Council Review crashed with unhandled exception:', err);
+    process.exit(1);
+  });
 }
