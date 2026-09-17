@@ -12,16 +12,17 @@
  */
 
 import { execSync } from 'child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadEnv, buildModelFallbacks, runWithFallback, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff } from './ai-utils.mjs';
 
 loadEnv();
 
 const FALLBACKS = buildModelFallbacks();
 
-// Bounded empty-state matching: tolerates natural language drift ('None found.', 'No warnings.')
-// and benign explanatory text ('None. The regex avoids...'), while strictly failing closed on
-// actual warnings ('No rate limiting...', 'None of the buffers...', 'Memory leak...').
-const EMPTY_STATE_REGEX = /^[-*>\s]*(none\s*([.:\x2d]|$)|none\s+(found|identified|detected|observed|at this time)\b|n\/a|nil|no\s+(warnings?|issues?)(\s+found)?\b)/i;
+// Bounded empty-state matching: strictly bound the entire string with end-of-string anchor ($)
+// to prevent prefix-match fail-open vulnerabilities (Demis Hassabis fail-closed invariant).
+export const EMPTY_STATE_REGEX = /^[-*>\s]*(none(\s+(found|identified|detected|observed|at this time))?|n\/a|nil|no(\s+(warnings?|issues?))?(\s+found)?)\.?$/i;
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -124,13 +125,13 @@ Council Review Standards:
 Structure your response EXACTLY as follows:
 
 ## 🔴 Critical Issues
-List blocking problems: data corruption, non-deterministic state, packet counter float arithmetic, missing fail-closed defaults, security vulnerabilities, or error suppressions. If none, write "None."
+List blocking problems: data corruption, non-deterministic state, packet counter float arithmetic, missing fail-closed defaults, security vulnerabilities, or error suppressions. If none, write exactly "None." and nothing else.
 
 ## 🟠 Warnings
-List significant architectural concerns: unbounded buffers without backpressure, missing timeout/retry bounds, fragile magic heuristic numbers (flagged by Quoc Le), multi-agent routing flap risks (flagged by Oriol Vinyals), or excessive abstraction layers (flagged by Sanjay Ghemawat). If none, write "None."
+List significant architectural concerns: unbounded buffers without backpressure, missing timeout/retry bounds, fragile magic heuristic numbers (flagged by Quoc Le), multi-agent routing flap risks (flagged by Oriol Vinyals), or excessive abstraction layers (flagged by Sanjay Ghemawat). If none, write exactly "None." and nothing else (no trailing commentary).
 
 ## 🟡 Suggestions
-List code quality improvements: naming, readability, TypeScript type precision, latency optimizations, or test coverage expansion. If none, write "None."
+List code quality improvements: naming, readability, TypeScript type precision, latency optimizations, or test coverage expansion. If none, write exactly "None."
 
 ## ✅ Positives
 Highlight exceptional engineering, clean invariants, and robust test patterns that satisfy Council standards.
@@ -204,4 +205,6 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch(console.error);
+}
