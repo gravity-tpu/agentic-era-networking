@@ -177,26 +177,16 @@ async function main() {
 
   const hasCritical = outcome.result.includes('❌ CHANGES REQUESTED');
 
-  // Detect non-empty Warnings section. Uses multiple patterns to tolerate LLM
-  // output variance (emoji dropped, spacing changed, bullet style varied):
-  //   1. Primary: section header containing "Warnings" followed by real content
-  //   2. Fallback: the verdict string contains APPROVED (no warnings = approved)
-  // Treat as "has warnings" only when the model explicitly flags issues AND
-  // does NOT declare ✅ APPROVED or 🟡 APPROVED WITH SUGGESTIONS.
-  const isApproved = outcome.result.includes('✅ APPROVED') ||
-                     outcome.result.includes('APPROVED WITH SUGGESTIONS') ||
-                     outcome.result.includes('APPROVED —');
-
   // Match the warnings section regardless of whether the 🟠 emoji rendered.
+  // In strict mode, any non-empty Warnings section (that does not explicitly state "None")
+  // must independently block the push, decoupled from the LLM's summary verdict string
+  // (Zero Suppression of Reality & Fail-Closed Invariants).
   const warningsSection = outcome.result.match(
     /##\s*(?:🟠\s*)?Warnings?\s*\n+([\s\S]*?)(?=\n##|$)/i
   );
   const warningsBody = warningsSection?.[1]?.trim() ?? '';
-  // shouldBlockForWarnings: true only when real warning content is present
-  // AND the model has not issued an APPROVED verdict.
-  const shouldBlockForWarnings = !isApproved &&
-                                 warningsBody.length > 4 &&
-                                 !/^none\.?$/i.test(warningsBody);
+  const shouldBlockForWarnings = warningsBody.length > 0 &&
+                                 !/^[-*>\s]*(none|n\/a|no|nil)\.?$/i.test(warningsBody);
 
   if (hasCritical) {
     console.error('🚫 Council Review: Critical Issues must be resolved before pushing.');
