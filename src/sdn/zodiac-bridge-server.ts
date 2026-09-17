@@ -15,6 +15,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
 import { ZodiacController } from './zodiac-controller.js';
 import {
   ZodiacFullTelemetrySnapshot,
@@ -25,6 +26,39 @@ import {
 } from './zodiac-telemetry.js';
 import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
 import { isLocalDev } from '../auth/google-auth.js';
+
+/**
+ * Native zero-dependency systemd sd_notify client.
+ *
+ * Writes the sd_notify message to $NOTIFY_SOCKET via the system
+ * `systemd-notify` binary (present on all systemd Linux installations).
+ * Falls back silently when systemd-notify is absent or $NOTIFY_SOCKET
+ * is unset (local dev, tests, Docker, macOS).
+ *
+ * Background: Node's node:dgram module does not expose AF_UNIX SOCK_DGRAM
+ * sockets through its TypeScript API surface. Rather than a type-cast hack,
+ * delegating to the first-party `systemd-notify` binary is the officially
+ * recommended approach for languages without a native sd_notify binding.
+ *
+ * Dean Invariant: execFile is fire-and-forget (callback discarded); the
+ * 10ms child-process overhead is negligible against the 10s heartbeat interval
+ * and never contends with the 2.5s telemetry poll loop.
+ * Ghemawat: zero npm packages; systemd-notify ships with every systemd host.
+ */
+function sdNotify(message: string): void {
+  const socketPath = process.env['NOTIFY_SOCKET'];
+  if (!socketPath) return; // Not running under systemd — no-op.
+  // Parse key=value pairs from the message and pass as individual --flag args.
+  // e.g. 'READY=1\n' → ['--ready'] ; 'WATCHDOG=1\n' → ['--watchdog']
+  const args: string[] = [];
+  for (const line of message.split('\n')) {
+    if (line === 'READY=1') args.push('--ready');
+    else if (line === 'WATCHDOG=1') args.push('--watchdog');
+    else if (line.startsWith('STATUS=')) args.push(`--status=${line.slice(7)}`);
+  }
+  if (args.length === 0) return;
+  execFile('systemd-notify', args, () => { /* fire-and-forget */ });
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,10 +167,27 @@ export class ZodiacBridgeServer {
 
     const boundPort = await tryListen(requestedPort);
 
+    // Notify systemd: service is fully ready to accept connections.
+    // This satisfies Type=notify in zodiac-bridge.service, allowing systemd
+    // to accurately track startup completion and enabling WatchdogSec liveness.
+    // No-ops silently outside systemd (NOTIFY_SOCKET absent).
+    sdNotify('READY=1\n');
+
     // 3. Start decoupled asynchronous background telemetry polling loop
     this.pollTimer = setInterval(() => {
       void this.refreshTelemetry();
     }, 2500);
+
+    // Systemd watchdog heartbeat: send WATCHDOG=1 every 10 seconds.
+    // WatchdogSec=30s in the service unit gives 3x the heartbeat interval
+    // as the liveness budget — systemd kills the process only if it stops
+    // responding entirely, not just during a slow Neon DB round-trip.
+    // Dean Invariant: 10s interval is far above the 500ms datacenter RTT;
+    // the heartbeat never contends with the 2.5s telemetry poll loop.
+    setInterval(() => {
+      sdNotify('WATCHDOG=1\n');
+    }, 10_000).unref(); // .unref() prevents the heartbeat from keeping Node alive
+                       // if all other I/O has drained (e.g. during graceful shutdown).
 
     return boundPort;
   }

@@ -98,10 +98,15 @@ export class ZodiacSerialClient {
         if (vid === ZodiacSerialClient.ZODIAC_USB_VENDOR_ID) {
           return `/dev/${candidate}`;
         }
-      } catch {
-        // sysfs entry missing for this candidate — skip it; not a fatal error.
-        // This is the only catch block permitted: it guards a probe, not the
-        // primary detection path, and never masks a "device absent" failure.
+      } catch (e: unknown) {
+        // sysfs entry may be missing (ENOENT) or inaccessible (EACCES) for
+        // this candidate — skip it; not a fatal error for the overall probe.
+        // Logging here distinguishes a benign ENOENT from a permission issue
+        // (Ghemawat: Zero Suppression — even non-fatal I/O errors leave a trace).
+        const msg = e instanceof Error ? e.message : String(e);
+        process.stderr.write(
+          `[ZodiacSerial] TRACE: sysfs probe skipped for /dev/${candidate}: ${msg}\n`,
+        );
       }
     }
 
@@ -137,13 +142,19 @@ export class ZodiacSerialClient {
     if (this._explicitPath) return this._explicitPath;
     // Council Invariant 1 (Zero Suppression of Reality / Anti-Shortcut Law):
     // Never swallow detectDevice() errors with a synthetic fallback path.
-    // A hardcoded '/dev/ttyACM0' return when the device is absent masks the
-    // root cause and produces a confusing downstream ENOENT / EACCES error.
+    // A hardcoded path when the device is absent masks the root cause and
+    // produces a confusing downstream ENOENT / EACCES error.
     //
-    // Offline / CI testing: set MOCK_SERIAL=1 to bypass hardware detection.
-    // Production: if the physical switch is absent, this getter throws — fail-closed.
+    // Offline / CI testing: set MOCK_SERIAL=1. Methods that spawn Python
+    // (e.g. _executeRaw) guard themselves against MOCK_SERIAL and return
+    // empty mock data before ever accessing devicePath, so this getter
+    // is never reached when MOCK_SERIAL is active. If it is somehow called,
+    // surface the intent clearly rather than returning a misleading path.
     if (process.env['MOCK_SERIAL']) {
-      return '/dev/null'; // Explicitly declared mock; never used in production.
+      throw new Error(
+        '[ZodiacSerial] devicePath accessed with MOCK_SERIAL=1. ' +
+          'Callers must check process.env["MOCK_SERIAL"] and bypass hardware I/O.',
+      );
     }
     return this.detectDevice();
   }
@@ -171,6 +182,12 @@ export class ZodiacSerialClient {
   }
 
   private async _executeRaw(command: string, timeoutMs: number = 3000): Promise<string> {
+    // MOCK_SERIAL guard: bypass all Python serial I/O in offline / CI environments.
+    // Returning '' here prevents any tcsetattr / ioctl on /dev/null (ENOTTY risk)
+    // and keeps test suites hardware-independent (Council Invariant 3: fail-closed
+    // mock is an explicit override, not a silent suppression).
+    if (process.env['MOCK_SERIAL']) return '';
+
     return new Promise((resolve, reject) => {
       const pythonScript = `
 import serial, time, sys

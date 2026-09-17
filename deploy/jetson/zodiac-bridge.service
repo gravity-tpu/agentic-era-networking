@@ -29,7 +29,12 @@ Wants=network-online.target
 # starts — cloud relay failures are non-fatal (AbortSignal-guarded, 3s timeout).
 
 [Service]
-Type=simple
+# Type=notify: systemd waits for READY=1 via $NOTIFY_SOCKET before marking
+# the service active and starting any downstream dependents. This eliminates
+# the TOCTOU window where dependents start before the HTTP server is bound.
+# The bridge server sends READY=1 via the native sdNotify() helper in
+# src/sdn/zodiac-bridge-server.ts immediately after srv.listen() resolves.
+Type=notify
 User=zodiac
 Group=zodiac
 
@@ -81,20 +86,18 @@ PrivateTmp=true
 # The bridge writes nothing to disk at runtime; all state is in-memory or Neon.
 ReadWritePaths=/tmp
 
-# --- Watchdog ---
-# WatchdogSec is intentionally absent.
+# --- Watchdog (Dean: kernel-level liveness guarantee, zero external deps) ---
+# WatchdogSec=30s: systemd kills and restarts the process if it does not
+# send WATCHDOG=1 to $NOTIFY_SOCKET within 30 seconds.
 #
-# If WatchdogSec is set, systemd requires the process to periodically write
-# WATCHDOG=1 to $NOTIFY_SOCKET (sd_notify protocol). Standard Node.js does not
-# implement this natively. Without sd_notify integration, systemd unconditionally
-# sends SIGABRT every WatchdogSec seconds regardless of whether the process is
-# healthy, triggering Restart=on-failure until StartLimitBurst is exhausted and
-# permanently killing the service.
+# The bridge server calls sdNotify('WATCHDOG=1') every 10 seconds (3x margin).
+# The 30s budget absorbs Neon DB cold-start latency and transient WAN blips
+# without triggering a false-positive restart. A genuine event-loop hang
+# (e.g. deadlocked mutex, infinite recursion) will surface within 30s.
 #
-# Future: if liveness probing is required, implement a lightweight HTTP health
-# check endpoint in zodiac-bridge-server.ts and monitor it with an external
-# watchdog (e.g., systemd-healthcheck or a Prometheus alert rule on
-# zodiac_bridge_up == 0), rather than relying on the NOTIFY_SOCKET protocol.
+# Implementation: pure node:dgram fire-and-forget datagram to $NOTIFY_SOCKET.
+# Zero external packages. See sdNotify() in src/sdn/zodiac-bridge-server.ts.
+WatchdogSec=30s
 
 # --- Logging ---
 StandardOutput=journal
