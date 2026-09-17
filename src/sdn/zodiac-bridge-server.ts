@@ -28,34 +28,41 @@ import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
 import { isLocalDev } from '../auth/google-auth.js';
 
 /**
+ * $NOTIFY_SOCKET is evaluated once at module load time.
+ *
+ * Ghemawat suggestion: if the variable is absent (local dev, tests, macOS,
+ * Docker without --notify-socket), we cache null and gate the watchdog
+ * setInterval creation entirely — no recurring 10s no-op callbacks.
+ */
+const NOTIFY_SOCKET: string | null = process.env['NOTIFY_SOCKET'] ?? null;
+
+/**
  * Native zero-dependency systemd sd_notify client.
  *
- * Writes the sd_notify message to $NOTIFY_SOCKET via the system
- * `systemd-notify` binary (present on all systemd Linux installations).
- * Falls back silently when systemd-notify is absent or $NOTIFY_SOCKET
- * is unset (local dev, tests, Docker, macOS).
+ * Delegates to the first-party `systemd-notify` binary, which is present
+ * on every systemd Linux installation (JetPack 6 / Ubuntu 22.04 ships
+ * systemd 249). Modern systemd-notify (≥240) accepts arbitrary VARIABLE=VALUE
+ * positional arguments directly, matching the sd_notify wire protocol without
+ * requiring flag-specific mappings.
  *
- * Background: Node's node:dgram module does not expose AF_UNIX SOCK_DGRAM
- * sockets through its TypeScript API surface. Rather than a type-cast hack,
- * delegating to the first-party `systemd-notify` binary is the officially
- * recommended approach for languages without a native sd_notify binding.
+ * Background: Node's node:dgram TypeScript API does not expose AF_UNIX
+ * SOCK_DGRAM sockets. Rather than a brittle type-cast, delegating to
+ * systemd-notify is the officially recommended approach for languages
+ * without a native sd_notify C binding.
  *
- * Dean Invariant: execFile is fire-and-forget (callback discarded); the
- * 10ms child-process overhead is negligible against the 10s heartbeat interval
- * and never contends with the 2.5s telemetry poll loop.
- * Ghemawat: zero npm packages; systemd-notify ships with every systemd host.
+ * Dean Invariant: execFile is fire-and-forget (callback ignored); the
+ * ~1-10ms fork/exec overhead is negligible against the 10s heartbeat
+ * interval and never contends with the 2.5s telemetry poll loop.
+ * Ghemawat: zero npm packages; systemd-notify ships on every systemd host.
  */
 function sdNotify(message: string): void {
-  const socketPath = process.env['NOTIFY_SOCKET'];
-  if (!socketPath) return; // Not running under systemd — no-op.
-  // Parse key=value pairs from the message and pass as individual --flag args.
-  // e.g. 'READY=1\n' → ['--ready'] ; 'WATCHDOG=1\n' → ['--watchdog']
-  const args: string[] = [];
-  for (const line of message.split('\n')) {
-    if (line === 'READY=1') args.push('--ready');
-    else if (line === 'WATCHDOG=1') args.push('--watchdog');
-    else if (line.startsWith('STATUS=')) args.push(`--status=${line.slice(7)}`);
-  }
+  if (!NOTIFY_SOCKET) return; // Not running under systemd — no-op.
+  // Pass each non-empty line as a positional VARIABLE=VALUE arg.
+  // systemd-notify ≥240 (Ubuntu 22.04) accepts 'READY=1', 'WATCHDOG=1',
+  // 'RELOADING=1', 'STATUS=text', etc. directly without flag translation.
+  // This eliminates the brittle READY→--ready / WATCHDOG→--watchdog mapping
+  // and forwards any future sd_notify state variable without code changes.
+  const args = message.split('\n').map((s) => s.trim()).filter(Boolean);
   if (args.length === 0) return;
   execFile('systemd-notify', args, () => { /* fire-and-forget */ });
 }
@@ -184,10 +191,15 @@ export class ZodiacBridgeServer {
     // responding entirely, not just during a slow Neon DB round-trip.
     // Dean Invariant: 10s interval is far above the 500ms datacenter RTT;
     // the heartbeat never contends with the 2.5s telemetry poll loop.
-    setInterval(() => {
-      sdNotify('WATCHDOG=1\n');
-    }, 10_000).unref(); // .unref() prevents the heartbeat from keeping Node alive
-                       // if all other I/O has drained (e.g. during graceful shutdown).
+    //
+    // NOTIFY_SOCKET is cached at module load; if absent, this block is skipped
+    // entirely — no recurring no-op callbacks on non-systemd hosts (Ghemawat).
+    if (NOTIFY_SOCKET) {
+      setInterval(() => {
+        sdNotify('WATCHDOG=1\n');
+      }, 10_000).unref(); // .unref() prevents the heartbeat from keeping Node
+                         // alive if all other I/O drains (graceful shutdown).
+    }
 
     return boundPort;
   }

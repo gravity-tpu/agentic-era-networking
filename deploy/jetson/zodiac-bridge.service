@@ -95,8 +95,11 @@ ReadWritePaths=/tmp
 # without triggering a false-positive restart. A genuine event-loop hang
 # (e.g. deadlocked mutex, infinite recursion) will surface within 30s.
 #
-# Implementation: pure node:dgram fire-and-forget datagram to $NOTIFY_SOCKET.
-# Zero external packages. See sdNotify() in src/sdn/zodiac-bridge-server.ts.
+# Implementation: execFile('systemd-notify', ['WATCHDOG=1']) — fire-and-forget.
+# Node's node:dgram TypeScript API does not expose AF_UNIX SOCK_DGRAM sockets.
+# systemd-notify (>=240, ships on JetPack 6 / Ubuntu 22.04) accepts positional
+# VARIABLE=VALUE args directly, forwarding them to $NOTIFY_SOCKET natively.
+# Zero npm packages. See sdNotify() in src/sdn/zodiac-bridge-server.ts.
 WatchdogSec=30s
 
 # --- Logging ---
