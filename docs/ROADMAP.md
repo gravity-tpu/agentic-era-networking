@@ -11,6 +11,37 @@ Governed by the **Senior Staff Council Invariants**:
 
 ---
 
+## Physical Hardware Triad
+
+```
++----------------------------+     Serial CDC-ACM     +--------------------------------+
+|   Northbound Networks      |  /dev/ttyACM0 (115200) |  NVIDIA Jetson Orin Nano Super |
+|   Zodiac FX Switch         |<---------------------->|  (Autonomous Master Appliance) |
+|   OpenFlow 1.3 Data Plane  |  Ethernet Port 4 :6633 |  Control Plane — headless 24/7 |
+|   4-port + Micro-USB       |<─────── OpenFlow ──────|  systemd: zodiac-bridge.service|
++----------------------------+                        +------------------+-------------+
+                                                                         |
+                                                          USB 3.0 SuperSpeed
+                                                                         |
+                                                         +---------------▼-------------+
+                                                         |    Google Coral Edge TPU    |
+                                                         |  4 TOPS INT8 — Phase 2A DPI |
+                                                         |  Port 3 mirror tap inference|
+                                                         +-----------------------------+
+
+         MacBook Pro (Untethered — connect via WiFi/SSH to push code changes only)
+         ↕ ssh zodiac@<jetson-ip>   |   https://agentic-era-networking.vercel.app
+```
+
+**Role separation:**
+
+| Node | Role | Always On? |
+|---|---|---|
+| **Zodiac FX** | Data Plane — hardware packet forwarding, OpenFlow 1.3 | ✅ Yes |
+| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | ✅ Yes |
+| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | ✅ Yes (USB) |
+| **MacBook Pro** | Dev Workstation — SSH coding, occasional local dashboard access | ❌ Plug-in only |
+
 ## Phase Overview
 
 ```
@@ -40,6 +71,15 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
+| Phase 0.7: Jetson Orin Headless Control-Plane Deployment (PLANNED — immediate next)               |
+| - Cross-platform serial CDC-ACM discovery: /dev/ttyACM0 on Jetson, /dev/cu.usbmodem* on macOS   |
+| - systemd zodiac-bridge.service unit: auto-restart, fail-closed, memory-bounded (256MB)          |
+| - Dedicated `zodiac` service user with CAP_NET_BIND_SERVICE (no root runtime)                    |
+| - Mac becomes untethered SSH dev workstation; Jetson is sole permanent control-plane host         |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
 | Phase 1: Zero-Config DNS Reverse Proxy Engine (NEXT)                                              |
 | - RFC 1035 UDP interceptor & dynamic domain mapping (wildcard / exact / catch-all)                |
 | - Transparent edge reverse proxy with nanosecond latency profiling                                |
@@ -48,9 +88,9 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
-| Phase 2: Real-Time Flow Anomaly Detection, Jetson TensorRT & Web Wireshark Packet Dissector      |
-| - NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, <1.0ms inference budget)            |
-| - Port 3 mirror tap stream analysis for rogue agent scanning and burst anomaly classification    |
+| Phase 2: Real-Time Flow Anomaly Detection — Coral + Jetson Split-Inference & Web Wireshark      |
+| - Google Coral Edge TPU (4 TOPS INT8): sub-ms shallow packet classification on Port 3 mirror tap |
+| - NVIDIA Jetson TensorRT (67 TOPS Ampere): deep anomaly detection model (<1.0ms inference budget) |
 | - In-Browser Wireshark: Real-time packet dissector (L2-L7), interactive hex dump & PCAP export   |
 | - Fail-closed line-rate FlowMod quarantine (priority 65535 default drop)                          |
 +---------------------------------------------------------------------------------------------------+
@@ -128,6 +168,20 @@ Governed by the **Senior Staff Council Invariants**:
   - Strict CSP headers (`default-src 'self'`, `script-src 'self'`, `connect-src 'self' https://accounts.google.com`, `frame-ancestors 'none'`).
   - Strict transport security (`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`).
 
+### Phase 0.7: Jetson Orin Headless Control-Plane Deployment
+*Status: Planned (immediate next — prerequisite for Phase 1)*
+- [ ] **Milestone 0.7A: Cross-Platform Serial CDC-ACM Discovery**:
+  - `zodiac-serial.ts` `detectDevice()` now resolves `/dev/ttyACM*` (preferred) or `/dev/ttyUSB*` on Linux/Jetson ARM64, and `/dev/cu.usbmodem*` on macOS. No external serial library dependencies (Ghemawat).
+  - Platform-aware fallback: `/dev/ttyACM0` on Linux, `/dev/cu.usbmodem212201` on macOS. Anti-Shortcut: error surfaces clearly rather than silently using wrong path.
+- [ ] **Milestone 0.7B: systemd Service Unit & Secret Provisioning**:
+  - `deploy/jetson/zodiac-bridge.service`: Type=simple, `Restart=on-failure`, `StartLimitBurst=5/60s`, `MemoryMax=256M`, `PrivateTmp=true`, `NoNewPrivileges=true`.
+  - `deploy/jetson/zodiac-bridge.env.template`: All runtime secrets documented; Coral TPU stubs pre-wired for Phase 2A.
+  - Dedicated `zodiac` service user with `CAP_NET_BIND_SERVICE` only — no root runtime.
+- [ ] **Milestone 0.7C: Untethered Mac SSH Dev Workflow**:
+  - MacBook connects via WiFi/Ethernet to push `git pull && npm run build && systemctl restart zodiac-bridge`.
+  - Close-lid / reboot Mac does not interrupt any network services.
+  - SSH key-based authentication only; password auth disabled on Jetson.
+
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
 - [ ] Transparent RFC 1035 UDP DNS interception on Zodiac data ports without client proxy setup.
@@ -136,13 +190,13 @@ Governed by the **Senior Staff Council Invariants**:
 - [ ] OpenFlow 1.3 steering rules redirecting UDP 53 and TCP 80/443 to the host controller.
 - [ ] Formal loop-free verification before flow rule hardware deployment.
 
-### Phase 2: Real-Time Flow Anomaly Detection, Jetson TensorRT & Web Wireshark Packet Dissector
+### Phase 2: Real-Time Flow Anomaly Detection — Coral + Jetson Split-Inference & Web Wireshark
 *Status: Planned*
-- [ ] **Milestone 2A: Jetson TensorRT Line-Rate Anomaly Detection**:
-  - NVIDIA Jetson Orin Nano Super co-design (67 TOPS INT8 Ampere GPU).
-  - Zodiac Port 3 mirror tap stream ingestion.
-  - Quantized TensorRT INT8 anomaly detection model (<1.0ms inference budget).
-  - Fail-closed line-rate FlowMod quarantine on detected rogue agent traffic.
+- [ ] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection**:
+  - **Google Coral Edge TPU** (4 TOPS INT8, USB 3.0 attached to Jetson): sub-millisecond shallow packet classification on Port 3 hardware mirror tap stream. Handles high-volume benign/rogue first-pass triage.
+  - **NVIDIA Jetson TensorRT** (67 TOPS INT8 Ampere GPU): deep anomaly detection model on packets flagged by Coral, `<1.0ms` inference budget.
+  - Division of labor: Coral = sub-100µs shallow classifier, Jetson TensorRT = deep-feature anomaly scorer.
+  - Fail-closed line-rate FlowMod quarantine (priority 65535 default drop) on high-confidence rogue agent classification.
 - [ ] **Milestone 2B: In-Browser Wireshark Packet Dissector Engine**:
   - Real-time deep packet inspection (DPI) & protocol dissection from Port 3 mirror tap and OpenFlow `PACKET_IN` streams.
   - Multi-layer protocol decoders: Layer 2 (Ethernet, 802.1Q VLAN), Layer 3 (IPv4, IPv6, ARP, ICMP), Layer 4 (TCP, UDP), Layer 7 (DNS, HTTP/1.1, OpenFlow 1.3).

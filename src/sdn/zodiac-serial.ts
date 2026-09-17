@@ -44,13 +44,42 @@ export class ZodiacSerialClient {
   }
 
   /**
-   * Auto-detects the first /dev/cu.usbmodem* device on macOS.
+   * Auto-detects the Zodiac FX CDC-ACM serial device.
+   *
+   * Platform resolution order (Ghemawat: no external deps, pure /dev scan):
+   *   macOS  → /dev/cu.usbmodem*  (USB CDC ACM call-out device)
+   *   Linux  → /dev/ttyACM*       (CDC ACM — preferred, Jetson Orin)
+   *            /dev/ttyUSB*       (USB-serial adapter fallback)
+   *
+   * Dean Invariant: synchronous readdirSync is acceptable here because
+   * detectDevice() is called only during one-shot CLI setup, never on
+   * the hot telemetry or OpenFlow control-plane paths.
    */
   public detectDevice(): string {
     const devFiles = readdirSync('/dev');
-    const modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
+    const platform = process.platform;
+
+    let modem: string | undefined;
+    if (platform === 'darwin') {
+      // macOS: call-out USB modem devices
+      modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
+    } else {
+      // Linux (Jetson Orin, Raspberry Pi, etc.)
+      // Prefer ttyACM* (native CDC ACM) over ttyUSB* (CP210x/FTDI adapter)
+      modem =
+        devFiles.find((f) => f.startsWith('ttyACM')) ??
+        devFiles.find((f) => f.startsWith('ttyUSB'));
+    }
+
     if (!modem) {
-      throw new Error('No Zodiac FX serial modem found under /dev/cu.usbmodem*');
+      const hint =
+        platform === 'darwin'
+          ? '/dev/cu.usbmodem*'
+          : '/dev/ttyACM* or /dev/ttyUSB*';
+      throw new Error(
+        `No Zodiac FX serial device found. Expected ${hint}. ` +
+          'Ensure the Micro-USB cable is connected and the Zodiac FX is powered on.',
+      );
     }
     return `/dev/${modem}`;
   }
@@ -64,7 +93,13 @@ export class ZodiacSerialClient {
     try {
       return this.detectDevice();
     } catch {
-      return '/dev/cu.usbmodem212201';
+      // Platform-aware fallback: never return a macOS path on Linux.
+      // Council Invariant 1 (Anti-Shortcut): callers that truly need a
+      // physical device should surface the detectDevice() error upstream;
+      // the fallback only exists to avoid throwing during offline testing.
+      return process.platform === 'darwin'
+        ? '/dev/cu.usbmodem212201'  // macOS development default
+        : '/dev/ttyACM0';           // Jetson Orin / Linux default
     }
   }
 
