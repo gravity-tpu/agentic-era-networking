@@ -38,7 +38,11 @@ Group=zodiac
 WorkingDirectory=/home/zodiac/agentic-era-networking
 
 # Prefer the project-local node binary; fall back to system node.
-ExecStart=/usr/bin/env node dist/sdn/zodiac-bridge-server.js serve 3003
+# --max-old-space-size=128: forces V8 garbage collection at 128MB, well below
+# the MemoryMax=256M cgroup hard limit. Without this flag, V8 may attempt to
+# grow the heap beyond 256MB before triggering GC, causing an abrupt OOM kill
+# by the kernel rather than a clean GC cycle (Quoc Le / Ghemawat invariant).
+ExecStart=/usr/bin/env node --max-old-space-size=128 dist/sdn/zodiac-bridge-server.js serve 3003
 
 # --- Environment ---
 # Secrets are stored in a chmod-600 env file, never in the unit itself.
@@ -77,11 +81,20 @@ PrivateTmp=true
 # The bridge writes nothing to disk at runtime; all state is in-memory or Neon.
 ReadWritePaths=/tmp
 
-# --- Watchdog (Dean: surface liveness failures, don't silently stall) ---
-# Node process must call sd_notify(WATCHDOG=1) or WatchdogSec kills it.
-# For a simple HTTP+TCP server without sd_notify, set a generous threshold.
-# Increase if Neon DB cold-start latency causes watchdog timeouts.
-WatchdogSec=30s
+# --- Watchdog ---
+# WatchdogSec is intentionally absent.
+#
+# If WatchdogSec is set, systemd requires the process to periodically write
+# WATCHDOG=1 to $NOTIFY_SOCKET (sd_notify protocol). Standard Node.js does not
+# implement this natively. Without sd_notify integration, systemd unconditionally
+# sends SIGABRT every WatchdogSec seconds regardless of whether the process is
+# healthy, triggering Restart=on-failure until StartLimitBurst is exhausted and
+# permanently killing the service.
+#
+# Future: if liveness probing is required, implement a lightweight HTTP health
+# check endpoint in zodiac-bridge-server.ts and monitor it with an external
+# watchdog (e.g., systemd-healthcheck or a Prometheus alert rule on
+# zodiac_bridge_up == 0), rather than relying on the NOTIFY_SOCKET protocol.
 
 # --- Logging ---
 StandardOutput=journal

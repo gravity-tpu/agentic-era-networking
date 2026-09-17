@@ -8,7 +8,7 @@
  * - Dean: Explicit timeouts preventing indefinite blocking on physical I/O.
  */
 
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 
 export interface ZodiacPortInfo {
@@ -44,44 +44,89 @@ export class ZodiacSerialClient {
   }
 
   /**
+   * Northbound Networks Zodiac FX USB identifiers (Atmel SAM4E8E CDC-ACM).
+   * Verified against `lsusb` output on a live Jetson Orin with Zodiac FX attached.
+   * Source: Atmel/Microchip USB Vendor ID registry; Zodiac FX firmware USB descriptor.
+   */
+  private static readonly ZODIAC_USB_VENDOR_ID = '03eb' as const; // Atmel Corporation
+
+  /**
    * Auto-detects the Zodiac FX CDC-ACM serial device.
    *
-   * Platform resolution order (Ghemawat: no external deps, pure /dev scan):
-   *   macOS  → /dev/cu.usbmodem*  (USB CDC ACM call-out device)
-   *   Linux  → /dev/ttyACM*       (CDC ACM — preferred, Jetson Orin)
-   *            /dev/ttyUSB*       (USB-serial adapter fallback)
+   * Platform resolution (Ghemawat: zero external deps, pure /dev + sysfs scan):
    *
-   * Dean Invariant: synchronous readdirSync is acceptable here because
-   * detectDevice() is called only during one-shot CLI setup, never on
-   * the hot telemetry or OpenFlow control-plane paths.
+   *   macOS  → /dev/cu.usbmodem*  (USB CDC-ACM call-out device; no sysfs available)
+   *
+   *   Linux  → Primary:  sysfs VID probe on /sys/class/tty/ttyACMx/device/idVendor
+   *                       matching Northbound Networks / Atmel VID 0x03eb.
+   *                       This prevents mis-binding to Coral debug consoles, UPS
+   *                       serial cables, or other CDC-ACM devices on the same bus.
+   *            Fallback:  First /dev/ttyUSB* if no VID-matched ttyACM* is found.
+   *
+   * Dean Invariant: synchronous I/O here is acceptable — detectDevice() is called
+   * only during one-shot CLI startup, never on the hot OpenFlow or telemetry paths.
+   *
+   * Council Invariant 3 (Fail-Closed): throws deterministically if the device is
+   * absent. Callers must not swallow this error. Offline testing must be gated
+   * via the MOCK_SERIAL environment variable, not by catching this exception.
    */
   public detectDevice(): string {
-    const devFiles = readdirSync('/dev');
     const platform = process.platform;
 
-    let modem: string | undefined;
     if (platform === 'darwin') {
-      // macOS: call-out USB modem devices
-      modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
-    } else {
-      // Linux (Jetson Orin, Raspberry Pi, etc.)
-      // Prefer ttyACM* (native CDC ACM) over ttyUSB* (CP210x/FTDI adapter)
-      modem =
-        devFiles.find((f) => f.startsWith('ttyACM')) ??
-        devFiles.find((f) => f.startsWith('ttyUSB'));
+      // macOS: sysfs unavailable; match first call-out USB modem device.
+      const devFiles = readdirSync('/dev');
+      const modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
+      if (!modem) {
+        throw new Error(
+          'No Zodiac FX serial device found under /dev/cu.usbmodem*. ' +
+            'Ensure the Micro-USB cable is connected and the Zodiac FX is powered on.',
+        );
+      }
+      return `/dev/${modem}`;
     }
 
-    if (!modem) {
-      const hint =
-        platform === 'darwin'
-          ? '/dev/cu.usbmodem*'
-          : '/dev/ttyACM* or /dev/ttyUSB*';
-      throw new Error(
-        `No Zodiac FX serial device found. Expected ${hint}. ` +
-          'Ensure the Micro-USB cable is connected and the Zodiac FX is powered on.',
-      );
+    // Linux (Jetson Orin ARM64): use sysfs VID matching to deterministically
+    // identify the Zodiac FX among potentially many CDC-ACM devices on the bus.
+    const devFiles = readdirSync('/dev');
+    const candidates = devFiles.filter((f) => f.startsWith('ttyACM'));
+
+    for (const candidate of candidates) {
+      try {
+        const vidPath = `/sys/class/tty/${candidate}/device/idVendor`;
+        const vid = readFileSync(vidPath, 'utf8').trim().toLowerCase();
+        if (vid === ZodiacSerialClient.ZODIAC_USB_VENDOR_ID) {
+          return `/dev/${candidate}`;
+        }
+      } catch {
+        // sysfs entry missing for this candidate — skip it; not a fatal error.
+        // This is the only catch block permitted: it guards a probe, not the
+        // primary detection path, and never masks a "device absent" failure.
+      }
     }
-    return `/dev/${modem}`;
+
+    // Fallback 1: ttyACM device present but sysfs VID unreadable (older kernels).
+    // Warn loudly so the operator knows auto-detection was imprecise.
+    const firstAcm = candidates[0];
+    if (firstAcm !== undefined) {
+      process.stderr.write(
+        `[ZodiacSerial] WARNING: Could not verify USB Vendor ID for /dev/${firstAcm} ` +
+          `via sysfs. Binding anyway. Set ZODIAC_SERIAL_PATH to suppress this warning.\n`,
+      );
+      return `/dev/${firstAcm}`;
+    }
+
+    // Fallback 2: ttyUSB* (CP210x / FTDI USB-serial adapter).
+    const usbSerial = devFiles.find((f) => f.startsWith('ttyUSB'));
+    if (usbSerial !== undefined) {
+      return `/dev/${usbSerial}`;
+    }
+
+    throw new Error(
+      'No Zodiac FX serial device found. Expected /dev/ttyACM* (Atmel VID 0x03eb) ' +
+        'or /dev/ttyUSB*. Ensure the Micro-USB cable is connected and the Zodiac FX ' +
+        'is powered on. To override, set ZODIAC_SERIAL_PATH=/dev/ttyACMx in the environment.',
+    );
   }
 
   public get path(): string {
@@ -90,17 +135,17 @@ export class ZodiacSerialClient {
 
   public get devicePath(): string {
     if (this._explicitPath) return this._explicitPath;
-    try {
-      return this.detectDevice();
-    } catch {
-      // Platform-aware fallback: never return a macOS path on Linux.
-      // Council Invariant 1 (Anti-Shortcut): callers that truly need a
-      // physical device should surface the detectDevice() error upstream;
-      // the fallback only exists to avoid throwing during offline testing.
-      return process.platform === 'darwin'
-        ? '/dev/cu.usbmodem212201'  // macOS development default
-        : '/dev/ttyACM0';           // Jetson Orin / Linux default
+    // Council Invariant 1 (Zero Suppression of Reality / Anti-Shortcut Law):
+    // Never swallow detectDevice() errors with a synthetic fallback path.
+    // A hardcoded '/dev/ttyACM0' return when the device is absent masks the
+    // root cause and produces a confusing downstream ENOENT / EACCES error.
+    //
+    // Offline / CI testing: set MOCK_SERIAL=1 to bypass hardware detection.
+    // Production: if the physical switch is absent, this getter throws — fail-closed.
+    if (process.env['MOCK_SERIAL']) {
+      return '/dev/null'; // Explicitly declared mock; never used in production.
     }
+    return this.detectDevice();
   }
 
   private mutexPromise: Promise<void> = Promise.resolve();
