@@ -176,10 +176,27 @@ async function main() {
   console.log(`\n${'═'.repeat(70)}\n`);
 
   const hasCritical = outcome.result.includes('❌ CHANGES REQUESTED');
-  // Detect whether the 🟠 Warnings section contains real content (not "None.").
-  const warningsMatch = outcome.result.match(/## 🟠 Warnings\s*([\s\S]*?)(?=##|$)/);
-  const warningsContent = warningsMatch?.[1]?.trim() ?? '';
-  const hasWarnings = warningsContent.length > 0 && !warningsMatch?.[1]?.trim().startsWith('None');
+
+  // Detect non-empty Warnings section. Uses multiple patterns to tolerate LLM
+  // output variance (emoji dropped, spacing changed, bullet style varied):
+  //   1. Primary: section header containing "Warnings" followed by real content
+  //   2. Fallback: the verdict string contains APPROVED (no warnings = approved)
+  // Treat as "has warnings" only when the model explicitly flags issues AND
+  // does NOT declare ✅ APPROVED or 🟡 APPROVED WITH SUGGESTIONS.
+  const isApproved = outcome.result.includes('✅ APPROVED') ||
+                     outcome.result.includes('APPROVED WITH SUGGESTIONS') ||
+                     outcome.result.includes('APPROVED —') ||
+                     outcome.result.includes('APPROVED —');
+
+  // Match the warnings section regardless of whether the 🟠 emoji rendered.
+  const warningsSection = outcome.result.match(
+    /##\s*(?:🟠\s*)?Warnings?\s*\n+([\s\S]*?)(?=\n##|$)/i
+  );
+  const warningsBody = warningsSection?.[1]?.trim() ?? '';
+  // Non-empty + doesn't just say "None" = real warnings present
+  const hasWarnings = !isApproved &&
+                      warningsBody.length > 4 &&
+                      !/^none\.?$/i.test(warningsBody);
 
   if (hasCritical) {
     console.error('🚫 Council Review: Critical Issues must be resolved before pushing.');

@@ -251,13 +251,15 @@ while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
       echo -e "  ${YELLOW}  Resolve the Warnings above, then re-push.${RESET}"
     fi
   else
-    # Non-standard exit (e.g. no API key → reviewer self-exits 0; this path
-    # means an unexpected script error). Treat as skipped, not as a failure,
-    # to avoid blocking pushes when AI APIs are unavailable.
-    echo -e "  ${YELLOW}⚠ Council Review skipped (reviewer unavailable or diff empty)${RESET}"
-    COUNCIL_PASS=true
-    PASS_COUNT=$((PASS_COUNT + 1))
-    break
+    # Fail-closed (Hassabis: Verification Asymmetry / Fail-Closed Bounds):
+    # Any exit code other than 0, 1, or 2 means the reviewer itself crashed
+    # (OOM, uncaught exception, SIGKILL, command-not-found, etc.).
+    # A verification gate that cannot execute MUST block the push, not silently
+    # pass. If AI APIs are unavailable, the reviewer exits 0 internally before
+    # Node even exits abnormally — this path is a genuine runtime failure.
+    echo -e "  ${RED}✗ Council Review crashed (exit code $COUNCIL_EXIT). Push blocked.${RESET}"
+    echo -e "  ${YELLOW}  Check that node is installed and GEMINI_API_KEY / ANTHROPIC_API_KEY is set.${RESET}"
+    echo -e "  ${YELLOW}  Emergency bypass (audited): git push --no-verify${RESET}"
   fi
 done
 
