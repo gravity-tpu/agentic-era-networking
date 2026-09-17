@@ -185,8 +185,11 @@ async function main() {
     /##\s*(?:🟠\s*)?Warnings?\s*\n+([\s\S]*?)(?=\n##|$)/i
   );
   const warningsBody = warningsSection?.[1]?.trim() ?? '';
+  // Bounded empty-state matching: tolerates natural language drift ('None found.', 'No warnings.')
+  // without using unbounded wildcards that could fail open on real warnings ('No rate limiting...')
+  const EMPTY_STATE_REGEX = /^[-*>\s]*(none(\s+(found|identified|detected|observed|at this time))?|n\/a|nil|no(\s+(warnings?|issues?))?(\s+found)?)\.?$/i;
   const shouldBlockForWarnings = warningsBody.length > 0 &&
-                                 !/^[-*>\s]*(none|n\/a|no|nil)\.?$/i.test(warningsBody);
+                                 !EMPTY_STATE_REGEX.test(warningsBody);
 
   if (hasCritical) {
     console.error('🚫 Council Review: Critical Issues must be resolved before pushing.');
