@@ -196,8 +196,8 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly coral?: CoralTelemetrySnapshot | undefined;
   /** Live OS process ID of the bridge daemon — Council Invariant 6: physical truth. */
   readonly bridgePid?: number | undefined;
-  /** Live RSS memory bytes from process.memoryUsage() — physical truth, not a synthetic estimate. */
-  readonly bridgeRssBytes?: number | undefined;
+  /** Live RSS memory bytes from process.memoryUsage() as bigint — structurally enforces integer-only invariant (Council Invariant 2). */
+  readonly bridgeRssBytes?: bigint | undefined;
 }
 
 /**

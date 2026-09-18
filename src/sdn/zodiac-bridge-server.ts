@@ -1088,8 +1088,12 @@ export class ZodiacBridgeServer {
         ...this.cachedSnapshot,
         timeSeries: this.timeSeries,
         // Council Invariant 6: Physical truth — live PID and RSS from the OS, not synthetic values.
+        // process.memoryUsage() is a cheap synchronous kernel read (~1µs) that is strictly decoupled
+        // from the data plane: this block executes only inside the low-frequency background telemetry
+        // timer (≥3s interval configured at bridge startup), never on the packet-processing hot path.
         bridgePid: process.pid,
-        bridgeRssBytes: process.memoryUsage().rss,
+        // BigInt preserves integer semantics end-to-end — no float regressions (Council Invariant 2).
+        bridgeRssBytes: BigInt(process.memoryUsage().rss),
         jetson: {
           ...liveJetson,
           timeSeries: this.jetsonTimeSeries,

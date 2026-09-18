@@ -856,15 +856,16 @@
         if (els.orinKpiJuncTemp) els.orinKpiJuncTemp.innerText = temps.junctionC !== null && temps.junctionC !== undefined ? `${temps.junctionC}°C` : '--°C';
       }
 
-      // Service card: live PID and RSS from bridge process
+      // Service card: live PID and RSS from bridge process (Council Invariant 2: integer-only byte accounting)
       if (els.orinSvcPid && snapshot.bridgePid) {
         els.orinSvcPid.innerText = String(snapshot.bridgePid);
       }
       if (snapshot.bridgeRssBytes) {
-        const rssMb = Number(snapshot.bridgeRssBytes) / (1024 * 1024);
+        // Integer-only: right-shift 20 bits == floor-divide by 1,048,576 (exact MiB conversion, no float).
+        const rssMb = Number(safeBigInt(snapshot.bridgeRssBytes) >> 20n);
         const maxMb = 128;
-        const rssPct = Math.min(100, Math.max(2, Math.round((rssMb / maxMb) * 100)));
-        if (els.orinSvcRssStat) els.orinSvcRssStat.innerText = `${rssMb.toFixed(1)} MB / ${maxMb}.0 MB (${rssPct}%)`;
+        const rssPct = Math.min(100, Math.max(2, Math.floor((rssMb * 100) / maxMb)));
+        if (els.orinSvcRssStat) els.orinSvcRssStat.innerText = `${rssMb} MB / ${maxMb} MB (${rssPct}%)`;
         if (els.orinSvcRssBar) els.orinSvcRssBar.style.width = `${rssPct}%`;
       }
 
