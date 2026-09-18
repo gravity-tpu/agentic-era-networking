@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="zodiac.3c35f508ca.css">
+  <link rel="stylesheet" href="zodiac.cc82126e66.css">
 </head>
 <body>
 
@@ -418,7 +418,7 @@
                       <span class="cf-port-stat-val" id="pstat-err-1">0</span>
                     </div>
                   </div>
-                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-port-1" style="position: relative; height: 130px;">
                     <canvas id="chart-port-1"></canvas>
                   </div>
                 </div>
@@ -464,7 +464,7 @@
                       <span class="cf-port-stat-val" id="pstat-err-2">0</span>
                     </div>
                   </div>
-                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-port-2" style="position: relative; height: 130px;">
                     <canvas id="chart-port-2"></canvas>
                   </div>
                 </div>
@@ -510,7 +510,7 @@
                       <span class="cf-port-stat-val" id="pstat-err-3">0</span>
                     </div>
                   </div>
-                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-port-3" style="position: relative; height: 130px;">
                     <canvas id="chart-port-3"></canvas>
                   </div>
                 </div>
@@ -556,7 +556,7 @@
                       <span class="cf-port-stat-val" id="pstat-err-4">0</span>
                     </div>
                   </div>
-                  <div class="cf-canvas-container" style="position: relative; height: 130px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-port-4" style="position: relative; height: 130px;">
                     <canvas id="chart-port-4"></canvas>
                   </div>
                 </div>
@@ -815,7 +815,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge blue">CPU &amp; GPU Dynamics</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-orin-compute" style="position: relative; height: 220px;">
                     <canvas id="chart-orin-compute"></canvas>
                   </div>
                 </div>
@@ -831,7 +831,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge green">Wire Accounting (Bps)</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-orin-network" style="position: relative; height: 220px;">
                     <canvas id="chart-orin-network"></canvas>
                   </div>
                 </div>
@@ -847,7 +847,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge orange">Thermal Invariant</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-orin-thermals" style="position: relative; height: 220px;">
                     <canvas id="chart-orin-thermals"></canvas>
                   </div>
                 </div>
@@ -863,7 +863,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge blue">Power Telemetry</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-orin-power" style="position: relative; height: 220px;">
                     <canvas id="chart-orin-power"></canvas>
                   </div>
                 </div>
@@ -871,75 +871,182 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
             </div>
 
-            <!-- Jetson Network Interfaces & System Inventory Table Card -->
+            <!-- Jetson Network Interfaces Table Card -->
             <div class="cf-card" style="margin-top: 1.5rem;">
               <div class="cf-card-header">
                 <div>
-                  <h3 class="cf-card-title">Appliance Network &amp; Hardware Inventory</h3>
-                  <div class="cf-card-subtitle">Carrier board physical ports, storage volumes, and systemd service runtime</div>
+                  <h3 class="cf-card-title">Appliance Physical Network Interfaces</h3>
+                  <div class="cf-card-subtitle">Linux sysfs &amp; /proc/net/dev socket wire accounting for SDN control and management planes</div>
                 </div>
-                <span class="cf-pill-badge blue">Orin Architecture</span>
+                <span class="cf-pill-badge blue">Dual-Stack Dual-NIC</span>
               </div>
               <div class="cf-card-body" style="padding: 0;">
-                <div style="overflow-x: auto;">
-                  <table class="cf-ports-table">
+                <div class="cf-table-container">
+                  <table class="cf-table">
                     <thead>
                       <tr>
-                        <th>Interface / Component</th>
-                        <th>Type / Path</th>
-                        <th>Role</th>
-                        <th>MAC / Identity</th>
-                        <th>Status / Speed</th>
-                        <th>Traffic (RX / TX)</th>
-                        <th>Packets</th>
-                        <th>Errors</th>
+                        <th>Interface</th>
+                        <th>Topology Role</th>
+                        <th>Physical Link &amp; MAC</th>
+                        <th>Status</th>
+                        <th>Cumulative Wire Traffic</th>
+                        <th>Packet Accounting</th>
                       </tr>
                     </thead>
                     <tbody id="orin-interfaces-tbody">
                       <tr>
-                        <td><strong>enP8p1s0</strong></td>
-                        <td>GbE RJ45</td>
-                        <td>SDN Control Link -&gt; Zodiac Port 4</td>
-                        <td class="cf-mono" id="orin-if-sdn-mac">ac:3a:e2:98:99:dd</td>
-                        <td><span class="cf-pill-badge green" id="orin-if-sdn-status">UP · 1000M</span></td>
-                        <td class="cf-mono" id="orin-if-sdn-bytes">-- / --</td>
-                        <td class="cf-mono" id="orin-if-sdn-pkts">-- / --</td>
-                        <td class="cf-mono">0 / 0</td>
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot green" style="width: 8px; height: 8px;"></span>
+                            <strong>enP8p1s0</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">SDN Control Link → Zodiac Port 4</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Direct copper patch · OpenFlow 1.3 channel</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" style="font-size: 0.75rem;">1000BASE-T (Full Duplex)</div>
+                          <div class="cf-mono" id="orin-if-sdn-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">ac:3a:e2:98:99:dd</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="orin-if-sdn-status">UP · 1000M</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-sdn-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-sdn-pkts" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
                       </tr>
                       <tr>
-                        <td><strong>wlP1p1s0</strong></td>
-                        <td>Wi-Fi 802.11ax</td>
-                        <td>Management Plane &amp; Cloud Relay</td>
-                        <td class="cf-mono" id="orin-if-wifi-mac">f0:68:e3:33:02:a3</td>
-                        <td><span class="cf-pill-badge green" id="orin-if-wifi-status">UP · 866M</span></td>
-                        <td class="cf-mono" id="orin-if-wifi-bytes">-- / --</td>
-                        <td class="cf-mono" id="orin-if-wifi-pkts">-- / --</td>
-                        <td class="cf-mono">0 / 0</td>
-                      </tr>
-                      <tr>
-                        <td><strong>NVMe SSD</strong></td>
-                        <td>M.2 Key M (PCIe Gen4)</td>
-                        <td>SanDisk Optimus 500GB (Root /)</td>
-                        <td class="cf-mono">PARTUUID: ...cb64</td>
-                        <td><span class="cf-pill-badge blue">Mounted · ~1.8GB/s</span></td>
-                        <td class="cf-mono" id="orin-disk-stat">23GB / 458GB (5%)</td>
-                        <td class="cf-mono">ext4</td>
-                        <td class="cf-mono">0</td>
-                      </tr>
-                      <tr>
-                        <td><strong>zodiac-bridge.service</strong></td>
-                        <td>systemd (Linux)</td>
-                        <td>Autonomous SDN Control Plane</td>
-                        <td class="cf-mono">PID: <span id="orin-svc-pid">--</span></td>
-                        <td><span class="cf-pill-badge green">active (running)</span></td>
-                        <td class="cf-mono">25.2 MB / 256 MB Max</td>
-                        <td class="cf-mono">Port 3003 / 6633</td>
-                        <td class="cf-mono">0</td>
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot green" style="width: 8px; height: 8px;"></span>
+                            <strong>wlP1p1s0</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">Management Plane &amp; Cloud Relay</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Wi-Fi 6 wireless uplink · Local REST &amp; cloud sync</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" style="font-size: 0.75rem;">802.11ax (866 Mbps)</div>
+                          <div class="cf-mono" id="orin-if-wifi-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">f0:68:e3:33:02:a3</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="orin-if-wifi-status">UP · 866M</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-wifi-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-wifi-pkts" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
+            </div>
+
+            <!-- Jetson Hardware & Subsystems Inventory Grid (NVMe Storage + systemd Service) -->
+            <div style="margin-top: 1.5rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--cf-text-primary); margin: 0;">Hardware &amp; System Subsystems</h3>
+                <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 2px;">NVMe persistent flash storage and systemd bridge service daemon runtime</div>
+              </div>
+              <span class="cf-pill-badge gray">Orin Architecture</span>
+            </div>
+
+            <div class="cf-system-inventory-grid" style="margin-top: 0;">
+              
+              <!-- Storage Subsystem Card -->
+              <div class="cf-card" style="margin-top: 0;">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(0, 81, 195, 0.1); color: var(--cf-blue); width: 32px; height: 32px;">NVMe</div>
+                    <div>
+                      <h3 class="cf-card-title" style="font-size: 0.95rem;">High-Speed NVMe Storage</h3>
+                      <div class="cf-card-subtitle" style="font-size: 0.72rem;">M.2 Key M PCIe Gen4 · SanDisk 500GB SSD</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge blue">Mounted (/)</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Root Volume Allocation</span>
+                    <span class="cf-mono" id="orin-disk-stat" style="font-size: 0.82rem; font-weight: 600; color: var(--cf-text-primary);">23.0 GB / 458.0 GB (5.0%)</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div id="orin-bar-disk" class="cf-mini-bar-fill" style="width: 5%; background: var(--cf-blue); height: 100%; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Filesystem</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">ext4 (Read/Write)</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Throughput</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">~1,800 MB/s Seq</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Partition Identity</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary); font-size: 0.7rem;">PARTUUID: ...cb64</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Device Health</span>
+                      <span class="cf-pill-badge green" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">SMART OK (0 errors)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Service Subsystem Card -->
+              <div class="cf-card" style="margin-top: 0;">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981; width: 32px; height: 32px;">SYS</div>
+                    <div>
+                      <h3 class="cf-card-title" style="font-size: 0.95rem;">Zodiac SDN Bridge Daemon</h3>
+                      <div class="cf-card-subtitle" style="font-size: 0.72rem;">systemd unit · zodiac-bridge.service</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge green">active (running)</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Memory RSS Budget</span>
+                    <span class="cf-mono" style="font-size: 0.82rem; font-weight: 600; color: var(--cf-text-primary);">~25.2 MB / 128.0 MB (19.7%)</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div class="cf-mini-bar-fill green" style="width: 20%; height: 100%; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Process Lifecycle</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">PID <span id="orin-svc-pid">--</span> (Node.js v22)</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Active Listeners</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">TCP :3003 &amp; :6633</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Watchdog Keepalive</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">sd_notify (10s interval)</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Fail-Closed SLA</span>
+                      <span class="cf-pill-badge blue" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Council Invariant 3</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
           </div><!-- /view-device-orin -->
@@ -1039,7 +1146,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge purple">Tensor Ops</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral-rate" style="position: relative; height: 220px;">
                     <canvas id="chart-coral-rate"></canvas>
                   </div>
                 </div>
@@ -1055,7 +1162,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge green">Dean Budget</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral-latency" style="position: relative; height: 220px;">
                     <canvas id="chart-coral-latency"></canvas>
                   </div>
                 </div>
@@ -1438,7 +1545,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.69aa5b08d1.js"></script>
+  <script defer src="zodiac-app.3d71b7bb4b.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

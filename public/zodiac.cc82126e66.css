@@ -957,18 +957,22 @@ body {
 .cf-chart-tooltip {
   position: absolute;
   pointer-events: none;
-  background: #1e293b;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #334155;
   color: #ffffff;
-  padding: 0.45rem 0.7rem;
+  padding: 0.45rem 0.75rem;
   border-radius: 6px;
   font-size: 0.72rem;
   font-family: var(--font-mono);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
   z-index: 50;
   transform: translate(-50%, -100%);
-  margin-top: -8px;
+  margin-top: -6px;
   white-space: nowrap;
-  line-height: 1.4;
+  line-height: 1.45;
+  transition: opacity 0.1s ease;
 }
 
 .cf-mini-charts-grid {
@@ -1379,4 +1383,31 @@ body {
   margin-top: 1.25rem;
   font-size: 0.7rem;
   color: #64748b;
+}
+
+/* ==========================================================================
+   Jetson Hardware & Subsystems Inventory Grid
+   ========================================================================== */
+.cf-system-inventory-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .cf-system-inventory-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cf-card-icon-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
 }

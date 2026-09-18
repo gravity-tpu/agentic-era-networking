@@ -195,6 +195,7 @@
     orinIfWifiBytes: document.getElementById('orin-if-wifi-bytes'),
     orinIfWifiPkts: document.getElementById('orin-if-wifi-pkts'),
     orinDiskStat: document.getElementById('orin-disk-stat'),
+    orinBarDisk: document.getElementById('orin-bar-disk'),
     orinSvcPid: document.getElementById('orin-svc-pid'),
 
     // Jetson Orin Canvases
@@ -830,6 +831,7 @@
       const diskPct = diskTot > 0n ? Number((diskUsed * 100n) / diskTot) : 0;
       if (els.orinKpiNvme) els.orinKpiNvme.innerText = `${formatBytes(diskUsed)} (${diskPct}%)`;
       if (els.orinDiskStat) els.orinDiskStat.innerText = `${formatBytes(diskUsed)} / ${formatBytes(diskTot)} (${diskPct}%)`;
+      if (els.orinBarDisk) els.orinBarDisk.style.width = `${Math.min(100, Math.max(5, diskPct))}%`;
 
       // Power & Thermals
       let pwrW = 0;
@@ -2701,18 +2703,41 @@ Please connect the physical switch via USB to execute '${command}' on device har
     });
   });
 
-  // Bind Chart Tooltip Crosshair
-  if (els.canvasWrapperFlow) {
-    els.canvasWrapperFlow.addEventListener('mousemove', (e) => {
-      const points = getPointsForDisplay();
-      if (points.length < 2) return;
-      const rect = els.canvasWrapperFlow.getBoundingClientRect();
-      const padLeft = 65;
-      const padRight = 20;
+  // ============================================================
+  // Universal Interactive Stats Hover Tooltips (Council Invariants 2 & 4)
+  // ============================================================
+  function bindChartHoverTooltip(wrapperOrId, getPointsFn, padLeft, padRight, renderHtmlFn) {
+    const wrapper = typeof wrapperOrId === 'string' ? document.getElementById(wrapperOrId) : wrapperOrId;
+    if (!wrapper) return;
+
+    let tooltipEl = wrapper.querySelector('.cf-chart-tooltip');
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'cf-chart-tooltip';
+      tooltipEl.style.display = 'none';
+      wrapper.appendChild(tooltipEl);
+    }
+
+    if (wrapper._hasTooltipListener) return;
+    wrapper._hasTooltipListener = true;
+
+    let rafId = null;
+    let pendingEvent = null;
+
+    function updateTooltip(e) {
+      const points = getPointsFn();
+      if (!points || points.length < 2) {
+        tooltipEl.style.display = 'none';
+        return;
+      }
+
+      const rect = wrapper.getBoundingClientRect();
       const plotW = rect.width - padLeft - padRight;
       const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
       if (mouseX < padLeft || mouseX > rect.width - padRight) {
-        if (els.chartTooltip) els.chartTooltip.style.display = 'none';
+        tooltipEl.style.display = 'none';
         return;
       }
 
@@ -2731,8 +2756,68 @@ Please connect the physical switch via USB to execute '${command}' on device har
         }
       }
 
-      if (!closestPt || !els.chartTooltip) return;
+      if (!closestPt) {
+        tooltipEl.style.display = 'none';
+        return;
+      }
 
+      const html = renderHtmlFn(closestPt);
+      if (!html) {
+        tooltipEl.style.display = 'none';
+        return;
+      }
+
+      tooltipEl.innerHTML = html;
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.left = `${mouseX}px`;
+      tooltipEl.style.top = `${mouseY}px`;
+
+      // Dynamic Bounding Box Clamping (Quoc Le Invariant: zero magic constants)
+      // Query actual rendered dimensions to support variable content lengths and localization
+      const tipRect = tooltipEl.getBoundingClientRect();
+      const halfTipW = tipRect.width > 0 ? tipRect.width / 2 : 0;
+      const tipH = tipRect.height > 0 ? tipRect.height : 0;
+
+      let transX = '-50%';
+      if (mouseX - halfTipW < 0) {
+        transX = '0%';
+      } else if (mouseX + halfTipW > rect.width) {
+        transX = '-100%';
+      }
+
+      let transY = '-100%';
+      if (mouseY - tipH - 8 < 0) {
+        transY = '18px';
+      }
+
+      tooltipEl.style.transform = `translate(${transX}, ${transY})`;
+    }
+
+    wrapper.addEventListener('mousemove', (e) => {
+      pendingEvent = e;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (pendingEvent) {
+          updateTooltip(pendingEvent);
+          pendingEvent = null;
+        }
+      });
+    });
+
+    wrapper.addEventListener('mouseleave', () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      pendingEvent = null;
+      tooltipEl.style.display = 'none';
+    });
+  }
+
+  // 1. Primary Traffic Flow Chart
+  if (els.canvasWrapperFlow) {
+    bindChartHoverTooltip(els.canvasWrapperFlow, getPointsForDisplay, 65, 20, (closestPt) => {
       const d = new Date(closestPt.timestampMs);
       const timeStr = d.toTimeString().slice(0, 8);
 
@@ -2751,21 +2836,142 @@ Please connect the physical switch via USB to execute '${command}' on device har
         txStr = currentUnit === 'pps' ? `${formatNumber(closestPt.txRatePps)} pps` : `${formatBytes(closestPt.txRateBps)}/s`;
       }
 
-      els.chartTooltip.style.display = 'block';
-      els.chartTooltip.style.left = `${mouseX}px`;
-      els.chartTooltip.style.top = `${e.clientY - rect.top}px`;
-      els.chartTooltip.innerHTML = `
-        <div style="font-weight: 700; color: #94a3b8; margin-bottom: 2px;">${headerStr}</div>
+      return `
+        <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${headerStr}</div>
         <div style="color: #60a5fa;">● Ingress: ${rxStr}</div>
         <div style="color: #fb923c;">● Egress: ${txStr}</div>
-        <div style="color: #4ade80;">Temp: ${closestPt.cpuTemperatureC !== null ? closestPt.cpuTemperatureC + '°C' : '--'} · Latency: ${formatLatencyNs(closestPt.latencyNs)}</div>
+        <div style="color: #4ade80;">Temp: ${closestPt.cpuTemperatureC !== null && closestPt.cpuTemperatureC !== undefined ? closestPt.cpuTemperatureC + '°C' : '--'} · Latency: ${formatLatencyNs(closestPt.latencyNs)}</div>
       `;
     });
-
-    els.canvasWrapperFlow.addEventListener('mouseleave', () => {
-      if (els.chartTooltip) els.chartTooltip.style.display = 'none';
-    });
   }
+
+  // 2. Zodiac CPU Temperature Mini Chart
+  bindChartHoverTooltip('canvas-wrapper-temp', getPointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const temp = closestPt.cpuTemperatureC !== null && closestPt.cpuTemperatureC !== undefined ? `${closestPt.cpuTemperatureC}°C` : '--';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · CPU Core Thermal</div>
+      <div style="color: #4ade80; font-weight: 600;">● Temperature: ${temp}</div>
+      <div style="color: #94a3b8; font-size: 0.68rem;">Zodiac Microcontroller Core (SAM4E16E)</div>
+    `;
+  });
+
+  // 3. Zodiac OpenFlow Latency Mini Chart
+  bindChartHoverTooltip('canvas-wrapper-lat', getPointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const latStr = formatLatencyNs(closestPt.latencyNs);
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · OpenFlow Echo RTT</div>
+      <div style="color: #60a5fa; font-weight: 600;">● Latency: ${latStr}</div>
+      <div style="color: #94a3b8; font-size: 0.68rem;">Deterministic SLA: &lt; 1,000 µs</div>
+    `;
+  });
+
+  // 4. Zodiac Physical Ports 1-4 Sparkline Charts
+  [1, 2, 3, 4].forEach((portNum) => {
+    bindChartHoverTooltip(`canvas-wrapper-port-${portNum}`, getPointsForDisplay, 48, 14, (closestPt) => {
+      const d = new Date(closestPt.timestampMs);
+      const timeStr = d.toTimeString().slice(0, 8);
+      const pData = closestPt.ports?.[portNum];
+      const rxStr = currentUnit === 'pps' ? `${formatNumber(pData?.rxRatePps ?? 0n)} pps` : `${formatBytes(pData?.rxRateBps ?? 0n)}/s`;
+      const txStr = currentUnit === 'pps' ? `${formatNumber(pData?.txRatePps ?? 0n)} pps` : `${formatBytes(pData?.txRateBps ?? 0n)}/s`;
+      return `
+        <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Port ${portNum} Wire</div>
+        <div style="color: #60a5fa;">● RX (Ingress): ${rxStr}</div>
+        <div style="color: #fb923c;">● TX (Egress): ${txStr}</div>
+      `;
+    });
+  });
+
+  // 5. Jetson Orin Compute Load Chart
+  bindChartHoverTooltip('canvas-wrapper-orin-compute', getJetsonPointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const cpu = typeof closestPt.cpuPercent === 'number' ? closestPt.cpuPercent.toFixed(1) + '%' : '0.0%';
+    const gpu = typeof closestPt.gpuPercent === 'number' ? closestPt.gpuPercent.toFixed(1) + '%' : '0.0%';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Orin Compute Load</div>
+      <div style="color: #38bdf8;">● 6-Core ARM Cortex-A78AE: ${cpu}</div>
+      <div style="color: #a78bfa;">● Ampere GPU (1024 CUDA): ${gpu}</div>
+    `;
+  });
+
+  // 6. Jetson Orin Network Interfaces Chart
+  bindChartHoverTooltip('canvas-wrapper-orin-network', getJetsonPointsForDisplay, 58, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const sdnRx = formatBytes(safeBigInt(closestPt.sdnRxRateBps));
+    const sdnTx = formatBytes(safeBigInt(closestPt.sdnTxRateBps));
+    const wifiRx = formatBytes(safeBigInt(closestPt.wifiRxRateBps));
+    const wifiTx = formatBytes(safeBigInt(closestPt.wifiTxRateBps));
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Interface Throughput</div>
+      <div style="color: #38bdf8;">● GbE (enP8p1s0): ${sdnRx}/s RX · ${sdnTx}/s TX</div>
+      <div style="color: #f59e0b;">● Wi-Fi (wlP1p1s0): ${wifiRx}/s RX · ${wifiTx}/s TX</div>
+    `;
+  });
+
+  // 7. Jetson Orin Thermals Chart
+  bindChartHoverTooltip('canvas-wrapper-orin-thermals', getJetsonPointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const soc = closestPt.socTempC !== null && closestPt.socTempC !== undefined ? closestPt.socTempC.toFixed(1) + '°C' : '--';
+    const ambient = closestPt.boardTempC !== null && closestPt.boardTempC !== undefined ? closestPt.boardTempC.toFixed(1) + '°C' : '--';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Orin Thermal Zones</div>
+      <div style="color: #f87171;">● SoC Thermal (CPU/GPU): ${soc}</div>
+      <div style="color: #fb923c;">● Carrier Board Ambient: ${ambient}</div>
+    `;
+  });
+
+  // 8. Jetson Orin Power Draw Chart
+  bindChartHoverTooltip('canvas-wrapper-orin-power', getJetsonPointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const power = closestPt.boardPowerW !== null && closestPt.boardPowerW !== undefined ? closestPt.boardPowerW.toFixed(2) + ' W' : '--';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Module Power Draw</div>
+      <div style="color: #eab308; font-weight: 600;">● Total Consumption: ${power}</div>
+      <div style="color: #94a3b8; font-size: 0.68rem;">15W Super Power Envelope (INA3221 Monitor)</div>
+    `;
+  });
+
+  // 9. Coral Edge TPU Inference Rate Chart
+  bindChartHoverTooltip('canvas-wrapper-coral-rate', getCoralPointsForDisplay, 55, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const ipsVal = safeBigInt(closestPt.inferencesPerSecond ?? closestPt.inferenceRateIps);
+    const inf = `${formatNumber(ipsVal)} inf/s`;
+    const tap = `${formatNumber(safeBigInt(closestPt.tapPacketsPerSecond ?? closestPt.tapPacketsPerSec))} pps`;
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Edge TPU Throughput</div>
+      <div style="color: #34d399; font-weight: 600;">● Real-time Inferences: ${inf}</div>
+      <div style="color: #38bdf8;">● Hardware Ingress Tap: ${tap}</div>
+    `;
+  });
+
+  // 10. Coral Edge TPU Inference Latency Chart (Dean & Quoc Le Invariant: Integer Nanoseconds)
+  bindChartHoverTooltip('canvas-wrapper-coral-latency', getCoralPointsForDisplay, 55, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const latNs = closestPt.latencyNs !== undefined && closestPt.latencyNs !== null
+      ? safeBigInt(closestPt.latencyNs)
+      : (closestPt.latencyP50Us !== undefined && closestPt.latencyP50Us !== null
+        ? safeBigInt(closestPt.latencyP50Us) * 1000n
+        : safeBigInt(closestPt.latencyMicros) * 1000n);
+    const latP99Ns = closestPt.latencyP99Us !== undefined && closestPt.latencyP99Us !== null
+      ? safeBigInt(closestPt.latencyP99Us) * 1000n
+      : 0n;
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Tensor Execution Latency</div>
+      <div style="color: #a78bfa; font-weight: 600;">● Inference Latency (P50): ${formatLatencyNs(latNs)}</div>
+      ${latP99Ns > 0n ? `<div style="color: #c084fc;">● Tail Latency (P99): ${formatLatencyNs(latP99Ns)}</div>` : ''}
+      <div style="color: #94a3b8; font-size: 0.68rem;">Strict Dean Budget: &lt; 500,000 ns (500 µs) Target</div>
+    `;
+  });
+
 
   // Bind Unit Toggles
   if (els.btnUnitPps) {
@@ -2903,6 +3109,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
       }
     }
 
+    if (window.location.hash !== `#sec-${device}` && window.location.hash !== `#${device}`) {
+      window.history.replaceState(null, '', `#sec-${device}`);
+    }
+
     updateCharts();
   }
 
@@ -2915,6 +3125,23 @@ Please connect the physical switch via USB to execute '${command}' on device har
   }
   if (els.btnDeviceCoral) {
     els.btnDeviceCoral.addEventListener('click', () => switchDevice('coral'));
+  }
+
+  // URL Hash & Deep Linking Navigation
+  function handleHashChange() {
+    const hash = (window.location.hash || '').toLowerCase();
+    if (hash === '#sec-orin' || hash === '#orin') {
+      switchDevice('orin');
+    } else if (hash === '#sec-coral' || hash === '#coral') {
+      switchDevice('coral');
+    } else if (hash === '#sec-zodiac' || hash === '#zodiac' || hash === '#sec-overview') {
+      switchDevice('zodiac');
+    }
+  }
+
+  window.addEventListener('hashchange', handleHashChange);
+  if (window.location.hash) {
+    handleHashChange();
   }
 
   // Responsive Chart Resizing

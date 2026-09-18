@@ -148,9 +148,10 @@ Governed by the **Senior Staff Council Invariants**:
   - Prisma models for `ZodiacTelemetryPoint` and `User` in Neon serverless Postgres (`@prisma/adapter-pg` / `@neondatabase/serverless`).
   - 10-second non-blocking batched persistence engine adhering to Ghemawat backpressure invariant (~259k records/30 days, ~40MB).
   - Bucketed SQL downsampling API (`/api/zodiac?range=1h|6h|24h|7d|30d`) returning bounded (<360) data points.
-  - Automated 30-day data retention pruning.
+  - Automated 30-day data retention pruning via daily scheduled cron (`/api/cron/prune-telemetry`).
   - Sub-millisecond monotonic clock calculation preserving microsecond precision (`performance.now() * 1000000`).
   - UI historical time range selector with explicit canvas watermark on database degradation/unreachable state (Anti-Shortcut / Anti-Simulation Law).
+  - Multi-tier storage architecture documented in [docs/design/physical-sdn-edge-tpu.md (Section 6)](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md#6-telemetry-ingestion-multi-tier-storage--query-routing-architecture): Local Jetson RAM (<10ms) vs. Cloud Vercel RAM (<20ms) vs. Neon Postgres historical downsampling (<150ms).
 - [x] **Milestone 0.5C: Content-Addressable Asset Pipeline & Edge Caching**:
   - Automated content-addressed asset build script (`scripts/build-assets.ts`) generating SHA-256 asset hashes (`zodiac.[hash].css`, `zodiac-app.[hash].js`).
   - Immutable edge cache headers (`Cache-Control: public, max-age=31536000, immutable`) on Vercel and local bridge server.

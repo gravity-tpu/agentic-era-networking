@@ -128,3 +128,53 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
    * *Invariant Solution*: Native traffic is delegated to KSZ8795 hardware VLAN switching; only agent-monitored, security-critical, and test traffic is routed through the OpenFlow pipeline.
 3. **Fail-Closed State Enforcement**:
    * CLI configuration `set failstate secure` ensures that if the OpenFlow controller or USB serial connection terminates, all transit traffic is immediately dropped rather than leaked.
+
+---
+
+## 6. Telemetry Ingestion, Multi-Tier Storage & Query Routing Architecture
+
+The system employs a deterministic two-tier storage and query routing architecture governed by the **Jeff Dean Latency Invariant** (<10ms local RAM, <20ms cloud edge RAM, <150ms WAN DB query) and **Sanjay Ghemawat's Zero-Bloat Invariant** (preventing connection exhaustion and unbounded database growth).
+
+### Architectural Overview & Data Paths
+
+```
+                                  [ ARCHITECTURE OVERVIEW ]
+
+   +-----------------------------------------------------------------------------------------+
+   | 1. PHYSICAL APPLIANCE (LOCAL LAN)                                                       |
+   |    Browser @ http://10.0.0.15:3003                                                      |
+   |                                                                                         |
+   |    Browser ────(every 2s GET /api/zodiac)────> Jetson Orin RAM Buffer (Zero DB)         |
+   +-----------------------------------------------------------------------------------------+
+
+   +-----------------------------------------------------------------------------------------+
+   | 2. CLOUD PRODUCTION (VERCEL)                                                            |
+   |    Browser @ https://agentic-era-networking.vercel.app                                  |
+   |                                                                                         |
+   |    Jetson Orin ──(every 10s POST)──> Vercel API ──(persist)──> Neon Postgres Table     |
+   |                                            │                                            |
+   |    Browser ──(Live Poll: GET /api/zodiac)──┘ [Served from Vercel RAM Cache: <20ms]      |
+   |                                                                                         |
+   |    Browser ──(Range: 1h/6h/24h/7d/30d)─────> Neon Postgres SQL Query [Sub-150ms]       |
+   +-----------------------------------------------------------------------------------------+
+```
+
+### Ingestion vs. Query Lifecycle Matrix
+
+| User Action / UI State | Deployment Target | Data Source | Ingestion / Query Cadence | Latency Budget | Mechanism & Invariant |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Live Appliance Dashboard** | Local LAN (`http://10.0.0.15:3003`) | **Jetson Orin Process RAM** | Every 2s poll (`GET /api/zodiac`) | `< 10ms` (LAN) | Direct memory read from `ZodiacBridgeServer.cachedSnapshot` and 120-point circular ring buffer. Zero database dependency. |
+| **Hardware Cloud Relay** | Jetson → Cloud (`https://agentic-era-networking.vercel.app`) | **Neon Postgres (`ZodiacTelemetryPoint`)** | Every 10s push (`POST /api/zodiac`) | `< 3000ms` (WAN timeout) | Jetson background daemon pushes authenticated snapshot (`X-Zodiac-Bridge-Secret`). Vercel writes batched records to Neon via `persistTelemetrySnapshot()`. |
+| **Live Cloud Dashboard** | Vercel Edge (`https://agentic-era-networking.vercel.app`) | **Vercel Serverless Memory** | Every 2s poll (`GET /api/zodiac`) | `< 20ms` (Edge) | Served directly from serverless in-memory `latestSnapshot` object. Never hits Neon, preserving database connections and compute credits. |
+| **Historical Range Selector** | Vercel Edge (`https://agentic-era-networking.vercel.app`) | **Neon Postgres (`ZodiacTelemetryPoint`)** | On-demand on range click (`1h`, `6h`, `24h`, `7d`, `30d`) | `< 150ms` (Postgres query) | Executes database-level integer time-bucketing (`FLOOR("timestampMs" / bucketMs) * bucketMs`) returning $\le 360$ points without pulling 250k+ raw records over WAN. |
+| **Automated Pruning Cron** | Vercel Cron | **Neon Postgres (`ZodiacTelemetryPoint`)** | Daily at 03:00 UTC (`0 3 * * *`) | `< 500ms` (Indexed delete) | Calls `/api/cron/prune-telemetry` with `Bearer ${CRON_SECRET}`, pruning points older than 30 days via indexed `timestampMs: { lt: cutoffMs }`. |
+
+### Design Rationales
+
+1. **Why Live Polling Bypasses Neon Postgres (Dean Latency & Cost Invariant)**:
+   Polling a relational database every 2 seconds from concurrent web clients causes connection pool exhaustion, latency spikes (>100ms vs <20ms from RAM), and unnecessary compute billing. Serving live metrics from memory guarantees deterministic sub-20ms TTFB.
+2. **Why Cloud Relay Cadence is 10 Seconds (Ghemawat Backpressure Invariant)**:
+   The physical switch MCU serial telemetry stream arrives at 1–2 Hz. Relaying over WAN every 10 seconds generates exactly 8,640 records/day (~259,200 points/30 days, ~103.7 MB total storage footprint), perfectly matching Neon's serverless scaling envelope.
+3. **Database-Level Downsampling vs. Application-Level Slicing**:
+   Rather than fetching 250,000 raw points over the WAN and downsampling in Node.js memory (which causes severe memory bloat and function timeouts), PostgreSQL performs the grouping directly in the query planner using integer division, streaming back a lightweight payload under 50 KB.
+
