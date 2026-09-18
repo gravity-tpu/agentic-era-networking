@@ -19,6 +19,8 @@ coverage/
 
 # Institutional & Local Audit Logs
 .agents/.local-push.log
+.agents/*.local.md
+.agents/local/
 
 # IDE & Editor
 .vscode/

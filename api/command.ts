@@ -29,13 +29,19 @@ function isValidCommandPayload(val: unknown): val is CommandPayload {
 
 const SIMULATION_BANNER = `[SIMULATION / CLOUD TWIN SANDBOX - PHYSICAL SWITCH NOT CONNECTED]\nNotice: Device is not physically attached to cloud serverless runtime. Returning simulated preview data.\n\n`;
 
+const mockSwitchIp = process.env['ZODIAC_SWITCH_IP'] ?? '192.0.2.99';
+const mockNetmask = process.env['ZODIAC_NETMASK'] ?? '255.255.255.0';
+const mockGateway = process.env['SDN_GATEWAY_IP'] ?? '192.0.2.1';
+const mockControllerIp = process.env['SDN_CONTROLLER_IP'] ?? '192.0.2.8';
+const mockOfPort = process.env['ZODIAC_OPENFLOW_PORT'] ?? '6633';
+
 const MOCK_COMMAND_RESPONSES: Record<string, string> = {
   'show status': `Device Status\nName:             Zodiac_FX\nFirmware Version: 0.86\nCPU Temperature:  31 C\nCPU UID:          1396191488-826951736-875574576-892547120\nUptime:           01:25:40`,
   'status': `Device Status\nName:             Zodiac_FX\nFirmware Version: 0.86\nCPU Temperature:  31 C\nCPU UID:          1396191488-826951736-875574576-892547120\nUptime:           01:25:40`,
   'show ports': `Port 1:\n  Status: DOWN\n  VLAN: 100 (OpenFlow)\n  RX: 42104 Bytes (336 Pkts), TX: 0 Bytes (0 Pkts)\nPort 2:\n  Status: DOWN\n  VLAN: 100 (OpenFlow)\n  RX: 0 Bytes (0 Pkts), TX: 0 Bytes (0 Pkts)\nPort 3:\n  Status: DOWN\n  VLAN: 100 (OpenFlow)\n  RX: 0 Bytes (0 Pkts), TX: 0 Bytes (0 Pkts)\nPort 4:\n  Status: UP\n  VLAN: 200 (Native)\n  RX: 259843 Bytes (1982 Pkts), TX: 169427 Bytes (1540 Pkts)`,
   'ports': `Port 1:\n  Status: DOWN\n  VLAN: 100 (OpenFlow)\n  RX: 42104 Bytes (336 Pkts), TX: 0 Bytes (0 Pkts)\nPort 2:\n  Status: DOWN\n  VLAN: 100 (OpenFlow)\n  RX: 0 Bytes (0 Pkts), TX: 0 Bytes (0 Pkts)\nPort 3:\n  Status: DOWN\n  VLAN: 100 (OpenFlow)\n  RX: 0 Bytes (0 Pkts), TX: 0 Bytes (0 Pkts)\nPort 4:\n  Status: UP\n  VLAN: 200 (Native)\n  RX: 259843 Bytes (1982 Pkts), TX: 169427 Bytes (1540 Pkts)`,
-  'show config': `IP Address: 10.0.1.99\nNetmask:    255.255.255.0\nGateway:    10.0.1.1\nController: 10.0.1.8:6633\nFailstate:  Secure`,
-  'config': `IP Address: 10.0.1.99\nNetmask:    255.255.255.0\nGateway:    10.0.1.1\nController: 10.0.1.8:6633\nFailstate:  Secure`,
+  'show config': `IP Address: ${mockSwitchIp}\nNetmask:    ${mockNetmask}\nGateway:    ${mockGateway}\nController: ${mockControllerIp}:${mockOfPort}\nFailstate:  Secure`,
+  'config': `IP Address: ${mockSwitchIp}\nNetmask:    ${mockNetmask}\nGateway:    ${mockGateway}\nController: ${mockControllerIp}:${mockOfPort}\nFailstate:  Secure`,
   'show of': `OpenFlow: Enabled\nVersion: 1.3\nDatapath ID: 0x70b3d58740bc\nActive Tables: 10\nActive Flows: 0`,
   'openflow': `OpenFlow: Enabled\nVersion: 1.3\nDatapath ID: 0x70b3d58740bc\nActive Tables: 10\nActive Flows: 0`,
 };

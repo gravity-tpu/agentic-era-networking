@@ -20,7 +20,7 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
   it('creates a valid default snapshot with BigInt counters', () => {
     const snap = createDefaultZodiacSnapshot();
     expect(snap.system.deviceName).toBe('Zodiac_FX');
-    expect(snap.system.ipAddress).toBe('10.0.1.99');
+    expect(snap.system.ipAddress).toBe(process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1');
     expect(snap.system.macAddress).toBe('70:B3:D5:87:40:BC');
     expect(snap.ports).toHaveLength(4);
     

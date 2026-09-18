@@ -3,6 +3,12 @@
   "outputDirectory": "public",
   "buildCommand": "npm run build",
   "cleanUrls": true,
+  "crons": [
+    {
+      "path": "/api/cron/prune-telemetry",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*\\.[a-f0-9]{10}\\.(?:js|css))",

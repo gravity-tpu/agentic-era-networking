@@ -88,10 +88,10 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 
 | Link | Source | Interface / Medium | Destination | Protocol / Speed | Role |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Link 1** | Jetson Orin (GbE RJ45) | Ethernet Patch Cable | Zodiac FX Port 4 | 100BASE-TX (`10.0.1.99`) | **OpenFlow 1.3 Control Channel** |
+| **Link 1** | Jetson Orin (GbE RJ45) | Ethernet Patch Cable | Zodiac FX Port 4 | 100BASE-TX (Native Management) | **OpenFlow 1.3 Control Channel** |
 | **Link 2** | Zodiac FX (Micro-USB) | USB Cable | Jetson Orin (USB-A) | USB CDC (`/dev/ttyACM0`) | **Real-Time Telemetry & CDC Console** |
 | **Link 3** | Zodiac FX Port 2 | Ethernet Patch Cable | ISP Gateway | 100BASE-TX (Home LAN) | **WAN / Internet Gateway Transit** |
-| **Link 4** | Zodiac FX Port 1 | Ethernet RJ45 | Local Workload / Agent | 100BASE-TX (`10.0.1.x`) | **Monitored Workload / Client Port** |
+| **Link 4** | Zodiac FX Port 1 | Ethernet RJ45 | Local Workload / Agent | 100BASE-TX (VLAN 100) | **Monitored Workload / Client Port** |
 | **Link 5** | Zodiac FX Port 3 | Ethernet RJ45 | Packet Tap / Sniffer | 100BASE-TX (Mirror Mode) | **Wire Snooping & Packet Capture** |
 | **Link 6** | MacBook Pro | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E (LAN) | **Untethered Dashboard & SSH Access** |
 

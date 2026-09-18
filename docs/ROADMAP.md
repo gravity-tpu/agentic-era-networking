@@ -165,7 +165,7 @@ Governed by the **Senior Staff Council Invariants**:
   - Strict 429 Too Many Requests with deterministic `Retry-After` headers.
 - [ ] **Milestone 0.6C: Cryptographic Command Attestation & Replay Protection**:
   - Monotonic nanosecond timestamp + HMAC-SHA256 signature verification on all bridge payloads (`X-Zodiac-Signature`, `X-Timestamp-Ns`) preventing replay attacks.
-  - Strict Origin and Host pinning to prevent DNS rebinding or SSRF pivot attacks into the private LAN subnet (`10.0.1.0/24`).
+  - Strict Origin and Host pinning to prevent DNS rebinding or SSRF pivot attacks into private appliance subnets.
 - [ ] **Milestone 0.6D: Hardened Content Security Policy & Security Headers**:
   - Strict CSP headers (`default-src 'self'`, `script-src 'self'`, `connect-src 'self' https://accounts.google.com`, `frame-ancestors 'none'`).
   - Strict transport security (`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`).
@@ -203,7 +203,7 @@ Governed by the **Senior Staff Council Invariants**:
   - Real-time deep packet inspection (DPI) & protocol dissection from Port 3 mirror tap and OpenFlow `PACKET_IN` streams.
   - Multi-layer protocol decoders: Layer 2 (Ethernet, 802.1Q VLAN), Layer 3 (IPv4, IPv6, ARP, ICMP), Layer 4 (TCP, UDP), Layer 7 (DNS, HTTP/1.1, OpenFlow 1.3).
   - Interactive Web UI Packet Inspector: Real-time packet table with colorized protocol streams, expandable protocol tree, and synchronous Hex/ASCII dump inspector.
-  - Display filter engine (BPF-like syntax, e.g., `ip.src == 10.0.1.2 && tcp.port == 80`) and one-click `.pcap` / `.pcapng` export.
+  - Display filter engine (BPF-like syntax, e.g., `ip.src == 192.0.2.2 && tcp.port == 80`) and one-click `.pcap` / `.pcapng` export.
 
 ### Phase 3: AlphaProof Symbolic Verification & Self-Tuning Control
 *Status: Planned*

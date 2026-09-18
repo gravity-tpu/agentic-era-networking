@@ -79,12 +79,121 @@ export interface ZodiacTimeSeriesPoint {
   } | undefined;
 }
 
+export interface JetsonNetworkInterfaceTelemetry {
+  readonly name: string;
+  readonly role: string;
+  readonly macAddress: string;
+  readonly ipAddress: string | null;
+  readonly status: 'UP' | 'DOWN';
+  readonly speedMbps: number;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxDropped: bigint;
+  readonly txDropped: bigint;
+  readonly rxErrors: bigint;
+  readonly txErrors: bigint;
+  readonly rxRateBps: bigint;
+  readonly txRateBps: bigint;
+  readonly rxRatePps: bigint;
+  readonly txRatePps: bigint;
+}
+
+export interface JetsonTimeSeriesPoint {
+  readonly timestampMs: number;
+  readonly cpuUtilizationPct: number;
+  readonly gpuUtilizationPct: number;
+  readonly cpuTempC: number;
+  readonly gpuTempC: number;
+  readonly junctionTempC: number;
+  readonly powerWatts: number;
+  readonly ramUsedBytes: bigint;
+  readonly nvmeReadRateBps: bigint;
+  readonly nvmeWriteRateBps: bigint;
+  readonly sdnPortRateBps: bigint;
+  readonly wifiPortRateBps: bigint;
+}
+
+export interface JetsonTelemetrySnapshot {
+  readonly deviceName: string;
+  readonly architecture: string;
+  readonly cpuModel: string;
+  readonly cpuCoreCount: number;
+  readonly cpuUtilizationPct: number;
+  readonly cpuCoresPct: number[];
+  readonly gpuModel: string;
+  readonly gpuCudaCores: number;
+  readonly gpuUtilizationPct: number;
+  readonly gpuFreqMhz: number;
+  readonly ramUsedBytes: bigint;
+  readonly ramTotalBytes: bigint;
+  readonly swapUsedBytes: bigint;
+  readonly swapTotalBytes: bigint;
+  readonly nvmeRootPath: string;
+  readonly nvmeUsedBytes: bigint;
+  readonly nvmeTotalBytes: bigint;
+  readonly nvmeReadRateBps: bigint;
+  readonly nvmeWriteRateBps: bigint;
+  readonly rescueSdMounted: boolean;
+  readonly temperatures: {
+    readonly cpuC: number;
+    readonly gpuC: number;
+    readonly socC: number;
+    readonly junctionC: number;
+  };
+  readonly powerMw: {
+    readonly vddIn: number;
+    readonly vddCpuGpuCv: number;
+    readonly vddSoc: number;
+  };
+  readonly systemLoad: [number, number, number];
+  readonly osVersion: string;
+  readonly kernelVersion: string;
+  readonly jetpackVersion: string;
+  readonly uptime: string;
+  readonly interfaces: JetsonNetworkInterfaceTelemetry[];
+  readonly timeSeries?: JetsonTimeSeriesPoint[];
+}
+
+export interface CoralTimeSeriesPoint {
+  readonly timestampMs: number;
+  readonly inferencesPerSecond: bigint;
+  readonly tapPacketsPerSecond: bigint;
+  readonly latencyP50Us: number;
+  readonly latencyP99Us: number;
+  readonly usbThroughputKbps: number;
+}
+
+export interface CoralTelemetrySnapshot {
+  readonly detected: boolean;
+  readonly name: string;
+  readonly vendorId: string;
+  readonly productId: string;
+  readonly usbBus: string;
+  readonly usbSpeed: string;
+  readonly status: 'STANDBY' | 'INFERENCE_ACTIVE' | 'NOT_DETECTED';
+  readonly pipelineRole: string;
+  readonly peakTopsInt8: number;
+  readonly targetLatencyBudgetNs: bigint;
+  readonly inferencesPerSecond: bigint;
+  readonly totalInferences: bigint;
+  readonly latencyP50Ns: bigint;
+  readonly latencyP99Ns: bigint;
+  readonly loadedModel: string;
+  readonly powerMode: string;
+  readonly temperatureC: number | null;
+  readonly timeSeries?: CoralTimeSeriesPoint[];
+}
+
 export interface ZodiacFullTelemetrySnapshot {
   readonly system: ZodiacSystemTelemetry;
   readonly ports: ZodiacPortTelemetry[];
   readonly openflow: ZodiacOpenFlowTelemetry;
   readonly source: 'live_hardware' | 'cloud_snapshot' | 'disconnected';
   readonly timeSeries?: ZodiacTimeSeriesPoint[] | undefined;
+  readonly jetson?: JetsonTelemetrySnapshot | undefined;
+  readonly coral?: CoralTelemetrySnapshot | undefined;
 }
 
 /**
@@ -151,10 +260,10 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
     system: {
       deviceName: 'Zodiac_FX',
       macAddress: '70:B3:D5:87:40:BC',
-      ipAddress: '10.0.1.99',
-      netmask: '255.255.255.0',
-      defaultGateway: '10.0.1.1',
-      openFlowController: '10.0.1.8',
+      ipAddress: process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1',
+      netmask: process.env['ZODIAC_NETMASK'] ?? '255.255.255.0',
+      defaultGateway: process.env['SDN_GATEWAY_IP'] ?? '127.0.0.1',
+      openFlowController: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1',
       openFlowPort: 6633,
       failstate: 'Secure',
       cpuTemperatureC: 31,
@@ -237,10 +346,223 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
     },
   };
 
+  const jetson = createDefaultJetsonSnapshot(false);
+  const coral = createDefaultCoralSnapshot(false);
+
   return {
     ...base,
     timeSeries: generateHistoricalTelemetry(base, 1, 60),
+    jetson: {
+      ...jetson,
+      timeSeries: generateJetsonHistoricalTelemetry(jetson, 1, 60),
+    },
+    coral: {
+      ...coral,
+      timeSeries: generateCoralHistoricalTelemetry(coral, 1, 60),
+    },
   };
+}
+
+/**
+ * Creates a default telemetry snapshot for the NVIDIA Jetson Orin Nano appliance.
+ */
+export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): JetsonTelemetrySnapshot {
+  const interfaces: JetsonNetworkInterfaceTelemetry[] = [
+    {
+      name: 'enP8p1s0',
+      role: 'SDN Control Link -> Zodiac Port 4',
+      macAddress: 'ac:3a:e2:98:99:dd',
+      ipAddress: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1',
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: 1000,
+      rxBytes: isDisconnected ? 0n : 1694270n,
+      txBytes: isDisconnected ? 0n : 2598430n,
+      rxPackets: isDisconnected ? 0n : 15400n,
+      txPackets: isDisconnected ? 0n : 19820n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 8420n,
+      txRateBps: isDisconnected ? 0n : 12450n,
+      rxRatePps: isDisconnected ? 0n : 42n,
+      txRatePps: isDisconnected ? 0n : 58n,
+    },
+    {
+      name: 'wlP1p1s0',
+      role: 'Management Plane & Cloud Relay (Wi-Fi)',
+      macAddress: 'f0:68:e3:33:02:a3',
+      ipAddress: process.env['JETSON_HOST'] ?? '127.0.0.1',
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: 866,
+      rxBytes: isDisconnected ? 0n : 48921000n,
+      txBytes: isDisconnected ? 0n : 12450000n,
+      rxPackets: isDisconnected ? 0n : 98400n,
+      txPackets: isDisconnected ? 0n : 45200n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 18200n,
+      txRateBps: isDisconnected ? 0n : 6400n,
+      rxRatePps: isDisconnected ? 0n : 75n,
+      txRatePps: isDisconnected ? 0n : 30n,
+    },
+  ];
+
+  return {
+    deviceName: 'jetson-orin',
+    architecture: 'aarch64 (ARMv8.2-A)',
+    cpuModel: '6-Core ARM Cortex-A78AE',
+    cpuCoreCount: 6,
+    cpuUtilizationPct: isDisconnected ? 0 : 8,
+    cpuCoresPct: isDisconnected ? [0, 0, 0, 0, 0, 0] : [7, 12, 6, 14, 5, 8],
+    gpuModel: 'NVIDIA Ampere (1024 CUDA Cores + 32 Tensor Cores)',
+    gpuCudaCores: 1024,
+    gpuUtilizationPct: 0,
+    gpuFreqMhz: 612,
+    ramUsedBytes: isDisconnected ? 0n : 2184183808n,
+    ramTotalBytes: 7990149120n,
+    swapUsedBytes: 0n,
+    swapTotalBytes: 3995074560n,
+    nvmeRootPath: '/dev/nvme0n1p2 (SanDisk Optimus 500GB)',
+    nvmeUsedBytes: isDisconnected ? 0n : 24696061952n,
+    nvmeTotalBytes: 491745476608n,
+    nvmeReadRateBps: isDisconnected ? 0n : 1048576n,
+    nvmeWriteRateBps: isDisconnected ? 0n : 262144n,
+    rescueSdMounted: true,
+    temperatures: {
+      cpuC: isDisconnected ? 0 : 48.0,
+      gpuC: isDisconnected ? 0 : 46.5,
+      socC: isDisconnected ? 0 : 46.2,
+      junctionC: isDisconnected ? 0 : 48.0,
+    },
+    powerMw: {
+      vddIn: isDisconnected ? 0 : 4785,
+      vddCpuGpuCv: isDisconnected ? 0 : 711,
+      vddSoc: isDisconnected ? 0 : 1384,
+    },
+    systemLoad: isDisconnected ? [0, 0, 0] : [0.82, 0.65, 0.54],
+    osVersion: 'Ubuntu 22.04.4 LTS',
+    kernelVersion: '5.15.148-tegra',
+    jetpackVersion: 'JetPack 6.1 (L4T 36.4.7)',
+    uptime: isDisconnected ? 'Offline' : '01:05:22',
+    interfaces,
+  };
+}
+
+/**
+ * Creates a default telemetry snapshot for the Google Coral Edge TPU.
+ */
+export function createDefaultCoralSnapshot(isDisconnected: boolean = false): CoralTelemetrySnapshot {
+  return {
+    detected: !isDisconnected,
+    name: 'Google Coral Edge TPU USB Accelerator',
+    vendorId: '1a6e',
+    productId: '089a',
+    usbBus: 'Bus 002 Device 003',
+    usbSpeed: 'USB 3.1 SuperSpeed (5.0 Gbps)',
+    status: isDisconnected ? 'NOT_DETECTED' : 'STANDBY',
+    pipelineRole: 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
+    peakTopsInt8: 4,
+    targetLatencyBudgetNs: 500000n,
+    inferencesPerSecond: 0n,
+    totalInferences: 0n,
+    latencyP50Ns: 0n,
+    latencyP99Ns: 0n,
+    loadedModel: 'None (Standby - Pre-Wired for Phase 2A)',
+    powerMode: isDisconnected ? 'Offline' : 'Low-Power Standby (<0.5W)',
+    temperatureC: isDisconnected ? null : 34.2,
+  };
+}
+
+/**
+ * Generates deterministic historical time-series points for Jetson Orin Nano.
+ */
+export function generateJetsonHistoricalTelemetry(
+  snapshot: JetsonTelemetrySnapshot,
+  durationHours: number = 1,
+  pointCount: number = 60
+): JetsonTimeSeriesPoint[] {
+  const points: JetsonTimeSeriesPoint[] = [];
+  const nowMs = Date.now();
+  const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  const baseCpu = snapshot.cpuUtilizationPct;
+  const baseGpu = snapshot.gpuUtilizationPct;
+  const baseCpuTemp = snapshot.temperatures.cpuC;
+  const baseGpuTemp = snapshot.temperatures.gpuC;
+  const baseJuncTemp = snapshot.temperatures.junctionC;
+  const basePowerWatts = snapshot.powerMw.vddIn > 0 ? snapshot.powerMw.vddIn / 1000 : 4.8;
+  const baseRam = snapshot.ramUsedBytes;
+
+  for (let i = pointCount - 1; i >= 0; i--) {
+    const timestampMs = nowMs - i * stepMs;
+    const cycle = Math.floor(timestampMs / 60000) % 60;
+    const jitter = (cycle % 7) - 3;
+
+    const cpuUtil = Math.max(2, Math.min(100, baseCpu + jitter * 2));
+    const gpuUtil = Math.max(0, Math.min(100, baseGpu + (cycle % 5 === 0 ? 15 : 0)));
+    const cpuTemp = Math.max(30, Math.min(85, baseCpuTemp + (jitter > 0 ? 1 : -1)));
+    const gpuTemp = Math.max(30, Math.min(85, baseGpuTemp + (cycle % 4 === 0 ? 1 : 0)));
+    const junctionTemp = Math.max(30, Math.min(90, baseJuncTemp + (jitter > 0 ? 1 : 0)));
+    const powerWatts = parseFloat((basePowerWatts + (jitter * 0.15)).toFixed(2));
+
+    const sdnRate = BigInt(Math.max(1000, 10000 + jitter * 1200));
+    const wifiRate = BigInt(Math.max(5000, 25000 + jitter * 3500));
+
+    points.push({
+      timestampMs,
+      cpuUtilizationPct: cpuUtil,
+      gpuUtilizationPct: gpuUtil,
+      cpuTempC: cpuTemp,
+      gpuTempC: gpuTemp,
+      junctionTempC: junctionTemp,
+      powerWatts,
+      ramUsedBytes: baseRam,
+      nvmeReadRateBps: 1048576n,
+      nvmeWriteRateBps: 262144n,
+      sdnPortRateBps: sdnRate,
+      wifiPortRateBps: wifiRate,
+    });
+  }
+
+  return points;
+}
+
+/**
+ * Generates deterministic historical time-series points for Google Coral Edge TPU.
+ */
+export function generateCoralHistoricalTelemetry(
+  snapshot: CoralTelemetrySnapshot,
+  durationHours: number = 1,
+  pointCount: number = 60
+): CoralTimeSeriesPoint[] {
+  const points: CoralTimeSeriesPoint[] = [];
+  const nowMs = Date.now();
+  const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  for (let i = pointCount - 1; i >= 0; i--) {
+    const timestampMs = nowMs - i * stepMs;
+    const cycle = Math.floor(timestampMs / 60000) % 60;
+    
+    const ips = snapshot.inferencesPerSecond;
+    const tapPkts = BigInt(cycle % 6 === 0 ? 120 : 0);
+    const latP50 = snapshot.status === 'INFERENCE_ACTIVE' ? 320 : 0;
+    const latP99 = snapshot.status === 'INFERENCE_ACTIVE' ? 480 : 0;
+    const usbKbps = snapshot.detected ? 45.0 : 0.0;
+
+    points.push({
+      timestampMs,
+      inferencesPerSecond: ips,
+      tapPacketsPerSecond: tapPkts,
+      latencyP50Us: latP50,
+      latencyP99Us: latP99,
+      usbThroughputKbps: usbKbps,
+    });
+  }
+
+  return points;
 }
 
 /**
@@ -253,10 +575,10 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
     system: {
       deviceName: 'Zodiac_FX',
       macAddress: '70:B3:D5:87:40:BC',
-      ipAddress: '10.0.1.99',
+      ipAddress: process.env['ZODIAC_SWITCH_IP'] ?? '0.0.0.0',
       netmask: '255.255.255.0',
-      defaultGateway: '10.0.1.1',
-      openFlowController: '10.0.1.8',
+      defaultGateway: process.env['SDN_GATEWAY_IP'] ?? '0.0.0.0',
+      openFlowController: process.env['SDN_CONTROLLER_IP'] ?? '0.0.0.0',
       openFlowPort: 6633,
       failstate: 'Secure',
       cpuTemperatureC: null,
@@ -320,7 +642,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         status: 'DOWN',
         vlanType: 'Native',
         vlanId: 200,
-        ipAddress: '10.0.1.99',
+        ipAddress: process.env['ZODIAC_SWITCH_IP'] ?? 'Controller Link',
         rxBytes: 0n,
         txBytes: 0n,
         rxPackets: 0n,
@@ -343,9 +665,20 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
     },
   };
 
+  const jetson = createDefaultJetsonSnapshot(true);
+  const coral = createDefaultCoralSnapshot(true);
+
   return {
     ...base,
     timeSeries: generateHistoricalTelemetry(base, 1, 60),
+    jetson: {
+      ...jetson,
+      timeSeries: generateJetsonHistoricalTelemetry(jetson, 1, 60),
+    },
+    coral: {
+      ...coral,
+      timeSeries: generateCoralHistoricalTelemetry(coral, 1, 60),
+    },
   };
 }
 

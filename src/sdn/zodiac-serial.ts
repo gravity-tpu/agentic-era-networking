@@ -389,11 +389,11 @@ except Exception as e:
 
   /**
    * Provisions standard Council networking configuration onto the physical Zodiac FX EEPROM:
-   * - Switch IP: 10.0.1.99 / 24
-   * - Controller: 10.0.1.8:6633 (OpenFlow 1.3, version 4)
+   * - Switch IP: from ZODIAC_SWITCH_IP env or params
+   * - Controller: from SDN_CONTROLLER_IP env or params (port 6633, OpenFlow 1.3)
    * - Failstate: Secure
    * - VLAN 100 (OpenFlow): Ports 1, 2, 3
-   * - VLAN 200 (Native): Port 4 (Jetson GbE RJ45)
+   * - VLAN 200 (Native): Port 4 (Host Controller Channel)
    */
   public async initializeDefaultConfig(params?: {
     switchIp?: string;
@@ -402,11 +402,11 @@ except Exception as e:
     controllerIp?: string;
     controllerPort?: number;
   }): Promise<string> {
-    const ip = params?.switchIp ?? '10.0.1.99';
-    const mask = params?.netmask ?? '255.255.255.0';
-    const gw = params?.gateway ?? '10.0.1.8';
-    const ctrlIp = params?.controllerIp ?? '10.0.1.8';
-    const ctrlPort = params?.controllerPort ?? 6633;
+    const ip = params?.switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1';
+    const mask = params?.netmask ?? process.env['ZODIAC_NETMASK'] ?? '255.255.255.0';
+    const gw = params?.gateway ?? process.env['SDN_GATEWAY_IP'] ?? '127.0.0.1';
+    const ctrlIp = params?.controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1';
+    const ctrlPort = params?.controllerPort ?? parseInt(process.env['ZODIAC_OPENFLOW_PORT'] ?? '6633', 10);
 
     const commands = [
       'config',

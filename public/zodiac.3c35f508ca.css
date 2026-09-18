@@ -119,9 +119,70 @@ body {
 
 /* Device Selector in Sidebar */
 .cf-device-selector {
-  padding: 0.85rem 1.25rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--cf-border);
   background: var(--cf-bg);
+}
+
+.cf-device-selector-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cf-text-subtle);
+  margin-bottom: 0.5rem;
+}
+
+.cf-device-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cf-device-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.65rem;
+  background: #ffffff;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+
+.cf-device-btn:hover {
+  border-color: var(--cf-blue);
+  background: rgba(0, 81, 195, 0.03);
+}
+
+.cf-device-btn.active {
+  border-color: var(--cf-blue);
+  background: rgba(0, 81, 195, 0.07);
+  box-shadow: 0 1px 3px rgba(0, 81, 195, 0.1);
+}
+
+.cf-device-btn-name {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--cf-text-primary);
+  flex: 1;
+  margin-left: 0.45rem;
+}
+
+.cf-pill-badge.purple {
+  background: rgba(147, 51, 234, 0.1);
+  color: #7e22ce;
+  border: 1px solid rgba(147, 51, 234, 0.25);
+}
+
+.cf-pill-badge.orange {
+  background: rgba(249, 115, 22, 0.1);
+  color: #ea580c;
+  border: 1px solid rgba(249, 115, 22, 0.25);
 }
 
 .cf-device-pill {

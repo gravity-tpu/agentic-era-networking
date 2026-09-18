@@ -10,8 +10,8 @@
  * Commands:
  *   status   - Query device firmware, temperature, uptime, and configuration.
  *   ports    - Display link status and VLAN mapping for Ports 1–4.
- *   listen   - Run the OpenFlow 1.3 SDN controller daemon on 10.0.1.8:6633.
- *   ping     - High-precision ping to Zodiac switch IP (10.0.1.99).
+ *   listen   - Run the OpenFlow 1.3 SDN controller daemon.
+ *   ping     - High-precision ping to Zodiac switch IP.
  *   reboot   - Restart the Zodiac FX switch via serial command.
  */
 
@@ -25,6 +25,11 @@ if (typeof process.loadEnvFile === 'function') {
     // Non-fatal if .env doesn't exist
   }
 }
+
+const switchIp = process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1';
+const controllerIp = process.env['SDN_CONTROLLER_IP'] ?? '0.0.0.0';
+const gatewayIp = process.env['SDN_GATEWAY_IP'] ?? '127.0.0.1';
+const openFlowPort = parseInt(process.env['ZODIAC_OPENFLOW_PORT'] ?? '6633', 10);
 
 const controller = new ZodiacController();
 
@@ -44,7 +49,7 @@ async function main(): Promise<void> {
       console.log(`  Firmware        : ${health.deviceStatus?.firmwareVersion ?? 'N/A'}`);
       console.log(`  CPU Temperature : ${health.deviceStatus?.cpuTempC ?? 'N/A'} °C`);
       console.log(`  Device Uptime   : ${health.deviceStatus?.uptime ?? 'N/A'}`);
-      console.log(`  OpenFlow Daemon : ${health.openFlowMetrics.state === 'ESTABLISHED' ? '🟢 Connected (10.0.1.8:6633)' : '⚪ Ready (10.0.1.8:6633)'}`);
+      console.log(`  OpenFlow Daemon : ${health.openFlowMetrics.state === 'ESTABLISHED' ? `🟢 Connected (${controllerIp}:${openFlowPort})` : `⚪ Ready (${controllerIp}:${openFlowPort})`}`);
       console.log('──────────────────────────────────────────────────────────────────');
       if (health.config) {
         console.log('  NETWORK CONFIGURATION:');
@@ -79,8 +84,8 @@ async function main(): Promise<void> {
     }
 
     case 'listen': {
-      const port = 6633;
-      const host = '10.0.1.8';
+      const port = openFlowPort;
+      const host = controllerIp;
       console.log(`\n🚀 Starting OpenFlow 1.3 SDN Controller Daemon on ${host}:${port}...\n`);
 
       const of = controller.openFlow;
@@ -99,43 +104,28 @@ async function main(): Promise<void> {
         console.log(`    Buffer Count : ${features.nBuffers}`);
         console.log(`    Flow Tables  : ${features.nTables}`);
         console.log(`    Capabilities : 0x${features.capabilities.toString(16)}`);
-        console.log('    Status       : Installing Table-Miss Flow Entry (Option A: Controller Header-Sampling)...');
-
-        try {
-          of.sendTableMissRule(0, 'CONTROLLER', 128);
-          console.log('    [+] Table-Miss Rule Dispatched -> Forward unhandled packet headers to Controller (bounded 128B)!\n');
-        } catch (err) {
-          console.error(`    [!] Failed to install Table-Miss rule: ${(err as Error).message}\n`);
-        }
+        console.log('\n🛰️  Listening for PACKET_IN events and enforcing Council SDN invariants...\n');
       });
 
       of.on('packetIn', (pkt) => {
-        const ipInfo = pkt.srcIp ? ` | ${pkt.srcIp} -> ${pkt.dstIp}` : '';
-        const arpInfo = pkt.arpSenderIp ? ` | ARP: ${pkt.arpSenderIp} -> ${pkt.arpTargetIp}` : '';
-        console.log(`[📦 PACKET_IN] InPort: ${pkt.inPort ?? '?'} | EtherType: ${pkt.etherTypeStr} | Src MAC: ${pkt.srcMac} -> Dst: ${pkt.dstMac}${ipInfo}${arpInfo}`);
-      });
-
-      of.on('echoLatency', (latencyNs) => {
-        const ms = (Number(latencyNs) / 1_000_000).toFixed(3);
-        console.log(`[~] [Echo Heartbeat] Round-trip latency: ${ms} ms (${latencyNs} ns)`);
-      });
-
-      of.on('disconnected', (addr) => {
-        console.log(`[-] [OpenFlow] Switch disconnected: ${addr}`);
+        console.log(`[📦] PACKET_IN: Ingress Port=${pkt.inPort}, Reason=${pkt.reason}, Len=${pkt.totalLen}B, Table=${pkt.tableId}`);
+        if (pkt.parsed) {
+          console.log(`     L2/L3 Match: ${pkt.parsed.ethType === 0x0800 ? 'IPv4' : pkt.parsed.ethType === 0x0806 ? 'ARP' : '0x' + pkt.parsed.ethType.toString(16)} | Src=${pkt.parsed.srcMac} -> Dst=${pkt.parsed.dstMac}`);
+        }
       });
 
       of.on('error', (err) => {
-        console.error(`[!] [OpenFlow Error] ${err.message}`);
+        console.error('[❌] [OpenFlow Error]:', err.message);
       });
 
-      await of.listen(port, host);
-      console.log(`[*] Controller listening on ${host}:${port}. Waiting for Zodiac FX...`);
-      console.log('    (Press Ctrl+C to exit)\n');
+      await controller.startOpenFlow(port, host);
 
-      // Send periodic echo keep-alive every 5 seconds once established
       const timer = setInterval(() => {
-        if (of.metrics.state === 'ESTABLISHED') {
-          of.pingEcho();
+        const metrics = controller.getMetrics();
+        if (metrics.state === 'ESTABLISHED') {
+          process.stdout.write(
+            `\r📊 Packets Handled: ${metrics.packetsHandled} | FlowMods Injected: ${metrics.flowModsInjected} | Echo Latency: ${(Number(metrics.lastEchoLatencyNs) / 1000).toFixed(1)} µs   `
+          );
         }
       }, 5000);
 
@@ -149,8 +139,8 @@ async function main(): Promise<void> {
     }
 
     case 'ping': {
-      console.log('\n📡 Testing physical link latency to 10.0.1.99...\n');
-      const ping = spawn('ping', ['-c', '5', '10.0.1.99'], { stdio: 'inherit' });
+      console.log(`\n📡 Testing physical link latency to ${switchIp}...\n`);
+      const ping = spawn('ping', ['-c', '5', switchIp], { stdio: 'inherit' });
       ping.on('close', (code) => {
         process.exit(code ?? 0);
       });
@@ -192,7 +182,7 @@ async function main(): Promise<void> {
       const boundPort = await bridge.start(port, host);
       console.log(`✨ Dashboard is live at : http://localhost:${boundPort}`);
       console.log(`   - REST Telemetry API : http://localhost:${boundPort}/api/zodiac`);
-      console.log(`   - OpenFlow 1.3 Daemon : 10.0.1.8:6633`);
+      console.log(`   - OpenFlow 1.3 Daemon : ${controllerIp}:${openFlowPort}`);
       console.log(`   - Serial Management   : ${controller.serialClient.path}`);
       if (cloudRelayUrl) {
         console.log(`   - Cloud Production   : ${cloudRelayUrl}`);
@@ -209,9 +199,9 @@ async function main(): Promise<void> {
 
     case 'init-switch': {
       console.log('\n⚙️  Provisioning Zodiac FX EEPROM with Council SDN configuration...\n');
-      console.log('   - Switch IP       : 10.0.1.99 / 24');
-      console.log('   - Default Gateway : 10.0.1.8 (Jetson)');
-      console.log('   - OF Controller   : 10.0.1.8:6633 (OpenFlow 1.3)');
+      console.log(`   - Switch IP       : ${switchIp} / 24`);
+      console.log(`   - Default Gateway : ${gatewayIp} (Jetson)`);
+      console.log(`   - OF Controller   : ${controllerIp}:${openFlowPort} (OpenFlow 1.3)`);
       console.log('   - Failstate       : Secure');
       console.log('   - VLAN 100        : Ports 1, 2, 3 (OpenFlow Data Plane)');
       console.log('   - VLAN 200        : Port 4 (Native Control Channel)\n');
@@ -233,9 +223,9 @@ Usage:
 Commands:
   status      - Query device firmware, temperature, uptime, and configuration
   ports       - Display link status and VLAN mapping for Ports 1–4
-  listen      - Run the OpenFlow 1.3 SDN controller daemon on 10.0.1.8:6633
+  listen      - Run the OpenFlow 1.3 SDN controller daemon (${controllerIp}:${openFlowPort})
   init-switch - Program Council SDN IPs, VLAN 100/200, and OpenFlow 1.3 onto switch
-  ping        - High-precision ping to Zodiac switch IP (10.0.1.99)
+  ping        - High-precision ping to Zodiac switch IP (${switchIp})
   reboot      - Restart the Zodiac FX switch via serial command
   serve       - Launch the local web dashboard and REST bridge on http://localhost:3000
 `);

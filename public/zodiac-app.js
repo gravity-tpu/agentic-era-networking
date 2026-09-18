@@ -18,6 +18,11 @@
   let isFetching = false;
   let pollTimeoutId = null;
 
+  // Active Appliance Tier State ('zodiac' | 'orin' | 'coral')
+  let activeDeviceId = 'zodiac';
+  let jetsonTimeSeriesBuffer = [];
+  let coralTimeSeriesBuffer = [];
+
   // Chart State
   let currentRange = 'live'; // 'live' | '1h' | '6h' | '24h' | '7d'
   let currentUnit = 'pps';   // 'pps' | 'bps'
@@ -148,6 +153,66 @@
     btnUnitPps: document.getElementById('btn-unit-pps'),
     btnUnitBps: document.getElementById('btn-unit-bps'),
     canvasWrapperFlow: document.getElementById('canvas-wrapper-flow'),
+
+    // Active Device Tier Selector & Views
+    btnDeviceZodiac: document.getElementById('btn-device-zodiac'),
+    btnDeviceOrin: document.getElementById('btn-device-orin'),
+    btnDeviceCoral: document.getElementById('btn-device-coral'),
+    dotDeviceZodiac: document.getElementById('dot-device-zodiac'),
+    dotDeviceOrin: document.getElementById('dot-device-orin'),
+    dotDeviceCoral: document.getElementById('dot-device-coral'),
+    viewDeviceZodiac: document.getElementById('view-device-zodiac'),
+    viewDeviceOrin: document.getElementById('view-device-orin'),
+    viewDeviceCoral: document.getElementById('view-device-coral'),
+
+    // Jetson Orin Nano Elements
+    orinJetpack: document.getElementById('orin-jetpack'),
+    orinUptime: document.getElementById('orin-uptime'),
+    orinCpuCoresBadge: document.getElementById('orin-cpu-cores-badge'),
+    orinKpiCompute: document.getElementById('orin-kpi-compute'),
+    orinBarCpu: document.getElementById('orin-bar-cpu'),
+    orinKpiGpu: document.getElementById('orin-kpi-gpu'),
+    orinKpiLoad: document.getElementById('orin-kpi-load'),
+    orinKpiSdnStatus: document.getElementById('orin-kpi-sdn-status'),
+    orinKpiSdnRate: document.getElementById('orin-kpi-sdn-rate'),
+    orinBarSdn: document.getElementById('orin-bar-sdn'),
+    orinKpiSdnRx: document.getElementById('orin-kpi-sdn-rx'),
+    orinKpiWifiRate: document.getElementById('orin-kpi-wifi-rate'),
+    orinKpiRam: document.getElementById('orin-kpi-ram'),
+    orinBarRam: document.getElementById('orin-bar-ram'),
+    orinKpiNvme: document.getElementById('orin-kpi-nvme'),
+    orinKpiPower: document.getElementById('orin-kpi-power'),
+    orinBarPower: document.getElementById('orin-bar-power'),
+    orinKpiCpuTemp: document.getElementById('orin-kpi-cpu-temp'),
+    orinKpiGpuTemp: document.getElementById('orin-kpi-gpu-temp'),
+    orinKpiJuncTemp: document.getElementById('orin-kpi-junc-temp'),
+    orinIfSdnMac: document.getElementById('orin-if-sdn-mac'),
+    orinIfSdnStatus: document.getElementById('orin-if-sdn-status'),
+    orinIfSdnBytes: document.getElementById('orin-if-sdn-bytes'),
+    orinIfSdnPkts: document.getElementById('orin-if-sdn-pkts'),
+    orinIfWifiMac: document.getElementById('orin-if-wifi-mac'),
+    orinIfWifiStatus: document.getElementById('orin-if-wifi-status'),
+    orinIfWifiBytes: document.getElementById('orin-if-wifi-bytes'),
+    orinIfWifiPkts: document.getElementById('orin-if-wifi-pkts'),
+    orinDiskStat: document.getElementById('orin-disk-stat'),
+    orinSvcPid: document.getElementById('orin-svc-pid'),
+
+    // Jetson Orin Canvases
+    chartOrinComputeCanvas: document.getElementById('chart-orin-compute'),
+    chartOrinNetworkCanvas: document.getElementById('chart-orin-network'),
+    chartOrinThermalsCanvas: document.getElementById('chart-orin-thermals'),
+    chartOrinPowerCanvas: document.getElementById('chart-orin-power'),
+
+    // Google Coral TPU Elements
+    coralKpiStatus: document.getElementById('coral-kpi-status'),
+    coralKpiSpeed: document.getElementById('coral-kpi-speed'),
+    coralKpiBus: document.getElementById('coral-kpi-bus'),
+    coralKpiVid: document.getElementById('coral-kpi-vid'),
+    coralKpiTotalInf: document.getElementById('coral-kpi-total-inf'),
+
+    // Google Coral Canvases
+    chartCoralRateCanvas: document.getElementById('chart-coral-rate'),
+    chartCoralLatencyCanvas: document.getElementById('chart-coral-latency'),
   };
 
   // Static Regex for integer string validation (Hoisted per Jeff Dean efficiency invariant)
@@ -334,11 +399,50 @@
 
     // 1. Sidebar & Topbar Identity
     const devName = snapshot.system.deviceName || 'Zodiac_FX';
-    const devIp = snapshot.system.ipAddress || '10.0.1.99';
+    const devIp = snapshot.system.ipAddress || '--';
 
-    if (els.breadcrumbName) els.breadcrumbName.innerText = devName;
-    if (els.sidebarDevName) els.sidebarDevName.innerText = devName;
-    if (els.sidebarIp) els.sidebarIp.innerText = `${devIp} · Port 4`;
+    if (els.breadcrumbName) {
+      if (activeDeviceId === 'orin') {
+        els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
+      } else if (activeDeviceId === 'coral') {
+        els.breadcrumbName.innerText = 'Google Coral Edge TPU (4 TOPS)';
+      } else {
+        els.breadcrumbName.innerText = devName;
+      }
+    }
+
+    if (els.sidebarDevName) {
+      if (activeDeviceId === 'orin') {
+        els.sidebarDevName.innerText = 'Jetson_Orin_Nano';
+      } else if (activeDeviceId === 'coral') {
+        els.sidebarDevName.innerText = 'Coral_Edge_TPU';
+      } else {
+        els.sidebarDevName.innerText = devName;
+      }
+    }
+
+    if (els.sidebarIp) {
+      if (activeDeviceId === 'orin') {
+        els.sidebarIp.innerText = 'enP8p1s0 (SDN) · wlP1p1s0 (Wi-Fi)';
+      } else if (activeDeviceId === 'coral') {
+        els.sidebarIp.innerText = 'USB 3.1 SuperSpeed (5 Gbps)';
+      } else {
+        els.sidebarIp.innerText = devIp !== '--' ? `${devIp} · Port 4` : 'Port 4 (SDN Link)';
+      }
+    }
+
+    // Update 3-Way Tier Selector Status Dots
+    if (els.dotDeviceZodiac) {
+      els.dotDeviceZodiac.className = snapshot.source === 'disconnected' ? 'cf-status-dot down' : 'cf-status-dot green';
+    }
+    if (els.dotDeviceOrin) {
+      const orinOnline = snapshot.jetson ? snapshot.jetson.status === 'online' : snapshot.source !== 'disconnected';
+      els.dotDeviceOrin.className = orinOnline ? 'cf-status-dot green' : 'cf-status-dot down';
+    }
+    if (els.dotDeviceCoral) {
+      const coralStatus = snapshot.coral?.status || (snapshot.source !== 'disconnected' ? 'standby' : 'offline');
+      els.dotDeviceCoral.className = coralStatus === 'online' ? 'cf-status-dot green' : (coralStatus === 'standby' ? 'cf-status-dot purple' : 'cf-status-dot down');
+    }
 
     if (els.sidebarStatusTag) {
       if (snapshot.source === 'disconnected') {
@@ -618,6 +722,183 @@
 
       if (timeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
         timeSeriesBuffer.shift();
+      }
+    }
+
+    // 7. Jetson Orin Nano Appliance Telemetry
+    if (snapshot.jetson) {
+      const j = snapshot.jetson;
+      const isOnline = snapshot.source !== 'disconnected';
+      if (els.dotDeviceOrin) {
+        els.dotDeviceOrin.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
+      }
+      if (els.orinJetpack && j.jetpackVersion) {
+        els.orinJetpack.innerText = `${j.jetpackVersion} (${j.l4tVersion || 'L4T 36.4.7'})`;
+      }
+      if (els.orinUptime) {
+        els.orinUptime.innerText = j.uptime || '--:--:--';
+      }
+      const cpuModelStr = j.cpuModel || j.compute?.cpuModel || '6-Core ARM Cortex-A78AE';
+      const coreCount = j.cpuCoreCount || j.compute?.cpuCores || 6;
+      if (els.orinCpuCoresBadge) {
+        els.orinCpuCoresBadge.innerText = `${coreCount} Cores · ${cpuModelStr}`;
+      }
+      const cpuPct = j.cpuUtilizationPct ?? j.compute?.cpuUtilizationPct ?? 0;
+      if (els.orinKpiCompute) {
+        els.orinKpiCompute.innerText = `${cpuPct}% CPU`;
+      }
+      if (els.orinBarCpu) {
+        els.orinBarCpu.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
+      }
+      const gpuPct = j.gpuUtilizationPct ?? j.compute?.gpuUtilizationPct ?? 0;
+      if (els.orinKpiGpu) {
+        els.orinKpiGpu.innerText = `${gpuPct}%`;
+      }
+      const loadArr = j.systemLoad || j.compute?.loadAverage;
+      if (els.orinKpiLoad) {
+        els.orinKpiLoad.innerText = Array.isArray(loadArr)
+          ? loadArr.map((v) => (typeof v === 'number' ? v.toFixed(2) : String(v))).join(', ')
+          : '--';
+      }
+
+      // Network Ports: SDN (enP8p1s0) vs Wi-Fi (wlP1p1s0)
+      const sdn = Array.isArray(j.interfaces)
+        ? j.interfaces.find((i) => i.name === 'enP8p1s0')
+        : (j.network?.enP8p1s0 || null);
+      const wifi = Array.isArray(j.interfaces)
+        ? j.interfaces.find((i) => i.name === 'wlP1p1s0')
+        : (j.network?.wlP1p1s0 || null);
+
+      if (sdn) {
+        const sdnUp = sdn.status === 'UP' || Boolean(sdn.carrier);
+        if (els.orinKpiSdnStatus) {
+          els.orinKpiSdnStatus.innerText = sdnUp ? (sdn.speedMbps ? `${sdn.speedMbps}M Full` : '1000M Full') : 'DOWN';
+          els.orinKpiSdnStatus.className = `cf-pill-badge ${sdnUp ? 'green' : 'gray'}`;
+        }
+        const sdnRate = safeBigInt(sdn.rxRateBps) + safeBigInt(sdn.txRateBps);
+        if (els.orinKpiSdnRate) els.orinKpiSdnRate.innerText = `${formatBytes(sdnRate)}/s`;
+        if (els.orinBarSdn) {
+          const sdnPct = sdnRate > 0n ? Math.min(100, Number((sdnRate * 100n) / 125000000n)) : 10;
+          els.orinBarSdn.style.width = `${Math.max(5, sdnPct)}%`;
+        }
+        if (els.orinKpiSdnRx) els.orinKpiSdnRx.innerText = `${formatNumber(sdn.rxRatePps)} pps`;
+
+        // Table details
+        if (els.orinIfSdnMac) els.orinIfSdnMac.innerText = sdn.macAddress || sdn.mac || 'ac:3a:e2:98:99:dd';
+        if (els.orinIfSdnStatus) {
+          els.orinIfSdnStatus.className = `cf-pill-badge ${sdnUp ? 'green' : 'gray'}`;
+          els.orinIfSdnStatus.innerText = sdnUp ? 'UP · 1000M' : 'DOWN';
+        }
+        if (els.orinIfSdnBytes) {
+          els.orinIfSdnBytes.innerText = `${formatBytes(sdn.rxBytes)} / ${formatBytes(sdn.txBytes)}`;
+        }
+        if (els.orinIfSdnPkts) {
+          els.orinIfSdnPkts.innerText = `${formatNumber(sdn.rxPackets)} / ${formatNumber(sdn.txPackets)}`;
+        }
+      }
+
+      if (wifi) {
+        const wifiUp = wifi.status === 'UP' || Boolean(wifi.carrier);
+        const wifiRate = safeBigInt(wifi.rxRateBps) + safeBigInt(wifi.txRateBps);
+        if (els.orinKpiWifiRate) els.orinKpiWifiRate.innerText = `${formatBytes(wifiRate)}/s`;
+
+        // Table details
+        if (els.orinIfWifiMac) els.orinIfWifiMac.innerText = wifi.macAddress || wifi.mac || 'f0:68:e3:33:02:a3';
+        if (els.orinIfWifiStatus) {
+          els.orinIfWifiStatus.className = `cf-pill-badge ${wifiUp ? 'green' : 'gray'}`;
+          els.orinIfWifiStatus.innerText = wifiUp ? 'UP · Wi-Fi' : 'DOWN';
+        }
+        if (els.orinIfWifiBytes) {
+          els.orinIfWifiBytes.innerText = `${formatBytes(wifi.rxBytes)} / ${formatBytes(wifi.txBytes)}`;
+        }
+        if (els.orinIfWifiPkts) {
+          els.orinIfWifiPkts.innerText = `${formatNumber(wifi.rxPackets)} / ${formatNumber(wifi.txPackets)}`;
+        }
+      }
+
+      // Memory & NVMe
+      const memUsed = safeBigInt(j.ramUsedBytes ?? j.memory?.usedBytes);
+      const memTot = safeBigInt(j.ramTotalBytes ?? j.memory?.totalBytes);
+      const memPct = memTot > 0n ? Number((memUsed * 100n) / memTot) : 0;
+      if (els.orinKpiRam) els.orinKpiRam.innerText = `${formatBytes(memUsed)} (${memPct}%)`;
+      if (els.orinBarRam) els.orinBarRam.style.width = `${Math.min(100, Math.max(5, memPct))}%`;
+
+      const diskUsed = safeBigInt(j.nvmeUsedBytes ?? j.storage?.usedBytes);
+      const diskTot = safeBigInt(j.nvmeTotalBytes ?? j.storage?.totalBytes);
+      const diskPct = diskTot > 0n ? Number((diskUsed * 100n) / diskTot) : 0;
+      if (els.orinKpiNvme) els.orinKpiNvme.innerText = `${formatBytes(diskUsed)} (${diskPct}%)`;
+      if (els.orinDiskStat) els.orinDiskStat.innerText = `${formatBytes(diskUsed)} / ${formatBytes(diskTot)} (${diskPct}%)`;
+
+      // Power & Thermals
+      let pwrW = 0;
+      if (j.powerMw && typeof j.powerMw.vddIn === 'number') {
+        pwrW = j.powerMw.vddIn / 1000;
+      } else if (j.power?.totalPowerW) {
+        pwrW = typeof j.power.totalPowerW === 'number' ? j.power.totalPowerW : Number(j.power.totalPowerW || 0);
+      }
+      if (els.orinKpiPower) els.orinKpiPower.innerText = `${pwrW.toFixed(1)} W`;
+      if (els.orinBarPower) {
+        const pwrPct = Math.min(100, Math.max(5, Math.round((pwrW / 15.0) * 100)));
+        els.orinBarPower.style.width = `${pwrPct}%`;
+      }
+
+      const temps = j.temperatures || j.thermals;
+      if (temps) {
+        if (els.orinKpiCpuTemp) els.orinKpiCpuTemp.innerText = temps.cpuC !== null && temps.cpuC !== undefined ? `${temps.cpuC}°C` : '--°C';
+        if (els.orinKpiGpuTemp) els.orinKpiGpuTemp.innerText = temps.gpuC !== null && temps.gpuC !== undefined ? `${temps.gpuC}°C` : '--°C';
+        if (els.orinKpiJuncTemp) els.orinKpiJuncTemp.innerText = temps.junctionC !== null && temps.junctionC !== undefined ? `${temps.junctionC}°C` : '--°C';
+      }
+
+      // Time series buffer update for Jetson
+      if (Array.isArray(j.timeSeries) && j.timeSeries.length > 0) {
+        const lastServerTs = j.timeSeries[j.timeSeries.length - 1].timestampMs;
+        if (jetsonTimeSeriesBuffer.length === 0 || (jetsonTimeSeriesBuffer[0] && lastServerTs < jetsonTimeSeriesBuffer[0].timestampMs)) {
+          jetsonTimeSeriesBuffer = j.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        } else {
+          const lastLocalTs = jetsonTimeSeriesBuffer[jetsonTimeSeriesBuffer.length - 1].timestampMs;
+          const newPts = j.timeSeries.filter((p) => p.timestampMs > lastLocalTs);
+          if (newPts.length > 0) {
+            jetsonTimeSeriesBuffer.push(...newPts);
+            if (jetsonTimeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
+              jetsonTimeSeriesBuffer = jetsonTimeSeriesBuffer.slice(-MAX_FRONTEND_BUFFER_POINTS);
+            }
+          }
+        }
+      }
+    }
+
+    // 8. Google Coral Edge TPU Telemetry
+    if (snapshot.coral) {
+      const c = snapshot.coral;
+      const isDetected = c.detected || c.status === 'online';
+      if (els.dotDeviceCoral) {
+        els.dotDeviceCoral.className = isDetected ? 'cf-status-dot green' : 'cf-status-dot purple';
+      }
+      if (els.coralKpiStatus) {
+        els.coralKpiStatus.innerText = isDetected ? 'ONLINE · STANDBY' : 'STANDBY';
+        els.coralKpiStatus.className = `cf-stat-value ${isDetected ? 'green' : 'purple'}`;
+      }
+      if (els.coralKpiSpeed) els.coralKpiSpeed.innerText = c.linkSpeed || (isDetected ? '5.0 Gbps (USB 3.1)' : 'Standby');
+      if (els.coralKpiBus) els.coralKpiBus.innerText = `Bus ${c.busNumber || '002'} Device ${c.deviceAddress || '003'}`;
+      if (els.coralKpiVid) els.coralKpiVid.innerText = `${c.vendorId || '1a6e'}:${c.productId || '089a'}`;
+      const totalInf = c.inferencesPerSecond ?? c.totalInferences ?? 0n;
+      if (els.coralKpiTotalInf) els.coralKpiTotalInf.innerText = formatNumber(totalInf);
+
+      // Time series buffer update for Coral
+      if (Array.isArray(c.timeSeries) && c.timeSeries.length > 0) {
+        const lastServerTs = c.timeSeries[c.timeSeries.length - 1].timestampMs;
+        if (coralTimeSeriesBuffer.length === 0 || (coralTimeSeriesBuffer[0] && lastServerTs < coralTimeSeriesBuffer[0].timestampMs)) {
+          coralTimeSeriesBuffer = c.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        } else {
+          const lastLocalTs = coralTimeSeriesBuffer[coralTimeSeriesBuffer.length - 1].timestampMs;
+          const newPts = c.timeSeries.filter((p) => p.timestampMs > lastLocalTs);
+          if (newPts.length > 0) {
+            coralTimeSeriesBuffer.push(...newPts);
+            if (coralTimeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
+              coralTimeSeriesBuffer = coralTimeSeriesBuffer.slice(-MAX_FRONTEND_BUFFER_POINTS);
+            }
+          }
+        }
       }
     }
 
@@ -1361,116 +1642,902 @@
     ctx.stroke();
   }
 
-  function updateCharts() {
-    const points = getPointsForDisplay();
-    if (points.length === 0) return;
+  function getJetsonPointsForDisplay() {
+    const durationMs = getRangeDurationMs(currentRange);
+    const cutoffMs = Date.now() - durationMs;
+    if (jetsonTimeSeriesBuffer.length > 0) {
+      const windowPoints = jetsonTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
+      return windowPoints.length > 0 ? windowPoints : jetsonTimeSeriesBuffer;
+    }
+    if (currentSnapshot?.jetson?.timeSeries) {
+      return currentSnapshot.jetson.timeSeries;
+    }
+    return [];
+  }
 
-    drawTrafficFlowChart(els.chartFlowCanvas, points, currentUnit);
-    drawMiniChart(els.chartCpuCanvas, points, 'cpuTemperatureC', '#10b981', '°C', 50);
-    drawMiniChart(els.chartLatCanvas, points, 'latencyNs', '#0051c3', 'µs', 500000);
+  function getCoralPointsForDisplay() {
+    const durationMs = getRangeDurationMs(currentRange);
+    const cutoffMs = Date.now() - durationMs;
+    if (coralTimeSeriesBuffer.length > 0) {
+      const windowPoints = coralTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
+      return windowPoints.length > 0 ? windowPoints : coralTimeSeriesBuffer;
+    }
+    if (currentSnapshot?.coral?.timeSeries) {
+      return currentSnapshot.coral.timeSeries;
+    }
+    return [];
+  }
 
-    const latest = points[points.length - 1];
-    if (latest) {
-      if (els.chartRxRate) {
-        if (chartPortFilter === 'all') {
-          els.chartRxRate.innerText = currentUnit === 'pps'
-            ? `${formatNumber(latest.rxRatePps)} pps (All Ports)`
-            : `${formatBytes(latest.rxRateBps)}/s (All Ports)`;
-        } else {
-          const pId = Number(chartPortFilter);
-          const pData = latest.ports?.[pId];
-          const rxRate = currentUnit === 'pps' ? pData?.rxRatePps ?? 0n : pData?.rxRateBps ?? 0n;
-          els.chartRxRate.innerText = currentUnit === 'pps'
-            ? `${formatNumber(rxRate)} pps (Port ${pId})`
-            : `${formatBytes(rxRate)}/s (Port ${pId})`;
-        }
-      }
-      if (els.chartTxRate) {
-        if (chartPortFilter === 'all') {
-          els.chartTxRate.innerText = currentUnit === 'pps'
-            ? `${formatNumber(latest.txRatePps)} pps (All Ports)`
-            : `${formatBytes(latest.txRateBps)}/s (All Ports)`;
-        } else {
-          const pId = Number(chartPortFilter);
-          const pData = latest.ports?.[pId];
-          const txRate = currentUnit === 'pps' ? pData?.txRatePps ?? 0n : pData?.txRateBps ?? 0n;
-          els.chartTxRate.innerText = currentUnit === 'pps'
-            ? `${formatNumber(txRate)} pps (Port ${pId})`
-            : `${formatBytes(txRate)}/s (Port ${pId})`;
-        }
-      }
-      if (els.chartTempVal) {
-        els.chartTempVal.innerText = currentSnapshot?.source === 'disconnected' || latest.cpuTemperatureC === null
-          ? '--°C'
-          : `${latest.cpuTemperatureC}°C`;
-      }
-      if (els.chartLatVal) {
-        els.chartLatVal.innerText = currentSnapshot?.source === 'disconnected' || latest.latencyNs === 0n
-          ? '--'
-          : formatLatencyNs(latest.latencyNs);
-      }
+  // --- Orin Chart 1: Compute (CPU vs GPU Utilization %) ---
+  function drawOrinComputeChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    // Grid lines: 0%, 25%, 50%, 75%, 100%
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${i * 25}%`, padLeft - 6, y);
     }
 
-    // Update all 4 Per-Port Analytics Cards
-    for (let portId = 1; portId <= 4; portId++) {
-      const cardRefs = els.portCards[portId];
-      if (!cardRefs) continue;
+    const durationMs = getRangeDurationMs(currentRange);
+    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
+    const minTime = maxTime - durationMs;
 
-      const portMeta = currentSnapshot?.ports?.find((p) => p.port === portId);
-      const isUp = portMeta?.status === 'UP';
+    // X-axis timestamps
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = 5;
+    for (let i = 0; i < xSteps; i++) {
+      const t = minTime + (durationMs * i) / (xSteps - 1);
+      const x = padLeft + (plotW * i) / (xSteps - 1);
+      const d = new Date(t);
+      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
+    }
 
-      // Update Header Dot, IP Badge & Status Badge
-      if (cardRefs.dot) {
-        cardRefs.dot.className = `cf-port-dot ${isUp ? 'active' : ''}`;
-      }
-      if (cardRefs.badgeStatus) {
-        cardRefs.badgeStatus.className = `cf-pill-badge ${isUp ? (portMeta?.vlanType === 'Native' ? 'blue' : 'green') : 'gray'}`;
-        cardRefs.badgeStatus.innerText = isUp ? (portId === 2 ? 'UP · 100M Full' : 'UP · 100M') : 'DOWN';
+    const getCoord = (pt, pctVal) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const y = padTop + plotH - (Math.max(0, Math.min(100, Number(pctVal || 0))) / 100) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // CPU Line & Area Fill (Blue #0051c3)
+    ctx.beginPath();
+    const c0 = getCoord(points[0], points[0].cpuUtilizationPct);
+    ctx.moveTo(c0.x, c0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].cpuUtilizationPct);
+      ctx.lineTo(c.x, c.y);
+    }
+    const cLast = getCoord(points[points.length - 1], points[points.length - 1].cpuUtilizationPct);
+    ctx.lineTo(cLast.x, padTop + plotH);
+    ctx.lineTo(c0.x, padTop + plotH);
+    ctx.closePath();
+    const cpuGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    cpuGrad.addColorStop(0, 'rgba(0, 81, 195, 0.16)');
+    cpuGrad.addColorStop(1, 'rgba(0, 81, 195, 0.01)');
+    ctx.fillStyle = cpuGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(c0.x, c0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].cpuUtilizationPct);
+      ctx.lineTo(c.x, c.y);
+    }
+    ctx.strokeStyle = '#0051c3';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // GPU Line (Purple #7e22ce)
+    ctx.beginPath();
+    const g0 = getCoord(points[0], points[0].gpuUtilizationPct);
+    ctx.moveTo(g0.x, g0.y);
+    for (let i = 1; i < points.length; i++) {
+      const g = getCoord(points[i], points[i].gpuUtilizationPct);
+      ctx.lineTo(g.x, g.y);
+    }
+    ctx.strokeStyle = '#7e22ce';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● CPU Utilization', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillText('● GPU (Ampere)', padLeft + 120, padTop - 6);
+  }
+
+  // --- Orin Chart 2: Network Throughput (enP8p1s0 vs wlP1p1s0) ---
+  function drawOrinNetworkChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 58;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    let maxY = 10000n; // 10 KB/s baseline
+    for (const pt of points) {
+      const sdnRate = safeBigInt(pt.sdnRxRateBps) + safeBigInt(pt.sdnTxRateBps);
+      const wifiRate = safeBigInt(pt.wifiRxRateBps) + safeBigInt(pt.wifiTxRateBps);
+      if (sdnRate > maxY) maxY = sdnRate;
+      if (wifiRate > maxY) maxY = wifiRate;
+    }
+    maxY = (maxY * 125n) / 100n;
+    const maxYNum = Number(maxY);
+
+    // Grid lines
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 3;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+
+      const gridVal = (maxY * BigInt(i)) / BigInt(steps);
+      ctx.fillText(`${formatBytes(gridVal)}/s`, padLeft - 6, y);
+    }
+
+    const durationMs = getRangeDurationMs(currentRange);
+    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
+    const minTime = maxTime - durationMs;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = 5;
+    for (let i = 0; i < xSteps; i++) {
+      const t = minTime + (durationMs * i) / (xSteps - 1);
+      const x = padLeft + (plotW * i) / (xSteps - 1);
+      const d = new Date(t);
+      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
+    }
+
+    const getCoord = (pt, rateBigInt) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const valNum = Number(safeBigInt(rateBigInt));
+      const y = padTop + plotH - (valNum / maxYNum) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // SDN Link (enP8p1s0) Curve (Green #10b981)
+    ctx.beginPath();
+    const s0 = getCoord(points[0], safeBigInt(points[0].sdnRxRateBps) + safeBigInt(points[0].sdnTxRateBps));
+    ctx.moveTo(s0.x, s0.y);
+    for (let i = 1; i < points.length; i++) {
+      const s = getCoord(points[i], safeBigInt(points[i].sdnRxRateBps) + safeBigInt(points[i].sdnTxRateBps));
+      ctx.lineTo(s.x, s.y);
+    }
+    const sLast = getCoord(points[points.length - 1], safeBigInt(points[points.length - 1].sdnRxRateBps) + safeBigInt(points[points.length - 1].sdnTxRateBps));
+    ctx.lineTo(sLast.x, padTop + plotH);
+    ctx.lineTo(s0.x, padTop + plotH);
+    ctx.closePath();
+    const sdnGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    sdnGrad.addColorStop(0, 'rgba(16, 185, 129, 0.16)');
+    sdnGrad.addColorStop(1, 'rgba(16, 185, 129, 0.01)');
+    ctx.fillStyle = sdnGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(s0.x, s0.y);
+    for (let i = 1; i < points.length; i++) {
+      const s = getCoord(points[i], safeBigInt(points[i].sdnRxRateBps) + safeBigInt(points[i].sdnTxRateBps));
+      ctx.lineTo(s.x, s.y);
+    }
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Wi-Fi (wlP1p1s0) Curve (Blue #0051c3)
+    ctx.beginPath();
+    const w0 = getCoord(points[0], safeBigInt(points[0].wifiRxRateBps) + safeBigInt(points[0].wifiTxRateBps));
+    ctx.moveTo(w0.x, w0.y);
+    for (let i = 1; i < points.length; i++) {
+      const w = getCoord(points[i], safeBigInt(points[i].wifiRxRateBps) + safeBigInt(points[i].wifiTxRateBps));
+      ctx.lineTo(w.x, w.y);
+    }
+    ctx.strokeStyle = '#0051c3';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#10b981';
+    ctx.fillText('● SDN GbE (enP8p1s0)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● Wi-Fi (wlP1p1s0)', padLeft + 150, padTop - 6);
+  }
+
+  // --- Orin Chart 3: Thermal Zones (CPU, GPU, Junction °C) ---
+  function drawOrinThermalsChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const minTemp = 20;
+    const maxTemp = 95;
+    const rangeTemp = maxTemp - minTemp;
+
+    // Grid lines: 25, 45, 65, 85
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const tempLevels = [25, 45, 65, 85];
+    for (const lvl of tempLevels) {
+      const y = padTop + plotH - ((lvl - minTemp) / rangeTemp) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${lvl}°C`, padLeft - 6, y);
+    }
+
+    // 85°C TJ Max Threshold Line
+    const threshY = padTop + plotH - ((85 - minTemp) / rangeTemp) * plotH;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(padLeft, threshY);
+    ctx.lineTo(width - padRight, threshY);
+    ctx.stroke();
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('85°C Limit', width - padRight - 5, threshY - 6);
+    ctx.restore();
+
+    const durationMs = getRangeDurationMs(currentRange);
+    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
+    const minTime = maxTime - durationMs;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = 5;
+    for (let i = 0; i < xSteps; i++) {
+      const t = minTime + (durationMs * i) / (xSteps - 1);
+      const x = padLeft + (plotW * i) / (xSteps - 1);
+      const d = new Date(t);
+      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
+    }
+
+    const getCoord = (pt, tempVal) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const v = typeof tempVal === 'number' ? tempVal : (pt.cpuTemperatureC || 35);
+      const y = padTop + plotH - ((Math.max(minTemp, Math.min(maxTemp, v)) - minTemp) / rangeTemp) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // CPU Temp Curve (Green #10b981)
+    ctx.beginPath();
+    const c0 = getCoord(points[0], points[0].cpuTemperatureC);
+    ctx.moveTo(c0.x, c0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].cpuTemperatureC);
+      ctx.lineTo(c.x, c.y);
+    }
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // GPU Temp Curve (Indigo #6366f1)
+    ctx.beginPath();
+    const g0 = getCoord(points[0], points[0].gpuTemperatureC);
+    ctx.moveTo(g0.x, g0.y);
+    for (let i = 1; i < points.length; i++) {
+      const g = getCoord(points[i], points[i].gpuTemperatureC);
+      ctx.lineTo(g.x, g.y);
+    }
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Junction Temp Curve (Orange #f6821f)
+    ctx.beginPath();
+    const j0 = getCoord(points[0], points[0].junctionTemperatureC);
+    ctx.moveTo(j0.x, j0.y);
+    for (let i = 1; i < points.length; i++) {
+      const j = getCoord(points[i], points[i].junctionTemperatureC);
+      ctx.lineTo(j.x, j.y);
+    }
+    ctx.strokeStyle = '#f6821f';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#10b981';
+    ctx.fillText('● CPU', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#6366f1';
+    ctx.fillText('● GPU', padLeft + 70, padTop - 6);
+    ctx.fillStyle = '#f6821f';
+    ctx.fillText('● Junction (Tj)', padLeft + 130, padTop - 6);
+  }
+
+  // --- Orin Chart 4: Board Power Draw (Watts) ---
+  function drawOrinPowerChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    let maxW = 10;
+    for (const pt of points) {
+      const w = typeof pt.boardPowerW === 'number' ? pt.boardPowerW : Number(pt.boardPowerW || 0);
+      if (w > maxW) maxW = w;
+    }
+    maxW = Math.max(10, Math.ceil(maxW * 1.25));
+
+    // Grid lines: 3 steps
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 3;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      const val = (maxW * i) / steps;
+      ctx.fillText(`${Math.round(val)} W`, padLeft - 6, y);
+    }
+
+    const durationMs = getRangeDurationMs(currentRange);
+    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
+    const minTime = maxTime - durationMs;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = 5;
+    for (let i = 0; i < xSteps; i++) {
+      const t = minTime + (durationMs * i) / (xSteps - 1);
+      const x = padLeft + (plotW * i) / (xSteps - 1);
+      const d = new Date(t);
+      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
+    }
+
+    const getCoord = (pt, powerW) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const w = typeof powerW === 'number' ? powerW : Number(powerW || 0);
+      const y = padTop + plotH - (Math.max(0, Math.min(maxW, w)) / maxW) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // Power Area & Line (Orange #f6821f)
+    ctx.beginPath();
+    const p0 = getCoord(points[0], points[0].boardPowerW);
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < points.length; i++) {
+      const p = getCoord(points[i], points[i].boardPowerW);
+      ctx.lineTo(p.x, p.y);
+    }
+    const pLast = getCoord(points[points.length - 1], points[points.length - 1].boardPowerW);
+    ctx.lineTo(pLast.x, padTop + plotH);
+    ctx.lineTo(p0.x, padTop + plotH);
+    ctx.closePath();
+    const pGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    pGrad.addColorStop(0, 'rgba(246, 130, 31, 0.16)');
+    pGrad.addColorStop(1, 'rgba(246, 130, 31, 0.01)');
+    ctx.fillStyle = pGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < points.length; i++) {
+      const p = getCoord(points[i], points[i].boardPowerW);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.strokeStyle = '#f6821f';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f6821f';
+    ctx.fillText('● Board Input Power (INA3221 VDD_IN)', padLeft + 10, padTop - 6);
+  }
+
+  // --- Coral Chart 1: Inference & Tap Ingestion Rate ---
+  function drawCoralRateChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 55;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    let maxY = 100;
+    for (const pt of points) {
+      const inf = typeof pt.inferenceRateIps === 'number' ? pt.inferenceRateIps : Number(pt.inferenceRateIps || 0);
+      const tap = typeof pt.tapPacketsPerSec === 'bigint' ? Number(pt.tapPacketsPerSec) : Number(pt.tapPacketsPerSec || 0);
+      if (inf > maxY) maxY = inf;
+      if (tap > maxY) maxY = tap;
+    }
+    maxY = Math.max(100, Math.ceil(maxY * 1.25));
+
+    // Grid lines: 3 steps
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 3;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      const val = (maxY * i) / steps;
+      ctx.fillText(formatNumber(Math.round(val)), padLeft - 6, y);
+    }
+
+    const durationMs = getRangeDurationMs(currentRange);
+    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
+    const minTime = maxTime - durationMs;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = 5;
+    for (let i = 0; i < xSteps; i++) {
+      const t = minTime + (durationMs * i) / (xSteps - 1);
+      const x = padLeft + (plotW * i) / (xSteps - 1);
+      const d = new Date(t);
+      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
+    }
+
+    const getCoord = (pt, valNum) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const v = typeof valNum === 'number' ? valNum : Number(valNum || 0);
+      const y = padTop + plotH - (Math.max(0, Math.min(maxY, v)) / maxY) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // Inference Curve (Purple #7e22ce)
+    ctx.beginPath();
+    const inf0 = getCoord(points[0], points[0].inferenceRateIps);
+    ctx.moveTo(inf0.x, inf0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].inferenceRateIps);
+      ctx.lineTo(c.x, c.y);
+    }
+    const infLast = getCoord(points[points.length - 1], points[points.length - 1].inferenceRateIps);
+    ctx.lineTo(infLast.x, padTop + plotH);
+    ctx.lineTo(inf0.x, padTop + plotH);
+    ctx.closePath();
+    const infGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    infGrad.addColorStop(0, 'rgba(126, 34, 206, 0.16)');
+    infGrad.addColorStop(1, 'rgba(126, 34, 206, 0.01)');
+    ctx.fillStyle = infGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(inf0.x, inf0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].inferenceRateIps);
+      ctx.lineTo(c.x, c.y);
+    }
+    ctx.strokeStyle = '#7e22ce';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Tap Packets Curve (Blue #0051c3)
+    ctx.beginPath();
+    const tap0 = getCoord(points[0], points[0].tapPacketsPerSec);
+    ctx.moveTo(tap0.x, tap0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].tapPacketsPerSec);
+      ctx.lineTo(c.x, c.y);
+    }
+    ctx.strokeStyle = '#0051c3';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillText('● Inferences (IPS)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● Port 3 Tap Packets (PPS)', padLeft + 130, padTop - 6);
+  }
+
+  // --- Coral Chart 2: Sub-Millisecond Latency Profile (µs) ---
+  function drawCoralLatencyChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 55;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    let maxLat = 600;
+    for (const pt of points) {
+      const lat = typeof pt.latencyMicros === 'number' ? pt.latencyMicros : Number(pt.latencyMicros || 0);
+      if (lat > maxLat) maxLat = lat;
+    }
+    maxLat = Math.max(600, Math.ceil(maxLat * 1.15));
+
+    // Grid lines: 3 steps
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 3;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      const val = (maxLat * i) / steps;
+      ctx.fillText(`${Math.round(val)} µs`, padLeft - 6, y);
+    }
+
+    // 500 µs Dean Invariant Threshold Line
+    const threshY = padTop + plotH - (500 / maxLat) * plotH;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(padLeft, threshY);
+    ctx.lineTo(width - padRight, threshY);
+    ctx.stroke();
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('500 µs Dean Target', width - padRight - 5, threshY - 6);
+    ctx.restore();
+
+    const durationMs = getRangeDurationMs(currentRange);
+    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
+    const minTime = maxTime - durationMs;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xSteps = 5;
+    for (let i = 0; i < xSteps; i++) {
+      const t = minTime + (durationMs * i) / (xSteps - 1);
+      const x = padLeft + (plotW * i) / (xSteps - 1);
+      const d = new Date(t);
+      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
+    }
+
+    const getCoord = (pt, latNum) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const v = typeof latNum === 'number' ? latNum : Number(latNum || 0);
+      const y = padTop + plotH - (Math.max(0, Math.min(maxLat, v)) / maxLat) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // Latency Area & Line (Emerald #059669)
+    ctx.beginPath();
+    const l0 = getCoord(points[0], points[0].latencyMicros);
+    ctx.moveTo(l0.x, l0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].latencyMicros);
+      ctx.lineTo(c.x, c.y);
+    }
+    const lLast = getCoord(points[points.length - 1], points[points.length - 1].latencyMicros);
+    ctx.lineTo(lLast.x, padTop + plotH);
+    ctx.lineTo(l0.x, padTop + plotH);
+    ctx.closePath();
+    const lGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    lGrad.addColorStop(0, 'rgba(5, 150, 105, 0.16)');
+    lGrad.addColorStop(1, 'rgba(5, 150, 105, 0.01)');
+    ctx.fillStyle = lGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(l0.x, l0.y);
+    for (let i = 1; i < points.length; i++) {
+      const c = getCoord(points[i], points[i].latencyMicros);
+      ctx.lineTo(c.x, c.y);
+    }
+    ctx.strokeStyle = '#059669';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#059669';
+    ctx.fillText('● Line-Rate Inference Latency (<500 µs)', padLeft + 10, padTop - 6);
+  }
+
+  function updateCharts() {
+    if (activeDeviceId === 'zodiac') {
+      const points = getPointsForDisplay();
+      if (points.length === 0) return;
+
+      drawTrafficFlowChart(els.chartFlowCanvas, points, currentUnit);
+      drawMiniChart(els.chartCpuCanvas, points, 'cpuTemperatureC', '#10b981', '°C', 50);
+      drawMiniChart(els.chartLatCanvas, points, 'latencyNs', '#0051c3', 'µs', 500000);
+
+      const latest = points[points.length - 1];
+      if (latest) {
+        if (els.chartRxRate) {
+          if (chartPortFilter === 'all') {
+            els.chartRxRate.innerText = currentUnit === 'pps'
+              ? `${formatNumber(latest.rxRatePps)} pps (All Ports)`
+              : `${formatBytes(latest.rxRateBps)}/s (All Ports)`;
+          } else {
+            const pId = Number(chartPortFilter);
+            const pData = latest.ports?.[pId];
+            const rxRate = currentUnit === 'pps' ? pData?.rxRatePps ?? 0n : pData?.rxRateBps ?? 0n;
+            els.chartRxRate.innerText = currentUnit === 'pps'
+              ? `${formatNumber(rxRate)} pps (Port ${pId})`
+              : `${formatBytes(rxRate)}/s (Port ${pId})`;
+          }
+        }
+        if (els.chartTxRate) {
+          if (chartPortFilter === 'all') {
+            els.chartTxRate.innerText = currentUnit === 'pps'
+              ? `${formatNumber(latest.txRatePps)} pps (All Ports)`
+              : `${formatBytes(latest.txRateBps)}/s (All Ports)`;
+          } else {
+            const pId = Number(chartPortFilter);
+            const pData = latest.ports?.[pId];
+            const txRate = currentUnit === 'pps' ? pData?.txRatePps ?? 0n : pData?.txRateBps ?? 0n;
+            els.chartTxRate.innerText = currentUnit === 'pps'
+              ? `${formatNumber(txRate)} pps (Port ${pId})`
+              : `${formatBytes(txRate)}/s (Port ${pId})`;
+          }
+        }
+        if (els.chartTempVal) {
+          els.chartTempVal.innerText = currentSnapshot?.source === 'disconnected' || latest.cpuTemperatureC === null
+            ? '--°C'
+            : `${latest.cpuTemperatureC}°C`;
+        }
+        if (els.chartLatVal) {
+          els.chartLatVal.innerText = currentSnapshot?.source === 'disconnected' || latest.latencyNs === 0n
+            ? '--'
+            : formatLatencyNs(latest.latencyNs);
+        }
       }
 
-      const portIpStr = portMeta?.ipAddress || (portId === 4 ? '10.0.1.99' : (portId === 2 ? 'Gateway Uplink' : 'Unassigned'));
-      if (cardRefs.badgeIp) {
-        cardRefs.badgeIp.innerText = portId === 4 ? `IP: ${portIpStr}` : (portId === 2 ? 'Gateway Uplink' : 'IP: Unassigned');
-        cardRefs.badgeIp.className = `cf-pill-badge mono ${portId === 4 || portId === 2 ? 'blue' : 'gray'}`;
-      }
+      // Update all 4 Per-Port Analytics Cards
+      for (let portId = 1; portId <= 4; portId++) {
+        const cardRefs = els.portCards[portId];
+        if (!cardRefs) continue;
 
-      // Latest port rate
-      const latestPortData = latest?.ports?.[portId];
-      const pRxRate = latestPortData?.rxRatePps ?? 0n;
-      const pTxRate = latestPortData?.txRatePps ?? 0n;
-      const pRxBytesRate = latestPortData?.rxRateBps ?? 0n;
+        const portMeta = currentSnapshot?.ports?.find((p) => p.port === portId);
+        const isUp = portMeta?.status === 'UP';
 
-      if (cardRefs.badgeRate) {
-        cardRefs.badgeRate.innerText = isUp
-          ? (currentUnit === 'pps' ? `${formatNumber(pRxRate)} pps` : `${formatBytes(pRxBytesRate)}/s`)
-          : '0 pps';
-      }
+        // Update Header Dot, IP Badge & Status Badge
+        if (cardRefs.dot) {
+          cardRefs.dot.className = `cf-port-dot ${isUp ? 'active' : ''}`;
+        }
+        if (cardRefs.badgeStatus) {
+          cardRefs.badgeStatus.className = `cf-pill-badge ${isUp ? (portMeta?.vlanType === 'Native' ? 'blue' : 'green') : 'gray'}`;
+          cardRefs.badgeStatus.innerText = isUp ? (portId === 2 ? 'UP · 100M Full' : 'UP · 100M') : 'DOWN';
+        }
 
-      // Collapsible Body Stats
-      if (cardRefs.statRx) {
-        const totalRxBytes = portMeta?.rxBytes ?? 0n;
-        cardRefs.statRx.innerText = `${formatBytes(totalRxBytes)} (${formatNumber(pRxRate)} pps)`;
-      }
-      if (cardRefs.statTx) {
-        const totalTxBytes = portMeta?.txBytes ?? 0n;
-        cardRefs.statTx.innerText = `${formatBytes(totalTxBytes)} (${formatNumber(pTxRate)} pps)`;
-      }
-      if (cardRefs.statPkts) {
-        const totalPkts = (portMeta?.rxPackets ?? 0n) + (portMeta?.txPackets ?? 0n);
-        cardRefs.statPkts.innerText = `${formatNumber(totalPkts)} pkts`;
-      }
-      if (cardRefs.statIp) {
-        cardRefs.statIp.innerText = portId === 4 ? `${portIpStr} (Native)` : (portId === 2 ? `${portIpStr} (ISP Gateway)` : 'Unassigned');
-      }
-      if (cardRefs.statErr) {
-        const drops = (portMeta?.rxDropped ?? 0n) + (portMeta?.txDropped ?? 0n);
-        const crc = portMeta?.rxCrcErrors ?? 0n;
-        cardRefs.statErr.innerText = `${formatNumber(drops)} drop · ${formatNumber(crc)} crc`;
-      }
+        const portIpStr = portMeta?.ipAddress || (portId === 4 ? (currentSnapshot?.system?.ipAddress || '--') : (portId === 2 ? 'Gateway Uplink' : 'Unassigned'));
+        if (cardRefs.badgeIp) {
+          cardRefs.badgeIp.innerText = portId === 4 ? (portIpStr !== '--' ? `IP: ${portIpStr}` : 'SDN Native Link') : (portId === 2 ? 'Gateway Uplink' : 'IP: Unassigned');
+          cardRefs.badgeIp.className = `cf-pill-badge mono ${portId === 4 || portId === 2 ? 'blue' : 'gray'}`;
+        }
 
-      // Render port mini chart if expanded
-      if (!portCollapseState[portId] && cardRefs.canvas) {
-        drawPortMiniChart(cardRefs.canvas, points, portId, currentUnit);
+        // Latest port rate
+        const latestPortData = latest?.ports?.[portId];
+        const pRxRate = latestPortData?.rxRatePps ?? 0n;
+        const pTxRate = latestPortData?.txRatePps ?? 0n;
+        const pRxBytesRate = latestPortData?.rxRateBps ?? 0n;
+
+        if (cardRefs.badgeRate) {
+          cardRefs.badgeRate.innerText = isUp
+            ? (currentUnit === 'pps' ? `${formatNumber(pRxRate)} pps` : `${formatBytes(pRxBytesRate)}/s`)
+            : '0 pps';
+        }
+
+        // Collapsible Body Stats
+        if (cardRefs.statRx) {
+          const totalRxBytes = portMeta?.rxBytes ?? 0n;
+          cardRefs.statRx.innerText = `${formatBytes(totalRxBytes)} (${formatNumber(pRxRate)} pps)`;
+        }
+        if (cardRefs.statTx) {
+          const totalTxBytes = portMeta?.txBytes ?? 0n;
+          cardRefs.statTx.innerText = `${formatBytes(totalTxBytes)} (${formatNumber(pTxRate)} pps)`;
+        }
+        if (cardRefs.statPkts) {
+          const totalPkts = (portMeta?.rxPackets ?? 0n) + (portMeta?.txPackets ?? 0n);
+          cardRefs.statPkts.innerText = `${formatNumber(totalPkts)} pkts`;
+        }
+        if (cardRefs.statIp) {
+          cardRefs.statIp.innerText = portId === 4 ? `${portIpStr} (Native)` : (portId === 2 ? `${portIpStr} (ISP Gateway)` : 'Unassigned');
+        }
+        if (cardRefs.statErr) {
+          const drops = (portMeta?.rxDropped ?? 0n) + (portMeta?.txDropped ?? 0n);
+          const crc = portMeta?.rxCrcErrors ?? 0n;
+          cardRefs.statErr.innerText = `${formatNumber(drops)} drop · ${formatNumber(crc)} crc`;
+        }
+
+        // Render port mini chart if expanded
+        if (!portCollapseState[portId] && cardRefs.canvas) {
+          drawPortMiniChart(cardRefs.canvas, points, portId, currentUnit);
+        }
+      }
+    } else if (activeDeviceId === 'orin') {
+      const orinPoints = getJetsonPointsForDisplay();
+      if (orinPoints.length > 0) {
+        drawOrinComputeChart(els.chartOrinComputeCanvas, orinPoints);
+        drawOrinNetworkChart(els.chartOrinNetworkCanvas, orinPoints);
+        drawOrinThermalsChart(els.chartOrinThermalsCanvas, orinPoints);
+        drawOrinPowerChart(els.chartOrinPowerCanvas, orinPoints);
+      }
+    } else if (activeDeviceId === 'coral') {
+      const coralPoints = getCoralPointsForDisplay();
+      if (coralPoints.length > 0) {
+        drawCoralRateChart(els.chartCoralRateCanvas, coralPoints);
+        drawCoralLatencyChart(els.chartCoralLatencyCanvas, coralPoints);
       }
     }
   }
@@ -1780,12 +2847,80 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Initialize Collapsible Navigation Sidebar (Left Pane Slider)
   initSidebarSlider();
 
+  // Active Appliance Tier Switching Logic
+  function switchDevice(device) {
+    if (!['zodiac', 'orin', 'coral'].includes(device)) return;
+    activeDeviceId = device;
+
+    if (els.btnDeviceZodiac) {
+      els.btnDeviceZodiac.classList.toggle('active', device === 'zodiac');
+      els.btnDeviceZodiac.setAttribute('aria-selected', String(device === 'zodiac'));
+    }
+    if (els.btnDeviceOrin) {
+      els.btnDeviceOrin.classList.toggle('active', device === 'orin');
+      els.btnDeviceOrin.setAttribute('aria-selected', String(device === 'orin'));
+    }
+    if (els.btnDeviceCoral) {
+      els.btnDeviceCoral.classList.toggle('active', device === 'coral');
+      els.btnDeviceCoral.setAttribute('aria-selected', String(device === 'coral'));
+    }
+
+    if (els.viewDeviceZodiac) els.viewDeviceZodiac.style.display = device === 'zodiac' ? 'block' : 'none';
+    if (els.viewDeviceOrin) els.viewDeviceOrin.style.display = device === 'orin' ? 'block' : 'none';
+    if (els.viewDeviceCoral) els.viewDeviceCoral.style.display = device === 'coral' ? 'block' : 'none';
+
+    if (els.breadcrumbName) {
+      if (device === 'zodiac') {
+        els.breadcrumbName.innerText = currentSnapshot?.system?.deviceName || 'Zodiac_FX';
+      } else if (device === 'orin') {
+        els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
+      } else if (device === 'coral') {
+        els.breadcrumbName.innerText = 'Google Coral Edge TPU (4 TOPS)';
+      }
+    }
+
+    if (els.sidebarDevName) {
+      if (device === 'zodiac') {
+        els.sidebarDevName.innerText = currentSnapshot?.system?.deviceName || 'Zodiac_FX';
+      } else if (device === 'orin') {
+        els.sidebarDevName.innerText = 'Jetson_Orin_Nano';
+      } else if (device === 'coral') {
+        els.sidebarDevName.innerText = 'Coral_Edge_TPU';
+      }
+    }
+
+    if (els.sidebarIp) {
+      if (device === 'zodiac') {
+        const devIp = currentSnapshot?.system?.ipAddress || '--';
+        els.sidebarIp.innerText = devIp !== '--' ? `${devIp} · Port 4` : 'Port 4 (SDN Link)';
+      } else if (device === 'orin') {
+        els.sidebarIp.innerText = 'enP8p1s0 (SDN) · wlP1p1s0 (Wi-Fi)';
+      } else if (device === 'coral') {
+        els.sidebarIp.innerText = 'USB 3.1 SuperSpeed (5 Gbps)';
+      }
+    }
+
+    updateCharts();
+  }
+
+  // Bind 3-Way Tier Selector Buttons
+  if (els.btnDeviceZodiac) {
+    els.btnDeviceZodiac.addEventListener('click', () => switchDevice('zodiac'));
+  }
+  if (els.btnDeviceOrin) {
+    els.btnDeviceOrin.addEventListener('click', () => switchDevice('orin'));
+  }
+  if (els.btnDeviceCoral) {
+    els.btnDeviceCoral.addEventListener('click', () => switchDevice('coral'));
+  }
+
   // Responsive Chart Resizing
   window.addEventListener('resize', () => {
     updateCharts();
   });
 
   // Global Helpers for external callers
+  window.switchDevice = switchDevice;
   window.triggerPacketBurst = triggerPacketBurst;
   window.triggerLoopInjection = triggerLoopInjection;
   window.resolveDns = resolveDns;
@@ -1872,6 +3007,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     fetchTelemetry,
     executeTerminalCommand,
     selectPort,
+    switchDevice,
     formatBytes,
     formatLatencyNs,
     triggerPacketBurst,

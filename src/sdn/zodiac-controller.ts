@@ -71,7 +71,7 @@ export class ZodiacController {
   /**
    * Probes end-to-end health across Serial and OpenFlow without aggressive polling.
    */
-  public async getComprehensiveHealth(_targetIp: string = '10.0.1.99'): Promise<ZodiacHealthReport> {
+  public async getComprehensiveHealth(): Promise<ZodiacHealthReport> {
     let serialDetected = false;
     let deviceStatus: ZodiacDeviceStatus | undefined;
     let ports: ZodiacPortInfo[] | undefined;
@@ -82,48 +82,35 @@ export class ZodiacController {
       if (path) {
         serialDetected = true;
       }
-    } catch (err: unknown) {
-      console.warn('[!] [ZodiacController] Serial device not detected:', err instanceof Error ? err.message : String(err));
+    } catch (_) {
       serialDetected = false;
     }
 
     const now = Date.now();
-    const shouldProbeSerial = serialDetected && (now - this.lastSerialProbeMs > 30_000 || !this.cachedConfig);
-
     if (serialDetected) {
-      if (shouldProbeSerial) {
-        this.lastSerialProbeMs = now;
+      // Cache serial responses for 1000ms to avoid locking the serial port under frequent polling
+      if (!this.cachedConfig || !this.cachedStatus || (now - this.lastSerialProbeMs > 1000)) {
         try {
-          deviceStatus = await this.serial.getStatus();
-          if (deviceStatus) this.cachedStatus = deviceStatus;
-        } catch (err: unknown) {
-          console.warn('[!] [ZodiacController] Serial getStatus error:', err instanceof Error ? err.message : String(err));
+          const [statusRes, portsRes, configRes] = await Promise.all([
+            this.serial.getStatus().catch(() => undefined),
+            this.serial.getPorts().catch(() => undefined),
+            this.serial.getConfig().catch((err: Error) => {
+              console.warn('[!] [ZodiacController] Serial getConfig error:', err.message);
+              return undefined;
+            }),
+          ]);
+
+          if (statusRes) this.cachedStatus = statusRes;
+          if (portsRes) this.cachedPorts = portsRes;
+          if (configRes) this.cachedConfig = configRes;
+          this.lastSerialProbeMs = now;
+        } catch (_) {
+          // Non-fatal if serial query is busy
         }
-        try {
-          ports = await this.serial.getPorts();
-          if (ports && ports.length > 0) this.cachedPorts = ports;
-        } catch (err: unknown) {
-          console.warn('[!] [ZodiacController] Serial getPorts error:', err instanceof Error ? err.message : String(err));
-        }
-        if (!this.cachedConfig) {
-          try {
-            config = await this.serial.getConfig();
-            if (config) this.cachedConfig = config;
-          } catch (err: unknown) {
-            console.warn('[!] [ZodiacController] Serial getConfig error:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      } else {
-        deviceStatus = this.cachedStatus;
-        ports = this.cachedPorts;
-        config = this.cachedConfig;
       }
-    } else {
-      // Disconnected: Do not masquerade stale cache as live hardware (Reality Invariant)
-      this.cachedStatus = undefined;
-      this.cachedPorts = undefined;
-      deviceStatus = undefined;
-      ports = undefined;
+
+      deviceStatus = this.cachedStatus;
+      ports = this.cachedPorts;
       config = this.cachedConfig;
     }
 
@@ -139,13 +126,20 @@ export class ZodiacController {
   }
 
   /**
-   * Generates formatted diagnostics output for CLI commands when physical hardware is disconnected or unresponsive.
-   * Council Invariant: Zero Suppression of Reality. Never fake hardware metrics.
+   * Executes a CLI command either via Serial CDC ACM.
+   * If serial is unavailable or disconnected, returns a clear hardware status message.
    */
-  public getDiagnosticsOutput(command: string): string {
+  public async executeCommand(command: string): Promise<string> {
+    try {
+      return await this.serial.executeRaw(command);
+    } catch (err: unknown) {
+      // Continue to check device presence below
+    }
+
     let serialPresent = false;
     try {
-      serialPresent = Boolean(this.serial.detectDevice());
+      const path = this.serial.detectDevice();
+      if (path) serialPresent = true;
     } catch {
       serialPresent = false;
     }
@@ -154,8 +148,8 @@ export class ZodiacController {
 
     if (!serialPresent && !ofConnected) {
       return `[!] Zodiac FX Hardware Disconnected
-No serial modem detected under /dev/cu.usbmodem* and OpenFlow switch is disconnected.
-Please connect the physical switch via USB (serial CLI) or Ethernet (OpenFlow 10.0.1.8:6633) to query live device state.`;
+No serial modem detected and OpenFlow switch is disconnected.
+Please connect the physical switch via USB (serial CLI) or Ethernet (OpenFlow controller) to query live device state.`;
     }
 
     if (serialPresent) {

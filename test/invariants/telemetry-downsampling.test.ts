@@ -14,8 +14,11 @@ import {
   RANGE_CONFIGS,
   getHistoricalTelemetry,
   persistTelemetrySnapshot,
+  pruneOldTelemetry,
 } from '../../src/db/telemetry-db.js';
 import { createDefaultZodiacSnapshot, type ZodiacTimeSeriesPoint } from '../../src/sdn/zodiac-telemetry.js';
+import pruneCronHandler from '../../api/cron/prune-telemetry.js';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 describe('Neon DB Historical Downsampling Engine', () => {
   it('strictly bounds any large dataset to maxPoints <= 360', () => {
@@ -111,5 +114,81 @@ describe('Neon DB Historical Downsampling Engine', () => {
     const snapshot = createDefaultZodiacSnapshot();
     const persisted = await persistTelemetrySnapshot(snapshot);
     expect(persisted).toBe(false);
+
+    const pruned = await pruneOldTelemetry(30);
+    expect(pruned).toBe(0);
+  });
+});
+
+describe('30-Day Retention Pruning Cron (api/cron/prune-telemetry)', () => {
+  function createMockHttp(options: {
+    method?: string;
+    headers?: Record<string, string>;
+  }) {
+    let statusCode = 200;
+    const responseHeaders: Record<string, string> = {};
+    let responseBody = '';
+
+    const req = {
+      method: options.method ?? 'GET',
+      headers: options.headers ?? {},
+    } as unknown as IncomingMessage;
+
+    const res = {
+      setHeader: (k: string, v: string) => { responseHeaders[k.toLowerCase()] = v; },
+      get statusCode() { return statusCode; },
+      set statusCode(c: number) { statusCode = c; },
+      end: (chunk?: string) => { if (chunk) responseBody += chunk; },
+    } as unknown as ServerResponse;
+
+    return { req, res, getStatus: () => statusCode, getBody: () => responseBody };
+  }
+
+  it('rejects unsupported HTTP methods with 405 (Fail-Closed Default Drop)', async () => {
+    const { req, res, getStatus, getBody } = createMockHttp({ method: 'DELETE' });
+    await pruneCronHandler(req, res);
+    expect(getStatus()).toBe(405);
+    expect(getBody()).toContain('Method Not Allowed');
+  });
+
+  it('rejects unauthenticated cron invocation with 401 when CRON_SECRET is required', async () => {
+    const prevSecret = process.env['CRON_SECRET'];
+    process.env['CRON_SECRET'] = 'secret-test-key-12345';
+
+    try {
+      const { req, res, getStatus } = createMockHttp({ method: 'GET', headers: {} });
+      await pruneCronHandler(req, res);
+      expect(getStatus()).toBe(401);
+    } finally {
+      if (prevSecret !== undefined) {
+        process.env['CRON_SECRET'] = prevSecret;
+      } else {
+        delete process.env['CRON_SECRET'];
+      }
+    }
+  });
+
+  it('executes pruning and returns 200 when authenticated with Bearer CRON_SECRET', async () => {
+    const prevSecret = process.env['CRON_SECRET'];
+    process.env['CRON_SECRET'] = 'secret-test-key-12345';
+
+    try {
+      const { req, res, getStatus, getBody } = createMockHttp({
+        method: 'GET',
+        headers: { authorization: 'Bearer secret-test-key-12345' },
+      });
+      await pruneCronHandler(req, res);
+      expect(getStatus()).toBe(200);
+      const parsed = JSON.parse(getBody());
+      expect(parsed.status).toBe('ok');
+      expect(parsed.retentionDays).toBe(30);
+      expect(typeof parsed.prunedCount).toBe('number');
+    } finally {
+      if (prevSecret !== undefined) {
+        process.env['CRON_SECRET'] = prevSecret;
+      } else {
+        delete process.env['CRON_SECRET'];
+      }
+    }
   });
 });

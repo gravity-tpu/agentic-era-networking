@@ -21,9 +21,12 @@ import {
   ZodiacFullTelemetrySnapshot,
   ZodiacTimeSeriesPoint,
   ZodiacPortSeriesPoint,
+  JetsonTimeSeriesPoint,
+  CoralTimeSeriesPoint,
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
+import { probeJetsonHardware, probeCoralHardware } from './hardware-probe.js';
 import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
 import { isLocalDev } from '../auth/google-auth.js';
 
@@ -92,6 +95,9 @@ export class ZodiacBridgeServer {
   private server: http.Server | null = null;
   private cachedSnapshot: ZodiacFullTelemetrySnapshot = createDisconnectedZodiacSnapshot();
   private timeSeries: ZodiacTimeSeriesPoint[] = [];
+  private jetsonTimeSeries: JetsonTimeSeriesPoint[] = [];
+  private coralTimeSeries: CoralTimeSeriesPoint[] = [];
+  private lastProbeNs: bigint = process.hrtime.bigint();
   private readonly portRxCounters = new Map<number, bigint>();
   private readonly portByteCounters = new Map<number, bigint>();
   private readonly cloudRelayUrl?: string | undefined;
@@ -107,14 +113,24 @@ export class ZodiacBridgeServer {
     bridgeSecret?: string
   ) {
     this.controller = controller ?? new ZodiacController();
-    this.switchIp = switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '10.0.1.99';
-    this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '10.0.1.8';
+    this.switchIp = switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1';
+    this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '0.0.0.0';
     this.cloudRelayUrl = cloudRelayUrl ?? process.env['ZODIAC_CLOUD_RELAY_URL'];
     this.bridgeSecret = bridgeSecret ?? process.env['ZODIAC_BRIDGE_SECRET'];
     this.timeSeries = generateHistoricalTelemetry(this.cachedSnapshot, 1, 60);
+    this.jetsonTimeSeries = this.cachedSnapshot.jetson?.timeSeries ? [...this.cachedSnapshot.jetson.timeSeries] : [];
+    this.coralTimeSeries = this.cachedSnapshot.coral?.timeSeries ? [...this.cachedSnapshot.coral.timeSeries] : [];
     this.cachedSnapshot = {
       ...this.cachedSnapshot,
       timeSeries: this.timeSeries,
+      jetson: this.cachedSnapshot.jetson ? {
+        ...this.cachedSnapshot.jetson,
+        timeSeries: this.jetsonTimeSeries,
+      } : undefined,
+      coral: this.cachedSnapshot.coral ? {
+        ...this.cachedSnapshot.coral,
+        timeSeries: this.coralTimeSeries,
+      } : undefined,
     };
 
     // Auto-install Table-Miss rule on connection to forward live traffic to controller
@@ -337,13 +353,10 @@ export class ZodiacBridgeServer {
 
           let output = '';
           try {
-            output = await this.controller.serialClient.executeRaw(command.trim());
-          } catch (serialErr: unknown) {
-            console.warn('[!] [Bridge Server] Serial executeRaw error, falling back to diagnostics:', serialErr instanceof Error ? serialErr.message : String(serialErr));
-          }
-
-          if (!output || output.trim() === '') {
-            output = this.controller.getDiagnosticsOutput(command.trim());
+            output = await this.controller.executeCommand(command.trim());
+          } catch (cmdErr: unknown) {
+            console.warn('[!] [Bridge Server] Command error:', cmdErr instanceof Error ? cmdErr.message : String(cmdErr));
+            output = `[Error executing command: ${cmdErr instanceof Error ? cmdErr.message : String(cmdErr)}]`;
           }
 
           res.statusCode = 200;
@@ -423,7 +436,7 @@ export class ZodiacBridgeServer {
             macAddress: '70:B3:D5:87:40:BC',
             ipAddress: this.switchIp,
             netmask: '255.255.255.0',
-            defaultGateway: '10.0.1.1',
+            defaultGateway: process.env['SDN_GATEWAY_IP'] ?? '0.0.0.0',
             openFlowController: this.controllerIp,
             openFlowPort: 6633,
             failstate: 'Secure',
@@ -525,7 +538,7 @@ export class ZodiacBridgeServer {
           macAddress: health.config?.macAddress ?? '70:B3:D5:87:40:BC',
           ipAddress: health.config?.ipAddress ?? this.switchIp,
           netmask: health.config?.netmask ?? '255.255.255.0',
-          defaultGateway: health.config?.gateway ?? '10.0.1.1',
+          defaultGateway: health.config?.gateway ?? process.env['SDN_GATEWAY_IP'] ?? '0.0.0.0',
           openFlowController: health.config?.controllerIp ?? this.controllerIp,
           openFlowPort: health.config?.controllerPort ?? 6633,
           failstate: health.config?.failstate ?? 'Secure',
@@ -633,9 +646,60 @@ export class ZodiacBridgeServer {
         this.timeSeries.shift();
       }
 
+      // Probe live Jetson Orin and Coral hardware
+      const nowNs = process.hrtime.bigint();
+      const deltaNs = nowNs - this.lastProbeNs;
+      this.lastProbeNs = nowNs;
+
+      const liveJetson = probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs);
+      const liveCoral = probeCoralHardware();
+
+      const sdnIf = liveJetson.interfaces.find((i) => i.name === 'enP8p1s0');
+      const wifiIf = liveJetson.interfaces.find((i) => i.name === 'wlP1p1s0');
+
+      this.jetsonTimeSeries.push({
+        timestampMs: nowMs,
+        cpuUtilizationPct: liveJetson.cpuUtilizationPct,
+        gpuUtilizationPct: liveJetson.gpuUtilizationPct,
+        cpuTempC: liveJetson.temperatures.cpuC,
+        gpuTempC: liveJetson.temperatures.gpuC,
+        junctionTempC: liveJetson.temperatures.junctionC,
+        powerWatts: parseFloat((liveJetson.powerMw.vddIn / 1000).toFixed(2)),
+        ramUsedBytes: liveJetson.ramUsedBytes,
+        nvmeReadRateBps: liveJetson.nvmeReadRateBps,
+        nvmeWriteRateBps: liveJetson.nvmeWriteRateBps,
+        sdnPortRateBps: sdnIf?.rxRateBps ?? 0n,
+        wifiPortRateBps: wifiIf?.rxRateBps ?? 0n,
+      });
+
+      if (this.jetsonTimeSeries.length > MAX_TIME_SERIES_POINTS) {
+        this.jetsonTimeSeries.shift();
+      }
+
+      this.coralTimeSeries.push({
+        timestampMs: nowMs,
+        inferencesPerSecond: liveCoral.inferencesPerSecond,
+        tapPacketsPerSecond: 0n,
+        latencyP50Us: Number(liveCoral.latencyP50Ns / 1000n),
+        latencyP99Us: Number(liveCoral.latencyP99Ns / 1000n),
+        usbThroughputKbps: liveCoral.detected ? 45.0 : 0.0,
+      });
+
+      if (this.coralTimeSeries.length > MAX_TIME_SERIES_POINTS) {
+        this.coralTimeSeries.shift();
+      }
+
       this.cachedSnapshot = {
         ...this.cachedSnapshot,
         timeSeries: this.timeSeries,
+        jetson: {
+          ...liveJetson,
+          timeSeries: this.jetsonTimeSeries,
+        },
+        coral: {
+          ...liveCoral,
+          timeSeries: this.coralTimeSeries,
+        },
       };
 
       // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud
@@ -726,7 +790,8 @@ if (isMain) {
 
   bridge.start(port, host).then((boundPort) => {
     console.log(`[+] [ZodiacBridgeServer] Autonomous bridge active on http://${host}:${boundPort}`);
-    console.log(`[+] [ZodiacBridgeServer] OpenFlow 1.3 controller listening on 10.0.1.8:6633`);
+    const ctrlHost = process.env['SDN_CONTROLLER_IP'] ?? host;
+    console.log(`[+] [ZodiacBridgeServer] OpenFlow 1.3 controller listening on ${ctrlHost}:6633`);
   }).catch((err) => {
     console.error('[-] [ZodiacBridgeServer] Fatal startup error:', err);
     process.exit(1);
