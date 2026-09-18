@@ -27,7 +27,7 @@ import {
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
-import { probeJetsonHardware, probeCoralHardware } from './hardware-probe.js';
+import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry } from './hardware-probe.js';
 import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
@@ -489,8 +489,16 @@ export class ZodiacBridgeServer {
       });
       this.coralDaemon = child;
 
-      child.stdout?.on('data', (d: Buffer) => process.stdout.write(`[coral-daemon] ${d}`.replace(/\n$/, '')  + '\n'));
-      child.stderr?.on('data', (d: Buffer) => process.stderr.write(`[coral-daemon] ${d}`.replace(/\n$/, '')  + '\n'));
+      child.stdout?.on('data', (d: Buffer) => {
+        d.toString().split('\n').filter(Boolean).forEach(line =>
+          process.stdout.write(`[coral-daemon] ${line}\n`)
+        );
+      });
+      child.stderr?.on('data', (d: Buffer) => {
+        d.toString().split('\n').filter(Boolean).forEach(line =>
+          process.stderr.write(`[coral-daemon] ${line}\n`)
+        );
+      });
 
       child.on('exit', (code, signal) => {
         this.coralDaemon = null;
@@ -970,13 +978,18 @@ export class ZodiacBridgeServer {
         this.timeSeries.shift();
       }
 
-      // Probe live Jetson Orin and Coral hardware
+      // Probe live Jetson Orin and Coral hardware.
+      // readCoralDaemonTelemetry is awaited here (async fs.promises I/O) so it
+      // never blocks the Node.js event loop during the synchronous sysfs reads.
       const nowNs = process.hrtime.bigint();
       const deltaNs = nowNs - this.lastProbeNs;
       this.lastProbeNs = nowNs;
 
-      const liveJetson = probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs);
-      const liveCoral = probeCoralHardware();
+      const [liveJetson, daemonData] = await Promise.all([
+        Promise.resolve(probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs)),
+        readCoralDaemonTelemetry(),
+      ]);
+      const liveCoral = probeCoralHardware(daemonData);
 
       const sdnIf = liveJetson.interfaces.find((i) => i.name === 'enP8p1s0');
       const wifiIf = liveJetson.interfaces.find((i) => i.name === 'wlP1p1s0');

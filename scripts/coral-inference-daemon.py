@@ -14,7 +14,8 @@ Council Invariant 6 (Anti-Simulation / Goodhart's Law):
 
 Council Invariant 2 (Determinism):
   All timestamps use time.monotonic_ns() for monotonic nanosecond precision.
-  Throughput and latency are computed using integer arithmetic only.
+  All counters and percentile indices use pure integer arithmetic — zero
+  floating-point arithmetic anywhere in the accounting path.
 """
 
 import json
@@ -25,12 +26,13 @@ import traceback
 
 OUTPUT_PATH        = '/tmp/coral-telemetry.json'
 MODEL_PATH         = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite'
-REPORT_INTERVAL_S  = 1.0
+REPORT_INTERVAL_NS = 1_000_000_000   # 1 second in nanoseconds (integer)
 BATCH_SIZE         = 10
 WARMUP_N           = 5
 
 
 def atomic_write_json(path, data):
+    """Write JSON atomically via rename — prevents partial reads by Node.js."""
     tmp = path + '.tmp'
     with open(tmp, 'w') as f:
         json.dump(data, f, separators=(',', ':'))
@@ -50,11 +52,17 @@ def write_offline(reason):
     })
 
 
-def percentile_ns(sorted_lats, p):
+def percentile_ns(sorted_lats, p_num, p_den):
+    """
+    Pure-integer percentile: p_num/p_den fraction (e.g. 50/100 for P50).
+
+    Council Invariant 2 (Determinism): no floating-point arithmetic.
+    The index is computed as (n * p_num) // p_den — integer division only.
+    """
     n = len(sorted_lats)
     if n == 0:
         return 0
-    idx = min(int(n * p), n - 1)
+    idx = min((n * p_num) // p_den, n - 1)
     return sorted_lats[idx]
 
 
@@ -86,7 +94,7 @@ def main():
         write_offline(msg)
         sys.exit(1)
 
-    print(f'[coral-daemon] Loading model onto Edge TPU...', flush=True)
+    print('[coral-daemon] Loading model onto Edge TPU...', flush=True)
     try:
         interp = make_interpreter(MODEL_PATH)
         interp.allocate_tensors()
@@ -97,7 +105,6 @@ def main():
         sys.exit(1)
 
     inp_detail = interp.get_input_details()[0]
-    import numpy as np
     dummy = np.zeros(inp_detail['shape'], dtype=np.uint8)
 
     print(f'[coral-daemon] Warming up ({WARMUP_N} inferences)...', flush=True)
@@ -107,11 +114,10 @@ def main():
 
     print('[coral-daemon] Warm-up complete. Entering inference loop.', flush=True)
 
-    total_inferences   = 0
-    window_latencies   = []
+    total_inferences   = 0           # int — never float
+    window_latencies   = []          # list[int] nanoseconds — never float
     window_start_ns    = time.monotonic_ns()
     last_report_ns     = window_start_ns
-    report_interval_ns = int(REPORT_INTERVAL_S * 1_000_000_000)
 
     while True:
         try:
@@ -120,18 +126,20 @@ def main():
                 interp.set_tensor(inp_detail['index'], dummy)
                 interp.invoke()
                 t1 = time.monotonic_ns()
-                window_latencies.append(t1 - t0)
-                total_inferences += 1
+                window_latencies.append(t1 - t0)   # int
+                total_inferences += 1              # int
 
             now_ns = time.monotonic_ns()
 
-            if now_ns - last_report_ns >= report_interval_ns:
+            if now_ns - last_report_ns >= REPORT_INTERVAL_NS:
                 elapsed_ns  = now_ns - window_start_ns
                 sorted_lats = sorted(window_latencies)
                 n           = len(sorted_lats)
-                p50_ns      = percentile_ns(sorted_lats, 0.50)
-                p99_ns      = percentile_ns(sorted_lats, 0.99)
-                inf_sec     = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
+
+                # Pure integer arithmetic (Council Invariant 2)
+                p50_ns  = percentile_ns(sorted_lats, 50, 100)
+                p99_ns  = percentile_ns(sorted_lats, 99, 100)
+                inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
 
                 atomic_write_json(OUTPUT_PATH, {
                     'detected':            True,
@@ -157,9 +165,10 @@ def main():
             break
         except Exception:
             err = traceback.format_exc()
-            print(f'[coral-daemon] ERROR in inference loop:\n{err}', file=sys.stderr, flush=True)
+            print(f'[coral-daemon] ERROR in inference loop:\n{err}',
+                  file=sys.stderr, flush=True)
             write_offline(f'Inference loop error: {err[:200]}')
-            time.sleep(2.0)
+            time.sleep(2)
 
 
 if __name__ == '__main__':

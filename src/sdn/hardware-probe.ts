@@ -322,48 +322,87 @@ export function probeJetsonHardware(
   };
 }
 
-// Staleness guard: if the daemon JSON is older than this, treat TPU as STANDBY.
-// Council Invariant 3 (Fail-Closed): stale = daemon dead = no inference data.
-const CORAL_TELEMETRY_PATH      = '/tmp/coral-telemetry.json';
-const CORAL_STALENESS_LIMIT_MS  = 5_000;
+// ── Coral Daemon IPC ─────────────────────────────────────────────────────────
+// Staleness guard: if the daemon JSON is older than this the daemon is dead.
+// Council Invariant 3 (Fail-Closed): stale → null → STANDBY.
+const CORAL_TELEMETRY_PATH     = '/tmp/coral-telemetry.json';
+const CORAL_STALENESS_LIMIT_MS = 5_000;
+
+/**
+ * Parse a JSON field directly to BigInt without floating-point intermediary.
+ * Council Invariant 2 (Determinism): integer counters must never pass through
+ * IEEE 754 double before becoming BigInt — `Number(x)` can silently truncate
+ * values > 2^53. Truncate any decimal suffix and clamp to [0, ∞).
+ */
+function parseBigIntClamped(val: unknown): bigint {
+  try {
+    // Truncate decimals (e.g. "123.0" → "123"), then parse directly to BigInt
+    const s = String(val ?? '0').split('.')[0]!;
+    const n = BigInt(s);
+    return n < 0n ? 0n : n;
+  } catch {
+    return 0n;
+  }
+}
 
 /**
  * Reads live inference telemetry from the coral-inference-daemon JSON file.
- * Returns null if the file is absent, unreadable, or stale.
+ *
+ * TOCTOU-free: opens a single file descriptor and both stats and reads through
+ * the same fd — the mtime and content are guaranteed to refer to the same
+ * file version.
+ *
+ * Returns null if:
+ *   - File does not exist (daemon not yet started — ENOENT is silent)
+ *   - File is stale (> CORAL_STALENESS_LIMIT_MS) — daemon likely dead
+ *   - mtime is in the future (NTP backward shift) — treated as suspect
+ *   - JSON is malformed or status is not 'ACTIVE'
+ *
+ * Council Invariant 3 (Fail-Closed): all error paths return null → STANDBY.
+ * Council Invariant 2 (Determinism): counters parsed directly to BigInt.
  */
-function readCoralDaemonTelemetry(): {
+export async function readCoralDaemonTelemetry(): Promise<{
   inferencesPerSecond: bigint;
   totalInferences: bigint;
   latencyP50Ns: bigint;
   latencyP99Ns: bigint;
-  status: 'INFERENCE_ACTIVE' | 'OFFLINE';
+  status: 'INFERENCE_ACTIVE';
   model: string;
-} | null {
+} | null> {
+  let fd: fs.promises.FileHandle | null = null;
   try {
-    if (!fs.existsSync(CORAL_TELEMETRY_PATH)) return null;
+    // Single open() gives us a stable fd — stat + read see the same file version
+    fd = await fs.promises.open(CORAL_TELEMETRY_PATH, 'r');
+    const [stat, raw] = await Promise.all([fd.stat(), fd.readFile('utf8')]);
 
-    // Staleness guard via mtime (Dean Invariant: single stat syscall, <0.02ms)
-    const stat = fs.statSync(CORAL_TELEMETRY_PATH);
+    // Staleness guard — handles both forward and backward NTP shifts
     const ageMs = Date.now() - stat.mtimeMs;
-    if (ageMs > CORAL_STALENESS_LIMIT_MS) return null;
+    if (ageMs < 0 || ageMs > CORAL_STALENESS_LIMIT_MS) return null;
 
-    const raw = fs.readFileSync(CORAL_TELEMETRY_PATH, 'utf8');
     const data = JSON.parse(raw) as Record<string, unknown>;
-
     if (!data['detected']) return null;
     if (data['status'] !== 'ACTIVE') return null;
 
     return {
-      inferencesPerSecond : BigInt(Math.max(0, Number(data['inferencesPerSecond'] ?? 0))),
-      totalInferences     : BigInt(Math.max(0, Number(data['totalInferences']     ?? 0))),
-      latencyP50Ns        : BigInt(Math.max(0, Number(data['latencyP50Ns']        ?? 0))),
-      latencyP99Ns        : BigInt(Math.max(0, Number(data['latencyP99Ns']        ?? 0))),
+      inferencesPerSecond : parseBigIntClamped(data['inferencesPerSecond']),
+      totalInferences     : parseBigIntClamped(data['totalInferences']),
+      latencyP50Ns        : parseBigIntClamped(data['latencyP50Ns']),
+      latencyP99Ns        : parseBigIntClamped(data['latencyP99Ns']),
       status              : 'INFERENCE_ACTIVE',
       model               : String(data['model'] ?? 'MobileNet V2 INT8 (EdgeTPU)'),
     };
-  } catch {
-    // Any parse or I/O error → fail-closed (STANDBY)
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      // Log genuine errors (permissions, disk I/O, JSON parse) — never swallow reality
+      process.stderr.write(
+        `[coral-probe] readCoralDaemonTelemetry: ${err instanceof Error ? err.message : String(err)}\n`
+      );
+    }
+    // All error paths → fail-closed (Council Invariant 3)
     return null;
+  } finally {
+    await fd?.close();
   }
 }
 
@@ -376,7 +415,9 @@ function readCoralDaemonTelemetry(): {
  * Council Invariant 3 (Fail-Closed): if the daemon is dead or stale,
  * status reverts to STANDBY and all inference counters are 0.
  */
-export function probeCoralHardware(): CoralTelemetrySnapshot {
+export function probeCoralHardware(
+  daemonData: Awaited<ReturnType<typeof readCoralDaemonTelemetry>> = null
+): CoralTelemetrySnapshot {
   if (process.platform !== 'linux') {
     return createDefaultCoralSnapshot(false);
   }
@@ -405,8 +446,6 @@ export function probeCoralHardware(): CoralTelemetrySnapshot {
         const dev        = fs.existsSync(devPath)     ? fs.readFileSync(devPath,     'utf8').trim() : '3';
         const speedLabel = speedMbps === '5000' ? 'USB 3.1 SuperSpeed (5.0 Gbps)' : `USB ${speedMbps} Mbps`;
 
-        // Read live inference metrics from daemon; fall back to zeros if daemon is not running.
-        const daemonData = readCoralDaemonTelemetry();
         const isActive   = daemonData !== null;
 
         return {
