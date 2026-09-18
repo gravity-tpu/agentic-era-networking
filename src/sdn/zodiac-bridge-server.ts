@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile, spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import readline from 'node:readline';
 import { ZodiacController } from './zodiac-controller.js';
 import {
   ZodiacFullTelemetrySnapshot,
@@ -339,6 +340,9 @@ export class ZodiacBridgeServer {
   private pollTimer: NodeJS.Timeout | null = null;
   private coralDaemon: ChildProcess | null = null;
   private coralDaemonRestartTimer: NodeJS.Timeout | null = null;
+  /** Vinyals flap-prevention: terminal fail-closed after MAX_CORAL_RESTARTS permanent failures. */
+  private coralDaemonRestartCount = 0;
+  private static readonly MAX_CORAL_RESTARTS = 10;
 
   constructor(
     controller?: ZodiacController,
@@ -469,6 +473,17 @@ export class ZodiacBridgeServer {
    * process streams for journald capture — zero silent failures.
    */
   private spawnCoralDaemon(backoffMs: number): void {
+    // Vinyals flap-prevention: after MAX_CORAL_RESTARTS attempts, declare
+    // terminal fail-closed — no further restarts to prevent infinite flapping
+    // on permanent ENOENT/EACCES conditions.
+    if (this.coralDaemonRestartCount >= ZodiacBridgeServer.MAX_CORAL_RESTARTS) {
+      process.stderr.write(
+        `[coral-daemon] Terminal fail-closed after ${ZodiacBridgeServer.MAX_CORAL_RESTARTS} restarts. ` +
+        `Coral metrics will remain STANDBY. Manual intervention required.\n`
+      );
+      return;
+    }
+
     const DAEMON_PATH = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       '../../scripts/coral-inference-daemon.py'
@@ -482,22 +497,44 @@ export class ZodiacBridgeServer {
     }
 
     const doSpawn = () => {
-      console.log(`[coral-daemon] Spawning (backoff=${backoffMs}ms): ${VENV_PYTHON} ${DAEMON_PATH}`);
+      console.log(`[coral-daemon] Spawning (backoff=${backoffMs}ms, attempt=${this.coralDaemonRestartCount + 1}/${ZodiacBridgeServer.MAX_CORAL_RESTARTS}): ${VENV_PYTHON} ${DAEMON_PATH}`);
       const child = spawn(VENV_PYTHON, [DAEMON_PATH], {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
       });
       this.coralDaemon = child;
+      // Record when this child was spawned — used for stability-based counter reset.
+      const spawnTimeMs = Date.now();
 
-      child.stdout?.on('data', (d: Buffer) => {
-        d.toString().split('\n').filter(Boolean).forEach(line =>
-          process.stdout.write(`[coral-daemon] ${line}\n`)
+      // readline.createInterface guarantees clean line events regardless of how
+      // pipe data is chunked — no fragmented log lines (Council: Zero Suppression).
+      if (child.stdout) {
+        readline.createInterface({ input: child.stdout, crlfDelay: Infinity })
+          .on('line', (line) => process.stdout.write(`[coral-daemon] ${line}\n`));
+      }
+      if (child.stderr) {
+        readline.createInterface({ input: child.stderr, crlfDelay: Infinity })
+          .on('line', (line) => process.stderr.write(`[coral-daemon] ${line}\n`));
+      }
+
+      child.on('error', (err: NodeJS.ErrnoException) => {
+        // Spawn failure (ENOENT, EACCES) — log and schedule backoff restart.
+        // Without this handler Node.js would emit an unhandled error and crash.
+        // Clear any existing timer to prevent duplicate restarts if both
+        // 'error' and 'exit' fire for the same crash (Ghemawat: state machine safety).
+        if (this.coralDaemonRestartTimer) {
+          clearTimeout(this.coralDaemonRestartTimer);
+          this.coralDaemonRestartTimer = null;
+        }
+        this.coralDaemon = null;
+        this.coralDaemonRestartCount++;
+        const nextBackoff = Math.min((backoffMs || 500) * 2, 30_000);
+        process.stderr.write(
+          `[coral-daemon] Spawn error (${err.code ?? err.message}). ` +
+          `Attempt ${this.coralDaemonRestartCount}/${ZodiacBridgeServer.MAX_CORAL_RESTARTS}. ` +
+          `Restarting in ${nextBackoff}ms.\n`
         );
-      });
-      child.stderr?.on('data', (d: Buffer) => {
-        d.toString().split('\n').filter(Boolean).forEach(line =>
-          process.stderr.write(`[coral-daemon] ${line}\n`)
-        );
+        this.coralDaemonRestartTimer = setTimeout(() => this.spawnCoralDaemon(nextBackoff), nextBackoff);
       });
 
       child.on('exit', (code, signal) => {
@@ -507,9 +544,28 @@ export class ZodiacBridgeServer {
           console.log('[coral-daemon] Terminated by SIGTERM (graceful stop).');
           return;
         }
-        // Restart with capped exponential backoff (max 30s)
+
+        // Vinyals stability reset: if the daemon survived > 60s before exiting,
+        // it was not permanently broken — reset the flap counter so transient
+        // errors over long uptimes don't permanently lock the daemon in FAULT.
+        const uptimeMs = Date.now() - spawnTimeMs;
+        if (uptimeMs >= 60_000) {
+          this.coralDaemonRestartCount = 0;
+        }
+
+        // Clear any pending timer from the 'error' handler before scheduling
+        // a new one — prevents fork-bomb if both events fire (Ghemawat: dedup).
+        if (this.coralDaemonRestartTimer) {
+          clearTimeout(this.coralDaemonRestartTimer);
+          this.coralDaemonRestartTimer = null;
+        }
+        this.coralDaemonRestartCount++;
         const nextBackoff = Math.min((backoffMs || 500) * 2, 30_000);
-        console.warn(`[coral-daemon] Exited (code=${code}). Restarting in ${nextBackoff}ms.`);
+        console.warn(
+          `[coral-daemon] Exited (code=${code}, uptime=${Math.round(uptimeMs / 1000)}s). ` +
+          `Attempt ${this.coralDaemonRestartCount}/${ZodiacBridgeServer.MAX_CORAL_RESTARTS}. ` +
+          `Restarting in ${nextBackoff}ms.`
+        );
         this.coralDaemonRestartTimer = setTimeout(() => this.spawnCoralDaemon(nextBackoff), nextBackoff);
       });
     };
@@ -989,7 +1045,7 @@ export class ZodiacBridgeServer {
         Promise.resolve(probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs)),
         readCoralDaemonTelemetry(),
       ]);
-      const liveCoral = probeCoralHardware(daemonData);
+      const liveCoral = await probeCoralHardware(daemonData);
 
       const sdnIf = liveJetson.interfaces.find((i) => i.name === 'enP8p1s0');
       const wifiIf = liveJetson.interfaces.find((i) => i.name === 'wlP1p1s0');

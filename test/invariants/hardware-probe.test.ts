@@ -91,8 +91,8 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(snap.interfaces.length).toBeGreaterThan(0);
   });
 
-  it('probeCoralHardware returns valid snapshot structure', () => {
-    const snap = probeCoralHardware();
+  it('probeCoralHardware returns valid snapshot structure', async () => {
+    const snap = await probeCoralHardware();
     expect(snap.peakTopsInt8).toBe(4);
     expect(typeof snap.targetLatencyBudgetNs).toBe('bigint');
   });

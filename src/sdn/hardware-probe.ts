@@ -340,7 +340,13 @@ function parseBigIntClamped(val: unknown): bigint {
     const s = String(val ?? '0').split('.')[0]!;
     const n = BigInt(s);
     return n < 0n ? 0n : n;
-  } catch {
+  } catch (err) {
+    // Log parse failures — never swallow reality (Council Invariant 1)
+    process.stderr.write(
+      `[coral-probe] parseBigIntClamped: cannot parse ${JSON.stringify(val)}: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`
+    );
     return 0n;
   }
 }
@@ -415,20 +421,29 @@ export async function readCoralDaemonTelemetry(): Promise<{
  * Council Invariant 3 (Fail-Closed): if the daemon is dead or stale,
  * status reverts to STANDBY and all inference counters are 0.
  */
-export function probeCoralHardware(
+export async function probeCoralHardware(
   daemonData: Awaited<ReturnType<typeof readCoralDaemonTelemetry>> = null
-): CoralTelemetrySnapshot {
+): Promise<CoralTelemetrySnapshot> {
   if (process.platform !== 'linux') {
     return createDefaultCoralSnapshot(false);
   }
 
   try {
     const usbBase = '/sys/bus/usb/devices';
-    if (!fs.existsSync(usbBase)) {
+
+    // Async existence check — does not block the event loop
+    try {
+      await fs.promises.access(usbBase);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        process.stderr.write(`[coral-probe] Cannot access ${usbBase} (${code ?? 'unknown'}): ${
+          err instanceof Error ? err.message : String(err)}\n`);
+      }
       return createDefaultCoralSnapshot(false);
     }
 
-    const dirs = fs.readdirSync(usbBase);
+    const dirs = await fs.promises.readdir(usbBase);
     for (const d of dirs) {
       const vendorPath  = path.join(usbBase, d, 'idVendor');
       const productPath = path.join(usbBase, d, 'idProduct');
@@ -436,43 +451,73 @@ export function probeCoralHardware(
       const busPath     = path.join(usbBase, d, 'busnum');
       const devPath     = path.join(usbBase, d, 'devnum');
 
-      if (!fs.existsSync(vendorPath)) continue;
-      const vid = fs.readFileSync(vendorPath, 'utf8').trim().toLowerCase();
-      // 1a6e = Global Unichip / Google Coral Bootloader; 18d1 = Google Coral Runtime
-      if (vid === '1a6e' || vid === '18d1') {
-        const pid        = fs.existsSync(productPath) ? fs.readFileSync(productPath, 'utf8').trim().toLowerCase() : '089a';
-        const speedMbps  = fs.existsSync(speedPath)   ? fs.readFileSync(speedPath,   'utf8').trim() : '5000';
-        const bus        = fs.existsSync(busPath)     ? fs.readFileSync(busPath,     'utf8').trim() : '2';
-        const dev        = fs.existsSync(devPath)     ? fs.readFileSync(devPath,     'utf8').trim() : '3';
-        const speedLabel = speedMbps === '5000' ? 'USB 3.1 SuperSpeed (5.0 Gbps)' : `USB ${speedMbps} Mbps`;
-
-        const isActive   = daemonData !== null;
-
-        return {
-          detected               : true,
-          name                   : 'Google Coral Edge TPU USB Accelerator',
-          vendorId               : vid,
-          productId              : pid,
-          usbBus                 : `Bus ${bus.padStart(3, '0')} Device ${dev.padStart(3, '0')}`,
-          usbSpeed               : speedLabel,
-          status                 : isActive ? 'INFERENCE_ACTIVE' : 'STANDBY',
-          pipelineRole           : isActive
-            ? `Live Inference: ${daemonData!.model}`
-            : 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
-          peakTopsInt8           : 4,
-          targetLatencyBudgetNs  : 500000n,
-          inferencesPerSecond    : daemonData?.inferencesPerSecond ?? 0n,
-          totalInferences        : daemonData?.totalInferences     ?? 0n,
-          latencyP50Ns           : daemonData?.latencyP50Ns        ?? 0n,
-          latencyP99Ns           : daemonData?.latencyP99Ns        ?? 0n,
-          loadedModel            : daemonData?.model ?? 'None (Standby)',
-          powerMode              : isActive ? 'Active Inference (~2W USB)' : 'Low-Power Standby (<0.5W)',
-          temperatureC           : 34.2,
-        };
+      // Read vendor — ENOENT is expected for non-device sysfs dirs; log anything else
+      let vid: string;
+      try {
+        vid = (await fs.promises.readFile(vendorPath, 'utf8')).trim().toLowerCase();
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== 'ENOENT') {
+          process.stderr.write(`[coral-probe] Cannot read ${vendorPath} (${code ?? 'unknown'}): ${
+            err instanceof Error ? err.message : String(err)}\n`);
+        }
+        continue;
       }
+
+      // 1a6e = Global Unichip / Google Coral Bootloader; 18d1 = Google Coral Runtime
+      if (vid !== '1a6e' && vid !== '18d1') continue;
+
+      // Read optional sysfs attributes — ENOENT silently uses fallback;
+      // any other error (EIO, EACCES) is logged before falling back.
+      const readOpt = async (p: string, fallback: string): Promise<string> => {
+        try {
+          return (await fs.promises.readFile(p, 'utf8')).trim();
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          if (code !== 'ENOENT') {
+            process.stderr.write(`[coral-probe] Cannot read ${p} (${code ?? 'unknown'}): ${
+              err instanceof Error ? err.message : String(err)}\n`);
+          }
+          return fallback;
+        }
+      };
+
+      const pid        = await readOpt(productPath, '089a');
+      const speedMbps  = await readOpt(speedPath,   '5000');
+      const bus        = await readOpt(busPath,     '2');
+      const dev        = await readOpt(devPath,     '3');
+      const speedLabel = speedMbps === '5000' ? 'USB 3.1 SuperSpeed (5.0 Gbps)' : `USB ${speedMbps} Mbps`;
+
+      const isActive = daemonData !== null;
+
+      return {
+        detected               : true,
+        name                   : 'Google Coral Edge TPU USB Accelerator',
+        vendorId               : vid,
+        productId              : pid,
+        usbBus                 : `Bus ${bus.padStart(3, '0')} Device ${dev.padStart(3, '0')}`,
+        usbSpeed               : speedLabel,
+        status                 : isActive ? 'INFERENCE_ACTIVE' : 'STANDBY',
+        pipelineRole           : isActive
+          ? `Live Inference: ${daemonData!.model}`
+          : 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
+        peakTopsInt8           : 4,
+        targetLatencyBudgetNs  : 500000n,
+        inferencesPerSecond    : daemonData?.inferencesPerSecond ?? 0n,
+        totalInferences        : daemonData?.totalInferences     ?? 0n,
+        latencyP50Ns           : daemonData?.latencyP50Ns        ?? 0n,
+        latencyP99Ns           : daemonData?.latencyP99Ns        ?? 0n,
+        loadedModel            : daemonData?.model ?? 'None (Standby)',
+        powerMode              : isActive ? 'Active Inference (~2W USB)' : 'Low-Power Standby (<0.5W)',
+        // Physical truth: no sysfs thermal zone is mapped for Coral USB — return null
+        // rather than a fabricated heuristic (Council Invariant 6, Quoc Le).
+        temperatureC           : null,
+      };
     }
-  } catch {
-    // Fall back to default
+  } catch (err) {
+    process.stderr.write(
+      `[coral-probe] probeCoralHardware: ${err instanceof Error ? err.message : String(err)}\n`
+    );
   }
 
   return createDefaultCoralSnapshot(false);
