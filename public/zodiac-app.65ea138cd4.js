@@ -197,6 +197,8 @@
     orinDiskStat: document.getElementById('orin-disk-stat'),
     orinBarDisk: document.getElementById('orin-bar-disk'),
     orinSvcPid: document.getElementById('orin-svc-pid'),
+    orinSvcRssStat: document.getElementById('orin-svc-rss-stat'),
+    orinSvcRssBar: document.getElementById('orin-svc-rss-bar'),
 
     // Jetson Orin Canvases
     chartOrinComputeCanvas: document.getElementById('chart-orin-compute'),
@@ -852,6 +854,18 @@
         if (els.orinKpiCpuTemp) els.orinKpiCpuTemp.innerText = temps.cpuC !== null && temps.cpuC !== undefined ? `${temps.cpuC}°C` : '--°C';
         if (els.orinKpiGpuTemp) els.orinKpiGpuTemp.innerText = temps.gpuC !== null && temps.gpuC !== undefined ? `${temps.gpuC}°C` : '--°C';
         if (els.orinKpiJuncTemp) els.orinKpiJuncTemp.innerText = temps.junctionC !== null && temps.junctionC !== undefined ? `${temps.junctionC}°C` : '--°C';
+      }
+
+      // Service card: live PID and RSS from bridge process
+      if (els.orinSvcPid && snapshot.bridgePid) {
+        els.orinSvcPid.innerText = String(snapshot.bridgePid);
+      }
+      if (snapshot.bridgeRssBytes) {
+        const rssMb = Number(snapshot.bridgeRssBytes) / (1024 * 1024);
+        const maxMb = 128;
+        const rssPct = Math.min(100, Math.max(2, Math.round((rssMb / maxMb) * 100)));
+        if (els.orinSvcRssStat) els.orinSvcRssStat.innerText = `${rssMb.toFixed(1)} MB / ${maxMb}.0 MB (${rssPct}%)`;
+        if (els.orinSvcRssBar) els.orinSvcRssBar.style.width = `${rssPct}%`;
       }
 
       // Time series buffer update for Jetson

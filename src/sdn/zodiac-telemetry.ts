@@ -194,6 +194,10 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly timeSeries?: ZodiacTimeSeriesPoint[] | undefined;
   readonly jetson?: JetsonTelemetrySnapshot | undefined;
   readonly coral?: CoralTelemetrySnapshot | undefined;
+  /** Live OS process ID of the bridge daemon — Council Invariant 6: physical truth. */
+  readonly bridgePid?: number | undefined;
+  /** Live RSS memory bytes from process.memoryUsage() — physical truth, not a synthetic estimate. */
+  readonly bridgeRssBytes?: number | undefined;
 }
 
 /**
