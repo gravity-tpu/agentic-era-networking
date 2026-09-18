@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jetson Orin Nano Super — Roboco Panini Case OLED Telemetry Daemon
-Autonomous 5-Screen Rotational Hardware Monitor (Cycles every 5 seconds)
+Autonomous 5-Screen Rotational Hardware Monitor (Cycles every 15 seconds)
 
 Hardware Substrates:
 - NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture)
@@ -34,7 +34,7 @@ I2C_BUS = 7
 OLED_ADDR = 0x3c
 WIDTH = 128
 HEIGHT = 64
-CYCLE_INTERVAL_SEC = 5
+CYCLE_INTERVAL_SEC = 15
 NUM_PAGES = 5
 
 def fetch_telemetry_snapshot():
@@ -253,7 +253,7 @@ def main():
     page = 0
     last_cycle_time = time.time()
     
-    print("5-screen OLED telemetry daemon active (cycling every 5s)...")
+    print("5-screen OLED telemetry daemon active (cycling every 15s)...")
     
     while True:
         try:

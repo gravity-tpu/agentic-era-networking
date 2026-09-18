@@ -47,5 +47,5 @@ else
 fi
 
 echo "=============================================================================="
-echo "OLED Telemetry Daemon installation complete! Display is cycling every 5s."
+echo "OLED Telemetry Daemon installation complete! Display is cycling every 15s."
 echo "=============================================================================="

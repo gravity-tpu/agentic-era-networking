@@ -6,6 +6,6 @@ All architecture documentation, physical 4-pin OLED wiring pinouts, button jumpe
 
 ### Quick Reference
 - [Architecture & Assembly Guide](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/README.md)
-- [oled_sysinfo.py](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/oled_sysinfo.py) — 5-Screen Rotational Telemetry Daemon (Cycles every 5s)
+- [oled_sysinfo.py](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/oled_sysinfo.py) — 5-Screen Rotational Telemetry Daemon (Cycles every 15s)
 - [oled.service](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/oled.service) — Systemd Unit Configuration
 - [install.sh](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/install.sh) — Automated Setup Script

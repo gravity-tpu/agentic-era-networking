@@ -105,7 +105,7 @@ The presence of `3c` confirms proper electrical continuity and clock arbitration
 
 ## 4. The 5-Screen Rotational Telemetry Architecture
 
-The OLED daemon cycles across 5 purpose-built screens every 5 seconds (25-second full cycle). Each screen features an **inverted top banner** (128x12 px) indicating the operational subsystem and page index (`X/5`), followed by 3 monospace data rows.
+The OLED daemon cycles across 5 purpose-built screens every 15 seconds (75-second full cycle). Each screen features an **inverted top banner** (128x12 px) indicating the operational subsystem and page index (`X/5`), followed by 3 monospace data rows.
 
 ```
 +-------------------------------------------------------------------------------+
