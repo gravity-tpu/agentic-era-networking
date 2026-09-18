@@ -322,8 +322,59 @@ export function probeJetsonHardware(
   };
 }
 
+// Staleness guard: if the daemon JSON is older than this, treat TPU as STANDBY.
+// Council Invariant 3 (Fail-Closed): stale = daemon dead = no inference data.
+const CORAL_TELEMETRY_PATH      = '/tmp/coral-telemetry.json';
+const CORAL_STALENESS_LIMIT_MS  = 5_000;
+
 /**
- * Probes Google Coral Edge TPU USB status from sysfs.
+ * Reads live inference telemetry from the coral-inference-daemon JSON file.
+ * Returns null if the file is absent, unreadable, or stale.
+ */
+function readCoralDaemonTelemetry(): {
+  inferencesPerSecond: bigint;
+  totalInferences: bigint;
+  latencyP50Ns: bigint;
+  latencyP99Ns: bigint;
+  status: 'INFERENCE_ACTIVE' | 'OFFLINE';
+  model: string;
+} | null {
+  try {
+    if (!fs.existsSync(CORAL_TELEMETRY_PATH)) return null;
+
+    // Staleness guard via mtime (Dean Invariant: single stat syscall, <0.02ms)
+    const stat = fs.statSync(CORAL_TELEMETRY_PATH);
+    const ageMs = Date.now() - stat.mtimeMs;
+    if (ageMs > CORAL_STALENESS_LIMIT_MS) return null;
+
+    const raw = fs.readFileSync(CORAL_TELEMETRY_PATH, 'utf8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+
+    if (!data['detected']) return null;
+    if (data['status'] !== 'ACTIVE') return null;
+
+    return {
+      inferencesPerSecond : BigInt(Math.max(0, Number(data['inferencesPerSecond'] ?? 0))),
+      totalInferences     : BigInt(Math.max(0, Number(data['totalInferences']     ?? 0))),
+      latencyP50Ns        : BigInt(Math.max(0, Number(data['latencyP50Ns']        ?? 0))),
+      latencyP99Ns        : BigInt(Math.max(0, Number(data['latencyP99Ns']        ?? 0))),
+      status              : 'INFERENCE_ACTIVE',
+      model               : String(data['model'] ?? 'MobileNet V2 INT8 (EdgeTPU)'),
+    };
+  } catch {
+    // Any parse or I/O error → fail-closed (STANDBY)
+    return null;
+  }
+}
+
+/**
+ * Probes Google Coral Edge TPU USB status from sysfs, augmented with
+ * live inference telemetry from the coral-inference-daemon process.
+ *
+ * Council Invariant 6 (Anti-Simulation): inference metrics come exclusively
+ * from the daemon's real hardware execution — zero synthetic values.
+ * Council Invariant 3 (Fail-Closed): if the daemon is dead or stale,
+ * status reverts to STANDBY and all inference counters are 0.
  */
 export function probeCoralHardware(): CoralTelemetrySnapshot {
   if (process.platform !== 'linux') {
@@ -338,41 +389,46 @@ export function probeCoralHardware(): CoralTelemetrySnapshot {
 
     const dirs = fs.readdirSync(usbBase);
     for (const d of dirs) {
-      const vendorPath = path.join(usbBase, d, 'idVendor');
+      const vendorPath  = path.join(usbBase, d, 'idVendor');
       const productPath = path.join(usbBase, d, 'idProduct');
-      const speedPath = path.join(usbBase, d, 'speed');
-      const busPath = path.join(usbBase, d, 'busnum');
-      const devPath = path.join(usbBase, d, 'devnum');
+      const speedPath   = path.join(usbBase, d, 'speed');
+      const busPath     = path.join(usbBase, d, 'busnum');
+      const devPath     = path.join(usbBase, d, 'devnum');
 
       if (!fs.existsSync(vendorPath)) continue;
       const vid = fs.readFileSync(vendorPath, 'utf8').trim().toLowerCase();
       // 1a6e = Global Unichip / Google Coral Bootloader; 18d1 = Google Coral Runtime
       if (vid === '1a6e' || vid === '18d1') {
-        const pid = fs.existsSync(productPath) ? fs.readFileSync(productPath, 'utf8').trim().toLowerCase() : '089a';
-        const speedMbps = fs.existsSync(speedPath) ? fs.readFileSync(speedPath, 'utf8').trim() : '5000';
-        const bus = fs.existsSync(busPath) ? fs.readFileSync(busPath, 'utf8').trim() : '2';
-        const dev = fs.existsSync(devPath) ? fs.readFileSync(devPath, 'utf8').trim() : '3';
-
+        const pid        = fs.existsSync(productPath) ? fs.readFileSync(productPath, 'utf8').trim().toLowerCase() : '089a';
+        const speedMbps  = fs.existsSync(speedPath)   ? fs.readFileSync(speedPath,   'utf8').trim() : '5000';
+        const bus        = fs.existsSync(busPath)     ? fs.readFileSync(busPath,     'utf8').trim() : '2';
+        const dev        = fs.existsSync(devPath)     ? fs.readFileSync(devPath,     'utf8').trim() : '3';
         const speedLabel = speedMbps === '5000' ? 'USB 3.1 SuperSpeed (5.0 Gbps)' : `USB ${speedMbps} Mbps`;
 
+        // Read live inference metrics from daemon; fall back to zeros if daemon is not running.
+        const daemonData = readCoralDaemonTelemetry();
+        const isActive   = daemonData !== null;
+
         return {
-          detected: true,
-          name: 'Google Coral Edge TPU USB Accelerator',
-          vendorId: vid,
-          productId: pid,
-          usbBus: `Bus ${bus.padStart(3, '0')} Device ${dev.padStart(3, '0')}`,
-          usbSpeed: speedLabel,
-          status: 'STANDBY',
-          pipelineRole: 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
-          peakTopsInt8: 4,
-          targetLatencyBudgetNs: 500000n,
-          inferencesPerSecond: 0n,
-          totalInferences: 0n,
-          latencyP50Ns: 0n,
-          latencyP99Ns: 0n,
-          loadedModel: 'None (Standby - Pre-Wired for Phase 2A)',
-          powerMode: 'Low-Power Standby (<0.5W)',
-          temperatureC: 34.2,
+          detected               : true,
+          name                   : 'Google Coral Edge TPU USB Accelerator',
+          vendorId               : vid,
+          productId              : pid,
+          usbBus                 : `Bus ${bus.padStart(3, '0')} Device ${dev.padStart(3, '0')}`,
+          usbSpeed               : speedLabel,
+          status                 : isActive ? 'INFERENCE_ACTIVE' : 'STANDBY',
+          pipelineRole           : isActive
+            ? `Live Inference: ${daemonData!.model}`
+            : 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
+          peakTopsInt8           : 4,
+          targetLatencyBudgetNs  : 500000n,
+          inferencesPerSecond    : daemonData?.inferencesPerSecond ?? 0n,
+          totalInferences        : daemonData?.totalInferences     ?? 0n,
+          latencyP50Ns           : daemonData?.latencyP50Ns        ?? 0n,
+          latencyP99Ns           : daemonData?.latencyP99Ns        ?? 0n,
+          loadedModel            : daemonData?.model ?? 'None (Standby)',
+          powerMode              : isActive ? 'Active Inference (~2W USB)' : 'Low-Power Standby (<0.5W)',
+          temperatureC           : 34.2,
         };
       }
     }

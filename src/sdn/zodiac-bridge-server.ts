@@ -15,7 +15,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { ZodiacController } from './zodiac-controller.js';
 import {
   ZodiacFullTelemetrySnapshot,
@@ -336,6 +337,8 @@ export class ZodiacBridgeServer {
   private readonly bridgeSecret?: string | undefined;
   private isRelaying = false;
   private pollTimer: NodeJS.Timeout | null = null;
+  private coralDaemon: ChildProcess | null = null;
+  private coralDaemonRestartTimer: NodeJS.Timeout | null = null;
 
   constructor(
     controller?: ZodiacController,
@@ -433,6 +436,13 @@ export class ZodiacBridgeServer {
       void this.refreshTelemetry();
     }, 2500);
 
+    // 4. Spawn the Coral inference daemon (managed child process).
+    //    Produces /tmp/coral-telemetry.json read by probeCoralHardware().
+    //    Only launched on Linux — no-ops silently on other platforms.
+    if (process.platform === 'linux') {
+      this.spawnCoralDaemon(0);
+    }
+
     // Systemd watchdog heartbeat: send WATCHDOG=1 every 10 seconds.
     // WatchdogSec=30s in the service unit gives 3x the heartbeat interval
     // as the liveness budget — systemd kills the process only if it stops
@@ -452,10 +462,69 @@ export class ZodiacBridgeServer {
     return boundPort;
   }
 
+  /**
+   * Spawns coral-inference-daemon.py as a managed child process.
+   * Automatically restarts it with capped exponential backoff on crash.
+   * Dean Invariant: daemon stdout/stderr forwarded to bridge server's
+   * process streams for journald capture — zero silent failures.
+   */
+  private spawnCoralDaemon(backoffMs: number): void {
+    const DAEMON_PATH = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../scripts/coral-inference-daemon.py'
+    );
+    const VENV_PYTHON = '/home/zodiac/coral-venv/bin/python3';
+
+    // Silently skip if daemon script or venv is absent
+    if (!fs.existsSync(DAEMON_PATH) || !fs.existsSync(VENV_PYTHON)) {
+      console.warn('[coral-daemon] Script or venv not found — Coral metrics will be STANDBY.');
+      return;
+    }
+
+    const doSpawn = () => {
+      console.log(`[coral-daemon] Spawning (backoff=${backoffMs}ms): ${VENV_PYTHON} ${DAEMON_PATH}`);
+      const child = spawn(VENV_PYTHON, [DAEMON_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: false,
+      });
+      this.coralDaemon = child;
+
+      child.stdout?.on('data', (d: Buffer) => process.stdout.write(`[coral-daemon] ${d}`.replace(/\n$/, '')  + '\n'));
+      child.stderr?.on('data', (d: Buffer) => process.stderr.write(`[coral-daemon] ${d}`.replace(/\n$/, '')  + '\n'));
+
+      child.on('exit', (code, signal) => {
+        this.coralDaemon = null;
+        if (signal === 'SIGTERM') {
+          // Graceful shutdown requested by stop() — do not restart.
+          console.log('[coral-daemon] Terminated by SIGTERM (graceful stop).');
+          return;
+        }
+        // Restart with capped exponential backoff (max 30s)
+        const nextBackoff = Math.min((backoffMs || 500) * 2, 30_000);
+        console.warn(`[coral-daemon] Exited (code=${code}). Restarting in ${nextBackoff}ms.`);
+        this.coralDaemonRestartTimer = setTimeout(() => this.spawnCoralDaemon(nextBackoff), nextBackoff);
+      });
+    };
+
+    if (backoffMs > 0) {
+      this.coralDaemonRestartTimer = setTimeout(doSpawn, backoffMs);
+    } else {
+      doSpawn();
+    }
+  }
+
   public async stop(): Promise<void> {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    if (this.coralDaemonRestartTimer) {
+      clearTimeout(this.coralDaemonRestartTimer);
+      this.coralDaemonRestartTimer = null;
+    }
+    if (this.coralDaemon) {
+      this.coralDaemon.kill('SIGTERM');
+      this.coralDaemon = null;
     }
     return new Promise((resolve) => {
       if (this.server) {
