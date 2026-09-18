@@ -24,3 +24,12 @@ ignore-missing-imports = [
     "tflite_runtime",
     "tflite_runtime.*"
 ]
+
+replace-untyped-imports-with-any = [
+    "psutil",
+    "PIL",
+    "PIL.*",
+    "board",
+    "busio",
+    "adafruit_ssd1306"
+]
