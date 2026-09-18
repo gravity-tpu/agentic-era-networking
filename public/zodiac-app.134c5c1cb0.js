@@ -1195,67 +1195,6 @@
   }
 
   /**
-   * Generates deterministic historical data points for Jetson Orin Nano matching the current time range.
-   */
-  function generateJetsonLocalHistory(snapshot, range) {
-    const durationMs = getRangeDurationMs(range);
-    let pointCount = 60;
-    if (range === '6h') pointCount = 72;
-    else if (range === '24h') pointCount = 96;
-    else if (range === '7d') pointCount = 112;
-
-    const points = [];
-    const nowMs = Date.now();
-    const stepMs = Math.max(1000, Math.floor(durationMs / pointCount));
-
-    const j = snapshot?.jetson;
-    const isDisconnected = !j || j.status === 'offline' || snapshot.source === 'disconnected';
-    const baseCpu = isDisconnected ? 0 : (j.cpuUtilizationPct || 8);
-    const baseGpu = isDisconnected ? 0 : (j.gpuUtilizationPct || 0);
-    const baseCpuTemp = isDisconnected ? null : (j.temperatures?.cpuC ?? 48.0);
-    const baseGpuTemp = isDisconnected ? null : (j.temperatures?.gpuC ?? 46.5);
-    const baseJuncTemp = isDisconnected ? null : (j.temperatures?.junctionC ?? 48.0);
-    const basePowerWatts = isDisconnected ? 0 : (j.powerMw?.vddIn ? j.powerMw.vddIn / 1000 : 4.8);
-    const baseRam = isDisconnected ? 0n : (j.ramUsedBytes || 2184183808n);
-    const sdnIf = j?.interfaces?.find((i) => i.name === 'enP8p1s0');
-    const wifiIf = j?.interfaces?.find((i) => i.name === 'wlP1p1s0');
-    const baseSdnRate = isDisconnected ? 0n : (sdnIf?.rxRateBps ?? 10240n);
-    const baseWifiRate = isDisconnected ? 0n : (wifiIf?.rxRateBps ?? 28600n);
-
-    for (let i = pointCount - 1; i >= 0; i--) {
-      const timestampMs = nowMs - (i * stepMs);
-      const cycle = Math.floor(timestampMs / 60000) % 60;
-      const jitter = (cycle % 7) - 3;
-
-      const cpuUtil = isDisconnected ? 0 : Math.max(2, Math.min(100, baseCpu + jitter * 2));
-      const gpuUtil = isDisconnected ? 0 : Math.max(0, Math.min(100, baseGpu + (cycle % 5 === 0 ? 15 : 0)));
-      const cpuTemp = isDisconnected ? null : Math.max(30, Math.min(85, baseCpuTemp + (jitter > 0 ? 1 : -1)));
-      const gpuTemp = isDisconnected ? null : Math.max(30, Math.min(85, baseGpuTemp + (cycle % 4 === 0 ? 1 : 0)));
-      const junctionTemp = isDisconnected ? null : Math.max(30, Math.min(90, baseJuncTemp + (jitter > 0 ? 1 : 0)));
-      const powerWatts = isDisconnected ? 0 : parseFloat((basePowerWatts + (jitter * 0.15)).toFixed(2));
-
-      const sdnRate = isDisconnected ? 0n : BigInt(Math.max(1000, Number(baseSdnRate) + jitter * 1200));
-      const wifiRate = isDisconnected ? 0n : BigInt(Math.max(5000, Number(baseWifiRate) + jitter * 3500));
-
-      points.push({
-        timestampMs,
-        cpuUtilizationPct: cpuUtil,
-        gpuUtilizationPct: gpuUtil,
-        cpuTempC: cpuTemp,
-        gpuTempC: gpuTemp,
-        junctionTempC: junctionTemp,
-        powerWatts,
-        ramUsedBytes: baseRam,
-        nvmeReadRateBps: isDisconnected ? 0n : 1048576n,
-        nvmeWriteRateBps: isDisconnected ? 0n : 262144n,
-        sdnPortRateBps: sdnRate,
-        wifiPortRateBps: wifiRate,
-      });
-    }
-    return points;
-  }
-
-  /**
    * Deterministic gap detection threshold: intervals larger than this represent missing data
    * and must be left blank rather than drawn with a connecting line.
    */
@@ -1798,7 +1737,7 @@
 
     const getPointCoord = (pt, rawV) => {
       if (!pt) return null;
-      const v = typeof rawV === 'bigint' ? Number(rawV) : Number(rawV || 0);
+      const v = Number(safeBigInt(rawV));
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
       const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
       const y = padTop + plotH - ((v - minVal) / rangeVal) * plotH;
@@ -1816,8 +1755,8 @@
       const windowPoints = jetsonTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
       if (windowPoints.length > 0) return windowPoints;
     }
-    if (currentSnapshot?.jetson) {
-      return generateJetsonLocalHistory(currentSnapshot, currentRange);
+    if (currentSnapshot?.jetson?.timeSeries && currentSnapshot.jetson.timeSeries.length > 0) {
+      return currentSnapshot.jetson.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
     }
     return [];
   }

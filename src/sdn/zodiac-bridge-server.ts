@@ -321,6 +321,8 @@ const MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
+const NANOSECONDS_PER_SECOND = 1_000_000_000n;
+
 export class ZodiacBridgeServer {
   public controlPlaneState: 'INITIALIZING' | 'ACTIVE' | 'DEGRADED_FAULT' = 'INITIALIZING';
   private readonly controller: ZodiacController;
@@ -332,6 +334,7 @@ export class ZodiacBridgeServer {
   private jetsonTimeSeries: JetsonTimeSeriesPoint[] = [];
   private coralTimeSeries: CoralTimeSeriesPoint[] = [];
   private lastProbeNs: bigint = process.hrtime.bigint();
+  private lastSwitchPollNs: bigint = process.hrtime.bigint();
   private readonly portRxCounters = new Map<number, bigint>();
   private readonly portByteCounters = new Map<number, bigint>();
   private readonly cloudRelayUrl?: string | undefined;
@@ -996,18 +999,23 @@ export class ZodiacBridgeServer {
         let rxRateBps = 0n;
         let txRateBps = 0n;
 
-        const deltaMs = lastPoint ? BigInt(Math.max(1, nowMs - lastPoint.timestampMs)) : 1000n;
+        // Monotonic nanoseconds clock calculation (Dean & Ghemawat invariant: zero NTP drift, pure integer units)
+        const currentPollNs = process.hrtime.bigint();
+        const deltaNs = this.lastSwitchPollNs > 0n && currentPollNs > this.lastSwitchPollNs
+          ? currentPollNs - this.lastSwitchPollNs
+          : 2_500_000_000n;
+        this.lastSwitchPollNs = currentPollNs;
 
-        if (lastPoint && lastPoint.rxPackets > 0n && totalRxPkts >= lastPoint.rxPackets) {
+        if (lastPoint !== undefined && totalRxPkts >= lastPoint.rxPackets) {
           const deltaRxP = totalRxPkts - lastPoint.rxPackets;
           const deltaTxP = totalTxPkts >= lastPoint.txPackets ? totalTxPkts - lastPoint.txPackets : 0n;
           const deltaRxB = totalRxBytes >= lastPoint.rxBytes ? totalRxBytes - lastPoint.rxBytes : 0n;
           const deltaTxB = totalTxBytes >= lastPoint.txBytes ? totalTxBytes - lastPoint.txBytes : 0n;
 
-          rxRatePps = (deltaRxP * 1000n) / deltaMs;
-          txRatePps = (deltaTxP * 1000n) / deltaMs;
-          rxRateBps = (deltaRxB * 1000n) / deltaMs;
-          txRateBps = (deltaTxB * 1000n) / deltaMs;
+          rxRatePps = (deltaRxP * NANOSECONDS_PER_SECOND) / deltaNs;
+          txRatePps = (deltaTxP * NANOSECONDS_PER_SECOND) / deltaNs;
+          rxRateBps = (deltaRxB * NANOSECONDS_PER_SECOND) / deltaNs;
+          txRateBps = (deltaTxB * NANOSECONDS_PER_SECOND) / deltaNs;
         }
 
         const portsSeries: Record<number, ZodiacPortSeriesPoint> = {};
@@ -1022,7 +1030,7 @@ export class ZodiacBridgeServer {
           let pRxRateBps = 0n;
           let pTxRateBps = 0n;
 
-          if (lastPoint?.ports?.[portId] && lastPoint.ports[portId]!.rxPackets > 0n) {
+          if (lastPoint?.ports?.[portId] !== undefined) {
             const lastPort = lastPoint.ports[portId]!;
             if (pRxPkts >= lastPort.rxPackets) {
               const dRxP = pRxPkts - lastPort.rxPackets;
@@ -1030,10 +1038,10 @@ export class ZodiacBridgeServer {
               const dRxB = pRxBytes >= lastPort.rxBytes ? pRxBytes - lastPort.rxBytes : 0n;
               const dTxB = pTxBytes >= lastPort.txBytes ? pTxBytes - lastPort.txBytes : 0n;
 
-              pRxRatePps = (dRxP * 1000n) / deltaMs;
-              pTxRatePps = (dTxP * 1000n) / deltaMs;
-              pRxRateBps = (dRxB * 1000n) / deltaMs;
-              pTxRateBps = (dTxB * 1000n) / deltaMs;
+              pRxRatePps = (dRxP * NANOSECONDS_PER_SECOND) / deltaNs;
+              pTxRatePps = (dTxP * NANOSECONDS_PER_SECOND) / deltaNs;
+              pRxRateBps = (dRxB * NANOSECONDS_PER_SECOND) / deltaNs;
+              pTxRateBps = (dTxB * NANOSECONDS_PER_SECOND) / deltaNs;
             }
           }
 
