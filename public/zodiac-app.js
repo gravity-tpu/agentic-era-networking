@@ -3067,170 +3067,114 @@ Please connect the physical switch via USB to execute '${command}' on device har
   initSidebarSlider();
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Dynamic Sidebar Navigation System
-  // Each device exposes a curated set of nav items. When the active device
-  // changes, the nav group is rebuilt and event listeners are rebound.
-  // Council Invariant 5: no magic numbers / hardcoded strings outside the
-  // single DEVICE_META declaration below.
+  // Sidebar Navigation System — O(1) display toggle + event delegation
+  //
+  // Three nav groups are pre-rendered in index.html as static HTML.
+  // Switching devices hides the old nav and shows the new one (O(1) CSS
+  // display toggle — zero layout thrashing, zero innerHTML mutation).
+  //
+  // A SINGLE delegated click listener on #cf-sidebar-nav-container reads
+  // data-section and data-scroll attributes to determine routing — no
+  // per-item closures, no rebinding after DOM changes.
+  //
+  // Council Invariant 5: all device metadata declared in one flat table.
+  // Ghemawat Razor: zero unnecessary allocations on every device switch.
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** SVG paths keyed by icon name (stroke-based, 24×24 viewBox). */
-  const NAV_ICONS = {
-    grid:     '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
-    wave:     '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
-    server:   '<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
-    bolt:     '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
-    terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
-    shield:   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-    cpu:      '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>',
-    thermo:   '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>',
-    zap:      '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
-    chip:     '<rect x="2" y="2" width="20" height="20" rx="2"/><line x1="6" y1="2" x2="6" y2="22"/><line x1="18" y1="2" x2="18" y2="22"/><line x1="2" y1="6" x2="22" y2="6"/><line x1="2" y1="18" x2="22" y2="18"/>',
-    inference:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>',
-    layers:   '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
-    memory:   '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>',
-    power:    '<path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>',
-  };
-
   /**
-   * Per-device nav configuration.
-   * `id`    – unique nav-tab element ID (used to re-query after DOM rebuild)
-   * `label` – display text
-   * `icon`  – key into NAV_ICONS
-   * `scroll`– ID of the page element to scrollIntoView, or null for top/section
-   * `section`– 'overview' | 'council' (which full-page section to show)
+   * Device metadata — keyed by device ID.
+   * `hwName`   – sidebar footer line 1 (hardware model string)
+   * `firmware` – sidebar footer line 2 (OS / firmware version)
+   * `navId`    – ID of the pre-rendered <nav> element in index.html
+   *
+   * @type {{ [device: string]: { hwName: string, firmware: string, navId: string } }}
    */
   const DEVICE_META = {
-    zodiac: {
-      hwName:   'Zodiac FX Hardware · Rev B',
-      firmware: 'Firmware v0.86',
-      nav: [
-        { id: 'nav-tab-overview',  label: 'Overview',          icon: 'grid',     section: 'overview', scroll: null        },
-        { id: 'nav-tab-analytics', label: 'Traffic Analytics', icon: 'wave',     section: 'overview', scroll: 'cf-card-analytics' },
-        { id: 'nav-tab-ports',     label: 'Ports & Interfaces',icon: 'server',   section: 'overview', scroll: 'cf-card-ports'     },
-        { id: 'nav-tab-openflow',  label: 'OpenFlow 1.3',      icon: 'bolt',     section: 'overview', scroll: 'cf-card-matrix'    },
-        { id: 'nav-tab-console',   label: 'Device Console',    icon: 'terminal', section: 'overview', scroll: 'cf-card-console'   },
-        { id: 'nav-tab-council',   label: 'Council Invariants',icon: 'shield',   section: 'council',  scroll: null               },
-      ],
-    },
-    orin: {
-      hwName:   'NVIDIA Jetson Orin Nano · Dev Kit',
-      firmware: 'JetPack 6.x · Ubuntu 22.04',
-      nav: [
-        { id: 'nav-tab-overview',  label: 'System Overview',   icon: 'grid',      section: 'overview', scroll: null              },
-        { id: 'nav-tab-analytics', label: 'Compute & GPU',     icon: 'cpu',       section: 'overview', scroll: 'orin-compute-card'},
-        { id: 'nav-tab-ports',     label: 'Thermals & Power',  icon: 'thermo',    section: 'overview', scroll: 'orin-thermal-card'},
-        { id: 'nav-tab-openflow',  label: 'SDN Interface',     icon: 'zap',       section: 'overview', scroll: 'orin-sdn-card'    },
-        { id: 'nav-tab-console',   label: 'Hardware Inventory',icon: 'memory',    section: 'overview', scroll: 'orin-inventory-card'},
-        { id: 'nav-tab-council',   label: 'Council Invariants',icon: 'shield',    section: 'council',  scroll: null               },
-      ],
-    },
-    coral: {
-      hwName:   'Google Coral Edge TPU · USB Acc.',
-      firmware: 'PyCoral · TFLite Runtime',
-      nav: [
-        { id: 'nav-tab-overview',  label: 'System Overview',   icon: 'grid',      section: 'overview', scroll: null              },
-        { id: 'nav-tab-analytics', label: 'Inference Metrics', icon: 'inference', section: 'overview', scroll: 'coral-perf-card'  },
-        { id: 'nav-tab-ports',     label: 'Pipeline Status',   icon: 'layers',    section: 'overview', scroll: 'coral-pipeline-card'},
-        { id: 'nav-tab-openflow',  label: 'USB Link',          icon: 'chip',      section: 'overview', scroll: 'coral-usb-card'   },
-        { id: 'nav-tab-council',   label: 'Council Invariants',icon: 'shield',    section: 'council',  scroll: null               },
-      ],
-    },
+    zodiac: { hwName: 'Zodiac FX Hardware \u00b7 Rev B',         firmware: 'Firmware v0.86',            navId: 'cf-nav-zodiac' },
+    orin:   { hwName: 'NVIDIA Jetson Orin Nano \u00b7 Dev Kit',  firmware: 'JetPack 6.x \u00b7 Ubuntu 22.04', navId: 'cf-nav-orin'   },
+    coral:  { hwName: 'Google Coral Edge TPU \u00b7 USB Acc.',   firmware: 'PyCoral \u00b7 TFLite Runtime',  navId: 'cf-nav-coral'  },
   };
 
-  /** Current active nav tab ID (survives DOM rebuilds). */
-  let currentActiveNavId = 'nav-tab-overview';
-
-  /** Build the inner HTML for the sidebar nav from a device's nav config. */
-  function buildNavHTML(navConfig) {
-    return navConfig.map((item, idx) => {
-      const isActive = (idx === 0) ? ' active' : '';
-      const svgPath = NAV_ICONS[item.icon] || NAV_ICONS['grid'];
-      return `<a class="cf-nav-item${isActive}" id="${item.id}" style="cursor:pointer">
-  <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgPath}</svg>
-  ${item.label}
-</a>`;
-    }).join('\n');
-  }
+  // Cached section elements (queried once — stable IDs, never recreated)
+  const secOverview = document.getElementById('section-overview');
+  const secCouncil  = document.getElementById('section-council');
 
   /**
-   * Bind click handlers to all nav items for the given device.
-   * Safely called after a DOM rebuild.  Each handler:
-   *   1. Updates the active CSS class.
-   *   2. Shows/hides the overview vs. council section.
-   *   3. Smooth-scrolls to the relevant card (if any).
+   * Single delegated click handler for all nav items across all device groups.
+   * Routes based on data-section and data-scroll attributes; updates .active class
+   * within the item's own parent <nav> without touching any other group.
    */
-  function bindNavTabs(device) {
-    const meta = DEVICE_META[device];
-    if (!meta) return;
+  const navContainer = document.getElementById('cf-sidebar-nav-container');
+  if (navContainer) {
+    navContainer.addEventListener('click', (e) => {
+      const item = e.target.closest('.cf-nav-item');
+      if (!item) return;
 
-    const secOverview = document.getElementById('section-overview');
-    const secCouncil  = document.getElementById('section-council');
+      // O(1) active state: deactivate siblings within this nav group only
+      const navGroup = item.closest('.cf-nav-group');
+      if (navGroup) {
+        navGroup.querySelectorAll('.cf-nav-item').forEach((el) => el.classList.remove('active'));
+      }
+      item.classList.add('active');
 
-    meta.nav.forEach((item) => {
-      const el = document.getElementById(item.id);
-      if (!el) return;
+      // Section routing via data attributes (no closures, no per-item state)
+      const section = item.dataset.section;
+      const scrollId = item.dataset.scroll;
 
-      el.addEventListener('click', () => {
-        // Deactivate previously active item
-        const prev = document.getElementById(currentActiveNavId);
-        if (prev) prev.classList.remove('active');
-        el.classList.add('active');
-        currentActiveNavId = item.id;
-
-        // Section visibility
-        if (item.section === 'council') {
-          if (secOverview) secOverview.style.display = 'none';
-          if (secCouncil)  secCouncil.style.display  = 'block';
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (section === 'council') {
+        if (secOverview) secOverview.style.display = 'none';
+        if (secCouncil)  secCouncil.style.display  = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        if (secOverview) secOverview.style.display = 'block';
+        if (secCouncil)  secCouncil.style.display  = 'none';
+        if (scrollId) {
+          const target = document.getElementById(scrollId);
+          if (target) { target.scrollIntoView({ behavior: 'smooth' }); }
         } else {
-          if (secOverview) secOverview.style.display = 'block';
-          if (secCouncil)  secCouncil.style.display  = 'none';
-          if (item.scroll) {
-            const target = document.getElementById(item.scroll);
-            if (target) target.scrollIntoView({ behavior: 'smooth' });
-          } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-      });
+      }
     });
   }
 
   /**
-   * Rebuild the sidebar nav HTML and update the footer metadata for the
-   * given device.  Called from switchDevice() every time the active tier
-   * changes.  Resets the active tab back to the first item (Overview).
+   * Switch the visible sidebar nav to the specified device and update the
+   * footer metadata.  O(1): two display-property writes + two text writes.
+   * Resets the active tab to the first item in the incoming nav group.
+   *
+   * @param {'zodiac'|'orin'|'coral'} device
    */
   function updateSidebarNav(device) {
     const meta = DEVICE_META[device];
     if (!meta) return;
 
-    // Rebuild nav DOM
-    const navEl = document.getElementById('cf-sidebar-nav');
-    if (navEl) {
-      navEl.innerHTML = buildNavHTML(meta.nav);
-      currentActiveNavId = meta.nav[0].id;
-      bindNavTabs(device);
+    // O(1) display toggle across all three pre-rendered nav groups
+    for (const [id, { navId }] of Object.entries(DEVICE_META)) {
+      const nav = document.getElementById(navId);
+      if (nav) nav.style.display = id === device ? '' : 'none';
     }
 
-    // Update sidebar footer hardware metadata
-    const hwNameEl    = document.getElementById('cf-hw-name');
-    const hwFirmware  = document.getElementById('cf-hw-firmware');
+    // Reset active state to the first item in the now-visible nav group
+    const activeNav = document.getElementById(meta.navId);
+    if (activeNav) {
+      const items = activeNav.querySelectorAll('.cf-nav-item');
+      items.forEach((el, idx) => el.classList.toggle('active', idx === 0));
+    }
+
+    // Update sidebar footer hardware metadata (two text writes)
+    const hwNameEl   = document.getElementById('cf-hw-name');
+    const hwFirmware = document.getElementById('cf-hw-firmware');
     if (hwNameEl)   hwNameEl.innerText   = meta.hwName;
     if (hwFirmware) hwFirmware.innerText = meta.firmware;
 
-    // If currently on council section, restore overview when switching devices
-    const secCouncil = document.getElementById('section-council');
+    // If the council section is visible, restore overview on device switch
     if (secCouncil && secCouncil.style.display === 'block') {
-      const secOverview = document.getElementById('section-overview');
       if (secOverview) secOverview.style.display = 'block';
       secCouncil.style.display = 'none';
     }
   }
 
-  // Bind nav tabs for the initial device (zodiac) on page load
-  bindNavTabs('zodiac');
 
   // Active Appliance Tier Switching Logic
   function switchDevice(device) {
