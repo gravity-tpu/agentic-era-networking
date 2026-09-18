@@ -11,8 +11,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   downsamplePoints,
+  downsampleJetsonPoints,
+  downsampleCoralPoints,
   RANGE_CONFIGS,
   getHistoricalTelemetry,
+  getHistoricalMultiDeviceTelemetry,
   persistTelemetrySnapshot,
   pruneOldTelemetry,
 } from '../../src/db/telemetry-db.js';
@@ -103,6 +106,51 @@ describe('Neon DB Historical Downsampling Engine', () => {
       expect(config!.maxPoints).toBeLessThanOrEqual(360);
       expect(config!.bucketSeconds).toBeGreaterThan(0);
     }
+  });
+
+  it('strictly bounds Jetson time-series downsampling to maxPoints with exact BigInt rates', () => {
+    const rawJetson = Array.from({ length: 500 }, (_, i) => ({
+      timestampMs: 1789300000000 + i * 2500,
+      cpuUtilizationPct: 20 + (i % 10),
+      gpuUtilizationPct: 10 + (i % 5),
+      cpuTempC: 45 + (i % 3),
+      gpuTempC: 42 + (i % 3),
+      junctionTempC: 48 + (i % 3),
+      powerWatts: 6.5,
+      ramUsedBytes: BigInt(4_000_000_000 + i * 1000),
+      nvmeReadRateBps: 1048576n,
+      nvmeWriteRateBps: 262144n,
+      sdnPortRateBps: BigInt(10000 + i * 10),
+      wifiPortRateBps: BigInt(25000 + i * 20),
+    }));
+
+    const downsampled = downsampleJetsonPoints(rawJetson, 120);
+    expect(downsampled.length).toBeLessThanOrEqual(120);
+    expect(downsampled.length).toBeGreaterThan(0);
+    expect(typeof downsampled[0]!.sdnPortRateBps).toBe('bigint');
+    expect(typeof downsampled[0]!.wifiPortRateBps).toBe('bigint');
+    expect(typeof downsampled[0]!.ramUsedBytes).toBe('bigint');
+    expect(Number.isInteger(downsampled[0]!.cpuTempC)).toBe(true);
+  });
+
+  it('strictly bounds Coral time-series downsampling to maxPoints with exact BigInt IPS and Tap rates', () => {
+    const rawCoral = Array.from({ length: 400 }, (_, i) => ({
+      timestampMs: 1789300000000 + i * 2500,
+      inferencesPerSecond: BigInt(50 + (i % 15)),
+      tapPacketsPerSecond: BigInt(i % 2 === 0 ? 100 : 0),
+      latencyP50Us: 320n,
+      latencyP99Us: 480n,
+      usbThroughputKbps: 45n,
+    }));
+
+    const downsampled = downsampleCoralPoints(rawCoral, 100);
+    expect(downsampled.length).toBeLessThanOrEqual(100);
+    expect(downsampled.length).toBeGreaterThan(0);
+    expect(typeof downsampled[0]!.inferencesPerSecond).toBe('bigint');
+    expect(typeof downsampled[0]!.tapPacketsPerSecond).toBe('bigint');
+    expect(typeof downsampled[0]!.latencyP50Us).toBe('bigint');
+    expect(typeof downsampled[0]!.latencyP99Us).toBe('bigint');
+    expect(typeof downsampled[0]!.usbThroughputKbps).toBe('bigint');
   });
 
   it('fails safely and returns empty array or false when DATABASE_URL is not configured', async () => {

@@ -29,7 +29,13 @@ import {
   createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
 import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry } from './hardware-probe.js';
-import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
+import { downsamplePoints, downsampleJetsonPoints, downsampleCoralPoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
+import {
+  resolveTelemetryStateFilePath,
+  loadTelemetryState,
+  saveTelemetryStateAtomic,
+  saveTelemetryStateAtomicSync,
+} from './telemetry-state-store.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
 /**
@@ -350,6 +356,9 @@ export class ZodiacBridgeServer {
   /** Vinyals flap-prevention: terminal fail-closed after MAX_CORAL_RESTARTS permanent failures. */
   private coralDaemonRestartCount = 0;
   private static readonly MAX_CORAL_RESTARTS = 10;
+  private readonly stateFilePath: string = resolveTelemetryStateFilePath();
+  private lastStateFlushTimeMs = 0;
+  public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
 
   constructor(
     controller?: ZodiacController,
@@ -366,6 +375,21 @@ export class ZodiacBridgeServer {
     this.timeSeries = generateHistoricalTelemetry(this.cachedSnapshot, 1, 60);
     this.jetsonTimeSeries = this.cachedSnapshot.jetson?.timeSeries ? [...this.cachedSnapshot.jetson.timeSeries] : [];
     this.coralTimeSeries = this.cachedSnapshot.coral?.timeSeries ? [...this.cachedSnapshot.coral.timeSeries] : [];
+
+    // Sanjay Ghemawat & Jeff Dean Invariant: Restore state checkpoint from local disk on startup
+    const loadedState = loadTelemetryState(this.stateFilePath);
+    if (loadedState) {
+      if (loadedState.timeSeries.length > 0) {
+        this.timeSeries = loadedState.timeSeries.slice(-MAX_TIME_SERIES_POINTS);
+      }
+      if (loadedState.jetsonTimeSeries.length > 0) {
+        this.jetsonTimeSeries = loadedState.jetsonTimeSeries.slice(-MAX_TIME_SERIES_POINTS);
+      }
+      if (loadedState.coralTimeSeries.length > 0) {
+        this.coralTimeSeries = loadedState.coralTimeSeries.slice(-MAX_TIME_SERIES_POINTS);
+      }
+    }
+
     this.cachedSnapshot = {
       ...this.cachedSnapshot,
       timeSeries: this.timeSeries,
@@ -604,7 +628,35 @@ export class ZodiacBridgeServer {
     }, delayMs);
   }
 
+  /**
+   * Sanjay Ghemawat & Jeff Dean Invariant: Atomically flush the in-memory telemetry buffers to local disk.
+   * Asynchronous non-blocking file I/O to prevent event loop starvation and SDN control plane jitter.
+   */
+  public async flushTelemetryStateToDisk(): Promise<boolean> {
+    return saveTelemetryStateAtomic(this.stateFilePath, {
+      version: 1,
+      savedAtMs: Date.now(),
+      timeSeries: this.timeSeries,
+      jetsonTimeSeries: this.jetsonTimeSeries,
+      coralTimeSeries: this.coralTimeSeries,
+    });
+  }
+
+  /**
+   * Synchronous flush reserved strictly for process shutdown hooks.
+   */
+  public flushTelemetryStateToDiskSync(): boolean {
+    return saveTelemetryStateAtomicSync(this.stateFilePath, {
+      version: 1,
+      savedAtMs: Date.now(),
+      timeSeries: this.timeSeries,
+      jetsonTimeSeries: this.jetsonTimeSeries,
+      coralTimeSeries: this.coralTimeSeries,
+    });
+  }
+
   public async stop(): Promise<void> {
+    this.flushTelemetryStateToDiskSync();
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
       this.pollTimer = null;
@@ -708,11 +760,25 @@ export class ZodiacBridgeServer {
         const config = RANGE_CONFIGS[range as keyof typeof RANGE_CONFIGS];
         if (config) {
           const points = downsamplePoints(this.timeSeries, config.maxPoints);
+          const jetsonPoints = downsampleJetsonPoints(this.jetsonTimeSeries, config.maxPoints);
+          const coralPoints = downsampleCoralPoints(this.coralTimeSeries, config.maxPoints);
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(this.serializeSnapshot({
             ...this.cachedSnapshot,
             timeSeries: points,
+            ...(this.cachedSnapshot.jetson ? {
+              jetson: {
+                ...this.cachedSnapshot.jetson,
+                timeSeries: jetsonPoints,
+              },
+            } : {}),
+            ...(this.cachedSnapshot.coral ? {
+              coral: {
+                ...this.cachedSnapshot.coral,
+                timeSeries: coralPoints,
+              },
+            } : {}),
           }));
           return;
         }
@@ -1117,9 +1183,12 @@ export class ZodiacBridgeServer {
         timestampMs: nowMs,
         inferencesPerSecond: liveCoral.inferencesPerSecond,
         tapPacketsPerSecond: 0n,
-        latencyP50Us: Number(liveCoral.latencyP50Ns / 1000n),
-        latencyP99Us: Number(liveCoral.latencyP99Ns / 1000n),
-        usbThroughputKbps: liveCoral.detected ? 45.0 : 0.0,
+        latencyP50Us: liveCoral.latencyP50Ns / 1000n,
+        latencyP99Us: liveCoral.latencyP99Ns / 1000n,
+        // Council Invariant 2 & 6: Physical truth integer BigInt throughput. 0n when idle/standby, line-rate when inference active.
+        usbThroughputKbps: liveCoral.inferencesPerSecond > 0n
+          ? (liveCoral.inferencesPerSecond * 300n * 8n) / 1000n
+          : 0n,
       });
 
       if (this.coralTimeSeries.length > MAX_TIME_SERIES_POINTS) {
@@ -1149,6 +1218,12 @@ export class ZodiacBridgeServer {
       // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud
       if (this.cloudRelayUrl && !this.isRelaying) {
         void this.relaySnapshotToCloud(this.cachedSnapshot);
+      }
+
+      // Sanjay Ghemawat & Jeff Dean Invariant: Periodic non-blocking async state checkpoint to disk
+      if (nowMs - this.lastStateFlushTimeMs >= ZodiacBridgeServer.STATE_FLUSH_INTERVAL_MS) {
+        this.lastStateFlushTimeMs = nowMs;
+        void this.flushTelemetryStateToDisk();
       }
     } catch (err: unknown) {
       console.warn('[!] [Zodiac Telemetry] Comprehensive health refresh error:', err instanceof Error ? err.message : String(err));

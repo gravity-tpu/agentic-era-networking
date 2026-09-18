@@ -160,9 +160,9 @@ export interface CoralTimeSeriesPoint {
   readonly timestampMs: number;
   readonly inferencesPerSecond: bigint;
   readonly tapPacketsPerSecond: bigint;
-  readonly latencyP50Us: number;
-  readonly latencyP99Us: number;
-  readonly usbThroughputKbps: number;
+  readonly latencyP50Us: bigint;
+  readonly latencyP99Us: bigint;
+  readonly usbThroughputKbps: bigint;
 }
 
 export interface CoralTelemetrySnapshot {
@@ -552,9 +552,9 @@ export function generateCoralHistoricalTelemetry(
     
     const ips = snapshot.inferencesPerSecond;
     const tapPkts = BigInt(cycle % 6 === 0 ? 120 : 0);
-    const latP50 = snapshot.status === 'INFERENCE_ACTIVE' ? 320 : 0;
-    const latP99 = snapshot.status === 'INFERENCE_ACTIVE' ? 480 : 0;
-    const usbKbps = snapshot.detected ? 45.0 : 0.0;
+    const latP50 = snapshot.status === 'INFERENCE_ACTIVE' ? 320n : 0n;
+    const latP99 = snapshot.status === 'INFERENCE_ACTIVE' ? 480n : 0n;
+    const usbKbps = snapshot.detected && ips > 0n ? (ips * 300n * 8n) / 1000n : 0n;
 
     points.push({
       timestampMs,

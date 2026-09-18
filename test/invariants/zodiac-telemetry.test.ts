@@ -219,6 +219,105 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
     const minTime = now - liveDurationMs;
     expect(now - minTime).toBe(600_000);
   });
+
+  it('atomically saves and restores persistent telemetry state across process restarts', async () => {
+    const {
+      serializeTelemetryState,
+      deserializeTelemetryState,
+      saveTelemetryStateAtomic,
+      loadTelemetryState,
+    } = await import('../../src/sdn/telemetry-state-store.js');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const fs = await import('node:fs');
+
+    const testState = {
+      version: 1 as const,
+      savedAtMs: 1789771180000,
+      timeSeries: [
+        {
+          timestampMs: 1789771180000,
+          rxBytes: 1048576n,
+          txBytes: 524288n,
+          rxPackets: 1000n,
+          txPackets: 500n,
+          rxRatePps: 100n,
+          txRatePps: 50n,
+          rxRateBps: 102400n,
+          txRateBps: 51200n,
+          cpuTemperatureC: 42,
+          latencyNs: 450000n,
+          ports: {
+            1: {
+              rxPackets: 500n,
+              txPackets: 250n,
+              rxBytes: 524288n,
+              txBytes: 262144n,
+              rxRatePps: 50n,
+              txRatePps: 25n,
+              rxRateBps: 51200n,
+              txRateBps: 25600n,
+            },
+          },
+        },
+      ],
+      jetsonTimeSeries: [
+        {
+          timestampMs: 1789771180000,
+          cpuUtilizationPct: 15.5,
+          gpuUtilizationPct: 2.0,
+          cpuTempC: 52.3,
+          gpuTempC: 50.1,
+          junctionTempC: 52.0,
+          powerWatts: 6.2,
+          ramUsedBytes: 2147483648n,
+          nvmeReadRateBps: 0n,
+          nvmeWriteRateBps: 1024n,
+          sdnPortRateBps: 125000n,
+          wifiPortRateBps: 84000n,
+        },
+      ],
+      coralTimeSeries: [
+        {
+          timestampMs: 1789771180000,
+          inferencesPerSecond: 125n,
+          tapPacketsPerSecond: 250n,
+          latencyP50Us: 380n,
+          latencyP99Us: 490n,
+          usbThroughputKbps: 1200n,
+        },
+      ],
+    };
+
+    const serialized = serializeTelemetryState(testState);
+    const deserialized = deserializeTelemetryState(serialized);
+    expect(deserialized).not.toBeNull();
+    expect(deserialized?.timeSeries).toHaveLength(1);
+    expect(deserialized?.timeSeries[0].rxBytes).toBe(1048576n);
+    expect(deserialized?.timeSeries[0].ports?.[1]?.rxRateBps).toBe(51200n);
+    expect(deserialized?.jetsonTimeSeries[0].ramUsedBytes).toBe(2147483648n);
+    expect(deserialized?.coralTimeSeries[0].inferencesPerSecond).toBe(125n);
+
+    // Test atomic file write & load
+    const tmpTestFile = path.join(os.tmpdir(), `test-zodiac-state-${Date.now()}.json`);
+    try {
+      const saved = await saveTelemetryStateAtomic(tmpTestFile, testState);
+      expect(saved).toBe(true);
+      expect(fs.existsSync(tmpTestFile)).toBe(true);
+
+      const loaded = loadTelemetryState(tmpTestFile);
+      expect(loaded).not.toBeNull();
+      expect(loaded?.jetsonTimeSeries[0].sdnPortRateBps).toBe(125000n);
+    } finally {
+      if (fs.existsSync(tmpTestFile)) {
+        fs.unlinkSync(tmpTestFile);
+      }
+    }
+
+    // Invalid JSON returns null without throwing
+    expect(deserializeTelemetryState('invalid json')).toBeNull();
+    expect(deserializeTelemetryState('{"version": 99}')).toBeNull();
+  });
 });
 
 

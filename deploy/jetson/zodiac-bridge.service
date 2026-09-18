@@ -85,8 +85,9 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
-# The bridge writes nothing to disk at runtime; all state is in-memory or Neon.
-ReadWritePaths=/tmp
+# StateDirectory creates /var/lib/zodiac owned by zodiac:zodiac across restarts
+StateDirectory=zodiac
+ReadWritePaths=/var/lib/zodiac /tmp
 
 # --- Watchdog (Dean: kernel-level liveness guarantee, zero external deps) ---
 # WatchdogSec=30s: systemd kills and restarts the process if it does not

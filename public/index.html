@@ -1248,12 +1248,22 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               
               <!-- Chart 1: Tap Ingestion Rate -->
               <div class="cf-card">
-                <div class="cf-card-header">
+                <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                   <div>
                     <h3 class="cf-card-title">Tap Ingestion &amp; Inference Rate</h3>
                     <div class="cf-card-subtitle">Inferences per second (IPS) vs Zodiac Port 3 Mirror Tap Packets (PPS)</div>
                   </div>
-                  <span class="cf-pill-badge purple">Tensor Ops</span>
+                  <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="cf-time-range-group" id="cf-coral-time-selectors">
+                      <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                      <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                      <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                      <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                      <button class="cf-time-btn" data-range="7d">7 Days</button>
+                      <button class="cf-time-btn" data-range="30d">30 Days</button>
+                    </div>
+                    <span class="cf-pill-badge purple">Tensor Ops</span>
+                  </div>
                 </div>
                 <div class="cf-card-body">
                   <div class="cf-canvas-container" id="canvas-wrapper-coral-rate" style="position: relative; height: 220px;">
@@ -1604,7 +1614,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.8c95432739.js"></script>
+  <script defer src="zodiac-app.c536a5f9a2.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

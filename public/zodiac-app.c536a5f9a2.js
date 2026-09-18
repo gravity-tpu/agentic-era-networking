@@ -2954,6 +2954,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
         jetsonTimeSeriesBuffer = data.jetson.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
       }
+      if (data?.coral && Array.isArray(data.coral.timeSeries) && data.coral.timeSeries.length > 0) {
+        // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
+        coralTimeSeriesBuffer = data.coral.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      }
     } catch (err) {
       console.warn('[!] [Historical Range] Failed to fetch historical telemetry from Neon DB:', err);
       historicalDataUnavailable = true;
@@ -2962,8 +2966,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     }
   }
 
-  // Bind Synchronized Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d) across Zodiac & Jetson
-  const allTimeBtns = document.querySelectorAll('#cf-time-selectors .cf-time-btn, #cf-orin-time-selectors .cf-time-btn');
+  // Bind Synchronized Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d) across Zodiac, Jetson & Coral
+  const allTimeBtns = document.querySelectorAll('#cf-time-selectors .cf-time-btn, #cf-orin-time-selectors .cf-time-btn, #cf-coral-time-selectors .cf-time-btn');
   function setTimeRange(newRange) {
     currentRange = newRange || 'live';
     allTimeBtns.forEach((b) => {
@@ -2971,7 +2975,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     });
   }
 
-  const timeRangeContainers = document.querySelectorAll('#cf-time-selectors, #cf-orin-time-selectors');
+  const timeRangeContainers = document.querySelectorAll('#cf-time-selectors, #cf-orin-time-selectors, #cf-coral-time-selectors');
   timeRangeContainers.forEach((container) => {
     const btns = container.querySelectorAll('.cf-time-btn');
     btns.forEach((btn) => {

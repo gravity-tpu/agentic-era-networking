@@ -70,6 +70,8 @@ model ZodiacTelemetryPoint {
   rxRateBps       BigInt
   txRateBps       BigInt
   portsJson       Json     // Full snapshot of Ports 1-4 counters and link status
+  jetsonJson      Json?    // NVIDIA Jetson Orin Nano host vitals, thermals, NICs
+  coralJson       Json?    // Google Coral Edge TPU inference rates, latencies
   createdAt       DateTime @default(now())
 
   @@index([createdAt])

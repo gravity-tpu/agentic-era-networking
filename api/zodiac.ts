@@ -19,6 +19,7 @@ import { requireOperatorAuth, isLocalDev } from '../dist/auth/google-auth.js';
 import {
   persistTelemetrySnapshot,
   getHistoricalTelemetry,
+  getHistoricalMultiDeviceTelemetry,
   isValidRange,
   isPersistingTelemetry,
 } from '../dist/db/telemetry-db.js';
@@ -127,6 +128,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
           });
 
+          const jetsonTimeSeries = Array.isArray(parsed.jetson?.timeSeries)
+            ? parsed.jetson.timeSeries.slice(-120)
+            : latestSnapshot.jetson?.timeSeries;
+
+          const coralTimeSeries = Array.isArray(parsed.coral?.timeSeries)
+            ? parsed.coral.timeSeries.slice(-120)
+            : latestSnapshot.coral?.timeSeries;
+
           latestSnapshot = {
             ...latestSnapshot,
             ...parsed,
@@ -139,6 +148,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               ...(parsed.system ?? {}),
               timestampNs: process.hrtime.bigint(),
             },
+            ...(parsed.jetson ? {
+              jetson: {
+                ...latestSnapshot.jetson,
+                ...parsed.jetson,
+                ...(jetsonTimeSeries ? { timeSeries: jetsonTimeSeries } : {}),
+              }
+            } : {}),
+            ...(parsed.coral ? {
+              coral: {
+                ...latestSnapshot.coral,
+                ...parsed.coral,
+                ...(coralTimeSeries ? { timeSeries: coralTimeSeries } : {}),
+              }
+            } : {}),
           };
 
           // Asynchronously persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
@@ -172,13 +195,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
     const range = url.searchParams.get('range');
     if (isValidRange(range)) {
-      const historicalPoints = await getHistoricalTelemetry(range);
-      if (historicalPoints.length > 0) {
+      const multi = await getHistoricalMultiDeviceTelemetry(range);
+      if (multi.timeSeries.length > 0 || multi.jetsonTimeSeries.length > 0 || multi.coralTimeSeries.length > 0) {
         res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
         res.statusCode = 200;
         res.end(serializeWithBigInt({
           ...latestSnapshot,
-          timeSeries: historicalPoints,
+          timeSeries: multi.timeSeries,
+          ...(latestSnapshot.jetson ? {
+            jetson: {
+              ...latestSnapshot.jetson,
+              timeSeries: multi.jetsonTimeSeries,
+            },
+          } : {}),
+          ...(latestSnapshot.coral ? {
+            coral: {
+              ...latestSnapshot.coral,
+              timeSeries: multi.coralTimeSeries,
+            },
+          } : {}),
         }));
         return;
       }
