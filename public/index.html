@@ -3,12 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zodiac FX SDN Console — Northbound Networks Hardware Monitor</title>
-  <meta name="description" content="Cloudflare-style enterprise observability dashboard for physical Northbound Networks Zodiac FX OpenFlow 1.3 SDN switch.">
+  <title>Agentic Era Networking — SDN · AI · Edge Control Plane</title>
+  <meta name="description" content="Unified agentic control plane for a three-tier physical appliance stack: Zodiac FX OpenFlow 1.3 SDN switch, NVIDIA Jetson Orin Nano edge compute, and Google Coral Edge TPU inference accelerator.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="zodiac.cc82126e66.css">
+  <!-- Favicon — three-tier network topology node (SVG primary, JPEG fallback) -->
+  <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+  <link rel="icon" type="image/jpeg" href="img/favicon.jpg" sizes="32x32">
+  <link rel="apple-touch-icon" href="img/favicon.jpg">
 </head>
 <body>
 
@@ -18,12 +22,22 @@
     <aside class="cf-sidebar">
       
       <div class="cf-sidebar-header">
-        <svg class="cf-logo-cloud" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/>
+        <!-- Network topology icon: central hub + 3 satellite nodes = three-tier appliance stack -->
+        <svg class="cf-logo-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Edges -->
+          <line x1="12" y1="12" x2="5"  y2="5"  stroke-width="1.4" opacity="0.65"/>
+          <line x1="12" y1="12" x2="20" y2="10" stroke-width="1.4" opacity="0.65"/>
+          <line x1="12" y1="12" x2="8"  y2="20" stroke-width="1.4" opacity="0.65"/>
+          <!-- Satellite nodes -->
+          <circle cx="5"  cy="5"  r="1.8" fill="currentColor" stroke="none"/>
+          <circle cx="20" cy="10" r="1.8" fill="currentColor" stroke="none"/>
+          <circle cx="8"  cy="20" r="1.8" fill="currentColor" stroke="none"/>
+          <!-- Central hub -->
+          <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
         </svg>
         <div class="cf-logo-title">
-          <span>ZODIAC FX</span>
-          <span class="cf-logo-subtitle">Agentic Networking</span>
+          <span>AGENTIC ERA</span>
+          <span class="cf-logo-subtitle">Networking Console</span>
         </div>
       </div>
 
