@@ -9,7 +9,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { pruneOldTelemetry } from '../../dist/db/telemetry-db.js';
+import { pruneOldTelemetry } from '../../src/db/telemetry-db.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   res.setHeader('Content-Type', 'application/json');

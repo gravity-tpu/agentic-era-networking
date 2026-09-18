@@ -43,6 +43,9 @@ jobs:
       - name: Verify TypeScript Invariants (Zero Suppressions)
         run: npm run check-types
 
+      - name: Build Project Artifacts
+        run: npm run build
+
       - name: Run Invariant & Unit Test Suite
         run: npm run test
 
