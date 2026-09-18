@@ -1999,48 +1999,44 @@
     }
 
     const getCoord = (pt, tempVal) => {
+      const v = typeof tempVal === 'number' ? tempVal : null;
+      if (v === null || isNaN(v)) return null;
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
       const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
-      const v = typeof tempVal === 'number' ? tempVal : (pt.cpuTemperatureC || 35);
       const y = padTop + plotH - ((Math.max(minTemp, Math.min(maxTemp, v)) - minTemp) / rangeTemp) * plotH;
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // CPU Temp Curve (Green #10b981)
-    ctx.beginPath();
-    const c0 = getCoord(points[0], points[0].cpuTemperatureC);
-    ctx.moveTo(c0.x, c0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].cpuTemperatureC);
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    const drawCurve = (getVal, color) => {
+      ctx.beginPath();
+      let isDrawing = false;
+      for (let i = 0; i < points.length; i++) {
+        const val = getVal(points[i]);
+        const c = getCoord(points[i], val);
+        if (!c) {
+          isDrawing = false;
+          continue;
+        }
+        if (!isDrawing) {
+          ctx.moveTo(c.x, c.y);
+          isDrawing = true;
+        } else {
+          ctx.lineTo(c.x, c.y);
+        }
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+    };
+
+    // CPU Temp Curve (Green #10b981) - Never fabricate baseline on sensor failure (Council Invariant 6)
+    drawCurve((pt) => pt.cpuTempC ?? pt.cpuTemperatureC ?? null, '#10b981');
 
     // GPU Temp Curve (Indigo #6366f1)
-    ctx.beginPath();
-    const g0 = getCoord(points[0], points[0].gpuTemperatureC);
-    ctx.moveTo(g0.x, g0.y);
-    for (let i = 1; i < points.length; i++) {
-      const g = getCoord(points[i], points[i].gpuTemperatureC);
-      ctx.lineTo(g.x, g.y);
-    }
-    ctx.strokeStyle = '#6366f1';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    drawCurve((pt) => pt.gpuTempC ?? pt.gpuTemperatureC ?? null, '#6366f1');
 
     // Junction Temp Curve (Orange #f6821f)
-    ctx.beginPath();
-    const j0 = getCoord(points[0], points[0].junctionTemperatureC);
-    ctx.moveTo(j0.x, j0.y);
-    for (let i = 1; i < points.length; i++) {
-      const j = getCoord(points[i], points[i].junctionTemperatureC);
-      ctx.lineTo(j.x, j.y);
-    }
-    ctx.strokeStyle = '#f6821f';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    drawCurve((pt) => pt.junctionTempC ?? pt.junctionTemperatureC ?? null, '#f6821f');
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2048,12 +2044,12 @@
     ctx.fillStyle = '#10b981';
     ctx.fillText('● CPU', padLeft + 10, padTop - 6);
     ctx.fillStyle = '#6366f1';
-    ctx.fillText('● GPU', padLeft + 70, padTop - 6);
+    ctx.fillText('● GPU', padLeft + 65, padTop - 6);
     ctx.fillStyle = '#f6821f';
-    ctx.fillText('● Junction (Tj)', padLeft + 130, padTop - 6);
+    ctx.fillText('● Junction (Tj)', padLeft + 120, padTop - 6);
   }
 
-  // --- Orin Chart 4: Board Power Draw (Watts) ---
+  // --- Orin Chart 4: Module Power Consumption (Watts) ---
   function drawOrinPowerChart(canvas, points) {
     if (!canvas || !points || points.length === 0) return;
     const ctx = canvas.getContext('2d');
@@ -2083,7 +2079,8 @@
 
     let maxW = 10;
     for (const pt of points) {
-      const w = typeof pt.boardPowerW === 'number' ? pt.boardPowerW : Number(pt.boardPowerW || 0);
+      const pVal = pt.powerWatts ?? pt.boardPowerW;
+      const w = typeof pVal === 'number' ? pVal : Number(pVal || 0);
       if (w > maxW) maxW = w;
     }
     maxW = Math.max(10, Math.ceil(maxW * 1.25));
@@ -2131,13 +2128,13 @@
 
     // Power Area & Line (Orange #f6821f)
     ctx.beginPath();
-    const p0 = getCoord(points[0], points[0].boardPowerW);
+    const p0 = getCoord(points[0], points[0].powerWatts ?? points[0].boardPowerW);
     ctx.moveTo(p0.x, p0.y);
     for (let i = 1; i < points.length; i++) {
-      const p = getCoord(points[i], points[i].boardPowerW);
+      const p = getCoord(points[i], points[i].powerWatts ?? points[i].boardPowerW);
       ctx.lineTo(p.x, p.y);
     }
-    const pLast = getCoord(points[points.length - 1], points[points.length - 1].boardPowerW);
+    const pLast = getCoord(points[points.length - 1], points[points.length - 1].powerWatts ?? points[points.length - 1].boardPowerW);
     ctx.lineTo(pLast.x, padTop + plotH);
     ctx.lineTo(p0.x, padTop + plotH);
     ctx.closePath();
@@ -2889,12 +2886,16 @@ Please connect the physical switch via USB to execute '${command}' on device har
   bindChartHoverTooltip('canvas-wrapper-orin-compute', getJetsonPointsForDisplay, 45, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
-    const cpu = typeof closestPt.cpuPercent === 'number' ? closestPt.cpuPercent.toFixed(1) + '%' : '0.0%';
-    const gpu = typeof closestPt.gpuPercent === 'number' ? closestPt.gpuPercent.toFixed(1) + '%' : '0.0%';
+    const cpuNum = closestPt.cpuUtilizationPct ?? closestPt.cpuPercent ?? 0;
+    const gpuNum = closestPt.gpuUtilizationPct ?? closestPt.gpuPercent ?? 0;
+    const cpu = Number(cpuNum).toFixed(1) + '%';
+    const gpu = Number(gpuNum).toFixed(1) + '%';
+    const ramUsed = closestPt.ramUsedBytes ? ` · RAM: ${formatBytes(safeBigInt(closestPt.ramUsedBytes))}` : '';
     return `
       <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Orin Compute Load</div>
       <div style="color: #38bdf8;">● 6-Core ARM Cortex-A78AE: ${cpu}</div>
       <div style="color: #a78bfa;">● Ampere GPU (1024 CUDA): ${gpu}</div>
+      <div style="color: #94a3b8; font-size: 0.68rem;">Orin Nano Silicon${ramUsed}</div>
     `;
   });
 
@@ -2902,14 +2903,16 @@ Please connect the physical switch via USB to execute '${command}' on device har
   bindChartHoverTooltip('canvas-wrapper-orin-network', getJetsonPointsForDisplay, 58, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
-    const sdnRx = formatBytes(safeBigInt(closestPt.sdnRxRateBps));
-    const sdnTx = formatBytes(safeBigInt(closestPt.sdnTxRateBps));
-    const wifiRx = formatBytes(safeBigInt(closestPt.wifiRxRateBps));
-    const wifiTx = formatBytes(safeBigInt(closestPt.wifiTxRateBps));
+    const sdnRate = closestPt.sdnPortRateBps != null
+      ? safeBigInt(closestPt.sdnPortRateBps)
+      : (safeBigInt(closestPt.sdnRxRateBps) + safeBigInt(closestPt.sdnTxRateBps));
+    const wifiRate = closestPt.wifiPortRateBps != null
+      ? safeBigInt(closestPt.wifiPortRateBps)
+      : (safeBigInt(closestPt.wifiRxRateBps) + safeBigInt(closestPt.wifiTxRateBps));
     return `
       <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Interface Throughput</div>
-      <div style="color: #38bdf8;">● GbE (enP8p1s0): ${sdnRx}/s RX · ${sdnTx}/s TX</div>
-      <div style="color: #f59e0b;">● Wi-Fi (wlP1p1s0): ${wifiRx}/s RX · ${wifiTx}/s TX</div>
+      <div style="color: #38bdf8;">● GbE (enP8p1s0): ${formatBytes(sdnRate)}/s</div>
+      <div style="color: #f59e0b;">● Wi-Fi (wlP1p1s0): ${formatBytes(wifiRate)}/s</div>
     `;
   });
 
@@ -2917,12 +2920,17 @@ Please connect the physical switch via USB to execute '${command}' on device har
   bindChartHoverTooltip('canvas-wrapper-orin-thermals', getJetsonPointsForDisplay, 45, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
-    const soc = closestPt.socTempC !== null && closestPt.socTempC !== undefined ? closestPt.socTempC.toFixed(1) + '°C' : '--';
-    const ambient = closestPt.boardTempC !== null && closestPt.boardTempC !== undefined ? closestPt.boardTempC.toFixed(1) + '°C' : '--';
+    const cpuT = closestPt.cpuTempC ?? closestPt.cpuTemperatureC ?? closestPt.socTempC;
+    const gpuT = closestPt.gpuTempC ?? closestPt.gpuTemperatureC;
+    const juncT = closestPt.junctionTempC ?? closestPt.junctionTemperatureC ?? closestPt.boardTempC;
+    const cpuStr = cpuT !== null && cpuT !== undefined ? Number(cpuT).toFixed(1) + '°C' : '--';
+    const gpuStr = gpuT !== null && gpuT !== undefined ? Number(gpuT).toFixed(1) + '°C' : '--';
+    const juncStr = juncT !== null && juncT !== undefined ? Number(juncT).toFixed(1) + '°C' : '--';
     return `
       <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Orin Thermal Zones</div>
-      <div style="color: #f87171;">● SoC Thermal (CPU/GPU): ${soc}</div>
-      <div style="color: #fb923c;">● Carrier Board Ambient: ${ambient}</div>
+      <div style="color: #10b981;">● CPU Temp: ${cpuStr}</div>
+      <div style="color: #818cf8;">● GPU Temp: ${gpuStr}</div>
+      <div style="color: #f97316;">● Junction (Tj): ${juncStr}</div>
     `;
   });
 
@@ -2930,13 +2938,15 @@ Please connect the physical switch via USB to execute '${command}' on device har
   bindChartHoverTooltip('canvas-wrapper-orin-power', getJetsonPointsForDisplay, 45, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
-    const power = closestPt.boardPowerW !== null && closestPt.boardPowerW !== undefined ? closestPt.boardPowerW.toFixed(2) + ' W' : '--';
+    const pwr = closestPt.powerWatts ?? closestPt.boardPowerW;
+    const power = pwr !== null && pwr !== undefined ? Number(pwr).toFixed(2) + ' W' : '--';
     return `
       <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Module Power Draw</div>
       <div style="color: #eab308; font-weight: 600;">● Total Consumption: ${power}</div>
       <div style="color: #94a3b8; font-size: 0.68rem;">15W Super Power Envelope (INA3221 Monitor)</div>
     `;
   });
+
 
   // 9. Coral Edge TPU Inference Rate Chart
   bindChartHoverTooltip('canvas-wrapper-coral-rate', getCoralPointsForDisplay, 55, 15, (closestPt) => {

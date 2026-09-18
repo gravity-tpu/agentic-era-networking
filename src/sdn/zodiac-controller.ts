@@ -66,7 +66,7 @@ export class ZodiacController {
   private cachedConfig: ZodiacConfig | undefined;
   private cachedStatus: ZodiacDeviceStatus | undefined;
   private cachedPorts: ZodiacPortInfo[] | undefined;
-  private lastSerialProbeMs: number = 0;
+  private lastSerialProbeNs: bigint = 0n;
 
   /**
    * Probes end-to-end health across Serial and OpenFlow without aggressive polling.
@@ -82,30 +82,52 @@ export class ZodiacController {
       if (path) {
         serialDetected = true;
       }
-    } catch (_) {
+    } catch (err: unknown) {
+      // Council Invariant 1 (Zero Suppression of Reality): Explicit protocol boundary logging
+      console.warn('[!] [ZodiacController] Serial device detection probe:', err instanceof Error ? err.message : String(err));
       serialDetected = false;
     }
 
-    const now = Date.now();
+    const nowNs = process.hrtime.bigint();
     if (serialDetected) {
-      // Cache serial responses for 1000ms to avoid locking the serial port under frequent polling
-      if (!this.cachedConfig || !this.cachedStatus || (now - this.lastSerialProbeMs > 1000)) {
+      // Council Invariant 1 & 2 (Dean & Ghemawat):
+      // 1. Static config (MAC, IP, Netmask, Gateway) is invariant at runtime; fetch ONCE on boot.
+      //    Never repeatedly enter/exit 'config' mode over UART at 1Hz, which locks the switch CPU.
+      if (!this.cachedConfig) {
         try {
-          const [statusRes, portsRes, configRes] = await Promise.all([
-            this.serial.getStatus().catch(() => undefined),
-            this.serial.getPorts().catch(() => undefined),
-            this.serial.getConfig().catch((err: Error) => {
-              console.warn('[!] [ZodiacController] Serial getConfig error:', err.message);
+          const configRes = await this.serial.getConfig().catch((err: unknown) => {
+            console.warn('[!] [ZodiacController] Initial getConfig error:', err instanceof Error ? err.message : String(err));
+            return undefined;
+          });
+          if (configRes) this.cachedConfig = configRes;
+        } catch (err: unknown) {
+          // Council Invariant 1: Explicitly log retry context rather than swallowing error
+          console.warn('[!] [ZodiacController] Initial config retrieval failed; retrying on next probe cycle:', err instanceof Error ? err.message : String(err));
+        }
+      }
+
+      // 2. Dynamic metrics (CPU temp, uptime, port link UP/DOWN) probed every 3000ms using monotonic nanosecond clock
+      //    Dean & Vinyals Invariant: Immune to NTP wall-clock jumps or backward leaps.
+      const PROBE_INTERVAL_NS = 3_000_000_000n; // 3 seconds
+      if (!this.cachedStatus || (nowNs - this.lastSerialProbeNs >= PROBE_INTERVAL_NS)) {
+        try {
+          const [statusRes, portsRes] = await Promise.all([
+            this.serial.getStatus().catch((err: unknown) => {
+              console.warn('[!] [ZodiacController] Serial getStatus error:', err instanceof Error ? err.message : String(err));
+              return undefined;
+            }),
+            this.serial.getPorts().catch((err: unknown) => {
+              console.warn('[!] [ZodiacController] Serial getPorts error:', err instanceof Error ? err.message : String(err));
               return undefined;
             }),
           ]);
 
           if (statusRes) this.cachedStatus = statusRes;
           if (portsRes) this.cachedPorts = portsRes;
-          if (configRes) this.cachedConfig = configRes;
-          this.lastSerialProbeMs = now;
-        } catch (_) {
-          // Non-fatal if serial query is busy
+          this.lastSerialProbeNs = nowNs;
+        } catch (err: unknown) {
+          // Council Invariant 1: Surface transient serial bus errors deterministically
+          console.warn('[!] [ZodiacController] Serial metrics probe batch error:', err instanceof Error ? err.message : String(err));
         }
       }
 

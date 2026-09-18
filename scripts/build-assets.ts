@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +32,10 @@ export function buildAssets(targetDir: string = PUBLIC_DIR): { jsHashed: string;
   const jsContent = fs.readFileSync(jsSourcePath, 'utf8');
   const cssContent = fs.readFileSync(cssSourcePath, 'utf8');
   let indexHtml = fs.readFileSync(indexPath, 'utf8');
+
+  // Council Invariant 1 (Zero Suppression of Reality): Pre-validate JS syntax
+  // Guarantees zero malformed or syntax-error bundles ever reach production.
+  new vm.Script(jsContent, { filename: jsSourcePath });
 
   const jsHash = hashFile(jsContent);
   const cssHash = hashFile(cssContent);
