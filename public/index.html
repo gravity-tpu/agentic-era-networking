@@ -1040,12 +1040,12 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
             </div>
 
             <!-- Jetson Hardware & Subsystems Inventory Grid (NVMe Storage + systemd Service) -->
-            <div style="margin-top: 1.5rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+            <div id="orin-inventory-card" style="margin-top: 1.5rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
               <div>
                 <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--cf-text-primary); margin: 0;">Hardware &amp; System Subsystems</h3>
-                <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 2px;">NVMe persistent flash storage and systemd bridge service daemon runtime</div>
+                <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 2px;">NVMe persistent flash storage · systemd bridge service · Coral inference daemon</div>
               </div>
-              <span class="cf-pill-badge gray">Orin Architecture</span>
+              <span class="cf-pill-badge gray">Orin Nano · 8GB LPDDR5</span>
             </div>
 
             <div class="cf-system-inventory-grid" style="margin-top: 0;">
@@ -1106,10 +1106,10 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
                   <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
                     <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Memory RSS Budget</span>
-                    <span class="cf-mono" style="font-size: 0.82rem; font-weight: 600; color: var(--cf-text-primary);">~25.2 MB / 128.0 MB (19.7%)</span>
+                    <span class="cf-mono" id="orin-svc-rss-stat" style="font-size: 0.82rem; font-weight: 600; color: var(--cf-text-primary);">-- MB / 128.0 MB</span>
                   </div>
                   <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
-                    <div class="cf-mini-bar-fill green" style="width: 20%; height: 100%; border-radius: 3px;"></div>
+                    <div class="cf-mini-bar-fill green" id="orin-svc-rss-bar" style="width: 5%; height: 100%; border-radius: 3px;"></div>
                   </div>
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
                     <div>

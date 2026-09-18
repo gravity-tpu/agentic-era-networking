@@ -1087,6 +1087,9 @@ export class ZodiacBridgeServer {
       this.cachedSnapshot = {
         ...this.cachedSnapshot,
         timeSeries: this.timeSeries,
+        // Council Invariant 6: Physical truth — live PID and RSS from the OS, not synthetic values.
+        bridgePid: process.pid,
+        bridgeRssBytes: process.memoryUsage().rss,
         jetson: {
           ...liveJetson,
           timeSeries: this.jetsonTimeSeries,
