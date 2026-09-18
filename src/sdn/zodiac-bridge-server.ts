@@ -28,7 +28,35 @@ import {
 } from './zodiac-telemetry.js';
 import { probeJetsonHardware, probeCoralHardware } from './hardware-probe.js';
 import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
-import { isLocalDev } from '../auth/google-auth.js';
+// isLocalDev is now superseded by isLanOperator defined below.
+
+/**
+ * Returns true when GOOGLE_CLIENT_ID is absent AND the request originates
+ * from either loopback or a private RFC 1918 LAN address.
+ *
+ * Physical operator context: the Jetson appliance listens on 0.0.0.0:3003
+ * but sits behind a private router. Any RFC 1918 peer is already inside
+ * the same trusted LAN — no external spoofing is possible without network
+ * access, which is the correct trust boundary when OAuth is not configured.
+ * (Ghemawat Simplicity / Hassabis Fail-Closed: fail open only where the
+ * physical network IS the trust boundary.)
+ */
+function isLanOperator(req: import('node:http').IncomingMessage): boolean {
+  const hasGoogleOauth = Boolean(process.env['GOOGLE_CLIENT_ID']);
+  if (hasGoogleOauth) return false; // OAuth configured — never bypass
+
+  const remote = req.socket?.remoteAddress ?? '';
+  // Normalise IPv4-mapped IPv6 (::ffff:192.168.x.x)
+  const ip = remote.replace(/^::ffff:/, '');
+
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(ip)
+  );
+}
 
 /**
  * $NOTIFY_SOCKET is evaluated once at module load time.
@@ -252,11 +280,34 @@ export class ZodiacBridgeServer {
       return;
     }
 
-    // API: GET /api/auth/me (Council Invariant 3: Fail-Closed Socket Provenance)
-    if (url.pathname === '/api/auth/me' && req.method === 'GET') {
-      const isLoopback = isLocalDev(req);
+    // API: GET /api/auth/login
+    // When GOOGLE_CLIENT_ID is configured this would redirect to Google OAuth.
+    // In local appliance mode (no OAuth) we redirect back to the dashboard root
+    // so clicking "Sign In" in the UI doesn't 404.
+    if (url.pathname === '/api/auth/login' && req.method === 'GET') {
+      const hasGoogleOauth = Boolean(process.env['GOOGLE_CLIENT_ID']);
+      if (!hasGoogleOauth) {
+        // No OAuth configured: LAN access IS the authentication boundary.
+        // Redirect to root — the /api/auth/me check will auto-pass for LAN clients.
+        res.statusCode = 302;
+        res.setHeader('Location', '/');
+        res.end();
+        return;
+      }
+      // Future: build Google OAuth redirect URL here when GOOGLE_CLIENT_ID is set.
+      res.statusCode = 501;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Google OAuth not yet wired to this appliance build.' }));
+      return;
+    }
 
-      if (!isLoopback) {
+    // API: GET /api/auth/me (Council Invariant 3: Fail-Closed Socket Provenance)
+    // Trust: loopback OR any RFC 1918 LAN peer when GOOGLE_CLIENT_ID is absent.
+    // When OAuth IS configured, only a valid signed session cookie is accepted.
+    if (url.pathname === '/api/auth/me' && req.method === 'GET') {
+      const isOperator = isLanOperator(req);
+
+      if (!isOperator) {
         res.statusCode = 401;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
