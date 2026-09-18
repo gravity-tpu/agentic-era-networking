@@ -778,7 +778,9 @@
         const sdnRate = safeBigInt(sdn.rxRateBps) + safeBigInt(sdn.txRateBps);
         if (els.orinKpiSdnRate) els.orinKpiSdnRate.innerText = `${formatBytes(sdnRate)}/s`;
         if (els.orinBarSdn) {
-          const sdnPct = sdnRate > 0n ? Math.min(100, Number((sdnRate * 100n) / 125000000n)) : 10;
+          const maxSpeedMbps = sdn.speedMbps ? BigInt(sdn.speedMbps) : 1000n;
+          const maxSpeedBps = maxSpeedMbps * 125000n;
+          const sdnPct = sdnRate > 0n ? Math.min(100, Number((sdnRate * 100n) / maxSpeedBps)) : 10;
           els.orinBarSdn.style.width = `${Math.max(5, sdnPct)}%`;
         }
         if (els.orinKpiSdnRx) els.orinKpiSdnRx.innerText = `${formatNumber(sdn.rxRatePps)} pps`;
@@ -838,7 +840,8 @@
       }
       if (els.orinKpiPower) els.orinKpiPower.innerText = `${pwrW.toFixed(1)} W`;
       if (els.orinBarPower) {
-        const pwrPct = Math.min(100, Math.max(5, Math.round((pwrW / 15.0) * 100)));
+        const maxTdpW = typeof j.maxPowerTdpW === 'number' ? j.maxPowerTdpW : 15.0;
+        const pwrPct = Math.min(100, Math.max(5, Math.round((pwrW / maxTdpW) * 100)));
         els.orinBarPower.style.width = `${pwrPct}%`;
       }
 

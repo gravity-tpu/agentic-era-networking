@@ -61,24 +61,28 @@ function getDiff() {
     process.exit(0);
   }
 
-  let diffCmd = 'git diff HEAD';
+  // Exclude compiled hashed bundle assets (which are exact copies of public/zodiac-app.js and zodiac.css)
+  // to avoid consuming 150KB of diff tokens and truncating real source code changes.
+  const ASSET_EXCLUDES = '-- . ":!public/zodiac-app.*.js" ":!public/zodiac.*.css"';
+
+  let diffCmd = `git diff HEAD ${ASSET_EXCLUDES}`;
   if (mode === 'staged') {
-    diffCmd = 'git diff --staged';
+    diffCmd = `git diff --staged ${ASSET_EXCLUDES}`;
   } else if (mode === 'last') {
     ensureHistory();
     const before = process.env.GITHUB_BEFORE;
     const sha    = process.env.GITHUB_SHA;
     if (before && sha && before !== '0000000000000000000000000000000000000000') {
-      diffCmd = `git diff ${before} ${sha}`;
+      diffCmd = `git diff ${before} ${sha} ${ASSET_EXCLUDES}`;
     } else {
-      diffCmd = 'git diff HEAD~1 HEAD';
+      diffCmd = `git diff HEAD~1 HEAD ${ASSET_EXCLUDES}`;
     }
   }
 
   try {
     let diff = execSync(diffCmd, diffOpts);
     if (mode === 'staged' && !diff.trim()) {
-      diffCmd = 'git diff';
+      diffCmd = `git diff ${ASSET_EXCLUDES}`;
       diff = execSync(diffCmd, diffOpts);
       if (!diff.trim()) {
         console.log('ℹ️  No changes detected (nothing staged or unstaged).');

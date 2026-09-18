@@ -10,7 +10,6 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { pruneOldTelemetry } from '../../dist/db/telemetry-db.js';
-import { requireOperatorAuth } from '../../dist/auth/google-auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   res.setHeader('Content-Type', 'application/json');
@@ -25,25 +24,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Authentication Verification (Vercel Cron Secret or Verified Operator Session)
+  // Authentication Verification (Vercel Cron Secret - Fail-Closed Zero-Trust)
   const cronSecret = process.env['CRON_SECRET'];
   const authHeader = req.headers['authorization'];
 
-  if (cronSecret) {
-    // Fail-Closed: When CRON_SECRET is configured in environment, require exact Bearer token
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      res.statusCode = 401;
-      res.end(JSON.stringify({
-        error: 'Unauthorized: Invalid or missing Bearer CRON_SECRET token',
-      }));
-      return;
-    }
-  } else {
-    // If CRON_SECRET is not configured, fallback to authenticated operator session
-    const user = requireOperatorAuth(req, res);
-    if (!user) {
-      return; // 401 response handled by requireOperatorAuth
-    }
+  // Fail-Closed Default (Demis Hassabis): All cron endpoints require explicit Bearer authentication.
+  // If CRON_SECRET is not configured or token does not match, reject immediately.
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({
+      error: 'Unauthorized: Missing or invalid Bearer CRON_SECRET token. Invariant: Fail-Closed Default Drop.',
+    }));
+    return;
   }
 
   try {
