@@ -65,6 +65,9 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
    +-----------------------------------------------------------------------------------------+
 ```
 
+> [!TIP]
+> **Physical Chassis & Display Subsystem**: For full mechanical assembly, 4-pin I2C OLED pinouts, button jumper wiring, and the 5-screen physical telemetry daemon, see the dedicated [Jetson Orin & Panini Case Architecture](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/README.md).
+
 ---
 
 ## 3. The Nanosecond-to-WAN Latency Budget (The Dean Invariant)

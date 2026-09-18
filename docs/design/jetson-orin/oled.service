@@ -1,0 +1,16 @@
+[Unit]
+Description=OLED System Info Display Service
+After=network.target
+
+[Service]
+Type=simple
+User=zodiac
+WorkingDirectory=/home/zodiac
+ExecStart=/usr/bin/python3 /home/zodiac/oled_sysinfo.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
