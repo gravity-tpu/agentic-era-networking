@@ -3066,8 +3066,175 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Initialize Collapsible Navigation Sidebar (Left Pane Slider)
   initSidebarSlider();
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Dynamic Sidebar Navigation System
+  // Each device exposes a curated set of nav items. When the active device
+  // changes, the nav group is rebuilt and event listeners are rebound.
+  // Council Invariant 5: no magic numbers / hardcoded strings outside the
+  // single DEVICE_META declaration below.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** SVG paths keyed by icon name (stroke-based, 24×24 viewBox). */
+  const NAV_ICONS = {
+    grid:     '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+    wave:     '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+    server:   '<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+    bolt:     '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+    shield:   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    cpu:      '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>',
+    thermo:   '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>',
+    zap:      '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    chip:     '<rect x="2" y="2" width="20" height="20" rx="2"/><line x1="6" y1="2" x2="6" y2="22"/><line x1="18" y1="2" x2="18" y2="22"/><line x1="2" y1="6" x2="22" y2="6"/><line x1="2" y1="18" x2="22" y2="18"/>',
+    inference:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>',
+    layers:   '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+    memory:   '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>',
+    power:    '<path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>',
+  };
+
+  /**
+   * Per-device nav configuration.
+   * `id`    – unique nav-tab element ID (used to re-query after DOM rebuild)
+   * `label` – display text
+   * `icon`  – key into NAV_ICONS
+   * `scroll`– ID of the page element to scrollIntoView, or null for top/section
+   * `section`– 'overview' | 'council' (which full-page section to show)
+   */
+  const DEVICE_META = {
+    zodiac: {
+      hwName:   'Zodiac FX Hardware · Rev B',
+      firmware: 'Firmware v0.86',
+      nav: [
+        { id: 'nav-tab-overview',  label: 'Overview',          icon: 'grid',     section: 'overview', scroll: null        },
+        { id: 'nav-tab-analytics', label: 'Traffic Analytics', icon: 'wave',     section: 'overview', scroll: 'cf-card-analytics' },
+        { id: 'nav-tab-ports',     label: 'Ports & Interfaces',icon: 'server',   section: 'overview', scroll: 'cf-card-ports'     },
+        { id: 'nav-tab-openflow',  label: 'OpenFlow 1.3',      icon: 'bolt',     section: 'overview', scroll: 'cf-card-matrix'    },
+        { id: 'nav-tab-console',   label: 'Device Console',    icon: 'terminal', section: 'overview', scroll: 'cf-card-console'   },
+        { id: 'nav-tab-council',   label: 'Council Invariants',icon: 'shield',   section: 'council',  scroll: null               },
+      ],
+    },
+    orin: {
+      hwName:   'NVIDIA Jetson Orin Nano · Dev Kit',
+      firmware: 'JetPack 6.x · Ubuntu 22.04',
+      nav: [
+        { id: 'nav-tab-overview',  label: 'System Overview',   icon: 'grid',      section: 'overview', scroll: null              },
+        { id: 'nav-tab-analytics', label: 'Compute & GPU',     icon: 'cpu',       section: 'overview', scroll: 'orin-compute-card'},
+        { id: 'nav-tab-ports',     label: 'Thermals & Power',  icon: 'thermo',    section: 'overview', scroll: 'orin-thermal-card'},
+        { id: 'nav-tab-openflow',  label: 'SDN Interface',     icon: 'zap',       section: 'overview', scroll: 'orin-sdn-card'    },
+        { id: 'nav-tab-console',   label: 'Hardware Inventory',icon: 'memory',    section: 'overview', scroll: 'orin-inventory-card'},
+        { id: 'nav-tab-council',   label: 'Council Invariants',icon: 'shield',    section: 'council',  scroll: null               },
+      ],
+    },
+    coral: {
+      hwName:   'Google Coral Edge TPU · USB Acc.',
+      firmware: 'PyCoral · TFLite Runtime',
+      nav: [
+        { id: 'nav-tab-overview',  label: 'System Overview',   icon: 'grid',      section: 'overview', scroll: null              },
+        { id: 'nav-tab-analytics', label: 'Inference Metrics', icon: 'inference', section: 'overview', scroll: 'coral-perf-card'  },
+        { id: 'nav-tab-ports',     label: 'Pipeline Status',   icon: 'layers',    section: 'overview', scroll: 'coral-pipeline-card'},
+        { id: 'nav-tab-openflow',  label: 'USB Link',          icon: 'chip',      section: 'overview', scroll: 'coral-usb-card'   },
+        { id: 'nav-tab-council',   label: 'Council Invariants',icon: 'shield',    section: 'council',  scroll: null               },
+      ],
+    },
+  };
+
+  /** Current active nav tab ID (survives DOM rebuilds). */
+  let currentActiveNavId = 'nav-tab-overview';
+
+  /** Build the inner HTML for the sidebar nav from a device's nav config. */
+  function buildNavHTML(navConfig) {
+    return navConfig.map((item, idx) => {
+      const isActive = (idx === 0) ? ' active' : '';
+      const svgPath = NAV_ICONS[item.icon] || NAV_ICONS['grid'];
+      return `<a class="cf-nav-item${isActive}" id="${item.id}" style="cursor:pointer">
+  <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgPath}</svg>
+  ${item.label}
+</a>`;
+    }).join('\n');
+  }
+
+  /**
+   * Bind click handlers to all nav items for the given device.
+   * Safely called after a DOM rebuild.  Each handler:
+   *   1. Updates the active CSS class.
+   *   2. Shows/hides the overview vs. council section.
+   *   3. Smooth-scrolls to the relevant card (if any).
+   */
+  function bindNavTabs(device) {
+    const meta = DEVICE_META[device];
+    if (!meta) return;
+
+    const secOverview = document.getElementById('section-overview');
+    const secCouncil  = document.getElementById('section-council');
+
+    meta.nav.forEach((item) => {
+      const el = document.getElementById(item.id);
+      if (!el) return;
+
+      el.addEventListener('click', () => {
+        // Deactivate previously active item
+        const prev = document.getElementById(currentActiveNavId);
+        if (prev) prev.classList.remove('active');
+        el.classList.add('active');
+        currentActiveNavId = item.id;
+
+        // Section visibility
+        if (item.section === 'council') {
+          if (secOverview) secOverview.style.display = 'none';
+          if (secCouncil)  secCouncil.style.display  = 'block';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          if (secOverview) secOverview.style.display = 'block';
+          if (secCouncil)  secCouncil.style.display  = 'none';
+          if (item.scroll) {
+            const target = document.getElementById(item.scroll);
+            if (target) target.scrollIntoView({ behavior: 'smooth' });
+          } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * Rebuild the sidebar nav HTML and update the footer metadata for the
+   * given device.  Called from switchDevice() every time the active tier
+   * changes.  Resets the active tab back to the first item (Overview).
+   */
+  function updateSidebarNav(device) {
+    const meta = DEVICE_META[device];
+    if (!meta) return;
+
+    // Rebuild nav DOM
+    const navEl = document.getElementById('cf-sidebar-nav');
+    if (navEl) {
+      navEl.innerHTML = buildNavHTML(meta.nav);
+      currentActiveNavId = meta.nav[0].id;
+      bindNavTabs(device);
+    }
+
+    // Update sidebar footer hardware metadata
+    const hwNameEl    = document.getElementById('cf-hw-name');
+    const hwFirmware  = document.getElementById('cf-hw-firmware');
+    if (hwNameEl)   hwNameEl.innerText   = meta.hwName;
+    if (hwFirmware) hwFirmware.innerText = meta.firmware;
+
+    // If currently on council section, restore overview when switching devices
+    const secCouncil = document.getElementById('section-council');
+    if (secCouncil && secCouncil.style.display === 'block') {
+      const secOverview = document.getElementById('section-overview');
+      if (secOverview) secOverview.style.display = 'block';
+      secCouncil.style.display = 'none';
+    }
+  }
+
+  // Bind nav tabs for the initial device (zodiac) on page load
+  bindNavTabs('zodiac');
+
   // Active Appliance Tier Switching Logic
   function switchDevice(device) {
+
     if (!['zodiac', 'orin', 'coral'].includes(device)) return;
     activeDeviceId = device;
 
@@ -3098,26 +3265,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
       }
     }
 
-    if (els.sidebarDevName) {
-      if (device === 'zodiac') {
-        els.sidebarDevName.innerText = currentSnapshot?.system?.deviceName || 'Zodiac_FX';
-      } else if (device === 'orin') {
-        els.sidebarDevName.innerText = 'Jetson_Orin_Nano';
-      } else if (device === 'coral') {
-        els.sidebarDevName.innerText = 'Coral_Edge_TPU';
-      }
-    }
-
-    if (els.sidebarIp) {
-      if (device === 'zodiac') {
-        const devIp = currentSnapshot?.system?.ipAddress || '--';
-        els.sidebarIp.innerText = devIp !== '--' ? `${devIp} · Port 4` : 'Port 4 (SDN Link)';
-      } else if (device === 'orin') {
-        els.sidebarIp.innerText = 'enP8p1s0 (SDN) · wlP1p1s0 (Wi-Fi)';
-      } else if (device === 'coral') {
-        els.sidebarIp.innerText = 'USB 3.1 SuperSpeed (5 Gbps)';
-      }
-    }
+    // Rebuild device-specific sidebar nav and update footer metadata
+    updateSidebarNav(device);
 
     if (window.location.hash !== `#sec-${device}` && window.location.hash !== `#${device}`) {
       window.history.replaceState(null, '', `#sec-${device}`);
@@ -3125,6 +3274,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
     updateCharts();
   }
+
 
   // Bind 3-Way Tier Selector Buttons
   if (els.btnDeviceZodiac) {

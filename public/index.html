@@ -49,8 +49,8 @@
         </div>
       </div>
 
-      <!-- Navigation Tabs -->
-      <nav class="cf-nav-group">
+      <!-- Navigation Tabs (rebuilt dynamically by switchDevice() in zodiac-app.js) -->
+      <nav class="cf-nav-group" id="cf-sidebar-nav">
         <a class="cf-nav-item active" id="nav-tab-overview">
           <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="7" height="7"/>
@@ -73,7 +73,7 @@
             <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
             <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
           </svg>
-          Ports & Interfaces
+          Ports &amp; Interfaces
         </a>
 
         <a class="cf-nav-item" id="nav-tab-openflow">
@@ -99,10 +99,10 @@
         </a>
       </nav>
 
-      <!-- Sidebar Footer -->
+      <!-- Sidebar Footer (updated dynamically by switchDevice() in zodiac-app.js) -->
       <div class="cf-sidebar-footer">
-        <div>Zodiac FX Hardware · Rev B</div>
-        <div style="margin-top: 0.25rem; color: var(--cf-text-subtle);">Firmware v0.86</div>
+        <div id="cf-hw-name">Zodiac FX Hardware · Rev B</div>
+        <div id="cf-hw-firmware" style="margin-top: 0.25rem; color: var(--cf-text-subtle);">Firmware v0.86</div>
       </div>
 
     </aside>
@@ -1442,60 +1442,9 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   <!-- Vercel Web Analytics (Native static integration, zero runtime bundle overhead) -->
   <script defer src="/_vercel/insights/script.js"></script>
   <script>
-    // Tab View Switcher (O(1) active toggle, zero layout thrashing per Ghemawat Razor)
-    const navItems = {
-      overview: document.getElementById('nav-tab-overview'),
-      analytics: document.getElementById('nav-tab-analytics'),
-      ports: document.getElementById('nav-tab-ports'),
-      openflow: document.getElementById('nav-tab-openflow'),
-      console: document.getElementById('nav-tab-console'),
-      council: document.getElementById('nav-tab-council'),
-    };
-    const secOverview = document.getElementById('section-overview');
-    const secCouncil = document.getElementById('section-council');
-    const breadcrumbName = document.getElementById('cf-breadcrumb-name');
-    const cardAnalytics = document.getElementById('cf-card-analytics');
-    const cardPorts = document.getElementById('cf-card-ports');
-    const cardMatrix = document.getElementById('cf-card-matrix');
-    const cardConsole = document.getElementById('cf-card-console');
-    let currentActiveNav = 'overview';
-
-    function switchNavTab(tab) {
-      if (currentActiveNav !== tab) {
-        if (navItems[currentActiveNav]) navItems[currentActiveNav].classList.remove('active');
-        if (navItems[tab]) navItems[tab].classList.add('active');
-        currentActiveNav = tab;
-      }
-
-      if (tab === 'council') {
-        secOverview.style.display = 'none';
-        secCouncil.style.display = 'block';
-        if (breadcrumbName) breadcrumbName.innerText = 'Senior Staff Council & Invariants';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        secOverview.style.display = 'block';
-        secCouncil.style.display = 'none';
-        if (tab === 'overview') {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else if (tab === 'analytics') {
-          if (cardAnalytics) cardAnalytics.scrollIntoView({ behavior: 'smooth' });
-        } else if (tab === 'ports') {
-          if (cardPorts) cardPorts.scrollIntoView({ behavior: 'smooth' });
-        } else if (tab === 'openflow') {
-          if (cardMatrix) cardMatrix.scrollIntoView({ behavior: 'smooth' });
-        } else if (tab === 'console') {
-          if (cardConsole) cardConsole.scrollIntoView({ behavior: 'smooth' });
-        }
-      }
-    }
-
-    // Deterministic addEventListener bindings (No inline onclick handlers)
-    if (navItems.overview) navItems.overview.addEventListener('click', () => switchNavTab('overview'));
-    if (navItems.analytics) navItems.analytics.addEventListener('click', () => switchNavTab('analytics'));
-    if (navItems.ports) navItems.ports.addEventListener('click', () => switchNavTab('ports'));
-    if (navItems.openflow) navItems.openflow.addEventListener('click', () => switchNavTab('openflow'));
-    if (navItems.console) navItems.console.addEventListener('click', () => switchNavTab('console'));
-    if (navItems.council) navItems.council.addEventListener('click', () => switchNavTab('council'));
+    // NOTE: Nav tab management is handled by zodiac-app.js (see bindNavTabs / updateSidebarNav).
+    // This inline script only manages non-device-specific UI that must be available before
+    // the deferred bundle loads.
 
     function togglePhotoView() {
       const box = document.getElementById('photo-box');
@@ -1545,7 +1494,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.c286bf753b.js"></script>
+  <script defer src="zodiac-app.d3793fa9e6.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
