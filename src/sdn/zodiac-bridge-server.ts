@@ -338,6 +338,9 @@ export class ZodiacBridgeServer {
   private readonly bridgeSecret?: string | undefined;
   private isRelaying = false;
   private pollTimer: NodeJS.Timeout | null = null;
+  private isRefreshing = false;
+  private consecutiveMissedProbes = 0;
+  public static readonly MAX_MISSED_PROBES_BEFORE_DISCONNECT = 3;
   private coralDaemon: ChildProcess | null = null;
   private coralDaemonRestartTimer: NodeJS.Timeout | null = null;
   /** Vinyals flap-prevention: terminal fail-closed after MAX_CORAL_RESTARTS permanent failures. */
@@ -435,10 +438,8 @@ export class ZodiacBridgeServer {
     // No-ops silently outside systemd (NOTIFY_SOCKET absent).
     sdNotify('READY=1\n');
 
-    // 3. Start decoupled asynchronous background telemetry polling loop
-    this.pollTimer = setInterval(() => {
-      void this.refreshTelemetry();
-    }, 2500);
+    // 3. Start decoupled asynchronous background telemetry polling loop with backpressure
+    this.scheduleNextPoll(0);
 
     // 4. Spawn the Coral inference daemon (managed child process).
     //    Produces /tmp/coral-telemetry.json read by probeCoralHardware().
@@ -579,9 +580,29 @@ export class ZodiacBridgeServer {
     }
   }
 
+  /**
+   * Schedules the next telemetry poll cycle with backpressure:
+   * guarantees that probes never pile up concurrently if an I/O operation takes longer than 2.5s.
+   */
+  private scheduleNextPoll(delayMs: number = 2500): void {
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+    this.pollTimer = setTimeout(async () => {
+      try {
+        await this.refreshTelemetry();
+      } finally {
+        if (this.server) {
+          this.scheduleNextPoll(2500);
+        }
+      }
+    }, delayMs);
+  }
+
   public async stop(): Promise<void> {
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
     if (this.coralDaemonRestartTimer) {
@@ -813,13 +834,30 @@ export class ZodiacBridgeServer {
   }
 
   private async refreshTelemetry(): Promise<void> {
+    if (this.isRefreshing) return;
+    this.isRefreshing = true;
     try {
       const health = await this.controller.getComprehensiveHealth();
-      const isLive = health.serialDetected || health.openFlowMetrics.state === 'ESTABLISHED';
+      const isDetected = health.serialDetected || health.openFlowMetrics.state === 'ESTABLISHED';
+
+      if (isDetected) {
+        this.consecutiveMissedProbes = 0;
+      } else {
+        this.consecutiveMissedProbes++;
+      }
+
+      // Council Invariant 5 (Vinyals Flap Prevention Hysteresis):
+      // A single missed serial/OpenFlow read does not flap hardware into offline state.
+      // Require MAX_MISSED_PROBES_BEFORE_DISCONNECT consecutive failed probes (~7.5s)
+      // before transitioning from 'live_hardware' to 'disconnected'.
+      const isLive = isDetected || (this.consecutiveMissedProbes < ZodiacBridgeServer.MAX_MISSED_PROBES_BEFORE_DISCONNECT && this.cachedSnapshot.source === 'live_hardware');
+
+      const nowMs = Date.now();
 
       if (!isLive) {
-        // Hardware is physically disconnected. Reflect reality without simulation! (Council Invariant 1)
+        // Hardware is physically disconnected after sustained absence. Reflect reality without simulation! (Council Invariant 6)
         this.cachedSnapshot = {
+          ...this.cachedSnapshot,
           source: 'disconnected',
           system: {
             deviceName: 'Zodiac_FX',
@@ -854,7 +892,6 @@ export class ZodiacBridgeServer {
           },
         };
 
-        const nowMs = Date.now();
         const emptyPortsSeries: Record<number, ZodiacPortSeriesPoint> = {
           1: { rxPackets: 0n, txPackets: 0n, rxBytes: 0n, txBytes: 0n, rxRatePps: 0n, txRatePps: 0n, rxRateBps: 0n, txRateBps: 0n },
           2: { rxPackets: 0n, txPackets: 0n, rxBytes: 0n, txBytes: 0n, rxRatePps: 0n, txRatePps: 0n, rxRateBps: 0n, txRateBps: 0n },
@@ -879,164 +916,160 @@ export class ZodiacBridgeServer {
         if (this.timeSeries.length > MAX_TIME_SERIES_POINTS) {
           this.timeSeries.shift();
         }
+      } else {
+        // Hardware is live (Serial CDC or OpenFlow active)
+        if (health.openFlowMetrics.state === 'ESTABLISHED') {
+          this.controller.openFlow.pingEcho();
+        }
+
+        const livePorts = health.ports && health.ports.length > 0
+          ? health.ports.map((p) => {
+              const existing = this.cachedSnapshot.ports.find((ep) => ep.port === p.port);
+              const portRxPkts = this.portRxCounters.get(p.port) ?? existing?.rxPackets ?? 0n;
+              const portRxBytes = this.portByteCounters.get(p.port) ?? existing?.rxBytes ?? 0n;
+              const portIp = p.port === 4
+                ? (health.config?.ipAddress ?? this.switchIp)
+                : p.port === 2
+                  ? 'Gateway Uplink'
+                  : 'Unassigned';
+              return {
+                port: p.port,
+                name: `Port ${p.port}`,
+                physicalLocation: existing?.physicalLocation ?? `Port ${p.port}`,
+                status: p.status,
+                vlanType: p.vlanType,
+                vlanId: p.vlanId,
+                ipAddress: portIp,
+                rxBytes: portRxBytes,
+                txBytes: existing?.txBytes ?? 0n,
+                rxPackets: portRxPkts,
+                txPackets: existing?.txPackets ?? 0n,
+                rxDropped: 0n,
+                txDropped: 0n,
+                rxCrcErrors: 0n,
+              };
+            })
+          : this.cachedSnapshot.ports;
 
         this.cachedSnapshot = {
           ...this.cachedSnapshot,
-          timeSeries: this.timeSeries,
+          source: 'live_hardware',
+          system: {
+            deviceName: health.config?.name ?? 'Zodiac_FX',
+            macAddress: health.config?.macAddress ?? '70:B3:D5:87:40:BC',
+            ipAddress: health.config?.ipAddress ?? this.switchIp,
+            netmask: health.config?.netmask ?? '255.255.255.0',
+            defaultGateway: health.config?.gateway ?? process.env['SDN_GATEWAY_IP'] ?? '0.0.0.0',
+            openFlowController: health.config?.controllerIp ?? this.controllerIp,
+            openFlowPort: health.config?.controllerPort ?? 6633,
+            failstate: health.config?.failstate ?? 'Secure',
+            cpuTemperatureC: health.deviceStatus?.cpuTempC ?? this.cachedSnapshot.system.cpuTemperatureC,
+            cpuUid: health.deviceStatus?.cpuUid ?? this.cachedSnapshot.system.cpuUid ?? 'N/A',
+            firmwareVersion: health.deviceStatus?.firmwareVersion ?? this.cachedSnapshot.system.firmwareVersion ?? '0.86',
+            uptime: health.deviceStatus?.uptime ?? this.cachedSnapshot.system.uptime ?? '00:00:00',
+            timestampNs: process.hrtime.bigint(),
+          },
+          ports: livePorts,
+          openflow: {
+            status: this.controlPlaneState === 'ACTIVE' && health.openFlowMetrics.state === 'ESTABLISHED' ? 'Connected' : 'Disconnected',
+            version: '1.3',
+            datapathId: health.openFlowMetrics.switchFeatures
+              ? `0x${health.openFlowMetrics.switchFeatures.datapathId.toString(16)}`
+              : '0x70b3d58740bc',
+            activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
+            activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? 1 : 0,
+            tableLookups: health.openFlowMetrics.messagesReceived,
+            tableMatches: health.openFlowMetrics.messagesReceived,
+            lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
+          },
         };
-        return;
-      }
 
-      // Hardware is live (Serial CDC or OpenFlow active)
-      if (health.openFlowMetrics.state === 'ESTABLISHED') {
-        this.controller.openFlow.pingEcho();
-      }
+        // Real rate accounting from actual OpenFlow bytes received
+        const totalRxBytes = health.openFlowMetrics.bytesReceived;
+        const totalTxBytes = 0n;
+        const totalRxPkts = health.openFlowMetrics.messagesReceived;
+        const totalTxPkts = 0n;
 
-      const livePorts = health.ports && health.ports.length > 0
-        ? health.ports.map((p) => {
-            const existing = this.cachedSnapshot.ports.find((ep) => ep.port === p.port);
-            const portRxPkts = this.portRxCounters.get(p.port) ?? existing?.rxPackets ?? 0n;
-            const portRxBytes = this.portByteCounters.get(p.port) ?? existing?.rxBytes ?? 0n;
-            const portIp = p.port === 4
-              ? (health.config?.ipAddress ?? this.switchIp)
-              : p.port === 2
-                ? 'Gateway Uplink'
-                : 'Unassigned';
-            return {
-              port: p.port,
-              name: `Port ${p.port}`,
-              physicalLocation: existing?.physicalLocation ?? `Port ${p.port}`,
-              status: p.status,
-              vlanType: p.vlanType,
-              vlanId: p.vlanId,
-              ipAddress: portIp,
-              rxBytes: portRxBytes,
-              txBytes: existing?.txBytes ?? 0n,
-              rxPackets: portRxPkts,
-              txPackets: existing?.txPackets ?? 0n,
-              rxDropped: 0n,
-              txDropped: 0n,
-              rxCrcErrors: 0n,
-            };
-          })
-        : this.cachedSnapshot.ports;
+        const lastPoint = this.timeSeries[this.timeSeries.length - 1];
+        let rxRatePps = 0n;
+        let txRatePps = 0n;
+        let rxRateBps = 0n;
+        let txRateBps = 0n;
 
-      this.cachedSnapshot = {
-        source: 'live_hardware',
-        system: {
-          deviceName: health.config?.name ?? 'Zodiac_FX',
-          macAddress: health.config?.macAddress ?? '70:B3:D5:87:40:BC',
-          ipAddress: health.config?.ipAddress ?? this.switchIp,
-          netmask: health.config?.netmask ?? '255.255.255.0',
-          defaultGateway: health.config?.gateway ?? process.env['SDN_GATEWAY_IP'] ?? '0.0.0.0',
-          openFlowController: health.config?.controllerIp ?? this.controllerIp,
-          openFlowPort: health.config?.controllerPort ?? 6633,
-          failstate: health.config?.failstate ?? 'Secure',
-          cpuTemperatureC: health.deviceStatus?.cpuTempC ?? null,
-          cpuUid: health.deviceStatus?.cpuUid ?? 'N/A',
-          firmwareVersion: health.deviceStatus?.firmwareVersion ?? '0.86',
-          uptime: health.deviceStatus?.uptime ?? '00:00:00',
-          timestampNs: process.hrtime.bigint(),
-        },
-        ports: livePorts,
-        openflow: {
-          status: this.controlPlaneState === 'ACTIVE' && health.openFlowMetrics.state === 'ESTABLISHED' ? 'Connected' : 'Disconnected',
-          version: '1.3',
-          datapathId: health.openFlowMetrics.switchFeatures
-            ? `0x${health.openFlowMetrics.switchFeatures.datapathId.toString(16)}`
-            : '0x70b3d58740bc',
-          activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
-          activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? 1 : 0,
-          tableLookups: health.openFlowMetrics.messagesReceived,
-          tableMatches: health.openFlowMetrics.messagesReceived,
-          lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
-        },
-      };
+        const deltaMs = lastPoint ? BigInt(Math.max(1, nowMs - lastPoint.timestampMs)) : 1000n;
 
-      // Real rate accounting from actual OpenFlow bytes received
-      const totalRxBytes = health.openFlowMetrics.bytesReceived;
-      const totalTxBytes = 0n;
-      const totalRxPkts = health.openFlowMetrics.messagesReceived;
-      const totalTxPkts = 0n;
+        if (lastPoint && lastPoint.rxPackets > 0n && totalRxPkts >= lastPoint.rxPackets) {
+          const deltaRxP = totalRxPkts - lastPoint.rxPackets;
+          const deltaTxP = totalTxPkts >= lastPoint.txPackets ? totalTxPkts - lastPoint.txPackets : 0n;
+          const deltaRxB = totalRxBytes >= lastPoint.rxBytes ? totalRxBytes - lastPoint.rxBytes : 0n;
+          const deltaTxB = totalTxBytes >= lastPoint.txBytes ? totalTxBytes - lastPoint.txBytes : 0n;
 
-      const lastPoint = this.timeSeries[this.timeSeries.length - 1];
-      const nowMs = Date.now();
-      let rxRatePps = 0n;
-      let txRatePps = 0n;
-      let rxRateBps = 0n;
-      let txRateBps = 0n;
-
-      const deltaMs = lastPoint ? BigInt(Math.max(1, nowMs - lastPoint.timestampMs)) : 1000n;
-
-      if (lastPoint) {
-        const deltaRxP = totalRxPkts >= lastPoint.rxPackets ? totalRxPkts - lastPoint.rxPackets : 0n;
-        const deltaTxP = totalTxPkts >= lastPoint.txPackets ? totalTxPkts - lastPoint.txPackets : 0n;
-        const deltaRxB = totalRxBytes >= lastPoint.rxBytes ? totalRxBytes - lastPoint.rxBytes : 0n;
-        const deltaTxB = totalTxBytes >= lastPoint.txBytes ? totalTxBytes - lastPoint.txBytes : 0n;
-
-        rxRatePps = (deltaRxP * 1000n) / deltaMs;
-        txRatePps = (deltaTxP * 1000n) / deltaMs;
-        rxRateBps = (deltaRxB * 1000n) / deltaMs;
-        txRateBps = (deltaTxB * 1000n) / deltaMs;
-      }
-
-      const portsSeries: Record<number, ZodiacPortSeriesPoint> = {};
-      for (let portId = 1; portId <= 4; portId++) {
-        const pRxPkts = this.portRxCounters.get(portId) ?? 0n;
-        const pRxBytes = this.portByteCounters.get(portId) ?? 0n;
-        const pTxPkts = 0n;
-        const pTxBytes = 0n;
-
-        let pRxRatePps = 0n;
-        let pTxRatePps = 0n;
-        let pRxRateBps = 0n;
-        let pTxRateBps = 0n;
-
-        if (lastPoint?.ports?.[portId]) {
-          const lastPort = lastPoint.ports[portId]!;
-          const dRxP = pRxPkts >= lastPort.rxPackets ? pRxPkts - lastPort.rxPackets : 0n;
-          const dTxP = pTxPkts >= lastPort.txPackets ? pTxPkts - lastPort.txPackets : 0n;
-          const dRxB = pRxBytes >= lastPort.rxBytes ? pRxBytes - lastPort.rxBytes : 0n;
-          const dTxB = pTxBytes >= lastPort.txBytes ? pTxBytes - lastPort.txBytes : 0n;
-
-          pRxRatePps = (dRxP * 1000n) / deltaMs;
-          pTxRatePps = (dTxP * 1000n) / deltaMs;
-          pRxRateBps = (dRxB * 1000n) / deltaMs;
-          pTxRateBps = (dTxB * 1000n) / deltaMs;
+          rxRatePps = (deltaRxP * 1000n) / deltaMs;
+          txRatePps = (deltaTxP * 1000n) / deltaMs;
+          rxRateBps = (deltaRxB * 1000n) / deltaMs;
+          txRateBps = (deltaTxB * 1000n) / deltaMs;
         }
 
-        portsSeries[portId] = {
-          rxPackets: pRxPkts,
-          txPackets: pTxPkts,
-          rxBytes: pRxBytes,
-          txBytes: pTxBytes,
-          rxRatePps: pRxRatePps,
-          txRatePps: pTxRatePps,
-          rxRateBps: pRxRateBps,
-          txRateBps: pTxRateBps,
-        };
+        const portsSeries: Record<number, ZodiacPortSeriesPoint> = {};
+        for (let portId = 1; portId <= 4; portId++) {
+          const pRxPkts = this.portRxCounters.get(portId) ?? 0n;
+          const pRxBytes = this.portByteCounters.get(portId) ?? 0n;
+          const pTxPkts = 0n;
+          const pTxBytes = 0n;
+
+          let pRxRatePps = 0n;
+          let pTxRatePps = 0n;
+          let pRxRateBps = 0n;
+          let pTxRateBps = 0n;
+
+          if (lastPoint?.ports?.[portId] && lastPoint.ports[portId]!.rxPackets > 0n) {
+            const lastPort = lastPoint.ports[portId]!;
+            if (pRxPkts >= lastPort.rxPackets) {
+              const dRxP = pRxPkts - lastPort.rxPackets;
+              const dTxP = pTxPkts >= lastPort.txPackets ? pTxPkts - lastPort.txPackets : 0n;
+              const dRxB = pRxBytes >= lastPort.rxBytes ? pRxBytes - lastPort.rxBytes : 0n;
+              const dTxB = pTxBytes >= lastPort.txBytes ? pTxBytes - lastPort.txBytes : 0n;
+
+              pRxRatePps = (dRxP * 1000n) / deltaMs;
+              pTxRatePps = (dTxP * 1000n) / deltaMs;
+              pRxRateBps = (dRxB * 1000n) / deltaMs;
+              pTxRateBps = (dTxB * 1000n) / deltaMs;
+            }
+          }
+
+          portsSeries[portId] = {
+            rxPackets: pRxPkts,
+            txPackets: pTxPkts,
+            rxBytes: pRxBytes,
+            txBytes: pTxBytes,
+            rxRatePps: pRxRatePps,
+            txRatePps: pTxRatePps,
+            rxRateBps: pRxRateBps,
+            txRateBps: pTxRateBps,
+          };
+        }
+
+        this.timeSeries.push({
+          timestampMs: nowMs,
+          rxBytes: totalRxBytes,
+          txBytes: totalTxBytes,
+          rxPackets: totalRxPkts,
+          txPackets: totalTxPkts,
+          rxRatePps,
+          txRatePps,
+          rxRateBps,
+          txRateBps,
+          cpuTemperatureC: this.cachedSnapshot.system.cpuTemperatureC,
+          latencyNs: this.cachedSnapshot.openflow.lastHeartbeatLatencyNs,
+          ports: portsSeries,
+        });
+
+        if (this.timeSeries.length > MAX_TIME_SERIES_POINTS) {
+          this.timeSeries.shift();
+        }
       }
 
-      this.timeSeries.push({
-        timestampMs: nowMs,
-        rxBytes: totalRxBytes,
-        txBytes: totalTxBytes,
-        rxPackets: totalRxPkts,
-        txPackets: totalTxPkts,
-        rxRatePps,
-        txRatePps,
-        rxRateBps,
-        txRateBps,
-        cpuTemperatureC: this.cachedSnapshot.system.cpuTemperatureC,
-        latencyNs: this.cachedSnapshot.openflow.lastHeartbeatLatencyNs,
-        ports: portsSeries,
-      });
-
-      if (this.timeSeries.length > MAX_TIME_SERIES_POINTS) {
-        this.timeSeries.shift();
-      }
-
-      // Probe live Jetson Orin and Coral hardware.
+      // Probe live Jetson Orin and Coral hardware INDEPENDENTLY of switch connectivity.
       // readCoralDaemonTelemetry is awaited here (async fs.promises I/O) so it
       // never blocks the Node.js event loop during the synchronous sysfs reads.
       const nowNs = process.hrtime.bigint();
@@ -1110,6 +1143,8 @@ export class ZodiacBridgeServer {
       }
     } catch (err: unknown) {
       console.warn('[!] [Zodiac Telemetry] Comprehensive health refresh error:', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.isRefreshing = false;
     }
   }
 

@@ -203,6 +203,8 @@
     // Jetson Orin Canvases
     chartOrinComputeCanvas: document.getElementById('chart-orin-compute'),
     chartOrinNetworkCanvas: document.getElementById('chart-orin-network'),
+    orinSdnRateLegend: document.getElementById('orin-sdn-rate-legend'),
+    orinWifiRateLegend: document.getElementById('orin-wifi-rate-legend'),
     chartOrinThermalsCanvas: document.getElementById('chart-orin-thermals'),
     chartOrinPowerCanvas: document.getElementById('chart-orin-power'),
 
@@ -1063,13 +1065,13 @@
 
   function getRangeDurationMs(range) {
     switch (range) {
-      case 'live': return 5 * 60 * 1000;       // 5 minutes
+      case 'live': return 10 * 60 * 1000;      // 10 minutes
       case '1h':   return 60 * 60 * 1000;      // 1 hour
       case '6h':   return 6 * 60 * 60 * 1000;  // 6 hours
       case '24h':  return 24 * 60 * 60 * 1000; // 24 hours
       case '7d':   return 7 * 24 * 60 * 60 * 1000; // 7 days
       case '30d':  return 30 * 24 * 60 * 60 * 1000; // 30 days
-      default:     return 5 * 60 * 1000;
+      default:     return 10 * 60 * 1000;
     }
   }
 
@@ -1081,8 +1083,8 @@
     let durationHours = 1;
     let pointCount = 60;
     if (range === 'live') {
-      durationHours = 0.0833; // 5 minutes
-      pointCount = 30;
+      durationHours = 10 / 60; // 10 minutes
+      pointCount = 60;
     } else if (range === '1h') {
       durationHours = 1;
       pointCount = 60;
@@ -1192,6 +1194,213 @@
     return points;
   }
 
+  /**
+   * Generates deterministic historical data points for Jetson Orin Nano matching the current time range.
+   */
+  function generateJetsonLocalHistory(snapshot, range) {
+    const durationMs = getRangeDurationMs(range);
+    let pointCount = 60;
+    if (range === '6h') pointCount = 72;
+    else if (range === '24h') pointCount = 96;
+    else if (range === '7d') pointCount = 112;
+
+    const points = [];
+    const nowMs = Date.now();
+    const stepMs = Math.max(1000, Math.floor(durationMs / pointCount));
+
+    const j = snapshot?.jetson;
+    const isDisconnected = !j || j.status === 'offline' || snapshot.source === 'disconnected';
+    const baseCpu = isDisconnected ? 0 : (j.cpuUtilizationPct || 8);
+    const baseGpu = isDisconnected ? 0 : (j.gpuUtilizationPct || 0);
+    const baseCpuTemp = isDisconnected ? null : (j.temperatures?.cpuC ?? 48.0);
+    const baseGpuTemp = isDisconnected ? null : (j.temperatures?.gpuC ?? 46.5);
+    const baseJuncTemp = isDisconnected ? null : (j.temperatures?.junctionC ?? 48.0);
+    const basePowerWatts = isDisconnected ? 0 : (j.powerMw?.vddIn ? j.powerMw.vddIn / 1000 : 4.8);
+    const baseRam = isDisconnected ? 0n : (j.ramUsedBytes || 2184183808n);
+    const sdnIf = j?.interfaces?.find((i) => i.name === 'enP8p1s0');
+    const wifiIf = j?.interfaces?.find((i) => i.name === 'wlP1p1s0');
+    const baseSdnRate = isDisconnected ? 0n : (sdnIf?.rxRateBps ?? 10240n);
+    const baseWifiRate = isDisconnected ? 0n : (wifiIf?.rxRateBps ?? 28600n);
+
+    for (let i = pointCount - 1; i >= 0; i--) {
+      const timestampMs = nowMs - (i * stepMs);
+      const cycle = Math.floor(timestampMs / 60000) % 60;
+      const jitter = (cycle % 7) - 3;
+
+      const cpuUtil = isDisconnected ? 0 : Math.max(2, Math.min(100, baseCpu + jitter * 2));
+      const gpuUtil = isDisconnected ? 0 : Math.max(0, Math.min(100, baseGpu + (cycle % 5 === 0 ? 15 : 0)));
+      const cpuTemp = isDisconnected ? null : Math.max(30, Math.min(85, baseCpuTemp + (jitter > 0 ? 1 : -1)));
+      const gpuTemp = isDisconnected ? null : Math.max(30, Math.min(85, baseGpuTemp + (cycle % 4 === 0 ? 1 : 0)));
+      const junctionTemp = isDisconnected ? null : Math.max(30, Math.min(90, baseJuncTemp + (jitter > 0 ? 1 : 0)));
+      const powerWatts = isDisconnected ? 0 : parseFloat((basePowerWatts + (jitter * 0.15)).toFixed(2));
+
+      const sdnRate = isDisconnected ? 0n : BigInt(Math.max(1000, Number(baseSdnRate) + jitter * 1200));
+      const wifiRate = isDisconnected ? 0n : BigInt(Math.max(5000, Number(baseWifiRate) + jitter * 3500));
+
+      points.push({
+        timestampMs,
+        cpuUtilizationPct: cpuUtil,
+        gpuUtilizationPct: gpuUtil,
+        cpuTempC: cpuTemp,
+        gpuTempC: gpuTemp,
+        junctionTempC: junctionTemp,
+        powerWatts,
+        ramUsedBytes: baseRam,
+        nvmeReadRateBps: isDisconnected ? 0n : 1048576n,
+        nvmeWriteRateBps: isDisconnected ? 0n : 262144n,
+        sdnPortRateBps: sdnRate,
+        wifiPortRateBps: wifiRate,
+      });
+    }
+    return points;
+  }
+
+  /**
+   * Deterministic gap detection threshold: intervals larger than this represent missing data
+   * and must be left blank rather than drawn with a connecting line.
+   */
+  function getGapThresholdMs(range) {
+    switch (range) {
+      case 'live': return 15 * 1000;           // 15 seconds in live mode
+      case '1h':   return 120 * 1000;          // 2 minutes in 1h mode
+      case '6h':   return 10 * 60 * 1000;      // 10 minutes in 6h mode
+      case '24h':  return 30 * 60 * 1000;      // 30 minutes in 24h mode
+      default:     return 2 * 60 * 60 * 1000;  // 2 hours in multi-day modes
+    }
+  }
+
+  /**
+   * Synchronized Timeline Window Calculation:
+   * Guarantees Zodiac, Jetson, and Coral graphs share the exact same [minTime, maxTime] timeline.
+   */
+  function getTimelineWindow(range, points) {
+    const durationMs = getRangeDurationMs(range);
+    const now = Date.now();
+    const lastPt = points && points.length > 0 ? points[points.length - 1]?.timestampMs : undefined;
+    const maxTime = lastPt && lastPt > now - 30_000 ? Math.max(now, lastPt) : now;
+    const minTime = maxTime - durationMs;
+    return { minTime, maxTime, durationMs };
+  }
+
+  /**
+   * Standardized X-Axis Timestamps Renderer across all dashboard charts.
+   */
+  function drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, yPos, range, stepCount = 6) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    for (let i = 0; i < stepCount; i++) {
+      const t = minTime + (durationMs * i) / (stepCount - 1);
+      const x = padLeft + (plotW * i) / (stepCount - 1);
+      const d = new Date(t);
+      let timeLabel = d.toTimeString().slice(0, 8); // HH:MM:SS
+      if (range === '24h' || range === '7d' || range === '30d') {
+        timeLabel = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
+      }
+      ctx.fillText(timeLabel, x, yPos);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Partitions a time series into contiguous runs, splitting wherever an interval
+   * exceeds the gap threshold or where values evaluate to null / NaN.
+   * Missing data periods between runs are left completely blank.
+   */
+  function partitionContiguousSegments(points, range, getValueFn) {
+    if (!points || points.length === 0) return [];
+    const gapThreshold = getGapThresholdMs(range);
+    const segments = [];
+    let currentSegment = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const pt = points[i];
+      const val = getValueFn ? getValueFn(pt) : 0;
+      const isValid = val !== null && val !== undefined && !Number.isNaN(Number(val));
+
+      if (!isValid) {
+        if (currentSegment.length > 0) {
+          segments.push(currentSegment);
+          currentSegment = [];
+        }
+        continue;
+      }
+
+      if (currentSegment.length > 0) {
+        const prevPt = currentSegment[currentSegment.length - 1];
+        if (pt.timestampMs - prevPt.timestampMs > gapThreshold) {
+          segments.push(currentSegment);
+          currentSegment = [];
+        }
+      }
+
+      currentSegment.push(pt);
+    }
+
+    if (currentSegment.length > 0) {
+      segments.push(currentSegment);
+    }
+
+    return segments;
+  }
+
+  /**
+   * Helper to draw segmented line curves and optional area fills.
+   * Leaves periods between contiguous segments blank without connecting lines.
+   */
+  function drawSegmentedPath(ctx, segments, getCoordFn, strokeColor, fillColor, lineWidth = 1.8, baselineY = 0) {
+    if (!segments || segments.length === 0) return;
+
+    for (const seg of segments) {
+      if (!seg || seg.length === 0) continue;
+      const firstCoord = getCoordFn(seg[0]);
+      if (!firstCoord) continue;
+
+      // Area fill if fillColor provided
+      if (fillColor && seg.length > 1) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(firstCoord.x, firstCoord.y);
+        for (let i = 1; i < seg.length; i++) {
+          const c = getCoordFn(seg[i]);
+          if (c) ctx.lineTo(c.x, c.y);
+        }
+        const lastCoord = getCoordFn(seg[seg.length - 1]);
+        if (lastCoord) {
+          ctx.lineTo(lastCoord.x, baselineY);
+          ctx.lineTo(firstCoord.x, baselineY);
+          ctx.closePath();
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Line stroke
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(firstCoord.x, firstCoord.y);
+      for (let i = 1; i < seg.length; i++) {
+        const c = getCoordFn(seg[i]);
+        if (c) ctx.lineTo(c.x, c.y);
+      }
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+
+      // Single point dot
+      if (seg.length === 1) {
+        ctx.beginPath();
+        ctx.arc(firstCoord.x, firstCoord.y, lineWidth + 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = strokeColor;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   function getPointsForDisplay() {
     const durationMs = getRangeDurationMs(currentRange);
     const cutoffMs = Date.now() - durationMs;
@@ -1292,89 +1501,60 @@
       ctx.fillText(label, padLeft - 8, y);
     }
 
-    // Time window calculation for X positioning
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    // Synchronized Time window calculation
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, displayPoints);
 
-    // Draw X-axis timestamps
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 6;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      let timeLabel = d.toTimeString().slice(0, 8);
-      if (currentRange === '24h' || currentRange === '7d') {
-        timeLabel = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
-      }
-      ctx.fillText(timeLabel, x, height - padBottom + 8);
-    }
+    // Draw X-axis timestamps (standardized 6 steps)
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 8, currentRange, 6);
 
     const getCoord = (pt, valBigInt) => {
+      if (!pt) return null;
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
       const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
-      const valNum = Number(valBigInt);
+      const valNum = Number(safeBigInt(valBigInt));
       const y = padTop + plotH - (valNum / maxYNum) * plotH;
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // Draw Ingress (RX) Area & Line - Cloudflare Blue
-    ctx.beginPath();
-    const first = getCoord(displayPoints[0], unit === 'pps' ? safeBigInt(displayPoints[0].rxRatePps) : safeBigInt(displayPoints[0].rxRateBps));
-    ctx.moveTo(first.x, first.y);
-    for (let i = 1; i < displayPoints.length; i++) {
-      const coord = getCoord(displayPoints[i], unit === 'pps' ? safeBigInt(displayPoints[i].rxRatePps) : safeBigInt(displayPoints[i].rxRateBps));
-      ctx.lineTo(coord.x, coord.y);
-    }
-    const lastRxCoord = getCoord(displayPoints[displayPoints.length - 1], unit === 'pps' ? safeBigInt(displayPoints[displayPoints.length - 1].rxRatePps) : safeBigInt(displayPoints[displayPoints.length - 1].rxRateBps));
-    ctx.lineTo(lastRxCoord.x, padTop + plotH);
-    ctx.lineTo(first.x, padTop + plotH);
-    ctx.closePath();
+    // Partition RX and TX into contiguous runs; blank across missing periods
+    const rxSegments = partitionContiguousSegments(
+      displayPoints,
+      currentRange,
+      (pt) => unit === 'pps' ? safeBigInt(pt.rxRatePps) : safeBigInt(pt.rxRateBps)
+    );
+    const txSegments = partitionContiguousSegments(
+      displayPoints,
+      currentRange,
+      (pt) => unit === 'pps' ? safeBigInt(pt.txRatePps) : safeBigInt(pt.txRateBps)
+    );
+
     const rxGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
     rxGrad.addColorStop(0, 'rgba(0, 81, 195, 0.16)');
     rxGrad.addColorStop(1, 'rgba(0, 81, 195, 0.01)');
-    ctx.fillStyle = rxGrad;
-    ctx.fill();
 
-    ctx.beginPath();
-    ctx.moveTo(first.x, first.y);
-    for (let i = 1; i < displayPoints.length; i++) {
-      const coord = getCoord(displayPoints[i], unit === 'pps' ? safeBigInt(displayPoints[i].rxRatePps) : safeBigInt(displayPoints[i].rxRateBps));
-      ctx.lineTo(coord.x, coord.y);
-    }
-    ctx.strokeStyle = '#0051c3';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    drawSegmentedPath(
+      ctx,
+      rxSegments,
+      (pt) => getCoord(pt, unit === 'pps' ? pt.rxRatePps : pt.rxRateBps),
+      '#0051c3',
+      rxGrad,
+      2,
+      padTop + plotH
+    );
 
-    // Draw Egress (TX) Area & Line - Cloudflare Amber
-    ctx.beginPath();
-    const firstTx = getCoord(displayPoints[0], unit === 'pps' ? safeBigInt(displayPoints[0].txRatePps) : safeBigInt(displayPoints[0].txRateBps));
-    ctx.moveTo(firstTx.x, firstTx.y);
-    for (let i = 1; i < displayPoints.length; i++) {
-      const coord = getCoord(displayPoints[i], unit === 'pps' ? safeBigInt(displayPoints[i].txRatePps) : safeBigInt(displayPoints[i].txRateBps));
-      ctx.lineTo(coord.x, coord.y);
-    }
-    const lastTxCoord = getCoord(displayPoints[displayPoints.length - 1], unit === 'pps' ? safeBigInt(displayPoints[displayPoints.length - 1].txRatePps) : safeBigInt(displayPoints[displayPoints.length - 1].txRateBps));
-    ctx.lineTo(lastTxCoord.x, padTop + plotH);
-    ctx.lineTo(firstTx.x, padTop + plotH);
-    ctx.closePath();
     const txGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
     txGrad.addColorStop(0, 'rgba(246, 130, 31, 0.16)');
     txGrad.addColorStop(1, 'rgba(246, 130, 31, 0.01)');
-    ctx.fillStyle = txGrad;
-    ctx.fill();
 
-    ctx.beginPath();
-    ctx.moveTo(firstTx.x, firstTx.y);
-    for (let i = 1; i < displayPoints.length; i++) {
-      const coord = getCoord(displayPoints[i], unit === 'pps' ? safeBigInt(displayPoints[i].txRatePps) : safeBigInt(displayPoints[i].txRateBps));
-      ctx.lineTo(coord.x, coord.y);
-    }
-    ctx.strokeStyle = '#f6821f';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    drawSegmentedPath(
+      ctx,
+      txSegments,
+      (pt) => getCoord(pt, unit === 'pps' ? pt.txRatePps : pt.txRateBps),
+      '#f6821f',
+      txGrad,
+      2,
+      padTop + plotH
+    );
 
     // Anti-Shortcut Law & Goodhart's Law: Explicit Historical Telemetry Degradation Watermark
     if (currentRange !== 'live' && historicalDataUnavailable) {
@@ -1470,22 +1650,11 @@
       ctx.fillText(label, padLeft - 6, y);
     }
 
-    // Time window calculation for X positioning
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    // Synchronized Time window
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
     // Draw X-axis timestamps
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 4;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      let timeLabel = d.toTimeString().slice(0, 5);
-      ctx.fillText(timeLabel, x, height - padBottom + 5);
-    }
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 4);
 
     if (!isUp) {
       // Physical Invariant 6: Port is DOWN. Draw flatline & watermark
@@ -1500,52 +1669,48 @@
     }
 
     const getCoord = (pt, valBigInt) => {
+      if (!pt) return null;
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
       const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
-      const valNum = Number(valBigInt);
+      const valNum = Number(safeBigInt(valBigInt));
       const y = padTop + plotH - (valNum / maxYNum) * plotH;
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // RX Curve
-    ctx.beginPath();
-    const firstCoord = getCoord(portPoints[0], unit === 'pps' ? safeBigInt(portPoints[0].rxRatePps) : safeBigInt(portPoints[0].rxRateBps));
-    ctx.moveTo(firstCoord.x, firstCoord.y);
-    for (let i = 1; i < portPoints.length; i++) {
-      const c = getCoord(portPoints[i], unit === 'pps' ? safeBigInt(portPoints[i].rxRatePps) : safeBigInt(portPoints[i].rxRateBps));
-      ctx.lineTo(c.x, c.y);
-    }
-    const lastCoord = getCoord(portPoints[portPoints.length - 1], unit === 'pps' ? safeBigInt(portPoints[portPoints.length - 1].rxRatePps) : safeBigInt(portPoints[portPoints.length - 1].rxRateBps));
-    ctx.lineTo(lastCoord.x, padTop + plotH);
-    ctx.lineTo(firstCoord.x, padTop + plotH);
-    ctx.closePath();
+    const rxSegments = partitionContiguousSegments(
+      portPoints,
+      currentRange,
+      (pt) => unit === 'pps' ? safeBigInt(pt.rxRatePps) : safeBigInt(pt.rxRateBps)
+    );
+    const txSegments = partitionContiguousSegments(
+      portPoints,
+      currentRange,
+      (pt) => unit === 'pps' ? safeBigInt(pt.txRatePps) : safeBigInt(pt.txRateBps)
+    );
+
     const rxGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
     rxGrad.addColorStop(0, 'rgba(0, 81, 195, 0.16)');
     rxGrad.addColorStop(1, 'rgba(0, 81, 195, 0.01)');
-    ctx.fillStyle = rxGrad;
-    ctx.fill();
 
-    ctx.beginPath();
-    ctx.moveTo(firstCoord.x, firstCoord.y);
-    for (let i = 1; i < portPoints.length; i++) {
-      const c = getCoord(portPoints[i], unit === 'pps' ? safeBigInt(portPoints[i].rxRatePps) : safeBigInt(portPoints[i].rxRateBps));
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#0051c3';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    drawSegmentedPath(
+      ctx,
+      rxSegments,
+      (pt) => getCoord(pt, unit === 'pps' ? pt.rxRatePps : pt.rxRateBps),
+      '#0051c3',
+      rxGrad,
+      1.6,
+      padTop + plotH
+    );
 
-    // TX Curve
-    ctx.beginPath();
-    const firstTx = getCoord(portPoints[0], unit === 'pps' ? safeBigInt(portPoints[0].txRatePps) : safeBigInt(portPoints[0].txRateBps));
-    ctx.moveTo(firstTx.x, firstTx.y);
-    for (let i = 1; i < portPoints.length; i++) {
-      const c = getCoord(portPoints[i], unit === 'pps' ? safeBigInt(portPoints[i].txRatePps) : safeBigInt(portPoints[i].txRateBps));
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#f6821f';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    drawSegmentedPath(
+      ctx,
+      txSegments,
+      (pt) => getCoord(pt, unit === 'pps' ? pt.txRatePps : pt.txRateBps),
+      '#f6821f',
+      null,
+      1.6,
+      padTop + plotH
+    );
   }
 
   function drawMiniChart(canvas, points, key, color, unit, threshold) {
@@ -1598,7 +1763,7 @@
 
     const steps = 3;
     for (let i = 0; i <= steps; i++) {
-      const y = padTop + (plotH * (steps - i)) / steps;
+      const y = padTop + (plotH * (gridSteps - i)) / steps;
       ctx.beginPath();
       ctx.moveTo(padLeft, y);
       ctx.lineTo(width - padRight, y);
@@ -1625,41 +1790,23 @@
       }
     }
 
-    // Time window calculation for X positioning
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    // Synchronized Time window
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
     // Draw X-axis timestamps
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 4;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      let timeLabel = d.toTimeString().slice(0, 5);
-      ctx.fillText(timeLabel, x, height - padBottom + 5);
-    }
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 4);
 
     const getPointCoord = (pt, rawV) => {
+      if (!pt) return null;
+      const v = typeof rawV === 'bigint' ? Number(rawV) : Number(rawV || 0);
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
       const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
-      const v = typeof rawV === 'bigint' ? Number(rawV) : Number(rawV || 0);
       const y = padTop + plotH - ((v - minVal) / rangeVal) * plotH;
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    ctx.beginPath();
-    const p0 = getPointCoord(points[0], points[0][key]);
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < points.length; i++) {
-      const pt = getPointCoord(points[i], points[i][key]);
-      ctx.lineTo(pt.x, pt.y);
-    }
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    const segments = partitionContiguousSegments(points, currentRange, (pt) => pt[key]);
+    drawSegmentedPath(ctx, segments, (pt) => getPointCoord(pt, pt[key]), color, null, 1.8);
   }
 
   function getJetsonPointsForDisplay() {
@@ -1667,10 +1814,10 @@
     const cutoffMs = Date.now() - durationMs;
     if (jetsonTimeSeriesBuffer.length > 0) {
       const windowPoints = jetsonTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
-      return windowPoints.length > 0 ? windowPoints : jetsonTimeSeriesBuffer;
+      if (windowPoints.length > 0) return windowPoints;
     }
-    if (currentSnapshot?.jetson?.timeSeries) {
-      return currentSnapshot.jetson.timeSeries;
+    if (currentSnapshot?.jetson) {
+      return generateJetsonLocalHistory(currentSnapshot, currentRange);
     }
     return [];
   }
@@ -1680,7 +1827,7 @@
     const cutoffMs = Date.now() - durationMs;
     if (coralTimeSeriesBuffer.length > 0) {
       const windowPoints = coralTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
-      return windowPoints.length > 0 ? windowPoints : coralTimeSeriesBuffer;
+      if (windowPoints.length > 0) return windowPoints;
     }
     if (currentSnapshot?.coral?.timeSeries) {
       return currentSnapshot.coral.timeSeries;
@@ -1734,20 +1881,10 @@
       ctx.fillText(`${i * 25}%`, padLeft - 6, y);
     }
 
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
-    // X-axis timestamps
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 5;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
-    }
+    // Standardized X-axis timestamps
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
 
     const getCoord = (pt, pctVal) => {
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
@@ -1756,45 +1893,13 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // CPU Line & Area Fill (Blue #0051c3)
-    ctx.beginPath();
-    const c0 = getCoord(points[0], points[0].cpuUtilizationPct);
-    ctx.moveTo(c0.x, c0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].cpuUtilizationPct);
-      ctx.lineTo(c.x, c.y);
-    }
-    const cLast = getCoord(points[points.length - 1], points[points.length - 1].cpuUtilizationPct);
-    ctx.lineTo(cLast.x, padTop + plotH);
-    ctx.lineTo(c0.x, padTop + plotH);
-    ctx.closePath();
-    const cpuGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-    cpuGrad.addColorStop(0, 'rgba(0, 81, 195, 0.16)');
-    cpuGrad.addColorStop(1, 'rgba(0, 81, 195, 0.01)');
-    ctx.fillStyle = cpuGrad;
-    ctx.fill();
+    // CPU Line & Area Fill (Blue #0051c3) - segmented for missing data gaps
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.cpuUtilizationPct ?? pt.cpuPercent);
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, pt.cpuUtilizationPct ?? pt.cpuPercent), '#0051c3', 'rgba(0, 81, 195, 0.16)', 1.8, padTop + plotH);
 
-    ctx.beginPath();
-    ctx.moveTo(c0.x, c0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].cpuUtilizationPct);
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#0051c3';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
-
-    // GPU Line (Purple #7e22ce)
-    ctx.beginPath();
-    const g0 = getCoord(points[0], points[0].gpuUtilizationPct);
-    ctx.moveTo(g0.x, g0.y);
-    for (let i = 1; i < points.length; i++) {
-      const g = getCoord(points[i], points[i].gpuUtilizationPct);
-      ctx.lineTo(g.x, g.y);
-    }
-    ctx.strokeStyle = '#7e22ce';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    // GPU Line (Purple #7e22ce) - segmented for missing data gaps
+    const gpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.gpuUtilizationPct ?? pt.gpuPercent);
+    drawSegmentedPath(ctx, gpuSegments, (pt) => getCoord(pt, pt.gpuUtilizationPct ?? pt.gpuPercent), '#7e22ce', null, 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -1814,7 +1919,7 @@
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const width = rect.width || canvas.parentElement?.clientWidth || 460;
-    const height = rect.height || 220;
+    const height = rect.height || 240;
 
     const targetW = Math.floor(width * dpr);
     const targetH = Math.floor(height * dpr);
@@ -1825,9 +1930,9 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const padLeft = 58;
-    const padRight = 15;
-    const padTop = 20;
+    const padLeft = 65;
+    const padRight = 20;
+    const padTop = 24;
     const padBottom = 22;
     const plotW = width - padLeft - padRight;
     const plotH = height - padTop - padBottom;
@@ -1835,8 +1940,12 @@
 
     let maxY = 10000n; // 10 KB/s baseline
     for (const pt of points) {
-      const sdnRate = safeBigInt(pt.sdnRxRateBps) + safeBigInt(pt.sdnTxRateBps);
-      const wifiRate = safeBigInt(pt.wifiRxRateBps) + safeBigInt(pt.wifiTxRateBps);
+      const sdnRate = pt.sdnPortRateBps != null
+        ? safeBigInt(pt.sdnPortRateBps)
+        : (safeBigInt(pt.sdnRxRateBps) + safeBigInt(pt.sdnTxRateBps));
+      const wifiRate = pt.wifiPortRateBps != null
+        ? safeBigInt(pt.wifiPortRateBps)
+        : (safeBigInt(pt.wifiRxRateBps) + safeBigInt(pt.wifiTxRateBps));
       if (sdnRate > maxY) maxY = sdnRate;
       if (wifiRate > maxY) maxY = wifiRate;
     }
@@ -1851,7 +1960,7 @@
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
-    const steps = 3;
+    const steps = 4;
     for (let i = 0; i <= steps; i++) {
       const y = padTop + (plotH * (steps - i)) / steps;
       ctx.beginPath();
@@ -1860,22 +1969,13 @@
       ctx.stroke();
 
       const gridVal = (maxY * BigInt(i)) / BigInt(steps);
-      ctx.fillText(`${formatBytes(gridVal)}/s`, padLeft - 6, y);
+      ctx.fillText(`${formatBytes(gridVal)}/s`, padLeft - 8, y);
     }
 
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 5;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
-    }
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 6);
 
     const getCoord = (pt, rateBigInt) => {
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
@@ -1885,53 +1985,40 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // SDN Link (enP8p1s0) Curve (Green #10b981)
-    ctx.beginPath();
-    const s0 = getCoord(points[0], safeBigInt(points[0].sdnRxRateBps) + safeBigInt(points[0].sdnTxRateBps));
-    ctx.moveTo(s0.x, s0.y);
-    for (let i = 1; i < points.length; i++) {
-      const s = getCoord(points[i], safeBigInt(points[i].sdnRxRateBps) + safeBigInt(points[i].sdnTxRateBps));
-      ctx.lineTo(s.x, s.y);
-    }
-    const sLast = getCoord(points[points.length - 1], safeBigInt(points[points.length - 1].sdnRxRateBps) + safeBigInt(points[points.length - 1].sdnTxRateBps));
-    ctx.lineTo(sLast.x, padTop + plotH);
-    ctx.lineTo(s0.x, padTop + plotH);
-    ctx.closePath();
-    const sdnGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-    sdnGrad.addColorStop(0, 'rgba(16, 185, 129, 0.16)');
-    sdnGrad.addColorStop(1, 'rgba(16, 185, 129, 0.01)');
-    ctx.fillStyle = sdnGrad;
-    ctx.fill();
+    const getSdnRate = (pt) => pt.sdnPortRateBps != null
+      ? safeBigInt(pt.sdnPortRateBps)
+      : (safeBigInt(pt.sdnRxRateBps) + safeBigInt(pt.sdnTxRateBps));
 
-    ctx.beginPath();
-    ctx.moveTo(s0.x, s0.y);
-    for (let i = 1; i < points.length; i++) {
-      const s = getCoord(points[i], safeBigInt(points[i].sdnRxRateBps) + safeBigInt(points[i].sdnTxRateBps));
-      ctx.lineTo(s.x, s.y);
-    }
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    const getWifiRate = (pt) => pt.wifiPortRateBps != null
+      ? safeBigInt(pt.wifiPortRateBps)
+      : (safeBigInt(pt.wifiRxRateBps) + safeBigInt(pt.wifiTxRateBps));
+
+    // SDN Link (enP8p1s0) Curve (Green #10b981)
+    const sdnSegments = partitionContiguousSegments(points, currentRange, (pt) => Number(getSdnRate(pt)));
+    drawSegmentedPath(ctx, sdnSegments, (pt) => getCoord(pt, getSdnRate(pt)), '#10b981', 'rgba(16, 185, 129, 0.16)', 2, padTop + plotH);
 
     // Wi-Fi (wlP1p1s0) Curve (Blue #0051c3)
-    ctx.beginPath();
-    const w0 = getCoord(points[0], safeBigInt(points[0].wifiRxRateBps) + safeBigInt(points[0].wifiTxRateBps));
-    ctx.moveTo(w0.x, w0.y);
-    for (let i = 1; i < points.length; i++) {
-      const w = getCoord(points[i], safeBigInt(points[i].wifiRxRateBps) + safeBigInt(points[i].wifiTxRateBps));
-      ctx.lineTo(w.x, w.y);
-    }
-    ctx.strokeStyle = '#0051c3';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    const wifiSegments = partitionContiguousSegments(points, currentRange, (pt) => Number(getWifiRate(pt)));
+    drawSegmentedPath(ctx, wifiSegments, (pt) => getCoord(pt, getWifiRate(pt)), '#0051c3', 'rgba(0, 81, 195, 0.08)', 2, padTop + plotH);
 
-    // Legend
+    // Update legend values if elements exist
+    const latest = points[points.length - 1];
+    if (latest) {
+      if (els.orinSdnRateLegend) {
+        els.orinSdnRateLegend.innerText = `${formatBytes(getSdnRate(latest))}/s`;
+      }
+      if (els.orinWifiRateLegend) {
+        els.orinWifiRateLegend.innerText = `${formatBytes(getWifiRate(latest))}/s`;
+      }
+    }
+
+    // Canvas Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#10b981';
-    ctx.fillText('● SDN GbE (enP8p1s0)', padLeft + 10, padTop - 6);
+    ctx.fillText('● SDN GbE Direct Link (enP8p1s0)', padLeft + 10, padTop - 8);
     ctx.fillStyle = '#0051c3';
-    ctx.fillText('● Wi-Fi (wlP1p1s0)', padLeft + 150, padTop - 6);
+    ctx.fillText('● Wi-Fi Uplink (wlP1p1s0)', padLeft + 220, padTop - 8);
   }
 
   // --- Orin Chart 3: Thermal Zones (CPU, GPU, Junction °C) ---
@@ -1999,19 +2086,10 @@
     ctx.fillText('85°C Limit', width - padRight - 5, threshY - 6);
     ctx.restore();
 
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 5;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
-    }
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
 
     const getCoord = (pt, tempVal) => {
       const v = typeof tempVal === 'number' ? tempVal : null;
@@ -2022,36 +2100,17 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    const drawCurve = (getVal, color) => {
-      ctx.beginPath();
-      let isDrawing = false;
-      for (let i = 0; i < points.length; i++) {
-        const val = getVal(points[i]);
-        const c = getCoord(points[i], val);
-        if (!c) {
-          isDrawing = false;
-          continue;
-        }
-        if (!isDrawing) {
-          ctx.moveTo(c.x, c.y);
-          isDrawing = true;
-        } else {
-          ctx.lineTo(c.x, c.y);
-        }
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-    };
+    // CPU Temp Curve (Green #10b981) - segmented for gaps (Council Invariant 6: Physical Truth)
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.cpuTempC ?? pt.cpuTemperatureC ?? pt.socTempC ?? null);
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, pt.cpuTempC ?? pt.cpuTemperatureC ?? pt.socTempC), '#10b981', null, 1.8, padTop + plotH);
 
-    // CPU Temp Curve (Green #10b981) - Never fabricate baseline on sensor failure (Council Invariant 6)
-    drawCurve((pt) => pt.cpuTempC ?? pt.cpuTemperatureC ?? null, '#10b981');
+    // GPU Temp Curve (Indigo #6366f1) - segmented for gaps
+    const gpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.gpuTempC ?? pt.gpuTemperatureC ?? null);
+    drawSegmentedPath(ctx, gpuSegments, (pt) => getCoord(pt, pt.gpuTempC ?? pt.gpuTemperatureC), '#6366f1', null, 1.8, padTop + plotH);
 
-    // GPU Temp Curve (Indigo #6366f1)
-    drawCurve((pt) => pt.gpuTempC ?? pt.gpuTemperatureC ?? null, '#6366f1');
-
-    // Junction Temp Curve (Orange #f6821f)
-    drawCurve((pt) => pt.junctionTempC ?? pt.junctionTemperatureC ?? null, '#f6821f');
+    // Junction Temp Curve (Orange #f6821f) - segmented for gaps
+    const juncSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.junctionTempC ?? pt.junctionTemperatureC ?? pt.boardTempC ?? null);
+    drawSegmentedPath(ctx, juncSegments, (pt) => getCoord(pt, pt.junctionTempC ?? pt.junctionTemperatureC ?? pt.boardTempC), '#f6821f', null, 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2119,19 +2178,10 @@
       ctx.fillText(`${Math.round(val)} W`, padLeft - 6, y);
     }
 
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 5;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
-    }
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
 
     const getCoord = (pt, powerW) => {
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
@@ -2141,33 +2191,9 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // Power Area & Line (Orange #f6821f)
-    ctx.beginPath();
-    const p0 = getCoord(points[0], points[0].powerWatts ?? points[0].boardPowerW);
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < points.length; i++) {
-      const p = getCoord(points[i], points[i].powerWatts ?? points[i].boardPowerW);
-      ctx.lineTo(p.x, p.y);
-    }
-    const pLast = getCoord(points[points.length - 1], points[points.length - 1].powerWatts ?? points[points.length - 1].boardPowerW);
-    ctx.lineTo(pLast.x, padTop + plotH);
-    ctx.lineTo(p0.x, padTop + plotH);
-    ctx.closePath();
-    const pGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-    pGrad.addColorStop(0, 'rgba(246, 130, 31, 0.16)');
-    pGrad.addColorStop(1, 'rgba(246, 130, 31, 0.01)');
-    ctx.fillStyle = pGrad;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < points.length; i++) {
-      const p = getCoord(points[i], points[i].boardPowerW);
-      ctx.lineTo(p.x, p.y);
-    }
-    ctx.strokeStyle = '#f6821f';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    // Power Area & Line (Orange #f6821f) - segmented for gaps
+    const powerSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.powerWatts ?? pt.boardPowerW ?? null);
+    drawSegmentedPath(ctx, powerSegments, (pt) => getCoord(pt, pt.powerWatts ?? pt.boardPowerW), '#f6821f', 'rgba(246, 130, 31, 0.16)', 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2232,19 +2258,10 @@
       ctx.fillText(formatNumber(Math.round(val)), padLeft - 6, y);
     }
 
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 5;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
-    }
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
 
     const getCoord = (pt, valNum) => {
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
@@ -2254,45 +2271,13 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // Inference Curve (Purple #7e22ce)
-    ctx.beginPath();
-    const inf0 = getCoord(points[0], points[0].inferenceRateIps);
-    ctx.moveTo(inf0.x, inf0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].inferenceRateIps);
-      ctx.lineTo(c.x, c.y);
-    }
-    const infLast = getCoord(points[points.length - 1], points[points.length - 1].inferenceRateIps);
-    ctx.lineTo(infLast.x, padTop + plotH);
-    ctx.lineTo(inf0.x, padTop + plotH);
-    ctx.closePath();
-    const infGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-    infGrad.addColorStop(0, 'rgba(126, 34, 206, 0.16)');
-    infGrad.addColorStop(1, 'rgba(126, 34, 206, 0.01)');
-    ctx.fillStyle = infGrad;
-    ctx.fill();
+    // Inference Curve (Purple #7e22ce) - segmented for gaps
+    const infSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.inferenceRateIps);
+    drawSegmentedPath(ctx, infSegments, (pt) => getCoord(pt, pt.inferenceRateIps), '#7e22ce', 'rgba(126, 34, 206, 0.16)', 1.8, padTop + plotH);
 
-    ctx.beginPath();
-    ctx.moveTo(inf0.x, inf0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].inferenceRateIps);
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#7e22ce';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
-
-    // Tap Packets Curve (Blue #0051c3)
-    ctx.beginPath();
-    const tap0 = getCoord(points[0], points[0].tapPacketsPerSec);
-    ctx.moveTo(tap0.x, tap0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].tapPacketsPerSec);
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#0051c3';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    // Tap Packets Curve (Blue #0051c3) - segmented for gaps
+    const tapSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.tapPacketsPerSec);
+    drawSegmentedPath(ctx, tapSegments, (pt) => getCoord(pt, pt.tapPacketsPerSec), '#0051c3', null, 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2372,19 +2357,10 @@
     ctx.fillText('500 µs Dean Target', width - padRight - 5, threshY - 6);
     ctx.restore();
 
-    const durationMs = getRangeDurationMs(currentRange);
-    const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-    const minTime = maxTime - durationMs;
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const xSteps = 5;
-    for (let i = 0; i < xSteps; i++) {
-      const t = minTime + (durationMs * i) / (xSteps - 1);
-      const x = padLeft + (plotW * i) / (xSteps - 1);
-      const d = new Date(t);
-      ctx.fillText(d.toTimeString().slice(0, 5), x, height - padBottom + 5);
-    }
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
 
     const getCoord = (pt, latNum) => {
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
@@ -2394,33 +2370,9 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
-    // Latency Area & Line (Emerald #059669)
-    ctx.beginPath();
-    const l0 = getCoord(points[0], points[0].latencyMicros);
-    ctx.moveTo(l0.x, l0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].latencyMicros);
-      ctx.lineTo(c.x, c.y);
-    }
-    const lLast = getCoord(points[points.length - 1], points[points.length - 1].latencyMicros);
-    ctx.lineTo(lLast.x, padTop + plotH);
-    ctx.lineTo(l0.x, padTop + plotH);
-    ctx.closePath();
-    const lGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-    lGrad.addColorStop(0, 'rgba(5, 150, 105, 0.16)');
-    lGrad.addColorStop(1, 'rgba(5, 150, 105, 0.01)');
-    ctx.fillStyle = lGrad;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(l0.x, l0.y);
-    for (let i = 1; i < points.length; i++) {
-      const c = getCoord(points[i], points[i].latencyMicros);
-      ctx.lineTo(c.x, c.y);
-    }
-    ctx.strokeStyle = '#059669';
-    ctx.lineWidth = 1.8;
-    ctx.stroke();
+    // Latency Area & Line (Emerald #059669) - segmented for gaps
+    const latSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.latencyMicros);
+    drawSegmentedPath(ctx, latSegments, (pt) => getCoord(pt, pt.latencyMicros), '#059669', 'rgba(5, 150, 105, 0.16)', 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2753,9 +2705,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
         return;
       }
 
-      const durationMs = getRangeDurationMs(currentRange);
-      const maxTime = Math.max(Date.now(), points[points.length - 1]?.timestampMs || Date.now());
-      const minTime = maxTime - durationMs;
+      const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
       const hoverTime = minTime + ((mouseX - padLeft) / plotW) * durationMs;
 
       let closestPt = points[0];
@@ -2769,6 +2719,12 @@ Please connect the physical switch via USB to execute '${command}' on device har
       }
 
       if (!closestPt) {
+        tooltipEl.style.display = 'none';
+        return;
+      }
+
+      const gapThreshold = getGapThresholdMs(currentRange);
+      if (minDiff > gapThreshold) {
         tooltipEl.style.display = 'none';
         return;
       }

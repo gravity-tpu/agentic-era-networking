@@ -382,7 +382,7 @@
 
                 <!-- Time Range Selector Buttons -->
                 <div class="cf-time-range-group" id="cf-time-selectors">
-                  <button class="cf-time-btn active" data-range="live">Live (5m)</button>
+                  <button class="cf-time-btn active" data-range="live">Live (10m)</button>
                   <button class="cf-time-btn" data-range="1h">1 Hour</button>
                   <button class="cf-time-btn" data-range="6h">6 Hours</button>
                   <button class="cf-time-btn" data-range="24h">24 Hours</button>
@@ -887,7 +887,36 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
             </div>
 
-            <!-- Jetson Charts Grid (2x2) -->
+            <!-- Primary Horizontal Network Interface Throughput Chart (Spans page similar to Zodiac lines) -->
+            <div class="cf-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Network Interface Wire Throughput</h3>
+                  <div class="cf-card-subtitle">GbE SDN Control Link (enP8p1s0) vs Wi-Fi Management (wlP1p1s0) Wire Accounting</div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <span class="cf-pill-badge blue">SDN: enP8p1s0</span>
+                  <span class="cf-pill-badge green">Wi-Fi: wlP1p1s0</span>
+                </div>
+              </div>
+              <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                <div class="cf-chart-legend-row" style="margin-bottom: 0.75rem;">
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot blue"></span>
+                    <span>SDN Control Link (enP8p1s0): <strong id="orin-sdn-rate-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot green"></span>
+                    <span>Management Wi-Fi (wlP1p1s0): <strong id="orin-wifi-rate-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                </div>
+                <div class="cf-canvas-container" id="canvas-wrapper-orin-network" style="position: relative; height: 240px;">
+                  <canvas id="chart-orin-network"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Jetson Compute & Thermal Charts (Side by Side) + Board Power -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
               
               <!-- Chart 1: Compute Utilization -->
@@ -906,23 +935,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- Chart 2: Network Port Throughput -->
-              <div class="cf-card">
-                <div class="cf-card-header">
-                  <div>
-                    <h3 class="cf-card-title">Network Interface Throughput</h3>
-                    <div class="cf-card-subtitle">GbE SDN Control Link (enP8p1s0) vs Wi-Fi Management (wlP1p1s0)</div>
-                  </div>
-                  <span class="cf-pill-badge green">Wire Accounting (Bps)</span>
-                </div>
-                <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-orin-network" style="position: relative; height: 220px;">
-                    <canvas id="chart-orin-network"></canvas>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Chart 3: Thermal Zones -->
+              <!-- Chart 2: Thermal Zones -->
               <div class="cf-card">
                 <div class="cf-card-header">
                   <div>
@@ -938,8 +951,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- Chart 4: Board Input Power -->
-              <div class="cf-card">
+              <!-- Chart 3: Board Input Power -->
+              <div class="cf-card" style="grid-column: 1 / -1;">
                 <div class="cf-card-header">
                   <div>
                     <h3 class="cf-card-title">Board Input Power Draw (Watts)</h3>
@@ -948,7 +961,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <span class="cf-pill-badge blue">Power Telemetry</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-orin-power" style="position: relative; height: 220px;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-orin-power" style="position: relative; height: 160px;">
                     <canvas id="chart-orin-power"></canvas>
                   </div>
                 </div>
@@ -1579,7 +1592,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.6a093b42d0.js"></script>
+  <script defer src="zodiac-app.9c472b14e1.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
