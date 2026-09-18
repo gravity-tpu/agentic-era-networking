@@ -1,0 +1,26 @@
+project-includes = [
+    "**/*.py*",
+]
+
+python-interpreter-path = "/Users/andymorven/git/agentic-era-networking/.venv/bin/python"
+
+site-package-path = [
+    "/Users/andymorven/git/agentic-era-networking/.venv/lib/python3.14/site-packages",
+    "/Users/andymorven/Library/Python/3.14/lib/python/site-packages",
+    "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages"
+]
+
+search-path = [
+    "docs/design/jetson-orin",
+    "scripts"
+]
+
+ignore-missing-imports = [
+    "board",
+    "busio",
+    "adafruit_ssd1306",
+    "pycoral",
+    "pycoral.*",
+    "tflite_runtime",
+    "tflite_runtime.*"
+]
