@@ -889,14 +889,26 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
             <!-- Primary Horizontal Network Interface Throughput Chart (Spans page similar to Zodiac lines) -->
             <div class="cf-card" style="margin-top: 1.5rem;">
-              <div class="cf-card-header">
+              <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                 <div>
                   <h3 class="cf-card-title">Network Interface Wire Throughput</h3>
                   <div class="cf-card-subtitle">GbE SDN Control Link (enP8p1s0) vs Wi-Fi Management (wlP1p1s0) Wire Accounting</div>
                 </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                  <span class="cf-pill-badge blue">SDN: enP8p1s0</span>
-                  <span class="cf-pill-badge green">Wi-Fi: wlP1p1s0</span>
+                
+                <!-- Filter Controls: Time Range -->
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                  <div class="cf-time-range-group" id="cf-orin-time-selectors">
+                    <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                    <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                    <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                    <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                    <button class="cf-time-btn" data-range="7d">7 Days</button>
+                    <button class="cf-time-btn" data-range="30d">30 Days</button>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span class="cf-pill-badge blue">SDN: enP8p1s0</span>
+                    <span class="cf-pill-badge green">Wi-Fi: wlP1p1s0</span>
+                  </div>
                 </div>
               </div>
               <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
@@ -1592,7 +1604,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.134c5c1cb0.js"></script>
+  <script defer src="zodiac-app.8c95432739.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

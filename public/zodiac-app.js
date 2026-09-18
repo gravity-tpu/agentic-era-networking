@@ -30,6 +30,10 @@
   const MAX_FRONTEND_BUFFER_POINTS = 3600; // Strictly bound client memory to 2.5 hours of continuous data
   let timeSeriesBuffer = [];
 
+  // Standardized chart layout padding constants (Dean & Ghemawat: eliminate magic numbers)
+  const ORIN_NETWORK_PAD_LEFT = 65;
+  const ORIN_NETWORK_PAD_RIGHT = 20;
+
   // DOM Elements Cache
   const els = {
     // Header & Sidebar
@@ -1869,8 +1873,8 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const padLeft = 65;
-    const padRight = 20;
+    const padLeft = ORIN_NETWORK_PAD_LEFT;
+    const padRight = ORIN_NETWORK_PAD_RIGHT;
     const padTop = 24;
     const padBottom = 22;
     const plotW = width - padLeft - padRight;
@@ -2810,7 +2814,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   });
 
   // 6. Jetson Orin Network Interfaces Chart
-  bindChartHoverTooltip('canvas-wrapper-orin-network', getJetsonPointsForDisplay, 58, 15, (closestPt) => {
+  bindChartHoverTooltip('canvas-wrapper-orin-network', getJetsonPointsForDisplay, ORIN_NETWORK_PAD_LEFT, ORIN_NETWORK_PAD_RIGHT, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
     const sdnRate = closestPt.sdnPortRateBps != null
@@ -2940,10 +2944,15 @@ Please connect the physical switch via USB to execute '${command}' on device har
       }
       const data = await res.json();
       if (data && Array.isArray(data.timeSeries) && data.timeSeries.length > 0) {
-        timeSeriesBuffer = data.timeSeries;
+        // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
+        timeSeriesBuffer = data.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
         historicalDataUnavailable = false;
       } else {
         historicalDataUnavailable = true;
+      }
+      if (data?.jetson && Array.isArray(data.jetson.timeSeries) && data.jetson.timeSeries.length > 0) {
+        // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
+        jetsonTimeSeriesBuffer = data.jetson.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
       }
     } catch (err) {
       console.warn('[!] [Historical Range] Failed to fetch historical telemetry from Neon DB:', err);
@@ -2953,20 +2962,30 @@ Please connect the physical switch via USB to execute '${command}' on device har
     }
   }
 
-  // Bind Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d)
-  const timeBtns = document.querySelectorAll('#cf-time-selectors .cf-time-btn');
-  timeBtns.forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      timeBtns.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentRange = btn.getAttribute('data-range') || 'live';
+  // Bind Synchronized Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d) across Zodiac & Jetson
+  const allTimeBtns = document.querySelectorAll('#cf-time-selectors .cf-time-btn, #cf-orin-time-selectors .cf-time-btn');
+  function setTimeRange(newRange) {
+    currentRange = newRange || 'live';
+    allTimeBtns.forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-range') === currentRange);
+    });
+  }
 
-      if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
-        await fetchHistoricalRange(currentRange);
-      } else {
-        historicalDataUnavailable = false;
-      }
-      updateCharts();
+  const timeRangeContainers = document.querySelectorAll('#cf-time-selectors, #cf-orin-time-selectors');
+  timeRangeContainers.forEach((container) => {
+    const btns = container.querySelectorAll('.cf-time-btn');
+    btns.forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const range = btn.getAttribute('data-range') || 'live';
+        setTimeRange(range);
+
+        if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
+          await fetchHistoricalRange(currentRange);
+        } else {
+          historicalDataUnavailable = false;
+        }
+        updateCharts();
+      });
     });
   });
 
