@@ -497,7 +497,11 @@ export class ZodiacBridgeServer {
     }
 
     const doSpawn = () => {
-      console.log(`[coral-daemon] Spawning (backoff=${backoffMs}ms, attempt=${this.coralDaemonRestartCount + 1}/${ZodiacBridgeServer.MAX_CORAL_RESTARTS}): ${VENV_PYTHON} ${DAEMON_PATH}`);
+      // Increment once per spawn attempt — not per event — so that a failed
+      // spawn emitting both 'error' and 'exit' only burns one retry slot.
+      // (Ghemawat: state machine counter must be monotone per logical attempt.)
+      this.coralDaemonRestartCount++;
+      console.log(`[coral-daemon] Spawning (backoff=${backoffMs}ms, attempt=${this.coralDaemonRestartCount}/${ZodiacBridgeServer.MAX_CORAL_RESTARTS}): ${VENV_PYTHON} ${DAEMON_PATH}`);
       const child = spawn(VENV_PYTHON, [DAEMON_PATH], {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
@@ -527,7 +531,6 @@ export class ZodiacBridgeServer {
           this.coralDaemonRestartTimer = null;
         }
         this.coralDaemon = null;
-        this.coralDaemonRestartCount++;
         const nextBackoff = Math.min((backoffMs || 500) * 2, 30_000);
         process.stderr.write(
           `[coral-daemon] Spawn error (${err.code ?? err.message}). ` +
@@ -559,7 +562,6 @@ export class ZodiacBridgeServer {
           clearTimeout(this.coralDaemonRestartTimer);
           this.coralDaemonRestartTimer = null;
         }
-        this.coralDaemonRestartCount++;
         const nextBackoff = Math.min((backoffMs || 500) * 2, 30_000);
         console.warn(
           `[coral-daemon] Exited (code=${code}, uptime=${Math.round(uptimeMs / 1000)}s). ` +
@@ -1117,16 +1119,31 @@ export class ZodiacBridgeServer {
       const endpoint = new URL('/api/zodiac', this.cloudRelayUrl).toString();
 
       // Council Invariant 2 & 6 (Dean Latency & Epistemic Provenance):
-      // Strictly bound timeSeries sent over WAN to the latest 120 points (~5 min of live telemetry, ~91KB).
-      // Prevents WAN bloat, network latency spikes, and serverless 413 Payload Too Large limits.
-      const MAX_CLOUD_RELAY_POINTS = 120;
-      const boundedTimeSeries = snapshot.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
+      // Strictly bound ALL time-series to the latest N points before WAN transit.
+      // The top-level timeSeries, plus the nested Jetson and Coral sub-series,
+      // must ALL be trimmed — the spread operator otherwise passes them unbounded,
+      // which is what caused the persistent HTTP 413 Payload Too Large errors.
+      const MAX_CLOUD_RELAY_POINTS = 60;
+      const boundedTimeSeries      = snapshot.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
+      const boundedJetsonSeries    = snapshot.jetson?.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
+      const boundedCoralSeries     = snapshot.coral?.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
 
-      const payload = this.serializeSnapshot({
+      const boundedSnapshot: ZodiacFullTelemetrySnapshot = {
         ...snapshot,
         timeSeries: boundedTimeSeries,
         source: snapshot.source === 'disconnected' ? 'disconnected' : 'live_hardware',
-      });
+        ...(snapshot.jetson ? { jetson: { ...snapshot.jetson, timeSeries: boundedJetsonSeries } } : {}),
+        ...(snapshot.coral  ? { coral:  { ...snapshot.coral,  timeSeries: boundedCoralSeries  } } : {}),
+      };
+
+      const payload = this.serializeSnapshot(boundedSnapshot);
+
+      // Guard: log payload size; skip send if still over limit to avoid infinite 413 storm.
+      const payloadBytes = Buffer.byteLength(payload, 'utf8');
+      if (payloadBytes > 250_000) {
+        console.warn(`[!] [Cloud Relay] Payload too large (${payloadBytes} bytes) — skipping push.`);
+        return;
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
