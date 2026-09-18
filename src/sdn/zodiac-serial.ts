@@ -92,21 +92,19 @@ export class ZodiacSerialClient {
     const candidates = devFiles.filter((f) => f.startsWith('ttyACM'));
 
     for (const candidate of candidates) {
-      try {
-        const vidPath = `/sys/class/tty/${candidate}/device/idVendor`;
-        const vid = readFileSync(vidPath, 'utf8').trim().toLowerCase();
-        if (vid === ZodiacSerialClient.ZODIAC_USB_VENDOR_ID) {
-          return `/dev/${candidate}`;
+      const vidCandidates = [
+        `/sys/class/tty/${candidate}/device/idVendor`,
+        `/sys/class/tty/${candidate}/device/../idVendor`,
+      ];
+      for (const vidPath of vidCandidates) {
+        try {
+          const vid = readFileSync(vidPath, 'utf8').trim().toLowerCase();
+          if (vid === ZodiacSerialClient.ZODIAC_USB_VENDOR_ID) {
+            return `/dev/${candidate}`;
+          }
+        } catch (_) {
+          // try next path
         }
-      } catch (e: unknown) {
-        // sysfs entry may be missing (ENOENT) or inaccessible (EACCES) for
-        // this candidate — skip it; not a fatal error for the overall probe.
-        // Logging here distinguishes a benign ENOENT from a permission issue
-        // (Ghemawat: Zero Suppression — even non-fatal I/O errors leave a trace).
-        const msg = e instanceof Error ? e.message : String(e);
-        process.stderr.write(
-          `[ZodiacSerial] TRACE: sysfs probe skipped for /dev/${candidate}: ${msg}\n`,
-        );
       }
     }
 
@@ -193,23 +191,30 @@ export class ZodiacSerialClient {
 import serial, time, sys
 
 try:
-    ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0)
+    ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0, write_timeout=2.0, rtscts=False, dsrdtr=False)
     ser.dtr = True
     ser.rts = True
-    time.sleep(0.15)
+    time.sleep(0.1)
     ser.reset_input_buffer()
     cmd = '${command}\\r\\n'
     ser.write(cmd.encode('ascii'))
-    time.sleep(0.3)
+    time.sleep(0.2)
     out = b''
     start_t = time.monotonic()
-    while time.monotonic() - start_t < 1.2:
+    while time.monotonic() - start_t < 1.5:
         if ser.in_waiting:
             out += ser.read(ser.in_waiting)
             time.sleep(0.05)
         else:
             time.sleep(0.05)
-        if b'Zodiac_FX>' in out or b'Command not recognized' in out:
+        trimmed = out.rstrip()
+        if (
+            trimmed.endswith(b'#')
+            or trimmed.endswith(b'>')
+            or b'Zodiac_FX>' in out
+            or b'Command not recognized' in out
+            or b'Unknown command' in out
+        ):
             break
     ser.close()
     sys.stdout.write(out.decode('latin1', errors='replace'))
@@ -300,19 +305,32 @@ import serial, time, sys, json
 
 try:
     cmds = json.loads('''${cmdsJson}''')
-    ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0)
+    ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0, write_timeout=2.0, rtscts=False, dsrdtr=False)
     ser.dtr = True
     ser.rts = True
-    time.sleep(0.15)
+    time.sleep(0.1)
     ser.reset_input_buffer()
     all_out = ''
     for c in cmds:
         ser.write((c + '\\r\\n').encode('ascii'))
-        time.sleep(0.35)
+        time.sleep(0.2)
         out = b''
-        while ser.in_waiting:
-            out += ser.read(ser.in_waiting)
-            time.sleep(0.05)
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < 1.5:
+            if ser.in_waiting:
+                out += ser.read(ser.in_waiting)
+                time.sleep(0.05)
+            else:
+                time.sleep(0.05)
+            trimmed = out.rstrip()
+            if (
+                trimmed.endswith(b'#')
+                or trimmed.endswith(b'>')
+                or b'Zodiac_FX>' in out
+                or b'Command not recognized' in out
+                or b'Unknown command' in out
+            ):
+                break
         all_out += out.decode('latin1', errors='replace') + '\\n'
     ser.close()
     sys.stdout.write(all_out)
@@ -367,6 +385,54 @@ except Exception as e:
       controllerPort: ofPortMatch ? parseInt(ofPortMatch[1]!, 10) : 6633,
       failstate: failstateMatch?.[1]?.trim() ?? 'Secure',
     };
+  }
+
+  /**
+   * Provisions standard Council networking configuration onto the physical Zodiac FX EEPROM:
+   * - Switch IP: 10.0.1.99 / 24
+   * - Controller: 10.0.1.8:6633 (OpenFlow 1.3, version 4)
+   * - Failstate: Secure
+   * - VLAN 100 (OpenFlow): Ports 1, 2, 3
+   * - VLAN 200 (Native): Port 4 (Jetson GbE RJ45)
+   */
+  public async initializeDefaultConfig(params?: {
+    switchIp?: string;
+    netmask?: string;
+    gateway?: string;
+    controllerIp?: string;
+    controllerPort?: number;
+  }): Promise<string> {
+    const ip = params?.switchIp ?? '10.0.1.99';
+    const mask = params?.netmask ?? '255.255.255.0';
+    const gw = params?.gateway ?? '10.0.1.8';
+    const ctrlIp = params?.controllerIp ?? '10.0.1.8';
+    const ctrlPort = params?.controllerPort ?? 6633;
+
+    const commands = [
+      'config',
+      'set name Zodiac_FX',
+      `set ip-address ${ip}`,
+      `set netmask ${mask}`,
+      `set gateway ${gw}`,
+      `set of-controller ${ctrlIp}`,
+      `set of-port ${ctrlPort}`,
+      'set failstate secure',
+      'set of-version 4',
+      'delete vlan 100',
+      'add vlan 100 openflow',
+      'set vlan-type 100 openflow',
+      'add vlan-port 100 1',
+      'add vlan-port 100 2',
+      'add vlan-port 100 3',
+      'delete vlan 200',
+      'add vlan 200 native',
+      'set vlan-type 200 native',
+      'add vlan-port 200 4',
+      'save',
+      'exit',
+    ];
+
+    return this.executeSequence(commands, 15000);
   }
 
   /**

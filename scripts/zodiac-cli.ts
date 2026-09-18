@@ -207,6 +207,21 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'init-switch': {
+      console.log('\n⚙️  Provisioning Zodiac FX EEPROM with Council SDN configuration...\n');
+      console.log('   - Switch IP       : 10.0.1.99 / 24');
+      console.log('   - Default Gateway : 10.0.1.8 (Jetson)');
+      console.log('   - OF Controller   : 10.0.1.8:6633 (OpenFlow 1.3)');
+      console.log('   - Failstate       : Secure');
+      console.log('   - VLAN 100        : Ports 1, 2, 3 (OpenFlow Data Plane)');
+      console.log('   - VLAN 200        : Port 4 (Native Control Channel)\n');
+
+      const out = await controller.serialClient.initializeDefaultConfig();
+      console.log('Raw Switch Responses:\n', out);
+      console.log('✅ Zodiac FX configured successfully!\n');
+      break;
+    }
+
     case 'help':
     default:
       console.log(`
@@ -216,12 +231,13 @@ Usage:
   npm run zodiac -- <command>
 
 Commands:
-  status   - Query device firmware, temperature, uptime, and configuration
-  ports    - Display link status and VLAN mapping for Ports 1–4
-  listen   - Run the OpenFlow 1.3 SDN controller daemon on 10.0.1.8:6633
-  ping     - High-precision ping to Zodiac switch IP (10.0.1.99)
-  reboot   - Restart the Zodiac FX switch via serial command
-  serve    - Launch the local web dashboard and REST bridge on http://localhost:3000
+  status      - Query device firmware, temperature, uptime, and configuration
+  ports       - Display link status and VLAN mapping for Ports 1–4
+  listen      - Run the OpenFlow 1.3 SDN controller daemon on 10.0.1.8:6633
+  init-switch - Program Council SDN IPs, VLAN 100/200, and OpenFlow 1.3 onto switch
+  ping        - High-precision ping to Zodiac switch IP (10.0.1.99)
+  reboot      - Restart the Zodiac FX switch via serial command
+  serve       - Launch the local web dashboard and REST bridge on http://localhost:3000
 `);
       break;
   }

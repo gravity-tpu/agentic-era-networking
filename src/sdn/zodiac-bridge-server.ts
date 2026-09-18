@@ -702,3 +702,46 @@ export class ZodiacBridgeServer {
     );
   }
 }
+
+// Autonomous systemd service and CLI entrypoint
+const isMain = process.argv[1] !== undefined && (
+  process.argv[1].endsWith('zodiac-bridge-server.js') ||
+  process.argv[1].endsWith('zodiac-bridge-server.ts')
+);
+
+if (isMain) {
+  const portArg = process.argv[2] === 'serve' ? process.argv[3] : process.argv[2];
+  const port = parseInt(process.env['PORT'] ?? portArg ?? '3003', 10);
+  const host = process.env['HOST'] ?? '0.0.0.0';
+  const cloudRelayUrl = process.env['ZODIAC_CLOUD_RELAY_URL'] ?? 'https://agentic-era-networking.vercel.app';
+  const bridgeSecret = process.env['ZODIAC_BRIDGE_SECRET'];
+
+  const bridge = new ZodiacBridgeServer(
+    undefined,
+    undefined,
+    undefined,
+    cloudRelayUrl,
+    bridgeSecret
+  );
+
+  bridge.start(port, host).then((boundPort) => {
+    console.log(`[+] [ZodiacBridgeServer] Autonomous bridge active on http://${host}:${boundPort}`);
+    console.log(`[+] [ZodiacBridgeServer] OpenFlow 1.3 controller listening on 10.0.1.8:6633`);
+  }).catch((err) => {
+    console.error('[-] [ZodiacBridgeServer] Fatal startup error:', err);
+    process.exit(1);
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('\n[!] Stopping ZodiacBridgeServer...');
+    await bridge.stop();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    console.log('\n[!] Stopping ZodiacBridgeServer...');
+    await bridge.stop();
+    process.exit(0);
+  });
+}
+

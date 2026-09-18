@@ -71,11 +71,13 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
-| Phase 0.7: Jetson Orin Headless Control-Plane Deployment (PLANNED — immediate next)               |
-| - Cross-platform serial CDC-ACM discovery: /dev/ttyACM0 on Jetson, /dev/cu.usbmodem* on macOS   |
-| - systemd zodiac-bridge.service unit: auto-restart, fail-closed, memory-bounded (256MB)          |
-| - Dedicated `zodiac` service user with CAP_NET_BIND_SERVICE (no root runtime)                    |
-| - Mac becomes untethered SSH dev workstation; Jetson is sole permanent control-plane host         |
+| Phase 0.7: Jetson Orin Headless Control-Plane Deployment (COMPLETE)                               |
+| - NVMe SSD boot migration: 500GB SanDisk Optimus @ 1.8 GB/s on native JetPack 6.1 (L4T 36.4.7)    |
+| - Cross-platform serial CDC-ACM discovery: /dev/ttyACM0 on Jetson with sysfs VID matching        |
+| - systemd zodiac-bridge.service unit: auto-restart, fail-closed, memory-bounded, Notify+Watchdog   |
+| - Dedicated `zodiac` service user with CAP_NET_BIND_SERVICE & dialout group (no root runtime)     |
+| - Physical Triad operational: Zodiac FX (Ports 2 & 4 UP) + Coral TPU + Jetson 24/7 SDN master      |
+| - Active OpenFlow 1.3 control channel (0.7ms echo latency) & Table-Miss packet sampling stream   |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v

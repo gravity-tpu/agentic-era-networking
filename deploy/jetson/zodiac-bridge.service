@@ -25,6 +25,10 @@ Description=Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking
 Documentation=https://github.com/gravity-tpu/agentic-era-networking
 After=network-online.target
 Wants=network-online.target
+# Cap restart burst: 5 restarts in 60s triggers a cooldown to prevent
+# UART flood or switch TCP RST storms from spinning the CPU.
+StartLimitIntervalSec=60s
+StartLimitBurst=5
 # If the Neon DB or Vercel relay is unavailable at boot, the service still
 # starts — cloud relay failures are non-fatal (AbortSignal-guarded, 3s timeout).
 
@@ -35,8 +39,10 @@ Wants=network-online.target
 # The bridge server sends READY=1 via the native sdNotify() helper in
 # src/sdn/zodiac-bridge-server.ts immediately after srv.listen() resolves.
 Type=notify
+NotifyAccess=all
 User=zodiac
 Group=zodiac
+SupplementaryGroups=dialout
 
 # --- Working directory & Node binary ---
 # Adjust WorkingDirectory if the repo is cloned elsewhere on the Jetson.
@@ -62,10 +68,6 @@ Environment=NODE_ENV=production
 # Restart on any non-zero exit or SIGTERM; not on SIGKILL (catastrophic).
 Restart=on-failure
 RestartSec=5s
-# Cap restart burst: 5 restarts in 60s triggers a cooldown to prevent
-# UART flood or switch TCP RST storms from spinning the CPU.
-StartLimitIntervalSec=60s
-StartLimitBurst=5
 
 # --- Resource limits (Ghemawat: zero-bloat, no runaway memory) ---
 # Jetson Orin Nano Super has 8 GB unified LPDDR5X.
@@ -81,7 +83,7 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 # Harden the execution environment.
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 PrivateTmp=true
 # The bridge writes nothing to disk at runtime; all state is in-memory or Neon.
 ReadWritePaths=/tmp
