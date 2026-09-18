@@ -22,6 +22,15 @@ coverage/
 .agents/*.local.md
 .agents/local/
 
+# Python Virtual Environments & Bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
 # IDE & Editor
 .vscode/
 .idea/

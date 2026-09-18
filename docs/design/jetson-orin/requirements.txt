@@ -1,0 +1,6 @@
+# Jetson Orin Hardware Telemetry & Coral EdgeTPU Daemon Dependencies
+pillow>=10.0.0
+psutil>=5.9.0
+adafruit-circuitpython-ssd1306>=2.12.0
+Adafruit-Blinka>=8.0.0
+numpy>=1.24.0
