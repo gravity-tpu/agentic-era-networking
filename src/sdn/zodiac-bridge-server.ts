@@ -322,6 +322,7 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 const NANOSECONDS_PER_SECOND = 1_000_000_000n;
+const DEFAULT_POLL_INTERVAL_NS = 2_500_000_000n;
 
 export class ZodiacBridgeServer {
   public controlPlaneState: 'INITIALIZING' | 'ACTIVE' | 'DEGRADED_FAULT' = 'INITIALIZING';
@@ -1003,7 +1004,7 @@ export class ZodiacBridgeServer {
         const currentPollNs = process.hrtime.bigint();
         const deltaNs = this.lastSwitchPollNs > 0n && currentPollNs > this.lastSwitchPollNs
           ? currentPollNs - this.lastSwitchPollNs
-          : 2_500_000_000n;
+          : DEFAULT_POLL_INTERVAL_NS;
         this.lastSwitchPollNs = currentPollNs;
 
         if (lastPoint !== undefined && totalRxPkts >= lastPoint.rxPackets) {
