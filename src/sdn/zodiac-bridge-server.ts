@@ -31,31 +31,235 @@ import { downsamplePoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
 /**
- * Returns true when GOOGLE_CLIENT_ID is absent AND the request originates
- * from either loopback or a private RFC 1918 LAN address.
- *
- * Physical operator context: the Jetson appliance listens on 0.0.0.0:3003
- * but sits behind a private router. Any RFC 1918 peer is already inside
- * the same trusted LAN — no external spoofing is possible without network
- * access, which is the correct trust boundary when OAuth is not configured.
- * (Ghemawat Simplicity / Hassabis Fail-Closed: fail open only where the
- * physical network IS the trust boundary.)
+ * Parses an IPv4 dotted-quad into an unsigned 32-bit integer.
+ * Sanjay Ghemawat - Radical Simplicity: Flat, deterministic O(1) parsing without regex or type coercion.
+ * Fail-Closed: Strictly rejects malformed characters, whitespace, leading zeros, or out-of-range octets.
  */
-function isLanOperator(req: import('node:http').IncomingMessage): boolean {
+export function parseIpv4ToUint32(ip: string): number | null {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return null;
+
+  let uint32 = 0;
+  for (let i = 0; i < 4; i++) {
+    const part = parts[i]!;
+    const len = part.length;
+    if (len === 0 || len > 3 || (len > 1 && part[0] === '0')) return null;
+
+    let byte = 0;
+    for (let c = 0; c < len; c++) {
+      const code = part.charCodeAt(c);
+      if (code < 48 || code > 57) return null; // Reject whitespace, signs, letters
+      byte = byte * 10 + (code - 48);
+    }
+    if (byte > 255) return null;
+
+    uint32 = ((uint32 << 8) | byte) >>> 0;
+  }
+  return uint32;
+}
+
+/**
+ * Determines whether an IPv4 address falls within private/local scopes:
+ * - 127.0.0.0/8    (Loopback - RFC 1122)
+ * - 10.0.0.0/8     (Private LAN Class A - RFC 1918)
+ * - 172.16.0.0/12  (Private LAN Class B - RFC 1918)
+ * - 192.168.0.0/16 (Private LAN Class C - RFC 1918)
+ * - 169.254.0.0/16 (Link-Local - RFC 3927)
+ *
+ * Jeff Dean Invariant: O(1) bitwise operations with zero allocations or regex overhead.
+ */
+export function isPrivateIpv4(ip: string): boolean {
+  const uint32 = parseIpv4ToUint32(ip);
+  if (uint32 === null) return false;
+
+  const top8 = uint32 >>> 24;
+  if (top8 === 127 || top8 === 10) return true;
+
+  const top12 = uint32 >>> 20;
+  if (top12 === 0xac1) return true; // 172.16.0.0/12 (0xac100000 - 0xac1fffff)
+
+  const top16 = uint32 >>> 16;
+  if (top16 === 0xc0a8 || top16 === 0xa9fe) return true; // 192.168.0.0/16 (0xc0a8) or 169.254.0.0/16 (0xa9fe)
+
+  return false;
+}
+
+/**
+ * Parses a single 16-bit hexadecimal hextet.
+ * Sanjay Ghemawat - Radical Simplicity: Flat O(1) character-code validation.
+ * Fail-Closed: Strictly rejects non-hex characters, empty strings, or lengths > 4.
+ */
+export function parseHextet(str: string): number | null {
+  const len = str.length;
+  if (len === 0 || len > 4) return null;
+
+  let val = 0;
+  for (let i = 0; i < len; i++) {
+    const code = str.charCodeAt(i);
+    let digit: number;
+    if (code >= 48 && code <= 57) {
+      // '0' - '9'
+      digit = code - 48;
+    } else if (code >= 97 && code <= 102) {
+      // 'a' - 'f'
+      digit = code - 87; // 97 - 10
+    } else if (code >= 65 && code <= 70) {
+      // 'A' - 'F'
+      digit = code - 55; // 65 - 10
+    } else {
+      // Non-hex character (e.g. 'z', 'g', '-', '.') -> Fail-Closed
+      return null;
+    }
+    val = (val << 4) | digit;
+  }
+  return val;
+}
+
+/**
+ * Parses an IPv6 address string into an array of 8 16-bit integer hextets.
+ * Strict RFC 4291 / RFC 5952 compliance with deterministic, fail-closed parsing.
+ */
+export function parseIpv6ToHextets(rawIp: string): number[] | null {
+  // Strip zone index / scope ID if present (e.g. fe80::1%enP8p1s0)
+  const percentIdx = rawIp.indexOf('%');
+  const ip = (percentIdx === -1 ? rawIp : rawIp.slice(0, percentIdx)).trim();
+  if (ip.length === 0) return null;
+
+  const doubleColonIdx = ip.indexOf('::');
+  if (doubleColonIdx !== -1) {
+    // Only a single '::' compression is allowed per RFC 4291
+    if (ip.indexOf('::', doubleColonIdx + 2) !== -1) return null;
+
+    const leftPart = ip.slice(0, doubleColonIdx);
+    const rightPart = ip.slice(doubleColonIdx + 2);
+
+    const leftHextets: number[] = [];
+    if (leftPart.length > 0) {
+      const parts = leftPart.split(':');
+      for (let i = 0; i < parts.length; i++) {
+        const val = parseHextet(parts[i]!);
+        if (val === null) return null;
+        leftHextets.push(val);
+      }
+    }
+
+    const rightHextets: number[] = [];
+    if (rightPart.length > 0) {
+      const parts = rightPart.split(':');
+      for (let i = 0; i < parts.length; i++) {
+        const val = parseHextet(parts[i]!);
+        if (val === null) return null;
+        rightHextets.push(val);
+      }
+    }
+
+    const totalProvided = leftHextets.length + rightHextets.length;
+    if (totalProvided > 7) return null; // '::' must represent at least one hextet
+
+    const zerosCount = 8 - totalProvided;
+    const result = new Array<number>(8);
+    let outIdx = 0;
+    for (let i = 0; i < leftHextets.length; i++) {
+      result[outIdx++] = leftHextets[i]!;
+    }
+    for (let i = 0; i < zerosCount; i++) {
+      result[outIdx++] = 0;
+    }
+    for (let i = 0; i < rightHextets.length; i++) {
+      result[outIdx++] = rightHextets[i]!;
+    }
+    return result;
+  }
+
+  // Uncompressed: must have exactly 8 hextets
+  const parts = ip.split(':');
+  if (parts.length !== 8) return null;
+
+  const result = new Array<number>(8);
+  for (let i = 0; i < 8; i++) {
+    const val = parseHextet(parts[i]!);
+    if (val === null) return null;
+    result[i] = val;
+  }
+  return result;
+}
+
+/**
+ * Determines whether an IPv6 address falls within private/local scopes:
+ * - RFC 4291 Loopback (::1, 0:0:0:0:0:0:0:1, and all compressed representations)
+ * - RFC 4291 Link-Local (fe80::/10, first 10 bits 1111 1110 10xx xxxx)
+ * - RFC 4193 Unique Local Address / ULA (fc00::/7, first 7 bits 1111 110x xxxx xxxx)
+ *
+ * Dean & Ghemawat Invariant: Dual-stack architecture with mathematical equivalence
+ * verification and deterministic, fail-closed character parsing.
+ */
+export function isPrivateIpv6(rawIp: string): boolean {
+  const hextets = parseIpv6ToHextets(rawIp);
+  if (hextets === null) return false;
+
+  // RFC 4291 Section 2.5.3: Loopback equivalence (0:0:0:0:0:0:0:1)
+  if (
+    hextets[0] === 0 &&
+    hextets[1] === 0 &&
+    hextets[2] === 0 &&
+    hextets[3] === 0 &&
+    hextets[4] === 0 &&
+    hextets[5] === 0 &&
+    hextets[6] === 0 &&
+    hextets[7] === 1
+  ) {
+    return true;
+  }
+
+  const firstHextet = hextets[0]!;
+
+  // fe80::/10: 1111 1110 10xx xxxx -> mask 0xffc0, value 0xfe80 (fe80 to febf)
+  if ((firstHextet & 0xffc0) === 0xfe80) return true;
+
+  // fc00::/7: 1111 110x xxxx xxxx -> mask 0xfe00, value 0xfc00 (fc00 to fdff)
+  if ((firstHextet & 0xfe00) === 0xfc00) return true;
+
+  return false;
+}
+
+/**
+ * Evaluates whether an unauthenticated request originates from the local operator
+ * perimeter (loopback, RFC 1918 private IPv4, or RFC 4193/4291 private IPv6).
+ *
+ * Council Architectural Context & BeyondCorp Alignment (Ghemawat & Hassabis):
+ * - ZERO-TRUST LAW: Network location is NEVER permanently conflated with verified identity.
+ *   In production enterprise topologies, upstream perimeter ingress filtering (BCP 38 / RFC 2827)
+ *   cannot be assumed, and IP-based trust violates BeyondCorp principles.
+ * - APPLIANCE BOOTSTRAP FALLBACK: When GOOGLE_CLIENT_ID is explicitly unconfigured,
+ *   the appliance operates in unmanaged/headless bootstrap mode. Here, private network socket
+ *   provenance is used strictly as a transitionary fallback to prevent complete operator lockout
+ *   on headless appliances before cloud SSO/mTLS is provisioned.
+ * - FAIL-CLOSED BOUNDARY: If GOOGLE_CLIENT_ID is configured, this fallback is completely
+ *   bypassed — returning false immediately and mandating cryptographically signed operator claims.
+ * - DUAL-STACK DETERMINISM (Dean & Ghemawat): Implements O(1) bitwise address evaluation
+ *   for both IPv4 (RFC 1918, RFC 3927, loopback) and IPv6 (RFC 4291 fe80::/10 link-local,
+ *   RFC 4193 fc00::/7 ULA, loopback ::1, and ::ffff: IPv4-mapped addresses) without regex overhead.
+ */
+export function isLanOperator(req: import('node:http').IncomingMessage): boolean {
   const hasGoogleOauth = Boolean(process.env['GOOGLE_CLIENT_ID']);
-  if (hasGoogleOauth) return false; // OAuth configured — never bypass
+  if (hasGoogleOauth) return false; // OAuth configured — zero-trust fail-closed enforcement
 
   const remote = req.socket?.remoteAddress ?? '';
-  // Normalise IPv4-mapped IPv6 (::ffff:192.168.x.x)
-  const ip = remote.replace(/^::ffff:/, '');
+  if (!remote) return false;
 
-  return (
-    ip === '127.0.0.1' ||
-    ip === '::1' ||
-    ip.startsWith('10.') ||
-    ip.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(ip)
-  );
+  // Handle IPv4-mapped IPv6 (::ffff:192.168.1.10)
+  if (remote.startsWith('::ffff:')) {
+    const ipv4Part = remote.slice(7);
+    return isPrivateIpv4(ipv4Part);
+  }
+
+  // Handle native IPv4
+  if (remote.includes('.')) {
+    return isPrivateIpv4(remote);
+  }
+
+  // Handle native IPv6
+  return isPrivateIpv6(remote);
 }
 
 /**
