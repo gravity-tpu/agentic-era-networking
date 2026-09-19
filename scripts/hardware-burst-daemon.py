@@ -50,6 +50,7 @@ DEFAULT_LOG_PATH = os.environ.get('BURST_LOG_PATH', '/home/zodiac/burst-telemetr
 DEFAULT_SWITCH_IP = os.environ.get('ZODIAC_SWITCH_IP', '127.0.0.1')
 DEFAULT_CTRL_IP = os.environ.get('SDN_CONTROLLER_IP', '0.0.0.0')
 DEFAULT_WORKLOAD_IP = os.environ.get('RPI_WORKLOAD_IP', '127.0.0.1')
+BURST_CORAL_TELEMETRY_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH', '/tmp/coral-burst-telemetry.json')
 
 stop_event = threading.Event()
 stats_lock = threading.Lock()
@@ -134,6 +135,16 @@ def check_size_limit_reached(max_bytes: int) -> bool:
         return tot >= max_bytes
 
 
+def atomic_write_burst_coral_json(data: dict):
+    tmp = BURST_CORAL_TELEMETRY_PATH + '.tmp'
+    try:
+        with open(tmp, 'w') as f:
+            json.dump(data, f, separators=(',', ':'))
+        os.replace(tmp, BURST_CORAL_TELEMETRY_PATH)
+    except Exception:
+        pass
+
+
 def coral_tpu_worker(dev_spec: str, max_bytes: int = 0):
     """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
     try:
@@ -155,18 +166,55 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0):
             interp.invoke()
 
         batch_size = 10
+        total_worker_inf = 0
+        w_start_ns = time.monotonic_ns()
+        w_latencies = []
+
         while not stop_event.is_set():
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
                 stop_event.set()
                 break
             for _ in range(batch_size):
+                t0 = time.monotonic_ns()
                 interp.set_tensor(inp_detail['index'], dummy)
                 interp.invoke()
+                t1 = time.monotonic_ns()
+                w_latencies.append(t1 - t0)
+
+            total_worker_inf += batch_size
             with stats_lock:
                 counters['coral_burst_inferences'] += batch_size
+
+            now_ns = time.monotonic_ns()
+            if now_ns - w_start_ns >= 1_000_000_000:
+                elapsed_ns = now_ns - w_start_ns
+                w_sorted = sorted(w_latencies)
+                n = len(w_sorted)
+                p50_ns = w_sorted[n // 2] if n > 0 else 0
+                p99_ns = w_sorted[min(int(n * 0.99), n - 1)] if n > 0 else 0
+                inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
+
+                atomic_write_burst_coral_json({
+                    'detected': True,
+                    'status': 'ACTIVE',
+                    'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - Burst Parallel',
+                    'inferencesPerSecond': inf_sec,
+                    'totalInferences': total_worker_inf,
+                    'latencyP50Ns': p50_ns,
+                    'latencyP99Ns': p99_ns,
+                    'timestampNs': now_ns,
+                })
+                w_latencies = []
+                w_start_ns = now_ns
     except Exception as e:
         sys.stderr.write(f'[coral_worker_{dev_spec}] Error: {e}\n')
         sys.stderr.flush()
+    finally:
+        try:
+            if os.path.exists(BURST_CORAL_TELEMETRY_PATH):
+                os.remove(BURST_CORAL_TELEMETRY_PATH)
+        except Exception:
+            pass
 
 
 def find_tap_interface() -> str:
@@ -474,6 +522,12 @@ def main():
         stop_event.set()
         for t in threads:
             t.join(timeout=2.0)
+
+        try:
+            if os.path.exists(BURST_CORAL_TELEMETRY_PATH):
+                os.remove(BURST_CORAL_TELEMETRY_PATH)
+        except Exception:
+            pass
 
         total_elapsed_sec = (time.monotonic_ns() - start_ns) // 1_000_000_000
         tot_bytes = counters['zodiac_p3_bytes'] + counters['zodiac_p4_bytes'] + counters['rpi_bytes']

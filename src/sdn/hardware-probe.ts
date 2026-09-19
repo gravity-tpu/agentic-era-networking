@@ -518,8 +518,18 @@ export async function probeJetsonHardware(
 // ── Coral Daemon IPC ─────────────────────────────────────────────────────────
 // Staleness guard: if the daemon JSON is older than this the daemon is dead.
 // Council Invariant 3 (Fail-Closed): stale → null → STANDBY.
-const CORAL_TELEMETRY_PATH     = '/tmp/coral-telemetry.json';
-const CORAL_STALENESS_LIMIT_MS = 5_000;
+const CORAL_TELEMETRY_PATH       = '/tmp/coral-telemetry.json';
+const CORAL_BURST_TELEMETRY_PATH = '/tmp/coral-burst-telemetry.json';
+const CORAL_STALENESS_LIMIT_MS   = 5_000;
+
+export interface CoralDaemonTelemetryData {
+  inferencesPerSecond: bigint;
+  totalInferences: bigint;
+  latencyP50Ns: bigint;
+  latencyP99Ns: bigint;
+  status: 'INFERENCE_ACTIVE' | 'STANDBY';
+  model: string;
+}
 
 /**
  * Parse a JSON field directly to BigInt without floating-point intermediary.
@@ -545,7 +555,7 @@ function parseBigIntClamped(val: unknown): bigint {
 }
 
 /**
- * Reads live inference telemetry from the coral-inference-daemon JSON file.
+ * Reads live inference telemetry from a designated Coral telemetry JSON file.
  *
  * TOCTOU-free: opens a single file descriptor and both stats and reads through
  * the same fd — the mtime and content are guaranteed to refer to the same
@@ -555,23 +565,16 @@ function parseBigIntClamped(val: unknown): bigint {
  *   - File does not exist (daemon not yet started — ENOENT is silent)
  *   - File is stale (> CORAL_STALENESS_LIMIT_MS) — daemon likely dead
  *   - mtime is in the future (NTP backward shift) — treated as suspect
- *   - JSON is malformed or status is not 'ACTIVE'
+ *   - JSON is malformed or detected is false
  *
  * Council Invariant 3 (Fail-Closed): all error paths return null → STANDBY.
  * Council Invariant 2 (Determinism): counters parsed directly to BigInt.
  */
-export async function readCoralDaemonTelemetry(): Promise<{
-  inferencesPerSecond: bigint;
-  totalInferences: bigint;
-  latencyP50Ns: bigint;
-  latencyP99Ns: bigint;
-  status: 'INFERENCE_ACTIVE';
-  model: string;
-} | null> {
+async function readCoralTelemetryFile(filePath: string): Promise<CoralDaemonTelemetryData | null> {
   let fd: fs.promises.FileHandle | null = null;
   try {
     // Single open() gives us a stable fd — stat + read see the same file version
-    fd = await fs.promises.open(CORAL_TELEMETRY_PATH, 'r');
+    fd = await fs.promises.open(filePath, 'r');
     const [stat, raw] = await Promise.all([fd.stat(), fd.readFile('utf8')]);
 
     // Staleness guard — handles both forward and backward NTP shifts
@@ -580,22 +583,23 @@ export async function readCoralDaemonTelemetry(): Promise<{
 
     const data = JSON.parse(raw) as Record<string, unknown>;
     if (!data['detected']) return null;
-    if (data['status'] !== 'ACTIVE') return null;
+
+    const isRunning = data['status'] === 'ACTIVE';
 
     return {
-      inferencesPerSecond : parseBigIntClamped(data['inferencesPerSecond']),
+      inferencesPerSecond : isRunning ? parseBigIntClamped(data['inferencesPerSecond']) : 0n,
       totalInferences     : parseBigIntClamped(data['totalInferences']),
-      latencyP50Ns        : parseBigIntClamped(data['latencyP50Ns']),
-      latencyP99Ns        : parseBigIntClamped(data['latencyP99Ns']),
-      status              : 'INFERENCE_ACTIVE',
-      model               : String(data['model'] ?? 'MobileNet V2 INT8 (EdgeTPU)'),
+      latencyP50Ns        : isRunning ? parseBigIntClamped(data['latencyP50Ns']) : 0n,
+      latencyP99Ns        : isRunning ? parseBigIntClamped(data['latencyP99Ns']) : 0n,
+      status              : isRunning ? 'INFERENCE_ACTIVE' : 'STANDBY',
+      model               : String(data['model'] ?? 'MobileNet V2 INT8 (EdgeTPU) - Wire Tap DPI'),
     };
   } catch (err: unknown) {
     const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       // Log genuine errors (permissions, disk I/O, JSON parse) — never swallow reality
       process.stderr.write(
-        `[coral-probe] readCoralDaemonTelemetry: ${err instanceof Error ? err.message : String(err)}\n`
+        `[coral-probe] readCoralTelemetryFile (${filePath}): ${err instanceof Error ? err.message : String(err)}\n`
       );
     }
     // All error paths → fail-closed (Council Invariant 3)
@@ -603,6 +607,14 @@ export async function readCoralDaemonTelemetry(): Promise<{
   } finally {
     await fd?.close();
   }
+}
+
+export async function readCoralDaemonTelemetry(): Promise<CoralDaemonTelemetryData | null> {
+  return readCoralTelemetryFile(CORAL_TELEMETRY_PATH);
+}
+
+export async function readCoralBurstTelemetry(): Promise<CoralDaemonTelemetryData | null> {
+  return readCoralTelemetryFile(CORAL_BURST_TELEMETRY_PATH);
 }
 
 /**
@@ -642,11 +654,16 @@ export function compareUsbTopology(a: string, b: string): number {
  * status reverts to STANDBY and all inference counters are 0.
  */
 export async function probeCoralHardware(
-  daemonData: Awaited<ReturnType<typeof readCoralDaemonTelemetry>> = null
+  daemonData: CoralDaemonTelemetryData | null = null,
+  burstData: CoralDaemonTelemetryData | null = null
 ): Promise<CoralTelemetrySnapshot> {
   if (process.platform !== 'linux') {
     return createDefaultCoralSnapshot(true);
   }
+
+  // If caller didn't supply telemetry, fetch asynchronously with staleness guard
+  const resolvedDaemon = daemonData !== null ? daemonData : await readCoralDaemonTelemetry();
+  const resolvedBurst  = burstData  !== null ? burstData  : await readCoralBurstTelemetry();
 
   try {
     const usbBase = '/sys/bus/usb/devices';
@@ -758,6 +775,10 @@ export async function probeCoralHardware(
         ? 'Google Coral Edge TPU #2 (DNS Sentinel)'
         : `Google Coral Edge TPU #${unitIdx + 1}`;
 
+      const unitStatus = unitIdx === 0
+        ? (resolvedDaemon?.status === 'INFERENCE_ACTIVE' ? 'INFERENCE_ACTIVE' : 'STANDBY')
+        : (resolvedBurst?.status === 'INFERENCE_ACTIVE' ? 'INFERENCE_ACTIVE' : 'STANDBY');
+
       return {
         id: `coral-${unitIdx}`,
         name: unitName,
@@ -766,7 +787,7 @@ export async function probeCoralHardware(
         usbBus: `Bus ${String(u.bus).padStart(3, '0')} Device ${String(u.dev).padStart(3, '0')}`,
         usbSpeed: u.speedLabel,
         assignedRole,
-        status: daemonData !== null ? 'INFERENCE_ACTIVE' : 'STANDBY',
+        status: unitStatus,
         peakTopsInt8: 4,
       };
     });
@@ -776,17 +797,36 @@ export async function probeCoralHardware(
       return createDefaultCoralSnapshot(true);
     }
 
-    const isActive = daemonData !== null;
+    const isActive = (resolvedDaemon?.status === 'INFERENCE_ACTIVE') || (resolvedBurst?.status === 'INFERENCE_ACTIVE');
+    const combinedIps = (resolvedDaemon?.inferencesPerSecond ?? 0n) + (resolvedBurst?.inferencesPerSecond ?? 0n);
+    const combinedTotal = (resolvedDaemon?.totalInferences ?? 0n) + (resolvedBurst?.totalInferences ?? 0n);
+
+    let combinedP50 = 0n;
+    let combinedP99 = 0n;
+    if (resolvedDaemon?.status === 'INFERENCE_ACTIVE' && resolvedBurst?.status === 'INFERENCE_ACTIVE') {
+      combinedP50 = (resolvedDaemon.latencyP50Ns + resolvedBurst.latencyP50Ns) / 2n;
+      combinedP99 = (resolvedDaemon.latencyP99Ns + resolvedBurst.latencyP99Ns) / 2n;
+    } else if (resolvedDaemon?.status === 'INFERENCE_ACTIVE') {
+      combinedP50 = resolvedDaemon.latencyP50Ns;
+      combinedP99 = resolvedDaemon.latencyP99Ns;
+    } else if (resolvedBurst?.status === 'INFERENCE_ACTIVE') {
+      combinedP50 = resolvedBurst.latencyP50Ns;
+      combinedP99 = resolvedBurst.latencyP99Ns;
+    }
+
     const count = detectedUnits.length;
     const totalTops = count * 4;
 
+    const primaryModel = resolvedDaemon?.model ?? 'MobileNet V2 INT8 (EdgeTPU) - Wire Tap DPI';
     const pipelineRole = count > 1
       ? (isActive
-          ? `Dual Pipeline: Tap DPI (${daemonData!.model}) + DNS Sentinel`
+          ? (resolvedBurst?.status === 'INFERENCE_ACTIVE'
+              ? `Dual Active: Tap DPI (${primaryModel}) + Burst Parallel (${resolvedBurst.model})`
+              : `Dual Pipeline: Tap DPI (${primaryModel}) + DNS Sentinel (Standby)`)
           : 'Dual Pipeline: Tap Packet Classifier (TPU 0) + DNS Sentinel (TPU 1)')
       : (isActive
-          ? `Live Inference: ${daemonData!.model}`
-          : 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)');
+          ? `Live Inference: ${primaryModel}`
+          : 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 0.8 Provenance)');
 
     const name = count > 1
       ? `Dual Google Coral Edge TPU USB Accelerators (${totalTops} TOPS)`
@@ -805,11 +845,11 @@ export async function probeCoralHardware(
       pipelineRole,
       peakTopsInt8: totalTops,
       targetLatencyBudgetNs: 500000n,
-      inferencesPerSecond: daemonData?.inferencesPerSecond ?? 0n,
-      totalInferences: daemonData?.totalInferences ?? 0n,
-      latencyP50Ns: daemonData?.latencyP50Ns ?? 0n,
-      latencyP99Ns: daemonData?.latencyP99Ns ?? 0n,
-      loadedModel: daemonData?.model ?? (count > 1 ? 'Dual Pipeline Standby (Tap + DNS)' : 'None (Standby)'),
+      inferencesPerSecond: combinedIps,
+      totalInferences: combinedTotal,
+      latencyP50Ns: combinedP50,
+      latencyP99Ns: combinedP99,
+      loadedModel: primaryModel,
       powerMode: isActive ? `Active Inference (~${count * 2}W USB)` : `Low-Power Standby (<${count * 500}mW)`,
       temperatureC: null,
     };

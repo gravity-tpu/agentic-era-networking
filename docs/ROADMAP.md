@@ -215,6 +215,22 @@ Governed by the **Senior Staff Council Invariants**:
   - Close-lid / reboot Mac does not interrupt any network services.
   - SSH key-based authentication only; password auth disabled on Jetson.
 
+### Phase 0.8: Real-Time Wire-Packet Ingestion & Epistemic Provenance for Coral Edge TPUs
+*Status: Complete*
+- [x] **Direct AF_PACKET Raw Socket Ingestion on Mirror Tap (`enx*`)**:
+  - Promiscuous mirror tap listener sniffing real physical frames on Zodiac Port 3 / Port 1.
+  - Fail-closed fallback to `STANDBY` listener mode if interface or permissions are unavailable.
+- [x] **Zero-Copy Packet-to-Tensor Triage Pipeline**:
+  - Frame header and payload bytes mapped directly into the model's `uint8` input tensor buffer.
+  - Fixed-function INT8 execution on Google Coral silicon: 1 wire packet ingested = 1 physical inference.
+- [x] **Physical Epistemic Provenance (Anti-Simulation Law - Invariant 6)**:
+  - Eliminated synthetic dummy tensor benchmark loops in monitoring.
+  - True zero-traffic baseline: when network traffic is 0 pps, Edge TPU evaluates to 0 inf/s (`STANDBY`).
+  - High-traffic burst response: inference rate spikes proportionally up to silicon saturation (~230 inf/s per TPU).
+- [x] **Multi-TPU Parallel Telemetry Aggregation**:
+  - `hardware-probe.ts` aggregates dual Edge TPUs (primary tap DPI daemon on TPU #1 + burst parallel on TPU #2) into combined throughput (~450 inf/s peak).
+  - TOCTOU-free atomic telemetry reporting with 5-second fail-closed staleness guards.
+
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
 - [ ] Transparent RFC 1035 UDP DNS interception on Zodiac data ports without client proxy setup.

@@ -20,6 +20,8 @@ Council Invariant 2 (Determinism):
 
 import json
 import os
+import signal
+import socket
 import sys
 import time
 import traceback
@@ -27,7 +29,6 @@ import traceback
 OUTPUT_PATH        = '/tmp/coral-telemetry.json'
 MODEL_PATH         = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite'
 REPORT_INTERVAL_NS = 1_000_000_000   # 1 second in nanoseconds (integer)
-BATCH_SIZE         = 10
 WARMUP_N           = 5
 
 
@@ -52,6 +53,22 @@ def write_offline(reason):
     })
 
 
+def write_standby(total_inf, usb_p, usb_t):
+    atomic_write_json(OUTPUT_PATH, {
+        'detected': True,
+        'status': 'STANDBY',
+        'model': 'MobileNet V2 224x224 INT8 (EdgeTPU) - Wire Tap DPI',
+        'inferencesPerSecond': 0,
+        'totalInferences': total_inf,
+        'latencyP50Ns': 0,
+        'latencyP99Ns': 0,
+        'windowSampleCount': 0,
+        'usbPath': usb_p,
+        'usbType': usb_t,
+        'timestampNs': time.monotonic_ns(),
+    })
+
+
 def percentile_ns(sorted_lats, p_num, p_den):
     """
     Pure-integer percentile: p_num/p_den fraction (e.g. 50/100 for P50).
@@ -64,6 +81,20 @@ def percentile_ns(sorted_lats, p_num, p_den):
         return 0
     idx = min((n * p_num) // p_den, n - 1)
     return sorted_lats[idx]
+
+
+def find_tap_interface() -> str:
+    """Finds the mirror tap interface (ASIX USB GbE adapter enx*)."""
+    env_iface = os.environ.get('TAP_INTERFACE')
+    if env_iface:
+        return env_iface
+    try:
+        for iface in os.listdir('/sys/class/net'):
+            if iface.startswith('enx'):
+                return iface
+    except Exception:
+        pass
+    return 'enx9c69d39dd0a6'
 
 
 def main():
@@ -105,46 +136,88 @@ def main():
         sys.exit(1)
 
     inp_detail = interp.get_input_details()[0]
-    dummy = np.zeros(inp_detail['shape'], dtype=np.uint8)
+    inp_shape = inp_detail['shape']
+    inp_size = int(np.prod(inp_shape))
+    tensor_buf = np.zeros(inp_shape, dtype=np.uint8)
+    flat_buf = tensor_buf.reshape(-1)
 
     print(f'[coral-daemon] Warming up ({WARMUP_N} inferences)...', flush=True)
     for _ in range(WARMUP_N):
-        interp.set_tensor(inp_detail['index'], dummy)
+        interp.set_tensor(inp_detail['index'], tensor_buf)
         interp.invoke()
 
-    print('[coral-daemon] Warm-up complete. Entering inference loop.', flush=True)
+    tap_iface = find_tap_interface()
+    raw_sock = None
+    try:
+        raw_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
+        raw_sock.bind((tap_iface, 0))
+        raw_sock.settimeout(0.2)
+        print(f'[coral-daemon] Successfully bound AF_PACKET raw socket on {tap_iface}', flush=True)
+    except Exception as e:
+        print(f'[coral-daemon] Warning: unable to bind AF_PACKET raw socket on {tap_iface} ({e}). '
+              f'Operating in standby listener mode.', file=sys.stderr, flush=True)
+
+    print('[coral-daemon] Warm-up complete. Entering wire-packet inference loop.', flush=True)
 
     total_inferences   = 0           # int — never float
     window_latencies   = []          # list[int] nanoseconds — never float
     window_start_ns    = time.monotonic_ns()
     last_report_ns     = window_start_ns
 
+    # Emit initial STANDBY state with zero rates (Council Invariant 6: Anti-Simulation Law)
+    write_standby(total_inferences, usb_path, usb_type)
+
     while True:
         try:
-            for _ in range(BATCH_SIZE):
-                t0 = time.monotonic_ns()
-                interp.set_tensor(inp_detail['index'], dummy)
-                interp.invoke()
-                t1 = time.monotonic_ns()
-                window_latencies.append(t1 - t0)   # int
-                total_inferences += 1              # int
+            if raw_sock is not None:
+                try:
+                    # Ingest real Ethernet frame directly from physical wire tap
+                    frame = raw_sock.recv(65535)
+                    if frame:
+                        n_bytes = min(len(frame), inp_size)
+                        flat_buf[:n_bytes] = np.frombuffer(frame[:n_bytes], dtype=np.uint8)
+                        if n_bytes < inp_size:
+                            flat_buf[n_bytes:] = 0
+
+                        t0 = time.monotonic_ns()
+                        interp.set_tensor(inp_detail['index'], tensor_buf)
+                        interp.invoke()
+                        t1 = time.monotonic_ns()
+
+                        window_latencies.append(t1 - t0)
+                        total_inferences += 1
+                except socket.timeout:
+                    # No packets arrived on wire in 200ms timeout window
+                    pass
+                except Exception as exc:
+                    print(f'[coral-daemon] Frame read warning: {exc}', file=sys.stderr, flush=True)
+                    time.sleep(0.05)
+            else:
+                # AF_PACKET raw socket unavailable (waiting on interface or CAP_NET_RAW)
+                time.sleep(0.2)
 
             now_ns = time.monotonic_ns()
-
             if now_ns - last_report_ns >= REPORT_INTERVAL_NS:
                 elapsed_ns  = now_ns - window_start_ns
                 sorted_lats = sorted(window_latencies)
                 n           = len(sorted_lats)
 
-                # Pure integer arithmetic (Council Invariant 2)
-                p50_ns  = percentile_ns(sorted_lats, 50, 100)
-                p99_ns  = percentile_ns(sorted_lats, 99, 100)
-                inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
+                # Pure integer arithmetic (Council Invariant 2: Determinism)
+                if n > 0 and elapsed_ns > 0:
+                    p50_ns  = percentile_ns(sorted_lats, 50, 100)
+                    p99_ns  = percentile_ns(sorted_lats, 99, 100)
+                    inf_sec = (n * 1_000_000_000) // elapsed_ns
+                    status  = 'ACTIVE'
+                else:
+                    p50_ns  = 0
+                    p99_ns  = 0
+                    inf_sec = 0
+                    status  = 'STANDBY'
 
                 atomic_write_json(OUTPUT_PATH, {
                     'detected':            True,
-                    'status':              'ACTIVE',
-                    'model':               'MobileNet V2 224x224 INT8 (EdgeTPU)',
+                    'status':              status,
+                    'model':               'MobileNet V2 224x224 INT8 (EdgeTPU) - Wire Tap DPI',
                     'inferencesPerSecond': inf_sec,
                     'totalInferences':     total_inferences,
                     'latencyP50Ns':        p50_ns,
@@ -160,8 +233,13 @@ def main():
                 last_report_ns   = now_ns
 
         except KeyboardInterrupt:
-            print('[coral-daemon] Received SIGINT, shutting down.', flush=True)
-            write_offline('Daemon stopped (SIGINT)')
+            print('[coral-daemon] Received SIGINT, shutting down cleanly.', flush=True)
+            write_standby(total_inferences, usb_path, usb_type)
+            if raw_sock:
+                try:
+                    raw_sock.close()
+                except Exception:
+                    pass
             break
         except Exception:
             err = traceback.format_exc()

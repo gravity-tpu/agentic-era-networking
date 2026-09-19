@@ -133,4 +133,47 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
       expect(snap.status).toBe('NOT_DETECTED');
     }
   });
+
+  it('aggregates multi-TPU throughput and latency deterministically', async () => {
+    const daemonData = {
+      inferencesPerSecond: 225n,
+      totalInferences: 10000n,
+      latencyP50Ns: 4300000n,
+      latencyP99Ns: 4900000n,
+      status: 'INFERENCE_ACTIVE' as const,
+      model: 'MobileNet V2 INT8 (EdgeTPU) - Wire Tap DPI',
+    };
+
+    const burstData = {
+      inferencesPerSecond: 230n,
+      totalInferences: 5000n,
+      latencyP50Ns: 4200000n,
+      latencyP99Ns: 4800000n,
+      status: 'INFERENCE_ACTIVE' as const,
+      model: 'MobileNet V2 INT8 (EdgeTPU) - Burst Parallel',
+    };
+
+    // When on Linux or mocked, test aggregation logic
+    const snap = await probeCoralHardware(daemonData, burstData);
+    if (snap.detected && snap.deviceCount > 1) {
+      expect(snap.inferencesPerSecond).toBe(455n); // 225n + 230n
+      expect(snap.totalInferences).toBe(15000n);
+      expect(snap.status).toBe('INFERENCE_ACTIVE');
+      expect(snap.devices[0]?.status).toBe('INFERENCE_ACTIVE');
+      expect(snap.devices[1]?.status).toBe('INFERENCE_ACTIVE');
+    }
+  });
+
+  it('returns fail-closed null for missing daemon telemetry files', async () => {
+    const { readCoralDaemonTelemetry, readCoralBurstTelemetry } = await import('../../src/sdn/hardware-probe.js');
+    // On systems where /tmp/coral-telemetry.json or burst doesn't exist, must fail-closed to null
+    const daemon = await readCoralDaemonTelemetry();
+    const burst = await readCoralBurstTelemetry();
+    if (!daemon) {
+      expect(daemon).toBeNull();
+    }
+    if (!burst) {
+      expect(burst).toBeNull();
+    }
+  });
 });

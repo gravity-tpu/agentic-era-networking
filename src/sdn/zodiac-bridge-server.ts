@@ -29,7 +29,7 @@ import {
   createDisconnectedZodiacSnapshot,
   CLOUD_RELAY_BOUNDS,
 } from './zodiac-telemetry.js';
-import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry } from './hardware-probe.js';
+import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry, readCoralBurstTelemetry } from './hardware-probe.js';
 import {
   downsamplePoints,
   downsampleJetsonPoints,
@@ -1274,11 +1274,12 @@ export class ZodiacBridgeServer {
       const deltaNs = nowNs - this.lastProbeNs;
       this.lastProbeNs = nowNs;
 
-      const [liveJetson, daemonData] = await Promise.all([
+      const [liveJetson, daemonData, burstData] = await Promise.all([
         probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs),
         readCoralDaemonTelemetry(),
+        readCoralBurstTelemetry(),
       ]);
-      const liveCoral = await probeCoralHardware(daemonData);
+      const liveCoral = await probeCoralHardware(daemonData, burstData);
 
       const sdnIf = liveJetson.interfaces.find((i) => i.name === 'enP8p1s0');
       const wifiIf = liveJetson.interfaces.find((i) => i.name === 'wlP1p1s0');
