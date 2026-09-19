@@ -514,11 +514,11 @@ body {
 }
 
 .cf-stat-label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--cf-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.035em;
 }
 
 .cf-stat-value {
@@ -1415,3 +1415,77 @@ body {
   font-size: 0.75rem;
   font-family: var(--font-mono);
 }
+
+/* ==========================================================================
+   Google Coral Edge TPU Device Pages Typography Scaling (-20%)
+   ========================================================================== */
+#view-device-coral-1 .cf-page-title,
+#view-device-coral-2 .cf-page-title {
+  font-size: 1.16rem;
+}
+
+#view-device-coral-1 .cf-page-desc,
+#view-device-coral-2 .cf-page-desc {
+  font-size: 0.70rem;
+}
+
+#view-device-coral-1 .cf-page-header .cf-pill-badge,
+#view-device-coral-2 .cf-page-header .cf-pill-badge {
+  font-size: 0.60rem;
+  padding: 0.15rem 0.5rem;
+}
+
+#view-device-coral-1 .cf-stat-label,
+#view-device-coral-2 .cf-stat-label {
+  font-size: 0.60rem;
+  letter-spacing: 0.04em;
+}
+
+#view-device-coral-1 .cf-stat-header .cf-pill-badge,
+#view-device-coral-2 .cf-stat-header .cf-pill-badge {
+  font-size: 0.54rem !important;
+  padding: 0.12rem 0.45rem;
+}
+
+#view-device-coral-1 .cf-stat-value,
+#view-device-coral-2 .cf-stat-value {
+  font-size: 1.48rem;
+}
+
+#view-device-coral-1 .cf-stat-footer,
+#view-device-coral-2 .cf-stat-footer {
+  font-size: 0.61rem;
+}
+
+#view-device-coral-1 .cf-card-title,
+#view-device-coral-2 .cf-card-title {
+  font-size: 0.84rem;
+}
+
+#view-device-coral-1 .cf-card-subtitle,
+#view-device-coral-2 .cf-card-subtitle {
+  font-size: 0.62rem;
+}
+
+#view-device-coral-1 .cf-card-header .cf-pill-badge,
+#view-device-coral-2 .cf-card-header .cf-pill-badge {
+  font-size: 0.58rem;
+  padding: 0.15rem 0.45rem;
+}
+
+#view-device-coral-1 .cf-time-btn,
+#view-device-coral-2 .cf-time-btn {
+  font-size: 0.60rem;
+  padding: 0.2rem 0.45rem;
+}
+
+#coral1-pipeline-card p,
+#coral2-pipeline-card p {
+  font-size: 0.66rem !important;
+}
+
+#coral1-pipeline-card strong,
+#coral2-pipeline-card strong {
+  font-size: 0.74rem;
+}
+

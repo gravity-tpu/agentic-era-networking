@@ -1329,6 +1329,9 @@ export class ZodiacBridgeServer {
         this.jetsonTimeSeries.shift();
       }
 
+      const coral1Dev = liveCoral?.devices?.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') ?? null;
+      const coral2Dev = liveCoral?.devices?.find((d) => d.assignedRole === 'DNS_SENTINEL' || d.id === 'coral-2') ?? null;
+
       this.coralTimeSeries.push({
         timestampMs: nowMs,
         inferencesPerSecond: liveCoral.inferencesPerSecond,
@@ -1339,6 +1342,10 @@ export class ZodiacBridgeServer {
         usbThroughputKbps: liveCoral.inferencesPerSecond > 0n
           ? (liveCoral.inferencesPerSecond * 300n * 8n) / 1000n
           : 0n,
+        coral1Ips: coral1Dev?.inferencesPerSecond ?? 0n,
+        coral2Ips: coral2Dev?.inferencesPerSecond ?? 0n,
+        coral1LatencyP50Us: (coral1Dev?.latencyP50Ns ?? 0n) / 1000n,
+        coral2LatencyP50Us: (coral2Dev?.latencyP50Ns ?? 0n) / 1000n,
       });
 
       if (this.coralTimeSeries.length > MAX_TIME_SERIES_POINTS) {

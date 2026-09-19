@@ -153,14 +153,45 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
       model: 'MobileNet V2 INT8 (EdgeTPU) - Burst Parallel',
     };
 
-    // When on Linux or mocked, test aggregation logic
+    // When on Linux or mocked, test aggregation and per-device separation logic
     const snap = await probeCoralHardware(daemonData, burstData);
     if (snap.detected && snap.deviceCount > 1) {
       expect(snap.inferencesPerSecond).toBe(455n); // 225n + 230n
       expect(snap.totalInferences).toBe(15000n);
       expect(snap.status).toBe('INFERENCE_ACTIVE');
       expect(snap.devices[0]?.status).toBe('INFERENCE_ACTIVE');
+      expect(snap.devices[0]?.inferencesPerSecond).toBe(225n);
+      expect(snap.devices[0]?.totalInferences).toBe(10000n);
       expect(snap.devices[1]?.status).toBe('INFERENCE_ACTIVE');
+      expect(snap.devices[1]?.inferencesPerSecond).toBe(230n);
+      expect(snap.devices[1]?.totalInferences).toBe(5000n);
+    }
+
+    // Isolated Burst Test: Coral #1 in STANDBY (0 ips), Coral #2 ACTIVE (220 ips)
+    const isolatedDaemon = {
+      inferencesPerSecond: 0n,
+      totalInferences: 10000n,
+      latencyP50Ns: 0n,
+      latencyP99Ns: 0n,
+      status: 'STANDBY' as const,
+      model: 'MobileNet V2 INT8 (EdgeTPU) - Wire Tap DPI',
+    };
+    const isolatedBurst = {
+      inferencesPerSecond: 220n,
+      totalInferences: 5000n,
+      latencyP50Ns: 4300000n,
+      latencyP99Ns: 4900000n,
+      status: 'INFERENCE_ACTIVE' as const,
+      model: 'RFC 1035 DNS Sentinel',
+    };
+    const isolatedSnap = await probeCoralHardware(isolatedDaemon, isolatedBurst);
+    if (isolatedSnap.detected && isolatedSnap.deviceCount > 1) {
+      expect(isolatedSnap.devices[0]?.assignedRole).toBe('TAP_PACKET_CLASSIFIER');
+      expect(isolatedSnap.devices[0]?.status).toBe('STANDBY');
+      expect(isolatedSnap.devices[0]?.inferencesPerSecond).toBe(0n);
+      expect(isolatedSnap.devices[1]?.assignedRole).toBe('DNS_SENTINEL');
+      expect(isolatedSnap.devices[1]?.status).toBe('INFERENCE_ACTIVE');
+      expect(isolatedSnap.devices[1]?.inferencesPerSecond).toBe(220n);
     }
   });
 

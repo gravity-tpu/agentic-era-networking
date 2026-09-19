@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="zodiac.4cf4c90385.css">
+  <link rel="stylesheet" href="zodiac.a90358a5f2.css">
   <!-- Favicon — three-tier network topology node (transparent SVG) -->
   <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon.svg">
@@ -851,15 +851,29 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Compute Engine Load</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;" id="orin-cpu-cores-badge">6 Cores · ARMv8.2</span>
                 </div>
-                <div class="cf-stat-value blue" id="orin-kpi-compute">--% <span style="font-size: 0.9rem; color: var(--cf-text-secondary); font-weight: normal;">CPU</span></div>
-                <div class="cf-mini-bar">
-                  <div class="cf-mini-bar-fill" id="orin-bar-cpu" style="width: 0%;"></div>
+                <div class="cf-stat-value blue" id="orin-kpi-compute" style="font-size: 1.45rem; white-space: nowrap;">--% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span> <span style="color: #94a3b8; font-weight: 300; margin: 0 0.2rem;">|</span> <span style="color: var(--cf-green);">--%</span> <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">GPU</span></div>
+                
+                <!-- Dual Engine Utilization Bars: CPU & GPU -->
+                <div style="margin-top: 0.65rem; display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.68rem; font-weight: 700; color: var(--cf-blue); width: 26px; text-transform: uppercase;">CPU</span>
+                    <div class="cf-mini-bar" style="flex: 1; margin-top: 0; background: #f1f5f9;">
+                      <div class="cf-mini-bar-fill" id="orin-bar-cpu" style="width: 0%;" title="CPU Load"></div>
+                    </div>
+                    <span class="cf-mono" id="orin-kpi-cpu" style="font-size: 0.72rem; width: 34px; text-align: right; color: var(--cf-text-secondary);">--%</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.68rem; font-weight: 700; color: var(--cf-green); width: 26px; text-transform: uppercase;">GPU</span>
+                    <div class="cf-mini-bar" style="flex: 1; margin-top: 0; background: #f1f5f9;">
+                      <div class="cf-mini-bar-fill green" id="orin-bar-gpu" style="width: 0%;" title="GPU Load"></div>
+                    </div>
+                    <span class="cf-mono" id="orin-kpi-gpu" style="font-size: 0.72rem; width: 34px; text-align: right; color: var(--cf-green);">--%</span>
+                  </div>
                 </div>
-                <div class="cf-stat-footer">
-                  <span>GPU: <strong class="cf-mono" id="orin-kpi-gpu">0%</strong> (Ampere GR3D)</span>
-                  <span>Load: <strong class="cf-mono" id="orin-kpi-load">--</strong></span>
+
+                <div class="cf-stat-footer" style="margin-top: 0.65rem;">
+                  <span>Load Avg: <strong class="cf-mono" id="orin-kpi-load">--</strong></span>
                 </div>
               </div>
 
@@ -963,7 +977,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 <div class="cf-card-header">
                   <div>
                     <h3 class="cf-card-title">Compute Utilization Engine</h3>
-                    <div class="cf-card-subtitle">6-Core ARM Cortex-A78AE vs NVIDIA Ampere 1024 CUDA Cores (%)</div>
+                    <div class="cf-card-subtitle">6-Core ARM Cortex-A78AE vs 1024 CUDA Cores (%)</div>
                   </div>
                   <span class="cf-pill-badge blue">CPU &amp; GPU Dynamics</span>
                 </div>
@@ -1261,8 +1275,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 1: Compute Capacity -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Tensor Compute Engine</span>
-                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Coral DPI</span>
+                  <span class="cf-stat-label">Tensor Compute</span>
+                  <span class="cf-pill-badge purple">Coral DPI</span>
                 </div>
                 <div class="cf-stat-value" style="color: #7e22ce;" id="coral1-kpi-tops">4 TOPS</div>
                 <div class="cf-mini-bar">
@@ -1277,8 +1291,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 2: Pipeline State -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Operational Pipeline</span>
-                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Tap Classifier</span>
+                  <span class="cf-stat-label">Pipeline Status</span>
+                  <span class="cf-pill-badge purple">Tap DPI</span>
                 </div>
                 <div class="cf-stat-value" id="coral1-kpi-status">--</div>
                 <div class="cf-mini-bar">
@@ -1293,8 +1307,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 3: USB Link -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">USB Bus &amp; Carrier Port</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">Hub Port 2</span>
+                  <span class="cf-stat-label">USB Link Speed</span>
+                  <span class="cf-pill-badge blue">Hub Port 2</span>
                 </div>
                 <div class="cf-stat-value blue" id="coral1-kpi-speed">5.0 Gbps</div>
                 <div class="cf-mini-bar">
@@ -1309,8 +1323,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 4: Dean Latency Budget -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Latency Intervention Budget</span>
-                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;">Dean Invariant</span>
+                  <span class="cf-stat-label">Latency Budget</span>
+                  <span class="cf-pill-badge gray">Dean Budget</span>
                 </div>
                 <div class="cf-stat-value" style="color: #059669;">&lt; 500 µs</div>
                 <div class="cf-mini-bar">
@@ -1324,8 +1338,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
             </div>
 
-            <!-- Coral 1 Charts Grid (2x1) -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+            <!-- Coral 1 Charts (Horizontal Full-Width Layout) -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-top: 1.5rem;">
               
               <!-- Chart 1: Tap Ingestion Rate -->
               <div class="cf-card">
@@ -1340,12 +1354,14 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       <button class="cf-time-btn" data-range="1h">1 Hour</button>
                       <button class="cf-time-btn" data-range="6h">6 Hours</button>
                       <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                      <button class="cf-time-btn" data-range="7d">7 Days</button>
+                      <button class="cf-time-btn" data-range="30d">30 Days</button>
                     </div>
                     <span class="cf-pill-badge purple">Tensor Ops</span>
                   </div>
                 </div>
-                <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-coral1-rate" style="position: relative; height: 220px;">
+                <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral1-rate" style="position: relative; height: 240px;">
                     <canvas id="chart-coral1-rate"></canvas>
                   </div>
                 </div>
@@ -1353,15 +1369,25 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
               <!-- Chart 2: Latency Profile -->
               <div class="cf-card">
-                <div class="cf-card-header">
+                <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                   <div>
                     <h3 class="cf-card-title">Sub-Millisecond Classification Latency</h3>
                     <div class="cf-card-subtitle">Dean Invariant target &lt; 500 µs (0.5 ms) line-rate packet triage</div>
                   </div>
-                  <span class="cf-pill-badge green">Dean Budget</span>
+                  <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="cf-time-range-group" id="cf-coral1-latency-time-selectors">
+                      <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                      <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                      <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                      <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                      <button class="cf-time-btn" data-range="7d">7 Days</button>
+                      <button class="cf-time-btn" data-range="30d">30 Days</button>
+                    </div>
+                    <span class="cf-pill-badge green">Dean Budget</span>
+                  </div>
                 </div>
-                <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-coral1-latency" style="position: relative; height: 220px;">
+                <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral1-latency" style="position: relative; height: 240px;">
                     <canvas id="chart-coral1-latency"></canvas>
                   </div>
                 </div>
@@ -1433,8 +1459,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 1: Compute Capacity -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Tensor Compute Engine</span>
-                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Coral DNS</span>
+                  <span class="cf-stat-label">Tensor Compute</span>
+                  <span class="cf-pill-badge purple">Coral DNS</span>
                 </div>
                 <div class="cf-stat-value" style="color: #7e22ce;" id="coral2-kpi-tops">4 TOPS</div>
                 <div class="cf-mini-bar">
@@ -1449,8 +1475,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 2: Pipeline State -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Operational Pipeline</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">DNS Sentinel</span>
+                  <span class="cf-stat-label">Pipeline Status</span>
+                  <span class="cf-pill-badge blue">DNS Sentinel</span>
                 </div>
                 <div class="cf-stat-value" id="coral2-kpi-status">--</div>
                 <div class="cf-mini-bar">
@@ -1465,8 +1491,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 3: USB Link -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">USB Bus &amp; Carrier Port</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">Hub Port 3</span>
+                  <span class="cf-stat-label">USB Link Speed</span>
+                  <span class="cf-pill-badge blue">Hub Port 3</span>
                 </div>
                 <div class="cf-stat-value blue" id="coral2-kpi-speed">5.0 Gbps</div>
                 <div class="cf-mini-bar">
@@ -1481,8 +1507,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <!-- KPI 4: Query Latency Budget -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">DNS SLA Latency Budget</span>
-                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;">Fast-Path SLA</span>
+                  <span class="cf-stat-label">DNS SLA Budget</span>
+                  <span class="cf-pill-badge gray">Fast-Path SLA</span>
                 </div>
                 <div class="cf-stat-value" style="color: #059669;">&lt; 250 µs</div>
                 <div class="cf-mini-bar">
@@ -1496,8 +1522,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
             </div>
 
-            <!-- Coral 2 Charts Grid (2x1) -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+            <!-- Coral 2 Charts (Horizontal Full-Width Layout) -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-top: 1.5rem;">
               
               <!-- Chart 1: DNS Query Volume -->
               <div class="cf-card">
@@ -1512,12 +1538,14 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       <button class="cf-time-btn" data-range="1h">1 Hour</button>
                       <button class="cf-time-btn" data-range="6h">6 Hours</button>
                       <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                      <button class="cf-time-btn" data-range="7d">7 Days</button>
+                      <button class="cf-time-btn" data-range="30d">30 Days</button>
                     </div>
                     <span class="cf-pill-badge blue">DNS QPS</span>
                   </div>
                 </div>
-                <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-coral2-rate" style="position: relative; height: 220px;">
+                <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral2-rate" style="position: relative; height: 240px;">
                     <canvas id="chart-coral2-rate"></canvas>
                   </div>
                 </div>
@@ -1525,15 +1553,25 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
               <!-- Chart 2: Fast-Path Latency -->
               <div class="cf-card">
-                <div class="cf-card-header">
+                <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                   <div>
                     <h3 class="cf-card-title">Fast-Path Resolution Latency Profile</h3>
                     <div class="cf-card-subtitle">Sub-millisecond query parsing &amp; Shannon entropy scoring</div>
                   </div>
-                  <span class="cf-pill-badge green">SLA Budget</span>
+                  <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="cf-time-range-group" id="cf-coral2-latency-time-selectors">
+                      <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                      <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                      <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                      <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                      <button class="cf-time-btn" data-range="7d">7 Days</button>
+                      <button class="cf-time-btn" data-range="30d">30 Days</button>
+                    </div>
+                    <span class="cf-pill-badge green">SLA Budget</span>
+                  </div>
                 </div>
-                <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-coral2-latency" style="position: relative; height: 220px;">
+                <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral2-latency" style="position: relative; height: 240px;">
                     <canvas id="chart-coral2-latency"></canvas>
                   </div>
                 </div>
@@ -1861,7 +1899,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.e435956b7b.js"></script>
+  <script defer src="zodiac-app.14f0fd4dd3.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

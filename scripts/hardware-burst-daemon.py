@@ -61,6 +61,51 @@ BURST_TARGET_PATHS = tuple(
     else [os.path.join(d, 'coral-burst-telemetry.json') for d in CANDIDATE_BURST_DIRS]
 )
 
+
+DEFAULT_CORAL_STALENESS_LIMIT_S = 5.0
+DEFAULT_MAX_LOAD_SCALE_FACTOR = 3.0
+WALL_CLOCK_EPOCH_THRESHOLD_NS = 1_000_000_000_000_000_000  # 1e18 ns boundary (Sept 2001) separating boot vs wall clock
+
+
+def get_coral_staleness_limit_s() -> float:
+    """
+    Council Invariant 5 (Quoc Le): Adaptive Control & Multi-Agent Stability.
+    Eliminates brittle magic numbers by making the staleness threshold configurable
+    via CORAL_DAEMON_STALENESS_LIMIT_S, dynamically scaling with system 1-minute load average
+    under high CPU/IO pressure to prevent false fail-closed drops during burst peaks.
+    """
+    base_limit = DEFAULT_CORAL_STALENESS_LIMIT_S
+    env_val = os.environ.get('CORAL_DAEMON_STALENESS_LIMIT_S')
+    if env_val:
+        try:
+            parsed = float(env_val)
+            if parsed > 0:
+                base_limit = parsed
+        except (ValueError, TypeError) as exc:
+            sys.stderr.write(f'[burst-daemon] Note: invalid CORAL_DAEMON_STALENESS_LIMIT_S ({env_val}): {exc}\n')
+
+    max_scale = DEFAULT_MAX_LOAD_SCALE_FACTOR
+    env_scale = os.environ.get('CORAL_MAX_LOAD_SCALE_FACTOR')
+    if env_scale:
+        try:
+            parsed_scale = float(env_scale)
+            if parsed_scale >= 1.0:
+                max_scale = parsed_scale
+        except (ValueError, TypeError) as exc:
+            sys.stderr.write(f'[burst-daemon] Note: invalid CORAL_MAX_LOAD_SCALE_FACTOR ({env_scale}): {exc}\n')
+
+    try:
+        if hasattr(os, 'getloadavg'):
+            load1, _, _ = os.getloadavg()
+            cpu_count = os.cpu_count() or 1
+            if load1 > cpu_count:
+                load_factor = min(max_scale, load1 / cpu_count)
+                return base_limit * load_factor
+    except (OSError, AttributeError) as exc:
+        sys.stderr.write(f'[burst-daemon] Note: system load average unavailable ({exc}), using base limit\n')
+
+    return base_limit
+
 stop_event = threading.Event()
 stats_lock = threading.Lock()
 
@@ -441,12 +486,48 @@ def telemetry_poller_worker():
     global cached_live_summary
     candidate_paths = ['/run/zodiac/coral-telemetry.json', '/tmp/coral-telemetry.json']
 
+    last_load_check_ns = 0
+    staleness_limit_ns = int(DEFAULT_CORAL_STALENESS_LIMIT_S * 1_000_000_000)
+
     while not stop_event.is_set():
+        now_ns = time.monotonic_ns()
+        # Hoist and decouple adaptive load scaling from inner file polling loop (Jeff Dean invariant)
+        if now_ns - last_load_check_ns >= 1_000_000_000:
+            staleness_limit_ns = int(get_coral_staleness_limit_s() * 1_000_000_000)
+            last_load_check_ns = now_ns
+
         tpu0_rate = 0
         for p in candidate_paths:
             try:
                 with open(p, 'r') as f:
                     cdata = json.load(f)
+                    # Council Invariant 2 (Determinism) & Invariant 6 (Physical Truth):
+                    # Disambiguate clock domain:
+                    # Wall-clock epochs (> 1e18 ns / post-2001) vs CLOCK_MONOTONIC boot epochs (< 1e18 ns)
+                    ts_raw = cdata.get('timestampNs')
+                    if ts_raw is not None:
+                        try:
+                            ts_val = int(ts_raw)
+                            if ts_val > WALL_CLOCK_EPOCH_THRESHOLD_NS:
+                                now_wall_ns = time.time_ns()
+                                age_ns = now_wall_ns - ts_val
+                                # Allow up to 2 seconds negative drift for NTP adjustments
+                                if age_ns < -2_000_000_000 or age_ns > staleness_limit_ns:
+                                    tpu0_rate = 0
+                                    continue
+                            else:
+                                age_ns = now_ns - ts_val
+                                if age_ns < 0 or age_ns > staleness_limit_ns:
+                                    tpu0_rate = 0
+                                    continue
+                        except (ValueError, TypeError) as exc:
+                            sys.stderr.write(f'[burst-daemon] Note: corrupt timestampNs in {p}: {exc}\n')
+                            tpu0_rate = 0
+                            continue
+                    else:
+                        tpu0_rate = 0
+                        continue
+
                     if cdata.get('status') == 'ACTIVE':
                         raw_val = cdata.get('inferencesPerSecond', 0)
                         try:
@@ -456,7 +537,12 @@ def telemetry_poller_worker():
                     else:
                         tpu0_rate = 0
                     break
-            except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError) as e:
+            except json.JSONDecodeError as e:
+                # Council Invariant 3 (Fail-Closed): Torn reads from concurrent driver writes fail-closed to 0
+                sys.stderr.write(f'[burst-daemon] Note: torn read / invalid JSON in {p}: {e}\n')
+                tpu0_rate = 0
+                continue
+            except (FileNotFoundError, PermissionError, OSError) as e:
                 sys.stderr.write(f'[burst-daemon] Note: cannot read {p}: {e}\n')
                 continue
 

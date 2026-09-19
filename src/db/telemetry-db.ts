@@ -456,13 +456,21 @@ export function downsampleCoralPoints(
     let sumLatP50 = 0n;
     let sumLatP99 = 0n;
     let sumUsb = 0n;
+    let sumCoral1Ips = 0n;
+    let sumCoral2Ips = 0n;
+    let sumCoral1LatP50 = 0n;
+    let sumCoral2LatP50 = 0n;
 
     for (const pt of chunk) {
-      sumIps += BigInt(pt.inferencesPerSecond || 0n);
-      sumTap += BigInt(pt.tapPacketsPerSecond || 0n);
-      sumLatP50 += BigInt(pt.latencyP50Us || 0n);
-      sumLatP99 += BigInt(pt.latencyP99Us || 0n);
-      sumUsb += BigInt(pt.usbThroughputKbps || 0n);
+      sumIps += pt.inferencesPerSecond ?? 0n;
+      sumTap += pt.tapPacketsPerSecond ?? 0n;
+      sumLatP50 += pt.latencyP50Us ?? 0n;
+      sumLatP99 += pt.latencyP99Us ?? 0n;
+      sumUsb += pt.usbThroughputKbps ?? 0n;
+      sumCoral1Ips += pt.coral1Ips ?? 0n;
+      sumCoral2Ips += pt.coral2Ips ?? 0n;
+      sumCoral1LatP50 += pt.coral1LatencyP50Us ?? 0n;
+      sumCoral2LatP50 += pt.coral2LatencyP50Us ?? 0n;
     }
 
     const countBig = BigInt(chunk.length);
@@ -476,6 +484,10 @@ export function downsampleCoralPoints(
       latencyP99Us: sumLatP99 / countBig,
       // Council Invariant 2: Banish floating point from bandwidth metering. Strict BigInt integer units.
       usbThroughputKbps: sumUsb / countBig,
+      coral1Ips: sumCoral1Ips / countBig,
+      coral2Ips: sumCoral2Ips / countBig,
+      coral1LatencyP50Us: sumCoral1LatP50 / countBig,
+      coral2LatencyP50Us: sumCoral2LatP50 / countBig,
     });
   }
 
@@ -517,6 +529,10 @@ function parseHistoricalCoralPoint(raw: unknown, defaultTimestampMs: number): Co
     latencyP50Us: BigInt(String(p['latencyP50Us'] ?? 0)),
     latencyP99Us: BigInt(String(p['latencyP99Us'] ?? 0)),
     usbThroughputKbps: BigInt(String(p['usbThroughputKbps'] ?? 0)),
+    coral1Ips: BigInt(String(p['coral1Ips'] ?? 0)),
+    coral2Ips: BigInt(String(p['coral2Ips'] ?? 0)),
+    coral1LatencyP50Us: BigInt(String(p['coral1LatencyP50Us'] ?? 0)),
+    coral2LatencyP50Us: BigInt(String(p['coral2LatencyP50Us'] ?? 0)),
   };
 }
 

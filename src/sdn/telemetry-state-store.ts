@@ -127,6 +127,10 @@ export function deserializeTelemetryState(jsonString: string): PersistentTelemet
         latencyP50Us: BigInt(String(p['latencyP50Us'] ?? '0')),
         latencyP99Us: BigInt(String(p['latencyP99Us'] ?? '0')),
         usbThroughputKbps: BigInt(String(p['usbThroughputKbps'] ?? '0')),
+        coral1Ips: BigInt(String(p['coral1Ips'] ?? '0')),
+        coral2Ips: BigInt(String(p['coral2Ips'] ?? '0')),
+        coral1LatencyP50Us: BigInt(String(p['coral1LatencyP50Us'] ?? '0')),
+        coral2LatencyP50Us: BigInt(String(p['coral2LatencyP50Us'] ?? '0')),
       };
     });
 

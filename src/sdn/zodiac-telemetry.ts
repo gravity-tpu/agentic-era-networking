@@ -164,6 +164,12 @@ export interface CoralTimeSeriesPoint {
   readonly latencyP50Us: bigint;
   readonly latencyP99Us: bigint;
   readonly usbThroughputKbps: bigint;
+  /** Per-device telemetry: Coral TPU #1 (Wire Tap DPI) rate */
+  readonly coral1Ips: bigint;
+  /** Per-device telemetry: Coral TPU #2 (DNS Sentinel) rate */
+  readonly coral2Ips: bigint;
+  readonly coral1LatencyP50Us: bigint;
+  readonly coral2LatencyP50Us: bigint;
 }
 
 export interface CoralDeviceDescriptor {
@@ -176,6 +182,12 @@ export interface CoralDeviceDescriptor {
   readonly assignedRole: 'TAP_PACKET_CLASSIFIER' | 'DNS_SENTINEL' | 'GENERAL_INFERENCE';
   readonly status: 'STANDBY' | 'INFERENCE_ACTIVE' | 'NOT_DETECTED';
   readonly peakTopsInt8: number;
+  readonly inferencesPerSecond: bigint;
+  readonly totalInferences: bigint;
+  readonly latencyP50Ns: bigint;
+  readonly latencyP99Ns: bigint;
+  readonly loadedModel?: string;
+  readonly usbPath?: string;
 }
 
 export interface CoralTelemetrySnapshot {
@@ -514,6 +526,11 @@ export function createDefaultCoralSnapshot(isDisconnected: boolean = true): Cora
             assignedRole: 'TAP_PACKET_CLASSIFIER',
             status: 'STANDBY',
             peakTopsInt8: 4,
+            inferencesPerSecond: 0n,
+            totalInferences: 0n,
+            latencyP50Ns: 0n,
+            latencyP99Ns: 0n,
+            loadedModel: 'MobileNet V2 224x224 INT8 - Wire Tap DPI',
           },
         ],
     name: 'Google Coral Edge TPU USB Accelerator',
@@ -635,6 +652,11 @@ export function generateCoralHistoricalTelemetry(
     const latP99 = snapshot.status === 'INFERENCE_ACTIVE' ? 480n : 0n;
     const usbKbps = snapshot.detected && ips > 0n ? (ips * 300n * 8n) / 1000n : 0n;
 
+    const coral1Ips = snapshot.devices?.[0]?.inferencesPerSecond ?? (snapshot.status === 'INFERENCE_ACTIVE' ? ips : 0n);
+    const coral2Ips = snapshot.devices?.[1]?.inferencesPerSecond ?? 0n;
+    const coral1LatP50 = snapshot.devices?.[0]?.latencyP50Ns !== undefined ? snapshot.devices[0].latencyP50Ns / 1000n : latP50;
+    const coral2LatP50 = snapshot.devices?.[1]?.latencyP50Ns !== undefined ? snapshot.devices[1].latencyP50Ns / 1000n : 0n;
+
     points.push({
       timestampMs,
       inferencesPerSecond: ips,
@@ -642,6 +664,10 @@ export function generateCoralHistoricalTelemetry(
       latencyP50Us: latP50,
       latencyP99Us: latP99,
       usbThroughputKbps: usbKbps,
+      coral1Ips,
+      coral2Ips,
+      coral1LatencyP50Us: coral1LatP50,
+      coral2LatencyP50Us: coral2LatP50,
     });
   }
 

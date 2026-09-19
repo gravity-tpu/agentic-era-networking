@@ -409,10 +409,18 @@ async function executeJetsonHardwareProbe(
     parseFloat(load[2]!.toFixed(2)),
   ];
 
-  const [hasMediaZodiac, hasMmcblk] = await Promise.all([
+  const [hasMediaZodiac, hasMmcblk, rawGpuLoad] = await Promise.all([
     fileExistsAsync('/media/zodiac'),
     fileExistsAsync('/dev/mmcblk0p1'),
+    readSysfsNumber('/sys/devices/platform/bus@0/17000000.gpu/load')
+      .then(async (val) => val ?? (await readSysfsNumber('/sys/devices/gpu.0/load'))),
   ]);
+
+  let gpuUtilizationPct = 0;
+  if (rawGpuLoad !== null) {
+    // Tegra sysfs load is reported in per-mille (0..1000 = 0..100%) or percentage (0..100)
+    gpuUtilizationPct = rawGpuLoad > 100 ? Math.floor(rawGpuLoad / 10) : rawGpuLoad;
+  }
 
   return {
     status: 'online',
@@ -424,7 +432,7 @@ async function executeJetsonHardwareProbe(
     cpuCoresPct,
     gpuModel: 'NVIDIA Ampere (1024 CUDA Cores + 32 Tensor Cores)',
     gpuCudaCores: 1024,
-    gpuUtilizationPct: 0,
+    gpuUtilizationPct,
     gpuFreqMhz: 612,
     ramUsedBytes: ramUsed,
     ramTotalBytes: ramTotal,
@@ -798,9 +806,14 @@ export async function probeCoralHardware(
         ? 'Google Coral Edge TPU #2 (DNS Sentinel)'
         : `Google Coral Edge TPU #${unitIdx + 1}`;
 
-      const unitStatus = unitIdx === 0
-        ? (resolvedDaemon?.status === 'INFERENCE_ACTIVE' ? 'INFERENCE_ACTIVE' : 'STANDBY')
-        : (resolvedBurst?.status === 'INFERENCE_ACTIVE' ? 'INFERENCE_ACTIVE' : 'STANDBY');
+      const telemetrySource = unitIdx === 0 ? resolvedDaemon : (unitIdx === 1 ? resolvedBurst : null);
+      const isUnitActive = telemetrySource?.status === 'INFERENCE_ACTIVE';
+      const unitStatus = isUnitActive ? 'INFERENCE_ACTIVE' : 'STANDBY';
+      const unitIps = isUnitActive ? (telemetrySource?.inferencesPerSecond ?? 0n) : 0n;
+      const unitTotal = telemetrySource?.totalInferences ?? 0n;
+      const unitP50 = isUnitActive ? (telemetrySource?.latencyP50Ns ?? 0n) : 0n;
+      const unitP99 = isUnitActive ? (telemetrySource?.latencyP99Ns ?? 0n) : 0n;
+      const unitModel = telemetrySource?.model ?? (unitIdx === 0 ? 'MobileNet V2 INT8 - Wire Tap DPI' : 'RFC 1035 DNS Sentinel');
 
       return {
         id: `coral-${unitIdx}`,
@@ -812,6 +825,12 @@ export async function probeCoralHardware(
         assignedRole,
         status: unitStatus,
         peakTopsInt8: 4,
+        inferencesPerSecond: unitIps,
+        totalInferences: unitTotal,
+        latencyP50Ns: unitP50,
+        latencyP99Ns: unitP99,
+        loadedModel: unitModel,
+        usbPath: u.dirName,
       };
     });
 

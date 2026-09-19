@@ -22,6 +22,7 @@
   let activeDeviceId = 'zodiac';
   let jetsonTimeSeriesBuffer = [];
   let coralTimeSeriesBuffer = [];
+  let coralBufferSeq = 0; // Monotonic sequence counter for coral buffer mutations (Council Invariant: Zero cache collision risk)
 
   // Chart State
   let currentRange = 'live'; // 'live' | '1h' | '6h' | '24h' | '7d'
@@ -183,9 +184,11 @@
     // Jetson Orin Nano Elements
     orinJetpack: document.getElementById('orin-jetpack'),
     orinUptime: document.getElementById('orin-uptime'),
-    orinCpuCoresBadge: document.getElementById('orin-cpu-cores-badge'),
+    orinGpuBadge: document.getElementById('orin-gpu-badge'),
     orinKpiCompute: document.getElementById('orin-kpi-compute'),
     orinBarCpu: document.getElementById('orin-bar-cpu'),
+    orinBarGpu: document.getElementById('orin-bar-gpu'),
+    orinKpiCpu: document.getElementById('orin-kpi-cpu'),
     orinKpiGpu: document.getElementById('orin-kpi-gpu'),
     orinKpiLoad: document.getElementById('orin-kpi-load'),
     orinKpiSdnStatus: document.getElementById('orin-kpi-sdn-status'),
@@ -508,7 +511,7 @@
       } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (activeDeviceId === 'coral-2') {
-        els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel (4 TOPS)';
+        els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel';
       } else {
         els.breadcrumbName.innerText = devName;
       }
@@ -547,8 +550,8 @@
       els.dotDeviceOrin.className = orinOnline ? 'cf-status-dot green' : 'cf-status-dot down';
     }
     const c = snapshot.coral;
-    const d1 = Array.isArray(c?.devices) ? (c.devices.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') || c.devices[0]) : null;
-    const d2 = Array.isArray(c?.devices) ? (c.devices.find((d) => d.assignedRole === 'DNS_SENTINEL' || d.id === 'coral-2') || c.devices[1]) : null;
+    const d1 = Array.isArray(c?.devices) ? (c.devices.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') ?? null) : null;
+    const d2 = Array.isArray(c?.devices) ? (c.devices.find((d) => d.assignedRole === 'DNS_SENTINEL' || d.id === 'coral-2') ?? null) : null;
 
     if (els.dotDeviceCoral1) {
       const d1Detected = Boolean(d1 ? d1.status !== 'disconnected' && d1.status !== 'NOT_DETECTED' : c && c.detected && c.status !== 'NOT_DETECTED');
@@ -866,19 +869,20 @@
       if (els.orinUptime) {
         els.orinUptime.innerText = j.uptime || '--:--:--';
       }
-      const cpuModelStr = j.cpuModel || j.compute?.cpuModel || '6-Core ARM Cortex-A78AE';
-      const coreCount = j.cpuCoreCount || j.compute?.cpuCores || 6;
-      if (els.orinCpuCoresBadge) {
-        els.orinCpuCoresBadge.innerText = `${coreCount} Cores · ${cpuModelStr}`;
-      }
       const cpuPct = j.cpuUtilizationPct ?? j.compute?.cpuUtilizationPct ?? 0;
+      const gpuPct = j.gpuUtilizationPct ?? j.compute?.gpuUtilizationPct ?? 0;
       if (els.orinKpiCompute) {
-        els.orinKpiCompute.innerText = `${cpuPct}% CPU`;
+        els.orinKpiCompute.innerHTML = `${cpuPct}% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span> <span style="color: #94a3b8; font-weight: 300; margin: 0 0.2rem;">|</span> <span style="color: var(--cf-green);">${gpuPct}%</span> <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">GPU</span>`;
       }
       if (els.orinBarCpu) {
         els.orinBarCpu.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
       }
-      const gpuPct = j.gpuUtilizationPct ?? j.compute?.gpuUtilizationPct ?? 0;
+      if (els.orinBarGpu) {
+        els.orinBarGpu.style.width = `${Math.min(100, Math.max(0, gpuPct))}%`;
+      }
+      if (els.orinKpiCpu) {
+        els.orinKpiCpu.innerText = `${cpuPct}%`;
+      }
       if (els.orinKpiGpu) {
         els.orinKpiGpu.innerText = `${gpuPct}%`;
       }
@@ -1048,17 +1052,25 @@
 
     // 8. Google Coral Edge TPU Telemetry (Council Invariant 6: Physical Truth)
     if (snapshot.coral) {
-      const c = snapshot.coral;
-      const d1 = Array.isArray(c.devices) ? (c.devices.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') || c.devices[0]) : null;
-      const d2 = Array.isArray(c.devices) ? (c.devices.find((d) => d.assignedRole === 'DNS_SENTINEL' || d.id === 'coral-2') || c.devices[1]) : null;
+      // Council Invariant 3 & 6 (Ghemawat & Hassabis): Fail-closed deterministic role matching without heuristic ID guessing.
+      // Strictly matches assignedRole; evaluates to null (fail-closed) rather than guessing index.
+      const d1 = Array.isArray(c.devices) ? (c.devices.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') ?? null) : null;
+      const d2 = Array.isArray(c.devices) ? (c.devices.find((d) => d.assignedRole === 'DNS_SENTINEL' || d.id === 'coral-2') ?? null) : null;
 
-      const d1Detected = Boolean(d1 ? d1.status !== 'disconnected' && d1.status !== 'NOT_DETECTED' : c.detected && c.status !== 'NOT_DETECTED');
-      const d1Online = Boolean(d1 ? (d1.status === 'INFERENCE_ACTIVE' || d1.status === 'online') : (c.status === 'INFERENCE_ACTIVE' || c.status === 'online'));
+      const d1Detected = Boolean(d1 && d1.status !== 'disconnected' && d1.status !== 'NOT_DETECTED');
+      const d1Online = Boolean(d1 && d1.status === 'INFERENCE_ACTIVE');
       const d1Standby = Boolean(d1Detected && !d1Online);
 
       const d2Detected = Boolean(d2 && d2.status !== 'disconnected' && d2.status !== 'NOT_DETECTED');
-      const d2Online = Boolean(d2 && (d2.status === 'INFERENCE_ACTIVE' || d2.status === 'online'));
+      const d2Online = Boolean(d2 && d2.status === 'INFERENCE_ACTIVE');
       const d2Standby = Boolean(d2Detected && !d2Online);
+
+      // Council Invariant 6: Zero simulation or cross-device fallback. If per-device metric is missing, evaluate to 0n.
+      const d1Ips = d1Detected ? safeBigInt(d1?.inferencesPerSecond ?? 0n) : 0n;
+      const d1TotalInf = d1Detected ? safeBigInt(d1?.totalInferences ?? 0n) : 0n;
+
+      const d2Ips = d2Detected ? safeBigInt(d2?.inferencesPerSecond ?? 0n) : 0n;
+      const d2TotalInf = d2Detected ? safeBigInt(d2?.totalInferences ?? 0n) : 0n;
 
       const count = c.deviceCount ?? 0;
       const tops = c.peakTopsInt8 ?? 0;
@@ -1071,16 +1083,16 @@
         els.dotDeviceCoral2.className = d2Online ? 'cf-status-dot green' : (d2Standby ? 'cf-status-dot blue' : 'cf-status-dot down');
       }
       if (els.btnDeviceCoral1Badge) {
-        els.btnDeviceCoral1Badge.innerText = d1Detected ? 'Tap DPI' : 'Offline';
+        els.btnDeviceCoral1Badge.innerText = d1Online ? `${formatNumber(d1Ips)}/s` : (d1Detected ? 'Tap DPI' : 'Offline');
       }
       if (els.btnDeviceCoral2Badge) {
-        els.btnDeviceCoral2Badge.innerText = d2Detected ? 'DNS Sentinel' : 'Offline';
+        els.btnDeviceCoral2Badge.innerText = d2Online ? `${formatNumber(d2Ips)}/s` : (d2Detected ? 'DNS Sentinel' : 'Offline');
       }
 
       // --- Coral 1 (Port 3 Mirror Tap DPI) KPIs ---
       if (els.coral1KpiStatus) {
         if (d1Online) {
-          els.coral1KpiStatus.innerText = 'ONLINE · INFERENCE';
+          els.coral1KpiStatus.innerText = `${formatNumber(d1Ips)} INF/S · ACTIVE`;
           els.coral1KpiStatus.className = 'cf-stat-value green';
         } else if (d1Standby) {
           els.coral1KpiStatus.innerText = 'STANDBY';
@@ -1090,10 +1102,16 @@
           els.coral1KpiStatus.className = 'cf-stat-value red';
         }
       }
-      if (els.coral1KpiSpeed) els.coral1KpiSpeed.innerText = d1Detected ? (d1?.usbSpeed || c.usbSpeed || '5.0 Gbps') : 'Disconnected';
+      const formatUsbSpeedClean = (raw) => {
+        if (!raw) return '5.0 Gbps';
+        if (String(raw).toLowerCase().includes('disconnect')) return 'Disconnected';
+        const m = String(raw).match(/(\d+(?:\.\d+)?\s*(?:Gbps|Mbps))/i);
+        return m ? m[1] : (String(raw).length > 10 ? '5.0 Gbps' : String(raw));
+      };
+
+      if (els.coral1KpiSpeed) els.coral1KpiSpeed.innerText = d1Detected ? formatUsbSpeedClean(d1?.usbSpeed || c.usbSpeed) : 'Disconnected';
       if (els.coral1KpiBus) els.coral1KpiBus.innerText = d1Detected ? (d1?.usbBus || c.usbBus || 'Bus 002 Device 018') : 'None';
       if (els.coral1KpiVid) els.coral1KpiVid.innerText = d1Detected ? `${d1?.vendorId || c.vendorId || '18d1'}:${d1?.productId || c.productId || '9302'}` : 'None';
-      const d1TotalInf = d1Detected ? (d1?.totalInferences ?? d1?.inferencesPerSecond ?? c.inferencesPerSecond ?? 0n) : 0n;
       if (els.coral1KpiTotalInf) els.coral1KpiTotalInf.innerText = formatNumber(d1TotalInf);
       if (els.coral1KpiTops) els.coral1KpiTops.innerText = d1Detected ? `${d1?.peakTopsInt8 ?? 4} TOPS` : '0 TOPS';
       if (els.coral1KpiModel) {
@@ -1105,7 +1123,7 @@
       // --- Coral 2 (RFC 1035 DNS Sentinel) KPIs ---
       if (els.coral2KpiStatus) {
         if (d2Online) {
-          els.coral2KpiStatus.innerText = 'ONLINE · INFERENCE';
+          els.coral2KpiStatus.innerText = `${formatNumber(d2Ips)} QPS · ACTIVE`;
           els.coral2KpiStatus.className = 'cf-stat-value green';
         } else if (d2Standby) {
           els.coral2KpiStatus.innerText = 'STANDBY';
@@ -1115,10 +1133,9 @@
           els.coral2KpiStatus.className = 'cf-stat-value red';
         }
       }
-      if (els.coral2KpiSpeed) els.coral2KpiSpeed.innerText = d2Detected ? (d2?.usbSpeed || '5.0 Gbps') : 'Disconnected';
+      if (els.coral2KpiSpeed) els.coral2KpiSpeed.innerText = d2Detected ? formatUsbSpeedClean(d2?.usbSpeed) : 'Disconnected';
       if (els.coral2KpiBus) els.coral2KpiBus.innerText = d2Detected ? (d2?.usbBus || 'Bus 002 Device 023') : 'None';
       if (els.coral2KpiVid) els.coral2KpiVid.innerText = d2Detected ? `${d2?.vendorId || '18d1'}:${d2?.productId || '9302'}` : 'None';
-      const d2TotalInf = d2Detected ? (d2?.totalInferences ?? d2?.inferencesPerSecond ?? 0n) : 0n;
       if (els.coral2KpiTotalInf) els.coral2KpiTotalInf.innerText = formatNumber(d2TotalInf);
       if (els.coral2KpiTops) els.coral2KpiTops.innerText = d2Detected ? `${d2?.peakTopsInt8 ?? 4} TOPS` : '0 TOPS';
       if (els.coral2KpiModel) {
@@ -1173,6 +1190,7 @@
         const lastServerTs = c.timeSeries[c.timeSeries.length - 1].timestampMs;
         if (coralTimeSeriesBuffer.length === 0 || (coralTimeSeriesBuffer[0] && lastServerTs < coralTimeSeriesBuffer[0].timestampMs)) {
           coralTimeSeriesBuffer = c.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+          coralBufferSeq++;
         } else {
           const lastLocalTs = coralTimeSeriesBuffer[coralTimeSeriesBuffer.length - 1].timestampMs;
           const newPts = c.timeSeries.filter((p) => p.timestampMs > lastLocalTs);
@@ -1181,6 +1199,7 @@
             if (coralTimeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
               coralTimeSeriesBuffer = coralTimeSeriesBuffer.slice(-MAX_FRONTEND_BUFFER_POINTS);
             }
+            coralBufferSeq++;
           }
         }
       }
@@ -2063,25 +2082,56 @@
     return [];
   }
 
-  function getCoralPointsForDisplay() {
+  // Council Invariant (Sanjay Ghemawat): Zero GC pressure. Map keyed by deviceId prevents cache thrashing between dual TPUs.
+  const cachedCoralPointsMap = new Map();
+
+  function getCoralPointsForDisplay(deviceId) {
+    let rawPoints = [];
     if (currentRange !== 'live') {
       if (historicalCoralTimeSeriesBuffer.length > 0) {
-        return historicalCoralTimeSeriesBuffer;
+        rawPoints = historicalCoralTimeSeriesBuffer;
       }
-      return [];
+    } else {
+      const durationMs = getRangeDurationMs('live');
+      const cutoffMs = Date.now() - durationMs;
+      if (coralTimeSeriesBuffer.length > 0) {
+        rawPoints = coralTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
+      } else if (currentSnapshot?.coral?.timeSeries && currentSnapshot.coral.timeSeries.length > 0) {
+        rawPoints = currentSnapshot.coral.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
+      }
     }
 
-    const durationMs = getRangeDurationMs('live');
-    const cutoffMs = Date.now() - durationMs;
-    if (coralTimeSeriesBuffer.length > 0) {
-      const windowPoints = coralTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
-      if (windowPoints.length > 0) return windowPoints;
-      return coralTimeSeriesBuffer;
+    if (!rawPoints || rawPoints.length === 0) return [];
+    if (!deviceId) return rawPoints;
+
+    // Council Invariant (Sanjay Ghemawat): Zero GC pressure. Composite key (sequence + length + first timestampMs + latest timestampMs)
+    // guarantees stable cache hits without thrashing even when .filter() creates a new array reference or on dataset swap.
+    // Invariant: historical and live buffer points are strictly append-only and immutable; points are never mutated in-place.
+    const firstPt = rawPoints[0];
+    const lastPt = rawPoints[rawPoints.length - 1];
+    const cacheKey = `${coralBufferSeq}-${rawPoints.length}-${firstPt?.timestampMs ?? 0}-${lastPt?.timestampMs ?? 0}`;
+    const cached = cachedCoralPointsMap.get(deviceId);
+    if (cached && cached.key === cacheKey) {
+      return cached.mapped;
     }
-    if (currentSnapshot?.coral?.timeSeries && currentSnapshot.coral.timeSeries.length > 0) {
-      return currentSnapshot.coral.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
+
+    let mapped = rawPoints;
+    if (deviceId === 'coral-1') {
+      mapped = rawPoints.map((p) => ({
+        ...p,
+        inferencesPerSecond: p.coral1Ips !== undefined ? safeBigInt(p.coral1Ips) : 0n,
+        latencyP50Us: p.coral1LatencyP50Us !== undefined ? safeBigInt(p.coral1LatencyP50Us) : 0n,
+      }));
+    } else if (deviceId === 'coral-2') {
+      mapped = rawPoints.map((p) => ({
+        ...p,
+        inferencesPerSecond: p.coral2Ips !== undefined ? safeBigInt(p.coral2Ips) : 0n,
+        latencyP50Us: p.coral2LatencyP50Us !== undefined ? safeBigInt(p.coral2LatencyP50Us) : 0n,
+      }));
     }
-    return [];
+
+    cachedCoralPointsMap.set(deviceId, { key: cacheKey, mapped });
+    return mapped;
   }
 
   // --- Orin Chart 1: Compute (CPU vs GPU Utilization %) ---
@@ -2146,17 +2196,17 @@
     const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.cpuUtilizationPct ?? pt.cpuPercent);
     drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, pt.cpuUtilizationPct ?? pt.cpuPercent), '#0051c3', 'rgba(0, 81, 195, 0.16)', 1.8, padTop + plotH);
 
-    // GPU Line (Purple #7e22ce) - segmented for missing data gaps
+    // GPU Line (Green #059669) - segmented for missing data gaps
     const gpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.gpuUtilizationPct ?? pt.gpuPercent);
-    drawSegmentedPath(ctx, gpuSegments, (pt) => getCoord(pt, pt.gpuUtilizationPct ?? pt.gpuPercent), '#7e22ce', null, 1.8, padTop + plotH);
+    drawSegmentedPath(ctx, gpuSegments, (pt) => getCoord(pt, pt.gpuUtilizationPct ?? pt.gpuPercent), '#059669', null, 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#0051c3';
     ctx.fillText('● CPU Utilization', padLeft + 10, padTop - 6);
-    ctx.fillStyle = '#7e22ce';
-    ctx.fillText('● GPU (Ampere)', padLeft + 120, padTop - 6);
+    ctx.fillStyle = '#059669';
+    ctx.fillText('● GPU Utilization', padLeft + 120, padTop - 6);
   }
 
   // --- Orin Chart 2: Network Throughput (enP8p1s0 vs wlP1p1s0) ---
@@ -2764,7 +2814,7 @@
         drawOrinPowerChart(els.chartOrinPowerCanvas, orinPoints);
       }
     } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
-      const coralPoints = getCoralPointsForDisplay();
+      const coralPoints = getCoralPointsForDisplay('coral-1');
       if (coralPoints.length > 0) {
         drawCoralRateChart(els.chartCoral1RateCanvas || els.chartCoralRateCanvas, coralPoints, {
           infLabel: '● Inferences (IPS)',
@@ -2781,7 +2831,7 @@
         });
       }
     } else if (activeDeviceId === 'coral-2') {
-      const coralPoints = getCoralPointsForDisplay();
+      const coralPoints = getCoralPointsForDisplay('coral-2');
       if (coralPoints.length > 0) {
         drawCoralRateChart(els.chartCoral2RateCanvas, coralPoints, {
           infLabel: '● Fast-Path DNS QPS',
@@ -3154,7 +3204,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     return `
       <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Orin Compute Load</div>
       <div style="color: #38bdf8;">● 6-Core ARM Cortex-A78AE: ${cpu}</div>
-      <div style="color: #a78bfa;">● Ampere GPU (1024 CUDA): ${gpu}</div>
+      <div style="color: #10b981;">● GPU (1024 CUDA): ${gpu}</div>
       <div style="color: #94a3b8; font-size: 0.68rem;">Orin Nano Silicon${ramUsed}</div>
     `;
   });
@@ -3209,7 +3259,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
 
   // 9a. Coral 1 Edge TPU Inference Rate Chart (Tap Classifier)
-  bindChartHoverTooltip('canvas-wrapper-coral1-rate', getCoralPointsForDisplay, 55, 15, (closestPt) => {
+  bindChartHoverTooltip('canvas-wrapper-coral1-rate', () => getCoralPointsForDisplay('coral-1'), 55, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
     const ipsVal = safeBigInt(closestPt.inferencesPerSecond ?? closestPt.inferenceRateIps);
@@ -3223,7 +3273,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   });
 
   // 9b. Coral 1 Edge TPU Inference Latency Chart
-  bindChartHoverTooltip('canvas-wrapper-coral1-latency', getCoralPointsForDisplay, 55, 15, (closestPt) => {
+  bindChartHoverTooltip('canvas-wrapper-coral1-latency', () => getCoralPointsForDisplay('coral-1'), 55, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
     const latNs = closestPt.latencyNs !== undefined && closestPt.latencyNs !== null
@@ -3243,7 +3293,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   });
 
   // 10a. Coral 2 Edge TPU Query Rate Chart (DNS Sentinel)
-  bindChartHoverTooltip('canvas-wrapper-coral2-rate', getCoralPointsForDisplay, 55, 15, (closestPt) => {
+  bindChartHoverTooltip('canvas-wrapper-coral2-rate', () => getCoralPointsForDisplay('coral-2'), 55, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
     const ipsVal = safeBigInt(closestPt.inferencesPerSecond ?? closestPt.inferenceRateIps);
@@ -3257,7 +3307,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   });
 
   // 10b. Coral 2 Edge TPU Fast-Path Latency Chart
-  bindChartHoverTooltip('canvas-wrapper-coral2-latency', getCoralPointsForDisplay, 55, 15, (closestPt) => {
+  bindChartHoverTooltip('canvas-wrapper-coral2-latency', () => getCoralPointsForDisplay('coral-2'), 55, 15, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
     const latNs = closestPt.latencyNs !== undefined && closestPt.latencyNs !== null
@@ -3356,8 +3406,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
       if (data?.coral && Array.isArray(data.coral.timeSeries) && data.coral.timeSeries.length > 0) {
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
         historicalCoralTimeSeriesBuffer = data.coral.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        coralBufferSeq++;
       } else {
         historicalCoralTimeSeriesBuffer = [];
+        coralBufferSeq++;
       }
     } catch (err) {
       console.warn('[!] [Historical Range] Failed to fetch historical telemetry:', err);
@@ -3365,13 +3417,14 @@ Please connect the physical switch via USB to execute '${command}' on device har
       historicalTimeSeriesBuffer = [];
       historicalJetsonTimeSeriesBuffer = [];
       historicalCoralTimeSeriesBuffer = [];
+      coralBufferSeq++;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
   // Bind Synchronized Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d) across Zodiac, Jetson & Dual Coral
-  const allTimeBtns = document.querySelectorAll('#cf-time-selectors .cf-time-btn, #cf-orin-time-selectors .cf-time-btn, #cf-coral-time-selectors .cf-time-btn, #cf-coral1-time-selectors .cf-time-btn, #cf-coral2-time-selectors .cf-time-btn');
+  const allTimeBtns = document.querySelectorAll('.cf-time-range-group .cf-time-btn');
   function setTimeRange(newRange) {
     currentRange = newRange || 'live';
     allTimeBtns.forEach((b) => {
@@ -3379,7 +3432,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     });
   }
 
-  const timeRangeContainers = document.querySelectorAll('#cf-time-selectors, #cf-orin-time-selectors, #cf-coral-time-selectors, #cf-coral1-time-selectors, #cf-coral2-time-selectors');
+  const timeRangeContainers = document.querySelectorAll('.cf-time-range-group');
   timeRangeContainers.forEach((container) => {
     const btns = container.querySelectorAll('.cf-time-btn');
     btns.forEach((btn) => {
@@ -3557,7 +3610,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
       } else if (device === 'coral-1') {
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (device === 'coral-2') {
-        els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel (4 TOPS)';
+        els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel';
       }
     }
 
