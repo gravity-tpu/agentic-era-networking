@@ -50,9 +50,10 @@ MAX_L4_PORT = 65535            # IANA 16-bit transport layer port space
 
 DEFAULT_CONTROLLER_URL = os.environ.get('SDN_CONTROLLER_URL', 'http://127.0.0.1:3003')
 DEFAULT_TAP_IFACE = os.environ.get('TAP_IFACE', 'enx9c69d39dd0a6')
-DEFAULT_ANOMALY_THRESHOLD = float(os.environ.get('GPU_ANOMALY_THRESHOLD', '0.45'))
+DEFAULT_ANOMALY_THRESHOLD = float(os.environ.get('GPU_ANOMALY_THRESHOLD', '0.15'))
 WINDOW_SIZE = 64  # Sliding packet sequence length
 NUM_FEATURES = 4   # [dt_us_norm, length_norm, flags_norm, port_entropy_norm]
+QUEUE_POLL_TIMEOUT_SEC = 0.1  # Bounded polling timeout for ingress queue
 
 @dataclass(frozen=True)
 class QuarantineAlertItem:
@@ -70,22 +71,27 @@ class AdaptiveThresholdController:
     reconstruction error distributions via exponential moving statistics (EMA).
     Dynamically adjusts threshold tau to prevent flap storms under traffic shifts.
     """
-    def __init__(self, initial_threshold: float = 0.45, alpha: float = 0.05, sensitivity_sigmas: float = 3.0):
+    def __init__(self, initial_threshold: float = 0.15, alpha: float = 0.05, sensitivity_sigmas: float = 2.5):
         self.base_threshold = initial_threshold
         self.alpha = alpha
         self.sensitivity = sensitivity_sigmas
-        self.ema_loss: float = initial_threshold * 0.5
-        self.ema_var: float = (initial_threshold * 0.2) ** 2
+        self.ema_loss: float = initial_threshold * 0.75
+        self.ema_var: float = (initial_threshold * 0.15) ** 2
         self.samples: int = 0
 
     def update_and_check(self, current_loss: float) -> Tuple[bool, float]:
         self.samples += 1
-        diff = current_loss - self.ema_loss
-        self.ema_loss += self.alpha * diff
-        self.ema_var = (1.0 - self.alpha) * self.ema_var + self.alpha * (diff ** 2)
         ema_std = math.sqrt(max(1e-6, self.ema_var))
         dynamic_tau = max(self.base_threshold, self.ema_loss + (self.sensitivity * ema_std))
         is_anomaly = current_loss >= dynamic_tau
+
+        # Council Invariant 5: Only incorporate non-anomalous background traffic into
+        # the running baseline distribution to prevent baseline pollution during malicious bursts.
+        if not is_anomaly:
+            diff = current_loss - self.ema_loss
+            self.ema_loss += self.alpha * diff
+            self.ema_var = (1.0 - self.alpha) * self.ema_var + self.alpha * (diff ** 2)
+
         return is_anomaly, dynamic_tau
 
 stop_event = False
@@ -116,68 +122,138 @@ class Gpu1DAutoencoder:
         self.in_channels = in_channels
         self.device_name = "CPU (Fallback)"
         self.has_cuda = False
+        self.cuda_lib = None
         self.torch_mod = None
         self.model = None
 
-        try:
-            import torch
-            import torch.nn as nn
-            self.torch_mod = torch
-
-            if torch.cuda.is_available():
-                self.has_cuda = True
-                self.device = torch.device('cuda:0')
-                self.device_name = f"NVIDIA Ampere CUDA ({torch.cuda.get_device_name(0)})"
-            else:
-                self.device = torch.device('cpu')
-                self.device_name = "PyTorch CPU"
-
-            # 1D-CNN Encoder-Decoder Architecture
-            class Conv1DAutoencoderNet(nn.Module):
-                def __init__(self, channels: int):
-                    super().__init__()
-                    # Encoder: (Batch, channels, 64) -> (Batch, 16, 32) -> (Batch, 8, 16)
-                    self.encoder = nn.Sequential(
-                        nn.Conv1d(channels, 16, kernel_size=3, stride=2, padding=1),
-                        nn.ReLU(inplace=True),
-                        nn.Conv1d(16, 8, kernel_size=3, stride=2, padding=1),
-                        nn.ReLU(inplace=True),
-                    )
-                    # Decoder: (Batch, 8, 16) -> (Batch, 16, 32) -> (Batch, channels, 64)
-                    self.decoder = nn.Sequential(
-                        nn.ConvTranspose1d(8, 16, kernel_size=4, stride=2, padding=1),
-                        nn.ReLU(inplace=True),
-                        nn.ConvTranspose1d(16, channels, kernel_size=4, stride=2, padding=1),
-                        nn.Sigmoid(),
-                    )
-
-                def forward(self, x):
-                    encoded = self.encoder(x)
-                    decoded = self.decoder(encoded)
-                    return decoded
-
-            self.model = Conv1DAutoencoderNet(in_channels).to(self.device)
-            self.model.eval()
-            if self.has_cuda:
-                self.model.half()  # INT8/FP16 Tensor Core execution
-            self.criterion = nn.MSELoss(reduction='none')
-
-        except ImportError:
-            # Standalone NumPy / math fallback for bare environments
+        # 1. First Priority: Native NVIDIA Ampere CUDA Engine via ctypes (Council Invariant 6)
+        cuda_so_candidates = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'libgpu_anomaly.so'),
+            '/home/zodiac/agentic-era-networking/build/libgpu_anomaly.so',
+            '/tmp/libgpu_anomaly.so',
+            'libgpu_anomaly.so'
+        ]
+        
+        # Check if we can build libgpu_anomaly.so on-the-fly if nvcc is available
+        nvcc_bin = '/usr/local/cuda/bin/nvcc'
+        cuda_cu_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'gpu', 'gpu_anomaly_kernel.cu')
+        target_so = cuda_so_candidates[0]
+        if not os.path.exists(target_so) and os.path.exists(nvcc_bin) and os.path.exists(cuda_cu_src):
             try:
-                import numpy as np
-                self.np_mod = np
-                self.device_name = "NumPy Matrix CPU (Fallback)"
-            except ImportError:
-                self.device_name = "Pure Math (Fallback)"
+                os.makedirs(os.path.dirname(target_so), exist_ok=True)
+                import subprocess
+                cuda_arch = os.environ.get('CUDA_ARCH', 'sm_87')
+                compile_cmd = [nvcc_bin, "-O3", f"-arch={cuda_arch}", "-shared", "-Xcompiler", "-fPIC", cuda_cu_src, "-o", target_so]
+                subprocess.run(compile_cmd, check=True, capture_output=True, text=True, timeout=60)
+                sys.stdout.write(f"[gpu-sentinel] Successfully compiled native Ampere CUDA kernel ({cuda_arch}) to {target_so}\n")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+                sys.stderr.write(f"[gpu-sentinel] Note: on-demand nvcc build skipped: {e}\n")
 
-    def compute_anomaly_score(self, feature_matrix: List[List[float]]) -> Tuple[float, float]:
+        import ctypes
+        self.input_dim = seq_len * in_channels
+        self._c_buffer = None
+        self._c_lat_ns = None
+
+        for so_path in cuda_so_candidates:
+            if os.path.exists(so_path):
+                try:
+                    lib = ctypes.CDLL(so_path)
+                    lib.init_cuda_engine.argtypes = []
+                    lib.init_cuda_engine.restype = ctypes.c_int
+                    lib.load_cuda_model_weights.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.c_int]
+                    lib.load_cuda_model_weights.restype = ctypes.c_int
+                    lib.run_gpu_inference.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_ulonglong)]
+                    lib.run_gpu_inference.restype = ctypes.c_float
+                    lib.shutdown_cuda_engine.argtypes = []
+                    lib.shutdown_cuda_engine.restype = None
+
+                    if lib.init_cuda_engine() == 0:
+                        self.cuda_lib = lib
+                        self.has_cuda = True
+                        self.device_name = "NVIDIA Ampere CUDA (Native sm_87 / 1024 Cores)"
+                        # Council Invariant (Systems Sanity / Ghemawat): Pre-allocate static C buffer to eliminate GC thrashing
+                        self._c_buffer = (ctypes.c_float * self.input_dim)()
+                        self._c_lat_ns = ctypes.c_ulonglong(0)
+                        break
+                except Exception as exc:
+                    sys.stderr.write(f"[gpu-sentinel] Note: Failed loading CUDA library {so_path}: {exc}\n")
+
+        # 2. Second Priority: PyTorch CUDA if available
+        if not self.has_cuda:
+            try:
+                import torch
+                import torch.nn as nn
+                self.torch_mod = torch
+
+                if torch.cuda.is_available():
+                    self.has_cuda = True
+                    self.device = torch.device('cuda:0')
+                    self.device_name = f"NVIDIA Ampere CUDA ({torch.cuda.get_device_name(0)})"
+                else:
+                    self.device = torch.device('cpu')
+                    self.device_name = "PyTorch CPU"
+
+                # 1D-CNN Encoder-Decoder Architecture
+                class Conv1DAutoencoderNet(nn.Module):
+                    def __init__(self, channels: int):
+                        super().__init__()
+                        self.encoder = nn.Sequential(
+                            nn.Conv1d(channels, 16, kernel_size=3, stride=2, padding=1),
+                            nn.ReLU(inplace=True),
+                            nn.Conv1d(16, 8, kernel_size=3, stride=2, padding=1),
+                            nn.ReLU(inplace=True),
+                        )
+                        self.decoder = nn.Sequential(
+                            nn.ConvTranspose1d(8, 16, kernel_size=4, stride=2, padding=1),
+                            nn.ReLU(inplace=True),
+                            nn.ConvTranspose1d(16, channels, kernel_size=4, stride=2, padding=1),
+                            nn.Sigmoid(),
+                        )
+
+                    def forward(self, x):
+                        encoded = self.encoder(x)
+                        decoded = self.decoder(encoded)
+                        return decoded
+
+                self.model = Conv1DAutoencoderNet(in_channels).to(self.device)
+                self.model.eval()
+                if self.has_cuda:
+                    self.model.half()  # INT8/FP16 Tensor Core execution
+                self.criterion = nn.MSELoss(reduction='none')
+
+            except ImportError:
+                # Standalone NumPy / math fallback for bare environments
+                try:
+                    import numpy as np
+                    self.np_mod = np
+                    self.device_name = "NumPy Matrix CPU (Fallback)"
+                except ImportError:
+                    self.device_name = "Pure Math (Fallback)"
+
+    def compute_anomaly_score(self, feature_matrix: List[List[float]]) -> Tuple[float, int]:
         """
         Computes the reconstruction error MSE of the sliding packet sequence.
-        Returns: (reconstruction_mse, inference_latency_ms)
+        Returns: (reconstruction_mse, inference_latency_ns)
         """
         t0_ns = time.monotonic_ns()
 
+        # 1. Native Ampere CUDA Execution (Council Invariant 6 - Zero-Allocation Hot Path)
+        if self.cuda_lib is not None and self._c_buffer is not None and self._c_lat_ns is not None:
+            buf = self._c_buffer
+            idx = 0
+            for row in feature_matrix:
+                for val in row:
+                    if idx < self.input_dim:
+                        buf[idx] = val
+                        idx += 1
+            # Council Invariant 1 (Determinism): Zero out remainder to prevent stale memory leakage across windows
+            if idx < self.input_dim:
+                for rem in range(idx, self.input_dim):
+                    buf[rem] = 0.0
+            loss = self.cuda_lib.run_gpu_inference(buf, ctypes.byref(self._c_lat_ns))
+            return float(loss), int(self._c_lat_ns.value)
+
+        # 2. PyTorch CUDA / CPU Fallback
         if self.torch_mod is not None and self.model is not None:
             dtype = self.torch_mod.float16 if self.has_cuda else self.torch_mod.float32
             # Shape: (1, NUM_FEATURES, WINDOW_SIZE)
@@ -191,31 +267,29 @@ class Gpu1DAutoencoder:
 
             t1_ns = time.monotonic_ns()
             # Council Invariant 2: return monotonic integer nanoseconds
-            return float(loss), (t1_ns - t0_ns)
+            return float(loss), int(t1_ns - t0_ns)
 
-        # NumPy fallback
+        # 3. NumPy CPU Fallback
         if hasattr(self, 'np_mod'):
             np = self.np_mod
             mat = np.array(feature_matrix, dtype=np.float32)
-            # Center and compute variance difference as reconstruction proxy
             mean_vec = np.mean(mat, axis=0)
             diff = mat - mean_vec
             loss = float(np.mean(diff ** 2))
             t1_ns = time.monotonic_ns()
-            return loss, (t1_ns - t0_ns)
+            return float(loss), int(t1_ns - t0_ns)
 
-        # Pure math deterministic fallback when PyTorch/NumPy are unavailable.
-        # Mathematical bounds: Features in feature_matrix are normalized to [0.0, 1.0].
-        # Mean deviation proxy: (val - 0.5)^2 has a provable domain of [0.0, 0.25],
-        # where uniform 0.5 has loss 0.0 and polar values (0.0 or 1.0) reach 0.25.
+        # 4. Deterministic Pure Math Fallback (Ghemawat - Zero Generator Overhead)
         total_sq = 0.0
-        count = len(feature_matrix) * (len(feature_matrix[0]) if feature_matrix else 1)
+        count = 0
         for row in feature_matrix:
             for val in row:
-                total_sq += (val - 0.5) ** 2
+                diff = val - 0.5
+                total_sq += diff * diff
+                count += 1
         loss = total_sq / max(1, count)
         t1_ns = time.monotonic_ns()
-        return float(loss), (t1_ns - t0_ns)
+        return float(loss), int(t1_ns - t0_ns)
 
 
 # ---------------------------------------------------------------------------
@@ -380,16 +454,49 @@ def run_sentinel(
     last_stat_ns = start_ns
     pkt_count = 0
 
+    # Council Invariant 2 & Systems Sanity (Dean & Ghemawat):
+    # Decouple raw AF_PACKET wire ingress from CUDA inference using a bounded ring buffer queue.
+    # Prevents kernel socket buffer overflow and microburst tail drops at 10Gbps+ line rates.
+    ingress_queue: queue.Queue[bytes] = queue.Queue(maxsize=2048)
+    ingress_drops = 0
+    capture_errors = 0
+
     sock = None
     if not demo_mode:
         try:
-            sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
-            sock.bind((tap_iface, 0))
+            sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
+            if tap_iface and tap_iface != 'any':
+                sock.bind((tap_iface, 0))
             sock.settimeout(0.5)
             print(f"[gpu-sentinel] Listening for raw Ethernet frames on {tap_iface}...")
         except Exception as e:
-            print(f"[gpu-sentinel] Raw tap socket unavailable ({e}); falling back to synthetic test stream.")
-            demo_mode = True
+            # Council Invariant 3 (Fail-Closed Isolation): Never silently fall back to simulation when physical link fails
+            sys.stderr.write(f"[gpu-sentinel] FATAL: Raw tap socket bind failed on {tap_iface}: {e}\n")
+            sys.stderr.write("[gpu-sentinel] Council Invariant 3 (Fail-Closed Isolation): Aborting execution. Sentinel will not silently simulate live wire without explicit --demo.\n")
+            sys.exit(1)
+
+        def packet_capture_worker():
+            nonlocal ingress_drops, capture_errors
+            while not stop_event and sock is not None:
+                try:
+                    raw_frame, _ = sock.recvfrom(2048)
+                    try:
+                        ingress_queue.put_nowait(raw_frame)
+                    except queue.Full:
+                        # Council Invariant 2: Explicit application-level backpressure accounting
+                        ingress_drops += 1
+                except socket.timeout:
+                    continue
+                except Exception as exc:
+                    capture_errors += 1
+                    # Council Invariant 1 (Zero Suppression of Reality): Never silently swallow thread exceptions
+                    sys.stderr.write(f"[gpu-sentinel] Ingress capture exception: {exc}\n")
+                    if stop_event:
+                        break
+                    time.sleep(0.01)
+
+        capture_thread = threading.Thread(target=packet_capture_worker, daemon=True)
+        capture_thread.start()
 
     try:
         while not stop_event:
@@ -425,35 +532,50 @@ def run_sentinel(
                     continue
             else:
                 try:
-                    raw_data, _ = sock.recvfrom(2048)
-                    pkt_count += 1
-                    frame_len = len(raw_data)
+                    raw_data = ingress_queue.get(timeout=QUEUE_POLL_TIMEOUT_SEC)
+                except queue.Empty:
+                    continue
+
+                pkt_count += 1
+                frame_len = len(raw_data)
+                # Council Invariant 1 (Anti-Shortcut) & Security: Drop malformed runt frames (<14 B Ethernet header)
+                if frame_len < 14:
+                    continue
+
+                try:
                     # Unpack Ethernet header (14 bytes)
                     eth_proto = struct.unpack('!H', raw_data[12:14])[0]
+                    l3_offset = 14
+
+                    # 802.1Q VLAN Tagged frame support (VLAN TPID 0x8100)
+                    if eth_proto == 0x8100 and frame_len >= 18:
+                        eth_proto = struct.unpack('!H', raw_data[16:18])[0]
+                        l3_offset = 18
+
                     proto = 0
                     flags = 0
                     src_p = 0
                     dst_p = 0
                     src_ip = 'unknown'
 
-                    if eth_proto == 0x0800 and len(raw_data) >= 34:  # IPv4
-                        ip_hdr = raw_data[14:34]
-                        proto = ip_hdr[9]
-                        src_ip = socket.inet_ntoa(ip_hdr[12:16])
+                    # IPv4 parsing with dynamic IHL (Internet Header Length) handling (Council Invariant 1)
+                    if eth_proto == 0x0800 and frame_len >= (l3_offset + 20):
+                        ip_hdr = raw_data[l3_offset:l3_offset + 20]
+                        ihl = (ip_hdr[0] & 0x0F) * 4  # Dynamic IHL in bytes
+                        if ihl >= 20 and frame_len >= (l3_offset + ihl):
+                            proto = ip_hdr[9]
+                            src_ip = socket.inet_ntoa(ip_hdr[12:16])
+                            l4_offset = l3_offset + ihl
 
-                        if proto == 6 and len(raw_data) >= 54:  # TCP
-                            tcp_hdr = raw_data[34:54]
-                            src_p, dst_p = struct.unpack('!HH', tcp_hdr[0:4])
-                            flags = tcp_hdr[13]
-                        elif proto == 17 and len(raw_data) >= 42:  # UDP
-                            udp_hdr = raw_data[34:42]
-                            src_p, dst_p = struct.unpack('!HH', udp_hdr[0:4])
+                            if proto == 6 and frame_len >= (l4_offset + 20):  # TCP
+                                src_p, dst_p = struct.unpack('!HH', raw_data[l4_offset:l4_offset + 4])
+                                flags = raw_data[l4_offset + 13]
+                            elif proto == 17 and frame_len >= (l4_offset + 8):  # UDP
+                                src_p, dst_p = struct.unpack('!HH', raw_data[l4_offset:l4_offset + 4])
 
                     window = extractor.ingest_packet(frame_len, proto, flags, src_p, dst_p, src_ip)
-                except socket.timeout:
-                    continue
-                except Exception as exc:
-                    sys.stderr.write(f"[gpu-sentinel] Frame decode note: {exc}\n")
+                except Exception as decode_err:
+                    sys.stderr.write(f"[gpu-sentinel] Frame decode note: {decode_err}\n")
                     continue
 
             # When a full window of 64 packets is ready, execute GPU inference
@@ -464,9 +586,13 @@ def run_sentinel(
 
                 # Check if anomaly threshold breached via adaptive self-tuning controller (Council Invariant 5)
                 is_anomaly, dynamic_tau = threshold_controller.update_and_check(loss)
+                target_ip = extractor.get_predominant_src_ip()
+
+                if total_inferences % 25 == 1:
+                    print(f"   [inf #{total_inferences}] loss={loss:.4f} | tau={dynamic_tau:.4f} | top_ip={target_ip} | lat={latency_ns / 1_000_000.0:.2f}ms")
+
                 if is_anomaly:
                     total_anomalies += 1
-                    target_ip = extractor.get_predominant_src_ip()
                     reason = f"GPU 1D-CNN Autoencoder Loss {loss:.4f} >= Dynamic Threshold {dynamic_tau:.4f} (Anomaly)"
                     latency_ms_display = latency_ns / 1_000_000.0
                     print(f"🚨 [ANOMALY DETECTED] {reason} | Offender: {target_ip} ({latency_ms_display:.2f}ms inference)")
@@ -502,6 +628,10 @@ def run_sentinel(
         print("✅ GPU SDN ANOMALY SENTINEL STOPPED")
         print(f"   Total Execution Time  : {total_time_s:.2f}s")
         print(f"   Packets Processed     : {pkt_count:,}")
+        if ingress_drops > 0:
+            print(f"   Tail Drops (Backpressure) : {ingress_drops:,}")
+        if capture_errors > 0:
+            print(f"   Capture Socket Errors : {capture_errors:,}")
         print(f"   Total Inferences Run  : {total_inferences:,}")
         print(f"   Average Latency       : {avg_lat:.3f} ms (Dean Latency Budget: < 1.0 ms)")
         print(f"   Anomalies Detected    : {total_anomalies}")
