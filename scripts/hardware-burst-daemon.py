@@ -416,23 +416,36 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
 
 
 def get_live_telemetry_summary() -> dict:
+    tpu0_rate = 0
+    for p in ['/run/zodiac/coral-telemetry.json', '/tmp/coral-telemetry.json']:
+        try:
+            with open(p, 'r') as f:
+                cdata = json.load(f)
+                if cdata.get('status') == 'ACTIVE':
+                    tpu0_rate = cdata.get('inferencesPerSecond', 0)
+                else:
+                    tpu0_rate = 0
+                break
+        except Exception as e:
+            sys.stderr.write(f'[burst-daemon] Note: cannot read {p}: {e}\n')
+            continue
+
     try:
         req = urllib.request.Request('http://127.0.0.1:3003/api/zodiac', headers={'User-Agent': 'BurstRunner/2.0'})
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             data = json.loads(resp.read().decode())
             p3 = next((p for p in data.get('ports', []) if p.get('port') == 3), {})
             p4 = next((p for p in data.get('ports', []) if p.get('port') == 4), {})
-            coral = data.get('coral', {})
             jetson = data.get('jetson', {})
             return {
                 'p3_rx_pkts': p3.get('rxPackets', '-'),
                 'p4_rx_bytes': p4.get('rxBytes', '-'),
-                'tpu0_inf_sec': coral.get('inferencesPerSecond', '-'),
+                'tpu0_inf_sec': tpu0_rate,
                 'jetson_temp_c': jetson.get('temperatures', {}).get('cpuC', '-'),
             }
     except Exception as e:
         sys.stderr.write(f'[burst-daemon] Note: get_live_telemetry_summary query failed: {e}\n')
-        return {}
+        return {'tpu0_inf_sec': tpu0_rate}
 
 
 def is_target_enabled(target_key: str, enabled_set: set) -> bool:
@@ -518,7 +531,7 @@ def main():
             for i, tpu_info in enumerate(detected_tpus):
                 dev_path = tpu_info.get('path')
                 if dev_path and '2-1.2' in dev_path:
-                    active_tpu_devs.append(dev_path)
+                    active_tpu_devs.append(f':{i}')
                     break
                 elif i == 1:
                     active_tpu_devs.append(':1')

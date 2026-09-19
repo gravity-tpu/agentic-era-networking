@@ -128,10 +128,16 @@ def main():
         write_offline(msg)
         sys.exit(0)
 
-    tpu = tpus[0]
+    target_idx = 0
+    for idx, t in enumerate(tpus):
+        if '2-1.3' in t.get('path', ''):
+            target_idx = idx
+            break
+
+    tpu = tpus[target_idx]
     usb_path = tpu.get('path', 'unknown')
     usb_type = tpu.get('type', 'usb')
-    print(f'[coral-daemon] TPU detected: {tpu}', flush=True)
+    print(f'[coral-daemon] TPU detected: {tpu} (index :{target_idx})', flush=True)
 
     if not os.path.exists(MODEL_PATH):
         msg = f'Model not found: {MODEL_PATH}'
@@ -139,9 +145,9 @@ def main():
         write_offline(msg)
         sys.exit(1)
 
-    print('[coral-daemon] Loading model onto Edge TPU...', flush=True)
+    print(f'[coral-daemon] Loading model onto Edge TPU :{target_idx}...', flush=True)
     try:
-        interp = make_interpreter(MODEL_PATH)
+        interp = make_interpreter(MODEL_PATH, device=f':{target_idx}')
         interp.allocate_tensors()
     except Exception as exc:
         msg = f'make_interpreter failed: {exc}'
