@@ -36,6 +36,7 @@ import {
   RANGE_CONFIGS,
   RANGE_DURATION_MS,
   isValidRange,
+  findCutoffIndex,
   getPrismaClient,
   getHistoricalMultiDeviceTelemetry,
 } from '../db/telemetry-db.js';
@@ -803,9 +804,11 @@ export class ZodiacBridgeServer {
         // Strictly filter by requested range duration so 1h doesn't downsample 2.5+ hours of history
         const durationMs = RANGE_DURATION_MS[range];
         const cutoffMs = Date.now() - durationMs;
-        const windowedPoints = this.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
-        const windowedJetson = this.jetsonTimeSeries.filter((p) => p.timestampMs >= cutoffMs);
-        const windowedCoral = this.coralTimeSeries.filter((p) => p.timestampMs >= cutoffMs);
+        // Sanjay Ghemawat - Algorithmic Efficiency Invariant:
+        // O(log N) bisection search + slice instead of O(N) linear filter on synchronous HTTP path
+        const windowedPoints = this.timeSeries.slice(findCutoffIndex(this.timeSeries, cutoffMs));
+        const windowedJetson = this.jetsonTimeSeries.slice(findCutoffIndex(this.jetsonTimeSeries, cutoffMs));
+        const windowedCoral = this.coralTimeSeries.slice(findCutoffIndex(this.coralTimeSeries, cutoffMs));
 
         const points = downsamplePoints(windowedPoints, config.maxPoints);
         const jetsonPoints = downsampleJetsonPoints(windowedJetson, config.maxPoints);

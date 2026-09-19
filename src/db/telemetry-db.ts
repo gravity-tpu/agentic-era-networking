@@ -258,6 +258,28 @@ export function isValidRange(range: string | null | undefined): range is Histori
 }
 
 /**
+ * Sanjay Ghemawat - Algorithmic Efficiency Invariant:
+ * Bisection search (lower_bound) to find the first index where timestampMs >= cutoffMs
+ * in an array strictly chronologically ordered by timestampMs in O(log N) time.
+ */
+export function findCutoffIndex<T extends { readonly timestampMs: number }>(
+  points: readonly T[],
+  cutoffMs: number
+): number {
+  let low = 0;
+  let high = points.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (points[mid]!.timestampMs < cutoffMs) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+/**
  * Pure deterministic bucketing function to downsample an array of raw time-series points
  * into a bounded window of averaged points (Dean Latency & Memory Invariant).
  */

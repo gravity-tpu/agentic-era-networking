@@ -15,6 +15,7 @@ import {
   downsampleCoralPoints,
   RANGE_CONFIGS,
   RANGE_DURATION_MS,
+  findCutoffIndex,
   getHistoricalTelemetry,
   getHistoricalMultiDeviceTelemetry,
   persistTelemetrySnapshot,
@@ -276,5 +277,41 @@ describe('30-Day Retention Pruning Cron (api/cron/prune-telemetry)', () => {
     expect(RANGE_DURATION_MS['24h']).toBe(24 * 3600 * 1000);
     expect(RANGE_DURATION_MS['7d']).toBe(7 * 24 * 3600 * 1000);
     expect(RANGE_DURATION_MS['30d']).toBe(30 * 24 * 3600 * 1000);
+  });
+
+  describe('findCutoffIndex (Sanjay Ghemawat O(log N) bisection)', () => {
+    it('handles empty array', () => {
+      expect(findCutoffIndex([], 1000)).toBe(0);
+    });
+
+    it('returns 0 when all points are newer than cutoff', () => {
+      const pts = [{ timestampMs: 100 }, { timestampMs: 200 }, { timestampMs: 300 }];
+      expect(findCutoffIndex(pts, 50)).toBe(0);
+      expect(findCutoffIndex(pts, 100)).toBe(0);
+    });
+
+    it('returns length when all points are older than cutoff', () => {
+      const pts = [{ timestampMs: 100 }, { timestampMs: 200 }, { timestampMs: 300 }];
+      expect(findCutoffIndex(pts, 350)).toBe(3);
+    });
+
+    it('finds the exact lower bound index in O(log N) steps', () => {
+      const pts = [
+        { timestampMs: 10 },
+        { timestampMs: 20 },
+        { timestampMs: 30 },
+        { timestampMs: 40 },
+        { timestampMs: 50 },
+      ];
+      expect(findCutoffIndex(pts, 25)).toBe(2); // pts[2] is 30 >= 25
+      expect(findCutoffIndex(pts, 30)).toBe(2); // pts[2] is 30 >= 30
+      expect(findCutoffIndex(pts, 31)).toBe(3); // pts[3] is 40 >= 31
+
+      // Verify slicing with the cutoff index produces exact subset
+      const sliced = pts.slice(findCutoffIndex(pts, 30));
+      expect(sliced).toHaveLength(3);
+      expect(sliced[0]!.timestampMs).toBe(30);
+      expect(sliced[2]!.timestampMs).toBe(50);
+    });
   });
 });
