@@ -2223,8 +2223,8 @@
 
     let maxY = 100;
     for (const pt of points) {
-      const inf = typeof pt.inferenceRateIps === 'number' ? pt.inferenceRateIps : Number(pt.inferenceRateIps || 0);
-      const tap = typeof pt.tapPacketsPerSec === 'bigint' ? Number(pt.tapPacketsPerSec) : Number(pt.tapPacketsPerSec || 0);
+      const inf = pt.inferencesPerSecond !== undefined ? Number(pt.inferencesPerSecond) : (typeof pt.inferenceRateIps === 'number' ? pt.inferenceRateIps : Number(pt.inferenceRateIps || 0));
+      const tap = pt.tapPacketsPerSecond !== undefined ? Number(pt.tapPacketsPerSecond) : (typeof pt.tapPacketsPerSec === 'bigint' ? Number(pt.tapPacketsPerSec) : Number(pt.tapPacketsPerSec || 0));
       if (inf > maxY) maxY = inf;
       if (tap > maxY) maxY = tap;
     }
@@ -2262,13 +2262,16 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
+    const getInfVal = (pt) => (pt.inferencesPerSecond !== undefined ? Number(pt.inferencesPerSecond) : (typeof pt.inferenceRateIps === 'number' ? pt.inferenceRateIps : Number(pt.inferenceRateIps || 0)));
+    const getTapVal = (pt) => (pt.tapPacketsPerSecond !== undefined ? Number(pt.tapPacketsPerSecond) : (typeof pt.tapPacketsPerSec === 'bigint' ? Number(pt.tapPacketsPerSec) : Number(pt.tapPacketsPerSec || 0)));
+
     // Inference Curve (Purple #7e22ce) - segmented for gaps
-    const infSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.inferenceRateIps);
-    drawSegmentedPath(ctx, infSegments, (pt) => getCoord(pt, pt.inferenceRateIps), '#7e22ce', 'rgba(126, 34, 206, 0.16)', 1.8, padTop + plotH);
+    const infSegments = partitionContiguousSegments(points, currentRange, getInfVal);
+    drawSegmentedPath(ctx, infSegments, (pt) => getCoord(pt, getInfVal(pt)), '#7e22ce', 'rgba(126, 34, 206, 0.16)', 1.8, padTop + plotH);
 
     // Tap Packets Curve (Blue #0051c3) - segmented for gaps
-    const tapSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.tapPacketsPerSec);
-    drawSegmentedPath(ctx, tapSegments, (pt) => getCoord(pt, pt.tapPacketsPerSec), '#0051c3', null, 1.8, padTop + plotH);
+    const tapSegments = partitionContiguousSegments(points, currentRange, getTapVal);
+    drawSegmentedPath(ctx, tapSegments, (pt) => getCoord(pt, getTapVal(pt)), '#0051c3', null, 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2309,8 +2312,10 @@
 
     let maxLat = 600;
     for (const pt of points) {
-      const lat = typeof pt.latencyMicros === 'number' ? pt.latencyMicros : Number(pt.latencyMicros || 0);
-      if (lat > maxLat) maxLat = lat;
+      const latVal = pt.latencyP50Us !== undefined && pt.latencyP50Us !== null
+        ? Number(pt.latencyP50Us)
+        : (typeof pt.latencyMicros === 'number' ? pt.latencyMicros : Number(pt.latencyMicros || 0));
+      if (latVal > maxLat) maxLat = latVal;
     }
     maxLat = Math.max(600, Math.ceil(maxLat * 1.15));
 
@@ -2361,9 +2366,11 @@
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
 
+    const getLatVal = (pt) => (pt.latencyP50Us !== undefined && pt.latencyP50Us !== null ? Number(pt.latencyP50Us) : (typeof pt.latencyMicros === 'number' ? pt.latencyMicros : Number(pt.latencyMicros || 0)));
+
     // Latency Area & Line (Emerald #059669) - segmented for gaps
-    const latSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.latencyMicros);
-    drawSegmentedPath(ctx, latSegments, (pt) => getCoord(pt, pt.latencyMicros), '#059669', 'rgba(5, 150, 105, 0.16)', 1.8, padTop + plotH);
+    const latSegments = partitionContiguousSegments(points, currentRange, getLatVal);
+    drawSegmentedPath(ctx, latSegments, (pt) => getCoord(pt, getLatVal(pt)), '#059669', 'rgba(5, 150, 105, 0.16)', 1.8, padTop + plotH);
 
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
