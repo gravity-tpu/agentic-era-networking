@@ -128,11 +128,18 @@ def main():
         write_offline(msg)
         sys.exit(0)
 
-    target_idx = 0
+    target_usb_path = os.environ.get('CORAL_PRIMARY_USB_PATH', '2-1.3')
+    target_idx = None
     for idx, t in enumerate(tpus):
-        if '2-1.3' in t.get('path', ''):
+        if target_usb_path in t.get('path', ''):
             target_idx = idx
             break
+
+    if target_idx is None:
+        msg = f'Required Edge TPU matching topology {target_usb_path} not found among {tpus}'
+        print(f'[coral-daemon] ERROR: {msg}', file=sys.stderr, flush=True)
+        write_offline(msg)
+        sys.exit(1)
 
     tpu = tpus[target_idx]
     usb_path = tpu.get('path', 'unknown')

@@ -415,37 +415,73 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
         sys.stderr.flush()
 
 
-def get_live_telemetry_summary() -> dict:
-    tpu0_rate = 0
-    for p in ['/run/zodiac/coral-telemetry.json', '/tmp/coral-telemetry.json']:
-        try:
-            with open(p, 'r') as f:
-                cdata = json.load(f)
-                if cdata.get('status') == 'ACTIVE':
-                    tpu0_rate = cdata.get('inferencesPerSecond', 0)
-                else:
-                    tpu0_rate = 0
-                break
-        except Exception as e:
-            sys.stderr.write(f'[burst-daemon] Note: cannot read {p}: {e}\n')
-            continue
+cached_live_summary = {
+    'p3_rx_pkts': '-',
+    'p4_rx_bytes': '-',
+    'tpu0_inf_sec': 0,
+    'jetson_temp_c': '-',
+}
+live_summary_lock = threading.Lock()
 
-    try:
-        req = urllib.request.Request('http://127.0.0.1:3003/api/zodiac', headers={'User-Agent': 'BurstRunner/2.0'})
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            data = json.loads(resp.read().decode())
-            p3 = next((p for p in data.get('ports', []) if p.get('port') == 3), {})
-            p4 = next((p for p in data.get('ports', []) if p.get('port') == 4), {})
-            jetson = data.get('jetson', {})
-            return {
-                'p3_rx_pkts': p3.get('rxPackets', '-'),
-                'p4_rx_bytes': p4.get('rxBytes', '-'),
-                'tpu0_inf_sec': tpu0_rate,
-                'jetson_temp_c': jetson.get('temperatures', {}).get('cpuC', '-'),
-            }
-    except Exception as e:
-        sys.stderr.write(f'[burst-daemon] Note: get_live_telemetry_summary query failed: {e}\n')
-        return {'tpu0_inf_sec': tpu0_rate}
+
+def telemetry_poller_worker():
+    """
+    Background worker to asynchronously poll telemetry and cache in memory (Jeff Dean latency invariant).
+    Zero synchronous I/O or HTTP blocking in the main daemon loop.
+    """
+    global cached_live_summary
+    candidate_paths = ['/run/zodiac/coral-telemetry.json', '/tmp/coral-telemetry.json']
+
+    while not stop_event.is_set():
+        tpu0_rate = 0
+        for p in candidate_paths:
+            try:
+                with open(p, 'r') as f:
+                    cdata = json.load(f)
+                    if cdata.get('status') == 'ACTIVE':
+                        raw_val = cdata.get('inferencesPerSecond', 0)
+                        try:
+                            tpu0_rate = int(raw_val)
+                        except (ValueError, TypeError):
+                            tpu0_rate = 0
+                    else:
+                        tpu0_rate = 0
+                    break
+            except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError) as e:
+                sys.stderr.write(f'[burst-daemon] Note: cannot read {p}: {e}\n')
+                continue
+
+        summary = {
+            'p3_rx_pkts': '-',
+            'p4_rx_bytes': '-',
+            'tpu0_inf_sec': tpu0_rate,
+            'jetson_temp_c': '-',
+        }
+
+        try:
+            req = urllib.request.Request('http://127.0.0.1:3003/api/zodiac', headers={'User-Agent': 'BurstRunner/2.0'})
+            # Bounded latency budget (250ms) for local loopback HTTP query
+            with urllib.request.urlopen(req, timeout=0.25) as resp:
+                data = json.loads(resp.read().decode())
+                p3 = next((p for p in data.get('ports', []) if p.get('port') == 3), {})
+                p4 = next((p for p in data.get('ports', []) if p.get('port') == 4), {})
+                jetson = data.get('jetson', {})
+                summary['p3_rx_pkts'] = p3.get('rxPackets', '-')
+                summary['p4_rx_bytes'] = p4.get('rxBytes', '-')
+                summary['jetson_temp_c'] = jetson.get('temperatures', {}).get('cpuC', '-')
+        except Exception as e:
+            sys.stderr.write(f'[burst-daemon] Note: telemetry HTTP poll failed: {e}\n')
+
+        with live_summary_lock:
+            cached_live_summary = summary
+
+        stop_event.wait(timeout=1.0)
+
+
+def get_live_telemetry_summary() -> dict:
+    """O(1) non-blocking in-memory telemetry read (Jeff Dean invariant)."""
+    with live_summary_lock:
+        return cached_live_summary.copy()
 
 
 def is_target_enabled(target_key: str, enabled_set: set) -> bool:
@@ -512,6 +548,11 @@ def main():
     tpu1_active = threading.Event()
     tpu2_active = threading.Event()
 
+    # Spawn asynchronous telemetry poller (Jeff Dean latency invariant)
+    t_poller = threading.Thread(target=telemetry_poller_worker, name='telemetry-poller', daemon=True)
+    threads.append(t_poller)
+    t_poller.start()
+
     is_coral_1 = any(t in enabled_targets for t in ['coral-1', 'coral-tap', 'coral-0', 'tpu-1', 'tpu-tap'])
     is_coral_2 = any(t in enabled_targets for t in ['coral-2', 'coral-sentinel', 'coral-dns', 'coral-burst', 'tpu-2'])
     is_coral_all = any(t in enabled_targets for t in ['coral', 'tpu', 'coral-all', 'corals', 'all'])
@@ -525,19 +566,17 @@ def main():
     # 1. Coral TPU #2 (dedicated accelerator worker)
     if is_coral_all or is_coral_2 or args.staggered:
         active_tpu_devs = []
+        sentinel_target_path = os.environ.get('CORAL_SENTINEL_USB_PATH', '2-1.2')
         try:
             from pycoral.utils.edgetpu import list_edge_tpus
             detected_tpus = list_edge_tpus()
             for i, tpu_info in enumerate(detected_tpus):
                 dev_path = tpu_info.get('path')
-                if dev_path and '2-1.2' in dev_path:
+                if dev_path and sentinel_target_path in dev_path:
                     active_tpu_devs.append(f':{i}')
                     break
-                elif i == 1:
-                    active_tpu_devs.append(':1')
-                    break
-            if not active_tpu_devs and detected_tpus:
-                active_tpu_devs.append(':1' if len(detected_tpus) > 1 else ':0')
+            if not active_tpu_devs and len(detected_tpus) > 1:
+                active_tpu_devs.append(':1')
         except Exception as exc:
             sys.stderr.write(f'[burst-daemon] Note: Edge TPU worker discovery error: {exc}\n')
 
