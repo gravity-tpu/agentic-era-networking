@@ -63,9 +63,9 @@ export function probeJetsonHardware(
   prevSnapshot?: JetsonTelemetrySnapshot | undefined,
   deltaNs?: bigint | undefined
 ): JetsonTelemetrySnapshot {
-  // If not running on Linux or Jetson platform, fall back to default reference snapshot
+  // If not running on Linux or Jetson platform, fall back to disconnected snapshot
   if (process.platform !== 'linux') {
-    return createDefaultJetsonSnapshot(false);
+    return createDefaultJetsonSnapshot(true);
   }
 
   // 1. Thermals (°C from millidegrees)
@@ -318,7 +318,7 @@ export function probeJetsonHardware(
     kernelVersion: os.release(),
     jetpackVersion: 'JetPack 6.1 (L4T 36.4.7)',
     uptime: uptimeStr,
-    interfaces: interfaces.length > 0 ? interfaces : createDefaultJetsonSnapshot(false).interfaces,
+    interfaces: interfaces.length > 0 ? interfaces : createDefaultJetsonSnapshot(true).interfaces,
   };
 }
 
@@ -425,7 +425,7 @@ export async function probeCoralHardware(
   daemonData: Awaited<ReturnType<typeof readCoralDaemonTelemetry>> = null
 ): Promise<CoralTelemetrySnapshot> {
   if (process.platform !== 'linux') {
-    return createDefaultCoralSnapshot(false);
+    return createDefaultCoralSnapshot(true);
   }
 
   try {
@@ -440,7 +440,7 @@ export async function probeCoralHardware(
         process.stderr.write(`[coral-probe] Cannot access ${usbBase} (${code ?? 'unknown'}): ${
           err instanceof Error ? err.message : String(err)}\n`);
       }
-      return createDefaultCoralSnapshot(false);
+      return createDefaultCoralSnapshot(true);
     }
 
     const dirs = await fs.promises.readdir(usbBase);
@@ -520,5 +520,5 @@ export async function probeCoralHardware(
     );
   }
 
-  return createDefaultCoralSnapshot(false);
+  return createDefaultCoralSnapshot(true);
 }

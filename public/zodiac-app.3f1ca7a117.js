@@ -449,8 +449,12 @@
       els.dotDeviceOrin.className = orinOnline ? 'cf-status-dot green' : 'cf-status-dot down';
     }
     if (els.dotDeviceCoral) {
-      const coralStatus = snapshot.coral?.status || (snapshot.source !== 'disconnected' ? 'standby' : 'offline');
-      els.dotDeviceCoral.className = coralStatus === 'online' ? 'cf-status-dot green' : (coralStatus === 'standby' ? 'cf-status-dot purple' : 'cf-status-dot down');
+      const coral = snapshot.coral;
+      const isDetected = Boolean(coral && coral.detected && coral.status !== 'NOT_DETECTED');
+      const isOnline = Boolean(coral && (coral.status === 'INFERENCE_ACTIVE' || coral.status === 'online'));
+      els.dotDeviceCoral.className = isOnline
+        ? 'cf-status-dot green'
+        : (isDetected ? 'cf-status-dot purple' : 'cf-status-dot down');
     }
 
     if (els.sidebarStatusTag) {
@@ -896,18 +900,31 @@
     // 8. Google Coral Edge TPU Telemetry
     if (snapshot.coral) {
       const c = snapshot.coral;
-      const isDetected = c.detected || c.status === 'online';
+      const isDetected = Boolean(c.detected && c.status !== 'NOT_DETECTED');
+      const isOnline = Boolean(isDetected && (c.status === 'INFERENCE_ACTIVE' || c.status === 'online'));
+      const isStandby = Boolean(isDetected && !isOnline);
+
       if (els.dotDeviceCoral) {
-        els.dotDeviceCoral.className = isDetected ? 'cf-status-dot green' : 'cf-status-dot purple';
+        els.dotDeviceCoral.className = isOnline
+          ? 'cf-status-dot green'
+          : (isStandby ? 'cf-status-dot purple' : 'cf-status-dot down');
       }
       if (els.coralKpiStatus) {
-        els.coralKpiStatus.innerText = isDetected ? 'ONLINE · STANDBY' : 'STANDBY';
-        els.coralKpiStatus.className = `cf-stat-value ${isDetected ? 'green' : 'purple'}`;
+        if (isOnline) {
+          els.coralKpiStatus.innerText = 'ONLINE · INFERENCE';
+          els.coralKpiStatus.className = 'cf-stat-value green';
+        } else if (isStandby) {
+          els.coralKpiStatus.innerText = 'STANDBY';
+          els.coralKpiStatus.className = 'cf-stat-value purple';
+        } else {
+          els.coralKpiStatus.innerText = 'DISCONNECTED';
+          els.coralKpiStatus.className = 'cf-stat-value red';
+        }
       }
-      if (els.coralKpiSpeed) els.coralKpiSpeed.innerText = c.linkSpeed || (isDetected ? '5.0 Gbps (USB 3.1)' : 'Standby');
-      if (els.coralKpiBus) els.coralKpiBus.innerText = `Bus ${c.busNumber || '002'} Device ${c.deviceAddress || '003'}`;
-      if (els.coralKpiVid) els.coralKpiVid.innerText = `${c.vendorId || '1a6e'}:${c.productId || '089a'}`;
-      const totalInf = c.inferencesPerSecond ?? c.totalInferences ?? 0n;
+      if (els.coralKpiSpeed) els.coralKpiSpeed.innerText = isDetected ? (c.usbSpeed || '5.0 Gbps (USB 3.1)') : 'Disconnected';
+      if (els.coralKpiBus) els.coralKpiBus.innerText = isDetected ? (c.usbBus || 'Bus 002 Device 003') : 'None';
+      if (els.coralKpiVid) els.coralKpiVid.innerText = isDetected ? `${c.vendorId || '1a6e'}:${c.productId || '089a'}` : 'None';
+      const totalInf = isDetected ? (c.inferencesPerSecond ?? c.totalInferences ?? 0n) : 0n;
       if (els.coralKpiTotalInf) els.coralKpiTotalInf.innerText = formatNumber(totalInf);
 
       // Time series buffer update for Coral

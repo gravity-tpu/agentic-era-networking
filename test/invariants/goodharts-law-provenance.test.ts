@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createDisconnectedZodiacSnapshot,
   createDefaultZodiacSnapshot,
+  createDefaultCoralSnapshot,
   generateHistoricalTelemetry,
   resolveVerifiedProvenance,
   assertVerifiedProvenance,
@@ -118,5 +119,29 @@ describe('Council Invariant 6: Goodhart\'s Law & Epistemic Telemetry Provenance'
     const rateBps = deltaMs > 0n ? (deltaBytes * 1000n) / deltaMs : 0n;
 
     expect(rateBps).toBe(0n);
+  });
+
+  it('enforces physical truth on disconnected Coral TPU: detected=false, NOT_DETECTED, and null thermals', () => {
+    const disconnectedZodiac = createDisconnectedZodiacSnapshot();
+    expect(disconnectedZodiac.coral).toBeDefined();
+
+    const coral = disconnectedZodiac.coral!;
+    expect(coral.detected).toBe(false);
+    expect(coral.status).toBe('NOT_DETECTED');
+    expect(coral.temperatureC).toBeNull();
+    expect(coral.usbBus).toBe('None');
+    expect(coral.usbSpeed).toBe('Disconnected');
+    expect(coral.powerMode).toBe('Offline');
+    expect(coral.inferencesPerSecond).toBe(0n);
+    expect(coral.totalInferences).toBe(0n);
+  });
+
+  it('enforces that Coral USB Accelerator never emits simulated non-null thermals', () => {
+    const sandboxCoral = createDefaultCoralSnapshot(false);
+    const disconnectedCoral = createDefaultCoralSnapshot(true);
+
+    // Council Invariant 6: Physical truth — Coral USB has no sysfs thermal zone mapped
+    expect(sandboxCoral.temperatureC).toBeNull();
+    expect(disconnectedCoral.temperatureC).toBeNull();
   });
 });

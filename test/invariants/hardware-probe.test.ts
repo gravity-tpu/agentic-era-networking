@@ -38,7 +38,7 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(typeof sdnIf?.rxRateBps).toBe('bigint');
   });
 
-  it('creates valid default Coral snapshot with 4 TOPS and Dean latency budget', () => {
+  it('creates valid default Coral snapshot with 4 TOPS and Dean latency budget in sandbox mode', () => {
     const coral = createDefaultCoralSnapshot(false);
     expect(coral.detected).toBe(true);
     expect(coral.peakTopsInt8).toBe(4);
@@ -46,6 +46,20 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(coral.targetLatencyBudgetNs).toBe(500000n); // 500 µs
     expect(typeof coral.inferencesPerSecond).toBe('bigint');
     expect(typeof coral.totalInferences).toBe('bigint');
+    expect(coral.temperatureC).toBeNull();
+  });
+
+  it('creates fail-closed disconnected Coral snapshot by default (Council Invariant 6)', () => {
+    const coral = createDefaultCoralSnapshot(); // Defaults to isDisconnected = true
+    expect(coral.detected).toBe(false);
+    expect(coral.status).toBe('NOT_DETECTED');
+    expect(coral.temperatureC).toBeNull();
+    expect(coral.vendorId).toBe('None');
+    expect(coral.productId).toBe('None');
+    expect(coral.usbBus).toBe('None');
+    expect(coral.usbSpeed).toBe('Disconnected');
+    expect(coral.powerMode).toBe('Offline');
+    expect(coral.inferencesPerSecond).toBe(0n);
   });
 
   it('generates deterministic historical time series for Jetson', () => {
@@ -91,9 +105,13 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(snap.interfaces.length).toBeGreaterThan(0);
   });
 
-  it('probeCoralHardware returns valid snapshot structure', async () => {
+  it('probeCoralHardware returns valid snapshot and fails closed when unlinked', async () => {
     const snap = await probeCoralHardware();
-    expect(snap.peakTopsInt8).toBe(4);
     expect(typeof snap.targetLatencyBudgetNs).toBe('bigint');
+    expect(snap.temperatureC).toBeNull();
+    if (process.platform !== 'linux') {
+      expect(snap.detected).toBe(false);
+      expect(snap.status).toBe('NOT_DETECTED');
+    }
   });
 });

@@ -95,6 +95,28 @@ function analyzeFile(filePath: string): Finding[] {
         });
       }
     }
+
+    // Rule 4: Hardware probes returning mock/connected defaults (Council Invariant 3 & 6)
+    // Physical probes in hardware-probe.ts must fail closed to isDisconnected=true.
+    if (relPath.includes('hardware-probe.ts') && /createDefault(Coral|Jetson)Snapshot\s*\(\s*false\s*\)/.test(line)) {
+      findings.push({
+        file: relPath,
+        line: lineNum,
+        message: "Hardware probe cannot return simulated default snapshot with isDisconnected=false; physical probe must fail-closed to disconnected (Invariant 6).",
+        snippet: line.trim(),
+      });
+    }
+
+    // Rule 5: Coral USB thermal simulation check
+    // Physical truth: Coral USB does not expose an on-die thermal zone in sysfs; temperatureC must always be null.
+    if (/coral/i.test(line) && /temperatureC\s*:\s*[0-9.]+/.test(line)) {
+      findings.push({
+        file: relPath,
+        line: lineNum,
+        message: "Coral USB Accelerator has no mapped sysfs thermal zone; temperatureC must evaluate to null, not a fabricated heuristic (Invariant 6).",
+        snippet: line.trim(),
+      });
+    }
   }
 
   return findings;

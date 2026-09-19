@@ -457,26 +457,33 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): Je
 
 /**
  * Creates a default telemetry snapshot for the Google Coral Edge TPU.
+ * Council Invariant 6 (Anti-Simulation & Goodhart's Law):
+ * Default must be fail-closed (isDisconnected = true). When disconnected,
+ * detected must evaluate to physical truth (false, 'NOT_DETECTED', null thermals).
+ * Physical Edge TPU USB does not expose an on-die thermal sensor in sysfs,
+ * so temperatureC must ALWAYS be null, never a fabricated float heuristic.
  */
-export function createDefaultCoralSnapshot(isDisconnected: boolean = false): CoralTelemetrySnapshot {
+export function createDefaultCoralSnapshot(isDisconnected: boolean = true): CoralTelemetrySnapshot {
   return {
     detected: !isDisconnected,
     name: 'Google Coral Edge TPU USB Accelerator',
-    vendorId: '1a6e',
-    productId: '089a',
-    usbBus: 'Bus 002 Device 003',
-    usbSpeed: 'USB 3.1 SuperSpeed (5.0 Gbps)',
+    vendorId: isDisconnected ? 'None' : '1a6e',
+    productId: isDisconnected ? 'None' : '089a',
+    usbBus: isDisconnected ? 'None' : 'Bus 002 Device 003',
+    usbSpeed: isDisconnected ? 'Disconnected' : 'USB 3.1 SuperSpeed (5.0 Gbps)',
     status: isDisconnected ? 'NOT_DETECTED' : 'STANDBY',
-    pipelineRole: 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
-    peakTopsInt8: 4,
+    pipelineRole: isDisconnected
+      ? 'Edge TPU Disconnected — Offline'
+      : 'Port 3 Mirror Tap Sub-Millisecond Classifier (Phase 2A Pre-Wired)',
+    peakTopsInt8: isDisconnected ? 0 : 4,
     targetLatencyBudgetNs: 500000n,
     inferencesPerSecond: 0n,
     totalInferences: 0n,
     latencyP50Ns: 0n,
     latencyP99Ns: 0n,
-    loadedModel: 'None (Standby - Pre-Wired for Phase 2A)',
+    loadedModel: isDisconnected ? 'None (Disconnected)' : 'None (Standby - Pre-Wired for Phase 2A)',
     powerMode: isDisconnected ? 'Offline' : 'Low-Power Standby (<0.5W)',
-    temperatureC: isDisconnected ? null : 34.2,
+    temperatureC: null,
   };
 }
 

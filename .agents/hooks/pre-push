@@ -186,6 +186,26 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
                 PROVENANCE_FAILURES+="    $m\n"
               done <<< "$ARTIFICIAL_INC"
             fi
+
+            # Hardware probe mock return check (Council Invariant 3 & 6)
+            if [[ "$file" == *"hardware-probe.ts" ]]; then
+              PROBE_MOCK=$(grep -nE "createDefault(Coral|Jetson)Snapshot\s*\(\s*false\s*\)" "$REPO_ROOT/$file" 2>/dev/null || true)
+              if [ -n "$PROBE_MOCK" ]; then
+                PROVENANCE_FAILURES+="\n  ${BOLD}$file (Hardware probe returning mock presence isDisconnected=false):${RESET}\n"
+                while IFS= read -r m; do
+                  PROVENANCE_FAILURES+="    $m\n"
+                done <<< "$PROBE_MOCK"
+              fi
+            fi
+
+            # Coral thermal simulation check (Council Invariant 6)
+            CORAL_THERMAL=$(grep -nE "(coral.*temperatureC\s*:\s*[0-9.]+|temperatureC\s*:\s*[0-9.]+\s*.*coral)" "$REPO_ROOT/$file" 2>/dev/null || true)
+            if [ -n "$CORAL_THERMAL" ]; then
+              PROVENANCE_FAILURES+="\n  ${BOLD}$file (Coral thermal simulation detected; must evaluate to null):${RESET}\n"
+              while IFS= read -r m; do
+                PROVENANCE_FAILURES+="    $m\n"
+              done <<< "$CORAL_THERMAL"
+            fi
             ;;
         esac
         ;;
