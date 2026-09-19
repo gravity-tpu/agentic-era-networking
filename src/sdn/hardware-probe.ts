@@ -88,7 +88,9 @@ async function fileExistsAsync(filePath: string): Promise<boolean> {
   }
 }
 
-const JETSON_PROBE_TIMEOUT_MS = 100;
+const DEFAULT_JETSON_PROBE_TIMEOUT_MS = 150;
+const parsedTimeout = process.env['JETSON_PROBE_TIMEOUT_MS'] ? parseInt(process.env['JETSON_PROBE_TIMEOUT_MS'], 10) : NaN;
+const JETSON_PROBE_TIMEOUT_MS = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_JETSON_PROBE_TIMEOUT_MS;
 
 /**
  * Internal hardware state sampler for NVIDIA Jetson Orin Nano from Linux sysfs and procfs.
@@ -386,7 +388,7 @@ async function executeJetsonHardwareProbe(
 
 /**
  * Probes NVIDIA Jetson Orin Nano hardware state asynchronously from Linux sysfs and procfs.
- * Fully non-blocking with strict timeout bounds (Dean Latency Budget & Council Invariant 1 & 6).
+ * Fully non-blocking with strict timeout bounds and unhandled rejection protection (Dean Latency Budget & Council Invariant 1 & 6).
  */
 export async function probeJetsonHardware(
   prevSnapshot?: JetsonTelemetrySnapshot | undefined,
@@ -397,6 +399,7 @@ export async function probeJetsonHardware(
     return createDefaultJetsonSnapshot(true);
   }
 
+  const startNs = process.hrtime.bigint();
   let timer: NodeJS.Timeout | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(
@@ -406,12 +409,25 @@ export async function probeJetsonHardware(
     timer.unref();
   });
 
+  const probePromise = executeJetsonHardwareProbe(prevSnapshot, deltaNs);
+  // Council Invariant 1 (Zero Suppression of Reality):
+  // Attach catch handler to background promise to prevent unhandled rejection crash if timeout fires first.
+  probePromise.catch((err) => {
+    process.stderr.write(`[jetson-probe] Background probe rejected post-timeout: ${
+      err instanceof Error ? err.message : String(err)
+    }\n`);
+  });
+
   try {
     const result = await Promise.race([
-      executeJetsonHardwareProbe(prevSnapshot, deltaNs),
+      probePromise,
       timeoutPromise,
     ]);
     if (timer) clearTimeout(timer);
+    const elapsedNs = process.hrtime.bigint() - startNs;
+    if (elapsedNs > 100_000_000n) {
+      process.stderr.write(`[jetson-probe] High probe latency: ${elapsedNs / 1_000_000n}ms\n`);
+    }
     return result;
   } catch (err) {
     if (timer) clearTimeout(timer);
