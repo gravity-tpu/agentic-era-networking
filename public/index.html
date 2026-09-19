@@ -54,10 +54,15 @@
             <span class="cf-device-btn-name">Jetson Orin</span>
             <span class="cf-pill-badge blue">Host</span>
           </button>
-          <button class="cf-device-btn" id="btn-device-coral" role="tab" aria-selected="false" data-device="coral">
-            <span class="cf-status-dot green" id="dot-device-coral"></span>
-            <span class="cf-device-btn-name" id="btn-device-coral-name">Coral TPU</span>
-            <span class="cf-pill-badge purple" id="btn-device-coral-badge">8 TOPS</span>
+          <button class="cf-device-btn" id="btn-device-coral-1" role="tab" aria-selected="false" data-device="coral-1">
+            <span class="cf-status-dot green" id="dot-device-coral-1"></span>
+            <span class="cf-device-btn-name">Coral TPU #1</span>
+            <span class="cf-pill-badge purple" id="btn-device-coral-1-badge">Tap DPI</span>
+          </button>
+          <button class="cf-device-btn" id="btn-device-coral-2" role="tab" aria-selected="false" data-device="coral-2">
+            <span class="cf-status-dot green" id="dot-device-coral-2"></span>
+            <span class="cf-device-btn-name">Coral TPU #2</span>
+            <span class="cf-pill-badge blue" id="btn-device-coral-2-badge">DNS Sentinel</span>
           </button>
         </div>
       </div>
@@ -148,31 +153,53 @@
           </a>
         </nav>
 
-        <!-- ── Google Coral Edge TPU ── (hidden until device switch) -->
-        <nav class="cf-nav-group" id="cf-nav-coral" style="display:none">
+        <!-- ── Google Coral Edge TPU #1 (Tap DPI) ── (hidden until device switch) -->
+        <nav class="cf-nav-group" id="cf-nav-coral-1" style="display:none">
           <a class="cf-nav-item active" data-section="overview" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
             </svg>
             System Overview
           </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="coral-perf-card">
+          <a class="cf-nav-item" data-section="overview" data-scroll="coral1-perf-card">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
             </svg>
-            Inference Metrics
+            Tap Ingestion &amp; IPS
           </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="coral-pipeline-card">
+          <a class="cf-nav-item" data-section="overview" data-scroll="coral1-pipeline-card">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
             </svg>
-            Pipeline Status
+            Wire Tap Pipeline
           </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="coral-usb-card">
+          <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="2" width="20" height="20" rx="2"/><line x1="6" y1="2" x2="6" y2="22"/><line x1="18" y1="2" x2="18" y2="22"/><line x1="2" y1="6" x2="22" y2="6"/><line x1="2" y1="18" x2="22" y2="18"/>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            USB Link
+            Council Invariants
+          </a>
+        </nav>
+
+        <!-- ── Google Coral Edge TPU #2 (DNS Sentinel) ── (hidden until device switch) -->
+        <nav class="cf-nav-group" id="cf-nav-coral-2" style="display:none">
+          <a class="cf-nav-item active" data-section="overview" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            System Overview
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="coral2-perf-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+            </svg>
+            DNS Volume &amp; Triage
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="coral2-pipeline-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+            </svg>
+            DGA &amp; Tunneling Sentinel
           </a>
           <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1214,35 +1241,36 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
           </div><!-- /view-device-orin -->
 
-          <!-- GOOGLE CORAL EDGE TPU VIEW -->
-          <div id="view-device-coral" style="display: none;">
+          <!-- GOOGLE CORAL EDGE TPU #1 VIEW (Port 3 Mirror Tap DPI) -->
+          <div id="view-device-coral-1" style="display: none;">
             <div class="cf-page-header">
               <div>
-                <h1 class="cf-page-title" id="coral-page-title">Google Coral Edge TPU — Real-Time Inference Tap</h1>
-                <p class="cf-page-desc" id="coral-page-desc">Hardware tensor processing units dedicated to Port 3 mirror tap packet classification &amp; RFC 1035 DNS Sentinel (&lt;500 µs latency budget).</p>
+                <h1 class="cf-page-title" id="coral1-page-title">Google Coral Edge TPU #1 — Port 3 Mirror Tap DPI</h1>
+                <p class="cf-page-desc" id="coral1-page-desc">Dedicated line-rate packet flow anomaly classifier connected to Zodiac Port 3 hardware mirror tap (&lt;500 µs latency budget).</p>
               </div>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <span class="cf-pill-badge purple" id="coral-tops-badge">8 TOPS INT8</span>
-                <span class="cf-pill-badge blue" id="coral-usb-badge">USB 3.1 SuperSpeed</span>
+                <span class="cf-pill-badge purple" id="coral1-tops-badge">4 TOPS INT8</span>
+                <span class="cf-pill-badge blue" id="coral1-tap-badge">Port 3 Mirror Tap</span>
+                <span class="cf-pill-badge gray mono" id="coral1-bus-badge">Bus 002 Dev 018</span>
               </div>
             </div>
 
-            <!-- Coral Top 4 KPI Cards -->
-            <div class="cf-stats-grid">
+            <!-- Coral 1 Top 4 KPI Cards -->
+            <div class="cf-stats-grid" id="coral1-perf-card">
               
               <!-- KPI 1: Compute Capacity -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Tensor Compute Engine</span>
-                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;" id="coral-tpu-badge">Google Coral</span>
+                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Google Coral #1</span>
                 </div>
-                <div class="cf-stat-value" style="color: #7e22ce;" id="coral-kpi-tops">8 TOPS</div>
+                <div class="cf-stat-value" style="color: #7e22ce;" id="coral1-kpi-tops">4 TOPS</div>
                 <div class="cf-mini-bar">
-                  <div class="cf-mini-bar-fill" id="coral-kpi-tops-bar" style="width: 100%; background: #7e22ce;"></div>
+                  <div class="cf-mini-bar-fill" style="width: 100%; background: #7e22ce;"></div>
                 </div>
                 <div class="cf-stat-footer">
                   <span>Architecture: <strong>Edge TPU INT8</strong></span>
-                  <span id="coral-kpi-tops-footer">Peak: 8 TOPS / 4W</span>
+                  <span>Peak: 4 TOPS / 2W</span>
                 </div>
               </div>
 
@@ -1250,31 +1278,31 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Operational Pipeline</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;" id="coral-kpi-pipeline-badge">Dual Pipeline</span>
+                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Tap Classifier</span>
                 </div>
-                <div class="cf-stat-value" id="coral-kpi-status">--</div>
+                <div class="cf-stat-value" id="coral1-kpi-status">--</div>
                 <div class="cf-mini-bar">
                   <div class="cf-mini-bar-fill" style="width: 0%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span id="coral-kpi-pipeline-role">Role: <strong>Tap + DNS</strong></span>
-                  <span id="coral-kpi-model">Model: <strong>Standby</strong></span>
+                  <span>Role: <strong>Port 3 Tap DPI</strong></span>
+                  <span id="coral1-kpi-model">Model: <strong>Standby</strong></span>
                 </div>
               </div>
 
-              <!-- KPI 3: USB 3.1 SuperSpeed -->
+              <!-- KPI 3: USB Link -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">USB Bus &amp; Carrier Port</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">USB 3.0 Type-A</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">Hub Port 2</span>
                 </div>
-                <div class="cf-stat-value blue" id="coral-kpi-speed">5.0 Gbps</div>
+                <div class="cf-stat-value blue" id="coral1-kpi-speed">5.0 Gbps</div>
                 <div class="cf-mini-bar">
                   <div class="cf-mini-bar-fill" style="width: 100%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span id="coral-kpi-bus">Bus 002 Device 018 | Dev 021</span>
-                  <span>VID: <strong class="cf-mono" id="coral-kpi-vid">18d1:9302</strong></span>
+                  <span id="coral1-kpi-bus">Bus 002 Device 018</span>
+                  <span>VID: <strong class="cf-mono" id="coral1-kpi-vid">18d1:9302</strong></span>
                 </div>
               </div>
 
@@ -1289,52 +1317,36 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <div class="cf-mini-bar-fill green" style="width: 25%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span>Line-Rate Inferences: <strong class="cf-mono" id="coral-kpi-total-inf">0</strong></span>
+                  <span>Line-Rate Inferences: <strong class="cf-mono" id="coral1-kpi-total-inf">0</strong></span>
                   <span>Target: &lt; 0.5 ms</span>
                 </div>
               </div>
 
             </div>
 
-            <!-- Coral Multi-Device Allocation Card -->
-            <div class="cf-card" style="margin-top: 1.25rem;">
-              <div class="cf-card-header">
-                <div>
-                  <h3 class="cf-card-title">Physical Edge TPU Accelerators &amp; Model Parallelism</h3>
-                  <div class="cf-card-subtitle">Zero-switching-latency model partitioning across enumerated hardware units</div>
-                </div>
-                <span class="cf-pill-badge purple" id="coral-device-count-badge">Dual TPU Attached</span>
-              </div>
-              <div class="cf-card-body" id="coral-device-pills" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                <!-- Dynamically populated by zodiac-app.js -->
-              </div>
-            </div>
-
-            <!-- Coral Charts Grid (2x1) -->
+            <!-- Coral 1 Charts Grid (2x1) -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
               
               <!-- Chart 1: Tap Ingestion Rate -->
               <div class="cf-card">
                 <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                   <div>
-                    <h3 class="cf-card-title">Tap Ingestion &amp; Inference Rate</h3>
+                    <h3 class="cf-card-title">Port 3 Tap Ingestion &amp; Classification Rate</h3>
                     <div class="cf-card-subtitle">Inferences per second (IPS) vs Zodiac Port 3 Mirror Tap Packets (PPS)</div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <div class="cf-time-range-group" id="cf-coral-time-selectors">
+                    <div class="cf-time-range-group" id="cf-coral1-time-selectors">
                       <button class="cf-time-btn active" data-range="live">Live (10m)</button>
                       <button class="cf-time-btn" data-range="1h">1 Hour</button>
                       <button class="cf-time-btn" data-range="6h">6 Hours</button>
                       <button class="cf-time-btn" data-range="24h">24 Hours</button>
-                      <button class="cf-time-btn" data-range="7d">7 Days</button>
-                      <button class="cf-time-btn" data-range="30d">30 Days</button>
                     </div>
                     <span class="cf-pill-badge purple">Tensor Ops</span>
                   </div>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-coral-rate" style="position: relative; height: 220px;">
-                    <canvas id="chart-coral-rate"></canvas>
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral1-rate" style="position: relative; height: 220px;">
+                    <canvas id="chart-coral1-rate"></canvas>
                   </div>
                 </div>
               </div>
@@ -1343,67 +1355,235 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-card">
                 <div class="cf-card-header">
                   <div>
-                    <h3 class="cf-card-title">Sub-Millisecond Latency Profile</h3>
+                    <h3 class="cf-card-title">Sub-Millisecond Classification Latency</h3>
                     <div class="cf-card-subtitle">Dean Invariant target &lt; 500 µs (0.5 ms) line-rate packet triage</div>
                   </div>
                   <span class="cf-pill-badge green">Dean Budget</span>
                 </div>
                 <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-coral-latency" style="position: relative; height: 220px;">
-                    <canvas id="chart-coral-latency"></canvas>
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral1-latency" style="position: relative; height: 220px;">
+                    <canvas id="chart-coral1-latency"></canvas>
                   </div>
                 </div>
               </div>
 
             </div>
 
-            <!-- Split-Inference Architecture Card -->
-            <div class="cf-card" style="margin-top: 1.5rem;">
+            <!-- Coral 1 Architecture Card -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="coral1-pipeline-card">
               <div class="cf-card-header">
                 <div>
-                  <h3 class="cf-card-title">Coral + Jetson Split-Inference Pipeline (Phase 2A Architecture)</h3>
-                  <div class="cf-card-subtitle">Co-designed dual accelerator division of labor for zero packet-loss wire protection</div>
+                  <h3 class="cf-card-title">Dedicated Model Parallelism — Tap Classifier Pipeline</h3>
+                  <div class="cf-card-subtitle">Port 3 mirror frames triage with zero SRAM model reload overhead (Dean &amp; Ghemawat)</div>
                 </div>
-                <span class="cf-pill-badge purple">Council Invariant 4 &amp; 5</span>
+                <span class="cf-pill-badge purple">SRAM Pinned (8MB)</span>
               </div>
               <div class="cf-card-body">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
-                  
                   <div style="padding: 1.25rem; border: 1px solid var(--cf-border); border-radius: 6px; background: rgba(147, 51, 234, 0.03);">
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                      <span class="cf-pill-badge purple">Tier 1 · Line-Rate Triage</span>
-                      <strong style="color: #7e22ce;">Google Coral Edge TPU</strong>
+                      <span class="cf-pill-badge purple">Hardware Source</span>
+                      <strong style="color: #7e22ce;">Zodiac FX Port 3 Mirror Tap</strong>
                     </div>
                     <p style="font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.5;">
-                      Directly inspects the <strong>Port 3 hardware mirror tap</strong>. Executes ultra-fast, shallow INT8 quantized packet classification (&lt;100 µs). Flags DNS exfiltration, DGA domains, and ARP spoofing patterns without buffering.
+                      Hardware tap frame replication over ASIX AX88179 Gigabit USB adapter. Streams raw ethernet frames directly into Coral #1 inference queue.
                     </p>
                   </div>
-
                   <div style="padding: 1.25rem; border: 1px solid var(--cf-border); border-radius: 6px; background: rgba(0, 81, 195, 0.03);">
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                      <span class="cf-pill-badge blue">Tier 2 · Deep Neural Scoring</span>
-                      <strong style="color: var(--cf-blue);">Jetson Ampere TensorRT</strong>
+                      <span class="cf-pill-badge blue">In-SRAM Model</span>
+                      <strong style="color: var(--cf-blue);">MobileNet V2 INT8 Flow DPI</strong>
                     </div>
                     <p style="font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.5;">
-                      Processes flagged anomaly streams from Coral using 1024 CUDA cores and TensorRT deep anomaly scoring (&lt;1.0 ms budget). Evaluates multi-agent graph sequence deviations and flow trajectories.
+                      Permanently pinned in Coral #1 on-chip SRAM. Evaluates packet headers, flow inter-arrival times, and payload entropy with 0 ns context-switching overhead.
                     </p>
                   </div>
-
                   <div style="padding: 1.25rem; border: 1px solid var(--cf-border); border-radius: 6px; background: rgba(16, 185, 129, 0.03);">
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                      <span class="cf-pill-badge green">Tier 3 · Fail-Closed Action</span>
-                      <strong style="color: #059669;">Zodiac FX FlowMod</strong>
+                      <span class="cf-pill-badge green">Fail-Closed Action</span>
+                      <strong style="color: #059669;">OpenFlow 1.3 FlowMod</strong>
                     </div>
                     <p style="font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.5;">
-                      When a threat is confirmed, the OpenFlow controller instantly dispatches an OpenFlow 1.3 <strong>FlowMod</strong> with Priority 65535 to drop the malicious source MAC/IP at line rate on Port 1 or 2.
+                      Anomaly detections dispatch Priority 65535 FlowMod rule to Zodiac FX hardware tables to drop attacker MAC/IP at line rate on Port 1 or 2.
                     </p>
                   </div>
-
                 </div>
               </div>
             </div>
 
-          </div><!-- /view-device-coral -->
+          </div><!-- /view-device-coral-1 -->
+
+          <!-- GOOGLE CORAL EDGE TPU #2 VIEW (RFC 1035 DNS Sentinel) -->
+          <div id="view-device-coral-2" style="display: none;">
+            <div class="cf-page-header">
+              <div>
+                <h1 class="cf-page-title" id="coral2-page-title">Google Coral Edge TPU #2 — RFC 1035 DNS Sentinel</h1>
+                <p class="cf-page-desc" id="coral2-page-desc">Dedicated fast-path deep packet inspection for DNS tunneling, high-entropy DGA domains, and covert channel exfiltration (&lt;250 µs latency budget).</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="cf-pill-badge purple" id="coral2-tops-badge">4 TOPS INT8</span>
+                <span class="cf-pill-badge blue" id="coral2-dns-badge">Port 53 Fast-Path</span>
+                <span class="cf-pill-badge gray mono" id="coral2-bus-badge">Bus 002 Dev 023</span>
+              </div>
+            </div>
+
+            <!-- Coral 2 Top 4 KPI Cards -->
+            <div class="cf-stats-grid" id="coral2-perf-card">
+              
+              <!-- KPI 1: Compute Capacity -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Tensor Compute Engine</span>
+                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Google Coral #2</span>
+                </div>
+                <div class="cf-stat-value" style="color: #7e22ce;" id="coral2-kpi-tops">4 TOPS</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill" style="width: 100%; background: #7e22ce;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Architecture: <strong>Edge TPU INT8</strong></span>
+                  <span>Peak: 4 TOPS / 2W</span>
+                </div>
+              </div>
+
+              <!-- KPI 2: Pipeline State -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Operational Pipeline</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">DNS Sentinel</span>
+                </div>
+                <div class="cf-stat-value" id="coral2-kpi-status">--</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Role: <strong>RFC 1035 Sentinel</strong></span>
+                  <span id="coral2-kpi-model">Model: <strong>Standby</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 3: USB Link -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">USB Bus &amp; Carrier Port</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">Hub Port 3</span>
+                </div>
+                <div class="cf-stat-value blue" id="coral2-kpi-speed">5.0 Gbps</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill" style="width: 100%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span id="coral2-kpi-bus">Bus 002 Device 023</span>
+                  <span>VID: <strong class="cf-mono" id="coral2-kpi-vid">18d1:9302</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 4: Query Latency Budget -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">DNS SLA Latency Budget</span>
+                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;">Fast-Path SLA</span>
+                </div>
+                <div class="cf-stat-value" style="color: #059669;">&lt; 250 µs</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" style="width: 25%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Queries Analyzed: <strong class="cf-mono" id="coral2-kpi-total-inf">0</strong></span>
+                  <span>Target: &lt; 0.25 ms</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Coral 2 Charts Grid (2x1) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+              
+              <!-- Chart 1: DNS Query Volume -->
+              <div class="cf-card">
+                <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                  <div>
+                    <h3 class="cf-card-title">DNS Query Volume &amp; Triage Rate</h3>
+                    <div class="cf-card-subtitle">Queries per second (QPS) vs DGA / Tunneling Anomaly Score Stream</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="cf-time-range-group" id="cf-coral2-time-selectors">
+                      <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                      <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                      <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                      <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                    </div>
+                    <span class="cf-pill-badge blue">DNS QPS</span>
+                  </div>
+                </div>
+                <div class="cf-card-body">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral2-rate" style="position: relative; height: 220px;">
+                    <canvas id="chart-coral2-rate"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart 2: Fast-Path Latency -->
+              <div class="cf-card">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">Fast-Path Resolution Latency Profile</h3>
+                    <div class="cf-card-subtitle">Sub-millisecond query parsing &amp; Shannon entropy scoring</div>
+                  </div>
+                  <span class="cf-pill-badge green">SLA Budget</span>
+                </div>
+                <div class="cf-card-body">
+                  <div class="cf-canvas-container" id="canvas-wrapper-coral2-latency" style="position: relative; height: 220px;">
+                    <canvas id="chart-coral2-latency"></canvas>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Coral 2 Architecture Card -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="coral2-pipeline-card">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Dedicated Model Parallelism — RFC 1035 DNS Sentinel</h3>
+                  <div class="cf-card-subtitle">Zero-overhead character-level neural scoring for algorithmic domain generation (DGA)</div>
+                </div>
+                <span class="cf-pill-badge blue">SRAM Pinned (8MB)</span>
+              </div>
+              <div class="cf-card-body">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+                  <div style="padding: 1.25rem; border: 1px solid var(--cf-border); border-radius: 6px; background: rgba(0, 81, 195, 0.03);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                      <span class="cf-pill-badge blue">Fast-Path Ingestion</span>
+                      <strong style="color: var(--cf-blue);">Port 53 UDP/TCP Queries</strong>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.5;">
+                      Direct stream of all client DNS lookups. Decodes wire-format labels per RFC 1035 with zero memory allocation.
+                    </p>
+                  </div>
+                  <div style="padding: 1.25rem; border: 1px solid var(--cf-border); border-radius: 6px; background: rgba(147, 51, 234, 0.03);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                      <span class="cf-pill-badge purple">In-SRAM Model</span>
+                      <strong style="color: #7e22ce;">Character-Level DGA &amp; Tunneling NLP</strong>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.5;">
+                      Evaluates domain n-gram distributions, vowel-to-consonant ratios, and Shannon entropy directly on Coral TPU #2 in &lt;150 µs.
+                    </p>
+                  </div>
+                  <div style="padding: 1.25rem; border: 1px solid var(--cf-border); border-radius: 6px; background: rgba(16, 185, 129, 0.03);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                      <span class="cf-pill-badge green">Fail-Closed Response</span>
+                      <strong style="color: #059669;">NXDOMAIN Injection &amp; Flow Quarantine</strong>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.5;">
+                      Flagged exfiltration queries immediately trigger authoritative NXDOMAIN synthesis or instant SDN drop rule installation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /view-device-coral-2 -->
 
         </div>
 
@@ -1681,7 +1861,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.51757cc1ba.js"></script>
+  <script defer src="zodiac-app.2f26532dba.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
