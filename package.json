@@ -28,6 +28,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "zodiac": "node --experimental-strip-types scripts/zodiac-cli.ts",
+    "burst": "node --experimental-strip-types scripts/burst-cli.ts start",
+    "burst:status": "node --experimental-strip-types scripts/burst-cli.ts status",
+    "burst:stop": "node --experimental-strip-types scripts/burst-cli.ts stop",
     "serve": "node --experimental-strip-types scripts/zodiac-cli.ts serve",
     "dev": "node --experimental-strip-types scripts/zodiac-cli.ts serve"
   },

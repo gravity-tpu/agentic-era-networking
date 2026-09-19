@@ -212,6 +212,23 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'burst':
+    case 'burst:status':
+    case 'burst:stop': {
+      const burstCliPath = new URL('./burst-cli.ts', import.meta.url).pathname;
+      const subArgs = args.slice(0); // includes command e.g. burst, 5m, etc.
+      if (command === 'burst') {
+        subArgs[0] = 'start';
+      }
+      const child = spawn('node', ['--experimental-strip-types', burstCliPath, ...subArgs], {
+        stdio: 'inherit',
+      });
+      child.on('close', (code) => {
+        process.exit(code ?? 0);
+      });
+      break;
+    }
+
     case 'help':
     default:
       console.log(`
@@ -228,6 +245,7 @@ Commands:
   ping        - High-precision ping to Zodiac switch IP (${switchIp})
   reboot      - Restart the Zodiac FX switch via serial command
   serve       - Launch the local web dashboard and REST bridge on http://localhost:3000
+  burst       - Send multi-device traffic & inference burst across Zodiac, Corals, Jetson, and RPi
 `);
       break;
   }
