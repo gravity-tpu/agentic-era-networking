@@ -260,6 +260,21 @@
   }
 
   /**
+   * Coerces numeric telemetry fields safely to finite numbers for canvas plotting.
+   * Protects against NaN or invalid types poisoning canvas coordinate math (Quoc Le).
+   */
+  function safeNumericValue(val, fallback = 0) {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'number') return Number.isFinite(val) ? val : fallback;
+    if (typeof val === 'bigint') return Number(val);
+    if (typeof val === 'string') {
+      const parsed = Number(val);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+    return fallback;
+  }
+
+  /**
    * Deterministic byte formatting using pure BigInt integer arithmetic.
    * Banishes IEEE-754 floating-point operations.
    */
@@ -2221,10 +2236,13 @@
     const plotH = height - padTop - padBottom;
     if (plotW <= 10 || plotH <= 10) return;
 
+    const getInfVal = (pt) => (pt.inferencesPerSecond !== undefined ? safeNumericValue(pt.inferencesPerSecond) : safeNumericValue(pt.inferenceRateIps));
+    const getTapVal = (pt) => (pt.tapPacketsPerSecond !== undefined ? safeNumericValue(pt.tapPacketsPerSecond) : safeNumericValue(pt.tapPacketsPerSec));
+
     let maxY = 100;
     for (const pt of points) {
-      const inf = pt.inferencesPerSecond !== undefined ? Number(pt.inferencesPerSecond) : (typeof pt.inferenceRateIps === 'number' ? pt.inferenceRateIps : Number(pt.inferenceRateIps || 0));
-      const tap = pt.tapPacketsPerSecond !== undefined ? Number(pt.tapPacketsPerSecond) : (typeof pt.tapPacketsPerSec === 'bigint' ? Number(pt.tapPacketsPerSec) : Number(pt.tapPacketsPerSec || 0));
+      const inf = getInfVal(pt);
+      const tap = getTapVal(pt);
       if (inf > maxY) maxY = inf;
       if (tap > maxY) maxY = tap;
     }
@@ -2261,9 +2279,6 @@
       const y = padTop + plotH - (Math.max(0, Math.min(maxY, v)) / maxY) * plotH;
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
-
-    const getInfVal = (pt) => (pt.inferencesPerSecond !== undefined ? Number(pt.inferencesPerSecond) : (typeof pt.inferenceRateIps === 'number' ? pt.inferenceRateIps : Number(pt.inferenceRateIps || 0)));
-    const getTapVal = (pt) => (pt.tapPacketsPerSecond !== undefined ? Number(pt.tapPacketsPerSecond) : (typeof pt.tapPacketsPerSec === 'bigint' ? Number(pt.tapPacketsPerSec) : Number(pt.tapPacketsPerSec || 0)));
 
     // Inference Curve (Purple #7e22ce) - segmented for gaps
     const infSegments = partitionContiguousSegments(points, currentRange, getInfVal);
@@ -2310,11 +2325,11 @@
     const plotH = height - padTop - padBottom;
     if (plotW <= 10 || plotH <= 10) return;
 
+    const getLatVal = (pt) => (pt.latencyP50Us !== undefined && pt.latencyP50Us !== null ? safeNumericValue(pt.latencyP50Us) : safeNumericValue(pt.latencyMicros));
+
     let maxLat = 600;
     for (const pt of points) {
-      const latVal = pt.latencyP50Us !== undefined && pt.latencyP50Us !== null
-        ? Number(pt.latencyP50Us)
-        : (typeof pt.latencyMicros === 'number' ? pt.latencyMicros : Number(pt.latencyMicros || 0));
+      const latVal = getLatVal(pt);
       if (latVal > maxLat) maxLat = latVal;
     }
     maxLat = Math.max(600, Math.ceil(maxLat * 1.15));
@@ -2365,8 +2380,6 @@
       const y = padTop + plotH - (Math.max(0, Math.min(maxLat, v)) / maxLat) * plotH;
       return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
     };
-
-    const getLatVal = (pt) => (pt.latencyP50Us !== undefined && pt.latencyP50Us !== null ? Number(pt.latencyP50Us) : (typeof pt.latencyMicros === 'number' ? pt.latencyMicros : Number(pt.latencyMicros || 0)));
 
     // Latency Area & Line (Emerald #059669) - segmented for gaps
     const latSegments = partitionContiguousSegments(points, currentRange, getLatVal);
