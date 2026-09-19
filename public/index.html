@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="zodiac.470d143fa5.css">
+  <link rel="stylesheet" href="zodiac.4cf4c90385.css">
   <!-- Favicon — three-tier network topology node (transparent SVG) -->
   <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon.svg">
@@ -56,8 +56,8 @@
           </button>
           <button class="cf-device-btn" id="btn-device-coral" role="tab" aria-selected="false" data-device="coral">
             <span class="cf-status-dot green" id="dot-device-coral"></span>
-            <span class="cf-device-btn-name">Coral TPU</span>
-            <span class="cf-pill-badge purple">4 TOPS</span>
+            <span class="cf-device-btn-name" id="btn-device-coral-name">Coral TPU</span>
+            <span class="cf-pill-badge purple" id="btn-device-coral-badge">8 TOPS</span>
           </button>
         </div>
       </div>
@@ -1184,6 +1184,32 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
+              <!-- Edge TPU Inference Acceleration Subsystem Card -->
+              <div class="cf-card" style="margin-top: 0;" id="orin-coral-subsystem-card">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(126, 34, 206, 0.1); color: #7e22ce; width: 32px; height: 32px;">TPU</div>
+                    <div>
+                      <h3 class="cf-card-title" id="orin-coral-card-title" style="font-size: 0.95rem;">Edge TPU Accelerators</h3>
+                      <div class="cf-card-subtitle" id="orin-coral-card-sub" style="font-size: 0.72rem;">USB 3.1 SuperSpeed · Dedicated Model Parallelism</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge purple" id="orin-coral-card-badge">8 TOPS INT8</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Silicon Allocation &amp; Roles</span>
+                    <span class="cf-mono" id="orin-coral-card-status" style="font-size: 0.82rem; font-weight: 600; color: #7e22ce;">Dual Accelerators Attached</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div class="cf-mini-bar-fill purple" id="orin-coral-card-bar" style="width: 100%; height: 100%; border-radius: 3px; background: #7e22ce;"></div>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;" id="orin-coral-subsystem-devices">
+                    <!-- Populated dynamically by zodiac-app.js -->
+                  </div>
+                </div>
+              </div>
+
             </div>
 
           </div><!-- /view-device-orin -->
@@ -1655,7 +1681,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.8e7d756ecd.js"></script>
+  <script defer src="zodiac-app.627c024c30.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
