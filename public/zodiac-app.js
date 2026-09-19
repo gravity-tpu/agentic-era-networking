@@ -506,9 +506,9 @@
       if (activeDeviceId === 'orin') {
         els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
       } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
-        els.breadcrumbName.innerText = 'Google Coral Edge TPU #1 · Port 3 Tap DPI (4 TOPS)';
+        els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (activeDeviceId === 'coral-2') {
-        els.breadcrumbName.innerText = 'Google Coral Edge TPU #2 · RFC 1035 DNS Sentinel (4 TOPS)';
+        els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel (4 TOPS)';
       } else {
         els.breadcrumbName.innerText = devName;
       }
@@ -518,9 +518,9 @@
       if (activeDeviceId === 'orin') {
         els.sidebarDevName.innerText = 'Jetson_Orin_Nano';
       } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
-        els.sidebarDevName.innerText = 'Coral_TPU_1_Tap';
+        els.sidebarDevName.innerText = 'Coral_TPU_Tap_DPI';
       } else if (activeDeviceId === 'coral-2') {
-        els.sidebarDevName.innerText = 'Coral_TPU_2_DNS';
+        els.sidebarDevName.innerText = 'Coral_TPU_DNS_Sentinel';
       } else {
         els.sidebarDevName.innerText = devName;
       }
@@ -3429,9 +3429,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
   const DEVICE_META = {
     zodiac:    { hwName: 'Zodiac FX Hardware \u00b7 Rev B',           firmware: 'Firmware v0.86',                  navId: 'cf-nav-zodiac' },
     orin:      { hwName: 'NVIDIA Jetson Orin Nano \u00b7 Dev Kit',    firmware: 'JetPack 6.x \u00b7 Ubuntu 22.04', navId: 'cf-nav-orin'   },
-    'coral-1': { hwName: 'Google Coral TPU #1 \u00b7 Port 3 Tap DPI',  firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
-    'coral-2': { hwName: 'Google Coral TPU #2 \u00b7 DNS Sentinel',    firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
-    coral:     { hwName: 'Google Coral TPU #1 \u00b7 Port 3 Tap DPI',  firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
+    'coral-1': { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
+    'coral-2': { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
+    coral:     { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
   };
 
   // Cached section elements (queried once — stable IDs, never recreated)
@@ -3555,9 +3555,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
       } else if (device === 'orin') {
         els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
       } else if (device === 'coral-1') {
-        els.breadcrumbName.innerText = 'Google Coral Edge TPU #1 · Port 3 Tap DPI (4 TOPS)';
+        els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (device === 'coral-2') {
-        els.breadcrumbName.innerText = 'Google Coral Edge TPU #2 · RFC 1035 DNS Sentinel (4 TOPS)';
+        els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel (4 TOPS)';
       }
     }
 
