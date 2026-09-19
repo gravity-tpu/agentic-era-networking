@@ -44,6 +44,7 @@ import socket
 import sys
 import threading
 import time
+from typing import TypedDict, Union
 import urllib.request
 
 MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite')
@@ -415,7 +416,14 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
         sys.stderr.flush()
 
 
-cached_live_summary = {
+class LiveTelemetrySummary(TypedDict):
+    p3_rx_pkts: Union[int, str]
+    p4_rx_bytes: Union[int, str]
+    tpu0_inf_sec: int
+    jetson_temp_c: Union[float, int, str]
+
+
+cached_live_summary: LiveTelemetrySummary = {
     'p3_rx_pkts': '-',
     'p4_rx_bytes': '-',
     'tpu0_inf_sec': 0,
@@ -575,8 +583,9 @@ def main():
                 if dev_path and sentinel_target_path in dev_path:
                     active_tpu_devs.append(f':{i}')
                     break
-            if not active_tpu_devs and len(detected_tpus) > 1:
-                active_tpu_devs.append(':1')
+            if not active_tpu_devs:
+                # Fail-closed (Council Invariant 3 & 4): unmatched topology constraint drops worker
+                sys.stderr.write(f'[burst-daemon] Fail-closed: Sentinel Edge TPU matching {sentinel_target_path} not found among {detected_tpus}\n')
         except Exception as exc:
             sys.stderr.write(f'[burst-daemon] Note: Edge TPU worker discovery error: {exc}\n')
 
