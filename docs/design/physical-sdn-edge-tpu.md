@@ -1,12 +1,11 @@
 # Physical SDN & Autonomous Master Appliance Architecture
 
 > **Hardware Specification & Integration Blueprint for the Agentic Era**  
-> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Google Coral Edge TPU + Raspberry Pi 3B+ (Client Workload) + Anker Solix F1500 (Autonomous Power Substrate)  
+> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Google Coral Edge TPU + Raspberry Pi 3B+ (Client Workload)  
 > **Autonomous Master Appliance:** NVIDIA Jetson Orin Nano Super (24/7 dedicated controller host, 67 TOPS Ampere GPU, TensorRT INT8 engine, Tri-Interface Stack)  
 > **Inference Accelerator:** Google Coral Edge TPU (4 TOPS INT8 accelerator, USB 3.0 line-rate packet classifier)  
 > **Untrusted Client Workload:** Raspberry Pi 3 Model B+ (isolated workload data plane on `eth0`, out-of-band management via `wlan0`)  
 > **Dedicated Tap Interface:** ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous capture mode)  
-> **Autonomous Power Substrate:** Anker Solix F1500 (1536 Wh LiFePO4 battery power station, 60–80+ hrs continuous off-grid runtime)  
 > **Untethered Workstation:** MacBook Pro (remote operator console via wireless WiFi 6/6E)  
 > **Governing Paradigms:** Jeff Dean (Latency Budgets), Sanjay Ghemawat (Fail-Closed Simplicity), Quoc Le (Self-Tuning Control), Oriol Vinyals (Graph Routing), Demis Hassabis (Symbolic Proof Asymmetry).
 
@@ -17,12 +16,11 @@
 In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts away critical physical artifacts: hardware buffer overruns, physical link state bounces, serialization jitter, and thermal throttle events. 
 
 This architecture grounds the `gravity-tpu/agentic-era-networking` control plane in **physical hardware**, elevating the compute node from a secondary peripheral into a **24/7 Autonomous Master Appliance**:
-- **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table. The switch is powered directly from the Jetson Orin via Micro-USB (5V VBUS), eliminating external AC wall-wart dependency.
-- **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, line-rate TensorRT neural anomaly detection (67 TOPS INT8), and physical SSD1306 OLED telemetry daemon. Powered via 19V DC from the Anker Solix battery substrate.
+- **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
+- **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, line-rate TensorRT neural anomaly detection (67 TOPS INT8), and physical SSD1306 OLED telemetry daemon.
 - **Google Coral Edge TPU**: Dedicated 4 TOPS INT8 USB 3.0 coprocessor executing sub-millisecond shallow packet classification on mirrored data streams without taxing the Jetson GPU pipeline.
 - **Dedicated Mirror Tap Interface (ASIX AX88179 USB GbE)**: Dedicated secondary physical NIC (`enx*`) on the Jetson Orin operating in promiscuous mode, directly cabled to Zodiac Port 3 for zero-loss packet inspection.
-- **Untrusted Client Workload (Raspberry Pi 3 Model B+)**: Physical client agent running on an isolated test subnet via `eth0` attached to Zodiac Port 1, protected by an out-of-band management backdoor via `wlan0`. Powered via 5V USB from the Anker Solix battery substrate.
-- **Autonomous Power Substrate (Anker Solix F1500)**: 1536 Wh LiFePO4 battery station providing conditioned power to the entire physical rack (~20W continuous draw), guaranteeing 60–80+ hours of off-grid survivability.
+- **Untrusted Client Workload (Raspberry Pi 3 Model B+)**: Physical client agent running on an isolated test subnet via `eth0` attached to Zodiac Port 1, protected by an out-of-band management backdoor via `wlan0`.
 - **Untethered Operator Workstation (MacBook Pro)**: Completely decoupled from physical data plane dependencies. The laptop can sleep, reboot, or travel without causing network flapping or interrupting traffic flow.
 
 ---
@@ -30,25 +28,6 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
 ## 2. Desktop Interconnect & Physical Wiring Topology
 
 ```
-+─────────────────────────────────────────────────────────────────────────────────────────────────────────+
-|                                    ANKER SOLIX F1500 (1536 Wh LiFePO4)                                  |
-|                         Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)                   |
-+───┬───────────────────────────────────────────────────────────────────┬─────────────────────────────────+
-    │ 19V DC Power                                                      │ 5V USB-C Power
-    ▼                                                                   ▼
-+───────────────────────────────────+                             +──────────────────────────────+
-| NVIDIA Jetson Orin Nano Super     |                             | Raspberry Pi 3 Model B+      |
-| 67 TOPS Ampere, 24/7 Controller   |                             | Untrusted Agent Workload     |
-| NVMe 500GB SSD @ 1.8 GB/s         |                             | Broadcom BCM2837B0           |
-+───┬───────────────────────────────+                             +──────────────────────────────+
-    │ 5V VBUS Power + Serial CDC Telemetry (/dev/ttyACM0 @ 115200 8N1)
-    ▼
-+──────────────────────────+
-| Zodiac FX 4-Port Switch  |  (Powered directly by Jetson Orin USB host)
-| Microchip KSZ8795 +      |
-| SAM4E8E ARM Cortex-M4    |
-+──────────────────────────+
-
                                             +───────────────────────────────────+
                                             |    Public Internet / Home LAN     |
                                             +-----------------+-----------------+
@@ -77,7 +56,7 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
         │                             │                         │ USB 3.0                   │
         │                             │                         ▼                           │
         │                        +----+-----------------------------------------------------+   Micro-USB
-        │                        |         NVIDIA Jetson Orin Nano Super Master Appliance   |<──5V Power & CDC
+        │                        |         NVIDIA Jetson Orin Nano Super Master Appliance   |<──Serial CDC
         │                        |                                                          |   /dev/ttyACM0
         │                        |  * Controller Plane: enP8p1s0 (<ctrl-subnet>) <──────────+───(115200 8N1)
         │                        |  * Mirror Tap Ingress: enx* (Promiscuous)                |
@@ -118,7 +97,7 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
 | **Zodiac FX Switch** | Port 2 (100BASE-TX) | KSZ8795 Port 2 | Gateway Bridged (VLAN 100) | ISP Gateway / Mesh Node | **WAN / Gateway Uplink**: Egress to public internet. |
 | **Zodiac FX Switch** | Port 3 (100BASE-TX) | KSZ8795 Port 3 | Port Mirror (VLAN 100) | Jetson `enx*` USB GbE | **Hardware Mirror Tap**: Zero-overhead port mirror for Coral/Jetson DPI. |
 | **Zodiac FX Switch** | Port 4 (100BASE-TX) | KSZ8795 Port 4 | Switch Management (VLAN 200) | Jetson `enP8p1s0` | **OpenFlow 1.3 Control Channel**: Isolated switch management. |
-| **Zodiac FX Switch** | Micro-USB (CDC-ACM) | Atmel VID 03eb PID 2404 | `/dev/ttyACM0` @ 115200 8N1 | Jetson USB Host | **Power & Telemetry**: 5V VBUS powered; 1–2 Hz hardware register stream. |
+| **Zodiac FX Switch** | Micro-USB (CDC-ACM) | Atmel VID 03eb PID 2404 | `/dev/ttyACM0` @ 115200 8N1 | Jetson USB Host | **Telemetry Stream**: 1–2 Hz hardware register stream. |
 | **Jetson Orin Nano** | `enP8p1s0` (Onboard GbE) | Onboard Realtek GbE | Dedicated Control Subnet | Zodiac Port 4 | **OpenFlow Controller**: Listens on `:6633` (<1ms latency). |
 | **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress**: Line-rate packet capture for Coral TPU. |
 | **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Home Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |
@@ -126,7 +105,6 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
 | **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | Zodiac Port 1 | **Untrusted Agent Workload**: Target for SDN policy enforcement. |
 | **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
-| **Anker Solix F1500** | 1536 Wh LiFePO4 Station | LiFePO4 Substrate | AC / 19V / 5V Rails | Master Rack Hardware | **Autonomous Power Substrate**: 60–80+ hrs continuous off-grid runtime. |
 | **MacBook Pro** | Wi-Fi 6/6E | Client Workstation | Management Plane Subnet | Home Wireless LAN | **Untethered Console**: Zero-risk development and monitoring console. |
 
 ### 2.2 Dual-Homed Workload Architecture & Asymmetric Routing Invariant
@@ -169,7 +147,7 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
 ### Role 1: Real-Time Flow Anomaly Detection & Fail-Closed Quarantine (Coral + Jetson Split Inference)
 * **Challenge**: Autonomous AI agents executing tool-use loops can trigger rogue network behaviors (DDoS against local services, aggressive subnet scanning, abnormal packet burst frequencies, exfiltration bursts).
 * **Split-Inference Hardware Mechanism**: 
-  * Port 3 of the Zodiac FX hardware-mirrors all data plane packet traffic (VLAN 100) directly to the Jetson Orin's dedicated ASIX AX88179 USB GbE adapter (`enx9c69d39dd0a6`) in promiscuous mode.
+  * Port 3 of the Zodiac FX hardware-mirrors all data plane packet traffic (VLAN 100) directly to the Jetson Orin's dedicated ASIX AX88179 USB GbE adapter (`enx*`) in promiscuous mode.
   * **Stage 1 — Google Coral Edge TPU (4 TOPS INT8)**: The Coral USB accelerator runs sub-millisecond shallow packet classification on raw frame headers, assessing inter-arrival time deltas ($\Delta t$), entropy, and packet size distributions without consuming GPU/CPU cycles.
   * **Stage 2 — Jetson Orin TensorRT (67 TOPS Ampere)**: Deep anomaly detection models (1D-CNN autoencoder) evaluate suspicious sequences flagged by Stage 1 within a `< 1.0 ms` budget.
   * If the anomaly reconstruction error exceeds the policy boundary, the controller pushes an immediate OpenFlow `FLOW_MOD` with highest priority (`65535`) to drop or quarantine the offending agent's MAC/IP traffic on Port 1.

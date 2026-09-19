@@ -6,23 +6,9 @@
 
 ---
 
-## Hardware Wiring & Power Substrate
+## Hardware Wiring
 
 ```
-+───────────────────────────────────────────────────────────────────────────+
-|                    ANKER SOLIX F1500 (1536 Wh LiFePO4)                    |
-|       Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)       |
-+───┬───────────────────────────────────────────────────────────┬───────────+
-    │ 19V DC Power                                              │ 5V USB-C
-    ▼                                                           ▼
-[Jetson Orin Nano Super]                                [Raspberry Pi 3B+]
-(67 TOPS, NVMe 500GB SSD)                               (Untrusted Workload)
-    │
-    │ 5V VBUS Power + Serial CDC Telemetry (/dev/ttyACM0 @ 115200 8N1)
-    ▼
-[Zodiac FX Switch]  (Powered directly by Jetson Orin USB host)
-(KSZ8795 + SAM4E8E)
-
 [ISP Gateway / Mesh Node]
           │ 100BASE-TX Ethernet
           ▼
@@ -30,7 +16,7 @@
 [Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [Raspberry Pi 3B+ eth0: <workload-subnet>]
 [Zodiac FX Port 3] ─── Ethernet RJ-45 ───► [Jetson ASIX USB GbE: enx* (Promiscuous Tap)]
 [Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
-[Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Power + Serial CDC)]
+[Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC Telemetry)]
                                            │
                                            ├──► [Google Coral Edge TPU (USB 3.0)]
                                            ├──► [SSD1306 0.96" OLED (I2C Bus 7, 0x3c)]
@@ -48,7 +34,7 @@
 | **Port 2** | ISP Gateway / Mesh Node | RJ-45 Uplink Cable | Gateway Bridged (VLAN 100) | **Gateway Transit**: Public Internet access. |
 | **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
 | **Port 4** | Jetson Orin Nano Super | `enP8p1s0` | Dedicated Control Subnet | **OpenFlow Control Channel**: Controller target `:6633`. |
-| **Micro-USB** | Jetson Orin Nano Super | USB CDC (VID 03eb PID 2404) | `/dev/ttyACM0` @ 115200 | **Power & Telemetry**: 5V VBUS powered; 1–2 Hz telemetry. |
+| **Micro-USB** | Jetson Orin Nano Super | USB CDC (VID 03eb PID 2404) | `/dev/ttyACM0` @ 115200 | **Hardware Register Telemetry**: 1–2 Hz hardware telemetry. |
 
 ---
 

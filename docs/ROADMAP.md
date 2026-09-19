@@ -11,21 +11,15 @@ Governed by the **Senior Staff Council Invariants**:
 
 ---
 
-## Physical Hardware Rack Architecture & Autonomous Substrate
+## Physical Hardware Architecture
 
 ```
-+───────────────────────────────────────────────────────────────────────────────────────────+
-|                           ANKER SOLIX F1500 (1536 Wh LiFePO4)                             |
-|               Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)               |
-+───┬───────────────────────────────────────────────────────────────────┬───────────────────+
-    │ 19V DC Power                                                      │ 5V USB-C
-    ▼                                                                   ▼
 +───────────────────────────────────+                             +─────────────────────────+
 | NVIDIA Jetson Orin Nano Super     |                             | Raspberry Pi 3 Model B+ |
 | 67 TOPS Ampere, 24/7 Controller   |                             | Untrusted Workload      |
 +───┬───────────┬───────────────────+                             +────────────┬────────────+
-    │ 5V VBUS + │ Port 4 (:6633)                                               │ eth0
-    │ CDC Telemetry                                                            │
+    │ Serial    │ Port 4 (:6633)                                               │ eth0
+    │ CDC       │                                                              │
     ▼           │ RJ-45 Patch                                                  │ RJ-45 Patch
 +───────────────▼──────────+                                                   │
 | Zodiac FX 4-Port Switch  |                                                   │
@@ -70,12 +64,11 @@ Governed by the **Senior Staff Council Invariants**:
 
 | Node | Role | Hardware / Logical Plane | Always On? |
 |---|---|---|---|
-| **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 (5V USB from Jetson) | ✅ Yes |
+| **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 | ✅ Yes |
 | **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`) | ✅ Yes |
-| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | USB 3.0 (Powered by Jetson) | ✅ Yes |
+| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
 | **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (<workload-subnet>), `wlan0` (<mgmt-subnet>) | ✅ Yes |
-| **Anker Solix F1500** | Autonomous Power Substrate — 1536 Wh LiFePO4 battery power station | ~20W total rack consumption | ✅ Yes |
 | **MacBook Pro** | Dev Workstation — SSH coding, web dashboard monitoring | WiFi 6/6E (<mgmt-subnet>) | ❌ Untethered |
 
 ## Phase Overview
