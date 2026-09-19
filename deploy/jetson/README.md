@@ -18,7 +18,8 @@
 [Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
 [Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC Telemetry)]
                                            │
-                                           ├──► [Google Coral Edge TPU (USB 3.0)]
+                                           ├──► [Google Coral Edge TPU #1 (USB 3.0: Tap DPI)]
+                                           ├──► [Google Coral Edge TPU #2 (USB 3.0: DNS Sentinel)]
                                            ├──► [SSD1306 0.96" OLED (I2C Bus 7, 0x3c)]
                                            └──► [wlP1p1s0: <mgmt-subnet> (Wi-Fi Mgmt/Relay)]
 ```
@@ -169,15 +170,17 @@ journalctl -u zodiac-bridge -f
 
 ---
 
-## 7. Google Coral TPU (Phase 2A — Not Yet Active)
+## 7. Dual Google Coral TPUs (Phase 2A — Pre-Wired)
 
-The Coral is physically connected to the Jetson USB 3.0 port. Phase 2A wiring is already
+Both Corals are physically connected to the Jetson USB 3.0 ports (8 TOPS INT8 total compute). Phase 2A wiring is already
 stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phase 2A begins:
 
 1. Install PyCoral / libedgetpu runtime on the Jetson.
 2. Populate `CORAL_DEVICE_PATH` and `CORAL_CONFIDENCE_THRESHOLD` in `/etc/zodiac/zodiac-bridge.env`.
-3. The Zodiac Port 3 mirror tap stream feeds the Coral for sub-millisecond shallow classification;
-   the Jetson TensorRT GPU handles deep anomaly models concurrently.
+3. Dedicated Model Parallelism:
+   - **TPU #1 (`usb:0`)**: Zodiac Port 3 mirror tap stream feeds the Coral for sub-millisecond shallow packet classification (<100 µs).
+   - **TPU #2 (`usb:1`)**: RFC 1035 transparent DNS Sentinel evaluates FQDN semantic intent and DGA likelihood (<300 µs).
+   - The Jetson Ampere TensorRT engine (67 TOPS) handles deep 1D-CNN autoencoder scoring concurrently.
 
 ---
 

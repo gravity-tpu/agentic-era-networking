@@ -1192,11 +1192,11 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
           <div id="view-device-coral" style="display: none;">
             <div class="cf-page-header">
               <div>
-                <h1 class="cf-page-title">Google Coral Edge TPU — Real-Time Inference Tap</h1>
-                <p class="cf-page-desc">Hardware tensor processing unit dedicated to Port 3 mirror tap packet anomaly classification (&lt;500 µs latency budget).</p>
+                <h1 class="cf-page-title" id="coral-page-title">Google Coral Edge TPU — Real-Time Inference Tap</h1>
+                <p class="cf-page-desc" id="coral-page-desc">Hardware tensor processing units dedicated to Port 3 mirror tap packet classification &amp; RFC 1035 DNS Sentinel (&lt;500 µs latency budget).</p>
               </div>
-              <div style="display: flex; gap: 0.5rem;">
-                <span class="cf-pill-badge purple" id="coral-tops-badge">4 TOPS INT8</span>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="cf-pill-badge purple" id="coral-tops-badge">8 TOPS INT8</span>
                 <span class="cf-pill-badge blue" id="coral-usb-badge">USB 3.1 SuperSpeed</span>
               </div>
             </div>
@@ -1208,15 +1208,15 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Tensor Compute Engine</span>
-                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;">Google Coral</span>
+                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;" id="coral-tpu-badge">Google Coral</span>
                 </div>
-                <div class="cf-stat-value" style="color: #7e22ce;">4 TOPS</div>
+                <div class="cf-stat-value" style="color: #7e22ce;" id="coral-kpi-tops">8 TOPS</div>
                 <div class="cf-mini-bar">
-                  <div class="cf-mini-bar-fill" style="width: 100%; background: #7e22ce;"></div>
+                  <div class="cf-mini-bar-fill" id="coral-kpi-tops-bar" style="width: 100%; background: #7e22ce;"></div>
                 </div>
                 <div class="cf-stat-footer">
                   <span>Architecture: <strong>Edge TPU INT8</strong></span>
-                  <span>Peak: 4 TOPS / 2W</span>
+                  <span id="coral-kpi-tops-footer">Peak: 8 TOPS / 4W</span>
                 </div>
               </div>
 
@@ -1224,15 +1224,15 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Operational Pipeline</span>
-                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">Port 3 Mirror</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;" id="coral-kpi-pipeline-badge">Dual Pipeline</span>
                 </div>
                 <div class="cf-stat-value" id="coral-kpi-status">--</div>
                 <div class="cf-mini-bar">
                   <div class="cf-mini-bar-fill" style="width: 0%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span>Pre-Wired for: <strong>Phase 2A Tap</strong></span>
-                  <span>Model: <strong>Standby</strong></span>
+                  <span id="coral-kpi-pipeline-role">Role: <strong>Tap + DNS</strong></span>
+                  <span id="coral-kpi-model">Model: <strong>Standby</strong></span>
                 </div>
               </div>
 
@@ -1247,8 +1247,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <div class="cf-mini-bar-fill" style="width: 100%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span id="coral-kpi-bus">Bus 002 Device 003</span>
-                  <span>VID: <strong class="cf-mono" id="coral-kpi-vid">1a6e:089a</strong></span>
+                  <span id="coral-kpi-bus">Bus 002 Device 018 | Dev 021</span>
+                  <span>VID: <strong class="cf-mono" id="coral-kpi-vid">18d1:9302</strong></span>
                 </div>
               </div>
 
@@ -1268,6 +1268,20 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
+            </div>
+
+            <!-- Coral Multi-Device Allocation Card -->
+            <div class="cf-card" style="margin-top: 1.25rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Physical Edge TPU Accelerators &amp; Model Parallelism</h3>
+                  <div class="cf-card-subtitle">Zero-switching-latency model partitioning across enumerated hardware units</div>
+                </div>
+                <span class="cf-pill-badge purple" id="coral-device-count-badge">Dual TPU Attached</span>
+              </div>
+              <div class="cf-card-body" id="coral-device-pills" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <!-- Dynamically populated by zodiac-app.js -->
+              </div>
             </div>
 
             <!-- Coral Charts Grid (2x1) -->

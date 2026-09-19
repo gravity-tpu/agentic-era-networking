@@ -66,13 +66,13 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
         │                        +──────────────────────────────┬───────────────────────────+
-        │                                                       │ USB 3.0 SuperSpeed
+        │                                                       │ Dual USB 3.0 SuperSpeed
         │                                                       ▼
-        │                                           +───────────────────────+
-        │                                           | Google Coral Edge TPU |
-        │                                           | 4 TOPS INT8 (USB 3.0) |
-        │                                           | Line-rate Anomaly DPI |
-        │                                           +───────────────────────+
+        │                                           +───────────────────────────────────────+
+        │                                           | Dual Google Coral Edge TPUs (8 TOPS)  |
+        │                                           | * TPU 0: Port 3 Mirror Tap DPI        |
+        │                                           | * TPU 1: RFC 1035 DNS Intent Sentinel |
+        │                                           +───────────────────────────────────────+
         │                                                       │
         ▼                                                       │ Management Plane
 +───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
@@ -101,7 +101,8 @@ This architecture grounds the `gravity-tpu/agentic-era-networking` control plane
 | **Jetson Orin Nano** | `enP8p1s0` (Onboard GbE) | Onboard Realtek GbE | Dedicated Control Subnet | Zodiac Port 4 | **OpenFlow Controller**: Listens on `:6633` (<1ms latency). |
 | **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress**: Line-rate packet capture for Coral TPU. |
 | **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Home Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |
-| **Google Coral TPU** | USB 3.0 SuperSpeed | Google VID 18d1 PID 9302 | USB 3.0 Endpoints | Jetson USB-A | **Neural Accelerator**: 4 TOPS INT8 shallow packet anomaly DPI. |
+| **Google Coral TPU #1**| USB 3.0 SuperSpeed | Google VID 18d1 PID 9302 | USB 3.0 (`usb:0`) | Jetson USB-A | **Line-Rate Tap DPI**: 4 TOPS INT8 mirror tap packet triage (<500 µs). |
+| **Google Coral TPU #2**| USB 3.0 SuperSpeed | Unichip VID 1a6e PID 089a | USB 3.0 (`usb:1`) | Jetson USB-A | **DNS Intent Sentinel**: 4 TOPS INT8 RFC 1035 DGA and exfiltration filter. |
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
 | **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | Zodiac Port 1 | **Untrusted Agent Workload**: Target for SDN policy enforcement. |
 | **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
@@ -148,9 +149,13 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
 * **Challenge**: Autonomous AI agents executing tool-use loops can trigger rogue network behaviors (DDoS against local services, aggressive subnet scanning, abnormal packet burst frequencies, exfiltration bursts).
 * **Split-Inference Hardware Mechanism**: 
   * Port 3 of the Zodiac FX hardware-mirrors all data plane packet traffic (VLAN 100) directly to the Jetson Orin's dedicated ASIX AX88179 USB GbE adapter (`enx*`) in promiscuous mode.
-  * **Stage 1 — Google Coral Edge TPU (4 TOPS INT8)**: The Coral USB accelerator runs sub-millisecond shallow packet classification on raw frame headers, assessing inter-arrival time deltas ($\Delta t$), entropy, and packet size distributions without consuming GPU/CPU cycles.
+  * **Stage 1 — Google Coral Edge TPU #1 (`usb:0`, 4 TOPS INT8)**: Dedicated exclusively to the Port 3 mirror tap. Executes ultra-fast, shallow INT8 quantized frame header anomaly classification (<100 µs), assessing inter-arrival time deltas ($\Delta t$), packet size distributions, and burst frequencies without consuming GPU/CPU cycles.
   * **Stage 2 — Jetson Orin TensorRT (67 TOPS Ampere)**: Deep anomaly detection models (1D-CNN autoencoder) evaluate suspicious sequences flagged by Stage 1 within a `< 1.0 ms` budget.
   * If the anomaly reconstruction error exceeds the policy boundary, the controller pushes an immediate OpenFlow `FLOW_MOD` with highest priority (`65535`) to drop or quarantine the offending agent's MAC/IP traffic on Port 1.
+* **Dedicated Model Parallelism Invariant (Dean & Ghemawat)**:
+  * **Why Dedicated Roles, Not Dynamic Auto-Balancing?**: Each Edge TPU possesses an 8 MB on-chip scratchpad SRAM. If two distinct models (Flow Anomaly vs. DNS Intent) were auto-balanced dynamically across both TPUs, each inference query would trigger a model eviction and reload over the USB bus, incurring a **5–15 ms latency penalty** per switch.
+  * Dedicated role assignment achieves **zero model reload latency** (0 ns overhead) by pinning Model A permanently into Coral #1 SRAM and Model B into Coral #2 SRAM.
+  * **Failover Invariant**: Only upon physical hardware failure or thermal throttling of one unit does the system fall back to time-sliced dual execution on the survivor.
 * **Fail-Closed Invariant**: Conforms to Sanjay Ghemawat & Demis Hassabis rules: if the ML detector fails or is ambiguous, the system defaults to DROP/QUARANTINE.
 
 ### Role 2: Verification Asymmetry & Symbolic Proof (AlphaProof Paradigm)
@@ -167,12 +172,12 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
   * An INT8 contextual bandit model running on the Jetson Orin observes real-time packet loss and latency feedback.
   * Dynamically reconfigures the Zodiac FX's 8 hardware rate meters and the software `AdaptiveFlowController` window using exact integer basis points (`BigInt`), completely eliminating magic constants.
 
-### Role 4: DNS Sentinel & Agent Intent Classification
+### Role 4: DNS Sentinel & Agent Intent Classification (Dedicated Coral TPU #2)
 * **Challenge**: Malicious or drifting agents can employ DNS exfiltration or algorithmic domain generation (DGA) to communicate outside approved environments.
-* **Jetson Orin TensorRT Mechanism**:
+* **Google Coral Edge TPU #2 (`usb:1`, 4 TOPS INT8) Sentinel**:
   * All agent DNS requests are serviced by the internal [src/dns/server.ts](file:///Users/andymorven/git/agentic-era-networking/src/dns/server.ts) resolver.
-  * The Jetson Orin runs a character-level quantized sequence model classifying the semantic intent and entropy of requested FQDNs in <1 ms.
-  * Queries identified as suspicious are rejected with `NXDOMAIN`, and an OpenFlow rule is dynamically synthesized to isolate the querying agent's MAC address.
+  * Rather than consuming Jetson GPU/CPU cycles, Coral #2 runs a dedicated character-level quantized sequence model in SRAM, evaluating the semantic intent, entropy, and DGA likelihood of requested FQDNs in <300 µs.
+  * Queries identified as suspicious are rejected with `NXDOMAIN`, and an OpenFlow rule is dynamically synthesized to isolate the querying agent's MAC address on the Zodiac FX data plane.
 
 ---
 

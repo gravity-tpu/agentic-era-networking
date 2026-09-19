@@ -166,8 +166,22 @@ export interface CoralTimeSeriesPoint {
   readonly usbThroughputKbps: bigint;
 }
 
+export interface CoralDeviceDescriptor {
+  readonly id: string;
+  readonly name: string;
+  readonly vendorId: string;
+  readonly productId: string;
+  readonly usbBus: string;
+  readonly usbSpeed: string;
+  readonly assignedRole: 'TAP_PACKET_CLASSIFIER' | 'DNS_SENTINEL' | 'GENERAL_INFERENCE';
+  readonly status: 'STANDBY' | 'INFERENCE_ACTIVE' | 'NOT_DETECTED';
+  readonly peakTopsInt8: number;
+}
+
 export interface CoralTelemetrySnapshot {
   readonly detected: boolean;
+  readonly deviceCount: number;
+  readonly devices: readonly CoralDeviceDescriptor[];
   readonly name: string;
   readonly vendorId: string;
   readonly productId: string;
@@ -486,6 +500,22 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = true): Jet
 export function createDefaultCoralSnapshot(isDisconnected: boolean = true): CoralTelemetrySnapshot {
   return {
     detected: !isDisconnected,
+    deviceCount: isDisconnected ? 0 : 1,
+    devices: isDisconnected
+      ? []
+      : [
+          {
+            id: 'coral-0',
+            name: 'Google Coral Edge TPU #1 (Tap DPI)',
+            vendorId: '1a6e',
+            productId: '089a',
+            usbBus: 'Bus 002 Device 003',
+            usbSpeed: 'USB 3.1 SuperSpeed (5.0 Gbps)',
+            assignedRole: 'TAP_PACKET_CLASSIFIER',
+            status: 'STANDBY',
+            peakTopsInt8: 4,
+          },
+        ],
     name: 'Google Coral Edge TPU USB Accelerator',
     vendorId: isDisconnected ? 'None' : '1a6e',
     productId: isDisconnected ? 'None' : '089a',

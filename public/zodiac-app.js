@@ -233,6 +233,14 @@
     coralKpiBus: document.getElementById('coral-kpi-bus'),
     coralKpiVid: document.getElementById('coral-kpi-vid'),
     coralKpiTotalInf: document.getElementById('coral-kpi-total-inf'),
+    coralKpiTops: document.getElementById('coral-kpi-tops'),
+    coralKpiTopsFooter: document.getElementById('coral-kpi-tops-footer'),
+    coralTpuBadge: document.getElementById('coral-tpu-badge'),
+    coralTopsBadge: document.getElementById('coral-tops-badge'),
+    coralKpiPipelineRole: document.getElementById('coral-kpi-pipeline-role'),
+    coralKpiModel: document.getElementById('coral-kpi-model'),
+    coralDeviceCountBadge: document.getElementById('coral-device-count-badge'),
+    coralDevicePills: document.getElementById('coral-device-pills'),
 
     // Google Coral Canvases
     chartCoralRateCanvas: document.getElementById('chart-coral-rate'),
@@ -967,6 +975,8 @@
       const isDetected = Boolean(c.detected && c.status !== 'NOT_DETECTED');
       const isOnline = Boolean(isDetected && (c.status === 'INFERENCE_ACTIVE' || c.status === 'online'));
       const isStandby = Boolean(isDetected && !isOnline);
+      const count = c.deviceCount ?? 0;
+      const tops = c.peakTopsInt8 ?? 0;
 
       if (els.dotDeviceCoral) {
         els.dotDeviceCoral.className = isOnline
@@ -990,6 +1000,51 @@
       if (els.coralKpiVid) els.coralKpiVid.innerText = isDetected ? `${c.vendorId || '1a6e'}:${c.productId || '089a'}` : 'None';
       const totalInf = isDetected ? (c.inferencesPerSecond ?? c.totalInferences ?? 0n) : 0n;
       if (els.coralKpiTotalInf) els.coralKpiTotalInf.innerText = formatNumber(totalInf);
+
+      if (els.coralKpiTops) {
+        els.coralKpiTops.innerText = isDetected ? `${tops} TOPS` : '0 TOPS';
+      }
+      if (els.coralKpiTopsFooter) {
+        els.coralKpiTopsFooter.innerText = isDetected ? `Peak: ${tops} TOPS / ${count * 2}W` : 'Offline';
+      }
+      if (els.coralTpuBadge) {
+        els.coralTpuBadge.innerText = count > 1 ? `Dual Coral (${count}x)` : 'Google Coral';
+      }
+      if (els.coralTopsBadge) {
+        els.coralTopsBadge.innerText = count > 1 ? `${tops} TOPS INT8 (Dual TPU)` : `${tops} TOPS INT8`;
+      }
+      if (els.coralDeviceCountBadge) {
+        els.coralDeviceCountBadge.innerText = count > 1 ? `${count} Accelerators Active` : (isDetected ? '1 Accelerator Active' : 'Offline');
+      }
+      if (els.coralKpiPipelineRole) {
+        els.coralKpiPipelineRole.innerHTML = `Role: <strong>${count > 1 ? 'Tap + DNS' : 'Phase 2A Tap'}</strong>`;
+      }
+      if (els.coralKpiModel) {
+        els.coralKpiModel.innerHTML = `Model: <strong>${escapeHtml(c.loadedModel || (count > 1 ? 'Dual Standby' : 'Standby'))}</strong>`;
+      }
+      if (els.coralDevicePills) {
+        if (Array.isArray(c.devices) && c.devices.length > 0) {
+          els.coralDevicePills.innerHTML = c.devices.map((d) => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.85rem; background: var(--cf-bg-secondary); border: 1px solid var(--cf-border); border-radius: 6px; font-size: 0.78rem;">
+              <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <span class="cf-status-dot ${d.status === 'INFERENCE_ACTIVE' ? 'green' : 'purple'}"></span>
+                <strong>${escapeHtml(d.name)}</strong>
+                <span class="cf-pill-badge ${d.assignedRole === 'TAP_PACKET_CLASSIFIER' ? 'purple' : 'blue'}" style="font-size: 0.65rem;">${escapeHtml(d.assignedRole === 'TAP_PACKET_CLASSIFIER' ? 'Port 3 Tap DPI' : 'RFC 1035 DNS Sentinel')}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.75rem; color: var(--cf-text-secondary);">
+                <span class="cf-mono" style="font-size: 0.72rem;">${escapeHtml(d.usbBus)}</span>
+                <span class="cf-pill-badge gray" style="font-size: 0.65rem;">${d.peakTopsInt8} TOPS</span>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          els.coralDevicePills.innerHTML = `
+            <div style="font-size: 0.78rem; color: var(--cf-text-secondary); padding: 0.5rem 0;">
+              No individual TPU descriptors enumerated.
+            </div>
+          `;
+        }
+      }
 
       // Time series buffer update for Coral
       if (Array.isArray(c.timeSeries) && c.timeSeries.length > 0) {

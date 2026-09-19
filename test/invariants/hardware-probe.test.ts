@@ -18,9 +18,16 @@ import {
 import {
   probeJetsonHardware,
   probeCoralHardware,
+  compareUsbTopology,
 } from '../../src/sdn/hardware-probe.js';
 
 describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
+  it('deterministically sorts USB topologies numerically across port expansions (Quoc Le Invariant)', () => {
+    const rawPaths = ['2-1.10', '2-1.2', '1-1.1', '2-1.1', '2-1.3'];
+    rawPaths.sort(compareUsbTopology);
+    expect(rawPaths).toEqual(['1-1.1', '2-1.1', '2-1.2', '2-1.3', '2-1.10']);
+  });
+
   it('creates valid default Jetson snapshot with BigInt memory and network counters', () => {
     const jetson = createDefaultJetsonSnapshot(false);
     expect(jetson.deviceName).toBe('jetson-orin');
@@ -41,6 +48,9 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
   it('creates valid default Coral snapshot with 4 TOPS and Dean latency budget in sandbox mode', () => {
     const coral = createDefaultCoralSnapshot(false);
     expect(coral.detected).toBe(true);
+    expect(coral.deviceCount).toBe(1);
+    expect(coral.devices).toHaveLength(1);
+    expect(coral.devices?.[0]?.assignedRole).toBe('TAP_PACKET_CLASSIFIER');
     expect(coral.peakTopsInt8).toBe(4);
     expect(coral.vendorId).toBe('1a6e');
     expect(coral.targetLatencyBudgetNs).toBe(500000n); // 500 µs
@@ -52,6 +62,8 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
   it('creates fail-closed disconnected Coral snapshot by default (Council Invariant 6)', () => {
     const coral = createDefaultCoralSnapshot(); // Defaults to isDisconnected = true
     expect(coral.detected).toBe(false);
+    expect(coral.deviceCount).toBe(0);
+    expect(coral.devices).toHaveLength(0);
     expect(coral.status).toBe('NOT_DETECTED');
     expect(coral.temperatureC).toBeNull();
     expect(coral.vendorId).toBe('None');

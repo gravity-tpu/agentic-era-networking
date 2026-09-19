@@ -42,12 +42,13 @@ Governed by the **Senior Staff Council Invariants**:
     │                   | * Mgmt: wlP1p1s0 (<mgmt-subnet>) |                   │
     │                   +────────────────┬─────────────────+                   │
     │                                    │                                     │
-    │                                    │ USB 3.0 SuperSpeed                  │
+    │                                    │ Dual USB 3.0 SuperSpeed             │
     │                                    ▼                                     │
-    │                          +───────────────────+                           │
-    │                          | Coral Edge TPU    |                           │
-    │                          | 4 TOPS INT8       |                           │
-    │                          +───────────────────+                           │
+    │                          +───────────────────────────────────+           │
+    │                          | Dual Coral Edge TPUs (8 TOPS)     |           │
+    │                          | * TPU 0: Tap Packet Classifier    |           │
+    │                          | * TPU 1: DNS Intent Sentinel      |           │
+    │                          +───────────────────────────────────+           │
     │                                                                          │
     └──────────────────────────────────────────────────────────────────────────┘
                                          │
@@ -66,7 +67,7 @@ Governed by the **Senior Staff Council Invariants**:
 |---|---|---|---|
 | **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 | ✅ Yes |
 | **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`) | ✅ Yes |
-| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | USB 3.0 (Attached to Jetson) | ✅ Yes |
+| **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism (Phase 2A) | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
 | **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (<workload-subnet>), `wlan0` (<mgmt-subnet>) | ✅ Yes |
 | **MacBook Pro** | Dev Workstation — SSH coding, web dashboard monitoring | WiFi 6/6E (<mgmt-subnet>) | ❌ Untethered |
