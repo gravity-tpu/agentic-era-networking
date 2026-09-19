@@ -26,7 +26,14 @@ import sys
 import time
 import traceback
 
-OUTPUT_PATH        = '/tmp/coral-telemetry.json'
+def get_telemetry_dir() -> str:
+    # Council Invariant: Prefer systemd RuntimeDirectory (/run/zodiac) for secure IPC
+    run_dir = '/run/zodiac'
+    if os.path.exists(run_dir) and os.access(run_dir, os.W_OK):
+        return run_dir
+    return '/tmp'
+
+OUTPUT_PATH        = os.path.join(get_telemetry_dir(), 'coral-telemetry.json')
 MODEL_PATH         = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite'
 REPORT_INTERVAL_NS = 1_000_000_000   # 1 second in nanoseconds (integer)
 WARMUP_N           = 5

@@ -84,10 +84,12 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-PrivateTmp=false
+PrivateTmp=true
+RuntimeDirectory=zodiac
+RuntimeDirectoryMode=0755
 # StateDirectory creates /var/lib/zodiac owned by zodiac:zodiac across restarts
 StateDirectory=zodiac
-ReadWritePaths=/var/lib/zodiac /tmp
+ReadWritePaths=/var/lib/zodiac /run/zodiac
 
 # --- Watchdog (Dean: kernel-level liveness guarantee, zero external deps) ---
 # WatchdogSec=30s: systemd kills and restarts the process if it does not

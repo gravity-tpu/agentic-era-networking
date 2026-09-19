@@ -518,8 +518,6 @@ export async function probeJetsonHardware(
 // ── Coral Daemon IPC ─────────────────────────────────────────────────────────
 // Staleness guard: if the daemon JSON is older than this the daemon is dead.
 // Council Invariant 3 (Fail-Closed): stale → null → STANDBY.
-const CORAL_TELEMETRY_PATH       = '/tmp/coral-telemetry.json';
-const CORAL_BURST_TELEMETRY_PATH = '/tmp/coral-burst-telemetry.json';
 const CORAL_STALENESS_LIMIT_MS   = 5_000;
 
 export interface CoralDaemonTelemetryData {
@@ -570,11 +568,30 @@ function parseBigIntClamped(val: unknown): bigint {
  * Council Invariant 3 (Fail-Closed): all error paths return null → STANDBY.
  * Council Invariant 2 (Determinism): counters parsed directly to BigInt.
  */
-async function readCoralTelemetryFile(filePath: string): Promise<CoralDaemonTelemetryData | null> {
+async function readCoralTelemetryFile(filename: string): Promise<CoralDaemonTelemetryData | null> {
+  // Council Invariant (Demis Hassabis & Sanjay Ghemawat):
+  // Check secure tmpfs RuntimeDirectory (/run/zodiac) first, fallback to /tmp for non-systemd/dev environments.
+  const candidates = [
+    path.join('/run/zodiac', filename),
+    path.join('/tmp', filename),
+  ];
+
   let fd: fs.promises.FileHandle | null = null;
+  let activePath = candidates[0]!;
+
+  for (const p of candidates) {
+    try {
+      fd = await fs.promises.open(p, 'r');
+      activePath = p;
+      break;
+    } catch {
+      // Continue to next candidate path
+    }
+  }
+
+  if (!fd) return null;
+
   try {
-    // Single open() gives us a stable fd — stat + read see the same file version
-    fd = await fs.promises.open(filePath, 'r');
     const [stat, raw] = await Promise.all([fd.stat(), fd.readFile('utf8')]);
 
     // Staleness guard — handles both forward and backward NTP shifts
@@ -599,7 +616,7 @@ async function readCoralTelemetryFile(filePath: string): Promise<CoralDaemonTele
     if (code !== 'ENOENT') {
       // Log genuine errors (permissions, disk I/O, JSON parse) — never swallow reality
       process.stderr.write(
-        `[coral-probe] readCoralTelemetryFile (${filePath}): ${err instanceof Error ? err.message : String(err)}\n`
+        `[coral-probe] readCoralTelemetryFile (${activePath}): ${err instanceof Error ? err.message : String(err)}\n`
       );
     }
     // All error paths → fail-closed (Council Invariant 3)
@@ -610,11 +627,11 @@ async function readCoralTelemetryFile(filePath: string): Promise<CoralDaemonTele
 }
 
 export async function readCoralDaemonTelemetry(): Promise<CoralDaemonTelemetryData | null> {
-  return readCoralTelemetryFile(CORAL_TELEMETRY_PATH);
+  return readCoralTelemetryFile('coral-telemetry.json');
 }
 
 export async function readCoralBurstTelemetry(): Promise<CoralDaemonTelemetryData | null> {
-  return readCoralTelemetryFile(CORAL_BURST_TELEMETRY_PATH);
+  return readCoralTelemetryFile('coral-burst-telemetry.json');
 }
 
 /**

@@ -49,8 +49,13 @@ MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobil
 DEFAULT_LOG_PATH = os.environ.get('BURST_LOG_PATH', '/home/zodiac/burst-telemetry.log')
 DEFAULT_SWITCH_IP = os.environ.get('ZODIAC_SWITCH_IP', '127.0.0.1')
 DEFAULT_CTRL_IP = os.environ.get('SDN_CONTROLLER_IP', '0.0.0.0')
-DEFAULT_WORKLOAD_IP = os.environ.get('RPI_WORKLOAD_IP', '127.0.0.1')
-BURST_CORAL_TELEMETRY_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH', '/tmp/coral-burst-telemetry.json')
+def get_telemetry_dir() -> str:
+    run_dir = '/run/zodiac'
+    if os.path.exists(run_dir) and os.access(run_dir, os.W_OK):
+        return run_dir
+    return '/tmp'
+
+BURST_CORAL_TELEMETRY_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH', os.path.join(get_telemetry_dir(), 'coral-burst-telemetry.json'))
 
 stop_event = threading.Event()
 stats_lock = threading.Lock()
