@@ -11,36 +11,58 @@ Governed by the **Senior Staff Council Invariants**:
 
 ---
 
-## Physical Hardware Triad
+## Physical Hardware Rack Architecture & Autonomous Substrate
 
 ```
-+----------------------------+     Serial CDC-ACM     +--------------------------------+
-|   Northbound Networks      |  /dev/ttyACM0 (115200) |  NVIDIA Jetson Orin Nano Super |
-|   Zodiac FX Switch         |<---------------------->|  (Autonomous Master Appliance) |
-|   OpenFlow 1.3 Data Plane  |  Ethernet Port 4 :6633 |  Control Plane — headless 24/7 |
-|   4-port + Micro-USB       |<─────── OpenFlow ──────|  systemd: zodiac-bridge.service|
-+----------------------------+                        +------------------+-------------+
-                                                                         |
-                                                          USB 3.0 SuperSpeed
-                                                                         |
-                                                         +---------------▼-------------+
-                                                         |    Google Coral Edge TPU    |
-                                                         |  4 TOPS INT8 — Phase 2A DPI |
-                                                         |  Port 3 mirror tap inference|
-                                                         +-----------------------------+
-
-         MacBook Pro (Untethered — connect via WiFi/SSH to push code changes only)
-         ↕ ssh zodiac@<jetson-ip>   |   https://agentic-era-networking.vercel.app
++───────────────────────────────────────────────────────────────────────────────────────────+
+|                           ANKER SOLIX F1500 (1536 Wh LiFePO4)                             |
+|               Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)               |
++───┬───────────────────────────────────────┬───────────────────────────────────┬───────────+
+    │ AC/DC Power                           │ 19V DC Power                      │ 5V USB-C
+    ▼                                       ▼                                   ▼
++──────────────────────────+     +───────────────────────────────────+     +────────────────+
+| Zodiac FX 4-Port Switch  |     | NVIDIA Jetson Orin Nano Super     |     | Raspberry Pi   |
+| OpenFlow 1.3 Data Plane  |     | 67 TOPS Ampere, 24/7 Controller   |     | 3 Model B+     |
++───┬───────────┬──────────+     +───┬───────────┬───────────────────+     +────────┬───────+
+    │ Port 1    │ Port 3             │ Port 4    │ Mirror Tap Ingress               │ eth0
+    │           │ (Mirror Tap)       │ (:6633)   │ (enx9c69d39dd0a6)                │
+    │           └────────────────────┼───────────┼──────────────────────────────────┘
+    │                                │           │
+    │           RJ45 Patch           │ RJ45 Patch│ ASIX AX88179 USB GbE
+    │                                │           │
+    └────────────────────────────────┼───────────┼──────────────────────────────────┐
+                                     │           │                                  │
+                                     ▼           ▼                                  ▼
+                        +────────────────────────────────────+             +────────────────+
+                        |  Jetson Orin Tri-Interface Stack   |             | RPi 3B+ Workld |
+                        |  * Controller: enP8p1s0 (10.0.1.8) |             | * eth0:        |
+                        |  * Mirror Tap: enx9c69d39dd0a6     |             |   10.0.2.50/24 |
+                        |  * Mgmt Plane: wlP1p1s0 (10.0.0.15)|             | * wlan0:       |
+                        +─────────────────┬──────────────────+             |   10.0.0.45/24 |
+                                          │                                +───────┬────────+
+                                          │ USB 3.0 SuperSpeed                     │ Wi-Fi
+                                          ▼                                        │ Backdoor
+                                +───────────────────+                              │
+                                | Coral Edge TPU    |                              │
+                                | 4 TOPS INT8       |                              │
+                                +───────────────────+                              │
+                                                                                   │
+         MacBook Pro (Untethered — connect via WiFi/SSH to push code changes only) │
+         ↕ ssh zodiac@10.0.0.15   |   https://agentic-era-networking.vercel.app    │
+         ↕ ssh agent@10.0.0.45 (Out-of-Band Safety Link) <─────────────────────────┘
 ```
 
 **Role separation:**
 
-| Node | Role | Always On? |
-|---|---|---|
-| **Zodiac FX** | Data Plane — hardware packet forwarding, OpenFlow 1.3 | ✅ Yes |
-| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | ✅ Yes |
-| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | ✅ Yes (USB) |
-| **MacBook Pro** | Dev Workstation — SSH coding, occasional local dashboard access | ❌ Plug-in only |
+| Node | Role | Hardware / IP | Always On? |
+|---|---|---|---|
+| **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4, `/dev/ttyACM0` | ✅ Yes |
+| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`10.0.0.15`, `10.0.1.8`) | ✅ Yes |
+| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | USB 3.0 (`18d1:9302`) | ✅ Yes |
+| **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx9c69d39dd0a6` (Promiscuous) | ✅ Yes |
+| **Raspberry Pi 3 Model B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`10.0.2.50`), `wlan0` (`10.0.0.45`) | ✅ Yes |
+| **Anker Solix F1500** | Autonomous Power Substrate — 1536 Wh LiFePO4 battery power station | ~20W total rack consumption | ✅ Yes |
+| **MacBook Pro** | Dev Workstation — SSH coding, web dashboard monitoring | WiFi 6/6E (`10.0.0.x`) | ❌ Untethered |
 
 ## Phase Overview
 

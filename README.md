@@ -33,67 +33,102 @@ This codebase is governed by the collective engineering rigor of five foundation
 This repository grounds autonomous SDN invariants in physical hardware, elevating the appliance from a passive coprocessor into a **dedicated 24/7 Autonomous Master Controller**:
 
 - **Detailed Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
-- **Data Plane Hardware**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
-- **Autonomous Master Appliance**: NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, GbE controller link, dedicated USB serial telemetry link, 7W–15W 24/7 low-power operation, TensorRT INT8 neural engine).
-- **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX.
-- **Untethered Workstation**: Operator workstation (MacBook Pro) operates untethered over wireless WiFi 6/6E with zero downtime risk (closing the laptop lid or rebooting never interrupts the network data plane).
+- **Data Plane Switch**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
+- **Autonomous Master Appliance**: NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, Tri-Interface stack, 500GB NVMe SSD @ 1.8 GB/s, 7W–15W 24/7 low-power operation, TensorRT INT8 neural engine, SSD1306 OLED telemetry).
+- **Edge Inference Accelerator**: Google Coral Edge TPU (4 TOPS INT8 accelerator, USB 3.0 line-rate packet classifier).
+- **Dedicated Tap Ingress**: ASIX AX88179 USB 3.0 GbE Adapter (`enx9c69d39dd0a6` in promiscuous mode attached to Zodiac Port 3).
+- **Untrusted Client Workload**: Raspberry Pi 3 Model B+ (`10.0.2.50/24` static on `eth0` attached to Zodiac Port 1, out-of-band management via `wlan0` `10.0.0.45/24`).
+- **Autonomous Power Substrate**: Anker Solix F1500 (1536 Wh LiFePO4 battery power station, 60–80+ hrs continuous autonomous runtime).
+- **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX to Zodiac Port 2.
+- **Untethered Workstation**: Operator workstation (MacBook Pro) operates untethered over wireless WiFi 6/6E with zero downtime risk.
 
 ### System Architecture Diagram
 
 ```
-                                +-----------------------------------+
-                                |    Public Internet / Home LAN     |
-                                +-----------------+-----------------+
-                                                  | (Mesh WiFi)
-                                                  v
-                                +-----------------------------------+
-                                |     ISP Gateway / Mesh Node       |
-                                +-----------------+-----------------+
-                                                  | 100BASE-TX Ethernet
-                                                  v
-   +-----------------------------------------------------------------------------------------+
-   |                       Zodiac FX OpenFlow Switch (Data Plane)                            |
-   |                                                                                         |
-   |   [Port 1]                 [Port 2]                 [Port 3]               [Port 4]     |
-   |   Local Workload /         Gateway Uplink           Hardware Tap /         Controller   |
-   |   Test Agent Subnet        (ISP Gateway)            Port Mirror            (OpenFlow)   |
-   |                                                                                 |       |
-   |   Micro-USB: Serial CDC Telemetry Stream (/dev/ttyACM0 @ 115200 8N1) ----------+----+  |
-   +--------------------------------------------------------------------------------|-----+  |
-                                                                                    |     |  |
-                                           +----------------------------------------+     |  |
-                                           | OpenFlow 1.3 Control Channel (100M/GbE)      |  |
-                                           |                                              |  |
-                                           v                                              v  v
-   +-----------------------------------------------------------------------------------------+
-   |             Autonomous Master Appliance: NVIDIA Jetson Orin Nano Super (24/7)           |
-   |                                                                                         |
-   |  * OpenFlow 1.3 Controller Plane (:6633) -- Fail-Closed FlowMod Dispatch                |
-   |  * Transparent RFC 1035 DNS Resolver (:53) with VIP Reverse Proxy Mapping               |
-   |  * Edge ML Anomaly Detection (TensorRT 67 TOPS Ampere Neural Engine)                    |
-   |  * Symbolic Route Verifier (AlphaProof DAG Loop-Free Verification Invariant)            |
-   |  * Real-Time Telemetry Daemon, Neon DB Relayer & Local Bridge Server (:3003)            |
-   +-----------------------------------------------------------------------------------------+
-                                           ^
-                                           | Wireless WiFi 6 / 6E (Untethered HTTPS / SSH)
-                                           v
-   +-----------------------------------------------------------------------------------------+
-   |                      Untethered Operator Workstation (MacBook Pro)                      |
-   |  * Web UI Dashboard (https://agentic-era-networking.vercel.app / http://localhost:3003)  |
-   |  * Zero Dependency: Close lid, reboot, or travel without interrupting network services   |
-   +-----------------------------------------------------------------------------------------+
++─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+|                                    ANKER SOLIX F1500 (1536 Wh LiFePO4)                                  |
+|                         Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)                   |
++───┬───────────────────────────────────────┬───────────────────────────────────┬─────────────────────────+
+    │ AC/DC Power                           │ 19V DC Power                      │ 5V USB-C Power
+    ▼                                       ▼                                   ▼
++──────────────────────────+     +───────────────────────────────────+     +──────────────────────────────+
+| Zodiac FX 4-Port Switch  |     | NVIDIA Jetson Orin Nano Super     |     | Raspberry Pi 3 Model B+      |
+| Microchip KSZ8795 +      |     | 67 TOPS Ampere, 24/7 Controller   |     | Untrusted Agent Workload     |
+| SAM4E8E ARM Cortex-M4    |     | NVMe 500GB SSD @ 1.8 GB/s         |     | Broadcom BCM2837B0           |
++──────────────────────────+     +───────────────────────────────────+     +──────────────────────────────+
+
+                                            +───────────────────────────────────+
+                                            |    Public Internet / Home LAN     |
+                                            +-----------------+-----------------+
+                                                              │ (Mesh WiFi)
+                                                              ▼
+                                            +───────────────────────────────────+
+                                            |     ISP Gateway / Mesh Node       |
+                                            +-----------------+-----------------+
+                                                              │ 100BASE-TX Ethernet
+                                                              ▼
++─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+|                                  Zodiac FX OpenFlow Switch (Data Plane)                                 |
+|                                                                                                         |
+|   [Port 1]                      [Port 2]                  [Port 3]                    [Port 4]          |
+|   Untrusted Agent Workload      Gateway Uplink            Hardware Mirror Tap         OpenFlow 1.3 Ctrl |
+|   VLAN 100 (OpenFlow)           VLAN 100 (OpenFlow)       VLAN 100 (OpenFlow)         VLAN 200 (Native) |
+|   100BASE-TX                    100BASE-TX                100BASE-TX                  100BASE-TX        |
++───────┬─────────────────────────────▲─────────────────────────┬───────────────────────────▲─────────────+
+        │                             │                         │                           │
+        │ RJ-45 Patch                 │ RJ-45 Patch             │ RJ-45 Patch               │ RJ-45 Patch
+        │                             │                         ▼                           │
+        │                             │             +───────────────────────+               │
+        │                             │             | ASIX AX88179 USB GbE  |               │
+        │                             │             | (enx9c69d39dd0a6)     |               │
+        │                             │             +───────────┬───────────+               │
+        │                             │                         │ USB 3.0                   │
+        │                             │                         ▼                           │
+        │                        +----+-----------------------------------------------------+   Micro-USB
+        │                        |         NVIDIA Jetson Orin Nano Super Master Appliance   |<──Serial CDC
+        │                        |                                                          |   /dev/ttyACM0
+        │                        |  * Controller Plane: enP8p1s0 (10.0.1.8/24) <────────────+───(115200 8N1)
+        │                        |  * Mirror Tap Ingress: enx9c69d39dd0a6 (Promiscuous)     |
+        │                        |  * Management Plane: wlP1p1s0 (10.0.0.15/24)             |
+        │                        |  * OpenFlow 1.3 Controller Plane (:6633)                 |
+        │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
+        │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
+        │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
+        │                        +──────────────────────────────┬───────────────────────────+
+        │                                                       │ USB 3.0 SuperSpeed
+        │                                                       ▼
+        │                                           +───────────────────────+
+        │                                           | Google Coral Edge TPU |
+        │                                           | 4 TOPS INT8 (18d1:9302|
+        │                                           | Line-rate Anomaly DPI |
+        │                                           +───────────────────────+
+        │                                                       │
+        ▼                                                       │ Management Plane
++───────────────────────────────────+                           │ Wireless WiFi (10.0.0.15)
+| Raspberry Pi 3 Model B+ (Workload)|                           ▼
+|                                   |       +───────────────────────────────────────────────────+
+| * eth0: 10.0.2.50/24 (Static) ────+       | Untethered Operator Workstation (MacBook Pro)     |
+|   Untrusted SDN Agent Data Plane  |       | * Web UI: http://10.0.0.15:3003 & Cloud Edge      |
+|                                   |       | * SSH Operator: ssh zodiac@10.0.0.15              |
+| * wlan0: 10.0.0.45/24 (Wi-Fi) <───+───────| * Out-of-Band Safety: ssh agent@10.0.0.45         |
+|   Out-of-Band Management Backdoor |       +───────────────────────────────────────────────────+
++───────────────────────────────────+
 ```
 
 ### Physical Interconnect Matrix
 
-| Link | Source | Interface / Medium | Destination | Protocol / Speed | Role |
+| Link | Source | Interface / Medium | Destination | Protocol / Speed | Role & Invariant |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Link 1** | Jetson Orin (GbE RJ45) | Ethernet Patch Cable | Zodiac FX Port 4 | 100BASE-TX (Native Management) | **OpenFlow 1.3 Control Channel** |
-| **Link 2** | Zodiac FX (Micro-USB) | USB Cable | Jetson Orin (USB-A) | USB CDC (`/dev/ttyACM0`) | **Real-Time Telemetry & CDC Console** |
-| **Link 3** | Zodiac FX Port 2 | Ethernet Patch Cable | ISP Gateway | 100BASE-TX (Home LAN) | **WAN / Internet Gateway Transit** |
-| **Link 4** | Zodiac FX Port 1 | Ethernet RJ45 | Local Workload / Agent | 100BASE-TX (VLAN 100) | **Monitored Workload / Client Port** |
-| **Link 5** | Zodiac FX Port 3 | Ethernet RJ45 | Packet Tap / Sniffer | 100BASE-TX (Mirror Mode) | **Wire Snooping & Packet Capture** |
-| **Link 6** | MacBook Pro | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E (LAN) | **Untethered Dashboard & SSH Access** |
+| **Link 1** | Jetson Orin (`enP8p1s0`) | RJ-45 Patch Cable | Zodiac FX Port 4 | 100BASE-TX (Native Management) | **OpenFlow 1.3 Control Channel**: Isolated `:6633` plane (`10.0.1.8/24`). |
+| **Link 2** | Zodiac FX (Micro-USB) | USB Cable | Jetson Orin (USB-A) | USB CDC (`/dev/ttyACM0` @ 115200) | **Hardware Register Telemetry**: 1–2 Hz continuous register stream. |
+| **Link 3** | Zodiac FX Port 2 | RJ-45 Patch Cable | ISP Gateway / Extender | 100BASE-TX (VLAN 100) | **WAN / Gateway Uplink**: Public Internet transit. |
+| **Link 4** | Zodiac FX Port 1 | RJ-45 Patch Cable | RPi 3B+ (`eth0`) | 100BASE-TX (VLAN 100) | **Untrusted Workload Port**: Monitored client agent data plane (`10.0.2.50/24`). |
+| **Link 5** | Zodiac FX Port 3 | RJ-45 Patch Cable | Jetson (`enx9c69d39dd0a6`)| 100BASE-TX (Port Mirror) | **Promiscuous Tap Ingress**: Line-rate packet capture for Coral Edge TPU. |
+| **Link 6** | Google Coral Edge TPU | USB 3.0 SuperSpeed | Jetson Orin (USB-A) | USB 3.0 (`18d1:9302`) | **Edge Inference Accelerator**: 4 TOPS INT8 shallow anomaly DPI. |
+| **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Home Wi-Fi LAN | WiFi (DHCP `10.0.0.45/24`) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
+| **Link 8** | Jetson Orin (`wlP1p1s0`)| Wireless 802.11ax | Home Wi-Fi LAN | WiFi (DHCP `10.0.0.15/24`) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
+| **Link 9** | Anker Solix F1500 | AC / 19V DC / 5V USB | Rack Hardware (All Nodes) | Power Delivery (~20W) | **Autonomous Power Substrate**: 1536 Wh LiFePO4 (60–80+ hrs runtime). |
+| **Link 10**| MacBook Pro | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E (`10.0.0.x`) | **Untethered Console**: Zero data plane dependency during operator sessions. |
 
 ### The 4 Autonomous Appliance Invariant Roles:
 1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
