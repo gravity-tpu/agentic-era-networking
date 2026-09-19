@@ -90,7 +90,10 @@ async function fileExistsAsync(filePath: string): Promise<boolean> {
 
 const DEFAULT_JETSON_PROBE_TIMEOUT_MS = 150;
 const parsedTimeout = process.env['JETSON_PROBE_TIMEOUT_MS'] ? parseInt(process.env['JETSON_PROBE_TIMEOUT_MS'], 10) : NaN;
-const JETSON_PROBE_TIMEOUT_MS = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : DEFAULT_JETSON_PROBE_TIMEOUT_MS;
+// Bounded between 20ms and 500ms to guarantee control plane responsiveness (Council Invariant 5)
+const JETSON_PROBE_TIMEOUT_MS = Number.isFinite(parsedTimeout) && parsedTimeout > 0
+  ? Math.min(Math.max(parsedTimeout, 20), 500)
+  : DEFAULT_JETSON_PROBE_TIMEOUT_MS;
 
 /**
  * Internal hardware state sampler for NVIDIA Jetson Orin Nano from Linux sysfs and procfs.
@@ -401,21 +404,26 @@ export async function probeJetsonHardware(
 
   const startNs = process.hrtime.bigint();
   let timer: NodeJS.Timeout | null = null;
+  let didTimeout = false;
+
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`Jetson hardware probe timed out (>${JETSON_PROBE_TIMEOUT_MS}ms)`)),
-      JETSON_PROBE_TIMEOUT_MS
-    );
+    timer = setTimeout(() => {
+      didTimeout = true;
+      reject(new Error(`Jetson hardware probe timed out (>${JETSON_PROBE_TIMEOUT_MS}ms)`));
+    }, JETSON_PROBE_TIMEOUT_MS);
     timer.unref();
   });
 
   const probePromise = executeJetsonHardwareProbe(prevSnapshot, deltaNs);
   // Council Invariant 1 (Zero Suppression of Reality):
-  // Attach catch handler to background promise to prevent unhandled rejection crash if timeout fires first.
+  // Guard background execution against unhandled rejection if timeout fires first.
+  // Only log if timeout already fired to prevent duplicate log spam.
   probePromise.catch((err) => {
-    process.stderr.write(`[jetson-probe] Background probe rejected post-timeout: ${
-      err instanceof Error ? err.message : String(err)
-    }\n`);
+    if (didTimeout) {
+      process.stderr.write(`[jetson-probe] Background probe rejected post-timeout: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
   });
 
   try {
@@ -425,8 +433,10 @@ export async function probeJetsonHardware(
     ]);
     if (timer) clearTimeout(timer);
     const elapsedNs = process.hrtime.bigint() - startNs;
-    if (elapsedNs > 100_000_000n) {
-      process.stderr.write(`[jetson-probe] High probe latency: ${elapsedNs / 1_000_000n}ms\n`);
+    // Dynamic latency warning at 80% of configured timeout budget
+    const warnThresholdNs = (BigInt(JETSON_PROBE_TIMEOUT_MS) * 1_000_000n * 8n) / 10n;
+    if (elapsedNs > warnThresholdNs) {
+      process.stderr.write(`[jetson-probe] High probe latency: ${elapsedNs / 1_000_000n}ms (budget: ${JETSON_PROBE_TIMEOUT_MS}ms)\n`);
     }
     return result;
   } catch (err) {
