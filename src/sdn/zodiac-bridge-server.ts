@@ -49,6 +49,17 @@ import {
 } from './telemetry-state-store.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
+// Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5000;
+function getShutdownTimeoutMs(): number {
+  const envVal = process.env['ZODIAC_SHUTDOWN_TIMEOUT_MS'];
+  if (envVal) {
+    const parsed = Number.parseInt(envVal, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_SHUTDOWN_TIMEOUT_MS;
+}
+
 /**
  * Parses an IPv4 dotted-quad into an unsigned 32-bit integer.
  * Sanjay Ghemawat - Radical Simplicity: Flat, deterministic O(1) parsing without regex or type coercion.
@@ -680,17 +691,45 @@ export class ZodiacBridgeServer {
       this.coralDaemon.kill('SIGTERM');
       this.coralDaemon = null;
     }
-    return new Promise((resolve) => {
-      if (this.server) {
-        this.server.close(async () => {
-          this.server = null;
+    const timeoutMs = getShutdownTimeoutMs();
+    let timerId: NodeJS.Timeout | null = null;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => {
+        reject(new Error(`[zodiac-bridge] Shutdown timed out after ${timeoutMs}ms (Council Invariant 3: Fail-Closed)`));
+      }, timeoutMs);
+    });
+
+    const closePromise = new Promise<void>((resolve, reject) => {
+      if (!this.server) {
+        resolve();
+        return;
+      }
+      if (typeof this.server.closeAllConnections === 'function') {
+        this.server.closeAllConnections();
+      }
+      this.server.close(async (closeErr) => {
+        this.server = null;
+        if (closeErr) {
+          reject(closeErr);
+          return;
+        }
+        try {
           await this.controller.stop();
           resolve();
-        });
-      } else {
-        resolve();
-      }
+        } catch (controllerErr) {
+          reject(controllerErr);
+        }
+      });
     });
+
+    try {
+      await Promise.race([closePromise, timeoutPromise]);
+    } finally {
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    }
   }
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
