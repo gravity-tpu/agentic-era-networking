@@ -84,7 +84,7 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-PrivateTmp=true
+PrivateTmp=false
 # StateDirectory creates /var/lib/zodiac owned by zodiac:zodiac across restarts
 StateDirectory=zodiac
 ReadWritePaths=/var/lib/zodiac /tmp
