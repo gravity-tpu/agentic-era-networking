@@ -208,6 +208,11 @@ function serializeCoralPointExplicit(point: CoralTimeSeriesPoint): Record<string
       t.unref?.();
     });
 
+    writePromise.catch((err: unknown) => {
+      // Council Invariant 1: Catch background rejection post-timeout to prevent process crash
+      console.warn('[!] [Telemetry DB] Background snapshot persist rejected post-timeout:', err instanceof Error ? err.message : String(err));
+    });
+
     await Promise.race([writePromise, timeoutPromise]);
 
     return true;
@@ -232,6 +237,14 @@ export const RANGE_CONFIGS: Record<HistoricalRange, DownsampleConfig> = {
   '24h': { bucketSeconds: 300,   maxPoints: 288 },
   '7d':  { bucketSeconds: 1800,  maxPoints: 336 },
   '30d': { bucketSeconds: 7200,  maxPoints: 360 },
+};
+
+export const RANGE_DURATION_MS: Record<HistoricalRange, number> = {
+  '1h':  60 * 60 * 1000,
+  '6h':  6 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d':  7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
 };
 
 export function isValidRange(range: string | null | undefined): range is HistoricalRange {
@@ -288,9 +301,10 @@ export function downsamplePoints(
     }
 
     const countBig = BigInt(chunk.length);
+    const isLastChunk = i + bucketSize >= rawPoints.length;
 
     downsampled.push({
-      timestampMs: midPoint.timestampMs,
+      timestampMs: isLastChunk ? lastPoint.timestampMs : midPoint.timestampMs,
       rxBytes: BigInt(lastPoint.rxBytes || 0),
       txBytes: BigInt(lastPoint.txBytes || 0),
       rxPackets: BigInt(lastPoint.rxPackets || 0),
@@ -371,9 +385,10 @@ export function downsampleJetsonPoints(
 
     const count = chunk.length;
     const countBig = BigInt(count);
+    const isLastChunk = i + bucketSize >= rawPoints.length;
 
     downsampled.push({
-      timestampMs: midPoint.timestampMs,
+      timestampMs: isLastChunk ? lastPoint.timestampMs : midPoint.timestampMs,
       cpuUtilizationPct: Math.round(sumCpuUtil / count),
       gpuUtilizationPct: Math.round(sumGpuUtil / count),
       cpuTempC: cpuTempCount > 0 ? Math.round(sumCpuTemp / cpuTempCount) : null,
@@ -429,9 +444,10 @@ export function downsampleCoralPoints(
     }
 
     const countBig = BigInt(chunk.length);
+    const isLastChunk = i + bucketSize >= rawPoints.length;
 
     downsampled.push({
-      timestampMs: midPoint.timestampMs,
+      timestampMs: isLastChunk ? lastPoint.timestampMs : midPoint.timestampMs,
       inferencesPerSecond: sumIps / countBig,
       tapPacketsPerSecond: sumTap / countBig,
       latencyP50Us: sumLatP50 / countBig,
@@ -496,15 +512,7 @@ export async function getHistoricalMultiDeviceTelemetry(
   }
 
   const config = RANGE_CONFIGS[range] ?? { bucketSeconds: 300, maxPoints: 288 };
-  const durationMsMap: Record<string, number> = {
-    '1h':  60 * 60 * 1000,
-    '6h':  6 * 60 * 60 * 1000,
-    '24h': 24 * 60 * 60 * 1000,
-    '7d':  7 * 24 * 60 * 60 * 1000,
-    '30d': 30 * 24 * 60 * 60 * 1000,
-  };
-
-  const durationMs = durationMsMap[range] ?? (24 * 60 * 60 * 1000);
+  const durationMs = RANGE_DURATION_MS[range] ?? (24 * 60 * 60 * 1000);
   const cutoffMs = BigInt(Date.now() - durationMs);
   const bucketMs = BigInt(config.bucketSeconds * 1000);
 
@@ -575,6 +583,11 @@ export async function getHistoricalMultiDeviceTelemetry(
     const timeoutPromise = new Promise<never>((_, reject) => {
       const t = setTimeout(() => reject(new Error(`Historical telemetry DB query timed out after ${DB_TIMEOUT_MS}ms`)), DB_TIMEOUT_MS);
       t.unref?.();
+    });
+
+    queryPromise.catch((err: unknown) => {
+      // Council Invariant 1: Catch background query failure post-timeout
+      console.warn('[!] [Telemetry DB] Background query rejected post-timeout:', err instanceof Error ? err.message : String(err));
     });
 
     const rows = await Promise.race([queryPromise, timeoutPromise]);

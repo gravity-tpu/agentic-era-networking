@@ -14,6 +14,7 @@ import {
   downsampleJetsonPoints,
   downsampleCoralPoints,
   RANGE_CONFIGS,
+  RANGE_DURATION_MS,
   getHistoricalTelemetry,
   getHistoricalMultiDeviceTelemetry,
   persistTelemetrySnapshot,
@@ -238,5 +239,42 @@ describe('30-Day Retention Pruning Cron (api/cron/prune-telemetry)', () => {
         delete process.env['CRON_SECRET'];
       }
     }
+  });
+
+  it('anchors the final downsampled bucket to the latest raw timestamp to eliminate trailing gaps', () => {
+    const rawPoints: ZodiacTimeSeriesPoint[] = [];
+    const baseMs = 1000000;
+    // 100 points spaced 2500ms apart
+    for (let i = 0; i < 100; i++) {
+      rawPoints.push({
+        timestampMs: baseMs + i * 2500,
+        rxBytes: BigInt(i * 10),
+        txBytes: 0n,
+        rxPackets: BigInt(i),
+        txPackets: 0n,
+        rxRatePps: 1n,
+        txRatePps: 0n,
+        rxRateBps: 100n,
+        txRateBps: 0n,
+        cpuTemperatureC: 40,
+        latencyNs: 1000n,
+      });
+    }
+
+    const latestRawTimestamp = rawPoints[rawPoints.length - 1]!.timestampMs;
+    // Downsample into 10 buckets
+    const downsampled = downsamplePoints(rawPoints, 10);
+    expect(downsampled.length).toBeLessThanOrEqual(10);
+    // Crucial invariant: The very last downsampled point must match the newest raw point's timestamp
+    const lastDownsampled = downsampled[downsampled.length - 1]!;
+    expect(lastDownsampled.timestampMs).toBe(latestRawTimestamp);
+  });
+
+  it('provides exact integer millisecond duration mappings in RANGE_DURATION_MS', () => {
+    expect(RANGE_DURATION_MS['1h']).toBe(3600 * 1000);
+    expect(RANGE_DURATION_MS['6h']).toBe(6 * 3600 * 1000);
+    expect(RANGE_DURATION_MS['24h']).toBe(24 * 3600 * 1000);
+    expect(RANGE_DURATION_MS['7d']).toBe(7 * 24 * 3600 * 1000);
+    expect(RANGE_DURATION_MS['30d']).toBe(30 * 24 * 3600 * 1000);
   });
 });

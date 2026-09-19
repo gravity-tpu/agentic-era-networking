@@ -29,7 +29,16 @@ import {
   createDisconnectedZodiacSnapshot,
 } from './zodiac-telemetry.js';
 import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry } from './hardware-probe.js';
-import { downsamplePoints, downsampleJetsonPoints, downsampleCoralPoints, RANGE_CONFIGS } from '../db/telemetry-db.js';
+import {
+  downsamplePoints,
+  downsampleJetsonPoints,
+  downsampleCoralPoints,
+  RANGE_CONFIGS,
+  RANGE_DURATION_MS,
+  isValidRange,
+  getPrismaClient,
+  getHistoricalMultiDeviceTelemetry,
+} from '../db/telemetry-db.js';
 import {
   resolveTelemetryStateFilePath,
   loadTelemetryState,
@@ -756,32 +765,71 @@ export class ZodiacBridgeServer {
     // API: GET /api/zodiac (Dean & Ghemawat Invariant: O(1) instant return of cached snapshot)
     if (url.pathname === '/api/zodiac' && req.method === 'GET') {
       const range = url.searchParams.get('range');
-      if (range && range in RANGE_CONFIGS) {
-        const config = RANGE_CONFIGS[range as keyof typeof RANGE_CONFIGS];
-        if (config) {
-          const points = downsamplePoints(this.timeSeries, config.maxPoints);
-          const jetsonPoints = downsampleJetsonPoints(this.jetsonTimeSeries, config.maxPoints);
-          const coralPoints = downsampleCoralPoints(this.coralTimeSeries, config.maxPoints);
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(this.serializeSnapshot({
-            ...this.cachedSnapshot,
-            timeSeries: points,
-            ...(this.cachedSnapshot.jetson ? {
-              jetson: {
-                ...this.cachedSnapshot.jetson,
-                timeSeries: jetsonPoints,
-              },
-            } : {}),
-            ...(this.cachedSnapshot.coral ? {
-              coral: {
-                ...this.cachedSnapshot.coral,
-                timeSeries: coralPoints,
-              },
-            } : {}),
-          }));
-          return;
+      if (range && isValidRange(range)) {
+        const config = RANGE_CONFIGS[range];
+
+        // 1. If Neon DB Prisma client is available, attempt querying full historical DB (up to 30 days)
+        const prisma = getPrismaClient();
+        if (prisma) {
+          try {
+            const multi = await getHistoricalMultiDeviceTelemetry(range);
+            if (multi.timeSeries.length > 0 || multi.jetsonTimeSeries.length > 0 || multi.coralTimeSeries.length > 0) {
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(this.serializeSnapshot({
+                ...this.cachedSnapshot,
+                timeSeries: multi.timeSeries,
+                ...(this.cachedSnapshot.jetson ? {
+                  jetson: {
+                    ...this.cachedSnapshot.jetson,
+                    timeSeries: multi.jetsonTimeSeries,
+                  },
+                } : {}),
+                ...(this.cachedSnapshot.coral ? {
+                  coral: {
+                    ...this.cachedSnapshot.coral,
+                    timeSeries: multi.coralTimeSeries,
+                  },
+                } : {}),
+              }));
+              return;
+            }
+          } catch (dbErr: unknown) {
+            console.warn('[!] [Bridge DB] Historical Neon query failed, falling back to in-memory window:', dbErr instanceof Error ? dbErr.message : String(dbErr));
+          }
         }
+
+        // 2. In-Memory Window Downsampling (Dean & Ghemawat Invariants)
+        // Strictly filter by requested range duration so 1h doesn't downsample 2.5+ hours of history
+        const durationMs = RANGE_DURATION_MS[range];
+        const cutoffMs = Date.now() - durationMs;
+        const windowedPoints = this.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
+        const windowedJetson = this.jetsonTimeSeries.filter((p) => p.timestampMs >= cutoffMs);
+        const windowedCoral = this.coralTimeSeries.filter((p) => p.timestampMs >= cutoffMs);
+
+        const points = downsamplePoints(windowedPoints, config.maxPoints);
+        const jetsonPoints = downsampleJetsonPoints(windowedJetson, config.maxPoints);
+        const coralPoints = downsampleCoralPoints(windowedCoral, config.maxPoints);
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(this.serializeSnapshot({
+          ...this.cachedSnapshot,
+          timeSeries: points,
+          ...(this.cachedSnapshot.jetson ? {
+            jetson: {
+              ...this.cachedSnapshot.jetson,
+              timeSeries: jetsonPoints,
+            },
+          } : {}),
+          ...(this.cachedSnapshot.coral ? {
+            coral: {
+              ...this.cachedSnapshot.coral,
+              timeSeries: coralPoints,
+            },
+          } : {}),
+        }));
+        return;
       }
 
       res.statusCode = 200;

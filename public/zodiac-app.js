@@ -30,6 +30,11 @@
   const MAX_FRONTEND_BUFFER_POINTS = 3600; // Strictly bound client memory to 2.5 hours of continuous data
   let timeSeriesBuffer = [];
 
+  // Dedicated Historical Range Buffers (Dean & Ghemawat Invariant: Strict decoupling of live streaming vs range query memory)
+  let historicalTimeSeriesBuffer = [];
+  let historicalJetsonTimeSeriesBuffer = [];
+  let historicalCoralTimeSeriesBuffer = [];
+
   // Standardized chart layout padding constants (Dean & Ghemawat: eliminate magic numbers)
   const ORIN_NETWORK_PAD_LEFT = 65;
   const ORIN_NETWORK_PAD_RIGHT = 20;
@@ -1362,13 +1367,23 @@
   }
 
   function getPointsForDisplay() {
-    const durationMs = getRangeDurationMs(currentRange);
+    if (currentRange !== 'live') {
+      if (historicalTimeSeriesBuffer.length > 0) {
+        return historicalTimeSeriesBuffer;
+      }
+      if (currentSnapshot) {
+        return generateLocalHistory(currentSnapshot, currentRange);
+      }
+      return [];
+    }
+
+    const durationMs = getRangeDurationMs('live');
     const cutoffMs = Date.now() - durationMs;
 
     if (currentSnapshot?.source === 'disconnected') {
       const liveBuffer = timeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
       if (liveBuffer.length > 0) return liveBuffer;
-      return generateLocalHistory(currentSnapshot, currentRange);
+      return generateLocalHistory(currentSnapshot, 'live');
     }
 
     if (timeSeriesBuffer.length > 0) {
@@ -1380,7 +1395,7 @@
     }
 
     if (currentSnapshot) {
-      return generateLocalHistory(currentSnapshot, currentRange);
+      return generateLocalHistory(currentSnapshot, 'live');
     }
     return [];
   }
@@ -1770,11 +1785,19 @@
   }
 
   function getJetsonPointsForDisplay() {
-    const durationMs = getRangeDurationMs(currentRange);
+    if (currentRange !== 'live') {
+      if (historicalJetsonTimeSeriesBuffer.length > 0) {
+        return historicalJetsonTimeSeriesBuffer;
+      }
+      return [];
+    }
+
+    const durationMs = getRangeDurationMs('live');
     const cutoffMs = Date.now() - durationMs;
     if (jetsonTimeSeriesBuffer.length > 0) {
       const windowPoints = jetsonTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
       if (windowPoints.length > 0) return windowPoints;
+      return jetsonTimeSeriesBuffer;
     }
     if (currentSnapshot?.jetson?.timeSeries && currentSnapshot.jetson.timeSeries.length > 0) {
       return currentSnapshot.jetson.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
@@ -1783,11 +1806,19 @@
   }
 
   function getCoralPointsForDisplay() {
-    const durationMs = getRangeDurationMs(currentRange);
+    if (currentRange !== 'live') {
+      if (historicalCoralTimeSeriesBuffer.length > 0) {
+        return historicalCoralTimeSeriesBuffer;
+      }
+      return [];
+    }
+
+    const durationMs = getRangeDurationMs('live');
     const cutoffMs = Date.now() - durationMs;
     if (coralTimeSeriesBuffer.length > 0) {
       const windowPoints = coralTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
       if (windowPoints.length > 0) return windowPoints;
+      return coralTimeSeriesBuffer;
     }
     if (currentSnapshot?.coral?.timeSeries) {
       return currentSnapshot.coral.timeSeries;
@@ -2955,29 +2986,40 @@ Please connect the physical switch via USB to execute '${command}' on device har
         signal: controller.signal,
       });
       if (!res.ok) {
-        console.warn(`[!] [Historical Range] Neon DB query returned status ${res.status}`);
+        console.warn(`[!] [Historical Range] Range query returned status ${res.status}`);
         historicalDataUnavailable = true;
+        historicalTimeSeriesBuffer = [];
+        historicalJetsonTimeSeriesBuffer = [];
+        historicalCoralTimeSeriesBuffer = [];
         return;
       }
       const data = await res.json();
       if (data && Array.isArray(data.timeSeries) && data.timeSeries.length > 0) {
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
-        timeSeriesBuffer = data.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        historicalTimeSeriesBuffer = data.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
         historicalDataUnavailable = false;
       } else {
+        historicalTimeSeriesBuffer = [];
         historicalDataUnavailable = true;
       }
       if (data?.jetson && Array.isArray(data.jetson.timeSeries) && data.jetson.timeSeries.length > 0) {
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
-        jetsonTimeSeriesBuffer = data.jetson.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        historicalJetsonTimeSeriesBuffer = data.jetson.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        historicalJetsonTimeSeriesBuffer = [];
       }
       if (data?.coral && Array.isArray(data.coral.timeSeries) && data.coral.timeSeries.length > 0) {
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
-        coralTimeSeriesBuffer = data.coral.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        historicalCoralTimeSeriesBuffer = data.coral.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        historicalCoralTimeSeriesBuffer = [];
       }
     } catch (err) {
-      console.warn('[!] [Historical Range] Failed to fetch historical telemetry from Neon DB:', err);
+      console.warn('[!] [Historical Range] Failed to fetch historical telemetry:', err);
       historicalDataUnavailable = true;
+      historicalTimeSeriesBuffer = [];
+      historicalJetsonTimeSeriesBuffer = [];
+      historicalCoralTimeSeriesBuffer = [];
     } finally {
       clearTimeout(timeoutId);
     }
