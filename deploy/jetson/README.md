@@ -12,35 +12,43 @@
 +───────────────────────────────────────────────────────────────────────────+
 |                    ANKER SOLIX F1500 (1536 Wh LiFePO4)                    |
 |       Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)       |
-+───┬───────────────────────────────────────┬───────────────────────────┬───+
-    │ AC/DC Power                           │ 19V DC Power              │ 5V USB-C
-    ▼                                       ▼                           ▼
-[Zodiac FX Switch]            [Jetson Orin Nano Super]        [Raspberry Pi 3B+]
-(KSZ8795 + SAM4E8E)           (67 TOPS, NVMe 500GB SSD)       (Untrusted Workload)
++───┬───────────────────────────────────────────────────────────┬───────────+
+    │ 19V DC Power                                              │ 5V USB-C
+    ▼                                                           ▼
+[Jetson Orin Nano Super]                                [Raspberry Pi 3B+]
+(67 TOPS, NVMe 500GB SSD)                               (Untrusted Workload)
+    │
+    │ 5V VBUS Power + Serial CDC Telemetry (/dev/ttyACM0 @ 115200 8N1)
+    ▼
+[Zodiac FX Switch]  (Powered directly by Jetson Orin USB host)
+(KSZ8795 + SAM4E8E)
 
 [ISP Gateway / Mesh Node]
           │ 100BASE-TX Ethernet
           ▼
 [Zodiac FX Port 2] ◄── Gateway Uplink
-[Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [Raspberry Pi 3B+ eth0: 10.0.2.50/24]
-[Zodiac FX Port 3] ─── Ethernet RJ-45 ───► [Jetson ASIX USB GbE: enx9c69d39dd0a6 (Promiscuous Tap)]
-[Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: 10.0.1.8/24 (:6633)]
-[Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC @ 115200)]
+[Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [Raspberry Pi 3B+ eth0: <workload-subnet>]
+[Zodiac FX Port 3] ─── Ethernet RJ-45 ───► [Jetson ASIX USB GbE: enx* (Promiscuous Tap)]
+[Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
+[Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Power + Serial CDC)]
                                            │
                                            ├──► [Google Coral Edge TPU (USB 3.0)]
                                            ├──► [SSD1306 0.96" OLED (I2C Bus 7, 0x3c)]
-                                           └──► [wlP1p1s0: 10.0.0.15/24 (Wi-Fi Mgmt/Relay)]
+                                           └──► [wlP1p1s0: <mgmt-subnet> (Wi-Fi Mgmt/Relay)]
 ```
+
+> [!NOTE]
+> Detailed private IP allocations, hardware MAC addresses, and physical port assignments are documented in the local persistent context manager ([.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md)).
 
 **Port assignment:**
 
-| Zodiac Port | Connected Device | Interface / MAC | Assigned IP / Subnet | Role & Invariant |
+| Zodiac Port | Connected Device | Interface Identity | Assigned Network / Role | Role & Invariant |
 |---|---|---|---|---|
-| **Port 1** | Raspberry Pi 3 Model B+ | `eth0` (`b8:27:eb:a2:ec:b0`) | `10.0.2.50/24` (Static) | **Untrusted Agent Workload**: Monitored SDN data plane. |
+| **Port 1** | Raspberry Pi 3 Model B+ | `eth0` | Isolated Workload Subnet | **Untrusted Agent Workload**: Monitored SDN data plane. |
 | **Port 2** | ISP Gateway / Mesh Node | RJ-45 Uplink Cable | Gateway Bridged (VLAN 100) | **Gateway Transit**: Public Internet access. |
-| **Port 3** | Jetson Orin Nano Super | `enx9c69d39dd0a6` (`9c:69:d3:9d:d0:a6`) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
-| **Port 4** | Jetson Orin Nano Super | `enP8p1s0` (`ac:3a:e2:98:99:dd`) | `10.0.1.8/24` (Static) | **OpenFlow Control Channel**: Controller target `:6633`. |
-| **Micro-USB** | Jetson Orin Nano Super | USB CDC (VID `03eb` PID `2404`) | `/dev/ttyACM0` @ 115200 | **Hardware Telemetry Stream**: Register telemetry (1–2 Hz). |
+| **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
+| **Port 4** | Jetson Orin Nano Super | `enP8p1s0` | Dedicated Control Subnet | **OpenFlow Control Channel**: Controller target `:6633`. |
+| **Micro-USB** | Jetson Orin Nano Super | USB CDC (VID 03eb PID 2404) | `/dev/ttyACM0` @ 115200 | **Power & Telemetry**: 5V VBUS powered; 1–2 Hz telemetry. |
 
 ---
 

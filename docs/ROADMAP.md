@@ -17,52 +17,66 @@ Governed by the **Senior Staff Council Invariants**:
 +───────────────────────────────────────────────────────────────────────────────────────────+
 |                           ANKER SOLIX F1500 (1536 Wh LiFePO4)                             |
 |               Off-Grid Power Substrate: ~20W Continuous Load (60-80+ Hours)               |
-+───┬───────────────────────────────────────┬───────────────────────────────────┬───────────+
-    │ AC/DC Power                           │ 19V DC Power                      │ 5V USB-C
-    ▼                                       ▼                                   ▼
-+──────────────────────────+     +───────────────────────────────────+     +────────────────+
-| Zodiac FX 4-Port Switch  |     | NVIDIA Jetson Orin Nano Super     |     | Raspberry Pi   |
-| OpenFlow 1.3 Data Plane  |     | 67 TOPS Ampere, 24/7 Controller   |     | 3 Model B+     |
-+───┬───────────┬──────────+     +───┬───────────┬───────────────────+     +────────┬───────+
-    │ Port 1    │ Port 3             │ Port 4    │ Mirror Tap Ingress               │ eth0
-    │           │ (Mirror Tap)       │ (:6633)   │ (enx9c69d39dd0a6)                │
-    │           └────────────────────┼───────────┼──────────────────────────────────┘
-    │                                │           │
-    │           RJ45 Patch           │ RJ45 Patch│ ASIX AX88179 USB GbE
-    │                                │           │
-    └────────────────────────────────┼───────────┼──────────────────────────────────┐
-                                     │           │                                  │
-                                     ▼           ▼                                  ▼
-                        +────────────────────────────────────+             +────────────────+
-                        |  Jetson Orin Tri-Interface Stack   |             | RPi 3B+ Workld |
-                        |  * Controller: enP8p1s0 (10.0.1.8) |             | * eth0:        |
-                        |  * Mirror Tap: enx9c69d39dd0a6     |             |   10.0.2.50/24 |
-                        |  * Mgmt Plane: wlP1p1s0 (10.0.0.15)|             | * wlan0:       |
-                        +─────────────────┬──────────────────+             |   10.0.0.45/24 |
-                                          │                                +───────┬────────+
-                                          │ USB 3.0 SuperSpeed                     │ Wi-Fi
-                                          ▼                                        │ Backdoor
-                                +───────────────────+                              │
-                                | Coral Edge TPU    |                              │
-                                | 4 TOPS INT8       |                              │
-                                +───────────────────+                              │
-                                                                                   │
-         MacBook Pro (Untethered — connect via WiFi/SSH to push code changes only) │
-         ↕ ssh zodiac@10.0.0.15   |   https://agentic-era-networking.vercel.app    │
-         ↕ ssh agent@10.0.0.45 (Out-of-Band Safety Link) <─────────────────────────┘
++───┬───────────────────────────────────────────────────────────────────┬───────────────────+
+    │ 19V DC Power                                                      │ 5V USB-C
+    ▼                                                                   ▼
++───────────────────────────────────+                             +─────────────────────────+
+| NVIDIA Jetson Orin Nano Super     |                             | Raspberry Pi 3 Model B+ |
+| 67 TOPS Ampere, 24/7 Controller   |                             | Untrusted Workload      |
++───┬───────────┬───────────────────+                             +────────────┬────────────+
+    │ 5V VBUS + │ Port 4 (:6633)                                               │ eth0
+    │ CDC Telemetry                                                            │
+    ▼           │ RJ-45 Patch                                                  │ RJ-45 Patch
++───────────────▼──────────+                                                   │
+| Zodiac FX 4-Port Switch  |                                                   │
+| OpenFlow 1.3 Data Plane  |                                                   │
++───┬───────────┬──────────+                                                   │
+    │ Port 1    │ Port 3 (Mirror Tap)                                          │
+    │           └────────────────────┐                                         │
+    │                                │                                         │
+    │                                ▼ RJ-45 Patch                             │
+    │                     +─────────────────────+                              │
+    │                     | ASIX AX88179 USB GbE|                              │
+    │                     | (enx* Promiscuous)  |                              │
+    │                     +──────────┬──────────+                              │
+    │                                │ USB 3.0                                 │
+    │                                ▼                                         │
+    │                   +──────────────────────────────────+                   │
+    │                   | Jetson Orin Tri-Interface Stack  |                   │
+    │                   | * Ctrl: enP8p1s0 (<ctrl-subnet>) |                   │
+    │                   | * Tap:  enx* (Promiscuous)       |                   │
+    │                   | * Mgmt: wlP1p1s0 (<mgmt-subnet>) |                   │
+    │                   +────────────────┬─────────────────+                   │
+    │                                    │                                     │
+    │                                    │ USB 3.0 SuperSpeed                  │
+    │                                    ▼                                     │
+    │                          +───────────────────+                           │
+    │                          | Coral Edge TPU    |                           │
+    │                          | 4 TOPS INT8       |                           │
+    │                          +───────────────────+                           │
+    │                                                                          │
+    └──────────────────────────────────────────────────────────────────────────┘
+                                         │
+                                         ▼ Wireless WiFi (<mgmt-subnet>)
+         MacBook Pro (Untethered — connect via WiFi/SSH to push code changes only)
+         ↕ ssh zodiac@<jetson-mgmt-ip>   |   https://agentic-era-networking.vercel.app
+         ↕ ssh agent@<pi-mgmt-ip> (Out-of-Band Safety Link)
 ```
+
+> [!NOTE]
+> Detailed private IP allocations, hardware MAC addresses, and physical port assignments are documented in the local persistent context manager ([.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md)).
 
 **Role separation:**
 
-| Node | Role | Hardware / IP | Always On? |
+| Node | Role | Hardware / Logical Plane | Always On? |
 |---|---|---|---|
-| **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4, `/dev/ttyACM0` | ✅ Yes |
-| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`10.0.0.15`, `10.0.1.8`) | ✅ Yes |
-| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | USB 3.0 (`18d1:9302`) | ✅ Yes |
-| **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx9c69d39dd0a6` (Promiscuous) | ✅ Yes |
-| **Raspberry Pi 3 Model B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`10.0.2.50`), `wlan0` (`10.0.0.45`) | ✅ Yes |
+| **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 (5V USB from Jetson) | ✅ Yes |
+| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`) | ✅ Yes |
+| **Google Coral Edge TPU** | Inference Accelerator — sub-ms shallow packet classification (Phase 2A) | USB 3.0 (Powered by Jetson) | ✅ Yes |
+| **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
+| **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (<workload-subnet>), `wlan0` (<mgmt-subnet>) | ✅ Yes |
 | **Anker Solix F1500** | Autonomous Power Substrate — 1536 Wh LiFePO4 battery power station | ~20W total rack consumption | ✅ Yes |
-| **MacBook Pro** | Dev Workstation — SSH coding, web dashboard monitoring | WiFi 6/6E (`10.0.0.x`) | ❌ Untethered |
+| **MacBook Pro** | Dev Workstation — SSH coding, web dashboard monitoring | WiFi 6/6E (<mgmt-subnet>) | ❌ Untethered |
 
 ## Phase Overview
 
