@@ -242,6 +242,14 @@
     coralDeviceCountBadge: document.getElementById('coral-device-count-badge'),
     coralDevicePills: document.getElementById('coral-device-pills'),
 
+    // Top Header & Jetson Subsystem Elements
+    btnDeviceCoralName: document.getElementById('btn-device-coral-name'),
+    btnDeviceCoralBadge: document.getElementById('btn-device-coral-badge'),
+    orinCoralCardTitle: document.getElementById('orin-coral-card-title'),
+    orinCoralCardBadge: document.getElementById('orin-coral-card-badge'),
+    orinCoralCardStatus: document.getElementById('orin-coral-card-status'),
+    orinCoralSubsystemDevices: document.getElementById('orin-coral-subsystem-devices'),
+
     // Google Coral Canvases
     chartCoralRateCanvas: document.getElementById('chart-coral-rate'),
     chartCoralLatencyCanvas: document.getElementById('chart-coral-latency'),
@@ -279,15 +287,12 @@
 
   /**
    * Fast HTML entity escaping to prevent DOM injection.
+   * Single-pass regex with dictionary lookup minimizes GC pressure (Jeff Dean invariant).
    */
+  const ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
   function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    if (str == null) return '';
+    return String(str).replace(/[&<>"']/g, (m) => ESCAPE_MAP[m] || m);
   }
 
   /**
@@ -1034,6 +1039,37 @@
       }
       if (els.coralKpiModel) {
         els.coralKpiModel.innerHTML = `Model: <strong>${escapeHtml(c.loadedModel || (count > 1 ? 'Dual Standby' : 'Standby'))}</strong>`;
+      }
+      if (els.btnDeviceCoralName) {
+        els.btnDeviceCoralName.innerText = count > 1 ? 'Dual Coral' : 'Coral TPU';
+      }
+      if (els.btnDeviceCoralBadge) {
+        els.btnDeviceCoralBadge.innerText = `${tops} TOPS`;
+      }
+      if (els.orinCoralCardTitle) {
+        els.orinCoralCardTitle.innerText = count > 1 ? 'Dual Edge TPU Accelerators' : 'Edge TPU Accelerator';
+      }
+      if (els.orinCoralCardBadge) {
+        els.orinCoralCardBadge.innerText = `${tops} TOPS INT8`;
+      }
+      if (els.orinCoralCardStatus) {
+        els.orinCoralCardStatus.innerText = isDetected ? `${count} Accelerator${count > 1 ? 's' : ''} Attached` : 'Offline';
+      }
+      if (els.orinCoralSubsystemDevices) {
+        if (Array.isArray(c.devices) && c.devices.length > 0) {
+          els.orinCoralSubsystemDevices.innerHTML = c.devices.map((d) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0;">
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <span class="cf-status-dot ${d.status === 'INFERENCE_ACTIVE' ? 'green' : 'purple'}" style="width: 6px; height: 6px;"></span>
+                <strong>${escapeHtml(d.name)}</strong>
+                <span class="cf-pill-badge ${d.assignedRole === 'TAP_PACKET_CLASSIFIER' ? 'purple' : 'blue'}" style="font-size: 0.65rem;">${escapeHtml(d.assignedRole === 'TAP_PACKET_CLASSIFIER' ? 'Tap DPI' : 'DNS Sentinel')}</span>
+              </div>
+              <span class="cf-mono" style="font-size: 0.7rem; color: var(--cf-text-secondary);">${escapeHtml(d.usbBus)}</span>
+            </div>
+          `).join('');
+        } else {
+          els.orinCoralSubsystemDevices.innerHTML = `<span style="color: var(--cf-text-secondary);">No Edge TPUs attached.</span>`;
+        }
       }
       if (els.coralDevicePills) {
         if (Array.isArray(c.devices) && c.devices.length > 0) {

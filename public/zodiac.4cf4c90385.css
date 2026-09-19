@@ -1394,7 +1394,7 @@ body {
    ========================================================================== */
 .cf-system-inventory-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1.25rem;
   margin-top: 1.25rem;
 }

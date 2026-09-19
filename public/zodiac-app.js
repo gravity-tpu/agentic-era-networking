@@ -287,15 +287,12 @@
 
   /**
    * Fast HTML entity escaping to prevent DOM injection.
+   * Single-pass regex with dictionary lookup minimizes GC pressure (Jeff Dean invariant).
    */
+  const ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
   function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    if (str == null) return '';
+    return String(str).replace(/[&<>"']/g, (m) => ESCAPE_MAP[m] || m);
   }
 
   /**
