@@ -203,6 +203,16 @@
     orinIfWifiStatus: document.getElementById('orin-if-wifi-status'),
     orinIfWifiBytes: document.getElementById('orin-if-wifi-bytes'),
     orinIfWifiPkts: document.getElementById('orin-if-wifi-pkts'),
+    orinNicBadge: document.getElementById('orin-nic-badge'),
+    orinIfTapRow: document.getElementById('orin-if-tap-row'),
+    orinIfTapDot: document.getElementById('orin-if-tap-dot'),
+    orinIfTapName: document.getElementById('orin-if-tap-name'),
+    orinIfTapSpeed: document.getElementById('orin-if-tap-speed'),
+    orinIfTapMac: document.getElementById('orin-if-tap-mac'),
+    orinIfTapStatus: document.getElementById('orin-if-tap-status'),
+    orinIfTapBytes: document.getElementById('orin-if-tap-bytes'),
+    orinIfTapPkts: document.getElementById('orin-if-tap-pkts'),
+    orinIfTapDrops: document.getElementById('orin-if-tap-drops'),
     orinDiskStat: document.getElementById('orin-disk-stat'),
     orinBarDisk: document.getElementById('orin-bar-disk'),
     orinSvcPid: document.getElementById('orin-svc-pid'),
@@ -849,6 +859,40 @@
         if (els.orinIfWifiPkts) {
           els.orinIfWifiPkts.innerText = `${formatNumber(wifi.rxPackets)} / ${formatNumber(wifi.txPackets)}`;
         }
+      }
+
+      const tapIf = Array.isArray(j.interfaces)
+        ? j.interfaces.find((i) => i.name.startsWith('enx') || i.name === 'eth1' || (i.role && i.role.includes('Mirror Tap')))
+        : null;
+
+      if (tapIf) {
+        const tapUp = tapIf.status === 'UP' || Boolean(tapIf.carrier);
+        if (els.orinNicBadge) els.orinNicBadge.innerText = 'Tri-Interface Stack';
+        if (els.orinIfTapRow) els.orinIfTapRow.style.display = '';
+        if (els.orinIfTapDot) els.orinIfTapDot.className = `cf-status-dot ${tapUp ? 'teal' : 'gray'}`;
+        if (els.orinIfTapName) els.orinIfTapName.innerText = tapIf.name;
+        if (els.orinIfTapMac) els.orinIfTapMac.innerText = tapIf.macAddress || tapIf.mac || '9c:69:d3:9d:d0:a6';
+        if (els.orinIfTapSpeed) {
+          els.orinIfTapSpeed.innerText = tapIf.speedMbps > 0 ? `${tapIf.speedMbps}BASE-TX (Full Duplex)` : '100BASE-TX (Full Duplex)';
+        }
+        if (els.orinIfTapStatus) {
+          els.orinIfTapStatus.className = `cf-pill-badge ${tapUp ? 'teal' : 'gray'}`;
+          els.orinIfTapStatus.innerText = tapUp ? (tapIf.speedMbps > 0 ? `UP · ${tapIf.speedMbps}M` : 'UP · 100M') : 'DOWN';
+        }
+        if (els.orinIfTapBytes) {
+          els.orinIfTapBytes.innerText = `${formatBytes(tapIf.rxBytes)} / ${formatBytes(tapIf.txBytes)}`;
+        }
+        if (els.orinIfTapPkts) {
+          els.orinIfTapPkts.innerText = `${formatNumber(tapIf.rxPackets)} / ${formatNumber(tapIf.txPackets)}`;
+        }
+        if (els.orinIfTapDrops) {
+          const drops = safeBigInt(tapIf.rxDropped) + safeBigInt(tapIf.txDropped);
+          const errs = safeBigInt(tapIf.rxErrors) + safeBigInt(tapIf.txErrors);
+          els.orinIfTapDrops.innerText = `${formatNumber(drops)} drops · ${formatNumber(errs)} err`;
+        }
+      } else {
+        if (els.orinNicBadge) els.orinNicBadge.innerText = 'Dual-Stack Dual-NIC';
+        if (els.orinIfTapRow) els.orinIfTapRow.style.display = 'none';
       }
 
       // Memory & NVMe

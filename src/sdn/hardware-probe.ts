@@ -30,6 +30,40 @@ interface PrevCpuSample {
 let prevCpuSample: PrevCpuSample | null = null;
 const prevPerCoreSample: PrevCpuSample[] = [];
 
+let cachedOsIfs: NodeJS.Dict<os.NetworkInterfaceInfo[]> = {};
+let lastOsIfsFetchNs = 0n;
+// Council Invariant 5 (Quoc Le): Configurable adaptive TTL via env variable, eliminating hardcoded heuristic magic numbers.
+const DEFAULT_OS_IFS_CACHE_TTL_NS = 5_000_000_000n; // 5 seconds
+function getOsIfsCacheTtlNs(): bigint {
+  const envMs = process.env['JETSON_IF_CACHE_TTL_MS'];
+  if (envMs) {
+    const parsed = parseInt(envMs, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return BigInt(parsed) * 1_000_000n;
+    }
+  }
+  return DEFAULT_OS_IFS_CACHE_TTL_NS;
+}
+
+function getCachedNetworkInterfaceIp(name: string, fallback: string | null): string | null {
+  const nowNs = process.hrtime.bigint();
+  const ttlNs = getOsIfsCacheTtlNs();
+  if (lastOsIfsFetchNs === 0n || nowNs - lastOsIfsFetchNs >= ttlNs) {
+    try {
+      cachedOsIfs = os.networkInterfaces();
+      lastOsIfsFetchNs = nowNs;
+    } catch (err) {
+      process.stderr.write(`[jetson-probe] Failed to read os.networkInterfaces: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+  const entries = cachedOsIfs[name];
+  if (entries) {
+    const v4 = entries.find((e) => e.family === 'IPv4' && !e.internal);
+    if (v4) return v4.address;
+  }
+  return fallback;
+}
+
 /**
  * Safely reads a numeric string from a sysfs file asynchronously, returning null on failure.
  * Council Invariant 1: Zero Suppression of Reality — errors other than ENOENT are logged.
@@ -241,10 +275,26 @@ async function executeJetsonHardwareProbe(
   const interfaces: JetsonNetworkInterfaceTelemetry[] = [];
   try {
     const netDevLines = (await fs.promises.readFile('/proc/net/dev', 'utf8')).split('\n');
-    const targetIfs = [
+
+    const targetIfs: Array<{ name: string; role: string; defaultIp: string | null }> = [
       { name: 'enP8p1s0', role: 'SDN Control Link -> Zodiac Port 4', defaultIp: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1' },
       { name: 'wlP1p1s0', role: 'Management Plane & Cloud Relay (Wi-Fi)', defaultIp: process.env['JETSON_HOST'] ?? '127.0.0.1' },
     ];
+
+    // Auto-discover USB Ethernet / Mirror Tap adapters (e.g. enx9c69d39dd0a6 or eth1)
+    for (const line of netDevLines) {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0) {
+        const ifName = line.substring(0, colonIdx).trim();
+        if ((ifName.startsWith('enx') || ifName === 'eth1') && !targetIfs.some((t) => t.name === ifName)) {
+          targetIfs.push({
+            name: ifName,
+            role: 'SDN Mirror Tap (Zodiac Port 3) -> Coral Sniffer',
+            defaultIp: null,
+          });
+        }
+      }
+    }
 
     for (const target of targetIfs) {
       const line = netDevLines.find((l) => l.trim().startsWith(`${target.name}:`));
@@ -302,7 +352,7 @@ async function executeJetsonHardwareProbe(
         name: target.name,
         role: target.role,
         macAddress: mac,
-        ipAddress: target.defaultIp,
+        ipAddress: getCachedNetworkInterfaceIp(target.name, target.defaultIp),
         status,
         speedMbps,
         rxBytes,

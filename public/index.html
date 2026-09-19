@@ -986,9 +986,9 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-card-header">
                 <div>
                   <h3 class="cf-card-title">Appliance Physical Network Interfaces</h3>
-                  <div class="cf-card-subtitle">Linux sysfs &amp; /proc/net/dev socket wire accounting for SDN control and management planes</div>
+                  <div class="cf-card-subtitle">Linux sysfs &amp; /proc/net/dev socket wire accounting for SDN control, tap, and management planes</div>
                 </div>
-                <span class="cf-pill-badge blue">Dual-Stack Dual-NIC</span>
+                <span class="cf-pill-badge teal" id="orin-nic-badge">Tri-Interface Stack</span>
               </div>
               <div class="cf-card-body" style="padding: 0;">
                 <div class="cf-table-container">
@@ -1056,6 +1056,33 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         <td class="cf-mono">
                           <div id="orin-if-wifi-pkts" style="font-weight: 600;">-- / --</div>
                           <div style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
+                      </tr>
+                      <tr id="orin-if-tap-row">
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot teal" id="orin-if-tap-dot" style="width: 8px; height: 8px;"></span>
+                            <strong id="orin-if-tap-name">enx9c69d39dd0a6</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">SDN Mirror Tap → Coral Sniffer</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Zodiac Port 3 mirror link · Real-time wire packet capture</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" id="orin-if-tap-speed" style="font-size: 0.75rem;">100BASE-TX (Full Duplex)</div>
+                          <div class="cf-mono" id="orin-if-tap-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">9c:69:d3:9d:d0:a6</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge teal" id="orin-if-tap-status">UP · 100M</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-tap-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-tap-pkts" style="font-weight: 600;">-- / --</div>
+                          <div id="orin-if-tap-drops" style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
                         </td>
                       </tr>
                     </tbody>
@@ -1614,7 +1641,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.d62d14e8e6.js"></script>
+  <script defer src="zodiac-app.e3b8f1b2bd.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

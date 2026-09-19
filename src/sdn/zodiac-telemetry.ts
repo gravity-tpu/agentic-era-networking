@@ -243,10 +243,10 @@ export function parseZodiacPortsHtml(html: string): ZodiacPortTelemetry[] {
   }
 
   const locations = [
-    'Opposite Micro-USB connector (Leftmost)',
-    'OpenFlow Data Plane Port 2',
-    'OpenFlow Data Plane Port 3',
-    'SDN Controller / Native Port (Rightmost)',
+    'Front Left (Micro-USB / LED side)',
+    'Front Middle-Left (Gateway Uplink)',
+    'Front Middle-Right (Hardware Tap / Sniffer)',
+    'Front Right (Controller Link / Opposite Micro-USB)',
   ];
 
   for (let i = 0; i < 4; i++) {
@@ -306,7 +306,7 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'Opposite Micro-USB connector (Leftmost)',
+        physicalLocation: 'Front Left (Micro-USB / LED side)',
       },
       {
         port: 2,
@@ -321,7 +321,7 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'OpenFlow Data Plane Port 2',
+        physicalLocation: 'Front Middle-Left (Gateway Uplink)',
       },
       {
         port: 3,
@@ -336,7 +336,7 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'OpenFlow Data Plane Port 3',
+        physicalLocation: 'Front Middle-Right (Hardware Tap / Sniffer)',
       },
       {
         port: 4,
@@ -351,7 +351,7 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'SDN Controller / Native Port (Rightmost)',
+        physicalLocation: 'Front Right (Controller Link / Opposite Micro-USB)',
       },
     ],
     openflow: {
@@ -655,7 +655,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'Opposite Micro-USB connector (Leftmost)',
+        physicalLocation: 'Front Left (Micro-USB / LED side)',
       },
       {
         port: 2,
@@ -671,7 +671,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'Middle Left',
+        physicalLocation: 'Front Middle-Left (Gateway Uplink)',
       },
       {
         port: 3,
@@ -687,7 +687,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'Middle Right',
+        physicalLocation: 'Front Middle-Right (Hardware Tap / Sniffer)',
       },
       {
         port: 4,
@@ -703,7 +703,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
         rxDropped: 0n,
         txDropped: 0n,
         rxCrcErrors: 0n,
-        physicalLocation: 'Next to Micro-USB connector (Rightmost)',
+        physicalLocation: 'Front Right (Controller Link / Opposite Micro-USB)',
       },
     ],
     openflow: {

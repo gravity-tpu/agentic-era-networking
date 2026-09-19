@@ -997,10 +997,10 @@ export class ZodiacBridgeServer {
             timestampNs: process.hrtime.bigint(),
           },
           ports: [
-            { port: 1, name: 'Port 1', physicalLocation: 'Opposite Micro-USB connector (Leftmost)', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, ipAddress: 'Unassigned', rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
-            { port: 2, name: 'Port 2', physicalLocation: 'Middle Left', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, ipAddress: 'Gateway Uplink', rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
-            { port: 3, name: 'Port 3', physicalLocation: 'Middle Right', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, ipAddress: 'Unassigned', rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
-            { port: 4, name: 'Port 4', physicalLocation: 'Next to Micro-USB connector (Rightmost)', status: 'DOWN', vlanType: 'Native', vlanId: 200, ipAddress: this.switchIp, rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 1, name: 'Port 1', physicalLocation: 'Front Left (Micro-USB / LED side)', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, ipAddress: 'Unassigned', rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 2, name: 'Port 2', physicalLocation: 'Front Middle-Left (Gateway Uplink)', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, ipAddress: 'Gateway Uplink', rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 3, name: 'Port 3', physicalLocation: 'Front Middle-Right (Hardware Tap / Sniffer)', status: 'DOWN', vlanType: 'OpenFlow', vlanId: 100, ipAddress: 'Unassigned', rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
+            { port: 4, name: 'Port 4', physicalLocation: 'Front Right (Controller Link / Opposite Micro-USB)', status: 'DOWN', vlanType: 'Native', vlanId: 200, ipAddress: this.switchIp, rxBytes: 0n, txBytes: 0n, rxPackets: 0n, txPackets: 0n, rxDropped: 0n, txDropped: 0n, rxCrcErrors: 0n },
           ],
           openflow: {
             status: 'Disconnected',
@@ -1047,13 +1047,17 @@ export class ZodiacBridgeServer {
         const livePorts = health.ports && health.ports.length > 0
           ? health.ports.map((p) => {
               const existing = this.cachedSnapshot.ports.find((ep) => ep.port === p.port);
-              const portRxPkts = this.portRxCounters.get(p.port) ?? existing?.rxPackets ?? 0n;
-              const portRxBytes = this.portByteCounters.get(p.port) ?? existing?.rxBytes ?? 0n;
+              const portRxPkts = p.rxPackets > 0n ? p.rxPackets : (this.portRxCounters.get(p.port) ?? existing?.rxPackets ?? 0n);
+              const portTxPkts = p.txPackets > 0n ? p.txPackets : (existing?.txPackets ?? 0n);
+              const portRxBytes = p.rxBytes > 0n ? p.rxBytes : (this.portByteCounters.get(p.port) ?? existing?.rxBytes ?? 0n);
+              const portTxBytes = p.txBytes > 0n ? p.txBytes : (existing?.txBytes ?? 0n);
               const portIp = p.port === 4
                 ? (health.config?.ipAddress ?? this.switchIp)
                 : p.port === 2
                   ? 'Gateway Uplink'
-                  : 'Unassigned';
+                  : p.port === 3
+                    ? 'Hardware Tap (Coral Sniffer)'
+                    : 'Unassigned';
               return {
                 port: p.port,
                 name: `Port ${p.port}`,
@@ -1063,12 +1067,12 @@ export class ZodiacBridgeServer {
                 vlanId: p.vlanId,
                 ipAddress: portIp,
                 rxBytes: portRxBytes,
-                txBytes: existing?.txBytes ?? 0n,
+                txBytes: portTxBytes,
                 rxPackets: portRxPkts,
-                txPackets: existing?.txPackets ?? 0n,
-                rxDropped: 0n,
-                txDropped: 0n,
-                rxCrcErrors: 0n,
+                txPackets: portTxPkts,
+                rxDropped: p.rxDropped,
+                txDropped: p.txDropped,
+                rxCrcErrors: p.rxCrcErrors,
               };
             })
           : this.cachedSnapshot.ports;
@@ -1106,11 +1110,26 @@ export class ZodiacBridgeServer {
           },
         };
 
-        // Real rate accounting from actual OpenFlow bytes received
-        const totalRxBytes = health.openFlowMetrics.bytesReceived;
-        const totalTxBytes = 0n;
-        const totalRxPkts = health.openFlowMetrics.messagesReceived;
-        const totalTxPkts = 0n;
+        // Real rate accounting from actual hardware counters across all ports (or OpenFlow fallback)
+        let totalRxBytes = 0n;
+        let totalTxBytes = 0n;
+        let totalRxPkts = 0n;
+        let totalTxPkts = 0n;
+
+        const hasHardwarePortCounters = livePorts.some((p) => p.rxPackets > 0n || p.txPackets > 0n);
+        if (hasHardwarePortCounters) {
+          for (const p of livePorts) {
+            totalRxBytes += p.rxBytes;
+            totalTxBytes += p.txBytes;
+            totalRxPkts += p.rxPackets;
+            totalTxPkts += p.txPackets;
+          }
+        } else {
+          totalRxBytes = health.openFlowMetrics.bytesReceived;
+          totalTxBytes = 0n;
+          totalRxPkts = health.openFlowMetrics.messagesReceived;
+          totalTxPkts = 0n;
+        }
 
         const lastPoint = this.timeSeries[this.timeSeries.length - 1];
         let rxRatePps = 0n;
@@ -1125,24 +1144,32 @@ export class ZodiacBridgeServer {
           : DEFAULT_POLL_INTERVAL_NS;
         this.lastSwitchPollNs = currentPollNs;
 
-        if (lastPoint !== undefined && totalRxPkts >= lastPoint.rxPackets) {
-          const deltaRxP = totalRxPkts - lastPoint.rxPackets;
-          const deltaTxP = totalTxPkts >= lastPoint.txPackets ? totalTxPkts - lastPoint.txPackets : 0n;
-          const deltaRxB = totalRxBytes >= lastPoint.rxBytes ? totalRxBytes - lastPoint.rxBytes : 0n;
-          const deltaTxB = totalTxBytes >= lastPoint.txBytes ? totalTxBytes - lastPoint.txBytes : 0n;
-
-          rxRatePps = (deltaRxP * NANOSECONDS_PER_SECOND) / deltaNs;
-          txRatePps = (deltaTxP * NANOSECONDS_PER_SECOND) / deltaNs;
-          rxRateBps = (deltaRxB * NANOSECONDS_PER_SECOND) / deltaNs;
-          txRateBps = (deltaTxB * NANOSECONDS_PER_SECOND) / deltaNs;
+        if (lastPoint !== undefined) {
+          if (totalRxPkts >= lastPoint.rxPackets) {
+            const deltaRxP = totalRxPkts - lastPoint.rxPackets;
+            rxRatePps = (deltaRxP * NANOSECONDS_PER_SECOND) / deltaNs;
+          }
+          if (totalTxPkts >= lastPoint.txPackets) {
+            const deltaTxP = totalTxPkts - lastPoint.txPackets;
+            txRatePps = (deltaTxP * NANOSECONDS_PER_SECOND) / deltaNs;
+          }
+          if (totalRxBytes >= lastPoint.rxBytes) {
+            const deltaRxB = totalRxBytes - lastPoint.rxBytes;
+            rxRateBps = (deltaRxB * NANOSECONDS_PER_SECOND) / deltaNs;
+          }
+          if (totalTxBytes >= lastPoint.txBytes) {
+            const deltaTxB = totalTxBytes - lastPoint.txBytes;
+            txRateBps = (deltaTxB * NANOSECONDS_PER_SECOND) / deltaNs;
+          }
         }
 
         const portsSeries: Record<number, ZodiacPortSeriesPoint> = {};
         for (let portId = 1; portId <= 4; portId++) {
-          const pRxPkts = this.portRxCounters.get(portId) ?? 0n;
-          const pRxBytes = this.portByteCounters.get(portId) ?? 0n;
-          const pTxPkts = 0n;
-          const pTxBytes = 0n;
+          const lp = livePorts.find((p) => p.port === portId);
+          const pRxPkts = lp?.rxPackets ?? this.portRxCounters.get(portId) ?? 0n;
+          const pTxPkts = lp?.txPackets ?? 0n;
+          const pRxBytes = lp?.rxBytes ?? this.portByteCounters.get(portId) ?? 0n;
+          const pTxBytes = lp?.txBytes ?? 0n;
 
           let pRxRatePps = 0n;
           let pTxRatePps = 0n;
@@ -1153,13 +1180,18 @@ export class ZodiacBridgeServer {
             const lastPort = lastPoint.ports[portId]!;
             if (pRxPkts >= lastPort.rxPackets) {
               const dRxP = pRxPkts - lastPort.rxPackets;
-              const dTxP = pTxPkts >= lastPort.txPackets ? pTxPkts - lastPort.txPackets : 0n;
-              const dRxB = pRxBytes >= lastPort.rxBytes ? pRxBytes - lastPort.rxBytes : 0n;
-              const dTxB = pTxBytes >= lastPort.txBytes ? pTxBytes - lastPort.txBytes : 0n;
-
               pRxRatePps = (dRxP * NANOSECONDS_PER_SECOND) / deltaNs;
+            }
+            if (pTxPkts >= lastPort.txPackets) {
+              const dTxP = pTxPkts - lastPort.txPackets;
               pTxRatePps = (dTxP * NANOSECONDS_PER_SECOND) / deltaNs;
+            }
+            if (pRxBytes >= lastPort.rxBytes) {
+              const dRxB = pRxBytes - lastPort.rxBytes;
               pRxRateBps = (dRxB * NANOSECONDS_PER_SECOND) / deltaNs;
+            }
+            if (pTxBytes >= lastPort.txBytes) {
+              const dTxB = pTxBytes - lastPort.txBytes;
               pTxRateBps = (dTxB * NANOSECONDS_PER_SECOND) / deltaNs;
             }
           }

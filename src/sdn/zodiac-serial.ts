@@ -11,11 +11,39 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 
+/**
+ * Safely parses BigInt values from raw hardware serial strings.
+ * Council Invariant 1 (Anti-Shortcut / Robustness Boundary):
+ * Strips non-digit characters and catches SyntaxError to guarantee fail-closed resilience against line noise.
+ */
+export function safeParseBigInt(val: string, fallback: bigint = 0n): bigint {
+  const cleaned = val.trim().replace(/[^0-9]/g, '');
+  if (cleaned.length === 0) return fallback;
+  try {
+    return BigInt(cleaned);
+  } catch (err: unknown) {
+    // Council Invariant 1 (Zero Suppression of Reality): Never swallow parsing exceptions silently
+    process.stderr.write(
+      `[ZodiacSerial] safeParseBigInt parsing error for "${val}" (cleaned: "${cleaned}"): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+    return fallback;
+  }
+}
+
 export interface ZodiacPortInfo {
   readonly port: number;
   readonly status: 'UP' | 'DOWN';
   readonly vlanType: string;
   readonly vlanId: number;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxDropped: bigint;
+  readonly txDropped: bigint;
+  readonly rxCrcErrors: bigint;
 }
 
 export interface ZodiacDeviceStatus {
@@ -275,15 +303,56 @@ except Exception as e:
       const portNum = parseInt(portBlocks[i]!, 10);
       const content = portBlocks[i + 1] ?? '';
 
-      const statusMatch = content.match(/Status:\s*(UP|DOWN)/i);
-      const vlanTypeMatch = content.match(/VLAN type:\s*([^\r\n]+)/i);
-      const vlanIdMatch = content.match(/VLAN ID:\s*(\d+)/i);
+      let status: 'UP' | 'DOWN' = 'DOWN';
+      let vlanType = 'Unknown';
+      let vlanId = 0;
+      let rxBytes = 0n;
+      let txBytes = 0n;
+      let rxPackets = 0n;
+      let txPackets = 0n;
+      let rxDropped = 0n;
+      let txDropped = 0n;
+      let rxCrcErrors = 0n;
+
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('Status:')) {
+          status = trimmed.substring(7).trim().toUpperCase() === 'UP' ? 'UP' : 'DOWN';
+        } else if (trimmed.startsWith('VLAN type:')) {
+          vlanType = trimmed.substring(10).trim();
+        } else if (trimmed.startsWith('VLAN ID:')) {
+          const idClean = trimmed.substring(8).trim().replace(/[^0-9]/g, '');
+          vlanId = idClean.length > 0 ? parseInt(idClean, 10) : 0;
+        } else if (trimmed.startsWith('RX Bytes:')) {
+          rxBytes = safeParseBigInt(trimmed.substring(9));
+        } else if (trimmed.startsWith('TX Bytes:')) {
+          txBytes = safeParseBigInt(trimmed.substring(9));
+        } else if (trimmed.startsWith('RX Packets:')) {
+          rxPackets = safeParseBigInt(trimmed.substring(11));
+        } else if (trimmed.startsWith('TX Packets:')) {
+          txPackets = safeParseBigInt(trimmed.substring(11));
+        } else if (trimmed.startsWith('RX Dropped Packets:')) {
+          rxDropped = safeParseBigInt(trimmed.substring(19));
+        } else if (trimmed.startsWith('TX Dropped Packets:')) {
+          txDropped = safeParseBigInt(trimmed.substring(19));
+        } else if (trimmed.startsWith('RX CRC Errors:')) {
+          rxCrcErrors = safeParseBigInt(trimmed.substring(14));
+        }
+      }
 
       ports.push({
         port: portNum,
-        status: (statusMatch?.[1]?.toUpperCase() === 'UP' ? 'UP' : 'DOWN'),
-        vlanType: vlanTypeMatch?.[1]?.trim() ?? 'Unknown',
-        vlanId: vlanIdMatch ? parseInt(vlanIdMatch[1]!, 10) : 0,
+        status,
+        vlanType,
+        vlanId,
+        rxBytes,
+        txBytes,
+        rxPackets,
+        txPackets,
+        rxDropped,
+        txDropped,
+        rxCrcErrors,
       });
     }
 
