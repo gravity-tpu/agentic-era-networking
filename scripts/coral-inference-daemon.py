@@ -26,29 +26,36 @@ import sys
 import time
 import traceback
 
-def get_telemetry_dir() -> str:
-    # Council Invariant: Prefer systemd RuntimeDirectory (/run/zodiac) for secure IPC
-    run_dir = '/run/zodiac'
-    if os.path.exists(run_dir) and os.access(run_dir, os.W_OK):
-        return run_dir
-    return '/tmp'
-
-OUTPUT_PATH        = os.path.join(get_telemetry_dir(), 'coral-telemetry.json')
 MODEL_PATH         = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite'
 REPORT_INTERVAL_NS = 1_000_000_000   # 1 second in nanoseconds (integer)
 WARMUP_N           = 5
 
 
-def atomic_write_json(path, data):
-    """Write JSON atomically via rename — prevents partial reads by Node.js."""
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f, separators=(',', ':'))
-    os.replace(tmp, path)
+def atomic_write_telemetry_json(filename: str, data: dict):
+    """
+    Council Invariant (Demis Hassabis & Sanjay Ghemawat):
+    Writes telemetry atomically via rename to secure tmpfs RuntimeDirectory (/run/zodiac),
+    falling back to /tmp on OSError without TOCTOU pre-check indirection.
+    """
+    candidate_dirs = ['/run/zodiac', '/tmp']
+    last_err = None
+    for d in candidate_dirs:
+        tmp = os.path.join(d, filename + '.tmp')
+        target = os.path.join(d, filename)
+        try:
+            with open(tmp, 'w') as f:
+                json.dump(data, f, separators=(',', ':'))
+            os.replace(tmp, target)
+            return
+        except OSError as e:
+            last_err = e
+            continue
+    if last_err:
+        sys.stderr.write(f'[coral-daemon] Failed writing telemetry {filename}: {last_err}\n')
 
 
 def write_offline(reason):
-    atomic_write_json(OUTPUT_PATH, {
+    atomic_write_telemetry_json('coral-telemetry.json', {
         'detected': False,
         'status': 'OFFLINE',
         'error': reason,
@@ -61,7 +68,7 @@ def write_offline(reason):
 
 
 def write_standby(total_inf, usb_p, usb_t):
-    atomic_write_json(OUTPUT_PATH, {
+    atomic_write_telemetry_json('coral-telemetry.json', {
         'detected': True,
         'status': 'STANDBY',
         'model': 'MobileNet V2 224x224 INT8 (EdgeTPU) - Wire Tap DPI',
@@ -221,7 +228,7 @@ def main():
                     inf_sec = 0
                     status  = 'STANDBY'
 
-                atomic_write_json(OUTPUT_PATH, {
+                atomic_write_telemetry_json('coral-telemetry.json', {
                     'detected':            True,
                     'status':              status,
                     'model':               'MobileNet V2 224x224 INT8 (EdgeTPU) - Wire Tap DPI',

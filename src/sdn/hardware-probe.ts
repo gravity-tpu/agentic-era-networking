@@ -577,15 +577,21 @@ async function readCoralTelemetryFile(filename: string): Promise<CoralDaemonTele
   ];
 
   let fd: fs.promises.FileHandle | null = null;
-  let activePath = candidates[0]!;
 
   for (const p of candidates) {
     try {
       fd = await fs.promises.open(p, 'r');
-      activePath = p;
       break;
-    } catch {
-      // Continue to next candidate path
+    } catch (err: unknown) {
+      const code = getErrorCode(err);
+      if (code !== 'ENOENT') {
+        // Council Invariant 1 (Zero Suppression): log permission errors (EACCES) or FD leaks (EMFILE)
+        process.stderr.write(
+          `[coral-probe] Candidate telemetry open error on ${p} (${code ?? 'unknown'}): ${
+            err instanceof Error ? err.message : String(err)
+          }\n`
+        );
+      }
     }
   }
 
@@ -616,7 +622,7 @@ async function readCoralTelemetryFile(filename: string): Promise<CoralDaemonTele
     if (code !== 'ENOENT') {
       // Log genuine errors (permissions, disk I/O, JSON parse) — never swallow reality
       process.stderr.write(
-        `[coral-probe] readCoralTelemetryFile (${activePath}): ${err instanceof Error ? err.message : String(err)}\n`
+        `[coral-probe] readCoralTelemetryFile (${filename}): ${err instanceof Error ? err.message : String(err)}\n`
       );
     }
     // All error paths → fail-closed (Council Invariant 3)

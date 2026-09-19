@@ -35,6 +35,7 @@ Council Invariants:
 """
 
 import argparse
+import errno
 import json
 import os
 import re
@@ -49,13 +50,13 @@ MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobil
 DEFAULT_LOG_PATH = os.environ.get('BURST_LOG_PATH', '/home/zodiac/burst-telemetry.log')
 DEFAULT_SWITCH_IP = os.environ.get('ZODIAC_SWITCH_IP', '127.0.0.1')
 DEFAULT_CTRL_IP = os.environ.get('SDN_CONTROLLER_IP', '0.0.0.0')
-def get_telemetry_dir() -> str:
-    run_dir = '/run/zodiac'
-    if os.path.exists(run_dir) and os.access(run_dir, os.W_OK):
-        return run_dir
-    return '/tmp'
-
-BURST_CORAL_TELEMETRY_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH', os.path.join(get_telemetry_dir(), 'coral-burst-telemetry.json'))
+CUSTOM_BURST_CORAL_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH')
+CANDIDATE_BURST_DIRS = ['/run/zodiac', '/tmp']
+BURST_TARGET_PATHS = tuple(
+    [CUSTOM_BURST_CORAL_PATH]
+    if CUSTOM_BURST_CORAL_PATH
+    else [os.path.join(d, 'coral-burst-telemetry.json') for d in CANDIDATE_BURST_DIRS]
+)
 
 stop_event = threading.Event()
 stats_lock = threading.Lock()
@@ -141,13 +142,28 @@ def check_size_limit_reached(max_bytes: int) -> bool:
 
 
 def atomic_write_burst_coral_json(data: dict):
-    tmp = BURST_CORAL_TELEMETRY_PATH + '.tmp'
-    try:
-        with open(tmp, 'w') as f:
-            json.dump(data, f, separators=(',', ':'))
-        os.replace(tmp, BURST_CORAL_TELEMETRY_PATH)
-    except Exception:
-        pass
+    last_err = None
+    for target in BURST_TARGET_PATHS:
+        tmp = target + '.tmp'
+        try:
+            with open(tmp, 'w') as f:
+                json.dump(data, f, separators=(',', ':'))
+            os.replace(tmp, target)
+            return
+        except OSError as e:
+            last_err = e
+            continue
+    if last_err:
+        sys.stderr.write(f'[burst-coral] Failed writing telemetry: {last_err}\n')
+
+
+def cleanup_burst_coral_telemetry():
+    for target in BURST_TARGET_PATHS:
+        try:
+            os.remove(target)
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                sys.stderr.write(f'[burst-coral] Failed cleanup {target}: {e}\n')
 
 
 def coral_tpu_worker(dev_spec: str, max_bytes: int = 0):
@@ -215,11 +231,7 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0):
         sys.stderr.write(f'[coral_worker_{dev_spec}] Error: {e}\n')
         sys.stderr.flush()
     finally:
-        try:
-            if os.path.exists(BURST_CORAL_TELEMETRY_PATH):
-                os.remove(BURST_CORAL_TELEMETRY_PATH)
-        except Exception:
-            pass
+        cleanup_burst_coral_telemetry()
 
 
 def find_tap_interface() -> str:
@@ -528,11 +540,7 @@ def main():
         for t in threads:
             t.join(timeout=2.0)
 
-        try:
-            if os.path.exists(BURST_CORAL_TELEMETRY_PATH):
-                os.remove(BURST_CORAL_TELEMETRY_PATH)
-        except Exception:
-            pass
+        cleanup_burst_coral_telemetry()
 
         total_elapsed_sec = (time.monotonic_ns() - start_ns) // 1_000_000_000
         tot_bytes = counters['zodiac_p3_bytes'] + counters['zodiac_p4_bytes'] + counters['rpi_bytes']
