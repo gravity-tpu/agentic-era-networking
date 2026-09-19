@@ -827,6 +827,9 @@ export async function probeCoralHardware(
     let combinedP50 = 0n;
     let combinedP99 = 0n;
     if (resolvedDaemon?.status === 'INFERENCE_ACTIVE' && resolvedBurst?.status === 'INFERENCE_ACTIVE') {
+      // Epistemic Note (Council Verification Standards): Mathematically, the arithmetic mean of two
+      // independent percentiles (P50/P99) is an epistemic approximation of the pooled distribution.
+      // Used as an operational aggregate gauge across dual hardware pipelines.
       combinedP50 = (resolvedDaemon.latencyP50Ns + resolvedBurst.latencyP50Ns) / 2n;
       combinedP99 = (resolvedDaemon.latencyP99Ns + resolvedBurst.latencyP99Ns) / 2n;
     } else if (resolvedDaemon?.status === 'INFERENCE_ACTIVE') {

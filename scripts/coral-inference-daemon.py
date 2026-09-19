@@ -106,8 +106,8 @@ def find_tap_interface() -> str:
         for iface in os.listdir('/sys/class/net'):
             if iface.startswith('enx'):
                 return iface
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f'[coral-daemon] Notice: /sys/class/net scan failed: {e}\n')
     return 'enx9c69d39dd0a6'
 
 
@@ -252,8 +252,8 @@ def main():
             if raw_sock:
                 try:
                     raw_sock.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    sys.stderr.write(f'[coral-daemon] Notice: error closing raw socket: {e}\n')
             break
         except Exception:
             err = traceback.format_exc()

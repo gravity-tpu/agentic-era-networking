@@ -82,8 +82,8 @@ def log_message(msg: str, log_file: str):
             with open(log_file, 'a') as f:
                 f.write(line + '\n')
                 f.flush()
-        except Exception:
-            pass
+        except Exception as e:
+            sys.stderr.write(f'[burst-daemon] Failed writing log to {log_file}: {e}\n')
 
 
 def parse_size_bytes(val: str) -> int:
@@ -208,22 +208,27 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.
         w_start_ns = time.monotonic_ns()
         w_latencies = []
 
+        is_in_standby = False
         while not stop_event.is_set():
             if active_event is not None and not active_event.is_set():
-                atomic_write_burst_coral_json({
-                    'detected': True,
-                    'status': 'STANDBY',
-                    'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - Burst Parallel',
-                    'inferencesPerSecond': 0,
-                    'totalInferences': total_worker_inf,
-                    'latencyP50Ns': 0,
-                    'latencyP99Ns': 0,
-                    'timestampNs': time.monotonic_ns(),
-                })
-                time.sleep(0.1)
+                if not is_in_standby:
+                    atomic_write_burst_coral_json({
+                        'detected': True,
+                        'status': 'STANDBY',
+                        'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - Burst Parallel',
+                        'inferencesPerSecond': 0,
+                        'totalInferences': total_worker_inf,
+                        'latencyP50Ns': 0,
+                        'latencyP99Ns': 0,
+                        'timestampNs': time.monotonic_ns(),
+                    })
+                    is_in_standby = True
+                active_event.wait(timeout=0.1)
                 w_start_ns = time.monotonic_ns()
                 w_latencies = []
                 continue
+
+            is_in_standby = False
 
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
                 stop_event.set()
@@ -286,8 +291,9 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading
             with open(f'/sys/class/net/{iface}/address') as f:
                 src_mac_str = f.read().strip().replace(':', '')
                 src_mac = bytes.fromhex(src_mac_str)
-        except Exception:
-            src_mac = bytes.fromhex('9c69d39dd0a6')
+        except Exception as e:
+            sys.stderr.write(f'[zodiac_p3_raw_worker] Fail-closed: Cannot read physical MAC for {iface}: {e}\n')
+            return
 
         eth_type = b'\x08\x00'
 
@@ -299,9 +305,13 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading
             frames.append(dst_mac + src_mac + eth_type + p[:pad_len])
 
         frame_idx = 0
+        pacing_interval_ns = 1_000_000  # 1 ms between packets (1,000 pps target pacing)
+        next_tx_ns = time.monotonic_ns()
+
         while not stop_event.is_set():
             if active_event is not None and not active_event.is_set():
-                time.sleep(0.05)
+                active_event.wait(timeout=0.05)
+                next_tx_ns = time.monotonic_ns()
                 continue
 
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
@@ -314,7 +324,16 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading
             with stats_lock:
                 counters['zodiac_p3_frames'] += 1
                 counters['zodiac_p3_bytes'] += len(f)
-            time.sleep(0.001)
+
+            now_ns = time.monotonic_ns()
+            if now_ns < next_tx_ns:
+                rem_ns = next_tx_ns - now_ns
+                if rem_ns > 2_000_000:
+                    time.sleep(rem_ns / 1_000_000_000)
+                else:
+                    while time.monotonic_ns() < next_tx_ns:
+                        pass
+            next_tx_ns = max(now_ns, next_tx_ns) + pacing_interval_ns
         s.close()
     except Exception as e:
         sys.stderr.write(f'[zodiac_p3_raw_worker] Error on {iface}: {e}\n')
@@ -327,11 +346,14 @@ def zodiac_p4_worker(target_ip: str = DEFAULT_SWITCH_IP, target_port: int = 9999
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.bind((DEFAULT_CTRL_IP, 0))
-        except Exception:
-            pass
+        except Exception as e:
+            sys.stderr.write(f'[zodiac_p4_worker] Notice: Bind to {DEFAULT_CTRL_IP} failed: {e}. Operating with default route.\n')
 
         target = (target_ip, target_port)
         payload = b'AGENTIC-BURST-OF-CTRL-' + (b'X' * 128)
+
+        pacing_interval_ns = 5_000_000  # 5 ms between probes (200 pps target pacing)
+        next_tx_ns = time.monotonic_ns()
 
         while not stop_event.is_set():
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
@@ -342,7 +364,16 @@ def zodiac_p4_worker(target_ip: str = DEFAULT_SWITCH_IP, target_port: int = 9999
             with stats_lock:
                 counters['zodiac_p4_packets'] += 1
                 counters['zodiac_p4_bytes'] += len(payload)
-            time.sleep(0.005)
+
+            now_ns = time.monotonic_ns()
+            if now_ns < next_tx_ns:
+                rem_ns = next_tx_ns - now_ns
+                if rem_ns > 2_000_000:
+                    time.sleep(rem_ns / 1_000_000_000)
+                else:
+                    while time.monotonic_ns() < next_tx_ns:
+                        pass
+            next_tx_ns = max(now_ns, next_tx_ns) + pacing_interval_ns
         s.close()
     except Exception as e:
         sys.stderr.write(f'[zodiac_p4_worker] Error: {e}\n')
@@ -356,6 +387,9 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
         target = (target_ip, target_port)
         payload = b'AGENTIC-WORKLOAD-PROBE-' + (b'W' * 128)
 
+        pacing_interval_ns = 10_000_000  # 10 ms between probes (100 pps target pacing)
+        next_tx_ns = time.monotonic_ns()
+
         while not stop_event.is_set():
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
                 stop_event.set()
@@ -365,7 +399,16 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
             with stats_lock:
                 counters['rpi_packets'] += 1
                 counters['rpi_bytes'] += len(payload)
-            time.sleep(0.01)
+
+            now_ns = time.monotonic_ns()
+            if now_ns < next_tx_ns:
+                rem_ns = next_tx_ns - now_ns
+                if rem_ns > 2_000_000:
+                    time.sleep(rem_ns / 1_000_000_000)
+                else:
+                    while time.monotonic_ns() < next_tx_ns:
+                        pass
+            next_tx_ns = max(now_ns, next_tx_ns) + pacing_interval_ns
         s.close()
     except Exception as e:
         sys.stderr.write(f'[rpi_workload_worker] Error: {e}\n')
@@ -387,7 +430,8 @@ def get_live_telemetry_summary() -> dict:
                 'tpu0_inf_sec': coral.get('inferencesPerSecond', '-'),
                 'jetson_temp_c': jetson.get('temperatures', {}).get('cpuC', '-'),
             }
-    except Exception:
+    except Exception as e:
+        sys.stderr.write(f'[burst-daemon] Note: get_live_telemetry_summary query failed: {e}\n')
         return {}
 
 
@@ -417,6 +461,7 @@ def main():
     parser.add_argument('--interval', type=int, default=15, help='Report interval in seconds')
     parser.add_argument('--target', '--device', default='all', help='Target device(s): all, zodiac, coral, coral-1, coral-2, rpi, jetson (comma-separated)')
     parser.add_argument('--staggered', '--stagger', action='store_true', help='Send staggered bursts to devices independently (TPU 1 solo -> rest -> TPU 2 solo -> rest -> dual concurrent)')
+    parser.add_argument('--stagger-rest-sec', type=int, default=0, help='Duration of settling interval in seconds (default: 0 = auto)')
     parser.add_argument('--size', default='', help='Burst size limit (e.g. 50mb, 100mb, 1gb, 500kb)')
     parser.add_argument('--log-file', default=DEFAULT_LOG_PATH, help='File to write persistent burst logs')
     parser.add_argument('--tap-iface', default='', help='Tap interface name (default: auto-detect enx*)')
@@ -435,8 +480,8 @@ def main():
         try:
             with open(log_file, 'w') as f:
                 f.write('=== AGENTIC-ERA NETWORKING HARDWARE BURST LOG ===\n')
-        except Exception:
-            pass
+        except Exception as e:
+            sys.stderr.write(f'[burst-daemon] Note: Failed initializing {log_file}: {e}\n')
 
     size_label = format_bytes_int(max_bytes) if max_bytes > 0 else 'Unlimited (Duration-based)'
     target_label = ', '.join(sorted(enabled_targets))
@@ -468,17 +513,20 @@ def main():
     if is_coral_all or is_coral_2 or args.staggered:
         active_tpu_devs = []
         try:
-            from pycoral.utils.edgetpu import make_interpreter
-            for dev in [':1', ':0']:
-                try:
-                    test_interp = make_interpreter(MODEL_PATH, device=dev)
-                    active_tpu_devs.append(dev)
-                    del test_interp
+            from pycoral.utils.edgetpu import list_edge_tpus
+            detected_tpus = list_edge_tpus()
+            for i, tpu_info in enumerate(detected_tpus):
+                dev_path = tpu_info.get('path')
+                if dev_path and '2-1.2' in dev_path:
+                    active_tpu_devs.append(dev_path)
                     break
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                elif i == 1:
+                    active_tpu_devs.append(':1')
+                    break
+            if not active_tpu_devs and detected_tpus:
+                active_tpu_devs.append(':1' if len(detected_tpus) > 1 else ':0')
+        except Exception as exc:
+            sys.stderr.write(f'[burst-daemon] Note: Edge TPU worker discovery error: {exc}\n')
 
         for dev in active_tpu_devs:
             t = threading.Thread(target=coral_tpu_worker, args=(dev, max_bytes, tpu2_active), name=f'coral-burst-{dev}', daemon=True)
@@ -526,7 +574,10 @@ def main():
     prev_counters = counters.copy()
 
     if args.staggered:
-        rest_sec = max(1, min(15, total_duration_sec // 10))
+        if args.stagger_rest_sec > 0:
+            rest_sec = args.stagger_rest_sec
+        else:
+            rest_sec = max(1, min(15, total_duration_sec // 10))
         active_pool = max(3, total_duration_sec - (2 * rest_sec))
         active_sec = max(1, active_pool // 3)
 

@@ -30,18 +30,23 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 if (typeof process.loadEnvFile === 'function') {
-  if (fs.existsSync('.env.local')) {
-    try {
-      process.loadEnvFile('.env.local');
-    } catch (err: unknown) {
-      process.stderr.write(`[burst-cli] Failed loading .env.local: ${err instanceof Error ? err.message : String(err)}\n`);
-    }
-  } else if (fs.existsSync('.env')) {
+  try {
+    process.loadEnvFile('.env.local');
+  } catch (err: unknown) {
     try {
       process.loadEnvFile('.env');
-    } catch (err: unknown) {
-      process.stderr.write(`[burst-cli] Failed loading .env: ${err instanceof Error ? err.message : String(err)}\n`);
+    } catch (innerErr: unknown) {
+      // Non-fatal if neither env file is present; log diagnostic to stderr
+      const msgLocal = formatError(err);
+      const msgDefault = formatError(innerErr);
+      if (!msgLocal.includes('ENOENT') || !msgDefault.includes('ENOENT')) {
+        process.stderr.write(`[burst-cli] Notice loading env files: ${msgLocal}; ${msgDefault}\n`);
+      }
     }
   }
 }
@@ -56,7 +61,8 @@ function isRunningOnJetson(): boolean {
   try {
     const hostname = osHostname();
     return hostname.includes('jetson') || fs.existsSync('/etc/nv_tegra_release');
-  } catch {
+  } catch (err: unknown) {
+    process.stderr.write(`[burst-cli] Notice checking platform: ${formatError(err)}\n`);
     return false;
   }
 }
@@ -64,7 +70,8 @@ function isRunningOnJetson(): boolean {
 function osHostname(): string {
   try {
     return execSync('hostname', { encoding: 'utf8' }).trim();
-  } catch {
+  } catch (err: unknown) {
+    process.stderr.write(`[burst-cli] Notice reading hostname: ${formatError(err)}\n`);
     return '';
   }
 }
@@ -84,12 +91,14 @@ function syncScriptToJetson(): void {
   try {
     execSync(`scp -q -o ConnectTimeout=5 ${localScript} ${JETSON_TARGET}:${REMOTE_SCRIPT_PATH}`, {
       stdio: 'pipe',
+      encoding: 'utf8',
     });
     execSync(`ssh -q -o ConnectTimeout=5 ${JETSON_TARGET} "chmod +x ${REMOTE_SCRIPT_PATH}"`, {
       stdio: 'pipe',
+      encoding: 'utf8',
     });
   } catch (err: unknown) {
-    throw new Error(`Failed to sync daemon script to Jetson (${JETSON_TARGET}): ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`Failed to sync daemon script to Jetson (${JETSON_TARGET}): ${formatError(err)}`);
   }
 }
 
@@ -100,6 +109,7 @@ export interface BurstOptions {
   detach?: boolean;
   interval?: number;
   staggered?: boolean;
+  staggerRestSec?: number;
 }
 
 async function startBurst(options: BurstOptions): Promise<void> {
@@ -109,6 +119,7 @@ async function startBurst(options: BurstOptions): Promise<void> {
   const detach = options.detach ?? false;
   const interval = options.interval ?? 15;
   const staggered = options.staggered ?? false;
+  const staggerRestSec = options.staggerRestSec;
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🚀 INITIALIZING HARDWARE TRAFFIC & INFERENCE BURST');
@@ -128,14 +139,17 @@ async function startBurst(options: BurstOptions): Promise<void> {
     const checkCmd = isRunningOnJetson()
       ? 'pgrep -f burst-daemon.py'
       : `ssh -o ConnectTimeout=5 ${JETSON_TARGET} "pgrep -f burst-daemon.py"`;
-    const existingPid = execSync(checkCmd, { encoding: 'utf8' }).trim();
+    const existingPid = execSync(checkCmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     if (existingPid) {
       console.warn(`⚠️  A burst is already running on Jetson (PID: ${existingPid.split('\n')[0]}).`);
       console.log(`   Run 'npm run burst:stop' to abort it, or 'npm run burst:status' to view live metrics.\n`);
       return;
     }
-  } catch {
-    // pgrep exited 1: no process running, proceed
+  } catch (err: unknown) {
+    const status = typeof err === 'object' && err !== null && 'status' in err ? (err as { status?: number }).status : undefined;
+    if (status !== 1) {
+      process.stderr.write(`[burst-cli] Note: pgrep returned non-standard status ${String(status)}: ${formatError(err)}\n`);
+    }
   }
 
   let pyCmd = `/home/zodiac/coral-venv/bin/python3 ${REMOTE_SCRIPT_PATH} --duration ${duration} --interval ${interval} --target ${target} --log-file ${REMOTE_LOG_PATH}`;
@@ -145,13 +159,16 @@ async function startBurst(options: BurstOptions): Promise<void> {
   if (staggered) {
     pyCmd += ` --staggered`;
   }
+  if (staggerRestSec !== undefined && staggerRestSec > 0) {
+    pyCmd += ` --stagger-rest-sec ${staggerRestSec}`;
+  }
 
   if (detach) {
     const detachCmd = isRunningOnJetson()
       ? `nohup sudo ${pyCmd} > /dev/null 2>&1 &`
       : `ssh -o ConnectTimeout=5 ${JETSON_TARGET} "nohup sudo ${pyCmd} > /dev/null 2>&1 &"`;
 
-    execSync(detachCmd);
+    execSync(detachCmd, { encoding: 'utf8' });
     console.log('✨ Burst initiated in background.');
     console.log(`   - Live Dashboard : http://${JETSON_HOST}:3003`);
     console.log(`   - View Status    : npm run burst:status`);
@@ -162,19 +179,19 @@ async function startBurst(options: BurstOptions): Promise<void> {
   // Live streaming mode
   console.log('📡 Streaming live hardware telemetry (Press Ctrl+C to abort cleanly)...\n');
   const runner = isRunningOnJetson()
-    ? spawn('sudo', ['/home/zodiac/coral-venv/bin/python3', REMOTE_SCRIPT_PATH, '--duration', duration, '--interval', String(interval), '--target', target, ...(size ? ['--size', size] : []), ...(staggered ? ['--staggered'] : [])], { stdio: 'inherit' })
+    ? spawn('sudo', ['/home/zodiac/coral-venv/bin/python3', REMOTE_SCRIPT_PATH, '--duration', duration, '--interval', String(interval), '--target', target, ...(size ? ['--size', size] : []), ...(staggered ? ['--staggered'] : []), ...(staggerRestSec ? ['--stagger-rest-sec', String(staggerRestSec)] : [])], { stdio: 'inherit' })
     : spawn('ssh', ['-tt', '-o', 'ConnectTimeout=5', JETSON_TARGET, `sudo ${pyCmd}`], { stdio: 'inherit' });
 
   const cleanExit = () => {
     console.log('\n[!] Stopping burst...');
     try {
       if (isRunningOnJetson()) {
-        execSync('sudo pkill -SIGINT -f burst-daemon.py || true');
+        execSync('sudo pkill -SIGINT -f burst-daemon.py || true', { encoding: 'utf8' });
       } else {
-        execSync(`ssh -o ConnectTimeout=5 ${JETSON_TARGET} "sudo pkill -SIGINT -f burst-daemon.py || true"`);
+        execSync(`ssh -o ConnectTimeout=5 ${JETSON_TARGET} "sudo pkill -SIGINT -f burst-daemon.py || true"`, { encoding: 'utf8' });
       }
-    } catch {
-      // Ignore
+    } catch (err: unknown) {
+      process.stderr.write(`[burst-cli] Notice during cleanup pkill: ${formatError(err)}\n`);
     }
   };
 
@@ -201,10 +218,14 @@ function checkStatus(): void {
     const checkCmd = isRunningOnJetson()
       ? 'pgrep -f burst-daemon.py'
       : `ssh -o ConnectTimeout=5 ${JETSON_TARGET} "pgrep -f burst-daemon.py"`;
-    pid = execSync(checkCmd, { encoding: 'utf8' }).trim();
+    pid = execSync(checkCmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     isRunning = pid.length > 0;
-  } catch {
+  } catch (err: unknown) {
     isRunning = false;
+    const status = typeof err === 'object' && err !== null && 'status' in err ? (err as { status?: number }).status : undefined;
+    if (status !== 1) {
+      process.stderr.write(`[burst-cli] Note: status check pgrep non-zero exit (${String(status)}): ${formatError(err)}\n`);
+    }
   }
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -224,8 +245,8 @@ function checkStatus(): void {
     for (const line of logOut.split('\n')) {
       console.log(`    ${line}`);
     }
-  } catch (err) {
-    console.log('  Log read failed:', err instanceof Error ? err.message : String(err));
+  } catch (err: unknown) {
+    console.log('  Log read failed:', formatError(err));
   }
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -237,10 +258,10 @@ function stopBurst(): void {
     const stopCmd = isRunningOnJetson()
       ? 'sudo pkill -SIGTERM -f burst-daemon.py || true'
       : `ssh -o ConnectTimeout=5 ${JETSON_TARGET} "sudo pkill -SIGTERM -f burst-daemon.py || true"`;
-    execSync(stopCmd, { stdio: 'inherit' });
+    execSync(stopCmd, { stdio: 'inherit', encoding: 'utf8' });
     console.log('✅ Burst process terminated successfully.\n');
-  } catch (err) {
-    console.error('❌ Failed to stop burst:', err instanceof Error ? err.message : String(err));
+  } catch (err: unknown) {
+    console.error('❌ Failed to stop burst:', formatError(err));
   }
 }
 
@@ -249,7 +270,7 @@ function showHelp(): void {
 Agentic Era Networking — Hardware Traffic & Inference Burst CLI
 
 Usage:
-  npm run burst [-- <duration>] [--target <device>] [--size <size>] [--detach] [--interval <sec>]
+  npm run burst [-- <duration>] [--target <device>] [--size <size>] [--detach] [--interval <sec>] [--stagger-rest-sec <sec>]
   npm run burst:status
   npm run burst:stop
 
@@ -273,6 +294,7 @@ Commands / Options:
                              Stage 3: Coral TPU #2 (DNS Sentinel) solo burst
                              Stage 4: Settling interval (both TPUs in STANDBY at 0 inf/s)
                              Stage 5: Dual Coral TPUs concurrently (peak parallelism ~450 inf/s)
+  --stagger-rest-sec <sec> - Configure custom settling interval duration in seconds.
   --size, -s <size>        - Cap the total burst data volume (e.g. 50mb, 100mb, 1gb, 500kb).
                              Terminates as soon as byte limit or duration is reached.
   --detach, -d             - Run in the background without holding the shell.
@@ -283,6 +305,7 @@ Commands / Options:
 Examples:
   npm run burst                                      # 15m live burst across all devices
   npm run burst -- 60s --staggered                   # Staggered burst cycle across Coral devices
+  npm run burst -- 60s --staggered --stagger-rest-sec=5
   npm run burst -- --target coral-1                  # Target Coral TPU #1 (Tap DPI) only
   npm run burst -- --target coral-2                  # Target Coral TPU #2 (DNS Sentinel) only
   npm run burst -- 5m                                # 5m live burst across all devices
@@ -344,6 +367,18 @@ async function main(): Promise<void> {
       if (!Number.isNaN(parsed) && parsed > 0) {
         options.interval = parsed;
       }
+    } else if (arg.startsWith('--stagger-rest-sec=')) {
+      const parts = arg.split('=');
+      const rawVal = parts[1] ?? '';
+      const parsed = parseInt(rawVal, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        options.staggerRestSec = parsed;
+      }
+    } else if (arg === '--stagger-rest-sec' && i + 1 < args.length) {
+      const parsed = parseInt(args[++i] ?? '', 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        options.staggerRestSec = parsed;
+      }
     } else if (arg.startsWith('--target=')) {
       options.target = arg.split('=')[1]!;
     } else if ((arg === '--target' || arg === '-t' || arg === '--device') && i + 1 < args.length) {
@@ -361,6 +396,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  console.error('\n❌ Fatal Burst CLI Error:', err instanceof Error ? err.message : String(err));
+  console.error('\n❌ Fatal Burst CLI Error:', formatError(err));
   process.exit(1);
 });
