@@ -969,6 +969,100 @@ export class ZodiacBridgeServer {
       return;
     }
 
+    // API: POST /api/sdn/quarantine (Autonomous Sentinel Emergency FlowMod Quarantine)
+    // Council Invariant 1 (Anti-Shortcut) & Invariant 3 (Fail-Closed Isolation):
+    // Synthesizes OpenFlow 1.3 priority 65535 drop rule to immediately isolate rogue/compromised agents on Port 1.
+    if (url.pathname === '/api/sdn/quarantine' && req.method === 'POST') {
+      const MAX_PAYLOAD = 32 * 1024;
+      const chunks: Buffer[] = [];
+      let bytesReceived = 0;
+      let aborted = false;
+
+      req.setTimeout(5000, () => {
+        aborted = true;
+        if (!res.headersSent) {
+          res.statusCode = 408;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Request Timeout: Stream timed out after 5000ms' }));
+        }
+        req.destroy();
+        req.socket?.destroy();
+      });
+
+      req.on('error', (err: Error) => {
+        aborted = true;
+        if (res.headersSent) return;
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: `Stream failure: ${err.message}` }));
+      });
+
+      req.on('data', (c: Buffer) => {
+        if (aborted || res.headersSent) return;
+        bytesReceived += c.length;
+        if (bytesReceived > MAX_PAYLOAD) {
+          aborted = true;
+          res.statusCode = 413;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Payload Too Large: Maximum quarantine payload is 32KB' }));
+          req.destroy();
+          req.socket?.destroy();
+          return;
+        }
+        chunks.push(c);
+      });
+
+      req.on('end', async () => {
+        if (aborted || res.headersSent) return;
+        try {
+          const raw = Buffer.concat(chunks).toString('utf-8');
+          const body = JSON.parse(raw);
+          const { targetMac, targetIp, reason, priority } = body;
+
+          const MAC_REGEX = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$|^([0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}$/;
+          const IPV4_REGEX = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
+          const cleanMac = typeof targetMac === 'string' && MAC_REGEX.test(targetMac.trim())
+            ? targetMac.trim()
+            : undefined;
+          const cleanIp = typeof targetIp === 'string' && IPV4_REGEX.test(targetIp.trim())
+            ? targetIp.trim()
+            : undefined;
+
+          if (!cleanMac && !cleanIp) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Valid targetMac (EUI-48) or targetIp (IPv4) required for quarantine' }));
+            return;
+          }
+
+          const qResult = this.controller.quarantineAgent({
+            targetMac: cleanMac,
+            targetIp: cleanIp,
+            reason: typeof reason === 'string' ? reason.trim() : 'Neural Anomaly Detected',
+            priority: typeof priority === 'number' ? priority : 65535,
+          });
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            ok: true,
+            quarantined: true,
+            ruleId: qResult.ruleId,
+            action: qResult.action,
+            priority: qResult.priority,
+            openFlowInstalled: qResult.openFlowInstalled,
+            timestampNs: qResult.timestampNs.toString(),
+          }));
+        } catch (err: unknown) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+      return;
+    }
+
     // Static File Serving from public/ (Asynchronous & Path-Traversal Protected)
     let reqPath = url.pathname;
     if (reqPath === '/' || reqPath === '') {

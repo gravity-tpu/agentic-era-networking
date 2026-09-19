@@ -23,6 +23,7 @@
  */
 
 import { spawn, execSync } from 'node:child_process';
+import http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -208,7 +209,7 @@ async function startBurst(options: BurstOptions): Promise<void> {
   });
 }
 
-function checkStatus(): void {
+async function checkStatus(): Promise<void> {
   console.log('\n🔭 Probing Hardware Burst Status...\n');
 
   let isRunning = false;
@@ -234,6 +235,38 @@ function checkStatus(): void {
   console.log(`  State           : ${isRunning ? `🟢 ACTIVE (PID ${pid.split('\n')[0]})` : '⚪ IDLE / COMPLETED'}`);
   console.log(`  Target Host     : ${JETSON_TARGET}`);
   console.log(`  Web Dashboard   : http://${JETSON_HOST}:3003`);
+
+  // Query live appliance hardware telemetry (Dean latency budget: 500ms native HTTP timeout)
+  try {
+    const liveRaw = await new Promise<string>((resolve, reject) => {
+      const req = http.get(`http://${JETSON_HOST}:3003/api/zodiac?summary=1`, { timeout: 500 }, (res) => {
+        let data = '';
+        res.on('data', (chunk: Buffer) => { data += chunk.toString('utf-8'); });
+        res.on('end', () => resolve(data));
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Telemetry poll timed out (500ms budget)'));
+      });
+      req.on('error', reject);
+    });
+
+    const liveRawTrimmed = liveRaw.trim();
+    if (liveRawTrimmed.startsWith('{')) {
+      const liveJson = JSON.parse(liveRawTrimmed);
+      const jetson = liveJson.jetson || {};
+      const gpuPct = jetson.gpuUtilizationPct ?? '--';
+      const gpuTemp = jetson.temperatures?.gpuC ?? '--';
+      const cpuTemp = jetson.temperatures?.cpuC ?? '--';
+      const pwrMw = jetson.power?.vddCpuGpuCv ?? '--';
+      console.log(`  Jetson GPU      : ${gpuPct}% load | Temp: ${gpuTemp}°C | Power: ${pwrMw}mW`);
+      console.log(`  Jetson CPU      : ${cpuTemp}°C`);
+    }
+  } catch (err: unknown) {
+    // Council Invariant 1 (Anti-Shortcut Law): Explicitly log telemetry probe status without empty catch
+    process.stderr.write(`  [telemetry-poll-note] Live hardware probe unreachable: ${formatError(err)}\n`);
+  }
+
   console.log('──────────────────────────────────────────────────────────────────');
 
   try {
@@ -278,16 +311,16 @@ Commands / Options:
   start [duration]         - Start burst (default duration: 15m).
                              Supported units: 15m, 5m, 1m, 30s, 900.
   --target, -t <device>    - Target specific device(s) (default: 'all'):
-                             * 'all'       - All hardware (Zodiac, Corals, Jetson, RPi)
-                             * 'zodiac'    - Zodiac FX switch (Port 3 mirror tap + Port 4 ctrl)
-                             * 'zodiac-p3' - Zodiac FX Port 3 mirror tap raw frame burst only
-                             * 'zodiac-p4' - Zodiac FX Port 4 controller UDP probe burst only
-                             * 'coral-1'   - Coral TPU #1 (Tap DPI) solo burst via Zodiac Port 3 tap
-                             * 'coral-2'   - Coral TPU #2 (DNS Sentinel) solo burst via accelerator worker
-                             * 'coral'     - Both Google Coral Edge TPUs
-                             * 'rpi'       - Raspberry Pi 3B+ workload node
-                             * 'jetson'    - NVIDIA Jetson Orin compute & network stack
-                             Comma-separated lists supported: e.g. '--target zodiac,coral'
+                             * 'all'        - All hardware (Zodiac, Corals, Jetson, RPi)
+                             * 'jetson'     - NVIDIA Jetson Orin Ampere GPU compute worker (or 'gpu')
+                             * 'zodiac'     - Zodiac FX switch (Port 3 mirror tap + Port 4 ctrl)
+                             * 'zodiac-p3'  - Zodiac FX Port 3 mirror tap raw frame burst only
+                             * 'zodiac-p4'  - Zodiac FX Port 4 controller UDP probe burst only
+                             * 'coral-1'    - Coral TPU #1 (Tap DPI) solo burst via Zodiac Port 3 tap
+                             * 'coral-2'    - Coral TPU #2 (DNS Sentinel) solo burst via accelerator worker
+                             * 'coral'      - Both Google Coral Edge TPUs
+                             * 'rpi'        - Raspberry Pi 3B+ workload node
+                             Comma-separated lists supported: e.g. '--target zodiac,coral,gpu'
   --staggered, --stagger   - Execute a 5-phase staggered burst cycle across Coral devices:
                              Stage 1: Coral TPU #1 (Tap DPI) solo burst
                              Stage 2: Settling interval (both TPUs in STANDBY at 0 inf/s)
@@ -304,15 +337,16 @@ Commands / Options:
 
 Examples:
   npm run burst                                      # 15m live burst across all devices
+  npm run burst -- --target jetson                   # Target Jetson Orin Ampere GPU worker only
+  npm run burst -- --target gpu --size 500mb         # 500 MB compute burst on Ampere GPU
   npm run burst -- 60s --staggered                   # Staggered burst cycle across Coral devices
-  npm run burst -- 60s --staggered --stagger-rest-sec=5
   npm run burst -- --target coral-1                  # Target Coral TPU #1 (Tap DPI) only
   npm run burst -- --target coral-2                  # Target Coral TPU #2 (DNS Sentinel) only
   npm run burst -- 5m                                # 5m live burst across all devices
   npm run burst -- --target zodiac --size 50mb       # 50 MB burst targeting Zodiac switch
   npm run burst -- --target coral                    # Target Coral Edge TPUs only
   npm run burst -- --target rpi --size 100mb         # 100 MB burst targeting Raspberry Pi only
-  npm run burst -- --target zodiac,coral --size 1gb  # 1 GB burst targeting Zodiac and Corals
+  npm run burst -- --target zodiac,gpu --size 1gb    # 1 GB burst targeting Zodiac and Jetson GPU
   npm run burst -- 15m --detach                      # 15m detached burst in background
   npm run burst:status                               # View live burst telemetry
   npm run burst:stop                                 # Immediately abort running burst
@@ -324,7 +358,7 @@ async function main(): Promise<void> {
   const command = args[0] ?? 'start';
 
   if (command === 'status' || command === 'burst:status') {
-    checkStatus();
+    await checkStatus();
     return;
   }
 

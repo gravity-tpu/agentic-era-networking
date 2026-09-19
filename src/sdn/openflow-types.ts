@@ -94,6 +94,14 @@ export interface SwitchFeatures {
   readonly capabilities: number;
 }
 
+export interface FlowModMatchOptions {
+  readonly srcMac?: string | undefined;
+  readonly dstMac?: string | undefined;
+  readonly srcIp?: string | undefined;
+  readonly dstIp?: string | undefined;
+  readonly etherType?: number | undefined;
+}
+
 export interface FlowModOptions {
   readonly command: FlowModCommand;
   readonly priority: number;
@@ -102,6 +110,7 @@ export interface FlowModOptions {
   readonly cookie?: bigint | undefined;
   readonly tableId?: number | undefined;
   readonly outPort?: number | undefined;
+  readonly match?: FlowModMatchOptions | undefined;
 }
 
 export interface DecodedPacketIn {
@@ -203,23 +212,110 @@ export function parseOfpFeaturesReply(buf: Buffer): SwitchFeatures {
   };
 }
 
+function parseMacToBuffer(mac: string): Buffer {
+  const isAllColons = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(mac);
+  const isAllHyphens = /^([0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}$/.test(mac);
+  if (!isAllColons && !isAllHyphens) {
+    throw new Error(`Invalid MAC address format (expected uniform colon or hyphen-separated 6 two-hex-digit octets): "${mac}"`);
+  }
+  const parts = isAllColons ? mac.split(':') : mac.split('-');
+  const bytes = parts.map((hex) => parseInt(hex, 16));
+  return Buffer.from(bytes);
+}
+
+function parseIpv4ToBuffer(ip: string): Buffer {
+  const parts = ip.split('.');
+  if (parts.length !== 4 || parts.some((p) => !/^\d{1,3}$/.test(p))) {
+    throw new Error(`Invalid IPv4 address format (expected 4 decimal octets): "${ip}"`);
+  }
+  const octets = parts.map(Number);
+  if (octets.some((o) => isNaN(o) || o < 0 || o > 255)) {
+    throw new Error(`IPv4 octet out of range [0-255]: "${ip}"`);
+  }
+  return Buffer.from(octets);
+}
+
 /**
- * Builds an OpenFlow 1.3 OFPT_FLOW_MOD message with a minimal standard OXM match.
+ * Builds an OpenFlow 1.3 OFPT_FLOW_MOD message with typed OXM match fields
+ * (ETH_SRC, ETH_DST, ETH_TYPE, IPV4_SRC, IPV4_DST) and fail-closed instruction encoding.
+ *
+ * Council Invariant 3 (Fail-Closed Isolation):
+ * If a requested match field cannot be parsed, this function strictly throws an error rather than
+ * omitting the field. Omitting match criteria would degrade the rule to a wildcard match,
+ * causing a targeted quarantine rule to blackhole all network traffic.
  */
 export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
-  // Base OFP_FLOW_MOD struct without instructions is 48 bytes (header + fields) + 8 bytes empty match
-  // Total minimal length = 56 bytes
-  const matchLength = 8; // Empty OXM match (type 1, len 4, + 4 pad)
-  const totalLength = 48 + matchLength;
+  const oxmTlvs: Buffer[] = [];
+  const match = options.match;
+
+  if (match) {
+    if (match.srcMac) {
+      const macBuf = parseMacToBuffer(match.srcMac);
+      // OFPXMT_OFB_ETH_SRC: class 0x8000, field 4 (<< 9), length 6 -> 0x80000806
+      const tlv = Buffer.alloc(10);
+      tlv.writeUInt32BE(0x80000806, 0);
+      macBuf.copy(tlv, 4);
+      oxmTlvs.push(tlv);
+    }
+
+    if (match.dstMac) {
+      const macBuf = parseMacToBuffer(match.dstMac);
+      // OFPXMT_OFB_ETH_DST: class 0x8000, field 3 (<< 9), length 6 -> 0x80000606
+      const tlv = Buffer.alloc(10);
+      tlv.writeUInt32BE(0x80000606, 0);
+      macBuf.copy(tlv, 4);
+      oxmTlvs.push(tlv);
+    }
+
+    let ethType = match.etherType;
+    if (ethType === undefined && (match.srcIp || match.dstIp)) {
+      ethType = 0x0800; // IPv4 required before L3 match in OpenFlow 1.3
+    }
+
+    if (ethType !== undefined) {
+      // OFPXMT_OFB_ETH_TYPE: class 0x8000, field 5 (<< 9), length 2 -> 0x80000a02
+      const tlv = Buffer.alloc(6);
+      tlv.writeUInt32BE(0x80000a02, 0);
+      tlv.writeUInt16BE(ethType, 4);
+      oxmTlvs.push(tlv);
+    }
+
+    if (match.srcIp) {
+      const ipBuf = parseIpv4ToBuffer(match.srcIp);
+      // OFPXMT_OFB_IPV4_SRC: class 0x8000, field 11 (<< 9), length 4 -> 0x80001604
+      const tlv = Buffer.alloc(8);
+      tlv.writeUInt32BE(0x80001604, 0);
+      ipBuf.copy(tlv, 4);
+      oxmTlvs.push(tlv);
+    }
+
+    if (match.dstIp) {
+      const ipBuf = parseIpv4ToBuffer(match.dstIp);
+      // OFPXMT_OFB_IPV4_DST: class 0x8000, field 12 (<< 9), length 4 -> 0x80001804
+      const tlv = Buffer.alloc(8);
+      tlv.writeUInt32BE(0x80001804, 0);
+      ipBuf.copy(tlv, 4);
+      oxmTlvs.push(tlv);
+    }
+  }
+
+  const oxmPayload = Buffer.concat(oxmTlvs);
+  // Match header is 4 bytes: type (2B) + length (2B).
+  // Total matchLen = 4 + oxmPayload.length.
+  const matchLen = 4 + oxmPayload.length;
+  // Padded to 8-byte boundary per OpenFlow 1.3 spec
+  const matchPaddedLen = Math.max(8, Math.ceil(matchLen / 8) * 8);
+
+  const totalLength = 48 + matchPaddedLen;
   const buf = Buffer.alloc(totalLength);
 
-  // Header
+  // Header (8 bytes)
   buf.writeUInt8(OFP_VERSION_1_3, 0);
   buf.writeUInt8(OpenFlowType.OFPT_FLOW_MOD, 1);
   buf.writeUInt16BE(totalLength, 2);
   buf.writeUInt32BE(xid, 4);
 
-  // Flow Mod Body
+  // Flow Mod Body (40 bytes)
   buf.writeBigUInt64BE(options.cookie ?? 0n, 8);
   buf.writeBigUInt64BE(0n, 16); // cookie_mask
   buf.writeUInt8(options.tableId ?? 0, 24);
@@ -233,10 +329,12 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
   buf.writeUInt16BE(0, 44); // flags
   buf.writeUInt16BE(0, 46); // pad
 
-  // Empty match: type=OFPMT_OXM (1), length=4 (header only), +4 pad
-  buf.writeUInt16BE(1, 48); // OFPMT_OXM
-  buf.writeUInt16BE(4, 50); // length 4
-  buf.writeUInt32BE(0, 52); // pad to 8 bytes
+  // Match header: type=1 (OFPMT_OXM), length=matchLen
+  buf.writeUInt16BE(1, 48);
+  buf.writeUInt16BE(matchLen, 50);
+  if (oxmPayload.length > 0) {
+    oxmPayload.copy(buf, 52);
+  }
 
   return buf;
 }

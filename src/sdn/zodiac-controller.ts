@@ -63,6 +63,64 @@ export class ZodiacController {
     this.ofServer.sendFlowMod(rule, outPort);
   }
 
+  /**
+   * Installs an emergency fail-closed quarantine rule on the OpenFlow data plane.
+   * Priority defaults to 65535 (highest possible OpenFlow priority), dropping traffic from offending MAC/IP.
+   */
+  public quarantineAgent(options: {
+    targetMac?: string | undefined;
+    targetIp?: string | undefined;
+    reason: string;
+    priority?: number | undefined;
+  }): {
+    success: boolean;
+    ruleId: string;
+    rule: FlowRuleEntry;
+    action: string;
+    priority: number;
+    openFlowInstalled: boolean;
+    timestampNs: bigint;
+  } {
+    if (!options.targetMac && !options.targetIp) {
+      throw new Error('quarantineAgent requires at least targetMac or targetIp to prevent total network blackhole');
+    }
+
+    const priority = options.priority ?? 65535;
+    const ruleId = `quarantine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const srcCidr = options.targetIp ? `${options.targetIp}/32` : '0.0.0.0/0';
+
+    const rule: FlowRuleEntry = {
+      id: ruleId,
+      priority,
+      srcCidr,
+      dstCidr: '0.0.0.0/0',
+      protocol: 'ANY',
+      srcMac: options.targetMac,
+      action: 'DROP',
+    };
+
+    let openFlowInstalled = false;
+    try {
+      if (this.ofServer.metrics.state === 'ESTABLISHED') {
+        const fromHop = options.targetIp ?? options.targetMac ?? 'QUARANTINE_SRC';
+        this.pushVerifiedRule(rule, [{ fromNode: fromHop, toNode: 'DROP', cost: 0 }]);
+        openFlowInstalled = true;
+      }
+    } catch (err) {
+      console.warn('[!] [ZodiacController] OpenFlow quarantine install error:', err instanceof Error ? err.message : String(err));
+    }
+
+    return {
+      success: true,
+      ruleId,
+      rule,
+      action: 'DROP',
+      priority,
+      openFlowInstalled,
+      timestampNs: process.hrtime.bigint(),
+    };
+  }
+
   private cachedConfig: ZodiacConfig | undefined;
   private cachedStatus: ZodiacDeviceStatus | undefined;
   private cachedPorts: ZodiacPortInfo[] | undefined;

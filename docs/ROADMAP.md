@@ -241,7 +241,7 @@ Governed by the **Senior Staff Council Invariants**:
 
 ### Phase 2: Real-Time Flow Anomaly Detection — Coral + Jetson Split-Inference & Web Wireshark
 *Status: Planned*
-- [ ] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection**:
+- [ ] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection** *(Tracked via [Jetson Orin GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*:
   - **Google Coral Edge TPU** (4 TOPS INT8, USB 3.0 attached to Jetson): sub-millisecond shallow packet classification on Port 3 hardware mirror tap stream. Handles high-volume benign/rogue first-pass triage.
   - **NVIDIA Jetson TensorRT** (67 TOPS INT8 Ampere GPU): deep anomaly detection model on packets flagged by Coral, `<1.0ms` inference budget.
   - Division of labor: Coral = sub-100µs shallow classifier, Jetson TensorRT = deep-feature anomaly scorer.

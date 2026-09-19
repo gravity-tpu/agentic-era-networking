@@ -123,10 +123,17 @@ export class OpenFlowServer extends EventEmitter {
     }
 
     const xid = this.nextXid++;
+    const isDrop = rule.action === 'DROP';
     const flowModPacket = buildOfpFlowMod({
-      command: rule.action === 'DROP' ? FlowModCommand.OFPFC_DELETE : FlowModCommand.OFPFC_ADD,
+      command: FlowModCommand.OFPFC_ADD,
       priority: rule.priority,
-      outPort: rule.action === 'FORWARD' ? outPort : undefined,
+      outPort: isDrop ? undefined : outPort,
+      match: {
+        srcMac: rule.srcMac,
+        dstMac: rule.dstMac,
+        srcIp: rule.srcCidr && rule.srcCidr !== '0.0.0.0/0' ? rule.srcCidr.split('/')[0] : undefined,
+        dstIp: rule.dstCidr && rule.dstCidr !== '0.0.0.0/0' ? rule.dstCidr.split('/')[0] : undefined,
+      },
     }, xid);
 
     this.clientSocket.write(flowModPacket);

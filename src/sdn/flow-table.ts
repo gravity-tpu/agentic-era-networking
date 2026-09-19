@@ -17,8 +17,10 @@ export interface FlowRuleEntry {
   readonly srcCidr: string;
   readonly dstCidr: string;
   readonly protocol: FlowProtocol;
-  readonly srcPort?: number;
-  readonly dstPort?: number;
+  readonly srcPort?: number | undefined;
+  readonly dstPort?: number | undefined;
+  readonly srcMac?: string | undefined;
+  readonly dstMac?: string | undefined;
   readonly action: FlowAction;
 }
 
@@ -26,8 +28,10 @@ export interface PacketHeader {
   readonly srcIp: string;
   readonly dstIp: string;
   readonly protocol: FlowProtocol;
-  readonly srcPort?: number;
-  readonly dstPort?: number;
+  readonly srcPort?: number | undefined;
+  readonly dstPort?: number | undefined;
+  readonly srcMac?: string | undefined;
+  readonly dstMac?: string | undefined;
 }
 
 export class SdnFlowTable {
@@ -87,6 +91,23 @@ export class SdnFlowTable {
       return false;
     }
     if (rule.dstPort !== undefined && rule.dstPort !== packet.dstPort) {
+      return false;
+    }
+
+    // MAC address match (if specified in rule)
+    if (rule.srcMac !== undefined && packet.srcMac !== undefined) {
+      if (rule.srcMac.toLowerCase() !== packet.srcMac.toLowerCase()) {
+        return false;
+      }
+    } else if (rule.srcMac !== undefined && packet.srcMac === undefined) {
+      return false;
+    }
+
+    if (rule.dstMac !== undefined && packet.dstMac !== undefined) {
+      if (rule.dstMac.toLowerCase() !== packet.dstMac.toLowerCase()) {
+        return false;
+      }
+    } else if (rule.dstMac !== undefined && packet.dstMac === undefined) {
       return false;
     }
 
