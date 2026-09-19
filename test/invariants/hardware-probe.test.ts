@@ -28,6 +28,13 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(rawPaths).toEqual(['1-1.1', '2-1.1', '2-1.2', '2-1.3', '2-1.10']);
   });
 
+  it('strictly rejects non-numeric segments in USB topology comparison', () => {
+    // Malformed segments with letters (e.g. '1a') evaluate as -1 vs valid positive integers
+    expect(compareUsbTopology('2-1.1a', '2-1.2')).toBeLessThan(0);
+    expect(compareUsbTopology('2-1.2', '2-1.1a')).toBeGreaterThan(0);
+    expect(compareUsbTopology('2-1.2', '2-1.2')).toBe(0);
+  });
+
   it('creates valid default Jetson snapshot with BigInt memory and network counters', () => {
     const jetson = createDefaultJetsonSnapshot(false);
     expect(jetson.deviceName).toBe('jetson-orin');

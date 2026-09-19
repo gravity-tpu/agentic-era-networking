@@ -532,7 +532,7 @@ export function createDefaultCoralSnapshot(isDisconnected: boolean = true): Cora
     latencyP50Ns: 0n,
     latencyP99Ns: 0n,
     loadedModel: isDisconnected ? 'None (Disconnected)' : 'None (Standby - Pre-Wired for Phase 2A)',
-    powerMode: isDisconnected ? 'Offline' : 'Low-Power Standby (<0.5W)',
+    powerMode: isDisconnected ? 'Offline' : 'Low-Power Standby (<500mW)',
     temperatureC: null,
   };
 }

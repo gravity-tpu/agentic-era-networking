@@ -66,16 +66,32 @@ function getCachedNetworkInterfaceIp(name: string, fallback: string | null): str
 }
 
 /**
+ * Safe error code extractor without unchecked type assertions.
+ * Enforces strict type narrowing (Council Invariant 1: Zero Suppression of Reality).
+ */
+function getErrorCode(err: unknown): string | undefined {
+  if (
+    err !== null &&
+    typeof err === 'object' &&
+    'code' in err &&
+    typeof (err as { code: unknown }).code === 'string'
+  ) {
+    return (err as { code: string }).code;
+  }
+  return undefined;
+}
+
+/**
  * Safely reads a numeric string from a sysfs file asynchronously, returning null on failure.
  * Council Invariant 1: Zero Suppression of Reality — errors other than ENOENT are logged.
  */
 async function readSysfsNumber(filePath: string): Promise<number | null> {
   try {
     const content = await fs.promises.readFile(filePath, 'utf8');
-    const val = parseFloat(content.trim());
-    return Number.isFinite(val) ? val : null;
+    const val = Number.parseInt(content.trim(), 10);
+    return Number.isSafeInteger(val) ? val : null;
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       process.stderr.write(`[jetson-probe] Cannot read sysfs number ${filePath} (${code ?? 'unknown'}): ${
         err instanceof Error ? err.message : String(err)
@@ -94,7 +110,7 @@ async function readSysfsString(filePath: string): Promise<string | null> {
     const content = await fs.promises.readFile(filePath, 'utf8');
     return content.trim();
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       process.stderr.write(`[jetson-probe] Cannot read sysfs string ${filePath} (${code ?? 'unknown'}): ${
         err instanceof Error ? err.message : String(err)
@@ -113,7 +129,7 @@ async function fileExistsAsync(filePath: string): Promise<boolean> {
     await fs.promises.access(filePath);
     return true;
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       process.stderr.write(`[jetson-probe] File access check error ${filePath} (${code ?? 'unknown'}): ${
         err instanceof Error ? err.message : String(err)
@@ -201,7 +217,7 @@ async function executeJetsonHardwareProbe(
       swapUsed = swapTotal >= swFree ? swapTotal - swFree : 0n;
     }
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       process.stderr.write(`[jetson-probe] Cannot read /proc/meminfo (${code ?? 'unknown'}): ${
         err instanceof Error ? err.message : String(err)
@@ -249,7 +265,7 @@ async function executeJetsonHardwareProbe(
       }
     }
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       process.stderr.write(`[jetson-probe] Cannot read /proc/stat (${code ?? 'unknown'}): ${
         err instanceof Error ? err.message : String(err)
@@ -371,7 +387,7 @@ async function executeJetsonHardwareProbe(
       });
     }
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       process.stderr.write(`[jetson-probe] Cannot read /proc/net/dev (${code ?? 'unknown'}): ${
         err instanceof Error ? err.message : String(err)
@@ -575,7 +591,7 @@ export async function readCoralDaemonTelemetry(): Promise<{
       model               : String(data['model'] ?? 'MobileNet V2 INT8 (EdgeTPU)'),
     };
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = getErrorCode(err);
     if (code !== 'ENOENT') {
       // Log genuine errors (permissions, disk I/O, JSON parse) — never swallow reality
       process.stderr.write(
@@ -593,19 +609,27 @@ export async function readCoralDaemonTelemetry(): Promise<{
  * Council Invariant 2 & 4 (Quoc Le & Sanjay Ghemawat): Deterministic physical hardware role assignment.
  * Parses the physical USB topology string (e.g. "2-1.2" vs "2-1.10") into integer component segments
  * to guarantee invariant physical port binding independent of locale/ICU data across reboots.
+ * Enforces strict numeric segment validation (using Number and integer digit check to reject malformed substrings like "1a").
  */
 export function compareUsbTopology(a: string, b: string): number {
-  const partsA = a.split(/[-.]/).map((p) => Number.parseInt(p, 10));
-  const partsB = b.split(/[-.]/).map((p) => Number.parseInt(p, 10));
+  const parseSegments = (s: string): number[] =>
+    s.split(/[-.]/).map((p) => {
+      if (!p || p.includes(' ') || !/^\d+$/.test(p)) return -1;
+      const n = Number(p);
+      return Number.isSafeInteger(n) && n >= 0 ? n : -1;
+    });
+
+  const partsA = parseSegments(a);
+  const partsB = parseSegments(b);
   const maxLen = Math.max(partsA.length, partsB.length);
   for (let i = 0; i < maxLen; i++) {
     const segA = partsA[i];
     const segB = partsB[i];
-    const valA = segA !== undefined && !Number.isNaN(segA) ? segA : -1;
-    const valB = segB !== undefined && !Number.isNaN(segB) ? segB : -1;
+    const valA = segA !== undefined ? segA : -1;
+    const valB = segB !== undefined ? segB : -1;
     if (valA !== valB) return valA - valB;
   }
-  return a.localeCompare(b);
+  return a === b ? 0 : (a < b ? -1 : 1);
 }
 
 /**
@@ -627,19 +651,19 @@ export async function probeCoralHardware(
   try {
     const usbBase = '/sys/bus/usb/devices';
 
-    // Async existence check — does not block the event loop
+    // Direct asynchronous directory read with ENOENT guard — avoids redundant stat/access overhead
+    let allDirs: string[];
     try {
-      await fs.promises.access(usbBase);
+      allDirs = await fs.promises.readdir(usbBase);
     } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
+      const code = getErrorCode(err);
       if (code !== 'ENOENT') {
-        process.stderr.write(`[coral-probe] Cannot access ${usbBase} (${code ?? 'unknown'}): ${
+        process.stderr.write(`[coral-probe] Cannot read ${usbBase} (${code ?? 'unknown'}): ${
           err instanceof Error ? err.message : String(err)}\n`);
       }
       return createDefaultCoralSnapshot(true);
     }
 
-    const allDirs = await fs.promises.readdir(usbBase);
     // Filter out USB interface endpoints (which contain ':') to bound sysfs file descriptor allocations
     const deviceDirs = allDirs.filter((d) => !d.includes(':'));
 
@@ -656,7 +680,7 @@ export async function probeCoralHardware(
       try {
         return (await fs.promises.readFile(p, 'utf8')).trim();
       } catch (err) {
-        const code = (err as NodeJS.ErrnoException).code;
+        const code = getErrorCode(err);
         if (code !== 'ENOENT') {
           process.stderr.write(
             `[coral-probe] Cannot read ${p} (${code ?? 'unknown'}): ${
@@ -678,7 +702,7 @@ export async function probeCoralHardware(
       try {
         vid = (await fs.promises.readFile(vendorPath, 'utf8')).trim().toLowerCase();
       } catch (err) {
-        const code = (err as NodeJS.ErrnoException).code;
+        const code = getErrorCode(err);
         if (code !== 'ENOENT') {
           process.stderr.write(
             `[coral-probe] Cannot read ${vendorPath} (${code ?? 'unknown'}): ${
@@ -697,10 +721,13 @@ export async function probeCoralHardware(
       const busPath     = path.join(usbBase, d, 'busnum');
       const devPath     = path.join(usbBase, d, 'devnum');
 
-      const pid       = await readOpt(productPath, '089a');
-      const speedMbps = await readOpt(speedPath,   '5000');
-      const busStr    = await readOpt(busPath,     '2');
-      const devStr    = await readOpt(devPath,     '3');
+      // Fetch per-device attributes concurrently — bounds open FDs to 4 per device while saving ~4 I/O ticks
+      const [pid, speedMbps, busStr, devStr] = await Promise.all([
+        readOpt(productPath, '089a'),
+        readOpt(speedPath,   '5000'),
+        readOpt(busPath,     '2'),
+        readOpt(devPath,     '3'),
+      ]);
 
       const parsedBus = Number.parseInt(busStr, 10);
       const parsedDev = Number.parseInt(devStr, 10);
@@ -783,7 +810,7 @@ export async function probeCoralHardware(
       latencyP50Ns: daemonData?.latencyP50Ns ?? 0n,
       latencyP99Ns: daemonData?.latencyP99Ns ?? 0n,
       loadedModel: daemonData?.model ?? (count > 1 ? 'Dual Pipeline Standby (Tap + DNS)' : 'None (Standby)'),
-      powerMode: isActive ? `Active Inference (~${count * 2}W USB)` : `Low-Power Standby (<${count * 0.5}W)`,
+      powerMode: isActive ? `Active Inference (~${count * 2}W USB)` : `Low-Power Standby (<${count * 500}mW)`,
       temperatureC: null,
     };
   } catch (err) {
