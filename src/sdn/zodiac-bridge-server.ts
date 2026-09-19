@@ -1152,7 +1152,7 @@ export class ZodiacBridgeServer {
       this.lastProbeNs = nowNs;
 
       const [liveJetson, daemonData] = await Promise.all([
-        Promise.resolve(probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs)),
+        probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs),
         readCoralDaemonTelemetry(),
       ]);
       const liveCoral = await probeCoralHardware(daemonData);
@@ -1167,7 +1167,7 @@ export class ZodiacBridgeServer {
         cpuTempC: liveJetson.temperatures.cpuC,
         gpuTempC: liveJetson.temperatures.gpuC,
         junctionTempC: liveJetson.temperatures.junctionC,
-        powerWatts: parseFloat((liveJetson.powerMw.vddIn / 1000).toFixed(2)),
+        powerWatts: liveJetson.powerMw.vddIn !== null ? parseFloat((liveJetson.powerMw.vddIn / 1000).toFixed(2)) : 0,
         ramUsedBytes: liveJetson.ramUsedBytes,
         nvmeReadRateBps: liveJetson.nvmeReadRateBps,
         nvmeWriteRateBps: liveJetson.nvmeWriteRateBps,

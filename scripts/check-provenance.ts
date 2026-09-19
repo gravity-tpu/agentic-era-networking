@@ -11,7 +11,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const REPO_ROOT = process.cwd();
-const SCAN_DIRS = ['src', 'api'];
+const SCAN_DIRS = ['src', 'api', 'public'];
 const EXCLUDE_DIRS = new Set(['node_modules', 'dist', '.git', 'test']);
 
 interface Finding {
@@ -114,6 +114,27 @@ function analyzeFile(filePath: string): Finding[] {
         file: relPath,
         line: lineNum,
         message: "Coral USB Accelerator has no mapped sysfs thermal zone; temperatureC must evaluate to null, not a fabricated heuristic (Invariant 6).",
+        snippet: line.trim(),
+      });
+    }
+
+    // Rule 6: Jetson UI status coupling check (public/zodiac-app.js)
+    // Jetson host liveness must not be coupled to the Zodiac switch serial connection (snapshot.source)
+    if (relPath.includes('zodiac-app.js') && /orin.*snapshot\.source\s*!==\s*['"]disconnected['"]/i.test(line)) {
+      findings.push({
+        file: relPath,
+        line: lineNum,
+        message: "Jetson host liveness in UI must not be coupled to Zodiac switch serial connection state (Council Invariant 6).",
+        snippet: line.trim(),
+      });
+    }
+
+    // Rule 7: Hardware probe hardcoded fallback CPU temperatures (Council Invariant 6)
+    if (relPath.includes('hardware-probe.ts') && /cpuC\s*:\s*[0-9]+(\.[0-9]+)?/.test(line)) {
+      findings.push({
+        file: relPath,
+        line: lineNum,
+        message: "Hardware probe cannot contain hardcoded fallback CPU temperatures; must evaluate to physical sysfs or null (Council Invariant 6).",
         snippet: line.trim(),
       });
     }

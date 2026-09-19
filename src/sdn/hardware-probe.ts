@@ -31,85 +31,120 @@ let prevCpuSample: PrevCpuSample | null = null;
 const prevPerCoreSample: PrevCpuSample[] = [];
 
 /**
- * Safely reads a numeric string from a sysfs file, returning null on failure.
+ * Safely reads a numeric string from a sysfs file asynchronously, returning null on failure.
+ * Council Invariant 1: Zero Suppression of Reality — errors other than ENOENT are logged.
  */
-function readSysfsNumber(filePath: string): number | null {
+async function readSysfsNumber(filePath: string): Promise<number | null> {
   try {
-    if (!fs.existsSync(filePath)) return null;
-    const content = fs.readFileSync(filePath, 'utf8').trim();
-    const val = parseFloat(content);
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    const val = parseFloat(content.trim());
     return Number.isFinite(val) ? val : null;
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] Cannot read sysfs number ${filePath} (${code ?? 'unknown'}): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
     return null;
   }
 }
 
 /**
- * Safely reads a string from a sysfs file.
+ * Safely reads a string from a sysfs file asynchronously.
+ * Council Invariant 1: Zero Suppression of Reality — errors other than ENOENT are logged.
  */
-function readSysfsString(filePath: string): string | null {
+async function readSysfsString(filePath: string): Promise<string | null> {
   try {
-    if (!fs.existsSync(filePath)) return null;
-    return fs.readFileSync(filePath, 'utf8').trim();
-  } catch {
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    return content.trim();
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] Cannot read sysfs string ${filePath} (${code ?? 'unknown'}): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
     return null;
   }
 }
 
 /**
- * Probes NVIDIA Jetson Orin Nano hardware state from Linux sysfs and procfs.
+ * Helper to check file existence asynchronously without throwing.
+ * Council Invariant 1: Zero Suppression of Reality — errors other than ENOENT are logged.
  */
-export function probeJetsonHardware(
+async function fileExistsAsync(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] File access check error ${filePath} (${code ?? 'unknown'}): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
+    return false;
+  }
+}
+
+const JETSON_PROBE_TIMEOUT_MS = 100;
+
+/**
+ * Internal hardware state sampler for NVIDIA Jetson Orin Nano from Linux sysfs and procfs.
+ */
+async function executeJetsonHardwareProbe(
   prevSnapshot?: JetsonTelemetrySnapshot | undefined,
   deltaNs?: bigint | undefined
-): JetsonTelemetrySnapshot {
-  // If not running on Linux or Jetson platform, fall back to disconnected snapshot
-  if (process.platform !== 'linux') {
-    return createDefaultJetsonSnapshot(true);
-  }
+): Promise<JetsonTelemetrySnapshot> {
+  // 1. Thermals (°C from millidegrees) - read concurrently via promises
+  const [cpuTempRaw, gpuTempRaw, socTempRaw, juncTempRaw] = await Promise.all([
+    readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone0/temp'),
+    readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone1/temp'),
+    readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone7/temp'),
+    readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone8/temp'),
+  ]);
 
-  // 1. Thermals (°C from millidegrees)
-  const cpuTempRaw = readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone0/temp');
-  const gpuTempRaw = readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone1/temp');
-  const socTempRaw = readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone7/temp');
-  const juncTempRaw = readSysfsNumber('/sys/devices/virtual/thermal/thermal_zone8/temp');
+  // Physical truth (Council Invariant 6): evaluate to null if sensor unreadable, never simulated constants.
+  const cpuC = cpuTempRaw !== null ? parseFloat((cpuTempRaw / 1000).toFixed(1)) : null;
+  const gpuC = gpuTempRaw !== null ? parseFloat((gpuTempRaw / 1000).toFixed(1)) : null;
+  const socC = socTempRaw !== null ? parseFloat((socTempRaw / 1000).toFixed(1)) : null;
+  const junctionC = juncTempRaw !== null ? parseFloat((juncTempRaw / 1000).toFixed(1)) : (cpuC ?? null);
 
-  const cpuC = cpuTempRaw !== null ? parseFloat((cpuTempRaw / 1000).toFixed(1)) : 48.0;
-  const gpuC = gpuTempRaw !== null ? parseFloat((gpuTempRaw / 1000).toFixed(1)) : 46.5;
-  const socC = socTempRaw !== null ? parseFloat((socTempRaw / 1000).toFixed(1)) : 46.2;
-  const junctionC = juncTempRaw !== null ? parseFloat((juncTempRaw / 1000).toFixed(1)) : (cpuC || 48.0);
+  // 2. Power Dissipation (INA3221 on hwmon1) — evaluate to null if sensors unreadable
+  let vddIn: number | null = null;
+  let vddCpuGpuCv: number | null = null;
+  let vddSoc: number | null = null;
 
-  // 2. Power Dissipation (INA3221 on hwmon1)
-  let vddIn = 4785;
-  let vddCpuGpuCv = 711;
-  let vddSoc = 1384;
+  const [in1, curr1, in2, curr2, in3, curr3] = await Promise.all([
+    readSysfsNumber('/sys/class/hwmon/hwmon1/in1_input'),
+    readSysfsNumber('/sys/class/hwmon/hwmon1/curr1_input'),
+    readSysfsNumber('/sys/class/hwmon/hwmon1/in2_input'),
+    readSysfsNumber('/sys/class/hwmon/hwmon1/curr2_input'),
+    readSysfsNumber('/sys/class/hwmon/hwmon1/in3_input'),
+    readSysfsNumber('/sys/class/hwmon/hwmon1/curr3_input'),
+  ]);
 
-  const in1 = readSysfsNumber('/sys/class/hwmon/hwmon1/in1_input');
-  const curr1 = readSysfsNumber('/sys/class/hwmon/hwmon1/curr1_input');
   if (in1 !== null && curr1 !== null) {
     vddIn = Math.round((in1 * curr1) / 1000);
   }
 
-  const in2 = readSysfsNumber('/sys/class/hwmon/hwmon1/in2_input');
-  const curr2 = readSysfsNumber('/sys/class/hwmon/hwmon1/curr2_input');
   if (in2 !== null && curr2 !== null) {
     vddCpuGpuCv = Math.round((in2 * curr2) / 1000);
   }
 
-  const in3 = readSysfsNumber('/sys/class/hwmon/hwmon1/in3_input');
-  const curr3 = readSysfsNumber('/sys/class/hwmon/hwmon1/curr3_input');
   if (in3 !== null && curr3 !== null) {
     vddSoc = Math.round((in3 * curr3) / 1000);
   }
 
-  // 3. Memory & SWAP from /proc/meminfo
-  let ramTotal = 7990149120n;
-  let ramUsed = 2184183808n;
-  let swapTotal = 3995074560n;
+  // 3. Memory & SWAP from /proc/meminfo — evaluate to 0n if unreadable
+  let ramTotal = 0n;
+  let ramUsed = 0n;
+  let swapTotal = 0n;
   let swapUsed = 0n;
 
   try {
-    const meminfo = fs.readFileSync('/proc/meminfo', 'utf8');
+    const meminfo = await fs.promises.readFile('/proc/meminfo', 'utf8');
     const totalMatch = meminfo.match(/MemTotal:\s+(\d+)\s+kB/);
     const availMatch = meminfo.match(/MemAvailable:\s+(\d+)\s+kB/);
     const swTotalMatch = meminfo.match(/SwapTotal:\s+(\d+)\s+kB/);
@@ -125,8 +160,13 @@ export function probeJetsonHardware(
       const swFree = BigInt(swFreeMatch[1]!) * 1024n;
       swapUsed = swapTotal >= swFree ? swapTotal - swFree : 0n;
     }
-  } catch {
-    // Keep baseline
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] Cannot read /proc/meminfo (${code ?? 'unknown'}): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
   }
 
   // 4. CPU & Per-Core Utilization from /proc/stat
@@ -134,7 +174,7 @@ export function probeJetsonHardware(
   const cpuCoresPct: number[] = [8, 8, 8, 8, 8, 8];
 
   try {
-    const statLines = fs.readFileSync('/proc/stat', 'utf8').split('\n');
+    const statLines = (await fs.promises.readFile('/proc/stat', 'utf8')).split('\n');
     const aggregateLine = statLines[0];
     if (aggregateLine && aggregateLine.startsWith('cpu ')) {
       const parts = aggregateLine.trim().split(/\s+/).slice(1).map((x) => BigInt(x));
@@ -168,27 +208,34 @@ export function probeJetsonHardware(
         prevPerCoreSample[c] = { total, idle };
       }
     }
-  } catch {
-    // Keep fallback
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] Cannot read /proc/stat (${code ?? 'unknown'}): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
   }
 
-  // 5. Storage (NVMe root)
-  let nvmeTotal = 491745476608n;
-  let nvmeUsed = 24696061952n;
+  // 5. Storage (NVMe root) — non-blocking async statfs
+  let nvmeTotal = 0n;
+  let nvmeUsed = 0n;
   try {
-    const stat = fs.statfsSync('/');
+    const stat = await fs.promises.statfs('/');
     const bsize = BigInt(stat.bsize);
     nvmeTotal = BigInt(stat.blocks) * bsize;
     const free = BigInt(stat.bavail) * bsize;
     nvmeUsed = nvmeTotal >= free ? nvmeTotal - free : 0n;
-  } catch {
-    // Keep fallback
+  } catch (err) {
+    process.stderr.write(`[jetson-probe] Cannot statfs('/') root filesystem: ${
+      err instanceof Error ? err.message : String(err)
+    }\n`);
   }
 
   // 6. Network Interfaces from /proc/net/dev
   const interfaces: JetsonNetworkInterfaceTelemetry[] = [];
   try {
-    const netDevLines = fs.readFileSync('/proc/net/dev', 'utf8').split('\n');
+    const netDevLines = (await fs.promises.readFile('/proc/net/dev', 'utf8')).split('\n');
     const targetIfs = [
       { name: 'enP8p1s0', role: 'SDN Control Link -> Zodiac Port 4', defaultIp: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1' },
       { name: 'wlP1p1s0', role: 'Management Plane & Cloud Relay (Wi-Fi)', defaultIp: process.env['JETSON_HOST'] ?? '127.0.0.1' },
@@ -235,12 +282,16 @@ export function probeJetsonHardware(
         txRatePps = (dTxP * 1_000_000_000n) / deltaNs;
       }
 
-      // Read MAC address from sysfs
-      const mac = readSysfsString(`/sys/class/net/${target.name}/address`) ?? (target.name === 'enP8p1s0' ? 'ac:3a:e2:98:99:dd' : 'f0:68:e3:33:02:a3');
-      const operstate = readSysfsString(`/sys/class/net/${target.name}/operstate`)?.toUpperCase();
+      // Read MAC address from sysfs concurrently
+      const [macVal, operstateVal, speedVal] = await Promise.all([
+        readSysfsString(`/sys/class/net/${target.name}/address`),
+        readSysfsString(`/sys/class/net/${target.name}/operstate`),
+        readSysfsNumber(`/sys/class/net/${target.name}/speed`),
+      ]);
+      const mac = macVal ?? 'None';
+      const operstate = operstateVal?.toUpperCase();
       const status: 'UP' | 'DOWN' = operstate === 'UP' ? 'UP' : (rxBytes > 0n ? 'UP' : 'DOWN');
-      const speedVal = readSysfsNumber(`/sys/class/net/${target.name}/speed`);
-      const speedMbps = speedVal && speedVal > 0 ? speedVal : (target.name === 'enP8p1s0' ? 1000 : 866);
+      const speedMbps = speedVal && speedVal > 0 ? speedVal : 0;
 
       interfaces.push({
         name: target.name,
@@ -263,8 +314,13 @@ export function probeJetsonHardware(
         txRatePps,
       });
     }
-  } catch {
-    // Keep fallback
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] Cannot read /proc/net/dev (${code ?? 'unknown'}): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`);
+    }
   }
 
   // Format system uptime
@@ -281,7 +337,13 @@ export function probeJetsonHardware(
     parseFloat(load[2]!.toFixed(2)),
   ];
 
+  const [hasMediaZodiac, hasMmcblk] = await Promise.all([
+    fileExistsAsync('/media/zodiac'),
+    fileExistsAsync('/dev/mmcblk0p1'),
+  ]);
+
   return {
+    status: 'online',
     deviceName: 'jetson-orin',
     architecture: `${os.arch()} (ARMv8.2-A)`,
     cpuModel: '6-Core ARM Cortex-A78AE',
@@ -299,9 +361,9 @@ export function probeJetsonHardware(
     nvmeRootPath: '/dev/nvme0n1p2 (SanDisk Optimus 500GB)',
     nvmeUsedBytes: nvmeUsed,
     nvmeTotalBytes: nvmeTotal,
-    nvmeReadRateBps: 1048576n,
-    nvmeWriteRateBps: 262144n,
-    rescueSdMounted: fs.existsSync('/media/zodiac') || fs.existsSync('/dev/mmcblk0p1'),
+    nvmeReadRateBps: 0n,
+    nvmeWriteRateBps: 0n,
+    rescueSdMounted: hasMediaZodiac || hasMmcblk,
     temperatures: {
       cpuC,
       gpuC,
@@ -320,6 +382,44 @@ export function probeJetsonHardware(
     uptime: uptimeStr,
     interfaces: interfaces.length > 0 ? interfaces : createDefaultJetsonSnapshot(true).interfaces,
   };
+}
+
+/**
+ * Probes NVIDIA Jetson Orin Nano hardware state asynchronously from Linux sysfs and procfs.
+ * Fully non-blocking with strict timeout bounds (Dean Latency Budget & Council Invariant 1 & 6).
+ */
+export async function probeJetsonHardware(
+  prevSnapshot?: JetsonTelemetrySnapshot | undefined,
+  deltaNs?: bigint | undefined
+): Promise<JetsonTelemetrySnapshot> {
+  // If not running on Linux or Jetson platform, fall back to disconnected snapshot
+  if (process.platform !== 'linux') {
+    return createDefaultJetsonSnapshot(true);
+  }
+
+  let timer: NodeJS.Timeout | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Jetson hardware probe timed out (>${JETSON_PROBE_TIMEOUT_MS}ms)`)),
+      JETSON_PROBE_TIMEOUT_MS
+    );
+    timer.unref();
+  });
+
+  try {
+    const result = await Promise.race([
+      executeJetsonHardwareProbe(prevSnapshot, deltaNs),
+      timeoutPromise,
+    ]);
+    if (timer) clearTimeout(timer);
+    return result;
+  } catch (err) {
+    if (timer) clearTimeout(timer);
+    process.stderr.write(`[jetson-probe] probeJetsonHardware failed or timed out: ${
+      err instanceof Error ? err.message : String(err)
+    }\n`);
+    return prevSnapshot ?? createDefaultJetsonSnapshot(true);
+  }
 }
 
 // ── Coral Daemon IPC ─────────────────────────────────────────────────────────

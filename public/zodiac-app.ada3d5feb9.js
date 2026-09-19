@@ -445,7 +445,7 @@
       els.dotDeviceZodiac.className = snapshot.source === 'disconnected' ? 'cf-status-dot down' : 'cf-status-dot green';
     }
     if (els.dotDeviceOrin) {
-      const orinOnline = snapshot.jetson ? snapshot.jetson.status === 'online' : snapshot.source !== 'disconnected';
+      const orinOnline = Boolean(snapshot.jetson && snapshot.jetson.status === 'online');
       els.dotDeviceOrin.className = orinOnline ? 'cf-status-dot green' : 'cf-status-dot down';
     }
     if (els.dotDeviceCoral) {
@@ -741,7 +741,7 @@
     // 7. Jetson Orin Nano Appliance Telemetry
     if (snapshot.jetson) {
       const j = snapshot.jetson;
-      const isOnline = snapshot.source !== 'disconnected';
+      const isOnline = Boolean(j.status === 'online');
       if (els.dotDeviceOrin) {
         els.dotDeviceOrin.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
       }
@@ -846,16 +846,16 @@
       if (els.orinBarDisk) els.orinBarDisk.style.width = `${Math.min(100, Math.max(5, diskPct))}%`;
 
       // Power & Thermals
-      let pwrW = 0;
+      let pwrW = null;
       if (j.powerMw && typeof j.powerMw.vddIn === 'number') {
         pwrW = j.powerMw.vddIn / 1000;
-      } else if (j.power?.totalPowerW) {
-        pwrW = typeof j.power.totalPowerW === 'number' ? j.power.totalPowerW : Number(j.power.totalPowerW || 0);
+      } else if (j.power && typeof j.power.totalPowerW === 'number') {
+        pwrW = j.power.totalPowerW;
       }
-      if (els.orinKpiPower) els.orinKpiPower.innerText = `${pwrW.toFixed(1)} W`;
+      if (els.orinKpiPower) els.orinKpiPower.innerText = pwrW !== null ? `${pwrW.toFixed(1)} W` : '-- W';
       if (els.orinBarPower) {
         const maxTdpW = typeof j.maxPowerTdpW === 'number' ? j.maxPowerTdpW : 15.0;
-        const pwrPct = Math.min(100, Math.max(5, Math.round((pwrW / maxTdpW) * 100)));
+        const pwrPct = pwrW !== null ? Math.min(100, Math.max(5, Math.round((pwrW / maxTdpW) * 100))) : 0;
         els.orinBarPower.style.width = `${pwrPct}%`;
       }
 

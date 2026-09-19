@@ -104,9 +104,9 @@ export interface JetsonTimeSeriesPoint {
   readonly timestampMs: number;
   readonly cpuUtilizationPct: number;
   readonly gpuUtilizationPct: number;
-  readonly cpuTempC: number;
-  readonly gpuTempC: number;
-  readonly junctionTempC: number;
+  readonly cpuTempC: number | null;
+  readonly gpuTempC: number | null;
+  readonly junctionTempC: number | null;
   readonly powerWatts: number;
   readonly ramUsedBytes: bigint;
   readonly nvmeReadRateBps: bigint;
@@ -116,6 +116,7 @@ export interface JetsonTimeSeriesPoint {
 }
 
 export interface JetsonTelemetrySnapshot {
+  readonly status: 'online' | 'offline';
   readonly deviceName: string;
   readonly architecture: string;
   readonly cpuModel: string;
@@ -137,15 +138,15 @@ export interface JetsonTelemetrySnapshot {
   readonly nvmeWriteRateBps: bigint;
   readonly rescueSdMounted: boolean;
   readonly temperatures: {
-    readonly cpuC: number;
-    readonly gpuC: number;
-    readonly socC: number;
-    readonly junctionC: number;
+    readonly cpuC: number | null;
+    readonly gpuC: number | null;
+    readonly socC: number | null;
+    readonly junctionC: number | null;
   };
   readonly powerMw: {
-    readonly vddIn: number;
-    readonly vddCpuGpuCv: number;
-    readonly vddSoc: number;
+    readonly vddIn: number | null;
+    readonly vddCpuGpuCv: number | null;
+    readonly vddSoc: number | null;
   };
   readonly systemLoad: [number, number, number];
   readonly osVersion: string;
@@ -369,16 +370,19 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
 
 /**
  * Creates a default telemetry snapshot for the NVIDIA Jetson Orin Nano appliance.
+ * Council Invariant 6 (Anti-Simulation Law):
+ * Default must be fail-closed (isDisconnected = true). When disconnected,
+ * thermals and power evaluate to physical truth (null), and status is 'offline'.
  */
-export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): JetsonTelemetrySnapshot {
+export function createDefaultJetsonSnapshot(isDisconnected: boolean = true): JetsonTelemetrySnapshot {
   const interfaces: JetsonNetworkInterfaceTelemetry[] = [
     {
       name: 'enP8p1s0',
       role: 'SDN Control Link -> Zodiac Port 4',
-      macAddress: 'ac:3a:e2:98:99:dd',
+      macAddress: isDisconnected ? 'None' : 'ac:3a:e2:98:99:dd',
       ipAddress: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1',
       status: isDisconnected ? 'DOWN' : 'UP',
-      speedMbps: 1000,
+      speedMbps: isDisconnected ? 0 : 1000,
       rxBytes: isDisconnected ? 0n : 1694270n,
       txBytes: isDisconnected ? 0n : 2598430n,
       rxPackets: isDisconnected ? 0n : 15400n,
@@ -395,10 +399,10 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): Je
     {
       name: 'wlP1p1s0',
       role: 'Management Plane & Cloud Relay (Wi-Fi)',
-      macAddress: 'f0:68:e3:33:02:a3',
+      macAddress: isDisconnected ? 'None' : 'f0:68:e3:33:02:a3',
       ipAddress: process.env['JETSON_HOST'] ?? '127.0.0.1',
       status: isDisconnected ? 'DOWN' : 'UP',
-      speedMbps: 866,
+      speedMbps: isDisconnected ? 0 : 866,
       rxBytes: isDisconnected ? 0n : 48921000n,
       txBytes: isDisconnected ? 0n : 12450000n,
       rxPackets: isDisconnected ? 0n : 98400n,
@@ -415,6 +419,7 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): Je
   ];
 
   return {
+    status: isDisconnected ? 'offline' : 'online',
     deviceName: 'jetson-orin',
     architecture: 'aarch64 (ARMv8.2-A)',
     cpuModel: '6-Core ARM Cortex-A78AE',
@@ -424,7 +429,7 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): Je
     gpuModel: 'NVIDIA Ampere (1024 CUDA Cores + 32 Tensor Cores)',
     gpuCudaCores: 1024,
     gpuUtilizationPct: 0,
-    gpuFreqMhz: 612,
+    gpuFreqMhz: isDisconnected ? 0 : 612,
     ramUsedBytes: isDisconnected ? 0n : 2184183808n,
     ramTotalBytes: 7990149120n,
     swapUsedBytes: 0n,
@@ -434,17 +439,17 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = false): Je
     nvmeTotalBytes: 491745476608n,
     nvmeReadRateBps: isDisconnected ? 0n : 1048576n,
     nvmeWriteRateBps: isDisconnected ? 0n : 262144n,
-    rescueSdMounted: true,
+    rescueSdMounted: !isDisconnected,
     temperatures: {
-      cpuC: isDisconnected ? 0 : 48.0,
-      gpuC: isDisconnected ? 0 : 46.5,
-      socC: isDisconnected ? 0 : 46.2,
-      junctionC: isDisconnected ? 0 : 48.0,
+      cpuC: isDisconnected ? null : 48.0,
+      gpuC: isDisconnected ? null : 46.5,
+      socC: isDisconnected ? null : 46.2,
+      junctionC: isDisconnected ? null : 48.0,
     },
     powerMw: {
-      vddIn: isDisconnected ? 0 : 4785,
-      vddCpuGpuCv: isDisconnected ? 0 : 711,
-      vddSoc: isDisconnected ? 0 : 1384,
+      vddIn: isDisconnected ? null : 4785,
+      vddCpuGpuCv: isDisconnected ? null : 711,
+      vddSoc: isDisconnected ? null : 1384,
     },
     systemLoad: isDisconnected ? [0, 0, 0] : [0.82, 0.65, 0.54],
     osVersion: 'Ubuntu 22.04.4 LTS',
@@ -499,12 +504,34 @@ export function generateJetsonHistoricalTelemetry(
   const nowMs = Date.now();
   const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
 
+  const isDisconnected = snapshot.status === 'offline' || snapshot.temperatures.cpuC === null;
+  if (isDisconnected) {
+    for (let i = pointCount - 1; i >= 0; i--) {
+      const timestampMs = nowMs - i * stepMs;
+      points.push({
+        timestampMs,
+        cpuUtilizationPct: 0,
+        gpuUtilizationPct: 0,
+        cpuTempC: null,
+        gpuTempC: null,
+        junctionTempC: null,
+        powerWatts: 0,
+        ramUsedBytes: 0n,
+        nvmeReadRateBps: 0n,
+        nvmeWriteRateBps: 0n,
+        sdnPortRateBps: 0n,
+        wifiPortRateBps: 0n,
+      });
+    }
+    return points;
+  }
+
   const baseCpu = snapshot.cpuUtilizationPct;
   const baseGpu = snapshot.gpuUtilizationPct;
-  const baseCpuTemp = snapshot.temperatures.cpuC;
-  const baseGpuTemp = snapshot.temperatures.gpuC;
-  const baseJuncTemp = snapshot.temperatures.junctionC;
-  const basePowerWatts = snapshot.powerMw.vddIn > 0 ? snapshot.powerMw.vddIn / 1000 : 4.8;
+  const baseCpuTemp = snapshot.temperatures.cpuC ?? 48.0;
+  const baseGpuTemp = snapshot.temperatures.gpuC ?? 46.5;
+  const baseJuncTemp = snapshot.temperatures.junctionC ?? 48.0;
+  const basePowerWatts = snapshot.powerMw.vddIn && snapshot.powerMw.vddIn > 0 ? snapshot.powerMw.vddIn / 1000 : 4.8;
   const baseRam = snapshot.ramUsedBytes;
 
   for (let i = pointCount - 1; i >= 0; i--) {

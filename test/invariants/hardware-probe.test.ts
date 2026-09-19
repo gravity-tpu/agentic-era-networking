@@ -98,8 +98,8 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(full.coral?.detected).toBe(true);
   });
 
-  it('probeJetsonHardware returns valid snapshot structure', () => {
-    const snap = probeJetsonHardware();
+  it('probeJetsonHardware returns valid snapshot structure', async () => {
+    const snap = await probeJetsonHardware();
     expect(snap.cpuCoreCount).toBe(6);
     expect(typeof snap.ramUsedBytes).toBe('bigint');
     expect(snap.interfaces.length).toBeGreaterThan(0);

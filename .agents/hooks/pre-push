@@ -196,6 +196,14 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
                   PROVENANCE_FAILURES+="    $m\n"
                 done <<< "$PROBE_MOCK"
               fi
+
+              PROBE_FALLBACK_TEMP=$(grep -nE "cpuC\s*:\s*[0-9]+(\.[0-9]+)?" "$REPO_ROOT/$file" 2>/dev/null || true)
+              if [ -n "$PROBE_FALLBACK_TEMP" ]; then
+                PROVENANCE_FAILURES+="\n  ${BOLD}$file (Hardware probe hardcoded fallback CPU temperature detected):${RESET}\n"
+                while IFS= read -r m; do
+                  PROVENANCE_FAILURES+="    $m\n"
+                done <<< "$PROBE_FALLBACK_TEMP"
+              fi
             fi
 
             # Coral thermal simulation check (Council Invariant 6)
@@ -205,6 +213,17 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
               while IFS= read -r m; do
                 PROVENANCE_FAILURES+="    $m\n"
               done <<< "$CORAL_THERMAL"
+            fi
+
+            # Jetson UI status coupling check (Council Invariant 6)
+            if [[ "$file" == *"zodiac-app.js" ]]; then
+              ORIN_COUPLING=$(grep -nE "orin.*snapshot\.source\s*!==\s*['\"]disconnected['\"]" "$REPO_ROOT/$file" 2>/dev/null || true)
+              if [ -n "$ORIN_COUPLING" ]; then
+                PROVENANCE_FAILURES+="\n  ${BOLD}$file (Jetson UI status coupled to Zodiac switch serial state):${RESET}\n"
+                while IFS= read -r m; do
+                  PROVENANCE_FAILURES+="    $m\n"
+                done <<< "$ORIN_COUPLING"
+              fi
             fi
             ;;
         esac

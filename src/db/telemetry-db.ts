@@ -334,8 +334,11 @@ export function downsampleJetsonPoints(
     let sumCpuUtil = 0;
     let sumGpuUtil = 0;
     let sumCpuTemp = 0;
+    let cpuTempCount = 0;
     let sumGpuTemp = 0;
+    let gpuTempCount = 0;
     let sumJuncTemp = 0;
+    let juncTempCount = 0;
     let sumPower = 0;
     let sumRam = 0n;
     let sumNvmeRead = 0n;
@@ -346,9 +349,18 @@ export function downsampleJetsonPoints(
     for (const pt of chunk) {
       sumCpuUtil += pt.cpuUtilizationPct;
       sumGpuUtil += pt.gpuUtilizationPct;
-      sumCpuTemp += pt.cpuTempC;
-      sumGpuTemp += pt.gpuTempC;
-      sumJuncTemp += pt.junctionTempC;
+      if (pt.cpuTempC !== null && pt.cpuTempC !== undefined) {
+        sumCpuTemp += pt.cpuTempC;
+        cpuTempCount++;
+      }
+      if (pt.gpuTempC !== null && pt.gpuTempC !== undefined) {
+        sumGpuTemp += pt.gpuTempC;
+        gpuTempCount++;
+      }
+      if (pt.junctionTempC !== null && pt.junctionTempC !== undefined) {
+        sumJuncTemp += pt.junctionTempC;
+        juncTempCount++;
+      }
       sumPower += pt.powerWatts;
       sumRam += BigInt(pt.ramUsedBytes || 0);
       sumNvmeRead += BigInt(pt.nvmeReadRateBps || 0);
@@ -364,10 +376,10 @@ export function downsampleJetsonPoints(
       timestampMs: midPoint.timestampMs,
       cpuUtilizationPct: Math.round(sumCpuUtil / count),
       gpuUtilizationPct: Math.round(sumGpuUtil / count),
-      cpuTempC: Math.round(sumCpuTemp / count),
-      gpuTempC: Math.round(sumGpuTemp / count),
-      junctionTempC: Math.round(sumJuncTemp / count),
-      powerWatts: parseFloat((sumPower / count).toFixed(2)),
+      cpuTempC: cpuTempCount > 0 ? Math.round(sumCpuTemp / cpuTempCount) : null,
+      gpuTempC: gpuTempCount > 0 ? Math.round(sumGpuTemp / gpuTempCount) : null,
+      junctionTempC: juncTempCount > 0 ? Math.round(sumJuncTemp / juncTempCount) : null,
+      powerWatts: count > 0 ? Math.round((sumPower * 100) / count) / 100 : 0,
       ramUsedBytes: sumRam / countBig,
       nvmeReadRateBps: sumNvmeRead / countBig,
       nvmeWriteRateBps: sumNvmeWrite / countBig,

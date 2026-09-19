@@ -14,7 +14,9 @@ import {
   createDisconnectedZodiacSnapshot,
   createDefaultZodiacSnapshot,
   createDefaultCoralSnapshot,
+  createDefaultJetsonSnapshot,
   generateHistoricalTelemetry,
+  generateJetsonHistoricalTelemetry,
   resolveVerifiedProvenance,
   assertVerifiedProvenance,
 } from '../../src/sdn/zodiac-telemetry.js';
@@ -143,5 +145,45 @@ describe('Council Invariant 6: Goodhart\'s Law & Epistemic Telemetry Provenance'
     // Council Invariant 6: Physical truth — Coral USB has no sysfs thermal zone mapped
     expect(sandboxCoral.temperatureC).toBeNull();
     expect(disconnectedCoral.temperatureC).toBeNull();
+  });
+
+  it('enforces fail-closed defaults and physical truth on disconnected Jetson Orin Nano', () => {
+    // 1. Default invocation must fail-closed (isDisconnected = true)
+    const defaultJetson = createDefaultJetsonSnapshot();
+    expect(defaultJetson.status).toBe('offline');
+    expect(defaultJetson.uptime).toBe('Offline');
+    expect(defaultJetson.temperatures.cpuC).toBeNull();
+    expect(defaultJetson.temperatures.gpuC).toBeNull();
+    expect(defaultJetson.temperatures.socC).toBeNull();
+    expect(defaultJetson.temperatures.junctionC).toBeNull();
+    expect(defaultJetson.powerMw.vddIn).toBeNull();
+    expect(defaultJetson.powerMw.vddCpuGpuCv).toBeNull();
+    expect(defaultJetson.powerMw.vddSoc).toBeNull();
+    expect(defaultJetson.ramUsedBytes).toBe(0n);
+    expect(defaultJetson.nvmeReadRateBps).toBe(0n);
+    expect(defaultJetson.nvmeWriteRateBps).toBe(0n);
+    expect(defaultJetson.rescueSdMounted).toBe(false);
+
+    // 2. Explicit disconnected parameter
+    const disconnectedJetson = createDefaultJetsonSnapshot(true);
+    expect(disconnectedJetson.status).toBe('offline');
+    expect(disconnectedJetson.interfaces[0]!.status).toBe('DOWN');
+    expect(disconnectedJetson.interfaces[0]!.macAddress).toBe('None');
+    expect(disconnectedJetson.interfaces[0]!.speedMbps).toBe(0);
+
+    // 3. Historical time-series points flatline to null thermals and 0 rates when disconnected
+    const historicalPoints = generateJetsonHistoricalTelemetry(disconnectedJetson, 1, 10);
+    expect(historicalPoints).toHaveLength(10);
+    for (const pt of historicalPoints) {
+      expect(pt.cpuTempC).toBeNull();
+      expect(pt.gpuTempC).toBeNull();
+      expect(pt.junctionTempC).toBeNull();
+      expect(pt.powerWatts).toBe(0);
+      expect(pt.cpuUtilizationPct).toBe(0);
+      expect(pt.gpuUtilizationPct).toBe(0);
+      expect(pt.ramUsedBytes).toBe(0n);
+      expect(pt.sdnPortRateBps).toBe(0n);
+      expect(pt.wifiPortRateBps).toBe(0n);
+    }
   });
 });
