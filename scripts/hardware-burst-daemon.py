@@ -44,7 +44,8 @@ import socket
 import sys
 import threading
 import time
-from typing import TypedDict, Union
+from typing import Optional, TypedDict
+import urllib.error
 import urllib.request
 
 MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite')
@@ -417,17 +418,17 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
 
 
 class LiveTelemetrySummary(TypedDict):
-    p3_rx_pkts: Union[int, str]
-    p4_rx_bytes: Union[int, str]
+    p3_rx_pkts: Optional[int]
+    p4_rx_bytes: Optional[int]
     tpu0_inf_sec: int
-    jetson_temp_c: Union[float, int, str]
+    jetson_temp_c: Optional[float]
 
 
 cached_live_summary: LiveTelemetrySummary = {
-    'p3_rx_pkts': '-',
-    'p4_rx_bytes': '-',
+    'p3_rx_pkts': None,
+    'p4_rx_bytes': None,
     'tpu0_inf_sec': 0,
-    'jetson_temp_c': '-',
+    'jetson_temp_c': None,
 }
 live_summary_lock = threading.Lock()
 
@@ -459,26 +460,46 @@ def telemetry_poller_worker():
                 sys.stderr.write(f'[burst-daemon] Note: cannot read {p}: {e}\n')
                 continue
 
-        summary = {
-            'p3_rx_pkts': '-',
-            'p4_rx_bytes': '-',
-            'tpu0_inf_sec': tpu0_rate,
-            'jetson_temp_c': '-',
-        }
+        p3_pkts_val: Optional[int] = None
+        p4_bytes_val: Optional[int] = None
+        jetson_temp_val: Optional[float] = None
 
         try:
             req = urllib.request.Request('http://127.0.0.1:3003/api/zodiac', headers={'User-Agent': 'BurstRunner/2.0'})
             # Bounded latency budget (250ms) for local loopback HTTP query
             with urllib.request.urlopen(req, timeout=0.25) as resp:
-                data = json.loads(resp.read().decode())
+                cl = resp.headers.get('Content-Length')
+                if cl and int(cl) > 65536:
+                    raise ValueError(f'Response payload exceeds 64KB budget: {cl} bytes')
+                data = json.loads(resp.read(65536).decode('utf-8', errors='replace'))
                 p3 = next((p for p in data.get('ports', []) if p.get('port') == 3), {})
                 p4 = next((p for p in data.get('ports', []) if p.get('port') == 4), {})
                 jetson = data.get('jetson', {})
-                summary['p3_rx_pkts'] = p3.get('rxPackets', '-')
-                summary['p4_rx_bytes'] = p4.get('rxBytes', '-')
-                summary['jetson_temp_c'] = jetson.get('temperatures', {}).get('cpuC', '-')
-        except Exception as e:
+                if 'rxPackets' in p3:
+                    try:
+                        p3_pkts_val = int(p3['rxPackets'])
+                    except (ValueError, TypeError):
+                        p3_pkts_val = None
+                if 'rxBytes' in p4:
+                    try:
+                        p4_bytes_val = int(p4['rxBytes'])
+                    except (ValueError, TypeError):
+                        p4_bytes_val = None
+                raw_temp = jetson.get('temperatures', {}).get('cpuC')
+                if raw_temp is not None:
+                    try:
+                        jetson_temp_val = float(raw_temp)
+                    except (ValueError, TypeError):
+                        jetson_temp_val = None
+        except (urllib.error.URLError, socket.timeout, json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError) as e:
             sys.stderr.write(f'[burst-daemon] Note: telemetry HTTP poll failed: {e}\n')
+
+        summary: LiveTelemetrySummary = {
+            'p3_rx_pkts': p3_pkts_val,
+            'p4_rx_bytes': p4_bytes_val,
+            'tpu0_inf_sec': tpu0_rate,
+            'jetson_temp_c': jetson_temp_val,
+        }
 
         with live_summary_lock:
             cached_live_summary = summary
@@ -586,7 +607,7 @@ def main():
             if not active_tpu_devs:
                 # Fail-closed (Council Invariant 3 & 4): unmatched topology constraint drops worker
                 sys.stderr.write(f'[burst-daemon] Fail-closed: Sentinel Edge TPU matching {sentinel_target_path} not found among {detected_tpus}\n')
-        except Exception as exc:
+        except (ImportError, OSError, ValueError) as exc:
             sys.stderr.write(f'[burst-daemon] Note: Edge TPU worker discovery error: {exc}\n')
 
         for dev in active_tpu_devs:
@@ -729,9 +750,11 @@ def main():
                 live = get_live_telemetry_summary()
                 rem_sec = max(0, total_duration_sec - elapsed_sec)
 
-                daemon_coral_rate = live.get('tpu0_inf_sec', '-')
-                temp = live.get('jetson_temp_c', '-')
-                p3_rx = live.get('p3_rx_pkts', '-')
+                daemon_coral_rate = live.get('tpu0_inf_sec', 0)
+                temp_val = live.get('jetson_temp_c')
+                temp_str = f'{temp_val:.1f}°C' if temp_val is not None else '--°C'
+                p3_rx_val = live.get('p3_rx_pkts')
+                p3_rx_str = f'{p3_rx_val}' if p3_rx_val is not None else '--'
 
                 tot_bytes = curr['zodiac_p3_bytes'] + curr['zodiac_p4_bytes'] + curr['rpi_bytes']
                 size_progress = format_bytes_int(tot_bytes)
@@ -745,13 +768,13 @@ def main():
                 if is_coral_all or is_coral_1 or is_coral_2 or args.staggered:
                     stat_parts.append(f'Coral #1 (Tap DPI): {daemon_coral_rate}/s | Coral #2 (DNS Sentinel): {burst_coral_rate}/s')
                 if is_target_enabled('zodiac-p3', enabled_targets) and not args.staggered:
-                    stat_parts.append(f'Zodiac P3: {p3_pps} pps ({p3_kbps} kbps, Rx {p3_rx} pkts)')
+                    stat_parts.append(f'Zodiac P3: {p3_pps} pps ({p3_kbps} kbps, Rx {p3_rx_str} pkts)')
                 if is_target_enabled('zodiac-p4', enabled_targets):
                     stat_parts.append(f'Zodiac P4: {p4_pps} pps')
                 if is_target_enabled('rpi', enabled_targets):
                     stat_parts.append(f'RPi: {rpi_pps} pps')
                 stat_parts.append(f'Transferred: {size_progress}')
-                stat_parts.append(f'Jetson: {temp}°C')
+                stat_parts.append(f'Jetson: {temp_str}')
 
                 log_message(' | '.join(stat_parts), log_file)
 
