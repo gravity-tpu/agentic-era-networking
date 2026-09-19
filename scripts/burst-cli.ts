@@ -31,14 +31,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 if (typeof process.loadEnvFile === 'function') {
-  try {
-    process.loadEnvFile();
-  } catch (_) {
-    // Non-fatal if .env doesn't exist
+  if (fs.existsSync('.env.local')) {
+    try {
+      process.loadEnvFile('.env.local');
+    } catch (err: unknown) {
+      process.stderr.write(`[burst-cli] Failed loading .env.local: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  } else if (fs.existsSync('.env')) {
+    try {
+      process.loadEnvFile('.env');
+    } catch (err: unknown) {
+      process.stderr.write(`[burst-cli] Failed loading .env: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
   }
 }
 
-const JETSON_HOST = process.env['JETSON_SSH_HOST'] ?? '127.0.0.1';
+const JETSON_HOST = process.env['JETSON_SSH_HOST'] ?? process.env['JETSON_HOST'] ?? '127.0.0.1';
 const JETSON_USER = process.env['JETSON_SSH_USER'] ?? 'zodiac';
 const JETSON_TARGET = `${JETSON_USER}@${JETSON_HOST}`;
 const REMOTE_SCRIPT_PATH = '/home/zodiac/burst-daemon.py';
@@ -91,6 +99,7 @@ export interface BurstOptions {
   size?: string;
   detach?: boolean;
   interval?: number;
+  staggered?: boolean;
 }
 
 async function startBurst(options: BurstOptions): Promise<void> {
@@ -99,13 +108,14 @@ async function startBurst(options: BurstOptions): Promise<void> {
   const size = options.size ?? '';
   const detach = options.detach ?? false;
   const interval = options.interval ?? 15;
+  const staggered = options.staggered ?? false;
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🚀 INITIALIZING HARDWARE TRAFFIC & INFERENCE BURST');
   console.log(`   Duration      : ${duration}`);
   console.log(`   Target Device : ${target.toUpperCase()}`);
   console.log(`   Size Limit    : ${size ? size.toUpperCase() : 'UNLIMITED (Duration-based)'}`);
-  console.log(`   Mode          : ${detach ? 'Detached (Background)' : 'Live Stream'}`);
+  console.log(`   Mode          : ${staggered ? 'Staggered 5-Phase Cycle' : (detach ? 'Detached (Background)' : 'Live Stream')}`);
   console.log(`   Target Host   : ${JETSON_TARGET}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
@@ -132,6 +142,9 @@ async function startBurst(options: BurstOptions): Promise<void> {
   if (size) {
     pyCmd += ` --size ${size}`;
   }
+  if (staggered) {
+    pyCmd += ` --staggered`;
+  }
 
   if (detach) {
     const detachCmd = isRunningOnJetson()
@@ -149,7 +162,7 @@ async function startBurst(options: BurstOptions): Promise<void> {
   // Live streaming mode
   console.log('📡 Streaming live hardware telemetry (Press Ctrl+C to abort cleanly)...\n');
   const runner = isRunningOnJetson()
-    ? spawn('sudo', ['/home/zodiac/coral-venv/bin/python3', REMOTE_SCRIPT_PATH, '--duration', duration, '--interval', String(interval), '--target', target, ...(size ? ['--size', size] : [])], { stdio: 'inherit' })
+    ? spawn('sudo', ['/home/zodiac/coral-venv/bin/python3', REMOTE_SCRIPT_PATH, '--duration', duration, '--interval', String(interval), '--target', target, ...(size ? ['--size', size] : []), ...(staggered ? ['--staggered'] : [])], { stdio: 'inherit' })
     : spawn('ssh', ['-tt', '-o', 'ConnectTimeout=5', JETSON_TARGET, `sudo ${pyCmd}`], { stdio: 'inherit' });
 
   const cleanExit = () => {
@@ -248,10 +261,18 @@ Commands / Options:
                              * 'zodiac'    - Zodiac FX switch (Port 3 mirror tap + Port 4 ctrl)
                              * 'zodiac-p3' - Zodiac FX Port 3 mirror tap raw frame burst only
                              * 'zodiac-p4' - Zodiac FX Port 4 controller UDP probe burst only
-                             * 'coral'     - Google Coral Edge TPU INT8 neural inference
+                             * 'coral-1'   - Coral TPU #1 (Tap DPI) solo burst via Zodiac Port 3 tap
+                             * 'coral-2'   - Coral TPU #2 (DNS Sentinel) solo burst via accelerator worker
+                             * 'coral'     - Both Google Coral Edge TPUs
                              * 'rpi'       - Raspberry Pi 3B+ workload node
                              * 'jetson'    - NVIDIA Jetson Orin compute & network stack
                              Comma-separated lists supported: e.g. '--target zodiac,coral'
+  --staggered, --stagger   - Execute a 5-phase staggered burst cycle across Coral devices:
+                             Stage 1: Coral TPU #1 (Tap DPI) solo burst
+                             Stage 2: Settling interval (both TPUs in STANDBY at 0 inf/s)
+                             Stage 3: Coral TPU #2 (DNS Sentinel) solo burst
+                             Stage 4: Settling interval (both TPUs in STANDBY at 0 inf/s)
+                             Stage 5: Dual Coral TPUs concurrently (peak parallelism ~450 inf/s)
   --size, -s <size>        - Cap the total burst data volume (e.g. 50mb, 100mb, 1gb, 500kb).
                              Terminates as soon as byte limit or duration is reached.
   --detach, -d             - Run in the background without holding the shell.
@@ -261,6 +282,9 @@ Commands / Options:
 
 Examples:
   npm run burst                                      # 15m live burst across all devices
+  npm run burst -- 60s --staggered                   # Staggered burst cycle across Coral devices
+  npm run burst -- --target coral-1                  # Target Coral TPU #1 (Tap DPI) only
+  npm run burst -- --target coral-2                  # Target Coral TPU #2 (DNS Sentinel) only
   npm run burst -- 5m                                # 5m live burst across all devices
   npm run burst -- --target zodiac --size 50mb       # 50 MB burst targeting Zodiac switch
   npm run burst -- --target coral                    # Target Coral Edge TPUs only
@@ -298,6 +322,7 @@ async function main(): Promise<void> {
     size: '',
     detach: false,
     interval: 15,
+    staggered: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -305,10 +330,20 @@ async function main(): Promise<void> {
     if (arg === 'start') continue;
     if (arg === '--detach' || arg === '-d') {
       options.detach = true;
+    } else if (arg === '--staggered' || arg === '--stagger') {
+      options.staggered = true;
     } else if (arg.startsWith('--interval=')) {
-      options.interval = parseInt(arg.split('=')[1]!, 10);
+      const parts = arg.split('=');
+      const rawVal = parts[1] ?? '';
+      const parsed = parseInt(rawVal, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        options.interval = parsed;
+      }
     } else if (arg === '--interval' && i + 1 < args.length) {
-      options.interval = parseInt(args[++i]!, 10);
+      const parsed = parseInt(args[++i] ?? '', 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        options.interval = parsed;
+      }
     } else if (arg.startsWith('--target=')) {
       options.target = arg.split('=')[1]!;
     } else if ((arg === '--target' || arg === '-t' || arg === '--device') && i + 1 < args.length) {

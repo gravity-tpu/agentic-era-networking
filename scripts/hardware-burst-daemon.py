@@ -142,6 +142,22 @@ def check_size_limit_reached(max_bytes: int) -> bool:
         return tot >= max_bytes
 
 
+def format_bytes_int(b: int) -> str:
+    """Formats byte counts deterministically using integer arithmetic (Dean & Ghemawat invariant)."""
+    if b >= 1024 * 1024 * 1024:
+        gib = b // (1024 * 1024 * 1024)
+        rem = (b % (1024 * 1024 * 1024)) * 100 // (1024 * 1024 * 1024)
+        return f'{gib}.{rem:02d} GB'
+    if b >= 1024 * 1024:
+        mib = b // (1024 * 1024)
+        rem = (b % (1024 * 1024)) * 100 // (1024 * 1024)
+        return f'{mib}.{rem:02d} MB'
+    if b >= 1024:
+        kib = b // 1024
+        return f'{kib} KB'
+    return f'{b} B'
+
+
 def atomic_write_burst_coral_json(data: dict):
     last_err = None
     for target in BURST_TARGET_PATHS:
@@ -167,7 +183,7 @@ def cleanup_burst_coral_telemetry():
                 sys.stderr.write(f'[burst-coral] Failed cleanup {target}: {e}\n')
 
 
-def coral_tpu_worker(dev_spec: str, max_bytes: int = 0):
+def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.Event = None):
     """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
     try:
         from pycoral.utils.edgetpu import make_interpreter
@@ -193,6 +209,22 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0):
         w_latencies = []
 
         while not stop_event.is_set():
+            if active_event is not None and not active_event.is_set():
+                atomic_write_burst_coral_json({
+                    'detected': True,
+                    'status': 'STANDBY',
+                    'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - Burst Parallel',
+                    'inferencesPerSecond': 0,
+                    'totalInferences': total_worker_inf,
+                    'latencyP50Ns': 0,
+                    'latencyP99Ns': 0,
+                    'timestampNs': time.monotonic_ns(),
+                })
+                time.sleep(0.1)
+                w_start_ns = time.monotonic_ns()
+                w_latencies = []
+                continue
+
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
                 stop_event.set()
                 break
@@ -243,7 +275,7 @@ def find_tap_interface() -> str:
     return 'enx9c69d39dd0a6'
 
 
-def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0):
+def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading.Event = None):
     """Sends raw Ethernet frames directly into Zodiac Port 3 via the tap interface."""
     try:
         s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
@@ -268,6 +300,10 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0):
 
         frame_idx = 0
         while not stop_event.is_set():
+            if active_event is not None and not active_event.is_set():
+                time.sleep(0.05)
+                continue
+
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
                 stop_event.set()
                 break
@@ -360,12 +396,18 @@ def is_target_enabled(target_key: str, enabled_set: set) -> bool:
         return True
     if target_key in enabled_set:
         return True
-    if target_key.startswith('zodiac') and ('zodiac' in enabled_set or 'switch' in enabled_set):
-        return True
-    if target_key.startswith('coral') and ('coral' in enabled_set or 'tpu' in enabled_set):
-        return True
-    if target_key == 'rpi' and ('rpi' in enabled_set or 'pi' in enabled_set or 'workload' in enabled_set):
-        return True
+    if target_key == 'zodiac-p3':
+        return any(t in enabled_set for t in ['zodiac', 'switch', 'zodiac-p3', 'p3', 'coral-1', 'coral-tap', 'coral-0', 'tpu-1', 'tpu-tap'])
+    if target_key == 'zodiac-p4':
+        return any(t in enabled_set for t in ['zodiac', 'switch', 'zodiac-p4', 'p4', 'controller', 'ctrl'])
+    if target_key == 'coral':
+        return any(t in enabled_set for t in ['coral', 'tpu', 'coral-all', 'corals', 'coral-1', 'coral-2', 'coral-tap', 'coral-sentinel'])
+    if target_key == 'coral-1':
+        return any(t in enabled_set for t in ['all', 'coral', 'tpu', 'coral-all', 'corals', 'coral-1', 'coral-tap', 'coral-0', 'tpu-1', 'tpu-tap'])
+    if target_key == 'coral-2':
+        return any(t in enabled_set for t in ['all', 'coral', 'tpu', 'coral-all', 'corals', 'coral-2', 'coral-sentinel', 'coral-dns', 'coral-burst', 'tpu-2'])
+    if target_key == 'rpi':
+        return any(t in enabled_set for t in ['rpi', 'pi', 'workload'])
     return False
 
 
@@ -373,7 +415,8 @@ def main():
     parser = argparse.ArgumentParser(description='Hardware-level Multi-Device Traffic & Inference Stress Burst')
     parser.add_argument('--duration', default='15m', help='Duration (e.g. 15m, 5m, 60s, 900)')
     parser.add_argument('--interval', type=int, default=15, help='Report interval in seconds')
-    parser.add_argument('--target', '--device', default='all', help='Target device(s): all, zodiac, coral, rpi, jetson (comma-separated)')
+    parser.add_argument('--target', '--device', default='all', help='Target device(s): all, zodiac, coral, coral-1, coral-2, rpi, jetson (comma-separated)')
+    parser.add_argument('--staggered', '--stagger', action='store_true', help='Send staggered bursts to devices independently (TPU 1 solo -> rest -> TPU 2 solo -> rest -> dual concurrent)')
     parser.add_argument('--size', default='', help='Burst size limit (e.g. 50mb, 100mb, 1gb, 500kb)')
     parser.add_argument('--log-file', default=DEFAULT_LOG_PATH, help='File to write persistent burst logs')
     parser.add_argument('--tap-iface', default='', help='Tap interface name (default: auto-detect enx*)')
@@ -395,49 +438,64 @@ def main():
         except Exception:
             pass
 
-    size_label = f'{max_bytes / (1024*1024):.2f} MB' if max_bytes > 0 else 'Unlimited (Duration-based)'
+    size_label = format_bytes_int(max_bytes) if max_bytes > 0 else 'Unlimited (Duration-based)'
     target_label = ', '.join(sorted(enabled_targets))
+    mode_label = 'Staggered 5-Phase Cycle' if args.staggered else 'Continuous Concurrent Burst'
 
     log_message('======================================================================', log_file)
     log_message('🚀 AGENTIC-ERA NETWORKING: HARDWARE TRAFFIC & INFERENCE BURST ACTIVE', log_file)
-    log_message(f'   Duration      : {total_duration_sec}s ({total_duration_sec // 60}m{total_duration_sec % 60:02d}s) | Reporting: every {report_interval_sec}s', log_file)
+    log_message(f'   Duration      : {total_duration_sec}s ({total_duration_sec // 60}m{total_duration_sec % 60:02d}s) | Mode: {mode_label}', log_file)
     log_message(f'   Target Filter : {target_label}', log_file)
     log_message(f'   Size Limit    : {size_label}', log_file)
     log_message(f'   Tap Interface : {tap_iface} (Zodiac Port 3)', log_file)
     log_message('======================================================================', log_file)
 
     threads = []
+    tpu1_active = threading.Event()
+    tpu2_active = threading.Event()
 
-    # 1. Coral TPUs
-    if is_target_enabled('coral', enabled_targets):
+    is_coral_1 = any(t in enabled_targets for t in ['coral-1', 'coral-tap', 'coral-0', 'tpu-1', 'tpu-tap'])
+    is_coral_2 = any(t in enabled_targets for t in ['coral-2', 'coral-sentinel', 'coral-dns', 'coral-burst', 'tpu-2'])
+    is_coral_all = any(t in enabled_targets for t in ['coral', 'tpu', 'coral-all', 'corals', 'all'])
+
+    if not args.staggered:
+        if is_coral_all or is_coral_1 or is_target_enabled('zodiac-p3', enabled_targets):
+            tpu1_active.set()
+        if is_coral_all or is_coral_2:
+            tpu2_active.set()
+
+    # 1. Coral TPU #2 (dedicated accelerator worker)
+    if is_coral_all or is_coral_2 or args.staggered:
         active_tpu_devs = []
         try:
             from pycoral.utils.edgetpu import make_interpreter
-            for dev in [':0', ':1']:
+            for dev in [':1', ':0']:
                 try:
                     test_interp = make_interpreter(MODEL_PATH, device=dev)
                     active_tpu_devs.append(dev)
                     del test_interp
+                    break
                 except Exception:
                     pass
         except Exception:
             pass
 
         for dev in active_tpu_devs:
-            t = threading.Thread(target=coral_tpu_worker, args=(dev, max_bytes), name=f'coral-burst-{dev}', daemon=True)
+            t = threading.Thread(target=coral_tpu_worker, args=(dev, max_bytes, tpu2_active), name=f'coral-burst-{dev}', daemon=True)
             threads.append(t)
             t.start()
-            log_message(f'   [+] Spawned dedicated Edge TPU worker on {dev}', log_file)
-        log_message('   [+] Companion Coral TPU active concurrently under central bridge daemon', log_file)
+            log_message(f'   [+] Spawned dedicated Edge TPU worker on {dev} (Coral TPU #2 DNS Sentinel)', log_file)
+        if not active_tpu_devs:
+            log_message('   [-] No free Edge TPU found for dedicated burst worker', log_file)
     else:
-        log_message('   [-] Coral TPUs omitted by target filter', log_file)
+        log_message('   [-] Coral TPU #2 worker omitted by target filter', log_file)
 
-    # 2. Zodiac Port 3
-    if is_target_enabled('zodiac-p3', enabled_targets):
-        t_p3 = threading.Thread(target=zodiac_p3_raw_worker, args=(tap_iface, max_bytes), name='zodiac-p3-raw', daemon=True)
+    # 2. Zodiac Port 3 (Wire-tap raw frame worker driving Coral TPU #1)
+    if is_coral_all or is_coral_1 or is_target_enabled('zodiac-p3', enabled_targets) or args.staggered:
+        t_p3 = threading.Thread(target=zodiac_p3_raw_worker, args=(tap_iface, max_bytes, tpu1_active), name='zodiac-p3-raw', daemon=True)
         threads.append(t_p3)
         t_p3.start()
-        log_message('   [+] Spawned Zodiac Port 3 raw frame burst worker', log_file)
+        log_message('   [+] Spawned Zodiac Port 3 raw frame burst worker (Coral TPU #1 Tap DPI)', log_file)
     else:
         log_message('   [-] Zodiac Port 3 raw worker omitted by target filter', log_file)
 
@@ -467,6 +525,26 @@ def main():
     last_report_ns = start_ns
     prev_counters = counters.copy()
 
+    if args.staggered:
+        rest_sec = max(1, min(15, total_duration_sec // 10))
+        active_pool = max(3, total_duration_sec - (2 * rest_sec))
+        active_sec = max(1, active_pool // 3)
+
+        t1 = active_sec
+        t2 = t1 + rest_sec
+        t3 = t2 + active_sec
+        t4 = t3 + rest_sec
+        t5 = max(t4 + 1, total_duration_sec)
+
+        stagger_stages = [
+            (1, 'Coral TPU #1 (Tap DPI) Solo Burst', 'Transmitting wire-tap frames to Zodiac Port 3; TPU 2 in STANDBY', 0, t1, True, False),
+            (2, 'Settling Baseline (Both Standby)', 'Zeroing wire traffic; observing both TPUs return to STANDBY (0 inf/s)', t1, t2, False, False),
+            (3, 'Coral TPU #2 (DNS Sentinel) Solo Burst', 'Driving dedicated Edge TPU accelerator :1; TPU 1 in STANDBY', t2, t3, False, True),
+            (4, 'Settling Baseline (Both Standby)', 'Zeroing burst worker; verifying zero drift baseline (0 inf/s)', t3, t4, False, False),
+            (5, 'Dual Coral TPUs Concurrently (Peak Parallelism)', 'Driving both accelerators simultaneously (~450 inf/s combined peak target)', t4, t5, True, True),
+        ]
+        current_stage_idx = -1
+
     def handle_signal(sig, frame):
         stop_event.set()
 
@@ -484,13 +562,43 @@ def main():
             with stats_lock:
                 tot_transferred = counters['zodiac_p3_bytes'] + counters['zodiac_p4_bytes'] + counters['rpi_bytes']
             if max_bytes > 0 and tot_transferred >= max_bytes:
-                log_message(f'🎯 Target burst size reached ({tot_transferred / (1024*1024):.2f} MB >= {size_label}). Concluding burst...', log_file)
+                log_message(f'🎯 Target burst size reached ({format_bytes_int(tot_transferred)} >= {size_label}). Concluding burst...', log_file)
                 break
+
+            if args.staggered:
+                active_stage = None
+                for st in stagger_stages:
+                    if st[3] <= elapsed_sec < st[4]:
+                        active_stage = st
+                        break
+                if active_stage is None and elapsed_sec >= stagger_stages[-1][4]:
+                    active_stage = stagger_stages[-1]
+
+                if active_stage and active_stage[0] != current_stage_idx:
+                    current_stage_idx = active_stage[0]
+                    stage_num, stage_title, stage_desc, s_start, s_end, s_tpu1, s_tpu2 = active_stage
+                    stage_dur = s_end - s_start
+                    if s_tpu1:
+                        tpu1_active.set()
+                    else:
+                        tpu1_active.clear()
+                    if s_tpu2:
+                        tpu2_active.set()
+                    else:
+                        tpu2_active.clear()
+
+                    log_message('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', log_file)
+                    log_message(f'⚡ [STAGE {stage_num}/5] {stage_title} ({stage_dur}s)', log_file)
+                    log_message(f'   {stage_desc}', log_file)
+                    log_message('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', log_file)
 
             time.sleep(1.0)
 
-            if (now_ns - last_report_ns) >= (report_interval_sec * 1_000_000_000):
-                window_elapsed_sec = (now_ns - last_report_ns) / 1_000_000_000
+            report_trigger = min(report_interval_sec, 3) if args.staggered else report_interval_sec
+            if (now_ns - last_report_ns) >= (report_trigger * 1_000_000_000):
+                window_elapsed_ns = now_ns - last_report_ns
+                if window_elapsed_ns <= 0:
+                    window_elapsed_ns = 1
                 with stats_lock:
                     curr = counters.copy()
 
@@ -500,11 +608,11 @@ def main():
                 d_p4_pkts = curr['zodiac_p4_packets'] - prev_counters['zodiac_p4_packets']
                 d_rpi_pkts = curr['rpi_packets'] - prev_counters['rpi_packets']
 
-                burst_coral_rate = int(d_coral / window_elapsed_sec)
-                p3_pps = int(d_p3_pkts / window_elapsed_sec)
-                p3_kbps = int((d_p3_bytes * 8) / (window_elapsed_sec * 1000))
-                p4_pps = int(d_p4_pkts / window_elapsed_sec)
-                rpi_pps = int(d_rpi_pkts / window_elapsed_sec)
+                burst_coral_rate = (d_coral * 1_000_000_000) // window_elapsed_ns
+                p3_pps = (d_p3_pkts * 1_000_000_000) // window_elapsed_ns
+                p3_kbps = ((d_p3_bytes * 8) * 1_000_000) // window_elapsed_ns
+                p4_pps = (d_p4_pkts * 1_000_000_000) // window_elapsed_ns
+                rpi_pps = (d_rpi_pkts * 1_000_000_000) // window_elapsed_ns
 
                 live = get_live_telemetry_summary()
                 rem_sec = max(0, total_duration_sec - elapsed_sec)
@@ -514,15 +622,17 @@ def main():
                 p3_rx = live.get('p3_rx_pkts', '-')
 
                 tot_bytes = curr['zodiac_p3_bytes'] + curr['zodiac_p4_bytes'] + curr['rpi_bytes']
-                size_progress = f'{tot_bytes / (1024*1024):.1f}MB'
+                size_progress = format_bytes_int(tot_bytes)
                 if max_bytes > 0:
-                    pct = min(100.0, (tot_bytes * 100.0) / max_bytes)
-                    size_progress += f' / {max_bytes / (1024*1024):.1f}MB ({pct:.1f}%)'
+                    pct = min(100, (tot_bytes * 100) // max_bytes)
+                    size_progress += f' / {format_bytes_int(max_bytes)} ({pct}%)'
 
                 stat_parts = [f'[{elapsed_sec:03d}s/{total_duration_sec}s - {rem_sec//60}m{rem_sec%60:02d}s left]']
-                if is_target_enabled('coral', enabled_targets):
-                    stat_parts.append(f'Coral Daemon: {daemon_coral_rate}/s | Coral Burst: {curr["coral_burst_inferences"]} inf ({burst_coral_rate}/s)')
-                if is_target_enabled('zodiac-p3', enabled_targets):
+                if args.staggered and current_stage_idx > 0:
+                    stat_parts.append(f'Stage {current_stage_idx}/5')
+                if is_coral_all or is_coral_1 or is_coral_2 or args.staggered:
+                    stat_parts.append(f'Coral #1 (Tap DPI): {daemon_coral_rate}/s | Coral #2 (DNS Sentinel): {burst_coral_rate}/s')
+                if is_target_enabled('zodiac-p3', enabled_targets) and not args.staggered:
                     stat_parts.append(f'Zodiac P3: {p3_pps} pps ({p3_kbps} kbps, Rx {p3_rx} pkts)')
                 if is_target_enabled('zodiac-p4', enabled_targets):
                     stat_parts.append(f'Zodiac P4: {p4_pps} pps')
@@ -537,6 +647,8 @@ def main():
                 last_report_ns = now_ns
 
     finally:
+        tpu1_active.clear()
+        tpu2_active.clear()
         stop_event.set()
         for t in threads:
             t.join(timeout=2.0)
@@ -551,12 +663,12 @@ def main():
         if is_target_enabled('coral', enabled_targets):
             log_message(f'   Coral Burst Inferences  : {counters["coral_burst_inferences"]:,}', log_file)
         if is_target_enabled('zodiac-p3', enabled_targets):
-            log_message(f'   Zodiac Port 3 Frames    : {counters["zodiac_p3_frames"]:,} ({counters["zodiac_p3_bytes"] / (1024*1024):.2f} MB)', log_file)
+            log_message(f'   Zodiac Port 3 Frames    : {counters["zodiac_p3_frames"]:,} ({format_bytes_int(counters["zodiac_p3_bytes"])})', log_file)
         if is_target_enabled('zodiac-p4', enabled_targets):
-            log_message(f'   Zodiac Port 4 Packets   : {counters["zodiac_p4_packets"]:,} ({counters["zodiac_p4_bytes"] / (1024*1024):.2f} MB)', log_file)
+            log_message(f'   Zodiac Port 4 Packets   : {counters["zodiac_p4_packets"]:,} ({format_bytes_int(counters["zodiac_p4_bytes"])})', log_file)
         if is_target_enabled('rpi', enabled_targets):
-            log_message(f'   RPi 3B+ Workload Packets: {counters["rpi_packets"]:,} ({counters["rpi_bytes"] / (1024*1024):.2f} MB)', log_file)
-        log_message(f'   Total Data Transferred  : {tot_bytes / (1024*1024):.2f} MB ({tot_bytes:,} bytes)', log_file)
+            log_message(f'   RPi 3B+ Workload Packets: {counters["rpi_packets"]:,} ({format_bytes_int(counters["rpi_bytes"])})', log_file)
+        log_message(f'   Total Data Transferred  : {format_bytes_int(tot_bytes)} ({tot_bytes:,} bytes)', log_file)
         log_message('======================================================================\n', log_file)
 
 

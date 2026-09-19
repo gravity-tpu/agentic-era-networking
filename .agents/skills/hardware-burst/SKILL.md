@@ -50,8 +50,17 @@ npm run burst -- --target zodiac-p3
 # Target ONLY Zodiac Port 4 (SDN controller channel UDP probe burst):
 npm run burst -- --target zodiac-p4
 
-# Target ONLY the Google Coral Edge TPUs (continuous INT8 neural inference):
+# Target ONLY the Google Coral Edge TPUs (continuous INT8 neural inference across both):
 npm run burst -- --target coral
+
+# Target Coral TPU #1 ONLY (Tap DPI via Zodiac Port 3 raw mirror tap):
+npm run burst -- --target coral-1
+
+# Target Coral TPU #2 ONLY (DNS Sentinel via dedicated accelerator worker):
+npm run burst -- --target coral-2
+
+# Staggered independent bursts across Coral devices (TPU 1 solo -> rest -> TPU 2 solo -> rest -> dual peak):
+npm run burst -- 60s --staggered
 
 # Target ONLY the Raspberry Pi 3B+ workload node:
 npm run burst -- --target rpi
