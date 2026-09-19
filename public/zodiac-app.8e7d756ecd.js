@@ -278,6 +278,19 @@
   }
 
   /**
+   * Fast HTML entity escaping to prevent DOM injection.
+   */
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
    * Coerces numeric telemetry fields safely to finite numbers for canvas plotting.
    * Protects against NaN or invalid types poisoning canvas coordinate math (Quoc Le).
    */
