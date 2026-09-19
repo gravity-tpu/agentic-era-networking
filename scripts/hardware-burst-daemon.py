@@ -464,14 +464,29 @@ def telemetry_poller_worker():
         p4_bytes_val: Optional[int] = None
         jetson_temp_val: Optional[float] = None
 
+        # Direct sysfs read for Jetson CPU thermal (Dean nanosecond budget, zero socket overhead)
+        # Follows EAFP principles without swallowing errors (Council Invariant 1: Zero Suppression of Reality)
+        thermal_read_errors = []
+        for tz in ('/sys/class/thermal/thermal_zone1/temp', '/sys/class/thermal/thermal_zone0/temp'):
+            try:
+                with open(tz, 'r') as f:
+                    raw_c = f.read().strip()
+                    jetson_temp_val = round(int(raw_c) / 1000.0, 1)
+                    break
+            except (FileNotFoundError, OSError, ValueError) as exc:
+                thermal_read_errors.append(f'{tz}: {exc}')
+
+        if jetson_temp_val is None and thermal_read_errors:
+            sys.stderr.write(f'[burst-daemon] Note: sysfs thermal probes unavailable ({"; ".join(thermal_read_errors)})\n')
+
+        MAX_HTTP_PAYLOAD = 64 * 1024  # 64 KB strict budget for flat snapshot (Dean & Ghemawat invariant)
         try:
-            req = urllib.request.Request('http://127.0.0.1:3003/api/zodiac', headers={'User-Agent': 'BurstRunner/2.0'})
-            # Bounded latency budget (250ms) for local loopback HTTP query
+            req = urllib.request.Request('http://127.0.0.1:3003/api/zodiac?summary=1', headers={'User-Agent': 'BurstRunner/2.0'})
             with urllib.request.urlopen(req, timeout=0.25) as resp:
                 cl = resp.headers.get('Content-Length')
-                if cl and int(cl) > 65536:
-                    raise ValueError(f'Response payload exceeds 64KB budget: {cl} bytes')
-                data = json.loads(resp.read(65536).decode('utf-8', errors='replace'))
+                if cl and int(cl) > MAX_HTTP_PAYLOAD:
+                    raise ValueError(f'Response payload exceeds {MAX_HTTP_PAYLOAD} bytes budget: {cl} bytes')
+                data = json.loads(resp.read(MAX_HTTP_PAYLOAD).decode('utf-8', errors='replace'))
                 p3 = next((p for p in data.get('ports', []) if p.get('port') == 3), {})
                 p4 = next((p for p in data.get('ports', []) if p.get('port') == 4), {})
                 jetson = data.get('jetson', {})
@@ -485,12 +500,13 @@ def telemetry_poller_worker():
                         p4_bytes_val = int(p4['rxBytes'])
                     except (ValueError, TypeError):
                         p4_bytes_val = None
-                raw_temp = jetson.get('temperatures', {}).get('cpuC')
-                if raw_temp is not None:
-                    try:
-                        jetson_temp_val = float(raw_temp)
-                    except (ValueError, TypeError):
-                        jetson_temp_val = None
+                if jetson_temp_val is None:
+                    raw_temp = jetson.get('temperatures', {}).get('cpuC')
+                    if raw_temp is not None:
+                        try:
+                            jetson_temp_val = float(raw_temp)
+                        except (ValueError, TypeError):
+                            jetson_temp_val = None
         except (urllib.error.URLError, socket.timeout, json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError) as e:
             sys.stderr.write(f'[burst-daemon] Note: telemetry HTTP poll failed: {e}\n')
 

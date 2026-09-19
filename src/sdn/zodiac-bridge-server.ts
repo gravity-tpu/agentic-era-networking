@@ -23,7 +23,9 @@ import {
   ZodiacFullTelemetrySnapshot,
   ZodiacTimeSeriesPoint,
   ZodiacPortSeriesPoint,
+  JetsonTelemetrySnapshot,
   JetsonTimeSeriesPoint,
+  CoralTelemetrySnapshot,
   CoralTimeSeriesPoint,
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
@@ -805,6 +807,30 @@ export class ZodiacBridgeServer {
 
     // API: GET /api/zodiac (Dean & Ghemawat Invariant: O(1) instant return of cached snapshot)
     if (url.pathname === '/api/zodiac' && req.method === 'GET') {
+      const isSummary = url.searchParams.get('summary') === 'true' || url.searchParams.get('summary') === '1';
+      if (isSummary) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        let jetsonSummary: JetsonTelemetrySnapshot | undefined = undefined;
+        if (this.cachedSnapshot.jetson) {
+          const { timeSeries: _ts, ...restJetson } = this.cachedSnapshot.jetson;
+          jetsonSummary = restJetson;
+        }
+        let coralSummary: CoralTelemetrySnapshot | undefined = undefined;
+        if (this.cachedSnapshot.coral) {
+          const { timeSeries: _ts, ...restCoral } = this.cachedSnapshot.coral;
+          coralSummary = restCoral;
+        }
+        const { timeSeries: _rootTs, ...restSnapshot } = this.cachedSnapshot;
+        const responsePayload: ZodiacFullTelemetrySnapshot = {
+          ...restSnapshot,
+          jetson: jetsonSummary,
+          coral: coralSummary,
+        };
+        res.end(this.serializeSnapshot(responsePayload));
+        return;
+      }
+
       const range = url.searchParams.get('range');
       if (range && isValidRange(range)) {
         const config = RANGE_CONFIGS[range];
