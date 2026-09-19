@@ -1753,7 +1753,7 @@
 
     const steps = 3;
     for (let i = 0; i <= steps; i++) {
-      const y = padTop + (plotH * (gridSteps - i)) / steps;
+      const y = padTop + (plotH * (steps - i)) / steps;
       ctx.beginPath();
       ctx.moveTo(padLeft, y);
       ctx.lineTo(width - padRight, y);
