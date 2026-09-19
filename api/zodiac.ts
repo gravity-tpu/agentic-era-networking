@@ -13,6 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   createDefaultZodiacSnapshot,
   resolveVerifiedProvenance,
+  CLOUD_RELAY_BOUNDS,
   type ZodiacFullTelemetrySnapshot,
 } from '../dist/sdn/zodiac-telemetry.js';
 import { requireOperatorAuth, isLocalDev } from '../dist/auth/google-auth.js';
@@ -24,10 +25,40 @@ import {
   isPersistingTelemetry,
 } from '../dist/db/telemetry-db.js';
 
-const MAX_PAYLOAD_BYTES = 512 * 1024; // 512 KB (ample headroom for 120-point live history ~91KB)
+const MAX_PAYLOAD_BYTES = CLOUD_RELAY_BOUNDS.MAX_PAYLOAD_BYTES;
+const MAX_SERVERLESS_BUFFER_POINTS = CLOUD_RELAY_BOUNDS.MAX_SERVERLESS_POINTS;
 
 // In-memory cache for cloud serverless execution
 let latestSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
+
+/**
+ * Merges incoming time series points into existing in-memory buffer,
+ * preserving continuity across bridge pushes and serverless invocations.
+ * Sanjay Ghemawat Invariant: Strict monotone retention — never destroys
+ * existing points when incoming payload contains identical or older timestamps.
+ */
+function mergeRollingSeries<T extends { timestampMs: number }>(
+  existing: T[] | undefined,
+  incoming: T[] | undefined,
+  limit: number = MAX_SERVERLESS_BUFFER_POINTS
+): T[] | undefined {
+  if (!incoming || !Array.isArray(incoming) || incoming.length === 0) {
+    return existing ? (existing.length > limit ? existing.slice(-limit) : existing) : undefined;
+  }
+  if (!existing || !Array.isArray(existing) || existing.length === 0) {
+    return incoming.length > limit ? incoming.slice(-limit) : incoming;
+  }
+  const lastExistingTs = existing[existing.length - 1]?.timestampMs ?? 0;
+  const newPoints = incoming.filter((p) => p.timestampMs > lastExistingTs);
+  if (newPoints.length > 0) {
+    const combined = existing.concat(newPoints);
+    return combined.length > limit ? combined.slice(-limit) : combined;
+  }
+  // Council Invariant (Sanjay Ghemawat): If no strictly newer points are present
+  // (lastIncomingTs <= lastExistingTs), ALWAYS retain existing buffer to prevent
+  // destructive truncations of accumulated historical telemetry.
+  return existing.length > limit ? existing.slice(-limit) : existing;
+}
 
 function serializeWithBigInt(obj: unknown): string {
   return JSON.stringify(obj, (_, value) =>
@@ -128,20 +159,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
           });
 
-          const jetsonTimeSeries = Array.isArray(parsed.jetson?.timeSeries)
-            ? parsed.jetson.timeSeries.slice(-120)
-            : latestSnapshot.jetson?.timeSeries;
+          const mergedZodiacSeries = mergeRollingSeries(
+            latestSnapshot.timeSeries,
+            parsed.timeSeries,
+            MAX_SERVERLESS_BUFFER_POINTS
+          ) ?? [];
 
-          const coralTimeSeries = Array.isArray(parsed.coral?.timeSeries)
-            ? parsed.coral.timeSeries.slice(-120)
-            : latestSnapshot.coral?.timeSeries;
+          const mergedJetsonSeries = mergeRollingSeries(
+            latestSnapshot.jetson?.timeSeries,
+            parsed.jetson?.timeSeries,
+            MAX_SERVERLESS_BUFFER_POINTS
+          );
+
+          const mergedCoralSeries = mergeRollingSeries(
+            latestSnapshot.coral?.timeSeries,
+            parsed.coral?.timeSeries,
+            MAX_SERVERLESS_BUFFER_POINTS
+          );
 
           latestSnapshot = {
             ...latestSnapshot,
             ...parsed,
-            timeSeries: Array.isArray(parsed.timeSeries)
-              ? parsed.timeSeries.slice(-120)
-              : latestSnapshot.timeSeries,
+            timeSeries: mergedZodiacSeries,
             source: verifiedSource,
             system: {
               ...latestSnapshot.system,
@@ -152,14 +191,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               jetson: {
                 ...latestSnapshot.jetson,
                 ...parsed.jetson,
-                ...(jetsonTimeSeries ? { timeSeries: jetsonTimeSeries } : {}),
+                ...(mergedJetsonSeries ? { timeSeries: mergedJetsonSeries } : {}),
               }
             } : {}),
             ...(parsed.coral ? {
               coral: {
                 ...latestSnapshot.coral,
                 ...parsed.coral,
-                ...(coralTimeSeries ? { timeSeries: coralTimeSeries } : {}),
+                ...(mergedCoralSeries ? { timeSeries: mergedCoralSeries } : {}),
               }
             } : {}),
           };

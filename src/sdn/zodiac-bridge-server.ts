@@ -27,6 +27,7 @@ import {
   CoralTimeSeriesPoint,
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
+  CLOUD_RELAY_BOUNDS,
 } from './zodiac-telemetry.js';
 import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry } from './hardware-probe.js';
 import {
@@ -1296,14 +1297,13 @@ export class ZodiacBridgeServer {
       const endpoint = new URL('/api/zodiac', this.cloudRelayUrl).toString();
 
       // Council Invariant 2 & 6 (Dean Latency & Epistemic Provenance):
-      // Strictly bound ALL time-series to the latest N points before WAN transit.
-      // The top-level timeSeries, plus the nested Jetson and Coral sub-series,
-      // must ALL be trimmed — the spread operator otherwise passes them unbounded,
-      // which is what caused the persistent HTTP 413 Payload Too Large errors.
-      const MAX_CLOUD_RELAY_POINTS = 60;
-      const boundedTimeSeries      = snapshot.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
-      const boundedJetsonSeries    = snapshot.jetson?.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
-      const boundedCoralSeries     = snapshot.coral?.timeSeries?.slice(-MAX_CLOUD_RELAY_POINTS) ?? [];
+      // Strictly bound ALL time-series to CLOUD_RELAY_BOUNDS.MAX_RELAY_POINTS before WAN transit.
+      // Coordinated bounds provide a 12.5-17m continuous live telemetry window with ample headroom
+      // for the 10m Live dashboard view without exceeding serverless payload thresholds.
+      const maxRelayPoints = CLOUD_RELAY_BOUNDS.MAX_RELAY_POINTS;
+      const boundedTimeSeries      = snapshot.timeSeries?.slice(-maxRelayPoints) ?? [];
+      const boundedJetsonSeries    = snapshot.jetson?.timeSeries?.slice(-maxRelayPoints) ?? [];
+      const boundedCoralSeries     = snapshot.coral?.timeSeries?.slice(-maxRelayPoints) ?? [];
 
       const boundedSnapshot: ZodiacFullTelemetrySnapshot = {
         ...snapshot,
@@ -1315,9 +1315,9 @@ export class ZodiacBridgeServer {
 
       const payload = this.serializeSnapshot(boundedSnapshot);
 
-      // Guard: log payload size; skip send if still over limit to avoid infinite 413 storm.
+      // Guard: log payload size; skip send if over limit to avoid infinite 413 storm.
       const payloadBytes = Buffer.byteLength(payload, 'utf8');
-      if (payloadBytes > 250_000) {
+      if (payloadBytes > CLOUD_RELAY_BOUNDS.MAX_SAFE_WAN_PAYLOAD_BYTES) {
         console.warn(`[!] [Cloud Relay] Payload too large (${payloadBytes} bytes) — skipping push.`);
         return;
       }

@@ -202,6 +202,21 @@ export interface ZodiacFullTelemetrySnapshot {
 }
 
 /**
+ * Single source of truth for cloud relay and serverless live buffer bounds
+ * (Council Invariants 2 & 4: Dean Latency Budgets & Coordinated Bounds).
+ */
+export const CLOUD_RELAY_BOUNDS = {
+  /** Maximum points sent over WAN in a single bridge push (300 points = ~12.5–17m live window). */
+  MAX_RELAY_POINTS: 300,
+  /** Maximum points maintained in rolling serverless in-memory buffer (360 points = ~15–20m live window). */
+  MAX_SERVERLESS_POINTS: 360,
+  /** Strict byte threshold for WAN push to prevent 413 Payload Too Large limits. */
+  MAX_PAYLOAD_BYTES: 1024 * 1024, // 1 MB
+  /** Safe WAN payload transmission ceiling (512 KB) providing 2x headroom below serverless edge limit. */
+  MAX_SAFE_WAN_PAYLOAD_BYTES: 512 * 1024,
+} as const;
+
+/**
  * Parses raw HTML exported by the Zodiac FX /d_ports.htm into structured port telemetry.
  */
 export function parseZodiacPortsHtml(html: string): ZodiacPortTelemetry[] {

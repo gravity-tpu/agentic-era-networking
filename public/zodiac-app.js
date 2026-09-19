@@ -1236,17 +1236,39 @@
   }
 
   /**
-   * Deterministic gap detection threshold: intervals larger than this represent missing data
-   * and must be left blank rather than drawn with a connecting line.
+   * Adaptive gap detection threshold (Quoc Le - Invariant 5: Robustness Under Distribution Shift):
+   * Calculates the threshold dynamically from the observed inter-arrival cadence,
+   * bounded strictly by deterministic lower and upper bounds.
    */
-  function getGapThresholdMs(range) {
-    switch (range) {
-      case 'live': return 15 * 1000;           // 15 seconds in live mode
-      case '1h':   return 120 * 1000;          // 2 minutes in 1h mode
-      case '6h':   return 10 * 60 * 1000;      // 10 minutes in 6h mode
-      case '24h':  return 30 * 60 * 1000;      // 30 minutes in 24h mode
-      default:     return 2 * 60 * 60 * 1000;  // 2 hours in multi-day modes
+  function getGapThresholdMs(range, points) {
+    if (range !== 'live') {
+      switch (range) {
+        case '1h':   return 120 * 1000;          // 2 minutes in 1h mode
+        case '6h':   return 10 * 60 * 1000;      // 10 minutes in 6h mode
+        case '24h':  return 30 * 60 * 1000;      // 30 minutes in 24h mode
+        default:     return 2 * 60 * 60 * 1000;  // 2 hours in multi-day modes
+      }
     }
+    // Live mode: adapt to observed telemetry polling cadence (typically 2.5s-3.5s)
+    // with a 4x multiplier, bounded between 15s (floor) and 30s (ceiling).
+    const CADENCE_SAMPLE_SIZE = 10;
+    if (points && points.length >= 2) {
+      let sumDelta = 0;
+      let count = 0;
+      const sampleCount = Math.min(points.length - 1, CADENCE_SAMPLE_SIZE);
+      for (let i = points.length - 1; i > points.length - 1 - sampleCount; i--) {
+        const delta = points[i].timestampMs - points[i - 1].timestampMs;
+        if (delta > 0 && delta < 60_000) {
+          sumDelta += delta;
+          count++;
+        }
+      }
+      if (count > 0) {
+        const avgCadence = sumDelta / count;
+        return Math.min(30_000, Math.max(15_000, Math.round(avgCadence * 4)));
+      }
+    }
+    return 20 * 1000;
   }
 
   /**
@@ -1291,7 +1313,7 @@
    */
   function partitionContiguousSegments(points, range, getValueFn) {
     if (!points || points.length === 0) return [];
-    const gapThreshold = getGapThresholdMs(range);
+    const gapThreshold = getGapThresholdMs(range, points);
     const segments = [];
     let currentSegment = [];
 
@@ -1835,8 +1857,8 @@
       if (windowPoints.length > 0) return windowPoints;
       return coralTimeSeriesBuffer;
     }
-    if (currentSnapshot?.coral?.timeSeries) {
-      return currentSnapshot.coral.timeSeries;
+    if (currentSnapshot?.coral?.timeSeries && currentSnapshot.coral.timeSeries.length > 0) {
+      return currentSnapshot.coral.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
     }
     return [];
   }
