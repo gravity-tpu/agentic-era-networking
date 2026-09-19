@@ -50,6 +50,7 @@ MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobil
 DEFAULT_LOG_PATH = os.environ.get('BURST_LOG_PATH', '/home/zodiac/burst-telemetry.log')
 DEFAULT_SWITCH_IP = os.environ.get('ZODIAC_SWITCH_IP', '127.0.0.1')
 DEFAULT_CTRL_IP = os.environ.get('SDN_CONTROLLER_IP', '0.0.0.0')
+DEFAULT_WORKLOAD_IP = os.environ.get('RPI_WORKLOAD_IP', '127.0.0.1')
 CUSTOM_BURST_CORAL_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH')
 CANDIDATE_BURST_DIRS = ['/run/zodiac', '/tmp']
 BURST_TARGET_PATHS = tuple(
