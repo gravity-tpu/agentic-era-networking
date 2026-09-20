@@ -24,8 +24,25 @@
   let coralTimeSeriesBuffer = [];
   let coralBufferSeq = 0; // Monotonic sequence counter for coral buffer mutations (Council Invariant: Zero cache collision risk)
 
-  // Chart State
-  let currentRange = 'live'; // 'live' | '1h' | '6h' | '24h' | '7d'
+  // Restore persisted time range from URL search param or localStorage (Council Invariant: Deterministic Operator UX)
+  function getInitialTimeRange() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramRange = urlParams.get('range');
+      if (paramRange && ['live', '1h', '6h', '24h', '7d', '30d'].includes(paramRange)) {
+        return paramRange;
+      }
+      const stored = localStorage.getItem('zodiac_selected_range');
+      if (stored && ['live', '1h', '6h', '24h', '7d', '30d'].includes(stored)) {
+        return stored;
+      }
+    } catch (err) {
+      console.warn('[UX] Storage access restricted or unavailable:', err instanceof Error ? err.message : String(err));
+    }
+    return 'live';
+  }
+
+  let currentRange = getInitialTimeRange(); // 'live' | '1h' | '6h' | '24h' | '7d'
   let currentUnit = 'pps';   // 'pps' | 'bps'
   let chartPortFilter = 'all'; // 'all' | '1' | '2' | '3' | '4'
   const MAX_FRONTEND_BUFFER_POINTS = 3600; // Strictly bound client memory to 2.5 hours of continuous data
@@ -3427,6 +3444,18 @@ Please connect the physical switch via USB to execute '${command}' on device har
   const allTimeBtns = document.querySelectorAll('.cf-time-range-group .cf-time-btn');
   function setTimeRange(newRange) {
     currentRange = newRange || 'live';
+    try {
+      localStorage.setItem('zodiac_selected_range', currentRange);
+      const url = new URL(window.location.href);
+      if (currentRange === 'live') {
+        url.searchParams.delete('range');
+      } else {
+        url.searchParams.set('range', currentRange);
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch (err) {
+      console.warn('[UX] History API or storage restricted:', err instanceof Error ? err.message : String(err));
+    }
     allTimeBtns.forEach((b) => {
       b.classList.toggle('active', b.getAttribute('data-range') === currentRange);
     });
@@ -3449,6 +3478,14 @@ Please connect the physical switch via USB to execute '${command}' on device har
       });
     });
   });
+
+  // Apply restored time range across buttons and initiate fetch if non-live
+  setTimeRange(currentRange);
+  if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
+    void fetchHistoricalRange(currentRange).then(() => {
+      updateCharts();
+    });
+  }
 
   // Initialize Port Collapse States
   initPortCollapse();

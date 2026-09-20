@@ -203,11 +203,37 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             } : {}),
           };
 
-          // Asynchronously persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
+          // Persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
+          // In serverless, un-awaited promises are killed on res.end(), so await with a configurable Dean latency deadline.
           if (!isPersistingTelemetry()) {
-            persistTelemetrySnapshot(latestSnapshot).catch((err: unknown) => {
-              console.error('[!] [DB] Telemetry persist to Neon failed:', err instanceof Error ? err.message : String(err));
+            const timeoutMs = Number(process.env['TELEMETRY_PERSIST_TIMEOUT_MS'] ?? 1500);
+            let timerId: NodeJS.Timeout | undefined;
+            const timeoutPromise = new Promise<{ timedOut: true; error?: undefined }>((resolve) => {
+              timerId = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+              timerId.unref?.();
             });
+
+            // Council Invariant: Prevent unhandled promise rejections if timeoutPromise wins the race
+            const persistTask = persistTelemetrySnapshot(latestSnapshot)
+              .then(() => ({ timedOut: false as const, error: undefined }))
+              .catch((err: unknown) => {
+                console.warn('[!] [DB] Telemetry persist to Neon failed:', err instanceof Error ? err.message : String(err));
+                return { timedOut: false as const, error: err };
+              });
+
+            try {
+              const raceResult = await Promise.race([
+                persistTask,
+                timeoutPromise,
+              ]);
+              if (raceResult.timedOut) {
+                console.warn(`[!] [DB] Telemetry persist to Neon timed out after ${timeoutMs}ms`);
+              }
+            } finally {
+              if (timerId !== undefined) {
+                clearTimeout(timerId);
+              }
+            }
           }
 
           res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);

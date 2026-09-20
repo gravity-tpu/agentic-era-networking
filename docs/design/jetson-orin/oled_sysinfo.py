@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 Jetson Orin Nano Super — Roboco Panini Case OLED Telemetry Daemon
-Autonomous 5-Screen Rotational Hardware Monitor (Cycles every 15 seconds)
+Autonomous 6-Screen Rotational Hardware Monitor (Cycles every 15 seconds)
 
 Hardware Substrates:
 - NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture)
 - 0.96" I2C 128x64 Monochrome OLED Display (SSD1306) on I2C Bus 7 (0x3c)
-- Google Coral EdgeTPU (USB Accelerator)
+- Dual Google Coral EdgeTPU (USB Accelerators):
+    1. Tap DPI (Wire Tap Packet Classifier)
+    2. DNS Sentinel (RFC 1035 Query & Anomaly Sentinel)
 - Northbound Networks Zodiac FX OpenFlow Switch
 
 Governing Council Invariants:
@@ -35,7 +37,7 @@ OLED_ADDR = 0x3c
 WIDTH = 128
 HEIGHT = 64
 CYCLE_INTERVAL_SEC = 15
-NUM_PAGES = 5
+NUM_PAGES = 6
 
 def fetch_telemetry_snapshot():
     """
@@ -47,8 +49,8 @@ def fetch_telemetry_snapshot():
         with urllib.request.urlopen(req, timeout=0.4) as res:
             data = json.loads(res.read().decode())
             return parse_bridge_data(data)
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] Bridge unreachable ({e}), falling back to sysfs\n")
     
     return parse_local_sysfs()
 
@@ -57,8 +59,6 @@ def parse_bridge_data(data):
     temps = jetson.get("temperatures", {})
     power = jetson.get("powerMw", {})
     coral = data.get("coral", {})
-    c_series = coral.get("timeSeries", [])
-    latest_coral = c_series[-1] if c_series else {}
     ports = data.get("ports", [])
     
     wifi_ip, eth_ip = get_local_ips()
@@ -84,10 +84,36 @@ def parse_bridge_data(data):
     
     gpu_load, gpu_freq_mhz = get_gpu_sysfs()
     
-    tpu_active = bool(coral.get("status") == "ACTIVE" or latest_coral)
-    tpu_rate = latest_coral.get("inferencesPerSecond", 0)
-    tpu_lat_ms = (latest_coral.get("latencyP50Us", 0) or 0) / 1000.0
-    
+    # Dual Edge TPU Extraction
+    devices = coral.get("devices", [])
+    tap_dev = next((d for d in devices if d.get("assignedRole") == "TAP_PACKET_CLASSIFIER" or "Tap" in d.get("name", "")), None)
+    if not tap_dev and len(devices) > 0:
+        tap_dev = devices[0]
+        
+    dns_dev = next((d for d in devices if d.get("assignedRole") == "DNS_SENTINEL" or "DNS" in d.get("name", "")), None)
+    if not dns_dev and len(devices) > 1:
+        dns_dev = devices[1]
+        
+    # Tap DPI Telemetry
+    if tap_dev:
+        tap_active = bool(tap_dev.get("status") == "INFERENCE_ACTIVE" or (int(tap_dev.get("inferencesPerSecond", 0) or 0) > 0))
+        tap_status = "ACTIVE" if tap_active else ("STANDBY" if tap_dev.get("status") == "STANDBY" else "OFFLINE")
+        tap_rate = int(tap_dev.get("inferencesPerSecond", 0) or 0)
+        tap_lat_ms = int(tap_dev.get("latencyP50Ns", 0) or 0) // 1_000_000
+        tap_total = int(tap_dev.get("totalInferences", 0) or 0)
+    else:
+        tap_active, tap_status, tap_rate, tap_lat_ms, tap_total = False, "OFFLINE", 0, 0, 0
+
+    # DNS Sentinel Telemetry
+    if dns_dev:
+        dns_active = bool(dns_dev.get("status") == "INFERENCE_ACTIVE" or (int(dns_dev.get("inferencesPerSecond", 0) or 0) > 0))
+        dns_status = "ACTIVE" if dns_active else ("STANDBY" if dns_dev.get("status") == "STANDBY" else "OFFLINE")
+        dns_rate = int(dns_dev.get("inferencesPerSecond", 0) or 0)
+        dns_lat_ms = int(dns_dev.get("latencyP50Ns", 0) or 0) // 1_000_000
+        dns_total = int(dns_dev.get("totalInferences", 0) or 0)
+    else:
+        dns_active, dns_status, dns_rate, dns_lat_ms, dns_total = False, "OFFLINE", 0, 0, 0
+
     up_ports = [f"P{p.get('port')}" for p in ports if p.get("status") == "UP"]
     zodiac_str = " ".join(up_ports) + " UP" if up_ports else "NO PORTS UP"
     
@@ -111,9 +137,16 @@ def parse_bridge_data(data):
         "gpu_rail_w": gpu_rail_w,
         "gpu_load": gpu_load,
         "gpu_freq_mhz": gpu_freq_mhz,
-        "tpu_active": tpu_active,
-        "tpu_rate": tpu_rate,
-        "tpu_lat_ms": tpu_lat_ms,
+        "tap_active": tap_active,
+        "tap_status": tap_status,
+        "tap_rate": tap_rate,
+        "tap_lat_ms": tap_lat_ms,
+        "tap_total": tap_total,
+        "dns_active": dns_active,
+        "dns_status": dns_status,
+        "dns_rate": dns_rate,
+        "dns_lat_ms": dns_lat_ms,
+        "dns_total": dns_total,
         "zodiac_str": zodiac_str
     }
 
@@ -124,13 +157,13 @@ def get_gpu_sysfs():
         with open("/sys/devices/platform/bus@0/17000000.gpu/load", "r") as f:
             val = int(f.read().strip())
             gpu_load = val / 10.0 if val > 100 else float(val)
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] GPU load read failed: {e}\n")
     try:
         with open("/sys/class/devfreq/17000000.gpu/cur_freq", "r") as f:
             gpu_freq_mhz = int(f.read().strip()) // 1000000
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] GPU freq read failed: {e}\n")
     return gpu_load, gpu_freq_mhz
 
 def get_local_ips():
@@ -143,8 +176,8 @@ def get_local_ips():
                         wifi_ip = addr.address
                     elif iface.startswith(("eth", "en")):
                         eth_ip = addr.address
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] Network interface read failed: {e}\n")
     return wifi_ip, eth_ip
 
 def get_uptime_fallback():
@@ -155,8 +188,26 @@ def get_uptime_fallback():
             m = (total_sec % 3600) // 60
             s = total_sec % 60
             return f"{h:02d}:{m:02d}:{s:02d}"
-    except Exception:
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] Uptime fallback read failed: {e}\n")
         return "00:00:00"
+
+def get_sysfs_coral_count():
+    usb_base = "/sys/bus/usb/devices"
+    corals = []
+    try:
+        for d in sorted(os.listdir(usb_base)):
+            if ":" in d:
+                continue
+            vp = os.path.join(usb_base, d, "idVendor")
+            if os.path.exists(vp):
+                with open(vp, "r") as f:
+                    vid = f.read().strip().lower()
+                    if vid in ("1a6e", "18d1"):
+                        corals.append(d)
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] Coral USB probe failed: {e}\n")
+    return corals
 
 def parse_local_sysfs():
     wifi_ip, eth_ip = get_local_ips()
@@ -190,20 +241,47 @@ def parse_local_sysfs():
     try:
         with open("/sys/class/hwmon/hwmon1/in2_input", "r") as f1, open("/sys/class/hwmon/hwmon1/curr2_input", "r") as f2:
             gpu_rail_w = (int(f1.read().strip()) * int(f2.read().strip())) / 1000000.0
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[oled-daemon] GPU rail power read failed: {e}\n")
 
     gpu_load, gpu_freq_mhz = get_gpu_sysfs()
     
-    tpu_active, tpu_rate, tpu_lat_ms = False, 0, 0.0
-    try:
-        with open("/tmp/coral-telemetry.json", "r") as f:
-            c = json.load(f)
-            tpu_active = c.get("status") == "ACTIVE"
-            tpu_rate = c.get("inferencesPerSecond", 0)
-            tpu_lat_ms = (c.get("latencyP50Ns", 0) or 0) / 1000000.0
-    except Exception:
-        pass
+    # Check physical hardware presence via sysfs
+    corals = get_sysfs_coral_count()
+    has_tap_device = len(corals) >= 1
+    has_dns_device = len(corals) >= 2
+
+    # Tap DPI telemetry fallback
+    tap_active, tap_status, tap_rate, tap_lat_ms, tap_total = False, ("STANDBY" if has_tap_device else "OFFLINE"), 0, 0, 0
+    for cand in ("/run/zodiac/coral-telemetry.json", "/tmp/coral-telemetry.json"):
+        if os.path.exists(cand):
+            try:
+                with open(cand, "r") as f:
+                    c = json.load(f)
+                    tap_active = c.get("status") == "ACTIVE"
+                    tap_status = "ACTIVE" if tap_active else ("STANDBY" if has_tap_device else "OFFLINE")
+                    tap_rate = int(c.get("inferencesPerSecond", 0) or 0)
+                    tap_lat_ms = int(c.get("latencyP50Ns", 0) or 0) // 1_000_000
+                    tap_total = int(c.get("totalInferences", 0) or 0)
+                    break
+            except Exception as e:
+                sys.stderr.write(f"[oled-daemon] Failed to read tap telemetry from {cand}: {e}\n")
+
+    # DNS Sentinel telemetry fallback
+    dns_active, dns_status, dns_rate, dns_lat_ms, dns_total = False, ("STANDBY" if has_dns_device else "OFFLINE"), 0, 0, 0
+    for cand in ("/run/zodiac/coral-dns-telemetry.json", "/run/zodiac/coral-burst-telemetry.json", "/tmp/coral-dns-telemetry.json", "/tmp/coral-burst-telemetry.json"):
+        if os.path.exists(cand):
+            try:
+                with open(cand, "r") as f:
+                    c = json.load(f)
+                    dns_active = c.get("status") == "ACTIVE"
+                    dns_status = "ACTIVE" if dns_active else ("STANDBY" if has_dns_device else "OFFLINE")
+                    dns_rate = int(c.get("inferencesPerSecond", 0) or 0)
+                    dns_lat_ms = int(c.get("latencyP50Ns", 0) or 0) // 1_000_000
+                    dns_total = int(c.get("totalInferences", 0) or 0)
+                    break
+            except Exception as e:
+                sys.stderr.write(f"[oled-daemon] Failed to read dns telemetry from {cand}: {e}\n")
         
     return {
         "wifi_ip": wifi_ip,
@@ -225,10 +303,17 @@ def parse_local_sysfs():
         "gpu_rail_w": gpu_rail_w,
         "gpu_load": gpu_load,
         "gpu_freq_mhz": gpu_freq_mhz,
-        "tpu_active": tpu_active,
-        "tpu_rate": tpu_rate,
-        "tpu_lat_ms": tpu_lat_ms,
-        "zodiac_str": "Bridge Offline"
+        "tap_active": tap_active,
+        "tap_status": tap_status,
+        "tap_rate": tap_rate,
+        "tap_lat_ms": tap_lat_ms,
+        "tap_total": tap_total,
+        "dns_active": dns_active,
+        "dns_status": dns_status,
+        "dns_rate": dns_rate,
+        "dns_lat_ms": dns_lat_ms,
+        "dns_total": dns_total,
+        "zodiac_str": "Offline"
     }
 
 def main():
@@ -253,7 +338,7 @@ def main():
     page = 0
     last_cycle_time = time.time()
     
-    print("5-screen OLED telemetry daemon active (cycling every 15s)...")
+    print("6-screen OLED telemetry daemon active (cycling every 15s)...")
     
     while True:
         try:
@@ -273,7 +358,7 @@ def main():
             if page == 0:
                 # Screen 1: Network & Host
                 draw.text((2, 0), "NET & HOST", font=font, fill=0)
-                draw.text((104, 0), "1/5", font=font, fill=0)
+                draw.text((104, 0), "1/6", font=font, fill=0)
                 draw.text((1, 15), f"WiFi: {metrics['wifi_ip']}", font=font, fill=1)
                 draw.text((1, 31), f"Eth:  {metrics['eth_ip']}", font=font, fill=1)
                 draw.text((1, 47), f"Up:{metrics['uptime']} L:{metrics['load']:.2f}", font=font, fill=1)
@@ -281,7 +366,7 @@ def main():
             elif page == 1:
                 # Screen 2: Compute & Memory
                 draw.text((2, 0), "CPU & RAM", font=font, fill=0)
-                draw.text((104, 0), "2/5", font=font, fill=0)
+                draw.text((104, 0), "2/6", font=font, fill=0)
                 draw.text((1, 15), f"CPU:  {metrics['cpu_pct']:04.1f}% (6-Core)", font=font, fill=1)
                 draw.text((1, 31), f"RAM:  {metrics['ram_used_g']:.1f}G/{metrics['ram_tot_g']:.1f}G ({metrics['ram_pct']}%)", font=font, fill=1)
                 draw.text((1, 47), f"NVMe: {metrics['nvme_used_g']:.0f}G/{metrics['nvme_tot_g']:.0f}G ({metrics['nvme_pct']}%)", font=font, fill=1)
@@ -289,7 +374,7 @@ def main():
             elif page == 2:
                 # Screen 3: Dedicated GPU Telemetry
                 draw.text((2, 0), "GPU AMPERE", font=font, fill=0)
-                draw.text((104, 0), "3/5", font=font, fill=0)
+                draw.text((104, 0), "3/6", font=font, fill=0)
                 draw.text((1, 15), "Ampere: 1024-CUDA", font=font, fill=1)
                 draw.text((1, 31), f"Load: {metrics['gpu_load']:.1f}% @{metrics['gpu_freq_mhz']}MHz", font=font, fill=1)
                 pwr_gpu = f"{metrics['gpu_rail_w']:.2f}W" if metrics['gpu_rail_w'] > 0 else "Active"
@@ -298,20 +383,27 @@ def main():
             elif page == 3:
                 # Screen 4: Thermals & Power
                 draw.text((2, 0), "THERM & PWR", font=font, fill=0)
-                draw.text((104, 0), "4/5", font=font, fill=0)
+                draw.text((104, 0), "4/6", font=font, fill=0)
                 draw.text((1, 15), f"CPU: {metrics['cpu_c']:.1f}°C GPU:{metrics['gpu_c']:.0f}°", font=font, fill=1)
                 draw.text((1, 31), f"SOC: {metrics['soc_c']:.1f}°C TJ :{metrics['tj_c']:.0f}°", font=font, fill=1)
                 pwr_str = f"Pwr:  {metrics['power_w']:.2f}W (In)" if metrics["power_w"] > 0 else "Pwr:  Active (DC)"
                 draw.text((1, 47), pwr_str, font=font, fill=1)
 
             elif page == 4:
-                # Screen 5: Coral TPU & Zodiac SDN
-                draw.text((2, 0), "TPU & SDN", font=font, fill=0)
-                draw.text((104, 0), "5/5", font=font, fill=0)
-                tpu_st = "ACTIVE (USB)" if metrics["tpu_active"] else "STANDBY"
-                draw.text((1, 15), f"Coral: {tpu_st}", font=font, fill=1)
-                draw.text((1, 31), f"Rate:  {metrics['tpu_rate']} inf/sec", font=font, fill=1)
-                draw.text((1, 47), f"Lat:{metrics['tpu_lat_ms']:.1f}ms  {metrics['zodiac_str']}", font=font, fill=1)
+                # Screen 5: DNS Sentinel
+                draw.text((2, 0), "DNS SENTINEL", font=font, fill=0)
+                draw.text((104, 0), "5/6", font=font, fill=0)
+                draw.text((1, 15), f"DNS Sent: {metrics['dns_status']}", font=font, fill=1)
+                draw.text((1, 31), f"Rate:     {metrics['dns_rate']} inf/sec", font=font, fill=1)
+                draw.text((1, 47), f"Lat:{metrics['dns_lat_ms']:.1f}ms  Tot:{metrics['dns_total']}", font=font, fill=1)
+
+            elif page == 5:
+                # Screen 6: Tap DPI & SDN
+                draw.text((2, 0), "TAP DPI & SDN", font=font, fill=0)
+                draw.text((104, 0), "6/6", font=font, fill=0)
+                draw.text((1, 15), f"Tap DPI:  {metrics['tap_status']}", font=font, fill=1)
+                draw.text((1, 31), f"Rate:     {metrics['tap_rate']} inf/sec", font=font, fill=1)
+                draw.text((1, 47), f"Lat:{metrics['tap_lat_ms']:.1f}ms  {metrics['zodiac_str']}", font=font, fill=1)
 
             display.image(image)
             display.show()

@@ -26,7 +26,7 @@ neonConfig.webSocketConstructor = ws;
 let globalPrisma: PrismaClient | null = null;
 
 export function getPrismaClient(): PrismaClient | null {
-  const dbUrl = process.env['DATABASE_URL'];
+  const dbUrl = process.env['DATABASE_URL'] || process.env['agentic_POSTGRES_PRISMA_URL'] || process.env['agentic_DATABASE_URL'] || process.env['POSTGRES_PRISMA_URL'];
   if (!dbUrl) {
     return null;
   }
@@ -130,6 +130,10 @@ function serializeCoralPointExplicit(point: CoralTimeSeriesPoint): Record<string
     latencyP50Us: point.latencyP50Us.toString(),
     latencyP99Us: point.latencyP99Us.toString(),
     usbThroughputKbps: point.usbThroughputKbps.toString(),
+    coral1Ips: (point.coral1Ips ?? 0n).toString(),
+    coral2Ips: (point.coral2Ips ?? 0n).toString(),
+    coral1LatencyP50Us: (point.coral1LatencyP50Us ?? 0n).toString(),
+    coral2LatencyP50Us: (point.coral2LatencyP50Us ?? 0n).toString(),
   };
 }
 
@@ -179,6 +183,10 @@ function serializeCoralPointExplicit(point: CoralTimeSeriesPoint): Record<string
           usbThroughputKbps: infPerSec > 0n
             ? ((infPerSec * 300n * 8n) / 1000n).toString()
             : '0',
+          coral1Ips: '0',
+          coral2Ips: '0',
+          coral1LatencyP50Us: '0',
+          coral2LatencyP50Us: '0',
         };
       }
     }
@@ -571,11 +579,30 @@ export async function getHistoricalMultiDeviceTelemetry(
       coralJson: unknown;
     }>>(
       Prisma.sql`
-        WITH BucketAgg AS (
+        WITH RawWindow AS (
           SELECT
             (FLOOR("timestampMs" / ${bucketMs}) * ${bucketMs})::bigint AS "bucketTime",
+            "timestampMs",
+            "cpuTemperatureC",
+            "latencyNs",
+            "totalRxBytes",
+            "totalTxBytes",
+            "totalRxPackets",
+            "totalTxPackets",
+            "rxRatePps",
+            "txRatePps",
+            "rxRateBps",
+            "txRateBps",
+            "jetsonJson",
+            "coralJson"
+          FROM "ZodiacTelemetryPoint"
+          WHERE "timestampMs" >= ${cutoffMs}
+        ),
+        BucketAgg AS (
+          SELECT
+            "bucketTime",
             ROUND(AVG("cpuTemperatureC"))::int AS "cpuTemperatureC",
-            CAST(COALESCE(AVG("latencyNs"), 0) AS BIGINT) AS "latencyNs",
+            CAST(COALESCE(percentile_disc(0.5) WITHIN GROUP (ORDER BY "latencyNs"), 0) AS BIGINT) AS "latencyNs",
             MAX("totalRxBytes") AS "totalRxBytes",
             MAX("totalTxBytes") AS "totalTxBytes",
             MAX("totalRxPackets") AS "totalRxPackets",
@@ -584,18 +611,16 @@ export async function getHistoricalMultiDeviceTelemetry(
             CAST(COALESCE(AVG("txRatePps"), 0) AS BIGINT) AS "txRatePps",
             CAST(COALESCE(AVG("rxRateBps"), 0) AS BIGINT) AS "rxRateBps",
             CAST(COALESCE(AVG("txRateBps"), 0) AS BIGINT) AS "txRateBps"
-          FROM "ZodiacTelemetryPoint"
-          WHERE "timestampMs" >= ${cutoffMs}
-          GROUP BY 1
+          FROM RawWindow
+          GROUP BY "bucketTime"
         ),
         LatestJsonPerBucket AS (
-          SELECT DISTINCT ON ((FLOOR("timestampMs" / ${bucketMs}) * ${bucketMs})::bigint)
-            (FLOOR("timestampMs" / ${bucketMs}) * ${bucketMs})::bigint AS "bucketTime",
+          SELECT DISTINCT ON ("bucketTime")
+            "bucketTime",
             "jetsonJson",
             "coralJson"
-          FROM "ZodiacTelemetryPoint"
-          WHERE "timestampMs" >= ${cutoffMs}
-          ORDER BY 1, "timestampMs" DESC
+          FROM RawWindow
+          ORDER BY "bucketTime", "timestampMs" DESC
         )
         SELECT
           b."bucketTime",
