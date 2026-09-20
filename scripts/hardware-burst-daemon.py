@@ -113,6 +113,7 @@ counters = {
     'coral_total_inferences': 0,
     'coral_tpu0_inferences': 0,
     'coral_tpu1_inferences': 0,
+    'telemetry_drops': 0,
     'zodiac_p3_frames': 0,
     'zodiac_p3_bytes': 0,
     'zodiac_p4_packets': 0,
@@ -132,7 +133,8 @@ def _enqueue_coral_write(filename: str, data: dict) -> None:
     try:
         _coral_write_q.put_nowait((filename, data))
     except queue.Full:
-        pass  # newest snapshot will arrive next second; drop rather than block the inference loop
+        with stats_lock:
+            counters['telemetry_drops'] += 1
 
 
 def _coral_telemetry_writer() -> None:
@@ -145,7 +147,15 @@ def _coral_telemetry_writer() -> None:
         _coral_write_q.task_done()
 
 
-threading.Thread(target=_coral_telemetry_writer, name='coral-telemetry-writer', daemon=True).start()
+_coral_writer_thread: threading.Thread | None = None
+
+
+def _start_coral_telemetry_writer() -> threading.Thread:
+    global _coral_writer_thread
+    t = threading.Thread(target=_coral_telemetry_writer, name='coral-telemetry-writer', daemon=True)
+    t.start()
+    _coral_writer_thread = t
+    return t
 
 
 def log_message(msg: str, log_file: str):
@@ -337,7 +347,7 @@ def coral_tpu_worker(
                 w_sorted = sorted(w_latencies)
                 n = len(w_sorted)
                 p50_ns = w_sorted[n // 2] if n > 0 else 0
-                p99_ns = w_sorted[min(int(n * 0.99), n - 1)] if n > 0 else 0
+                p99_ns = w_sorted[min((n * 99) // 100, n - 1)] if n > 0 else 0
                 inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
 
                 _enqueue_coral_write(telemetry_file, {
@@ -895,7 +905,8 @@ def main():
     tpu1_active = threading.Event()
     tpu2_active = threading.Event()
 
-    # Spawn asynchronous telemetry poller (Jeff Dean latency invariant)
+    # Start the coral telemetry file writer and async telemetry poller
+    _start_coral_telemetry_writer()
     t_poller = threading.Thread(target=telemetry_poller_worker, name='telemetry-poller', daemon=True)
     threads.append(t_poller)
     t_poller.start()
@@ -1140,6 +1151,11 @@ def main():
             t.join(timeout=2.0)
 
         cleanup_burst_coral_telemetry()
+
+        # Drain and shut down the coral telemetry writer thread (poison pill)
+        _coral_write_q.put(None)
+        if _coral_writer_thread is not None:
+            _coral_writer_thread.join(timeout=2.0)
 
         total_elapsed_sec = (time.monotonic_ns() - start_ns) // 1_000_000_000
         tot_bytes = counters['zodiac_p3_bytes'] + counters['zodiac_p4_bytes'] + counters['rpi_bytes'] + counters['jetson_gpu_bytes']
