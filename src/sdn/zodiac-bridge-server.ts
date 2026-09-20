@@ -13,6 +13,7 @@
 
 import http from 'node:http';
 import fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile, spawn } from 'node:child_process';
@@ -389,7 +390,7 @@ export class ZodiacBridgeServer {
   private lastStateFlushTimeMs = 0;
   private lastLocalHistoryFlushMs = 0;
   private consecutiveRelayFailures = 0;
-  private lastRelayAttemptMs = 0;
+  private lastRelayAttemptPerfMs = 0; // performance.now() — monotonic, NTP-immune
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
   private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
   private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
@@ -1550,19 +1551,24 @@ export class ZodiacBridgeServer {
     });
   }
 
-  /**
-   * Returns true when enough time has elapsed since the last relay attempt given the current
-   * consecutive-failure count. Backoff doubles per failure up to RELAY_MAX_BACKOFF_MS:
-   *   0 failures → immediate | 1 → 5 s | 2 → 10 s | 3 → 20 s | 4 → 40 s | 5+ → 60 s
-   */
-  private isRelayBackoffElapsed(nowMs: number): boolean {
-    if (this.consecutiveRelayFailures === 0) return true;
+  /** Single source of truth for the current exponential backoff duration. */
+  private get currentRelayBackoffMs(): number {
     const exp = Math.min(this.consecutiveRelayFailures - 1, 10);
-    const backoffMs = Math.min(
+    return Math.min(
       ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << exp),
       ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
     );
-    return nowMs - this.lastRelayAttemptMs >= backoffMs;
+  }
+
+  /**
+   * Returns true when enough time has elapsed since the last relay attempt.
+   * Uses performance.now() (monotonic) so NTP clock adjustments cannot stall the relay.
+   * Backoff schedule: 0 failures → immediate | 1 → 5 s | 2 → 10 s | 3 → 20 s | 4 → 40 s | 5+ → 60 s
+   */
+  private isRelayBackoffElapsed(nowMs: number): boolean {
+    void nowMs; // wall-clock nowMs not used here — kept in signature for API consistency
+    if (this.consecutiveRelayFailures === 0) return true;
+    return performance.now() - this.lastRelayAttemptPerfMs >= this.currentRelayBackoffMs;
   }
 
   /**
@@ -1575,7 +1581,7 @@ export class ZodiacBridgeServer {
   private async relaySnapshotToCloud(snapshot: ZodiacFullTelemetrySnapshot): Promise<void> {
     if (!this.cloudRelayUrl || this.isRelaying) return;
     this.isRelaying = true;
-    this.lastRelayAttemptMs = Date.now();
+    this.lastRelayAttemptPerfMs = performance.now(); // monotonic stamp for backoff gating
     try {
       const endpoint = new URL('/api/zodiac', this.cloudRelayUrl).toString();
 
@@ -1620,13 +1626,9 @@ export class ZodiacBridgeServer {
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
+        const text = await res.text().catch((e: unknown) => `[unreadable: ${e instanceof Error ? e.message : String(e)}]`);
         this.consecutiveRelayFailures++;
-        const backoffMs = Math.min(
-          ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << Math.min(this.consecutiveRelayFailures - 1, 10)),
-          ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
-        );
-        console.warn(`[!] [Cloud Relay] HTTP ${res.status} (failure #${this.consecutiveRelayFailures}, next retry in ${backoffMs / 1000}s): ${text}`);
+        console.warn(`[!] [Cloud Relay] HTTP ${res.status} (failure #${this.consecutiveRelayFailures}, next retry in ${this.currentRelayBackoffMs / 1000}s): ${text}`);
       } else {
         if (this.consecutiveRelayFailures > 0) {
           console.log(`[+] [Cloud Relay] Relay recovered after ${this.consecutiveRelayFailures} consecutive failure(s).`);
@@ -1635,11 +1637,7 @@ export class ZodiacBridgeServer {
       }
     } catch (err: unknown) {
       this.consecutiveRelayFailures++;
-      const backoffMs = Math.min(
-        ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << Math.min(this.consecutiveRelayFailures - 1, 10)),
-        ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
-      );
-      console.warn(`[!] [Cloud Relay] Network error (failure #${this.consecutiveRelayFailures}, next retry in ${backoffMs / 1000}s):`, err instanceof Error ? err.message : String(err));
+      console.warn(`[!] [Cloud Relay] Network error (failure #${this.consecutiveRelayFailures}, next retry in ${this.currentRelayBackoffMs / 1000}s):`, err instanceof Error ? err.message : String(err));
     } finally {
       this.isRelaying = false;
     }
