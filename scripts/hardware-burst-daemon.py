@@ -141,7 +141,8 @@ def _coral_telemetry_writer() -> None:
     while True:
         item = _coral_write_q.get()
         if item is None:
-            return
+            _coral_write_q.task_done()
+            break
         filename, data = item
         atomic_write_coral_file(filename, data)
         _coral_write_q.task_done()
