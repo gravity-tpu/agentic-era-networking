@@ -109,7 +109,7 @@ stop_event = threading.Event()
 stats_lock = threading.Lock()
 
 counters = {
-    'coral_burst_inferences': 0,
+    'coral_total_inferences': 0,
     'coral_tpu0_inferences': 0,
     'coral_tpu1_inferences': 0,
     'zodiac_p3_frames': 0,
@@ -225,9 +225,6 @@ def atomic_write_coral_file(filename: str, data: dict):
         sys.stderr.write(f'[burst-coral] Failed writing telemetry {filename}: {last_err}\n')
 
 
-def atomic_write_burst_coral_json(data: dict):
-    atomic_write_coral_file('coral-burst-telemetry.json', data)
-
 
 def cleanup_burst_coral_telemetry(filename: str = 'coral-burst-telemetry.json'):
     for d in CANDIDATE_BURST_DIRS:
@@ -305,8 +302,8 @@ def coral_tpu_worker(
 
             total_worker_inf += batch_size
             with stats_lock:
-                counters['coral_burst_inferences'] += batch_size
-                if counter_key != 'coral_burst_inferences' and counter_key in counters:
+                counters['coral_total_inferences'] += batch_size
+                if counter_key != 'coral_total_inferences' and counter_key in counters:
                     counters[counter_key] += batch_size
 
             now_ns = time.monotonic_ns()
@@ -910,7 +907,11 @@ def main():
             t = threading.Thread(
                 target=coral_tpu_worker,
                 args=(dev, max_bytes, tpu2_active),
-                kwargs={'model_role': 'DNS Sentinel', 'counter_key': 'coral_tpu1_inferences'},
+                kwargs={
+                    'telemetry_file': 'coral-tpu1-burst-telemetry.json',
+                    'model_role': 'DNS Sentinel',
+                    'counter_key': 'coral_tpu1_inferences',
+                },
                 name=f'coral-burst-{dev}',
                 daemon=True,
             )
@@ -1049,7 +1050,7 @@ def main():
                 with stats_lock:
                     curr = counters.copy()
 
-                d_coral = curr['coral_burst_inferences'] - prev_counters['coral_burst_inferences']
+                d_coral = curr['coral_total_inferences'] - prev_counters['coral_total_inferences']
                 d_p3_pkts = curr['zodiac_p3_frames'] - prev_counters['zodiac_p3_frames']
                 d_p3_bytes = curr['zodiac_p3_bytes'] - prev_counters['zodiac_p3_bytes']
                 d_p4_pkts = curr['zodiac_p4_packets'] - prev_counters['zodiac_p4_packets']
@@ -1121,7 +1122,7 @@ def main():
         log_message('\n======================================================================', log_file)
         log_message(f'✅ BURST COMPLETED: Total Run Time {total_elapsed_sec}s ({total_elapsed_sec//60}m{total_elapsed_sec%60:02d}s)', log_file)
         if is_target_enabled('coral', enabled_targets):
-            log_message(f'   Coral Burst Inferences  : {counters["coral_burst_inferences"]:,}', log_file)
+            log_message(f'   Coral Total Inferences  : {counters["coral_total_inferences"]:,}', log_file)
             if counters['coral_tpu1_inferences'] > 0:
                 log_message(f'     └─ Coral TPU #2 (DNS Sentinel): {counters["coral_tpu1_inferences"]:,}', log_file)
         if is_target_enabled('zodiac-p3', enabled_targets):
