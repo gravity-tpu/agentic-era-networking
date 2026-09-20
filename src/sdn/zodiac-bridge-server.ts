@@ -1533,12 +1533,15 @@ export class ZodiacBridgeServer {
     const ji = findCutoffIndex(this.jetsonTimeSeries, cutoff + 1);
     const ci = findCutoffIndex(this.coralTimeSeries,  cutoff + 1);
 
-    // Fire-and-forget async write — never blocks the SDN event loop (Jeff Dean latency invariant)
-    void appendLocalHistoryPoints(
+    // Fire-and-forget async write — never blocks the SDN event loop (Jeff Dean latency invariant).
+    // Explicit .catch() ensures unhandled rejections don't propagate to the process unhandledRejection handler.
+    appendLocalHistoryPoints(
       this.timeSeries.slice(zi),
       this.jetsonTimeSeries.slice(ji),
       this.coralTimeSeries.slice(ci),
-    );
+    ).catch((err: unknown) => {
+      console.warn('[!] [Bridge] Local history append failed:', err instanceof Error ? err.message : String(err));
+    });
   }
 
   /**

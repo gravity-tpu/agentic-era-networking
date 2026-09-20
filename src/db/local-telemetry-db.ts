@@ -65,7 +65,11 @@ function resolveHistoryDir(): string {
     }
   }
   console.warn('[!] [Local Telemetry DB] No writable history directory found; falling back to /tmp/zodiac-history.');
-  try { fs.mkdirSync('/tmp/zodiac-history', { recursive: true }); } catch { /* logged above */ }
+  try {
+    fs.mkdirSync('/tmp/zodiac-history', { recursive: true });
+  } catch (mkdirErr: unknown) {
+    console.warn('[!] [Local Telemetry DB] Failed to create /tmp/zodiac-history:', mkdirErr instanceof Error ? mkdirErr.message : String(mkdirErr));
+  }
   return '/tmp/zodiac-history';
 }
 
@@ -228,8 +232,10 @@ async function readZodiacFile(filePath: string, cutoffMs: number): Promise<Zodia
   let raw: string;
   try {
     raw = await fsp.readFile(filePath, 'utf-8');
-  } catch {
-    return []; // file doesn't exist yet (first run) or is unreadable — normal, not an error
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // normal on first run
+    console.warn(`[!] [Local Telemetry DB] I/O error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
+    return [];
   }
   const result: ZodiacTimeSeriesPoint[] = [];
   for (const line of raw.split('\n')) {
@@ -249,7 +255,9 @@ async function readJetsonFile(filePath: string, cutoffMs: number): Promise<Jetso
   let raw: string;
   try {
     raw = await fsp.readFile(filePath, 'utf-8');
-  } catch {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    console.warn(`[!] [Local Telemetry DB] I/O error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
     return [];
   }
   const result: JetsonTimeSeriesPoint[] = [];
@@ -270,7 +278,9 @@ async function readCoralFile(filePath: string, cutoffMs: number): Promise<CoralT
   let raw: string;
   try {
     raw = await fsp.readFile(filePath, 'utf-8');
-  } catch {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    console.warn(`[!] [Local Telemetry DB] I/O error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
     return [];
   }
   const result: CoralTimeSeriesPoint[] = [];
@@ -324,10 +334,9 @@ export async function queryLocalHistory(range: HistoricalRange): Promise<LocalHi
     Promise.all(suffixes.map(s => readCoralFile(coralFile(s), cutoffMs))),
   ]);
 
-  // Flatten using concat to avoid spread call-stack limits on large arrays
-  const zodiacPoints = ([] as ZodiacTimeSeriesPoint[]).concat(...zodiacArrays);
-  const jetsonPoints = ([] as JetsonTimeSeriesPoint[]).concat(...jetsonArrays);
-  const coralPoints  = ([] as CoralTimeSeriesPoint[]).concat(...coralArrays);
+  const zodiacPoints = zodiacArrays.flat();
+  const jetsonPoints = jetsonArrays.flat();
+  const coralPoints  = coralArrays.flat();
 
   // Files are scanned newest-first (i=0 is today); sort ascending before downsampling
   zodiacPoints.sort((a, b) => a.timestampMs - b.timestampMs);
