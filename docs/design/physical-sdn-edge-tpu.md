@@ -194,48 +194,111 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
 
 ## 6. Telemetry Ingestion, Multi-Tier Storage & Query Routing Architecture
 
-The system employs a deterministic two-tier storage and query routing architecture governed by the **Jeff Dean Latency Invariant** (<10ms local RAM, <20ms cloud edge RAM, <150ms WAN DB query) and **Sanjay Ghemawat's Zero-Bloat Invariant** (preventing connection exhaustion and unbounded database growth).
+The system employs a deterministic **three-tier storage and query routing architecture** governed by the **Jeff Dean Latency Invariant** (<10ms local RAM, <150ms local NVMe, <150ms WAN DB query) and **Sanjay Ghemawat's Zero-Bloat Invariant** (preventing connection exhaustion and unbounded database growth).
+
+### Tier Overview
+
+| Tier | Storage Medium | Location | Capacity | Surviving Restart? | Primary Consumer |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tier 1 — Process RAM** | `ZodiacBridgeServer` in-memory ring buffer | Jetson Orin RAM | ~2.5 h (3600 × 2.5 s points) | No (checkpoint to disk, loaded on start) | Live UI polling (≤10 min range) |
+| **Tier 2 — Local NVMe JSONL** | Append-log per calendar day, per device type | `/var/lib/zodiac/history/` | 30 days (~430 KB/day/device type) | **Yes** — survives reboots and crashes | Localhost historical queries (1h–30d) |
+| **Tier 3 — Neon Postgres** | `ZodiacTelemetryPoint` table, indexed on `timestampMs` | Neon serverless Postgres (cloud) | 30 days (pruned daily at 03:00 UTC) | **Yes** — cloud-durable | Vercel historical queries (1h–30d) |
 
 ### Architectural Overview & Data Paths
 
 ```
-                                  [ ARCHITECTURE OVERVIEW ]
-
-   +-----------------------------------------------------------------------------------------+
-   | 1. PHYSICAL APPLIANCE (LOCAL LAN)                                                       |
-   |    Browser @ http://<jetson-mgmt-ip>:3003 (or http://localhost:3003)                    |
-   |                                                                                         |
-   |    Browser ────(every 2s GET /api/zodiac)────> Jetson Orin RAM Buffer (Zero DB)         |
-   +-----------------------------------------------------------------------------------------+
-
-   +-----------------------------------------------------------------------------------------+
-   | 2. CLOUD PRODUCTION (VERCEL)                                                            |
-   |    Browser @ https://agentic-era-networking.vercel.app                                  |
-   |                                                                                         |
-   |    Jetson Orin ──(every 10s POST)──> Vercel API ──(persist)──> Neon Postgres Table     |
-   |                                            │                                            |
-   |    Browser ──(Live Poll: GET /api/zodiac)──┘ [Served from Vercel RAM Cache: <20ms]      |
-   |                                                                                         |
-   |    Browser ──(Range: 1h/6h/24h/7d/30d)─────> Neon Postgres SQL Query [Sub-150ms]       |
-   +-----------------------------------------------------------------------------------------+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │ JETSON ORIN NANO SUPER (LOCAL LAN)                                                   │
+  │                                                                                      │
+  │  Hardware ─(2.5s)─> RAM Ring Buffer (Tier 1) ──────────────────────────────────┐    │
+  │                              │                                                  │    │
+  │                              │ (every 30s flush)                                │    │
+  │                              ▼                                                  │    │
+  │              /var/lib/zodiac/history/*.jsonl (Tier 2)                           │    │
+  │              zodiac-YYYY-MM-DD.jsonl                                            │    │
+  │              jetson-YYYY-MM-DD.jsonl                                            │    │
+  │              coral-YYYY-MM-DD.jsonl                                             │    │
+  │                                                                                 │    │
+  │  Browser GET /api/zodiac?range=1h|6h|24h|7d|30d                                │    │
+  │    1. Query Tier 2 (local NVMe JSONL — always available, no internet)           │    │
+  │    2. Query Tier 3 (Neon, if Tier 2 is empty — e.g. first run after install)   │    │
+  │    3. Downsample Tier 1 ring buffer (fallback, max 2.5 h)                      │    │
+  │                                                                                 │    │
+  │  Browser GET /api/zodiac (live, no range) ─────────────────────────────────────┘    │
+  │    → Served directly from Tier 1 RAM cache (<10 ms LAN latency)                     │
+  │                                                                                      │
+  └─────────────────────────────┬────────────────────────────────────────────────────────┘
+                                │
+                                │ Cloud Relay (fire-and-forget, exponential backoff)
+                                │ X-Zodiac-Bridge-Secret HMAC authentication
+                                │ Backoff: 5s → 10s → 20s → 40s → 60s cap (monotonic clock)
+                                ▼
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │ VERCEL PRODUCTION (https://agentic-era-networking.vercel.app)                        │
+  │                                                                                      │
+  │  POST /api/zodiac ──────> persistTelemetrySnapshot() ──> Neon Postgres (Tier 3)     │
+  │                                                                                      │
+  │  Browser GET /api/zodiac (live) ────────────────────────────────────────────────┐   │
+  │    → Vercel serverless in-memory latestSnapshot (<20 ms edge latency)            │   │
+  │                                                                                  │   │
+  │  Browser GET /api/zodiac?range=1h|6h|24h|7d|30d                                 │   │
+  │    → Neon Postgres SQL (bucketed integer downsampling, ≤360 pts) [<150 ms]      │   │
+  │                                                                                  │   │
+  │  Vercel Cron 03:00 UTC ──> /api/cron/prune-telemetry ──> DELETE WHERE ts < 30d  │   │
+  └──────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Local JSONL History Engine (`src/db/local-telemetry-db.ts`)
+
+Every 30 seconds `ZodiacBridgeServer` appends one averaged data point per device type to the current day's JSONL file using `fs.promises.appendFile` (never blocking the SDN event loop). Each flush uses `downsamplePoints(newPts, 1)` to average the ~12 raw 2.5 s points into a single representative point.
+
+**Storage budget per device type:**
+- 2 points/min × 60 min × 24 h = 2,880 points/day
+- ~150 bytes/point (compact JSON, BigInt serialized as strings)
+- ≈ 430 KB/day × 3 device types × 30 days ≈ **39 MB total** (well within 500 GB NVMe)
+
+**Query flow:** `queryLocalHistory(range)` fans reads across all relevant day files in parallel via `Promise.all`, flattens with `.flat()`, sorts ascending, then applies the same `downsamplePoints` / `downsampleJetsonPoints` / `downsampleCoralPoints` bucketing used by the Neon path — producing ≤360 output points regardless of range.
+
+**30-day retention:** `pruneLocalHistory()` runs synchronously on bridge server startup (before HTTP traffic begins), deleting files whose UTC date suffix predates the 30-day cutoff.
+
+### Cloud Relay Resilience (`ZodiacBridgeServer.relaySnapshotToCloud`)
+
+The relay fires from every 2.5 s hardware poll but is gated by an exponential backoff counter (`consecutiveRelayFailures`) measured on a monotonic `performance.now()` clock (immune to NTP adjustments):
+
+| Failure Count | Next Retry After |
+| :--- | :--- |
+| 0 (healthy) | Immediate (next 2.5 s poll) |
+| 1 | 5 s |
+| 2 | 10 s |
+| 3 | 20 s |
+| 4 | 40 s |
+| ≥5 | 60 s (cap) |
+
+On recovery, `consecutiveRelayFailures` resets to 0 and the bridge logs the outage duration. Because the relay always sends `snapshot.timeSeries.slice(-MAX_RELAY_POINTS)`, the next successful relay naturally backfills the most recent missed window (up to ~12.5 min) into Neon.
 
 ### Ingestion vs. Query Lifecycle Matrix
 
-| User Action / UI State | Deployment Target | Data Source | Ingestion / Query Cadence | Latency Budget | Mechanism & Invariant |
+| User Action / UI State | Deployment Target | Data Source | Cadence | Latency Budget | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Live Appliance Dashboard** | Local LAN (`http://<jetson-mgmt-ip>:3003`) | **Jetson Orin Process RAM** | Every 2s poll (`GET /api/zodiac`) | `< 10ms` (LAN) | Direct memory read from `ZodiacBridgeServer.cachedSnapshot` and 120-point circular ring buffer. Zero database dependency. |
-| **Hardware Cloud Relay** | Jetson → Cloud (`https://agentic-era-networking.vercel.app`) | **Neon Postgres (`ZodiacTelemetryPoint`)** | Every 10s push (`POST /api/zodiac`) | `< 3000ms` (WAN timeout) | Jetson background daemon pushes authenticated snapshot (`X-Zodiac-Bridge-Secret`). Vercel writes batched records to Neon via `persistTelemetrySnapshot()`. |
-| **Live Cloud Dashboard** | Vercel Edge (`https://agentic-era-networking.vercel.app`) | **Vercel Serverless Memory** | Every 2s poll (`GET /api/zodiac`) | `< 20ms` (Edge) | Served directly from serverless in-memory `latestSnapshot` object. Never hits Neon, preserving database connections and compute credits. |
-| **Historical Range Selector** | Vercel Edge (`https://agentic-era-networking.vercel.app`) | **Neon Postgres (`ZodiacTelemetryPoint`)** | On-demand on range click (`1h`, `6h`, `24h`, `7d`, `30d`) | `< 150ms` (Postgres query) | Executes database-level integer time-bucketing (`FLOOR("timestampMs" / bucketMs) * bucketMs`) returning $\le 360$ points without pulling 250k+ raw records over WAN. |
-| **Automated Pruning Cron** | Vercel Cron | **Neon Postgres (`ZodiacTelemetryPoint`)** | Daily at 03:00 UTC (`0 3 * * *`) | `< 500ms` (Indexed delete) | Calls `/api/cron/prune-telemetry` with `Bearer ${CRON_SECRET}`, pruning points older than 30 days via indexed `timestampMs: { lt: cutoffMs }`. |
+| **Live Appliance Dashboard** | Local LAN (`:3003`) | Tier 1 — Jetson RAM | 2 s poll | `< 10 ms` | `cachedSnapshot` direct read; zero DB dependency. |
+| **Local Historical Range** | Local LAN (`:3003`) | Tier 2 — Local JSONL → Tier 3 Neon fallback → Tier 1 | On-demand | `< 150 ms` NVMe | Tier 2 always tried first; internet not required. |
+| **Hardware Cloud Relay** | Jetson → Vercel | Tier 3 — Neon Postgres | ~2.5 s (gated by backoff) | `< 3000 ms` WAN | Exponential backoff prevents hammering on 5xx/network errors. |
+| **Live Cloud Dashboard** | Vercel (`.vercel.app`) | Vercel serverless RAM | 2 s poll | `< 20 ms` | `latestSnapshot` in-memory; never hits Neon on live path. |
+| **Cloud Historical Range** | Vercel (`.vercel.app`) | Tier 3 — Neon Postgres | On-demand | `< 150 ms` | SQL integer-bucketed downsampling; ≤360 output points. |
+| **Automated Pruning Cron** | Vercel Cron | Tier 3 — Neon Postgres | Daily 03:00 UTC | `< 500 ms` | `/api/cron/prune-telemetry`; `DELETE WHERE timestampMs < cutoff`. |
+| **Local Pruning on Start** | Jetson (startup) | Tier 2 — Local JSONL | Once at boot | `< 100 ms` | `pruneLocalHistory()` deletes files > 30 days before HTTP server opens. |
 
 ### Design Rationales
 
-1. **Why Live Polling Bypasses Neon Postgres (Dean Latency & Cost Invariant)**:
-   Polling a relational database every 2 seconds from concurrent web clients causes connection pool exhaustion, latency spikes (>100ms vs <20ms from RAM), and unnecessary compute billing. Serving live metrics from memory guarantees deterministic sub-20ms TTFB.
-2. **Why Cloud Relay Cadence is 10 Seconds (Ghemawat Backpressure Invariant)**:
-   The physical switch MCU serial telemetry stream arrives at 1–2 Hz. Relaying over WAN every 10 seconds generates exactly 8,640 records/day (~259,200 points/30 days, ~103.7 MB total storage footprint), perfectly matching Neon's serverless scaling envelope.
-3. **Database-Level Downsampling vs. Application-Level Slicing**:
-   Rather than fetching 250,000 raw points over the WAN and downsampling in Node.js memory (which causes severe memory bloat and function timeouts), PostgreSQL performs the grouping directly in the query planner using integer division, streaming back a lightweight payload under 50 KB.
+1. **Why Local JSONL (Tier 2) Instead of Querying Neon Locally**:
+   The in-memory ring buffer is capped at ~2.5 h. Historical ranges (6 h, 24 h, 7 d, 30 d) previously required querying Neon over WAN — which fails when the Jetson has no internet or Vercel is degraded. Local JSONL files on the NVMe SSD are always available, have zero network dependency, and survive process restarts. The Jetson becomes fully self-sufficient for 30-day history without Neon.
+
+2. **Why Append-Only JSONL (Not SQLite or a Database)**:
+   Introducing SQLite or any embedded database adds a runtime dependency, lock files, WAL management, and non-trivial startup overhead. Append-only JSONL files with one averaged point per 30 s flush have zero new dependencies (only `node:fs/promises`), are trivially inspectable with `cat`, survive partial writes without corruption (each line is atomic at the OS level with `O_APPEND`), and can be parsed in parallel with `Promise.all`.
+
+3. **Why Live Polling Still Bypasses All Storage Tiers**:
+   Polling any persistent store (disk or DB) every 2 s from concurrent browser clients causes unnecessary I/O and latency jitter. The Tier 1 RAM cache guarantees deterministic <10 ms TTFB for live metrics.
+
+4. **Why Cloud Relay Cadence Stays at ~2.5 s (with Backoff)**:
+   The relay payload is bounded to `MAX_RELAY_POINTS` points, keeping WAN payloads under 512 KB. Neon's `persistTelemetrySnapshot()` enforces a 10 s minimum write cadence server-side (deduplication), so frequent relay calls don't cause write amplification — they just keep the serverless RAM cache warm for the live Vercel dashboard.
 

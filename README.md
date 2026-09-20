@@ -164,7 +164,7 @@ npm run review:head
 ## 5. Quick Start & Verification
 
 ### Prerequisites
-- Node.js >= 20.12.0
+- Node.js >= 22.x (see `.nvmrc`)
 - Git
 
 ### 1. Install Dependencies & Git Hooks
@@ -178,7 +178,7 @@ npm run setup-hooks
 # Zero-defect compile check
 npm run check-types
 
-# Run deterministic invariant test suite (18+ tests passing)
+# Run deterministic invariant test suite (132+ tests passing)
 npm run test
 ```
 
@@ -196,6 +196,10 @@ cp .env.example .env.local
   - Both collaborators have admin rights to push, manage pull requests, and configure CI secrets.
 - **Neon Database**:
   - Provision a new dedicated Neon project (e.g. `agentic-networking-db`) and paste the connection string into `DATABASE_URL` in `.env.local` and GitHub repository secrets.
+- **Local Telemetry History (Jetson)**:
+  - The bridge server automatically writes 30-day JSONL history to `/var/lib/zodiac/history/` (falls back to `~/zodiac-history` or `/tmp/zodiac-history`).
+  - No configuration needed — ensure the `zodiac` service user has write access to `/var/lib/zodiac/`.
+  - After restarting the bridge server (`sudo systemctl restart zodiac-bridge`), history accumulates at ~2 points/min and historical ranges (`?range=6h` etc.) serve from local disk with no internet dependency.
 - **Vercel Project (Optional)**:
   - Link `gravity-tpu/agentic-era-networking` to your Vercel project.
   - Add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` to GitHub Secrets/Vars. The CI deploy job is self-skipping until configured.

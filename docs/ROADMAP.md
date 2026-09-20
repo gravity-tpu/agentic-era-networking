@@ -112,6 +112,25 @@ Governed by the **Senior Staff Council Invariants**:
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
+| Phase 0.8: Real-Time Wire-Packet Ingestion & Dual Coral TPU Epistemic Provenance (COMPLETE)       |
+| - AF_PACKET raw socket ingestion on Port 3 mirror tap (enx*), promiscuous mode                   |
+| - Zero-copy packet-to-tensor pipeline: 1 wire frame = 1 physical Coral inference                 |
+| - Physical epistemic provenance: 0 pps = 0 inf/s STANDBY (Anti-Simulation Law Invariant 6)       |
+| - Burst daemon per-TPU telemetry isolation: async writer thread, per-TPU JSONL files             |
+| - hardware-burst-daemon.py: coral_tpu1_inferences counter, DNS Sentinel role separation          |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+| Phase 0.9: Local 30-Day Telemetry Persistence & Cloud Relay Resilience (COMPLETE)                 |
+| - Three-tier storage: RAM (live, 2.5h) + NVMe JSONL disk (30d, localhost) + Neon (30d, Vercel)   |
+| - src/db/local-telemetry-db.ts: append-only per-day JSONL, async parallel reads, 30d pruning    |
+| - Query priority on localhost: local NVMe first -> Neon fallback -> in-memory (no internet req.) |
+| - Cloud relay exponential backoff: 5s->10s->20s->60s cap on monotonic performance.now() clock   |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
 | Phase 1: Zero-Config DNS Reverse Proxy Engine (NEXT)                                              |
 | - RFC 1035 UDP interceptor & dynamic domain mapping (wildcard / exact / catch-all)                |
 | - Transparent edge reverse proxy with nanosecond latency profiling                                |
@@ -202,15 +221,15 @@ Governed by the **Senior Staff Council Invariants**:
   - Strict transport security (`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`).
 
 ### Phase 0.7: Jetson Orin Headless Control-Plane Deployment
-*Status: Planned (immediate next — prerequisite for Phase 1)*
-- [ ] **Milestone 0.7A: Cross-Platform Serial CDC-ACM Discovery**:
+*Status: Complete*
+- [x] **Milestone 0.7A: Cross-Platform Serial CDC-ACM Discovery**:
   - `zodiac-serial.ts` `detectDevice()` now resolves `/dev/ttyACM*` (preferred) or `/dev/ttyUSB*` on Linux/Jetson ARM64, and `/dev/cu.usbmodem*` on macOS. No external serial library dependencies (Ghemawat).
   - Platform-aware fallback: `/dev/ttyACM0` on Linux, `/dev/cu.usbmodem212201` on macOS. Anti-Shortcut: error surfaces clearly rather than silently using wrong path.
-- [ ] **Milestone 0.7B: systemd Service Unit & Secret Provisioning**:
+- [x] **Milestone 0.7B: systemd Service Unit & Secret Provisioning**:
   - `deploy/jetson/zodiac-bridge.service`: Type=simple, `Restart=on-failure`, `StartLimitBurst=5/60s`, `MemoryMax=256M`, `PrivateTmp=true`, `NoNewPrivileges=true`.
   - `deploy/jetson/zodiac-bridge.env.template`: All runtime secrets documented; Coral TPU stubs pre-wired for Phase 2A.
   - Dedicated `zodiac` service user with `CAP_NET_BIND_SERVICE` only — no root runtime.
-- [ ] **Milestone 0.7C: Untethered Mac SSH Dev Workflow**:
+- [x] **Milestone 0.7C: Untethered Mac SSH Dev Workflow**:
   - MacBook connects via WiFi/Ethernet to push `git pull && npm run build && systemctl restart zodiac-bridge`.
   - Close-lid / reboot Mac does not interrupt any network services.
   - SSH key-based authentication only; password auth disabled on Jetson.
@@ -230,6 +249,30 @@ Governed by the **Senior Staff Council Invariants**:
 - [x] **Multi-TPU Parallel Telemetry Aggregation**:
   - `hardware-probe.ts` aggregates dual Edge TPUs (primary tap DPI daemon on TPU #1 + burst parallel on TPU #2) into combined throughput (~450 inf/s peak).
   - TOCTOU-free atomic telemetry reporting with 5-second fail-closed staleness guards.
+
+### Phase 0.9: Local 30-Day Telemetry Persistence & Cloud Relay Resilience
+*Status: Complete (Commits `a050d4c`, `e716eba`, `9474f48`, `ee41d98`)*
+- [x] **Milestone 0.9A: Three-Tier Telemetry Storage Architecture**:
+  - Architecture upgraded from two-tier (RAM + Neon) to three-tier: Tier 1 — in-memory ring buffer (live, 2.5 h); Tier 2 — local NVMe JSONL files (30-day, localhost history); Tier 3 — Neon Postgres (30-day, Vercel cloud).
+  - Localhost is now fully self-sufficient for 30-day historical queries without internet connectivity or Neon access.
+  - Query priority on localhost GET `?range=`: Tier 2 (local disk) → Tier 3 (Neon fallback) → Tier 1 (in-memory 2.5 h fallback).
+  - Vercel path unchanged: POST relay → `persistTelemetrySnapshot()` → Neon → GET historical query.
+- [x] **Milestone 0.9B: Local JSONL History Engine (`src/db/local-telemetry-db.ts`)**:
+  - Append-only JSONL storage with one averaged point per 30-second flush cycle per device type (Zodiac, Jetson, Coral) at `~430 KB/day/device` on `/var/lib/zodiac/history/` (NVMe SSD).
+  - All file I/O async (`fs.promises.appendFile`, `fs.promises.readFile`) so SDN OpenFlow event loop is never blocked (Jeff Dean latency invariant).
+  - Historical queries fan reads across all relevant day files in parallel via `Promise.all`, then apply the same `downsamplePoints` bucketing used by the Neon path — returning ≤360 output points per range.
+  - `pruneLocalHistory()` runs synchronously on bridge startup (before HTTP traffic), deleting files whose UTC date suffix predates the 30-day cutoff.
+  - Zero new runtime dependencies: pure `node:fs/promises` and `node:path`.
+- [x] **Milestone 0.9C: Burst Daemon Per-TPU Telemetry Isolation**:
+  - `hardware-burst-daemon.py` refactored: `coral_total_inferences` (aggregate), `coral_tpu0_inferences` (Tap DPI), `coral_tpu1_inferences` (DNS Sentinel) counters.
+  - DNS Sentinel worker now writes to `coral-tpu1-burst-telemetry.json` (independent file, no race condition with other workers).
+  - Async writer thread (`_coral_telemetry_writer`) decouples all telemetry file writes from the TPU inference hot loop via a bounded `queue.Queue(maxsize=4)`.
+  - Exponential P99 latency fixed: `int(n * 0.99)` → `(n * 99) // 100` (integer-only arithmetic, determinism invariant).
+- [x] **Milestone 0.9D: Cloud Relay Exponential Backoff**:
+  - `ZodiacBridgeServer.relaySnapshotToCloud()` now gates retries via `isRelayBackoffElapsed()` using a monotonic `performance.now()` clock (immune to NTP clock adjustments).
+  - Backoff schedule: `consecutiveRelayFailures` 0 → immediate | 1 → 5 s | 2 → 10 s | 3 → 20 s | 4 → 40 s | ≥5 → 60 s cap.
+  - `currentRelayBackoffMs` getter is the single source of truth for the formula (eliminates duplication).
+  - Recovery logged with outage failure count; `consecutiveRelayFailures` resets to 0 on `res.ok`.
 
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
