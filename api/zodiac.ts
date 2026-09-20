@@ -279,8 +279,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         series: readonly T[] | undefined
       ): T[] | undefined => {
         if (!series) return undefined;
-        const delta = (series as T[]).filter((p) => p.timestampMs > sinceMs);
-        return delta.length > 0 ? delta : undefined;
+        return series.filter((p) => p.timestampMs > sinceMs);
       };
 
       res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
