@@ -1153,8 +1153,13 @@ def main():
 
         cleanup_burst_coral_telemetry()
 
-        # Drain and shut down the coral telemetry writer thread (poison pill)
-        _coral_write_q.put(None)
+        # Drain and shut down the coral telemetry writer thread (poison pill).
+        # Use put with timeout to avoid blocking the main thread if the writer is hung on a
+        # stalled filesystem and the queue is still full at shutdown time.
+        try:
+            _coral_write_q.put(None, timeout=1.0)
+        except queue.Full:
+            pass  # writer thread is daemon=True and will be killed with the process
         if _coral_writer_thread is not None:
             _coral_writer_thread.join(timeout=2.0)
 
