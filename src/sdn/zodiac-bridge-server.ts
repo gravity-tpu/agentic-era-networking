@@ -1553,7 +1553,9 @@ export class ZodiacBridgeServer {
 
   /** Single source of truth for the current exponential backoff duration. */
   private get currentRelayBackoffMs(): number {
-    const exp = Math.min(this.consecutiveRelayFailures - 1, 10);
+    // Clamp lower bound to 0: without Math.max, consecutiveRelayFailures=0 → exp=-1
+    // → (1 << -1) applies modulo-32 → (1 << 31) = -2147483648 (signed overflow).
+    const exp = Math.max(0, Math.min(this.consecutiveRelayFailures - 1, 10));
     return Math.min(
       ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << exp),
       ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
@@ -1565,8 +1567,7 @@ export class ZodiacBridgeServer {
    * Uses performance.now() (monotonic) so NTP clock adjustments cannot stall the relay.
    * Backoff schedule: 0 failures → immediate | 1 → 5 s | 2 → 10 s | 3 → 20 s | 4 → 40 s | 5+ → 60 s
    */
-  private isRelayBackoffElapsed(nowMs: number): boolean {
-    void nowMs; // wall-clock nowMs not used here — kept in signature for API consistency
+  private isRelayBackoffElapsed(_nowMs: number): boolean {
     if (this.consecutiveRelayFailures === 0) return true;
     return performance.now() - this.lastRelayAttemptPerfMs >= this.currentRelayBackoffMs;
   }
