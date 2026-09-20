@@ -45,9 +45,9 @@ import socket
 import sys
 import threading
 import time
-from typing import Optional, TypedDict
 import urllib.error
 import urllib.request
+from typing import TypedDict
 
 MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite')
 DEFAULT_LOG_PATH = os.environ.get(
@@ -170,7 +170,7 @@ def log_message(msg: str, log_file: str):
             with open(log_file, 'a') as f:
                 f.write(line + '\n')
                 f.flush()
-        except Exception as e:
+        except OSError as e:
             sys.stderr.write(f'[burst-daemon] Failed writing log to {log_file}: {e}\n')
 
 
@@ -284,8 +284,8 @@ def coral_tpu_worker(
 ):
     """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
     try:
-        from pycoral.utils.edgetpu import make_interpreter
         import numpy as np
+        from pycoral.utils.edgetpu import make_interpreter
 
         if not os.path.exists(MODEL_PATH):
             sys.stderr.write(f'[coral_worker_{dev_spec}] Model not found at {MODEL_PATH}\n')
@@ -365,7 +365,7 @@ def coral_tpu_worker(
                 })
                 w_latencies = []
                 w_start_ns = now_ns
-    except Exception as e:
+    except (OSError, RuntimeError, ImportError, ValueError) as e:
         sys.stderr.write(f'[coral_worker_{dev_spec}] Error: {e}\n')
         sys.stderr.flush()
     finally:
@@ -384,7 +384,7 @@ def find_tap_interface() -> str:
     return 'enx9c69d39dd0a6'
 
 
-def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading.Event = None):
+def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading.Event | None = None):
     """Sends raw Ethernet frames directly into Zodiac Port 3 via the tap interface."""
     try:
         s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
@@ -395,7 +395,7 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading
             with open(f'/sys/class/net/{iface}/address') as f:
                 src_mac_str = f.read().strip().replace(':', '')
                 src_mac = bytes.fromhex(src_mac_str)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             sys.stderr.write(f'[zodiac_p3_raw_worker] Fail-closed: Cannot read physical MAC for {iface}: {e}\n')
             return
 
@@ -439,7 +439,7 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading
                         pass
             next_tx_ns = max(now_ns, next_tx_ns) + pacing_interval_ns
         s.close()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         sys.stderr.write(f'[zodiac_p3_raw_worker] Error on {iface}: {e}\n')
         sys.stderr.flush()
 
@@ -450,7 +450,7 @@ def zodiac_p4_worker(target_ip: str = DEFAULT_SWITCH_IP, target_port: int = 9999
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.bind((DEFAULT_CTRL_IP, 0))
-        except Exception as e:
+        except OSError as e:
             sys.stderr.write(f'[zodiac_p4_worker] Notice: Bind to {DEFAULT_CTRL_IP} failed: {e}. Operating with default route.\n')
 
         target = (target_ip, target_port)
@@ -479,7 +479,7 @@ def zodiac_p4_worker(target_ip: str = DEFAULT_SWITCH_IP, target_port: int = 9999
                         pass
             next_tx_ns = max(now_ns, next_tx_ns) + pacing_interval_ns
         s.close()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         sys.stderr.write(f'[zodiac_p4_worker] Error: {e}\n')
         sys.stderr.flush()
 
@@ -514,12 +514,12 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
                         pass
             next_tx_ns = max(now_ns, next_tx_ns) + pacing_interval_ns
         s.close()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         sys.stderr.write(f'[rpi_workload_worker] Error: {e}\n')
         sys.stderr.flush()
 
 
-def jetson_gpu_worker(max_bytes: int = 0, active_event: Optional[threading.Event] = None):
+def jetson_gpu_worker(max_bytes: int = 0, active_event: threading.Event | None = None):
     """
     Council Invariant 2 (Determinism & Accounting) & Invariant 6 (Anti-Simulation Law):
     Generates authentic, physical neural/matrix operations on NVIDIA Ampere GPU (CUDA/PyTorch),
@@ -547,7 +547,7 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: Optional[threading.Event
                 has_cuda = True
                 engine_name = "NVIDIA Ampere Native CUDA (sm_87 Orin)"
                 break
-            except Exception as e:
+            except (OSError, ImportError, AttributeError) as e:
                 sys.stderr.write(f"[jetson_gpu_worker] Note loading {lib_path}: {e}\n")
 
     if not has_cuda:
@@ -586,7 +586,7 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: Optional[threading.Event
             d_b = cuda_lib.alloc_cuda_matrix(matrix_dim)
             d_c = cuda_lib.alloc_cuda_matrix(matrix_dim)
             cuda_ptrs = (d_a, d_b, d_c)
-        except Exception as exc:
+        except (MemoryError, OSError, RuntimeError, AttributeError) as exc:
             sys.stderr.write(f"[jetson_gpu_worker] Failed allocating CUDA device memory: {exc}\n")
             cuda_lib = None
             has_cuda = False
@@ -626,7 +626,7 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: Optional[threading.Event
                 with stats_lock:
                     counters['jetson_gpu_ops'] += 1
                     counters['jetson_gpu_bytes'] += bytes_per_op
-            except Exception as err:
+            except (RuntimeError, OSError, AttributeError) as err:
                 sys.stderr.write(f"[jetson_gpu_worker] Compute loop note: {err}\n")
                 time.sleep(0.05)
     finally:
@@ -635,18 +635,18 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: Optional[threading.Event
                 cuda_lib.free_cuda_matrix(cuda_ptrs[0])
                 cuda_lib.free_cuda_matrix(cuda_ptrs[1])
                 cuda_lib.free_cuda_matrix(cuda_ptrs[2])
-            except Exception as cleanup_err:
+            except (RuntimeError, OSError, AttributeError) as cleanup_err:
                 sys.stderr.write(f"[jetson_gpu_worker] CUDA free error: {cleanup_err}\n")
 
 
 class LiveTelemetrySummary(TypedDict):
-    p3_rx_pkts: Optional[int]
-    p4_rx_bytes: Optional[int]
+    p3_rx_pkts: int | None
+    p4_rx_bytes: int | None
     tpu0_inf_sec: int
-    jetson_temp_c: Optional[float]
-    jetson_gpu_temp_c: Optional[float]
-    jetson_gpu_util_pct: Optional[int]
-    jetson_gpu_power_mw: Optional[int]
+    jetson_temp_c: float | None
+    jetson_gpu_temp_c: float | None
+    jetson_gpu_util_pct: int | None
+    jetson_gpu_power_mw: int | None
 
 
 cached_live_summary: LiveTelemetrySummary = {
@@ -729,12 +729,12 @@ def telemetry_poller_worker():
                 sys.stderr.write(f'[burst-daemon] Note: cannot read {p}: {e}\n')
                 continue
 
-        p3_pkts_val: Optional[int] = None
-        p4_bytes_val: Optional[int] = None
-        jetson_temp_val: Optional[float] = None
-        jetson_gpu_temp_val: Optional[float] = None
-        jetson_gpu_util_val: Optional[int] = None
-        jetson_gpu_power_val: Optional[int] = None
+        p3_pkts_val: int | None = None
+        p4_bytes_val: int | None = None
+        jetson_temp_val: float | None = None
+        jetson_gpu_temp_val: float | None = None
+        jetson_gpu_util_val: int | None = None
+        jetson_gpu_power_val: int | None = None
 
         # Direct sysfs read for Jetson CPU thermal (Dean nanosecond budget, zero socket overhead)
         # Follows EAFP principles without swallowing errors (Council Invariant 1: Zero Suppression of Reality)
@@ -817,7 +817,7 @@ def telemetry_poller_worker():
                                 jetson_gpu_power_val = int(raw_pwr)
                             except (ValueError, TypeError):
                                 jetson_gpu_power_val = None
-        except (urllib.error.URLError, socket.timeout, json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError) as e:
+        except (TimeoutError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError) as e:
             sys.stderr.write(f'[burst-daemon] Note: telemetry HTTP poll failed: {e}\n')
 
         summary: LiveTelemetrySummary = {
@@ -889,7 +889,7 @@ def main():
         try:
             with open(log_file, 'w') as f:
                 f.write('=== AGENTIC-ERA NETWORKING HARDWARE BURST LOG ===\n')
-        except Exception as e:
+        except OSError as e:
             sys.stderr.write(f'[burst-daemon] Note: Failed initializing {log_file}: {e}\n')
 
     size_label = format_bytes_int(max_bytes) if max_bytes > 0 else 'Unlimited (Duration-based)'
@@ -1096,6 +1096,7 @@ def main():
                 d_rpi_pkts = curr['rpi_packets'] - prev_counters['rpi_packets']
                 d_gpu_ops = curr['jetson_gpu_ops'] - prev_counters['jetson_gpu_ops']
                 d_gpu_bytes = curr['jetson_gpu_bytes'] - prev_counters['jetson_gpu_bytes']
+                _ = d_gpu_bytes  # tracked in counters; reserved for future bandwidth summary
 
                 burst_coral_rate = (d_coral * 1_000_000_000) // window_elapsed_ns
                 p3_pps = (d_p3_pkts * 1_000_000_000) // window_elapsed_ns
