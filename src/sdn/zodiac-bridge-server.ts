@@ -49,6 +49,11 @@ import {
   saveTelemetryStateAtomic,
   saveTelemetryStateAtomicSync,
 } from './telemetry-state-store.js';
+import {
+  appendLocalHistoryPoints,
+  queryLocalHistory,
+  pruneLocalHistory,
+} from '../db/local-telemetry-db.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -382,6 +387,7 @@ export class ZodiacBridgeServer {
   private static readonly MAX_CORAL_RESTARTS = 10;
   private readonly stateFilePath: string = resolveTelemetryStateFilePath();
   private lastStateFlushTimeMs = 0;
+  private lastLocalHistoryFlushMs = 0;
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
 
   constructor(
@@ -426,6 +432,11 @@ export class ZodiacBridgeServer {
         timeSeries: this.coralTimeSeries,
       } : undefined,
     };
+
+    // Prune local JSONL history files older than 30 days (fast sync directory scan at startup)
+    pruneLocalHistory();
+    // Start the flush pointer at now so the loaded rolling buffer isn't re-appended to disk
+    this.lastLocalHistoryFlushMs = Date.now();
 
     // Auto-install Table-Miss rule on connection to forward live traffic to controller
     this.controller.openFlow.on('ready', () => {
@@ -835,7 +846,29 @@ export class ZodiacBridgeServer {
       if (range && isValidRange(range)) {
         const config = RANGE_CONFIGS[range];
 
-        // 1. If Neon DB Prisma client is available, attempt querying full historical DB (up to 30 days)
+        // 1. Local disk JSONL history (preferred: persistent, no network, 30-day retention)
+        try {
+          const local = queryLocalHistory(range);
+          if (local.timeSeries.length > 0 || local.jetsonTimeSeries.length > 0 || local.coralTimeSeries.length > 0) {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(this.serializeSnapshot({
+              ...this.cachedSnapshot,
+              timeSeries: local.timeSeries,
+              ...(this.cachedSnapshot.jetson ? {
+                jetson: { ...this.cachedSnapshot.jetson, timeSeries: local.jetsonTimeSeries },
+              } : {}),
+              ...(this.cachedSnapshot.coral ? {
+                coral: { ...this.cachedSnapshot.coral, timeSeries: local.coralTimeSeries },
+              } : {}),
+            }));
+            return;
+          }
+        } catch (localErr: unknown) {
+          console.warn('[!] [Bridge DB] Local history query failed, falling back to Neon:', localErr instanceof Error ? localErr.message : String(localErr));
+        }
+
+        // 2. Neon DB (cloud backup; may require internet connectivity)
         const prisma = getPrismaClient();
         if (prisma) {
           try {
@@ -1475,12 +1508,36 @@ export class ZodiacBridgeServer {
       if (nowMs - this.lastStateFlushTimeMs >= ZodiacBridgeServer.STATE_FLUSH_INTERVAL_MS) {
         this.lastStateFlushTimeMs = nowMs;
         void this.flushTelemetryStateToDisk();
+        // Append new time-series points accumulated since the last flush cycle to local JSONL history.
+        // O(log N) bisection locates new points; appendLocalHistoryPoints averages and writes one
+        // compact JSON line per device type — total I/O is ~150 B × 3 = ~450 B per 30-second tick.
+        this.flushNewPointsToLocalHistory(nowMs);
       }
     } catch (err: unknown) {
       console.warn('[!] [Zodiac Telemetry] Comprehensive health refresh error:', err instanceof Error ? err.message : String(err));
     } finally {
       this.isRefreshing = false;
     }
+  }
+
+  /**
+   * Append all new time-series points accumulated since the last local history flush.
+   * Uses O(log N) bisection to find the cutoff index rather than a linear scan.
+   */
+  private flushNewPointsToLocalHistory(nowMs: number): void {
+    const cutoff = this.lastLocalHistoryFlushMs;
+    this.lastLocalHistoryFlushMs = nowMs;
+
+    // findCutoffIndex returns the first index with timestampMs >= cutoff+1 (strictly newer)
+    const zi = findCutoffIndex(this.timeSeries,       cutoff + 1);
+    const ji = findCutoffIndex(this.jetsonTimeSeries, cutoff + 1);
+    const ci = findCutoffIndex(this.coralTimeSeries,  cutoff + 1);
+
+    appendLocalHistoryPoints(
+      this.timeSeries.slice(zi),
+      this.jetsonTimeSeries.slice(ji),
+      this.coralTimeSeries.slice(ci),
+    );
   }
 
   /**
