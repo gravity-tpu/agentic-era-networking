@@ -388,7 +388,11 @@ export class ZodiacBridgeServer {
   private readonly stateFilePath: string = resolveTelemetryStateFilePath();
   private lastStateFlushTimeMs = 0;
   private lastLocalHistoryFlushMs = 0;
+  private consecutiveRelayFailures = 0;
+  private lastRelayAttemptMs = 0;
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
+  private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
+  private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
 
   constructor(
     controller?: ZodiacController,
@@ -1500,7 +1504,9 @@ export class ZodiacBridgeServer {
       };
 
       // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud
-      if (this.cloudRelayUrl && !this.isRelaying) {
+      // Exponential backoff gates re-attempts after failures so a degraded Vercel endpoint
+      // is not hammered at the full 2.5s poll cadence (Quoc Le stability invariant).
+      if (this.cloudRelayUrl && !this.isRelaying && this.isRelayBackoffElapsed(nowMs)) {
         void this.relaySnapshotToCloud(this.cachedSnapshot);
       }
 
@@ -1545,14 +1551,31 @@ export class ZodiacBridgeServer {
   }
 
   /**
+   * Returns true when enough time has elapsed since the last relay attempt given the current
+   * consecutive-failure count. Backoff doubles per failure up to RELAY_MAX_BACKOFF_MS:
+   *   0 failures → immediate | 1 → 5 s | 2 → 10 s | 3 → 20 s | 4 → 40 s | 5+ → 60 s
+   */
+  private isRelayBackoffElapsed(nowMs: number): boolean {
+    if (this.consecutiveRelayFailures === 0) return true;
+    const exp = Math.min(this.consecutiveRelayFailures - 1, 10);
+    const backoffMs = Math.min(
+      ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << exp),
+      ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
+    );
+    return nowMs - this.lastRelayAttemptMs >= backoffMs;
+  }
+
+  /**
    * Asynchronously streams the physical hardware telemetry snapshot to a cloud relay endpoint
    * (e.g. Vercel) using the cryptographic ZODIAC_BRIDGE_SECRET to guarantee physical provenance.
    *
    * Adheres to Dean Latency Budget: bounded by a 3000ms AbortSignal so the local control loop never blocks.
+   * Exponential backoff on failure prevents hammering a degraded endpoint.
    */
   private async relaySnapshotToCloud(snapshot: ZodiacFullTelemetrySnapshot): Promise<void> {
     if (!this.cloudRelayUrl || this.isRelaying) return;
     this.isRelaying = true;
+    this.lastRelayAttemptMs = Date.now();
     try {
       const endpoint = new URL('/api/zodiac', this.cloudRelayUrl).toString();
 
@@ -1598,10 +1621,25 @@ export class ZodiacBridgeServer {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        console.warn(`[!] [Cloud Relay] Telemetry push returned HTTP ${res.status}: ${text}`);
+        this.consecutiveRelayFailures++;
+        const backoffMs = Math.min(
+          ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << Math.min(this.consecutiveRelayFailures - 1, 10)),
+          ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
+        );
+        console.warn(`[!] [Cloud Relay] HTTP ${res.status} (failure #${this.consecutiveRelayFailures}, next retry in ${backoffMs / 1000}s): ${text}`);
+      } else {
+        if (this.consecutiveRelayFailures > 0) {
+          console.log(`[+] [Cloud Relay] Relay recovered after ${this.consecutiveRelayFailures} consecutive failure(s).`);
+          this.consecutiveRelayFailures = 0;
+        }
       }
     } catch (err: unknown) {
-      console.warn('[!] [Cloud Relay] Failed to push telemetry to cloud:', err instanceof Error ? err.message : String(err));
+      this.consecutiveRelayFailures++;
+      const backoffMs = Math.min(
+        ZodiacBridgeServer.RELAY_BASE_BACKOFF_MS * (1 << Math.min(this.consecutiveRelayFailures - 1, 10)),
+        ZodiacBridgeServer.RELAY_MAX_BACKOFF_MS,
+      );
+      console.warn(`[!] [Cloud Relay] Network error (failure #${this.consecutiveRelayFailures}, next retry in ${backoffMs / 1000}s):`, err instanceof Error ? err.message : String(err));
     } finally {
       this.isRelaying = false;
     }
