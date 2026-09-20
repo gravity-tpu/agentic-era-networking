@@ -38,6 +38,7 @@ import argparse
 import errno
 import json
 import os
+import queue
 import re
 import signal
 import socket
@@ -121,6 +122,30 @@ counters = {
     'jetson_gpu_ops': 0,
     'jetson_gpu_bytes': 0,
 }
+
+# Bounded async queue decoupling telemetry file writes from the inference hot loop.
+# Capacity=4: at 1Hz emission rate a full queue means the writer is stalled >4s — drop silently.
+_coral_write_q: queue.Queue = queue.Queue(maxsize=4)
+
+
+def _enqueue_coral_write(filename: str, data: dict) -> None:
+    try:
+        _coral_write_q.put_nowait((filename, data))
+    except queue.Full:
+        pass  # newest snapshot will arrive next second; drop rather than block the inference loop
+
+
+def _coral_telemetry_writer() -> None:
+    while True:
+        item = _coral_write_q.get()
+        if item is None:
+            return
+        filename, data = item
+        atomic_write_coral_file(filename, data)
+        _coral_write_q.task_done()
+
+
+threading.Thread(target=_coral_telemetry_writer, name='coral-telemetry-writer', daemon=True).start()
 
 
 def log_message(msg: str, log_file: str):
@@ -239,10 +264,10 @@ def cleanup_burst_coral_telemetry(filename: str = 'coral-burst-telemetry.json'):
 def coral_tpu_worker(
     dev_spec: str,
     max_bytes: int = 0,
-    active_event: Optional[threading.Event] = None,
+    active_event: threading.Event | None = None,
     telemetry_file: str = 'coral-burst-telemetry.json',
     model_role: str = 'Burst Parallel',
-    counter_key: str = 'coral_burst_inferences'
+    counter_key: str = 'coral_total_inferences'
 ):
     """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
     try:
@@ -272,7 +297,7 @@ def coral_tpu_worker(
         while not stop_event.is_set():
             if active_event is not None and not active_event.is_set():
                 if not is_in_standby:
-                    atomic_write_coral_file(telemetry_file, {
+                    _enqueue_coral_write(telemetry_file, {
                         'detected': True,
                         'status': 'STANDBY',
                         'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - {model_role}',
@@ -315,7 +340,7 @@ def coral_tpu_worker(
                 p99_ns = w_sorted[min(int(n * 0.99), n - 1)] if n > 0 else 0
                 inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
 
-                atomic_write_coral_file(telemetry_file, {
+                _enqueue_coral_write(telemetry_file, {
                     'detected': True,
                     'status': 'ACTIVE',
                     'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - {model_role}',
