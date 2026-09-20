@@ -3468,9 +3468,15 @@ Please connect the physical switch via USB to execute '${command}' on device har
     const intervalMs = getHistoricalRefreshMs(range);
     histRefreshTimeoutId = setTimeout(async function scheduleNext() {
       if (!['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) return;
-      await fetchHistoricalRange(currentRange);
-      updateCharts();
-      histRefreshTimeoutId = setTimeout(scheduleNext, getHistoricalRefreshMs(currentRange));
+      try {
+        await fetchHistoricalRange(currentRange);
+        updateCharts();
+      } catch (err) {
+        console.warn('[!] [Historical Refresh] Background fetch failed:', err instanceof Error ? err.message : String(err));
+      } finally {
+        // Reschedule inside finally so a transient network error never kills the loop
+        histRefreshTimeoutId = setTimeout(scheduleNext, getHistoricalRefreshMs(currentRange));
+      }
     }, intervalMs);
   }
   // ─────────────────────────────────────────────────────────────────────────────
@@ -3522,6 +3528,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     void fetchHistoricalRange(currentRange).then(() => {
       updateCharts();
       startHistoricalRefresh(currentRange);
+    }).catch((err) => {
+      console.warn('[!] [Historical Range] Initial load failed:', err instanceof Error ? err.message : String(err));
     });
   }
 
