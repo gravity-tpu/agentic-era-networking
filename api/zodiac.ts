@@ -19,7 +19,6 @@ import {
 import { requireOperatorAuth, isLocalDev } from '../dist/auth/google-auth.js';
 import {
   persistTelemetrySnapshot,
-  getHistoricalTelemetry,
   getHistoricalMultiDeviceTelemetry,
   isValidRange,
   isPersistingTelemetry,
@@ -101,152 +100,136 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (req.method === 'POST') {
-    // Await stream processing inside a Promise to prevent premature serverless context freeze
-    return new Promise<void>((resolve) => {
-      const chunks: Buffer[] = [];
-      let bytesReceived = 0;
-      let aborted = false;
+    const chunks: Buffer[] = [];
+    let bytesReceived = 0;
 
-      req.on('error', (err: Error) => {
-        aborted = true;
-        req.destroy();
-        if (!res.headersSent) {
-          res.statusCode = 500;
-          res.end(JSON.stringify({ error: `Request stream failure: ${err.message}` }));
-        }
-        resolve();
-      });
-
-      req.on('data', (chunk: Buffer) => {
-        if (aborted || res.headersSent) return;
-        bytesReceived += chunk.length;
+    try {
+      for await (const chunk of req) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        bytesReceived += buf.length;
         if (bytesReceived > MAX_PAYLOAD_BYTES) {
-          aborted = true;
           req.destroy();
           res.statusCode = 413;
           res.end(JSON.stringify({ error: 'Payload Too Large: Maximum telemetry push size is 256KB' }));
-          resolve();
           return;
         }
-        chunks.push(chunk);
+        chunks.push(buf);
+      }
+    } catch (err: unknown) {
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: `Request stream failure: ${err instanceof Error ? err.message : String(err)}` }));
+      }
+      return;
+    }
+
+    try {
+      const body = Buffer.concat(chunks).toString('utf-8');
+      const parsed: unknown = JSON.parse(body);
+
+      if (!isValidTelemetryPayload(parsed)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Invalid payload: telemetry snapshot must be a JSON object' }));
+        return;
+      }
+
+      const isLoopback = isLocalDev(req);
+
+      const bridgeSecret = typeof req.headers['x-zodiac-bridge-secret'] === 'string'
+        ? req.headers['x-zodiac-bridge-secret']
+        : undefined;
+
+      const verifiedSource = resolveVerifiedProvenance(parsed.source, {
+        isLoopback,
+        bridgeSecret,
+        expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
       });
 
-      req.on('end', () => {
-        if (aborted || res.headersSent) {
-          resolve();
-          return;
-        }
-        try {
-          const body = Buffer.concat(chunks).toString('utf-8');
-          const parsed: unknown = JSON.parse(body);
+      const mergedZodiacSeries = mergeRollingSeries(
+        latestSnapshot.timeSeries,
+        parsed.timeSeries,
+        MAX_SERVERLESS_BUFFER_POINTS
+      ) ?? [];
 
-          if (!isValidTelemetryPayload(parsed)) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Invalid payload: telemetry snapshot must be a JSON object' }));
-            resolve();
-            return;
+      const mergedJetsonSeries = mergeRollingSeries(
+        latestSnapshot.jetson?.timeSeries,
+        parsed.jetson?.timeSeries,
+        MAX_SERVERLESS_BUFFER_POINTS
+      );
+
+      const mergedCoralSeries = mergeRollingSeries(
+        latestSnapshot.coral?.timeSeries,
+        parsed.coral?.timeSeries,
+        MAX_SERVERLESS_BUFFER_POINTS
+      );
+
+      latestSnapshot = {
+        ...latestSnapshot,
+        ...parsed,
+        timeSeries: mergedZodiacSeries,
+        source: verifiedSource,
+        system: {
+          ...latestSnapshot.system,
+          ...(parsed.system ?? {}),
+          timestampNs: process.hrtime.bigint(),
+        },
+        ...(parsed.jetson ? {
+          jetson: {
+            ...latestSnapshot.jetson,
+            ...parsed.jetson,
+            ...(mergedJetsonSeries ? { timeSeries: mergedJetsonSeries } : {}),
           }
+        } : {}),
+        ...(parsed.coral ? {
+          coral: {
+            ...latestSnapshot.coral,
+            ...parsed.coral,
+            ...(mergedCoralSeries ? { timeSeries: mergedCoralSeries } : {}),
+          }
+        } : {}),
+      };
 
-          const isLoopback = isLocalDev(req);
+      // Persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
+      // In serverless, un-awaited promises are killed on res.end(), so await with a configurable Dean latency deadline.
+      if (!isPersistingTelemetry()) {
+        const timeoutMs = Number(process.env['TELEMETRY_PERSIST_TIMEOUT_MS'] ?? 1500);
+        let timerId: NodeJS.Timeout | undefined;
+        const timeoutPromise = new Promise<{ timedOut: true; error?: undefined }>((resolve) => {
+          timerId = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+          timerId.unref?.();
+        });
 
-          const bridgeSecret = typeof req.headers['x-zodiac-bridge-secret'] === 'string'
-            ? req.headers['x-zodiac-bridge-secret']
-            : undefined;
-
-          const verifiedSource = resolveVerifiedProvenance(parsed.source, {
-            isLoopback,
-            bridgeSecret,
-            expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
+        // Council Invariant: Prevent unhandled promise rejections if timeoutPromise wins the race
+        const persistTask = persistTelemetrySnapshot(latestSnapshot)
+          .then(() => ({ timedOut: false as const, error: undefined }))
+          .catch((err: unknown) => {
+            console.warn('[!] [DB] Telemetry persist to Neon failed:', err instanceof Error ? err.message : String(err));
+            return { timedOut: false as const, error: err };
           });
 
-          const mergedZodiacSeries = mergeRollingSeries(
-            latestSnapshot.timeSeries,
-            parsed.timeSeries,
-            MAX_SERVERLESS_BUFFER_POINTS
-          ) ?? [];
-
-          const mergedJetsonSeries = mergeRollingSeries(
-            latestSnapshot.jetson?.timeSeries,
-            parsed.jetson?.timeSeries,
-            MAX_SERVERLESS_BUFFER_POINTS
-          );
-
-          const mergedCoralSeries = mergeRollingSeries(
-            latestSnapshot.coral?.timeSeries,
-            parsed.coral?.timeSeries,
-            MAX_SERVERLESS_BUFFER_POINTS
-          );
-
-          latestSnapshot = {
-            ...latestSnapshot,
-            ...parsed,
-            timeSeries: mergedZodiacSeries,
-            source: verifiedSource,
-            system: {
-              ...latestSnapshot.system,
-              ...(parsed.system ?? {}),
-              timestampNs: process.hrtime.bigint(),
-            },
-            ...(parsed.jetson ? {
-              jetson: {
-                ...latestSnapshot.jetson,
-                ...parsed.jetson,
-                ...(mergedJetsonSeries ? { timeSeries: mergedJetsonSeries } : {}),
-              }
-            } : {}),
-            ...(parsed.coral ? {
-              coral: {
-                ...latestSnapshot.coral,
-                ...parsed.coral,
-                ...(mergedCoralSeries ? { timeSeries: mergedCoralSeries } : {}),
-              }
-            } : {}),
-          };
-
-          // Persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
-          // In serverless, un-awaited promises are killed on res.end(), so await with a configurable Dean latency deadline.
-          if (!isPersistingTelemetry()) {
-            const timeoutMs = Number(process.env['TELEMETRY_PERSIST_TIMEOUT_MS'] ?? 1500);
-            let timerId: NodeJS.Timeout | undefined;
-            const timeoutPromise = new Promise<{ timedOut: true; error?: undefined }>((resolve) => {
-              timerId = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
-              timerId.unref?.();
-            });
-
-            // Council Invariant: Prevent unhandled promise rejections if timeoutPromise wins the race
-            const persistTask = persistTelemetrySnapshot(latestSnapshot)
-              .then(() => ({ timedOut: false as const, error: undefined }))
-              .catch((err: unknown) => {
-                console.warn('[!] [DB] Telemetry persist to Neon failed:', err instanceof Error ? err.message : String(err));
-                return { timedOut: false as const, error: err };
-              });
-
-            try {
-              const raceResult = await Promise.race([
-                persistTask,
-                timeoutPromise,
-              ]);
-              if (raceResult.timedOut) {
-                console.warn(`[!] [DB] Telemetry persist to Neon timed out after ${timeoutMs}ms`);
-              }
-            } finally {
-              if (timerId !== undefined) {
-                clearTimeout(timerId);
-              }
-            }
+        try {
+          const raceResult = await Promise.race([
+            persistTask,
+            timeoutPromise,
+          ]);
+          if (raceResult.timedOut) {
+            console.warn(`[!] [DB] Telemetry persist to Neon timed out after ${timeoutMs}ms`);
           }
-
-          res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
-          res.statusCode = 200;
-          res.end(JSON.stringify({ status: 'ok', synced: true, provenance: latestSnapshot.source }));
-        } catch (err: unknown) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Invalid JSON' }));
         } finally {
-          resolve();
+          if (timerId !== undefined) {
+            clearTimeout(timerId);
+          }
         }
-      });
-    });
+      }
+
+      res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ status: 'ok', synced: true, provenance: latestSnapshot.source }));
+    } catch (err: unknown) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Invalid JSON' }));
+    }
+    return;
   }
 
   if (req.method === 'GET') {

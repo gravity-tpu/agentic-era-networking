@@ -12,7 +12,7 @@
     "postinstall": "prisma generate",
     "build": "prisma generate && tsc && node --experimental-strip-types scripts/build-assets.ts",
     "build:assets": "node --experimental-strip-types scripts/build-assets.ts",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit && tsc --project tsconfig.api.json --noEmit",
     "check:provenance": "node --experimental-strip-types scripts/check-provenance.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -50,6 +50,7 @@
   "devDependencies": {
     "@types/node": "^22.13.9",
     "@types/ws": "^8.18.1",
+    "prisma": "^7.10.0",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
   },
@@ -59,7 +60,6 @@
     "@prisma/client": "^7.10.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "prisma": "^7.10.0",
     "ws": "^8.21.3"
   },
   "overrides": {
