@@ -267,6 +267,37 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
     }
 
+    // Delta polling: ?since=<timestampMs> strips timeSeries to only points newer than
+    // the client's last known timestamp. After the first full-payload request, each
+    // subsequent 2s poll sends 1–2 new points (~1 KB) instead of all 360 (~80 KB),
+    // reducing Vercel Fast Origin Transfer by ~98% on the Hobby plan.
+    const sinceRaw = Number(url.searchParams.get('since') ?? '0');
+    const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0 && sinceRaw < Date.now() ? sinceRaw : 0;
+
+    if (sinceMs > 0) {
+      const trimSince = <T extends { readonly timestampMs: number }>(
+        series: readonly T[] | undefined
+      ): T[] | undefined => {
+        if (!series) return undefined;
+        const delta = (series as T[]).filter((p) => p.timestampMs > sinceMs);
+        return delta.length > 0 ? delta : undefined;
+      };
+
+      res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
+      res.statusCode = 200;
+      res.end(serializeWithBigInt({
+        ...latestSnapshot,
+        timeSeries: trimSince(latestSnapshot.timeSeries),
+        ...(latestSnapshot.jetson ? {
+          jetson: { ...latestSnapshot.jetson, timeSeries: trimSince(latestSnapshot.jetson.timeSeries) },
+        } : {}),
+        ...(latestSnapshot.coral ? {
+          coral: { ...latestSnapshot.coral, timeSeries: trimSince(latestSnapshot.coral.timeSeries) },
+        } : {}),
+      }));
+      return;
+    }
+
     res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
     res.statusCode = 200;
     res.end(serializeWithBigInt(latestSnapshot));

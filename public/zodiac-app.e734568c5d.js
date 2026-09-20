@@ -466,7 +466,14 @@
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
     try {
-      const resp = await fetch('/api/zodiac', { 
+      // Include ?since=<ts> so the server returns only new timeSeries points (delta),
+      // not all 360 buffered points on every 2s poll. Reduces Vercel Fast Origin
+      // Transfer by ~98% after the first full-payload request.
+      const sinceTs = timeSeriesBuffer.length > 0
+        ? timeSeriesBuffer[timeSeriesBuffer.length - 1].timestampMs
+        : 0;
+      const pollUrl = sinceTs > 0 ? `/api/zodiac?since=${sinceTs}` : '/api/zodiac';
+      const resp = await fetch(pollUrl, {
         cache: 'no-store',
         signal: controller.signal,
       });
