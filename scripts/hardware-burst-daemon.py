@@ -57,12 +57,8 @@ DEFAULT_SWITCH_IP = os.environ.get('ZODIAC_SWITCH_IP', '127.0.0.1')
 DEFAULT_CTRL_IP = os.environ.get('SDN_CONTROLLER_IP', '0.0.0.0')
 DEFAULT_WORKLOAD_IP = os.environ.get('RPI_WORKLOAD_IP', '127.0.0.1')
 CUSTOM_BURST_CORAL_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH')
-CANDIDATE_BURST_DIRS = ['/run/zodiac', '/tmp']
-BURST_TARGET_PATHS = tuple(
-    [CUSTOM_BURST_CORAL_PATH]
-    if CUSTOM_BURST_CORAL_PATH
-    else [os.path.join(d, 'coral-burst-telemetry.json') for d in CANDIDATE_BURST_DIRS]
-)
+_custom_burst_dir = os.path.dirname(CUSTOM_BURST_CORAL_PATH) if CUSTOM_BURST_CORAL_PATH else None
+CANDIDATE_BURST_DIRS = [_custom_burst_dir] if _custom_burst_dir else ['/run/zodiac', '/tmp']
 
 
 DEFAULT_CORAL_STALENESS_LIMIT_S = 5.0
@@ -114,6 +110,8 @@ stats_lock = threading.Lock()
 
 counters = {
     'coral_burst_inferences': 0,
+    'coral_tpu0_inferences': 0,
+    'coral_tpu1_inferences': 0,
     'zodiac_p3_frames': 0,
     'zodiac_p3_bytes': 0,
     'zodiac_p4_packets': 0,
@@ -210,9 +208,10 @@ def format_bytes_int(b: int) -> str:
     return f'{b} B'
 
 
-def atomic_write_burst_coral_json(data: dict):
+def atomic_write_coral_file(filename: str, data: dict):
     last_err = None
-    for target in BURST_TARGET_PATHS:
+    for d in CANDIDATE_BURST_DIRS:
+        target = os.path.join(d, filename)
         tmp = target + '.tmp'
         try:
             with open(tmp, 'w') as f:
@@ -223,11 +222,16 @@ def atomic_write_burst_coral_json(data: dict):
             last_err = e
             continue
     if last_err:
-        sys.stderr.write(f'[burst-coral] Failed writing telemetry: {last_err}\n')
+        sys.stderr.write(f'[burst-coral] Failed writing telemetry {filename}: {last_err}\n')
 
 
-def cleanup_burst_coral_telemetry():
-    for target in BURST_TARGET_PATHS:
+def atomic_write_burst_coral_json(data: dict):
+    atomic_write_coral_file('coral-burst-telemetry.json', data)
+
+
+def cleanup_burst_coral_telemetry(filename: str = 'coral-burst-telemetry.json'):
+    for d in CANDIDATE_BURST_DIRS:
+        target = os.path.join(d, filename)
         try:
             os.remove(target)
         except OSError as e:
@@ -235,7 +239,14 @@ def cleanup_burst_coral_telemetry():
                 sys.stderr.write(f'[burst-coral] Failed cleanup {target}: {e}\n')
 
 
-def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.Event = None):
+def coral_tpu_worker(
+    dev_spec: str,
+    max_bytes: int = 0,
+    active_event: Optional[threading.Event] = None,
+    telemetry_file: str = 'coral-burst-telemetry.json',
+    model_role: str = 'Burst Parallel',
+    counter_key: str = 'coral_burst_inferences'
+):
     """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
     try:
         from pycoral.utils.edgetpu import make_interpreter
@@ -264,10 +275,10 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.
         while not stop_event.is_set():
             if active_event is not None and not active_event.is_set():
                 if not is_in_standby:
-                    atomic_write_burst_coral_json({
+                    atomic_write_coral_file(telemetry_file, {
                         'detected': True,
                         'status': 'STANDBY',
-                        'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - Burst Parallel',
+                        'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - {model_role}',
                         'inferencesPerSecond': 0,
                         'totalInferences': total_worker_inf,
                         'latencyP50Ns': 0,
@@ -295,6 +306,8 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.
             total_worker_inf += batch_size
             with stats_lock:
                 counters['coral_burst_inferences'] += batch_size
+                if counter_key != 'coral_burst_inferences' and counter_key in counters:
+                    counters[counter_key] += batch_size
 
             now_ns = time.monotonic_ns()
             if now_ns - w_start_ns >= 1_000_000_000:
@@ -305,10 +318,10 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.
                 p99_ns = w_sorted[min(int(n * 0.99), n - 1)] if n > 0 else 0
                 inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
 
-                atomic_write_burst_coral_json({
+                atomic_write_coral_file(telemetry_file, {
                     'detected': True,
                     'status': 'ACTIVE',
-                    'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - Burst Parallel',
+                    'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - {model_role}',
                     'inferencesPerSecond': inf_sec,
                     'totalInferences': total_worker_inf,
                     'latencyP50Ns': p50_ns,
@@ -321,7 +334,7 @@ def coral_tpu_worker(dev_spec: str, max_bytes: int = 0, active_event: threading.
         sys.stderr.write(f'[coral_worker_{dev_spec}] Error: {e}\n')
         sys.stderr.flush()
     finally:
-        cleanup_burst_coral_telemetry()
+        cleanup_burst_coral_telemetry(telemetry_file)
 
 
 def find_tap_interface() -> str:
@@ -894,7 +907,13 @@ def main():
             sys.stderr.write(f'[burst-daemon] Note: Edge TPU worker discovery error: {exc}\n')
 
         for dev in active_tpu_devs:
-            t = threading.Thread(target=coral_tpu_worker, args=(dev, max_bytes, tpu2_active), name=f'coral-burst-{dev}', daemon=True)
+            t = threading.Thread(
+                target=coral_tpu_worker,
+                args=(dev, max_bytes, tpu2_active),
+                kwargs={'model_role': 'DNS Sentinel', 'counter_key': 'coral_tpu1_inferences'},
+                name=f'coral-burst-{dev}',
+                daemon=True,
+            )
             threads.append(t)
             t.start()
             log_message(f'   [+] Spawned dedicated Edge TPU worker on {dev} (Coral TPU #2 DNS Sentinel)', log_file)
@@ -1103,6 +1122,8 @@ def main():
         log_message(f'✅ BURST COMPLETED: Total Run Time {total_elapsed_sec}s ({total_elapsed_sec//60}m{total_elapsed_sec%60:02d}s)', log_file)
         if is_target_enabled('coral', enabled_targets):
             log_message(f'   Coral Burst Inferences  : {counters["coral_burst_inferences"]:,}', log_file)
+            if counters['coral_tpu1_inferences'] > 0:
+                log_message(f'     └─ Coral TPU #2 (DNS Sentinel): {counters["coral_tpu1_inferences"]:,}', log_file)
         if is_target_enabled('zodiac-p3', enabled_targets):
             log_message(f'   Zodiac Port 3 Frames    : {counters["zodiac_p3_frames"]:,} ({format_bytes_int(counters["zodiac_p3_bytes"])})', log_file)
         if is_target_enabled('zodiac-p4', enabled_targets):
