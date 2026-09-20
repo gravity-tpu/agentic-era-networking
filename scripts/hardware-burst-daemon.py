@@ -63,6 +63,8 @@ CANDIDATE_BURST_DIRS = [_custom_burst_dir] if _custom_burst_dir else ['/run/zodi
 
 
 DEFAULT_CORAL_STALENESS_LIMIT_S = 5.0
+SHUTDOWN_QUEUE_TIMEOUT_SEC = 1.0   # max wait to enqueue poison pill during shutdown
+SHUTDOWN_JOIN_TIMEOUT_SEC = 2.0    # max wait for telemetry writer thread to exit
 DEFAULT_MAX_LOAD_SCALE_FACTOR = 3.0
 WALL_CLOCK_EPOCH_THRESHOLD_NS = 1_000_000_000_000_000_000  # 1e18 ns boundary (Sept 2001) separating boot vs wall clock
 
@@ -1157,11 +1159,15 @@ def main():
         # Use put with timeout to avoid blocking the main thread if the writer is hung on a
         # stalled filesystem and the queue is still full at shutdown time.
         try:
-            _coral_write_q.put(None, timeout=1.0)
+            _coral_write_q.put(None, timeout=SHUTDOWN_QUEUE_TIMEOUT_SEC)
         except queue.Full:
-            pass  # writer thread is daemon=True and will be killed with the process
+            sys.stderr.write(
+                f'[burst-daemon] Coral telemetry writer queue full during shutdown '
+                f'(qsize={_coral_write_q.qsize()}); writer thread likely hung on stalled '
+                f'filesystem. Dropping poison pill — daemon thread will be reaped on exit.\n'
+            )
         if _coral_writer_thread is not None:
-            _coral_writer_thread.join(timeout=2.0)
+            _coral_writer_thread.join(timeout=SHUTDOWN_JOIN_TIMEOUT_SEC)
 
         total_elapsed_sec = (time.monotonic_ns() - start_ns) // 1_000_000_000
         tot_bytes = counters['zodiac_p3_bytes'] + counters['zodiac_p4_bytes'] + counters['rpi_bytes'] + counters['jetson_gpu_bytes']
