@@ -17,6 +17,7 @@
   let selectedPort = 4; // Default to active Port 4
   let isFetching = false;
   let pollTimeoutId = null;
+  let histRefreshTimeoutId = null;
 
   // Active Appliance Tier State ('zodiac' | 'orin' | 'coral')
   let activeDeviceId = 'zodiac';
@@ -3440,6 +3441,40 @@ Please connect the physical switch via USB to execute '${command}' on device har
     }
   }
 
+  // ── Historical background refresh ────────────────────────────────────────────
+  // Re-fetches the active range on a cadence matched to its bucket resolution so
+  // the charts stay current without a page reload. Cleared when returning to Live.
+  function getHistoricalRefreshMs(range) {
+    switch (range) {
+      case '1h':  return 60_000;      // 1 min  — JSONL flushes every 30s
+      case '6h':  return 120_000;     // 2 min
+      case '24h': return 300_000;     // 5 min
+      case '7d':  return 600_000;     // 10 min
+      case '30d': return 1_800_000;   // 30 min — 2h buckets, slow-moving
+      default:    return 120_000;
+    }
+  }
+
+  function stopHistoricalRefresh() {
+    if (histRefreshTimeoutId !== null) {
+      clearTimeout(histRefreshTimeoutId);
+      histRefreshTimeoutId = null;
+    }
+  }
+
+  function startHistoricalRefresh(range) {
+    stopHistoricalRefresh();
+    if (!['1h', '6h', '24h', '7d', '30d'].includes(range)) return;
+    const intervalMs = getHistoricalRefreshMs(range);
+    histRefreshTimeoutId = setTimeout(async function scheduleNext() {
+      if (!['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) return;
+      await fetchHistoricalRange(currentRange);
+      updateCharts();
+      histRefreshTimeoutId = setTimeout(scheduleNext, getHistoricalRefreshMs(currentRange));
+    }, intervalMs);
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Bind Synchronized Time Range Selector Buttons (Live, 1h, 6h, 24h, 7d, 30d) across Zodiac, Jetson & Dual Coral
   const allTimeBtns = document.querySelectorAll('.cf-time-range-group .cf-time-btn');
   function setTimeRange(newRange) {
@@ -3468,9 +3503,11 @@ Please connect the physical switch via USB to execute '${command}' on device har
       btn.addEventListener('click', async () => {
         const range = btn.getAttribute('data-range') || 'live';
         setTimeRange(range);
+        stopHistoricalRefresh();
 
         if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
           await fetchHistoricalRange(currentRange);
+          startHistoricalRefresh(currentRange);
         } else {
           historicalDataUnavailable = false;
         }
@@ -3484,6 +3521,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   if (['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
     void fetchHistoricalRange(currentRange).then(() => {
       updateCharts();
+      startHistoricalRefresh(currentRange);
     });
   }
 
