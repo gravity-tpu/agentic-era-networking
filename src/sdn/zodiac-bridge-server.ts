@@ -848,7 +848,7 @@ export class ZodiacBridgeServer {
 
         // 1. Local disk JSONL history (preferred: persistent, no network, 30-day retention)
         try {
-          const local = queryLocalHistory(range);
+          const local = await queryLocalHistory(range);
           if (local.timeSeries.length > 0 || local.jetsonTimeSeries.length > 0 || local.coralTimeSeries.length > 0) {
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
@@ -1533,7 +1533,8 @@ export class ZodiacBridgeServer {
     const ji = findCutoffIndex(this.jetsonTimeSeries, cutoff + 1);
     const ci = findCutoffIndex(this.coralTimeSeries,  cutoff + 1);
 
-    appendLocalHistoryPoints(
+    // Fire-and-forget async write — never blocks the SDN event loop (Jeff Dean latency invariant)
+    void appendLocalHistoryPoints(
       this.timeSeries.slice(zi),
       this.jetsonTimeSeries.slice(ji),
       this.coralTimeSeries.slice(ci),

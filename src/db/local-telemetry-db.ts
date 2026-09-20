@@ -2,23 +2,26 @@
  * src/db/local-telemetry-db.ts
  * Local disk-backed historical telemetry store for the Zodiac bridge server.
  *
- * Appends one averaged data point per 30-second flush cycle to per-day JSONL files,
- * supporting 30-day persistent history without requiring Neon/cloud connectivity.
- * On restart the rolling in-memory buffer is replaced by data read from these files.
+ * Appends one averaged data point per device type (Zodiac, Jetson, Coral) to per-day
+ * JSONL files every 30 seconds, supporting 30-day persistent history without Neon/cloud.
+ * Historical queries read relevant day files in parallel via async I/O, never blocking
+ * the SDN OpenFlow event loop.
  *
- * Storage layout (under HISTORY_DIR, resolved below):
+ * Storage layout (under HISTORY_DIR resolved below):
  *   zodiac-YYYY-MM-DD.jsonl   — ZodiacTimeSeriesPoint, one JSON object per line
  *   jetson-YYYY-MM-DD.jsonl   — JetsonTimeSeriesPoint, one JSON object per line
  *   coral-YYYY-MM-DD.jsonl    — CoralTimeSeriesPoint,  one JSON object per line
  *
  * Council Invariants Enforced:
- * - Jeff Dean: bounded reads per query; O(log N) downsampling reuses existing functions.
- * - Sanjay Ghemawat: append-only JSONL (no rewrite on append); zero new dependencies.
- * - Anti-Shortcut Law: BigInt → string serialization preserves 64-bit invariants across
- *   disk round-trips; corrupt JSONL lines are skipped rather than crashing the server.
+ * - Jeff Dean: All file I/O is async (never blocks the Node.js event loop); parallel
+ *   Promise.all reads across day files for minimum query latency.
+ * - Sanjay Ghemawat: Append-only JSONL; zero new dependencies; flat data layout.
+ * - Anti-Shortcut Law: BigInt → string round-trips preserve 64-bit invariants;
+ *   corrupt JSONL lines are counted and logged rather than silently swallowed.
  */
 
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ZodiacTimeSeriesPoint,
@@ -37,6 +40,9 @@ import {
 
 export const LOCAL_HISTORY_RETENTION_DAYS = 30;
 
+// Tracks corrupt JSONL lines seen since process start (observable via logs, not silently dropped)
+let corruptLinesTotal = 0;
+
 // ─── Directory resolution ────────────────────────────────────────────────────
 
 function resolveHistoryDir(): string {
@@ -54,12 +60,12 @@ function resolveHistoryDir(): string {
       fs.writeFileSync(probe, '');
       fs.unlinkSync(probe);
       return dir;
-    } catch {
-      // try next candidate
+    } catch (err: unknown) {
+      console.warn(`[!] [Local Telemetry DB] Directory ${dir} not usable:`, err instanceof Error ? err.message : String(err));
     }
   }
-  // Last resort — best-effort create even if subsequent writes fail (we log those)
-  try { fs.mkdirSync('/tmp/zodiac-history', { recursive: true }); } catch { /* ignore */ }
+  console.warn('[!] [Local Telemetry DB] No writable history directory found; falling back to /tmp/zodiac-history.');
+  try { fs.mkdirSync('/tmp/zodiac-history', { recursive: true }); } catch { /* logged above */ }
   return '/tmp/zodiac-history';
 }
 
@@ -67,9 +73,9 @@ const HISTORY_DIR = resolveHistoryDir();
 
 // ─── File path helpers ───────────────────────────────────────────────────────
 
-// Use UTC dates for cross-timezone consistency across Jetson (JST) and Vercel (UTC).
+// UTC dates for cross-timezone consistency between Jetson and Vercel.
 function utcDateSuffix(ms: number): string {
-  const d = new Date(ms);
+  const d  = new Date(ms);
   const y  = d.getUTCFullYear();
   const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
   const da = String(d.getUTCDate()).padStart(2, '0');
@@ -82,61 +88,62 @@ const coralFile  = (suffix: string) => path.join(HISTORY_DIR, `coral-${suffix}.j
 
 const bigintReplacer = (_: string, v: unknown) => typeof v === 'bigint' ? v.toString() : v;
 
-// ─── Write path ──────────────────────────────────────────────────────────────
+// ─── Write path (async, fire-and-forget from callers) ───────────────────────
 
 /**
  * Append one averaged data point per device type to today's JSONL history files.
  *
  * Called by ZodiacBridgeServer every STATE_FLUSH_INTERVAL_MS (30 s) with all raw
  * points accumulated since the previous call. Uses downsamplePoints(pts, 1) to average
- * them into a single representative point per flush, keeping file growth bounded at
- * ~2 points/min = 2880/day × ~150 B ≈ 430 KB/day per device type (13 MB/30 days total).
+ * them into a single representative point per call — ~150 B × 3 files per flush tick.
+ * All writes are async so the SDN OpenFlow event loop is never stalled.
  */
-export function appendLocalHistoryPoints(
+export async function appendLocalHistoryPoints(
   newZodiacPoints: ZodiacTimeSeriesPoint[],
   newJetsonPoints: JetsonTimeSeriesPoint[],
   newCoralPoints: CoralTimeSeriesPoint[],
-): void {
+): Promise<void> {
   if (newZodiacPoints.length === 0 && newJetsonPoints.length === 0 && newCoralPoints.length === 0) {
     return;
   }
 
   const suffix = utcDateSuffix(Date.now());
+  const writes: Promise<void>[] = [];
 
-  // Average each device's window into a single representative point before appending.
-  // Spreading into a new array avoids mutating the caller's slice references.
   if (newZodiacPoints.length > 0) {
-    try {
-      const summary = downsamplePoints([...newZodiacPoints], 1);
-      if (summary.length > 0) {
-        fs.appendFileSync(zodiacFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n');
-      }
-    } catch (err: unknown) {
-      console.warn('[!] [Local Telemetry DB] Failed to append zodiac history:', err instanceof Error ? err.message : String(err));
+    const summary = downsamplePoints([...newZodiacPoints], 1);
+    if (summary.length > 0) {
+      writes.push(
+        fsp.appendFile(zodiacFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
+          console.warn('[!] [Local Telemetry DB] Failed to append zodiac history:', err instanceof Error ? err.message : String(err));
+        })
+      );
     }
   }
 
   if (newJetsonPoints.length > 0) {
-    try {
-      const summary = downsampleJetsonPoints([...newJetsonPoints], 1);
-      if (summary.length > 0) {
-        fs.appendFileSync(jetsonFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n');
-      }
-    } catch (err: unknown) {
-      console.warn('[!] [Local Telemetry DB] Failed to append jetson history:', err instanceof Error ? err.message : String(err));
+    const summary = downsampleJetsonPoints([...newJetsonPoints], 1);
+    if (summary.length > 0) {
+      writes.push(
+        fsp.appendFile(jetsonFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
+          console.warn('[!] [Local Telemetry DB] Failed to append jetson history:', err instanceof Error ? err.message : String(err));
+        })
+      );
     }
   }
 
   if (newCoralPoints.length > 0) {
-    try {
-      const summary = downsampleCoralPoints([...newCoralPoints], 1);
-      if (summary.length > 0) {
-        fs.appendFileSync(coralFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n');
-      }
-    } catch (err: unknown) {
-      console.warn('[!] [Local Telemetry DB] Failed to append coral history:', err instanceof Error ? err.message : String(err));
+    const summary = downsampleCoralPoints([...newCoralPoints], 1);
+    if (summary.length > 0) {
+      writes.push(
+        fsp.appendFile(coralFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
+          console.warn('[!] [Local Telemetry DB] Failed to append coral history:', err instanceof Error ? err.message : String(err));
+        })
+      );
     }
   }
+
+  await Promise.all(writes);
 }
 
 // ─── Deserialization helpers ─────────────────────────────────────────────────
@@ -188,12 +195,9 @@ function parseJetsonLine(p: Record<string, unknown>): JetsonTimeSeriesPoint {
     timestampMs:       Number(p['timestampMs'] ?? 0),
     cpuUtilizationPct: Number(p['cpuUtilizationPct'] ?? 0),
     gpuUtilizationPct: Number(p['gpuUtilizationPct'] ?? 0),
-    cpuTempC:          p['cpuTempC'] !== null && p['cpuTempC'] !== undefined
-      ? Number(p['cpuTempC']) : null,
-    gpuTempC:          p['gpuTempC'] !== null && p['gpuTempC'] !== undefined
-      ? Number(p['gpuTempC']) : null,
-    junctionTempC:     p['junctionTempC'] !== null && p['junctionTempC'] !== undefined
-      ? Number(p['junctionTempC']) : null,
+    cpuTempC:          p['cpuTempC'] !== null && p['cpuTempC'] !== undefined ? Number(p['cpuTempC']) : null,
+    gpuTempC:          p['gpuTempC'] !== null && p['gpuTempC'] !== undefined ? Number(p['gpuTempC']) : null,
+    junctionTempC:     p['junctionTempC'] !== null && p['junctionTempC'] !== undefined ? Number(p['junctionTempC']) : null,
     powerWatts:        Number(p['powerWatts'] ?? 0),
     ramUsedBytes:      BigInt(String(p['ramUsedBytes']      ?? '0')),
     nvmeReadRateBps:   BigInt(String(p['nvmeReadRateBps']   ?? '0')),
@@ -205,7 +209,7 @@ function parseJetsonLine(p: Record<string, unknown>): JetsonTimeSeriesPoint {
 
 function parseCoralLine(p: Record<string, unknown>): CoralTimeSeriesPoint {
   return {
-    timestampMs:        Number(p['timestampMs'] ?? 0),
+    timestampMs:         Number(p['timestampMs'] ?? 0),
     inferencesPerSecond: BigInt(String(p['inferencesPerSecond'] ?? '0')),
     tapPacketsPerSecond: BigInt(String(p['tapPacketsPerSecond'] ?? '0')),
     latencyP50Us:        BigInt(String(p['latencyP50Us']        ?? '0')),
@@ -218,54 +222,69 @@ function parseCoralLine(p: Record<string, unknown>): CoralTimeSeriesPoint {
   };
 }
 
-// ─── Read path (per-file helpers) ────────────────────────────────────────────
+// ─── Async read path ─────────────────────────────────────────────────────────
 
-function readZodiacFile(filePath: string, cutoffMs: number): ZodiacTimeSeriesPoint[] {
+async function readZodiacFile(filePath: string, cutoffMs: number): Promise<ZodiacTimeSeriesPoint[]> {
+  let raw: string;
   try {
-    const result: ZodiacTimeSeriesPoint[] = [];
-    for (const line of fs.readFileSync(filePath, 'utf-8').split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const p = JSON.parse(line) as Record<string, unknown>;
-        if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseZodiacLine(p));
-      } catch { /* skip corrupt line; Anti-Shortcut: explicit degradation */ }
-    }
-    return result;
+    raw = await fsp.readFile(filePath, 'utf-8');
   } catch {
-    return []; // file doesn't exist yet or unreadable — normal on first run
+    return []; // file doesn't exist yet (first run) or is unreadable — normal, not an error
   }
+  const result: ZodiacTimeSeriesPoint[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const p = JSON.parse(line) as Record<string, unknown>;
+      if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseZodiacLine(p));
+    } catch (parseErr: unknown) {
+      corruptLinesTotal++;
+      console.warn(`[!] [Local Telemetry DB] Skipping corrupt zodiac line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
+    }
+  }
+  return result;
 }
 
-function readJetsonFile(filePath: string, cutoffMs: number): JetsonTimeSeriesPoint[] {
+async function readJetsonFile(filePath: string, cutoffMs: number): Promise<JetsonTimeSeriesPoint[]> {
+  let raw: string;
   try {
-    const result: JetsonTimeSeriesPoint[] = [];
-    for (const line of fs.readFileSync(filePath, 'utf-8').split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const p = JSON.parse(line) as Record<string, unknown>;
-        if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseJetsonLine(p));
-      } catch { /* skip corrupt line */ }
-    }
-    return result;
+    raw = await fsp.readFile(filePath, 'utf-8');
   } catch {
     return [];
   }
+  const result: JetsonTimeSeriesPoint[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const p = JSON.parse(line) as Record<string, unknown>;
+      if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseJetsonLine(p));
+    } catch (parseErr: unknown) {
+      corruptLinesTotal++;
+      console.warn(`[!] [Local Telemetry DB] Skipping corrupt jetson line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
+    }
+  }
+  return result;
 }
 
-function readCoralFile(filePath: string, cutoffMs: number): CoralTimeSeriesPoint[] {
+async function readCoralFile(filePath: string, cutoffMs: number): Promise<CoralTimeSeriesPoint[]> {
+  let raw: string;
   try {
-    const result: CoralTimeSeriesPoint[] = [];
-    for (const line of fs.readFileSync(filePath, 'utf-8').split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const p = JSON.parse(line) as Record<string, unknown>;
-        if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseCoralLine(p));
-      } catch { /* skip corrupt line */ }
-    }
-    return result;
+    raw = await fsp.readFile(filePath, 'utf-8');
   } catch {
     return [];
   }
+  const result: CoralTimeSeriesPoint[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const p = JSON.parse(line) as Record<string, unknown>;
+      if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseCoralLine(p));
+    } catch (parseErr: unknown) {
+      corruptLinesTotal++;
+      console.warn(`[!] [Local Telemetry DB] Skipping corrupt coral line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
+    }
+  }
+  return result;
 }
 
 // ─── Public query API ────────────────────────────────────────────────────────
@@ -277,35 +296,40 @@ export interface LocalHistoricalResult {
 }
 
 /**
- * Read all local JSONL history files that overlap the requested time range,
- * filter by cutoff timestamp, then downsample to the range's configured maxPoints.
+ * Read all local JSONL history files overlapping the requested time range and
+ * downsample to the range's configured maxPoints.
  *
- * Synchronous I/O is intentional: historical queries are user-initiated (low frequency)
- * and this is the same approach used by loadTelemetryState in telemetry-state-store.ts.
- * Worst-case read for 30d: ~13 MB total across 31 files ≈ 50–150 ms on NVMe SSD.
+ * All file reads are async and fanned out in parallel across the three device types
+ * to keep total query latency bounded (worst case 30d: ~13 MB, three-way parallel read).
+ * Never blocks the SDN OpenFlow event loop (Jeff Dean latency invariant).
  */
-export function queryLocalHistory(range: HistoricalRange): LocalHistoricalResult {
+export async function queryLocalHistory(range: HistoricalRange): Promise<LocalHistoricalResult> {
   const config   = RANGE_CONFIGS[range];
   const windowMs = RANGE_DURATION_MS[range];
   const nowMs    = Date.now();
   const cutoffMs = nowMs - windowMs;
 
-  // Number of calendar day files to scan (+1 for UTC-boundary overlap)
-  const DAY_MS      = 24 * 60 * 60 * 1000;
-  const daysToScan  = Math.ceil(windowMs / DAY_MS) + 1;
-
-  const zodiacPoints: ZodiacTimeSeriesPoint[] = [];
-  const jetsonPoints: JetsonTimeSeriesPoint[] = [];
-  const coralPoints:  CoralTimeSeriesPoint[]  = [];
-
+  // Suffixes for every UTC calendar day that overlaps the window (+1 for boundary)
+  const DAY_MS     = 24 * 60 * 60 * 1000;
+  const daysToScan = Math.ceil(windowMs / DAY_MS) + 1;
+  const suffixes: string[] = [];
   for (let i = 0; i <= daysToScan; i++) {
-    const suffix = utcDateSuffix(nowMs - i * DAY_MS);
-    zodiacPoints.push(...readZodiacFile(zodiacFile(suffix), cutoffMs));
-    jetsonPoints.push(...readJetsonFile(jetsonFile(suffix), cutoffMs));
-    coralPoints.push(...readCoralFile(coralFile(suffix), cutoffMs));
+    suffixes.push(utcDateSuffix(nowMs - i * DAY_MS));
   }
 
-  // Files scanned newest-first; sort before downsampling (required by downsamplePoints)
+  // Parallel reads across all three device types simultaneously
+  const [zodiacArrays, jetsonArrays, coralArrays] = await Promise.all([
+    Promise.all(suffixes.map(s => readZodiacFile(zodiacFile(s), cutoffMs))),
+    Promise.all(suffixes.map(s => readJetsonFile(jetsonFile(s), cutoffMs))),
+    Promise.all(suffixes.map(s => readCoralFile(coralFile(s), cutoffMs))),
+  ]);
+
+  // Flatten using concat to avoid spread call-stack limits on large arrays
+  const zodiacPoints = ([] as ZodiacTimeSeriesPoint[]).concat(...zodiacArrays);
+  const jetsonPoints = ([] as JetsonTimeSeriesPoint[]).concat(...jetsonArrays);
+  const coralPoints  = ([] as CoralTimeSeriesPoint[]).concat(...coralArrays);
+
+  // Files are scanned newest-first (i=0 is today); sort ascending before downsampling
   zodiacPoints.sort((a, b) => a.timestampMs - b.timestampMs);
   jetsonPoints.sort((a, b) => a.timestampMs - b.timestampMs);
   coralPoints.sort((a, b)  => a.timestampMs - b.timestampMs);
@@ -320,8 +344,9 @@ export function queryLocalHistory(range: HistoricalRange): LocalHistoricalResult
 // ─── Pruning ─────────────────────────────────────────────────────────────────
 
 /**
- * Delete JSONL files older than retentionDays. Called once on bridge server startup.
- * Fast synchronous directory scan — acceptable at startup, not on the hot path.
+ * Delete JSONL files older than retentionDays. Called once synchronously on bridge
+ * server startup before the HTTP server begins accepting connections, so blocking
+ * a directory scan at that point is safe (no live OpenFlow traffic yet).
  */
 export function pruneLocalHistory(retentionDays: number = LOCAL_HISTORY_RETENTION_DAYS): void {
   const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
@@ -334,9 +359,9 @@ export function pruneLocalHistory(retentionDays: number = LOCAL_HISTORY_RETENTIO
       if (Number.isFinite(dayMs) && dayMs < cutoffMs) {
         try {
           fs.unlinkSync(path.join(HISTORY_DIR, entry));
+          console.log(`[+] [Local Telemetry DB] Pruned expired history file: ${entry}`);
         } catch (unlinkErr: unknown) {
-          console.warn(`[!] [Local Telemetry DB] Failed to delete old history file ${entry}:`,
-            unlinkErr instanceof Error ? unlinkErr.message : String(unlinkErr));
+          console.warn(`[!] [Local Telemetry DB] Failed to delete ${entry}:`, unlinkErr instanceof Error ? unlinkErr.message : String(unlinkErr));
         }
       }
     }
