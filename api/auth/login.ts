@@ -7,7 +7,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { buildGoogleOAuthUrl, generateOAuthState } from '../../dist/auth/google-auth.js';
+import { buildGoogleOAuthUrl, generateOAuthState } from '../../src/auth/google-auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'GET') {

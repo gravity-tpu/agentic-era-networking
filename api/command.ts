@@ -10,7 +10,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { requireOperatorAuth } from '../dist/auth/google-auth.js';
+import { requireOperatorAuth } from '../src/auth/google-auth.js';
 
 const MAX_PAYLOAD_BYTES = 64 * 1024; // 64 KB
 

@@ -4,7 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { buildClearCookieHeader } from '../../dist/auth/google-auth.js';
+import { buildClearCookieHeader } from '../../src/auth/google-auth.js';
 
 export default async function handler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
   const clearCookie = buildClearCookieHeader();

@@ -4,7 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { getAuthenticatedUser, isLocalDev } from '../../dist/auth/google-auth.js';
+import { getAuthenticatedUser, isLocalDev } from '../../src/auth/google-auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');

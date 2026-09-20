@@ -15,8 +15,8 @@ import {
   buildSessionCookieHeader,
   parseCookies,
   type GoogleUserClaims,
-} from '../../dist/auth/google-auth.js';
-import { upsertUser } from '../../dist/db/telemetry-db.js';
+} from '../../src/auth/google-auth.js';
+import { upsertUser } from '../../src/db/telemetry-db.js';
 
 interface GoogleTokenResponse {
   readonly id_token?: string;

@@ -15,14 +15,14 @@ import {
   resolveVerifiedProvenance,
   CLOUD_RELAY_BOUNDS,
   type ZodiacFullTelemetrySnapshot,
-} from '../dist/sdn/zodiac-telemetry.js';
-import { requireOperatorAuth, isLocalDev } from '../dist/auth/google-auth.js';
+} from '../src/sdn/zodiac-telemetry.js';
+import { requireOperatorAuth, isLocalDev } from '../src/auth/google-auth.js';
 import {
   persistTelemetrySnapshot,
   getHistoricalMultiDeviceTelemetry,
   isValidRange,
   isPersistingTelemetry,
-} from '../dist/db/telemetry-db.js';
+} from '../src/db/telemetry-db.js';
 
 const MAX_PAYLOAD_BYTES = CLOUD_RELAY_BOUNDS.MAX_PAYLOAD_BYTES;
 const MAX_SERVERLESS_BUFFER_POINTS = CLOUD_RELAY_BOUNDS.MAX_SERVERLESS_POINTS;
