@@ -1671,7 +1671,12 @@
   function getPointsForDisplay() {
     if (currentRange !== 'live') {
       if (historicalTimeSeriesBuffer.length > 0) {
-        return historicalTimeSeriesBuffer;
+        // Extend JSONL history with live buffer tail so the chart never shows a
+        // gap between the last JSONL flush and the current moment, regardless of
+        // background refresh cadence or browser tab throttling.
+        const lastHistTs = historicalTimeSeriesBuffer[historicalTimeSeriesBuffer.length - 1]?.timestampMs ?? 0;
+        const liveExt = timeSeriesBuffer.filter((p) => p.timestampMs > lastHistTs);
+        return liveExt.length > 0 ? [...historicalTimeSeriesBuffer, ...liveExt] : historicalTimeSeriesBuffer;
       }
       if (currentSnapshot) {
         return generateLocalHistory(currentSnapshot, currentRange);
@@ -2089,7 +2094,9 @@
   function getJetsonPointsForDisplay() {
     if (currentRange !== 'live') {
       if (historicalJetsonTimeSeriesBuffer.length > 0) {
-        return historicalJetsonTimeSeriesBuffer;
+        const lastHistTs = historicalJetsonTimeSeriesBuffer[historicalJetsonTimeSeriesBuffer.length - 1]?.timestampMs ?? 0;
+        const liveExt = jetsonTimeSeriesBuffer.filter((p) => p.timestampMs > lastHistTs);
+        return liveExt.length > 0 ? [...historicalJetsonTimeSeriesBuffer, ...liveExt] : historicalJetsonTimeSeriesBuffer;
       }
       return [];
     }
@@ -2114,7 +2121,9 @@
     let rawPoints = [];
     if (currentRange !== 'live') {
       if (historicalCoralTimeSeriesBuffer.length > 0) {
-        rawPoints = historicalCoralTimeSeriesBuffer;
+        const lastHistTs = historicalCoralTimeSeriesBuffer[historicalCoralTimeSeriesBuffer.length - 1]?.timestampMs ?? 0;
+        const liveExt = coralTimeSeriesBuffer.filter((p) => p.timestampMs > lastHistTs);
+        rawPoints = liveExt.length > 0 ? [...historicalCoralTimeSeriesBuffer, ...liveExt] : historicalCoralTimeSeriesBuffer;
       }
     } else {
       const durationMs = getRangeDurationMs('live');
@@ -3545,6 +3554,20 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
   // Initialize Collapsible Navigation Sidebar (Left Pane Slider)
   initSidebarSlider();
+
+  // Re-fetch historical data immediately when the tab regains focus.
+  // Browsers throttle background-tab timers (Chrome/Safari: up to 15 min),
+  // so the background refresh may be stale when the user returns to the tab.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && ['1h', '6h', '24h', '7d', '30d'].includes(currentRange)) {
+      void fetchHistoricalRange(currentRange).then(() => {
+        updateCharts();
+        startHistoricalRefresh(currentRange); // reset timer so next tick is fresh 60s from now
+      }).catch((err) => {
+        console.warn('[!] [Historical Range] Visibility re-fetch failed:', err instanceof Error ? err.message : String(err));
+      });
+    }
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Sidebar Navigation System — O(1) display toggle + event delegation
