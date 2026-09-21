@@ -273,7 +273,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // subsequent 2s poll sends 1–2 new points (~1 KB) instead of all 360 (~80 KB),
     // reducing Vercel Fast Origin Transfer by ~98% on the Hobby plan.
     const sinceRaw = Number(url.searchParams.get('since') ?? '0');
-    const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0 && sinceRaw < Date.now() ? sinceRaw : 0;
+    // Math.floor enforces integer semantics: a float like 1700000000.5 would make
+    // sinceMs + 1 = 1700000001.5, altering the strict > sinceMs boundary in trimSince.
+    const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0 && sinceRaw < Date.now()
+      ? Math.floor(sinceRaw)
+      : 0;
 
     if (sinceMs > 0) {
       // O(log N) binary search to the first point strictly newer than sinceMs,
