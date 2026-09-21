@@ -22,6 +22,7 @@ import {
   getHistoricalMultiDeviceTelemetry,
   isValidRange,
   isPersistingTelemetry,
+  findCutoffIndex,
 } from '../src/db/telemetry-db.js';
 
 const MAX_PAYLOAD_BYTES = CLOUD_RELAY_BOUNDS.MAX_PAYLOAD_BYTES;
@@ -275,16 +276,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0 && sinceRaw < Date.now() ? sinceRaw : 0;
 
     if (sinceMs > 0) {
-      // Returns undefined (key omitted from JSON) when the delta is empty — saves
-      // ~15 bytes per device type per response vs returning []. All callers in
-      // zodiac-app.js guard with `Array.isArray(x) && x.length > 0` so undefined
-      // is handled identically to an empty array.
+      // O(log N) binary search to the first point strictly newer than sinceMs,
+      // then a single slice. Chronological sort invariant holds because mergeRollingSeries
+      // only appends strictly-newer timestamps. Always returns T[] (never undefined)
+      // to maintain a stable iterable API contract; returns [] when no new points exist.
       const trimSince = <T extends { readonly timestampMs: number }>(
         series: readonly T[] | undefined
-      ): T[] | undefined => {
-        if (!series) return undefined;
-        const delta = series.filter((p) => p.timestampMs > sinceMs);
-        return delta.length > 0 ? delta : undefined;
+      ): T[] => {
+        if (!series || series.length === 0) return [];
+        const idx = findCutoffIndex(series, sinceMs + 1);
+        return series.slice(idx) as T[];
       };
 
       res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
