@@ -54,6 +54,29 @@
   let historicalJetsonTimeSeriesBuffer = [];
   let historicalCoralTimeSeriesBuffer = [];
 
+  // ── History + live stitch cache ───────────────────────────────────────────
+  // Merging historical (JSONL) and live buffer tails is called every 2s from the
+  // live poll. Cache by last-timestamp key so the spread allocation only fires
+  // when one of the buffers actually receives new data (Ghemawat GC invariant).
+  const _stitchCache = {
+    zodiac: { key: '', data: /** @type {any[]} */ ([]) },
+    jetson: { key: '', data: /** @type {any[]} */ ([]) },
+    coral:  { key: '', data: /** @type {any[]} */ ([]) },
+  };
+
+  function stitchWithLive(histBuf, liveBuf, slot) {
+    if (histBuf.length === 0) return histBuf;
+    const lastHistTs = histBuf[histBuf.length - 1]?.timestampMs ?? 0;
+    const lastLiveTs = liveBuf.length > 0 ? liveBuf[liveBuf.length - 1].timestampMs : 0;
+    const key = `${histBuf.length}-${lastHistTs}-${liveBuf.length}-${lastLiveTs}`;
+    if (slot.key === key) return slot.data;
+    const ext = liveBuf.filter((p) => p.timestampMs > lastHistTs);
+    slot.data = ext.length > 0 ? [...histBuf, ...ext] : histBuf;
+    slot.key = key;
+    return slot.data;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Standardized chart layout padding constants (Dean & Ghemawat: eliminate magic numbers)
   const ORIN_NETWORK_PAD_LEFT = 65;
   const ORIN_NETWORK_PAD_RIGHT = 20;
@@ -1671,12 +1694,7 @@
   function getPointsForDisplay() {
     if (currentRange !== 'live') {
       if (historicalTimeSeriesBuffer.length > 0) {
-        // Extend JSONL history with live buffer tail so the chart never shows a
-        // gap between the last JSONL flush and the current moment, regardless of
-        // background refresh cadence or browser tab throttling.
-        const lastHistTs = historicalTimeSeriesBuffer[historicalTimeSeriesBuffer.length - 1]?.timestampMs ?? 0;
-        const liveExt = timeSeriesBuffer.filter((p) => p.timestampMs > lastHistTs);
-        return liveExt.length > 0 ? [...historicalTimeSeriesBuffer, ...liveExt] : historicalTimeSeriesBuffer;
+        return stitchWithLive(historicalTimeSeriesBuffer, timeSeriesBuffer, _stitchCache.zodiac);
       }
       if (currentSnapshot) {
         return generateLocalHistory(currentSnapshot, currentRange);
@@ -2094,9 +2112,7 @@
   function getJetsonPointsForDisplay() {
     if (currentRange !== 'live') {
       if (historicalJetsonTimeSeriesBuffer.length > 0) {
-        const lastHistTs = historicalJetsonTimeSeriesBuffer[historicalJetsonTimeSeriesBuffer.length - 1]?.timestampMs ?? 0;
-        const liveExt = jetsonTimeSeriesBuffer.filter((p) => p.timestampMs > lastHistTs);
-        return liveExt.length > 0 ? [...historicalJetsonTimeSeriesBuffer, ...liveExt] : historicalJetsonTimeSeriesBuffer;
+        return stitchWithLive(historicalJetsonTimeSeriesBuffer, jetsonTimeSeriesBuffer, _stitchCache.jetson);
       }
       return [];
     }
@@ -2121,9 +2137,7 @@
     let rawPoints = [];
     if (currentRange !== 'live') {
       if (historicalCoralTimeSeriesBuffer.length > 0) {
-        const lastHistTs = historicalCoralTimeSeriesBuffer[historicalCoralTimeSeriesBuffer.length - 1]?.timestampMs ?? 0;
-        const liveExt = coralTimeSeriesBuffer.filter((p) => p.timestampMs > lastHistTs);
-        rawPoints = liveExt.length > 0 ? [...historicalCoralTimeSeriesBuffer, ...liveExt] : historicalCoralTimeSeriesBuffer;
+        rawPoints = stitchWithLive(historicalCoralTimeSeriesBuffer, coralTimeSeriesBuffer, _stitchCache.coral);
       }
     } else {
       const durationMs = getRangeDurationMs('live');
