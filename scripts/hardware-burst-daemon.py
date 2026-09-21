@@ -126,6 +126,10 @@ counters = {
     'jetson_gpu_bytes': 0,
 }
 
+# Adaptive backoff state for jetson_gpu_worker error recovery (module-level avoids
+# function-attribute pattern that pyright cannot track — Ghemawat flat-layout rule).
+_gpu_err_backoff_ns: int = 50_000_000  # 50ms initial; doubles per error, capped at 400ms
+
 # Bounded async queue decoupling telemetry file writes from the inference hot loop.
 # Capacity=4: at 1Hz emission rate a full queue means the writer is stalled >4s — drop silently.
 _coral_write_q: queue.Queue = queue.Queue(maxsize=4)
@@ -285,7 +289,9 @@ def coral_tpu_worker(
     """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
     try:
         import numpy as np
-        from pycoral.utils.edgetpu import make_interpreter
+        from pycoral.utils.edgetpu import (
+            make_interpreter,  # type: ignore[import-untyped]  # Jetson Linux only
+        )
 
         if not os.path.exists(MODEL_PATH):
             sys.stderr.write(f'[coral_worker_{dev_spec}] Model not found at {MODEL_PATH}\n')
@@ -387,7 +393,8 @@ def find_tap_interface() -> str:
 def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading.Event | None = None):
     """Sends raw Ethernet frames directly into Zodiac Port 3 via the tap interface."""
     try:
-        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)  # type: ignore[attr-defined]  # Linux-only
+        s.setblocking(False)  # Non-blocking: prevents thread stall if kernel txqueuelen fills
         s.bind((iface, 0))
 
         dst_mac = bytes.fromhex('70b3d58740c9')
@@ -424,7 +431,12 @@ def zodiac_p3_raw_worker(iface: str, max_bytes: int = 0, active_event: threading
 
             f = frames[frame_idx % len(frames)]
             frame_idx += 1
-            s.send(f)
+            try:
+                s.send(f)
+            except BlockingIOError:
+                # TX ring buffer full (EAGAIN/EWOULDBLOCK): apply backpressure, yield to OS
+                next_tx_ns = time.monotonic_ns() + pacing_interval_ns
+                continue
             with stats_lock:
                 counters['zodiac_p3_frames'] += 1
                 counters['zodiac_p3_bytes'] += len(f)
@@ -448,6 +460,7 @@ def zodiac_p4_worker(target_ip: str = DEFAULT_SWITCH_IP, target_port: int = 9999
     """Sends high-rate UDP probes to Zodiac Port 4 via controller interface."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setblocking(False)  # Non-blocking: prevents thread stall under UDP TX queue pressure
         try:
             s.bind((DEFAULT_CTRL_IP, 0))
         except OSError as e:
@@ -464,7 +477,12 @@ def zodiac_p4_worker(target_ip: str = DEFAULT_SWITCH_IP, target_port: int = 9999
                 stop_event.set()
                 break
 
-            s.sendto(payload, target)
+            try:
+                s.sendto(payload, target)
+            except BlockingIOError:
+                # UDP TX ring full (EAGAIN): backpressure — skip this interval, yield to OS
+                next_tx_ns = time.monotonic_ns() + pacing_interval_ns
+                continue
             with stats_lock:
                 counters['zodiac_p4_packets'] += 1
                 counters['zodiac_p4_bytes'] += len(payload)
@@ -488,6 +506,7 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
     """Sends probe bursts to the workload node."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setblocking(False)  # Non-blocking: prevents thread stall under workload probe TX pressure
         target = (target_ip, target_port)
         payload = b'AGENTIC-WORKLOAD-PROBE-' + (b'W' * 128)
 
@@ -499,7 +518,12 @@ def rpi_workload_worker(target_ip: str = DEFAULT_WORKLOAD_IP, target_port: int =
                 stop_event.set()
                 break
 
-            s.sendto(payload, target)
+            try:
+                s.sendto(payload, target)
+            except BlockingIOError:
+                # TX buffer full (EAGAIN): apply backpressure, skip interval, yield to OS
+                next_tx_ns = time.monotonic_ns() + pacing_interval_ns
+                continue
             with stats_lock:
                 counters['rpi_packets'] += 1
                 counters['rpi_bytes'] += len(payload)
@@ -552,7 +576,7 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: threading.Event | None =
 
     if not has_cuda:
         try:
-            import torch
+            import torch  # type: ignore[import-untyped]  # Jetson runtime dep, not available on dev workstation
             torch_mod = torch
             if torch.cuda.is_available():
                 has_cuda = True
@@ -628,7 +652,15 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: threading.Event | None =
                     counters['jetson_gpu_bytes'] += bytes_per_op
             except (RuntimeError, OSError, AttributeError) as err:
                 sys.stderr.write(f"[jetson_gpu_worker] Compute loop note: {err}\n")
-                time.sleep(0.05)
+                # Adaptive exponential backoff: 50ms base, doubles on repeat errors, capped at 400ms.
+                # Satisfies Quoc Le invariant: no hardcoded magic sleeps under distribution shift.
+                global _gpu_err_backoff_ns
+                time.sleep(_gpu_err_backoff_ns / 1_000_000_000)
+                _gpu_err_backoff_ns = min(_gpu_err_backoff_ns * 2, 400_000_000)  # cap at 400ms
+                continue
+            else:
+                # Reset backoff on successful compute iteration
+                _gpu_err_backoff_ns = 50_000_000
     finally:
         if cuda_lib is not None and cuda_ptrs is not None:
             try:
@@ -836,7 +868,7 @@ def telemetry_poller_worker():
         stop_event.wait(timeout=1.0)
 
 
-def get_live_telemetry_summary() -> dict:
+def get_live_telemetry_summary() -> LiveTelemetrySummary:
     """O(1) non-blocking in-memory telemetry read (Jeff Dean invariant)."""
     with live_summary_lock:
         return cached_live_summary.copy()
@@ -929,7 +961,9 @@ def main():
         active_tpu_devs = []
         sentinel_target_path = os.environ.get('CORAL_SENTINEL_USB_PATH', '2-1.2')
         try:
-            from pycoral.utils.edgetpu import list_edge_tpus
+            from pycoral.utils.edgetpu import (
+                list_edge_tpus,  # type: ignore[import-untyped]  # Jetson Linux only
+            )
             detected_tpus = list_edge_tpus()
             for i, tpu_info in enumerate(detected_tpus):
                 dev_path = tpu_info.get('path')
@@ -1008,6 +1042,11 @@ def main():
     start_ns = time.monotonic_ns()
     last_report_ns = start_ns
     prev_counters = counters.copy()
+
+    # Initialize stagger state unconditionally so pyright can prove these are always bound
+    # when referenced inside the loop (even under args.staggered guard).
+    stagger_stages: list | None = None
+    current_stage_idx: int = -1
 
     if args.staggered:
         if args.stagger_rest_sec > 0:
@@ -1095,8 +1134,6 @@ def main():
                 d_p4_pkts = curr['zodiac_p4_packets'] - prev_counters['zodiac_p4_packets']
                 d_rpi_pkts = curr['rpi_packets'] - prev_counters['rpi_packets']
                 d_gpu_ops = curr['jetson_gpu_ops'] - prev_counters['jetson_gpu_ops']
-                d_gpu_bytes = curr['jetson_gpu_bytes'] - prev_counters['jetson_gpu_bytes']
-                _ = d_gpu_bytes  # tracked in counters; reserved for future bandwidth summary
 
                 burst_coral_rate = (d_coral * 1_000_000_000) // window_elapsed_ns
                 p3_pps = (d_p3_pkts * 1_000_000_000) // window_elapsed_ns
