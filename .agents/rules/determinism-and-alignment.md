@@ -77,8 +77,13 @@ Any code, pull request, or architecture plan that violates these rules is reject
 ### Rule 7: Back-of-the-Envelope Sanity (The Dean Latency Rule)
 - Always verify design against physical latency limits:
   - L1 (0.5ns), RAM (100ns), 10Gbps line transmit (1µs), NVMe SSD (16µs), Datacenter LAN (500µs), WAN (100ms), LLM TTFT (1000ms).
-- Avoid synchronous blocking calls in packet dispatch loops.
+- **Async I/O Mandate**: Synchronous file and network I/O is permitted only in two strictly bounded contexts:
+  1. *Process initialization*, before the HTTP/OpenFlow server begins accepting connections.
+  2. *SIGTERM / shutdown handlers*, where the event loop is terminating and async microtasks may not drain.
+  All other file reads, writes, and network calls — including telemetry flushes, JSONL appends, and historical range queries — must use async equivalents (`fs.promises.*`, `fsp.*`) so the SDN OpenFlow event loop is never stalled.
+- Avoid synchronous blocking calls in packet dispatch loops or any background worker thread.
 - All external API calls, DNS lookups, and distributed consensus requests must have bounded timeouts, backoff jitter, and circuit breakers.
+- Cloud relay retries must use **monotonic clocks** (`performance.now()`, `process.hrtime.bigint()`) for interval gating — never wall-clock `Date.now()`, which is subject to NTP adjustment and can stall or accelerate retry loops unpredictably.
 
 ### Rule 8: Goodhart's Law & Epistemic Telemetry Provenance (The Anti-Simulation Law)
 - *"When a measure becomes a target, it ceases to be a good measure."* (Goodhart's Law).
@@ -88,6 +93,27 @@ Any code, pull request, or architecture plan that violates these rules is reject
   2. `DISCONNECTED`: The physical truth of absence. When hardware is disconnected or unlinked, telemetry MUST evaluate to physical truth: `0` byte/packet rates, `null` thermals (`--°C`), and an explicit `disconnected` status. Never substitute default or nominal numbers to "keep graphs pretty."
   3. `SIMULATION_SANDBOX`: Permitted strictly in isolated demo/cloud preview environments. All sandbox data MUST carry unambiguous provenance metadata (`source: 'cloud_snapshot'`), and all outputs (web UI, CLI, APIs) MUST display an unmistakable disclaimer banner (`[SIMULATION / CLOUD TWIN SANDBOX]`).
 - **Anti-Metric-Gaming Rule**: Invariant test suites must never assert against a mock testing itself, nor accept synthetic data where physical state is required. Unit tests MUST verify negative states (link-down, zero-traffic, sensor-fault) with equal or greater rigor than positive states.
+
+### Rule 9: Multi-Tier Storage & Offline-First Observability (Dean & Ghemawat)
+Local observability must never depend on cloud connectivity. The system is sovereign on its own hardware.
+
+**The Three-Tier Storage Hierarchy:**
+
+| Tier | Medium | Latency | Survives Restart? | Primary Consumer |
+|------|--------|---------|-------------------|-----------------|
+| Tier 1 | Process RAM ring buffer | < 10 ms | No (checkpointed) | Live UI polling (≤ 10 min range) |
+| Tier 2 | Local NVMe JSONL append-log | < 150 ms | **Yes** | Local historical queries (1 h – 30 d) |
+| Tier 3 | Cloud Postgres (Neon) | < 150 ms (WAN) | **Yes** | Cloud dashboard historical queries |
+
+**Query Priority Invariant**: Always query the fastest available tier first. Degrade to slower tiers only when the faster tier is empty (e.g. first run after a fresh install) or unavailable. Return stale cloud data only as a last resort; never block a local query waiting on a WAN round-trip.
+
+**Write Independence Invariant**: Each tier is written independently. Tier 2 (JSONL) is written directly by the local bridge process on every flush cycle. Tier 3 (Neon) is written by the cloud API endpoint on relay ingestion. Neither write path depends on the other — a cloud outage must not interrupt local persistence, and a local disk failure must not interrupt the cloud relay.
+
+**Append-Only & ENOENT-Tolerant**: Tier 2 files are strictly append-only (one averaged point per flush cycle, per device type). Readers must tolerate missing files gracefully (`ENOENT → return []`) while surfacing unexpected I/O errors (`EACCES`, `EIO`) explicitly — never swallow non-ENOENT errors silently.
+
+**Retention & Pruning**: 30-day rolling retention enforced at both Tier 2 (synchronous file scan at process startup, before HTTP server opens) and Tier 3 (daily cron, `DELETE WHERE timestampMs < cutoff`). Pruning runs at startup to establish a clean state before serving any traffic.
+
+**Dialect Question** *(Sanjay Ghemawat)*: "If the WAN link is down for a week, can an operator on the local subnet still query 30 days of history with sub-150ms latency?"
 
 ---
 
@@ -103,4 +129,5 @@ When invoked, adopt the persona of the **Senior Staff Council**:
   4. *Oriol Vinyals*: "If three autonomous nodes execute this simultaneously, does the graph converge or flap endlessly?"
   5. *Quoc Le*: "Why is this timeout hardcoded to 500ms? How does this adapt when traffic shifts from datacenter LAN to satellite WAN?"
   6. *Goodhart's Law*: "Does this counter or status originate from verified physical silicon/sockets, or is it a synthetic metric gamed to satisfy UI or test assertions?"
+  7. *Sanjay Ghemawat (Storage)*: "If the WAN link is down for a week, can an operator on the local subnet still query 30 days of history with sub-150ms latency? Which tier serves it, and does it block on anything remote?"
 
