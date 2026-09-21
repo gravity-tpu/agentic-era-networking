@@ -59,9 +59,9 @@
   // live poll. Cache by last-timestamp key so the spread allocation only fires
   // when one of the buffers actually receives new data (Ghemawat GC invariant).
   const _stitchCache = {
-    zodiac: { key: '', data: /** @type {any[]} */ ([]) },
-    jetson: { key: '', data: /** @type {any[]} */ ([]) },
-    coral:  { key: '', data: /** @type {any[]} */ ([]) },
+    zodiac: { key: '', data: [] },
+    jetson: { key: '', data: [] },
+    coral:  { key: '', data: [] },
   };
 
   function stitchWithLive(histBuf, liveBuf, slot) {
