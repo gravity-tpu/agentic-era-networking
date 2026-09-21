@@ -550,6 +550,9 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: threading.Event | None =
     driving verifiable compute load to /sys/devices/platform/bus@0/17000000.gpu/load and power draw in vddCpuGpuCv.
     Gracefully executes on CPU matrix loops on developer workstations without CUDA.
     """
+    # Hoist global declaration to function top — Python raises SyntaxError if any assignment
+    # to the variable appears in the function body before the global statement.
+    global _gpu_err_backoff_ns  # noqa: PLW0603
     import ctypes
 
     has_cuda = False
@@ -654,7 +657,6 @@ def jetson_gpu_worker(max_bytes: int = 0, active_event: threading.Event | None =
                 sys.stderr.write(f"[jetson_gpu_worker] Compute loop note: {err}\n")
                 # Adaptive exponential backoff: 50ms base, doubles on repeat errors, capped at 400ms.
                 # Satisfies Quoc Le invariant: no hardcoded magic sleeps under distribution shift.
-                global _gpu_err_backoff_ns
                 time.sleep(_gpu_err_backoff_ns / 1_000_000_000)
                 _gpu_err_backoff_ns = min(_gpu_err_backoff_ns * 2, 400_000_000)  # cap at 400ms
                 continue
