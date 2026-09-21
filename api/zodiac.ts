@@ -275,11 +275,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0 && sinceRaw < Date.now() ? sinceRaw : 0;
 
     if (sinceMs > 0) {
+      // Returns undefined (key omitted from JSON) when the delta is empty — saves
+      // ~15 bytes per device type per response vs returning []. All callers in
+      // zodiac-app.js guard with `Array.isArray(x) && x.length > 0` so undefined
+      // is handled identically to an empty array.
       const trimSince = <T extends { readonly timestampMs: number }>(
         series: readonly T[] | undefined
       ): T[] | undefined => {
         if (!series) return undefined;
-        return series.filter((p) => p.timestampMs > sinceMs);
+        const delta = series.filter((p) => p.timestampMs > sinceMs);
+        return delta.length > 0 ? delta : undefined;
       };
 
       res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
