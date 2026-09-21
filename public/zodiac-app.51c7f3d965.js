@@ -59,20 +59,26 @@
   // live poll. Cache by last-timestamp key so the spread allocation only fires
   // when one of the buffers actually receives new data (Ghemawat GC invariant).
   const _stitchCache = {
-    zodiac: { key: '', data: [] },
-    jetson: { key: '', data: [] },
-    coral:  { key: '', data: [] },
+    zodiac: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
+    jetson: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
+    coral:  { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
   };
 
   function stitchWithLive(histBuf, liveBuf, slot) {
     if (histBuf.length === 0) return histBuf;
     const lastHistTs = histBuf[histBuf.length - 1]?.timestampMs ?? 0;
     const lastLiveTs = liveBuf.length > 0 ? liveBuf[liveBuf.length - 1].timestampMs : 0;
-    const key = `${histBuf.length}-${lastHistTs}-${liveBuf.length}-${lastLiveTs}`;
-    if (slot.key === key) return slot.data;
+    // Four integer comparisons — zero string allocation on the polling hot path
+    if (slot.histLen === histBuf.length && slot.lastHistTs === lastHistTs &&
+        slot.liveLen === liveBuf.length && slot.lastLiveTs === lastLiveTs) {
+      return slot.data;
+    }
     const ext = liveBuf.filter((p) => p.timestampMs > lastHistTs);
     slot.data = ext.length > 0 ? [...histBuf, ...ext] : histBuf;
-    slot.key = key;
+    slot.histLen   = histBuf.length;
+    slot.lastHistTs = lastHistTs;
+    slot.liveLen   = liveBuf.length;
+    slot.lastLiveTs = lastLiveTs;
     return slot.data;
   }
   // ─────────────────────────────────────────────────────────────────────────
