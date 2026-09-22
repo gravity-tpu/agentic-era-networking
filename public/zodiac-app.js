@@ -3048,6 +3048,19 @@
     }
   }
 
+  // Escape HTML special characters before interpolating network-derived strings
+  // into innerHTML. Required for any field that originates from packet headers
+  // (srcMac, srcCidr, dstCidr) — an attacker can craft these to inject JS.
+  function escHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   let ofFlowsLastFetchMs = 0;
   async function fetchAndRenderOpenFlowRules() {
     const nowMs = Date.now();
@@ -3070,13 +3083,13 @@
             const age = Date.now() - (r.installedAtMs || 0);
             const ageStr = age < 60000 ? `${Math.round(age/1000)}s ago` : `${Math.round(age/60000)}m ago`;
             const actionBadge = r.action === 'DROP' ? 'red' : r.action === 'QUARANTINE' ? 'amber' : 'green';
-            const macInfo = r.srcMac ? `<div style="font-size:0.68rem; color:var(--cf-text-secondary); font-family:monospace;">${r.srcMac}</div>` : '';
+            const macInfo = r.srcMac ? `<div style="font-size:0.68rem; color:var(--cf-text-secondary); font-family:monospace;">${escHtml(r.srcMac)}</div>` : '';
             return `<tr>
-              <td><span class="cf-pill-badge" style="background:rgba(99,102,241,0.12); color:#6366f1;">${r.priority}</span></td>
-              <td><span class="cf-pill-badge ${actionBadge}">${r.action}</span></td>
-              <td class="cf-mono" style="font-size:0.78rem;">${r.srcCidr || '0.0.0.0/0'}${macInfo}</td>
-              <td class="cf-mono" style="font-size:0.78rem;">${r.dstCidr || '0.0.0.0/0'}</td>
-              <td><span class="cf-pill-badge gray">${r.protocol || 'ANY'}</span></td>
+              <td><span class="cf-pill-badge" style="background:rgba(99,102,241,0.12); color:#6366f1;">${Number(r.priority) || 0}</span></td>
+              <td><span class="cf-pill-badge ${actionBadge}">${escHtml(r.action)}</span></td>
+              <td class="cf-mono" style="font-size:0.78rem;">${escHtml(r.srcCidr || '0.0.0.0/0')}${macInfo}</td>
+              <td class="cf-mono" style="font-size:0.78rem;">${escHtml(r.dstCidr || '0.0.0.0/0')}</td>
+              <td><span class="cf-pill-badge gray">${escHtml(r.protocol || 'ANY')}</span></td>
               <td>${r.openFlowInstalled ? '<span class="cf-pill-badge green">Installed</span>' : '<span class="cf-pill-badge gray">Pending</span>'}</td>
               <td style="font-size:0.78rem; color:var(--cf-text-secondary);">${ageStr}</td>
             </tr>`;
