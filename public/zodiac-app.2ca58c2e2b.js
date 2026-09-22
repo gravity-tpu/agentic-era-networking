@@ -548,7 +548,7 @@
     } finally {
       clearTimeout(timeoutId);
       isFetching = false;
-      pollTimeoutId = setTimeout(fetchTelemetry, 2000);
+      pollTimeoutId = setTimeout(fetchTelemetry, 5000);
     }
   }
 
@@ -647,7 +647,7 @@
         els.pollStatus.innerText = '○ Offline';
         els.pollStatus.className = 'cf-pill-badge gray';
       } else {
-        els.pollStatus.innerText = '● Live · 2.5s Polling';
+        els.pollStatus.innerText = '● Live · 5s Polling';
         els.pollStatus.className = 'cf-pill-badge green';
       }
     }
