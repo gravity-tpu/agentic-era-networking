@@ -383,7 +383,6 @@
                 <div class="cf-mini-bar-fill" style="width: 0%;"></div>
               </div>
               <div class="cf-stat-footer">
-                <span>DPID: <strong class="cf-mono" id="z-of-dpid">--</strong></span>
                 <span id="z-of-tables">-- tables</span>
                 <span id="z-of-active-flows" style="font-size:0.82rem; color:var(--cf-text-secondary);">-- flows active</span>
                 <span id="z-of-table-lookups" style="font-size:0.82rem; color:var(--cf-text-secondary);">-- lookups</span>
@@ -926,22 +925,33 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- KPI 4: Power & Thermals -->
+              <!-- KPI 4: Board Power -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Board Power &amp; Thermals</span>
+                  <span class="cf-stat-label">Board Power</span>
                   <span class="cf-pill-badge teal" style="font-size: 0.68rem;" id="orin-kpi-power-badge">INA3221 Sensor</span>
                 </div>
                 <div class="cf-stat-value teal" id="orin-kpi-power">-- W</div>
                 <div class="cf-mini-bar">
                   <div class="cf-mini-bar-fill teal" id="orin-bar-power" style="width: 32%;"></div>
                 </div>
-                <div style="display:flex; gap:1.5rem; margin-top:0.5rem; font-size:0.78rem; color:var(--cf-text-secondary);">
+                <div class="cf-stat-footer">
                   <span>CPU+GPU+CV: <strong id="orin-kpi-power-cpu-gpu" class="cf-mono">-- W</strong></span>
                   <span>SoC: <strong id="orin-kpi-power-soc" class="cf-mono">-- W</strong></span>
                 </div>
+              </div>
+
+              <!-- KPI 5: Thermal Zones -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Thermal Zones</span>
+                  <span class="cf-pill-badge orange" style="font-size: 0.68rem;">85°C Limit</span>
+                </div>
+                <div class="cf-stat-value orange" id="orin-kpi-cpu-temp">--°C</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill orange" id="orin-bar-cpu-temp" style="width: 0%;"></div>
+                </div>
                 <div class="cf-stat-footer">
-                  <span>CPU: <strong class="cf-mono" id="orin-kpi-cpu-temp">--°C</strong></span>
                   <span>GPU: <strong class="cf-mono" id="orin-kpi-gpu-temp">--°C</strong></span>
                   <span>Tj: <strong class="cf-mono" id="orin-kpi-junc-temp">--°C</strong></span>
                 </div>
@@ -2051,7 +2061,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.c3b08994bc.js"></script>
+  <script defer src="zodiac-app.f76869b3d3.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

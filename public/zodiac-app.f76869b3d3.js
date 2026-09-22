@@ -275,6 +275,7 @@
     orinKpiPowerCpuGpu: document.getElementById('orin-kpi-power-cpu-gpu'),
     orinKpiPowerSoc: document.getElementById('orin-kpi-power-soc'),
     orinKpiCpuTemp: document.getElementById('orin-kpi-cpu-temp'),
+    orinBarCpuTemp: document.getElementById('orin-bar-cpu-temp'),
     orinKpiGpuTemp: document.getElementById('orin-kpi-gpu-temp'),
     orinKpiJuncTemp: document.getElementById('orin-kpi-junc-temp'),
     orinIfSdnMac: document.getElementById('orin-if-sdn-mac'),
@@ -1113,7 +1114,13 @@
 
       const temps = j.temperatures || j.thermals;
       if (temps) {
-        if (els.orinKpiCpuTemp) els.orinKpiCpuTemp.innerText = temps.cpuC !== null && temps.cpuC !== undefined ? `${temps.cpuC}°C` : '--°C';
+        const cpuC = temps.cpuC !== null && temps.cpuC !== undefined ? temps.cpuC : null;
+        if (els.orinKpiCpuTemp) els.orinKpiCpuTemp.innerText = cpuC !== null ? `${cpuC}°C` : '--°C';
+        if (els.orinBarCpuTemp) {
+          const tempPct = cpuC !== null ? Math.min(100, Math.max(0, Math.round((cpuC / 85) * 100))) : 0;
+          els.orinBarCpuTemp.style.width = `${tempPct}%`;
+          els.orinBarCpuTemp.className = `cf-mini-bar-fill ${cpuC !== null && cpuC >= 75 ? 'red' : 'orange'}`;
+        }
         if (els.orinKpiGpuTemp) els.orinKpiGpuTemp.innerText = temps.gpuC !== null && temps.gpuC !== undefined ? `${temps.gpuC}°C` : '--°C';
         if (els.orinKpiJuncTemp) els.orinKpiJuncTemp.innerText = temps.junctionC !== null && temps.junctionC !== undefined ? `${temps.junctionC}°C` : '--°C';
       }
