@@ -3053,8 +3053,9 @@
     const nowMs = Date.now();
     if (nowMs - ofFlowsLastFetchMs < 5000) return; // debounce 5s
     ofFlowsLastFetchMs = nowMs;
+    const OF_FLOWS_FETCH_TIMEOUT_MS = 4000; // LAN latency budget; matches Dean Latency Invariant (<4s before abort)
     const abortCtrl = new AbortController();
-    const abortTimer = setTimeout(() => abortCtrl.abort(), 4000);
+    const abortTimer = setTimeout(() => abortCtrl.abort(), OF_FLOWS_FETCH_TIMEOUT_MS);
     try {
       const res = await fetch('/api/zodiac/flows', { cache: 'no-store', signal: abortCtrl.signal });
       if (!res.ok) return;
