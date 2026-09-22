@@ -113,6 +113,22 @@
     ofLatency: document.getElementById('z-of-latency'),
     ofDpid: document.getElementById('z-of-dpid'),
     ofTables: document.getElementById('z-of-tables'),
+    ofActiveFlows: document.getElementById('z-of-active-flows'),
+    ofTableLookups: document.getElementById('z-of-table-lookups'),
+    ofTableMatches: document.getElementById('z-of-table-matches'),
+
+    // OpenFlow Page Elements
+    ofPageStatus: document.getElementById('of-page-status'),
+    ofPageDpid: document.getElementById('of-page-dpid'),
+    ofPageVersion: document.getElementById('of-page-version'),
+    ofPageTables: document.getElementById('of-page-tables'),
+    ofPageFlows: document.getElementById('of-page-flows'),
+    ofPageLatency: document.getElementById('of-page-latency'),
+    ofPageLookups: document.getElementById('of-page-lookups'),
+    ofPageMatches: document.getElementById('of-page-matches'),
+    ofFlowsCountBadge: document.getElementById('of-flows-count-badge'),
+    ofFlowsTbody: document.getElementById('of-flows-tbody'),
+    ofDeviceSection: document.getElementById('openflow-device-section'),
 
     // Port Physical Block Elements Cache (ports 1..4 per Dean Nanosecond Budget)
     portBoxes: {
@@ -217,6 +233,7 @@
     btnDeviceCoral1: document.getElementById('btn-device-coral-1'),
     btnDeviceCoral2: document.getElementById('btn-device-coral-2'),
     btnDeviceCoral: document.getElementById('btn-device-coral'),
+    btnDeviceOpenflow: document.getElementById('btn-device-openflow'),
     dotDeviceZodiac: document.getElementById('dot-device-zodiac'),
     dotDeviceOrin: document.getElementById('dot-device-orin'),
     dotDeviceCoral1: document.getElementById('dot-device-coral-1'),
@@ -248,6 +265,8 @@
     orinKpiNvme: document.getElementById('orin-kpi-nvme'),
     orinKpiPower: document.getElementById('orin-kpi-power'),
     orinBarPower: document.getElementById('orin-bar-power'),
+    orinKpiPowerCpuGpu: document.getElementById('orin-kpi-power-cpu-gpu'),
+    orinKpiPowerSoc: document.getElementById('orin-kpi-power-soc'),
     orinKpiCpuTemp: document.getElementById('orin-kpi-cpu-temp'),
     orinKpiGpuTemp: document.getElementById('orin-kpi-gpu-temp'),
     orinKpiJuncTemp: document.getElementById('orin-kpi-junc-temp'),
@@ -282,6 +301,7 @@
     orinWifiRateLegend: document.getElementById('orin-wifi-rate-legend'),
     chartOrinThermalsCanvas: document.getElementById('chart-orin-thermals'),
     chartOrinPowerCanvas: document.getElementById('chart-orin-power'),
+    chartOrinNvmeCanvas: document.getElementById('chart-orin-nvme'),
 
     // Google Coral TPU #1 Elements (Tap DPI)
     coral1KpiStatus: document.getElementById('coral1-kpi-status'),
@@ -748,6 +768,15 @@
       }
       if (els.ofDpid) els.ofDpid.innerText = snapshot.openflow.datapathId || '0x000000000000';
       if (els.ofTables) els.ofTables.innerText = `${snapshot.openflow.activeTables || 10} tables`;
+      if (els.ofActiveFlows) {
+        els.ofActiveFlows.innerText = `${snapshot.openflow?.activeFlows ?? 0} flows active`;
+      }
+      if (els.ofTableLookups && snapshot.openflow?.tableLookups !== undefined) {
+        els.ofTableLookups.innerText = `${Number(snapshot.openflow.tableLookups).toLocaleString()} lookups`;
+      }
+      if (els.ofTableMatches && snapshot.openflow?.tableMatches !== undefined) {
+        els.ofTableMatches.innerText = `${Number(snapshot.openflow.tableMatches).toLocaleString()} matches`;
+      }
     }
 
     // 5. Ports Physical Blocks & Matrix Table
@@ -1064,6 +1093,14 @@
         const maxTdpW = typeof j.maxPowerTdpW === 'number' ? j.maxPowerTdpW : 15.0;
         const pwrPct = pwrW !== null ? Math.min(100, Math.max(5, Math.round((pwrW / maxTdpW) * 100))) : 0;
         els.orinBarPower.style.width = `${pwrPct}%`;
+      }
+      if (els.orinKpiPowerCpuGpu) {
+        const cpuGpuW = j.powerMw?.vddCpuGpuCv != null ? (j.powerMw.vddCpuGpuCv / 1000).toFixed(1) : null;
+        els.orinKpiPowerCpuGpu.innerText = cpuGpuW != null ? `${cpuGpuW} W` : '-- W';
+      }
+      if (els.orinKpiPowerSoc) {
+        const socW = j.powerMw?.vddSoc != null ? (j.powerMw.vddSoc / 1000).toFixed(1) : null;
+        els.orinKpiPowerSoc.innerText = socW != null ? `${socW} W` : '-- W';
       }
 
       const temps = j.temperatures || j.thermals;
@@ -2555,6 +2592,64 @@
     ctx.fillText('● Board Input Power (INA3221 VDD_IN)', padLeft + 10, padTop - 6);
   }
 
+  // --- Orin Chart 5: NVMe SSD I/O Throughput ---
+  function drawOrinNvmeChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 460;
+    const H = canvas.clientHeight || 160;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const padLeft = 65, padRight = 20, padTop = 16, padBottom = 30;
+    const plotW = W - padLeft - padRight;
+    const plotH = H - padTop - padBottom;
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Compute Y axis max from both read + write
+    let maxBps = 1n;
+    for (const pt of points) {
+      const r = safeBigInt(pt.nvmeReadRateBps);
+      const w = safeBigInt(pt.nvmeWriteRateBps);
+      if (r > maxBps) maxBps = r;
+      if (w > maxBps) maxBps = w;
+    }
+    maxBps = (maxBps * 12n) / 10n;
+    if (maxBps < 1n) maxBps = 1n;
+
+    // Grid
+    ctx.strokeStyle = 'rgba(100,116,139,0.15)'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padTop + (plotH * i) / 4;
+      ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(padLeft + plotW, y); ctx.stroke();
+      const val = maxBps - (maxBps * BigInt(i)) / 4n;
+      ctx.fillStyle = '#64748b'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+      ctx.fillText(formatBytes(val) + '/s', padLeft - 4, y + 3);
+    }
+
+    const getCoord = (pt, bpsVal) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const v = safeBigInt(bpsVal);
+      const y = padTop + plotH - (maxBps > 0n ? Number((v * BigInt(plotH)) / maxBps) : 0);
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // Read line (blue)
+    const readSegs = partitionContiguousSegments(points, currentRange, (p) => p.nvmeReadRateBps);
+    drawSegmentedPath(ctx, readSegs, (pt) => getCoord(pt, pt.nvmeReadRateBps), '#3b82f6', null, 1.8);
+
+    // Write line (amber)
+    const writeSegs = partitionContiguousSegments(points, currentRange, (p) => p.nvmeWriteRateBps);
+    drawSegmentedPath(ctx, writeSegs, (pt) => getCoord(pt, pt.nvmeWriteRateBps), '#f59e0b', null, 1.8);
+
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, padTop + plotH + 4, currentRange);
+  }
+
   // --- Coral Chart 1: Inference & Tap Ingestion Rate ---
   function drawCoralRateChart(canvas, points, options = {}) {
     if (!canvas || !points || points.length === 0) return;
@@ -2685,6 +2780,9 @@
     for (const pt of points) {
       const latVal = getLatVal(pt);
       if (latVal > maxLat) maxLat = latVal;
+      // Include P99 in Y-axis range
+      const p99Val = pt.latencyP99Us !== undefined && pt.latencyP99Us !== null ? safeNumericValue(pt.latencyP99Us) : 0;
+      if (p99Val > maxLat) maxLat = p99Val;
     }
     maxLat = Math.max(maxLat, Math.ceil(maxLat * 1.15));
 
@@ -2739,11 +2837,28 @@
     const latSegments = partitionContiguousSegments(points, currentRange, getLatVal);
     drawSegmentedPath(ctx, latSegments, (pt) => getCoord(pt, getLatVal(pt)), '#059669', 'rgba(5, 150, 105, 0.16)', 1.8, padTop + plotH);
 
+    // P99 line (amber) - draws after P50
+    const getP99Val = (pt) => (pt.latencyP99Us !== undefined && pt.latencyP99Us !== null ? safeNumericValue(pt.latencyP99Us) : 0);
+    const p99Segs = partitionContiguousSegments(points, currentRange, (pt) => {
+      const v = getP99Val(pt);
+      return v > 0 ? BigInt(Math.round(v)) : 0n;
+    });
+    const p99Color = options.p99Color || 'rgba(245, 158, 11, 0.85)'; // amber
+    drawSegmentedPath(ctx, p99Segs, (pt) => {
+      const v = getP99Val(pt);
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const y = maxLat > 0 ? padTop + plotH - (v / maxLat) * plotH : padTop + plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    }, p99Color, null, 1.4);
+
     // Legend
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#059669';
     ctx.fillText(options.latencyLabel || '● Line-Rate Inference Latency (<500 µs)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.85)';
+    ctx.fillText('● P99', padLeft + 10, padTop + 8);
   }
 
   function updateCharts() {
@@ -2866,6 +2981,7 @@
         drawOrinNetworkChart(els.chartOrinNetworkCanvas, orinPoints);
         drawOrinThermalsChart(els.chartOrinThermalsCanvas, orinPoints);
         drawOrinPowerChart(els.chartOrinPowerCanvas, orinPoints);
+        drawOrinNvmeChart(els.chartOrinNvmeCanvas, orinPoints);
       }
     } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
       const coralPoints = getCoralPointsForDisplay('coral-1');
@@ -2901,6 +3017,73 @@
           latencyLabel: '● DNS Fast-Path Latency (<250 µs)',
         });
       }
+    } else if (activeDeviceId === 'openflow') {
+      // Render live OpenFlow stats from currentSnapshot
+      const of = currentSnapshot?.openflow;
+      if (of) {
+        if (els.ofPageStatus) {
+          const isConn = of.status === 'Connected';
+          els.ofPageStatus.innerText = isConn ? 'Connected' : 'Disconnected';
+          els.ofPageStatus.className = `cf-pill-badge ${isConn ? 'green' : 'gray'}`;
+        }
+        if (els.ofPageDpid) els.ofPageDpid.innerText = of.datapathId || '--';
+        if (els.ofPageVersion) els.ofPageVersion.innerText = of.version ? `OF ${of.version}` : '--';
+        if (els.ofPageTables) els.ofPageTables.innerText = `${of.activeTables ?? '--'} tables`;
+        if (els.ofPageFlows) els.ofPageFlows.innerText = `${of.activeFlows ?? '--'}`;
+        if (els.ofPageLatency) {
+          els.ofPageLatency.innerText = (of.status === 'Connected' && of.lastHeartbeatLatencyNs)
+            ? formatLatencyNs(of.lastHeartbeatLatencyNs)
+            : '--';
+        }
+        if (els.ofPageLookups) {
+          els.ofPageLookups.innerText = of.tableLookups !== undefined
+            ? Number(of.tableLookups).toLocaleString()
+            : '--';
+        }
+        if (els.ofPageMatches) {
+          els.ofPageMatches.innerText = of.tableMatches !== undefined
+            ? Number(of.tableMatches).toLocaleString()
+            : '--';
+        }
+      }
+      void fetchAndRenderOpenFlowRules();
+    }
+  }
+
+  let ofFlowsLastFetchMs = 0;
+  async function fetchAndRenderOpenFlowRules() {
+    const nowMs = Date.now();
+    if (nowMs - ofFlowsLastFetchMs < 5000) return; // debounce 5s
+    ofFlowsLastFetchMs = nowMs;
+    try {
+      const res = await fetch('/api/zodiac/flows', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const rules = Array.isArray(data.rules) ? data.rules : [];
+      if (els.ofFlowsCountBadge) els.ofFlowsCountBadge.innerText = `${rules.length} rule${rules.length !== 1 ? 's' : ''}`;
+      if (els.ofFlowsTbody) {
+        if (rules.length === 0) {
+          els.ofFlowsTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--cf-text-secondary); padding:1.5rem; font-size:0.82rem;">No flow rules pushed this session. Quarantine events will appear here.</td></tr>`;
+        } else {
+          els.ofFlowsTbody.innerHTML = rules.map(r => {
+            const age = Date.now() - (r.installedAtMs || 0);
+            const ageStr = age < 60000 ? `${Math.round(age/1000)}s ago` : `${Math.round(age/60000)}m ago`;
+            const actionBadge = r.action === 'DROP' ? 'red' : r.action === 'QUARANTINE' ? 'amber' : 'green';
+            const macInfo = r.srcMac ? `<div style="font-size:0.68rem; color:var(--cf-text-secondary); font-family:monospace;">${r.srcMac}</div>` : '';
+            return `<tr>
+              <td><span class="cf-pill-badge" style="background:rgba(99,102,241,0.12); color:#6366f1;">${r.priority}</span></td>
+              <td><span class="cf-pill-badge ${actionBadge}">${r.action}</span></td>
+              <td class="cf-mono" style="font-size:0.78rem;">${r.srcCidr || '0.0.0.0/0'}${macInfo}</td>
+              <td class="cf-mono" style="font-size:0.78rem;">${r.dstCidr || '0.0.0.0/0'}</td>
+              <td><span class="cf-pill-badge gray">${r.protocol || 'ANY'}</span></td>
+              <td>${r.openFlowInstalled ? '<span class="cf-pill-badge green">Installed</span>' : '<span class="cf-pill-badge gray">Pending</span>'}</td>
+              <td style="font-size:0.78rem; color:var(--cf-text-secondary);">${ageStr}</td>
+            </tr>`;
+          }).join('');
+        }
+      }
+    } catch (err) {
+      console.warn('[OpenFlow] Flow rules fetch failed:', err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -3618,6 +3801,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     'coral-1': { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
     'coral-2': { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
     coral:     { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
+    openflow:  { hwName: 'OpenFlow 1.3 Controller',               firmware: 'Zodiac FX \u00b7 KSZ8795 Data Plane', navId: 'cf-nav-openflow' },
   };
 
   // Cached section elements (queried once — stable IDs, never recreated)
@@ -3705,7 +3889,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Active Appliance Tier Switching Logic
   function switchDevice(device) {
     if (device === 'coral') device = 'coral-1';
-    if (!['zodiac', 'orin', 'coral-1', 'coral-2'].includes(device)) return;
+    if (!['zodiac', 'orin', 'coral-1', 'coral-2', 'openflow'].includes(device)) return;
     activeDeviceId = device;
 
     if (els.btnDeviceZodiac) {
@@ -3728,12 +3912,17 @@ Please connect the physical switch via USB to execute '${command}' on device har
       els.btnDeviceCoral.classList.toggle('active', device === 'coral-1');
       els.btnDeviceCoral.setAttribute('aria-selected', String(device === 'coral-1'));
     }
+    if (els.btnDeviceOpenflow) {
+      els.btnDeviceOpenflow.classList.toggle('active', device === 'openflow');
+      els.btnDeviceOpenflow.setAttribute('aria-selected', String(device === 'openflow'));
+    }
 
     if (els.viewDeviceZodiac) els.viewDeviceZodiac.style.display = device === 'zodiac' ? 'block' : 'none';
     if (els.viewDeviceOrin) els.viewDeviceOrin.style.display = device === 'orin' ? 'block' : 'none';
     if (els.viewDeviceCoral1) els.viewDeviceCoral1.style.display = device === 'coral-1' ? 'block' : 'none';
     if (els.viewDeviceCoral2) els.viewDeviceCoral2.style.display = device === 'coral-2' ? 'block' : 'none';
     if (els.viewDeviceCoral) els.viewDeviceCoral.style.display = device === 'coral-1' ? 'block' : 'none';
+    if (els.ofDeviceSection) els.ofDeviceSection.style.display = device === 'openflow' ? 'block' : 'none';
 
     if (els.breadcrumbName) {
       if (device === 'zodiac') {
@@ -3744,6 +3933,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (device === 'coral-2') {
         els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel';
+      } else if (device === 'openflow') {
+        els.breadcrumbName.innerText = 'OpenFlow 1.3 Controller';
       }
     }
 
@@ -3774,6 +3965,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
   if (els.btnDeviceCoral) {
     els.btnDeviceCoral.addEventListener('click', () => switchDevice('coral-1'));
   }
+  if (els.btnDeviceOpenflow) {
+    els.btnDeviceOpenflow.addEventListener('click', () => switchDevice('openflow'));
+  }
 
   // URL Hash & Deep Linking Navigation
   function handleHashChange() {
@@ -3786,6 +3980,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
       switchDevice('coral-2');
     } else if (hash === '#sec-zodiac' || hash === '#zodiac' || hash === '#sec-overview') {
       switchDevice('zodiac');
+    } else if (hash === '#sec-openflow' || hash === '#openflow') {
+      switchDevice('openflow');
     }
   }
 

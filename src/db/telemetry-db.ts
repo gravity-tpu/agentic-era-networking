@@ -345,6 +345,9 @@ export function downsamplePoints(
       txRateBps: sumTxRateBps / countBig,
       cpuTemperatureC: tempCount > 0 ? Math.round(tempSum / tempCount) : null,
       latencyNs: sumLatency / countBig,
+      ...(lastPoint.activeFlows !== undefined ? { activeFlows: lastPoint.activeFlows } : {}),
+      ...(lastPoint.tableLookups !== undefined ? { tableLookups: lastPoint.tableLookups } : {}),
+      ...(lastPoint.tableMatches !== undefined ? { tableMatches: lastPoint.tableMatches } : {}),
       ports: lastPoint.ports,
     });
   }

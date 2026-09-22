@@ -74,6 +74,9 @@ export interface ZodiacTimeSeriesPoint {
   readonly txRateBps: bigint;
   readonly cpuTemperatureC: number | null;
   readonly latencyNs: bigint;
+  readonly activeFlows?: number;
+  readonly tableLookups?: bigint;
+  readonly tableMatches?: bigint;
   readonly ports?: {
     readonly [port: number]: ZodiacPortSeriesPoint;
   } | undefined;

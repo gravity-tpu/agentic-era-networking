@@ -94,6 +94,9 @@ export function deserializeTelemetryState(jsonString: string): PersistentTelemet
           ? Number(p['cpuTemperatureC'])
           : null,
         latencyNs: BigInt(String(p['latencyNs'] ?? '0')),
+        ...(p['activeFlows'] !== undefined && p['activeFlows'] !== null ? { activeFlows: Number(p['activeFlows']) } : {}),
+        ...(p['tableLookups'] !== undefined && p['tableLookups'] !== null ? { tableLookups: BigInt(String(p['tableLookups'])) } : {}),
+        ...(p['tableMatches'] !== undefined && p['tableMatches'] !== null ? { tableMatches: BigInt(String(p['tableMatches'])) } : {}),
         ports: portsObj,
       };
     });

@@ -394,6 +394,18 @@ export class ZodiacBridgeServer {
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
   private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
   private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
+  private readonly flowRuleRegistry: Map<string, {
+    ruleId: string;
+    priority: number;
+    action: string;
+    srcCidr: string;
+    dstCidr: string;
+    protocol: string;
+    srcMac?: string;
+    dstMac?: string;
+    installedAtMs: number;
+    openFlowInstalled: boolean;
+  }> = new Map();
 
   constructor(
     controller?: ZodiacController,
@@ -1081,6 +1093,21 @@ export class ZodiacBridgeServer {
             priority: typeof priority === 'number' ? priority : 65535,
           });
 
+          if (qResult.ruleId) {
+            this.flowRuleRegistry.set(qResult.ruleId, {
+              ruleId: qResult.ruleId,
+              priority: qResult.priority ?? 65535,
+              action: qResult.action ?? 'DROP',
+              srcCidr: qResult.rule?.srcCidr ?? '0.0.0.0/0',
+              dstCidr: qResult.rule?.dstCidr ?? '0.0.0.0/0',
+              protocol: qResult.rule?.protocol ?? 'ANY',
+              ...(qResult.rule?.srcMac !== undefined ? { srcMac: qResult.rule.srcMac } : {}),
+              ...(qResult.rule?.dstMac !== undefined ? { dstMac: qResult.rule.dstMac } : {}),
+              installedAtMs: Date.now(),
+              openFlowInstalled: qResult.openFlowInstalled ?? false,
+            });
+          }
+
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({
@@ -1098,6 +1125,27 @@ export class ZodiacBridgeServer {
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
         }
       });
+      return;
+    }
+
+    // API: GET /api/zodiac/flows (OpenFlow flow rule registry — controller-pushed rules)
+    if (url.pathname === '/api/zodiac/flows' && req.method === 'GET') {
+      const isOperator = isLanOperator(req);
+      if (!isOperator) {
+        res.statusCode = 401;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Unauthorized: Operator access required.' }));
+        return;
+      }
+      res.setHeader('Content-Type', 'application/json');
+      res.statusCode = 200;
+      res.end(JSON.stringify({
+        dataSource: 'controller_registry',
+        note: 'Per-flow hardware stats (OFPT_MULTIPART_REQUEST) not yet implemented; showing controller-pushed rules only.',
+        rules: Array.from(this.flowRuleRegistry.values()),
+        totalRules: this.flowRuleRegistry.size,
+        timestamp: Date.now(),
+      }));
       return;
     }
 
@@ -1229,6 +1277,9 @@ export class ZodiacBridgeServer {
           txRateBps: 0n,
           cpuTemperatureC: null,
           latencyNs: 0n,
+          activeFlows: 0,
+          tableLookups: 0n,
+          tableMatches: 0n,
           ports: emptyPortsSeries,
         });
 
@@ -1417,6 +1468,9 @@ export class ZodiacBridgeServer {
           txRateBps,
           cpuTemperatureC: this.cachedSnapshot.system.cpuTemperatureC,
           latencyNs: this.cachedSnapshot.openflow.lastHeartbeatLatencyNs,
+          activeFlows: this.cachedSnapshot.openflow.activeFlows,
+          tableLookups: this.cachedSnapshot.openflow.tableLookups,
+          tableMatches: this.cachedSnapshot.openflow.tableMatches,
           ports: portsSeries,
         });
 
