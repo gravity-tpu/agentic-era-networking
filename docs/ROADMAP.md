@@ -1,6 +1,6 @@
-# Agentic Era Networking — Master Architecture Roadmap
+# Zodiac — Master Architecture Roadmap
 
-Autonomous, verifiable networking infrastructure for the agentic era: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
+Autonomous, verifiable networking infrastructure — the Zodiac control plane: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
 
 Governed by the **Senior Staff Council Invariants**:
 - **Jeff Dean**: Systems scale, nanosecond-to-WAN latency budgets, hardware co-design, and graceful degradation.

@@ -300,7 +300,7 @@ function stopBurst(): void {
 
 function showHelp(): void {
   console.log(`
-Agentic Era Networking — Hardware Traffic & Inference Burst CLI
+Zodiac — Hardware Traffic & Inference Burst CLI
 
 Usage:
   npm run burst [-- <duration>] [--target <device>] [--size <size>] [--detach] [--interval <sec>] [--stagger-rest-sec <sec>]

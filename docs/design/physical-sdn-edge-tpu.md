@@ -1,6 +1,6 @@
 # Physical SDN & Autonomous Master Appliance Architecture
 
-> **Hardware Specification & Integration Blueprint for the Agentic Era**  
+> **Zodiac Hardware Specification & Integration Blueprint**  
 > **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Google Coral Edge TPU + Raspberry Pi 3B+ (Client Workload)  
 > **Autonomous Master Appliance:** NVIDIA Jetson Orin Nano Super (24/7 dedicated controller host, 67 TOPS Ampere GPU, TensorRT INT8 engine, Tri-Interface Stack)  
 > **Inference Accelerator:** Google Coral Edge TPU (4 TOPS INT8 accelerator, USB 3.0 line-rate packet classifier)  
@@ -15,7 +15,7 @@
 
 In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts away critical physical artifacts: hardware buffer overruns, physical link state bounces, serialization jitter, and thermal throttle events. 
 
-This architecture grounds the `gravity-tpu/agentic-era-networking` control plane in **physical hardware**, elevating the compute node from a secondary peripheral into a **24/7 Autonomous Master Appliance**:
+This architecture grounds the Zodiac control plane in **physical hardware**, elevating the compute node from a secondary peripheral into a **24/7 Autonomous Master Appliance**:
 - **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
 - **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, line-rate TensorRT neural anomaly detection (67 TOPS INT8), and physical SSD1306 OLED telemetry daemon.
 - **Google Coral Edge TPU**: Dedicated 4 TOPS INT8 USB 3.0 coprocessor executing sub-millisecond shallow packet classification on mirrored data streams without taxing the Jetson GPU pipeline.

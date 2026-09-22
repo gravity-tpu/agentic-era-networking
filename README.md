@@ -1,6 +1,6 @@
-# Agentic Era Networking
+# Zodiac
 
-> **Autonomous, Verifiable Networking Infrastructure for the Agentic Era**  
+> **Zodiac — Autonomous, Verifiable SDN Control Plane**  
 > Focus: Autonomous Monitoring, Latency Profiling, DNS Resolution Engines & Software Defined Networking (SDN).  
 > Hosted at: [https://github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking)
 

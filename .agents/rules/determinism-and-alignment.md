@@ -6,7 +6,7 @@
 - **Oriol Vinyals** (Pointer Networks, Graph Neural Routing, Multi-Agent Equilibrium)
 - **Demis Hassabis** (Hybrid Neuro-Symbolic Verification, AlphaProof Verification Asymmetry)
 
-**Applicable Scope: All agents, workflows, and engineers in Agentic Era Networking**
+**Applicable Scope: All agents, workflows, and engineers in Zodiac**
 
 ---
 

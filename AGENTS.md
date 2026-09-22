@@ -1,6 +1,6 @@
-# Agentic Era Networking — Repository Invariants & Guidelines
+# Zodiac — Repository Invariants & Guidelines
 
-This repository (`gravity-tpu/agentic-era-networking`) designs autonomous, verifiable networking infrastructure for the agentic era: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
+This repository (`gravity-tpu/agentic-era-networking`) (Zodiac) designs autonomous, verifiable networking infrastructure for the agentic era: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
 
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Agentic Era Networking — Git Hooks Installer
+# Zodiac — Git Hooks Installer
 # ==============================================================================
 # Symlinks .agents/hooks/* into .git/hooks/ so they are active for this
 # developer machine without requiring manual configuration.
