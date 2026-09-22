@@ -15,6 +15,13 @@
   // State
   let currentSnapshot = null;
   let selectedPort = 4; // Default to active Port 4
+  // Single source of truth for the live telemetry poll interval.
+  // A ±10% jitter is applied on each reschedule to desynchronise concurrent browser
+  // sessions and prevent thundering-herd bursts against the bridge / Vercel origin
+  // (Quoc Le distribution-shift robustness invariant).
+  const TELEMETRY_POLL_INTERVAL_MS = 5000;
+  const TELEMETRY_POLL_JITTER_MS   =  500; // ±10% of base interval
+
   let isFetching = false;
   let pollTimeoutId = null;
   let histRefreshTimeoutId = null;
@@ -568,7 +575,8 @@
     } finally {
       clearTimeout(timeoutId);
       isFetching = false;
-      pollTimeoutId = setTimeout(fetchTelemetry, 5000);
+      const jitter = Math.floor(Math.random() * (2 * TELEMETRY_POLL_JITTER_MS + 1)) - TELEMETRY_POLL_JITTER_MS;
+      pollTimeoutId = setTimeout(fetchTelemetry, TELEMETRY_POLL_INTERVAL_MS + jitter);
     }
   }
 
@@ -667,7 +675,7 @@
         els.pollStatus.innerText = '○ Offline';
         els.pollStatus.className = 'cf-pill-badge gray';
       } else {
-        els.pollStatus.innerText = '● Live · 5s Polling';
+        els.pollStatus.innerText = `● Live · ${TELEMETRY_POLL_INTERVAL_MS / 1000}s Polling`;
         els.pollStatus.className = 'cf-pill-badge green';
       }
     }
