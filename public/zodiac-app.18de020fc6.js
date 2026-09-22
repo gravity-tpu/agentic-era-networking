@@ -3057,7 +3057,6 @@
     const abortTimer = setTimeout(() => abortCtrl.abort(), 4000);
     try {
       const res = await fetch('/api/zodiac/flows', { cache: 'no-store', signal: abortCtrl.signal });
-      clearTimeout(abortTimer);
       if (!res.ok) return;
       const data = await res.json();
       const rules = Array.isArray(data.rules) ? data.rules : [];
@@ -3085,6 +3084,8 @@
       }
     } catch (err) {
       console.warn('[OpenFlow] Flow rules fetch failed:', err instanceof Error ? err.message : String(err));
+    } finally {
+      clearTimeout(abortTimer);
     }
   }
 
