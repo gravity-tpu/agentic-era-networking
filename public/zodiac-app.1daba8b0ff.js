@@ -2780,9 +2780,9 @@
     for (const pt of points) {
       const latVal = getLatVal(pt);
       if (latVal > maxLat) maxLat = latVal;
-      // Include P99 in Y-axis range
-      const p99Val = pt.latencyP99Us !== undefined && pt.latencyP99Us !== null ? safeNumericValue(pt.latencyP99Us) : 0;
-      if (p99Val > maxLat) maxLat = p99Val;
+      // Include P99 in Y-axis range — use safeBigInt for integer-correct comparison
+      const p99Int = pt.latencyP99Us !== undefined && pt.latencyP99Us !== null ? Number(safeBigInt(pt.latencyP99Us)) : 0;
+      if (p99Int > maxLat) maxLat = p99Int;
     }
     maxLat = Math.max(maxLat, Math.ceil(maxLat * 1.15));
 
@@ -2838,14 +2838,12 @@
     drawSegmentedPath(ctx, latSegments, (pt) => getCoord(pt, getLatVal(pt)), '#059669', 'rgba(5, 150, 105, 0.16)', 1.8, padTop + plotH);
 
     // P99 line (amber) - draws after P50
-    const getP99Val = (pt) => (pt.latencyP99Us !== undefined && pt.latencyP99Us !== null ? safeNumericValue(pt.latencyP99Us) : 0);
-    const p99Segs = partitionContiguousSegments(points, currentRange, (pt) => {
-      const v = getP99Val(pt);
-      return v > 0 ? BigInt(Math.round(v)) : 0n;
-    });
+    // safeBigInt preserves integer semantics; Number() conversion is only for canvas pixel coords
+    const getP99BigInt = (pt) => (pt.latencyP99Us !== undefined && pt.latencyP99Us !== null ? safeBigInt(pt.latencyP99Us) : 0n);
+    const p99Segs = partitionContiguousSegments(points, currentRange, getP99BigInt);
     const p99Color = options.p99Color || 'rgba(245, 158, 11, 0.85)'; // amber
     drawSegmentedPath(ctx, p99Segs, (pt) => {
-      const v = getP99Val(pt);
+      const v = Number(getP99BigInt(pt)); // integer µs → float only at canvas boundary
       const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
       const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
       const y = maxLat > 0 ? padTop + plotH - (v / maxLat) * plotH : padTop + plotH;
@@ -3055,8 +3053,11 @@
     const nowMs = Date.now();
     if (nowMs - ofFlowsLastFetchMs < 5000) return; // debounce 5s
     ofFlowsLastFetchMs = nowMs;
+    const abortCtrl = new AbortController();
+    const abortTimer = setTimeout(() => abortCtrl.abort(), 4000);
     try {
-      const res = await fetch('/api/zodiac/flows', { cache: 'no-store' });
+      const res = await fetch('/api/zodiac/flows', { cache: 'no-store', signal: abortCtrl.signal });
+      clearTimeout(abortTimer);
       if (!res.ok) return;
       const data = await res.json();
       const rules = Array.isArray(data.rules) ? data.rules : [];

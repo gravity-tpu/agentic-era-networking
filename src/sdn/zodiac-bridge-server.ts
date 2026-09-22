@@ -1094,6 +1094,12 @@ export class ZodiacBridgeServer {
           });
 
           if (qResult.ruleId) {
+            // Bounded FIFO eviction: cap at 1000 entries so the registry never causes OOM
+            // (Maps preserve insertion order — first key is always the oldest).
+            if (this.flowRuleRegistry.size >= 1000) {
+              const oldestKey = this.flowRuleRegistry.keys().next().value;
+              if (oldestKey !== undefined) this.flowRuleRegistry.delete(oldestKey);
+            }
             this.flowRuleRegistry.set(qResult.ruleId, {
               ruleId: qResult.ruleId,
               priority: qResult.priority ?? 65535,
