@@ -24,6 +24,7 @@ import {
   ZodiacFullTelemetrySnapshot,
   ZodiacTimeSeriesPoint,
   ZodiacPortSeriesPoint,
+  ZodiacFlowRuleEntry,
   JetsonTelemetrySnapshot,
   JetsonTimeSeriesPoint,
   CoralTelemetrySnapshot,
@@ -387,6 +388,9 @@ export class ZodiacBridgeServer {
   /** Vinyals flap-prevention: terminal fail-closed after MAX_CORAL_RESTARTS permanent failures. */
   private coralDaemonRestartCount = 0;
   private static readonly MAX_CORAL_RESTARTS = 10;
+  // KSZ8795 hardware flow table hard ceiling; bounds the O(N) registry snapshot
+  // allocation per heartbeat to O(1) regardless of Map size.
+  private static readonly MAX_FLOW_SNAPSHOT_RULES = 512;
   private readonly stateFilePath: string = resolveTelemetryStateFilePath();
   private lastStateFlushTimeMs = 0;
   private lastLocalHistoryFlushMs = 0;
@@ -1217,6 +1221,19 @@ export class ZodiacBridgeServer {
     res.end('404 Not Found');
   }
 
+  private boundedFlowSnapshot(): readonly ZodiacFlowRuleEntry[] {
+    const cap = ZodiacBridgeServer.MAX_FLOW_SNAPSHOT_RULES;
+    if (this.flowRuleRegistry.size <= cap) {
+      return Array.from(this.flowRuleRegistry.values());
+    }
+    const result: ZodiacFlowRuleEntry[] = [];
+    for (const rule of this.flowRuleRegistry.values()) {
+      result.push(rule);
+      if (result.length >= cap) break;
+    }
+    return result;
+  }
+
   private async refreshTelemetry(): Promise<void> {
     if (this.isRefreshing) return;
     this.isRefreshing = true;
@@ -1273,6 +1290,7 @@ export class ZodiacBridgeServer {
             tableLookups: 0n,
             tableMatches: 0n,
             lastHeartbeatLatencyNs: 0n,
+            rules: this.boundedFlowSnapshot(),
           },
         };
 
@@ -1368,10 +1386,11 @@ export class ZodiacBridgeServer {
               ? `0x${health.openFlowMetrics.switchFeatures.datapathId.toString(16)}`
               : '0x70b3d58740bc',
             activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
-            activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? 1 : 0,
+            activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? this.flowRuleRegistry.size : 0,
             tableLookups: health.openFlowMetrics.messagesReceived,
             tableMatches: health.openFlowMetrics.messagesReceived,
             lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
+            rules: this.boundedFlowSnapshot(),
           },
         };
 

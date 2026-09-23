@@ -240,8 +240,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return; // 401 response already handled by requireOperatorAuth
     }
 
-    // Historical Range Query from Neon Postgres (up to 30 days)
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+
+    // Flow Rule Registry — served from cached snapshot pushed by the bridge
+    if (url.searchParams.get('section') === 'flows') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
+      res.statusCode = 200;
+      res.end(JSON.stringify({
+        dataSource: 'cloud_snapshot',
+        note: 'Controller-pushed flow rules relayed from bridge. May be up to 30s stale.',
+        rules: latestSnapshot.openflow.rules ?? [],
+        totalRules: latestSnapshot.openflow.rules?.length ?? 0,
+        timestamp: Date.now(),
+      }));
+      return;
+    }
+
+    // Historical Range Query from Neon Postgres (up to 30 days)
     const range = url.searchParams.get('range');
     if (isValidRange(range)) {
       const multi = await getHistoricalMultiDeviceTelemetry(range);

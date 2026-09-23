@@ -40,6 +40,19 @@ export interface ZodiacSystemTelemetry {
   readonly timestampNs: bigint;
 }
 
+export interface ZodiacFlowRuleEntry {
+  readonly ruleId: string;
+  readonly priority: number;
+  readonly action: string;
+  readonly srcCidr: string;
+  readonly dstCidr: string;
+  readonly protocol: string;
+  readonly srcMac?: string;
+  readonly dstMac?: string;
+  readonly installedAtMs: number;
+  readonly openFlowInstalled: boolean;
+}
+
 export interface ZodiacOpenFlowTelemetry {
   readonly status: 'Connected' | 'Disconnected' | 'Handshake';
   readonly version: string;
@@ -49,6 +62,7 @@ export interface ZodiacOpenFlowTelemetry {
   readonly tableLookups: bigint;
   readonly tableMatches: bigint;
   readonly lastHeartbeatLatencyNs: bigint;
+  readonly rules?: readonly ZodiacFlowRuleEntry[];
 }
 
 export interface ZodiacPortSeriesPoint {
