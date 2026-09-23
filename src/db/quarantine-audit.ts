@@ -186,10 +186,16 @@ export function getFailedQuarantineAuditWriteCount(): bigint {
   return failedWriteCount;
 }
 
+export function getInflightQuarantineAuditWriteCount(): bigint {
+  return BigInt(inflightWrites);
+}
+
 /**
  * Persist a quarantine enforcement event to both local JSONL and Neon Postgres.
- * Uses Promise.allSettled so a failure in either path never rejects — errors
- * are logged and the function always resolves (SDN control plane invariant).
+ * Uses Promise.allSettled so the "never rejects" guarantee is enforced at
+ * this orchestration layer, not delegated to whether every leaf task
+ * remembers to wrap itself in .catch (a future third destination could
+ * otherwise silently reintroduce a rejection here).
  * Bounded concurrency: if MAX_INFLIGHT_WRITES writes are already in flight,
  * the event is dropped (and counted via getDroppedQuarantineAuditCount)
  * rather than queued indefinitely. Individual write failures are counted
