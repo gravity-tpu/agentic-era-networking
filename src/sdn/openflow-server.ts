@@ -55,7 +55,13 @@ export class OpenFlowServer extends EventEmitter {
   private state: SwitchState = 'DISCONNECTED';
   private switchFeatures?: SwitchFeatures | undefined;
   private rxBuffer: Buffer = Buffer.alloc(0);
-  private nextXid: number = 100; // always kept in [0, 0xFFFFFFFF] via >>> 0 wrapping
+  private nextXid: number = 100;
+
+  private allocateXid(): number {
+    const xid = this.nextXid;
+    this.nextXid = (this.nextXid + 1) >>> 0; // 32-bit unsigned wrap; prevents ERR_OUT_OF_RANGE
+    return xid;
+  }
 
   // Invariant counters
   private _messagesReceived: bigint = 0n;
@@ -122,8 +128,7 @@ export class OpenFlowServer extends EventEmitter {
       throw new Error(`Cannot send FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
     }
 
-    const xid = this.nextXid;
-    this.nextXid = (this.nextXid + 1) >>> 0;
+    const xid = this.allocateXid();
     const isDrop = rule.action === 'DROP';
     const flowModPacket = buildOfpFlowMod({
       command: FlowModCommand.OFPFC_ADD,
@@ -153,8 +158,7 @@ export class OpenFlowServer extends EventEmitter {
       throw new Error(`Cannot send MirrorRule: switch not in ESTABLISHED state (current: ${this.state})`);
     }
 
-    const xid = this.nextXid;
-    this.nextXid = (this.nextXid + 1) >>> 0;
+    const xid = this.allocateXid();
     const packet = buildOfpFlowMod({
       command: FlowModCommand.OFPFC_ADD,
       priority,
@@ -181,8 +185,7 @@ export class OpenFlowServer extends EventEmitter {
       throw new Error(`Cannot send Table-Miss FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
     }
 
-    const xid = this.nextXid;
-    this.nextXid = (this.nextXid + 1) >>> 0;
+    const xid = this.allocateXid();
     const packet = buildOfpTableMissFlowMod(xid, priority, action, maxLen);
     this.clientSocket.write(packet);
   }
@@ -193,8 +196,7 @@ export class OpenFlowServer extends EventEmitter {
   public pingEcho(): void {
     if (!this.clientSocket || this.state !== 'ESTABLISHED') return;
 
-    const xid = this.nextXid;
-    this.nextXid = (this.nextXid + 1) >>> 0;
+    const xid = this.allocateXid();
     this.activeEchoXid = xid;
     this.echoSentNs = process.hrtime.bigint();
 
@@ -278,8 +280,7 @@ export class OpenFlowServer extends EventEmitter {
         this.clientSocket?.write(helloReply);
 
         // 2. Query switch hardware capabilities
-        const featuresReq = buildOfpFeaturesRequest(this.nextXid);
-        this.nextXid = (this.nextXid + 1) >>> 0;
+        const featuresReq = buildOfpFeaturesRequest(this.allocateXid());
         this.clientSocket?.write(featuresReq);
         break;
       }

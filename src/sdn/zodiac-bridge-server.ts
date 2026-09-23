@@ -458,13 +458,11 @@ export class ZodiacBridgeServer {
 
     // Auto-install baseline flow rules on switch connection
     this.controller.openFlow.on('ready', () => {
-      try {
-        // Table-miss → CONTROLLER: bounded header-only packet sampling for live telemetry accounting
-        this.controller.openFlow.sendTableMissRule(0, 'CONTROLLER', 128);
-        console.log('[+] [Bridge Server] Table-Miss flow rule installed (CONTROLLER packet sampling, 128B bounded header).');
-      } catch (err: unknown) {
-        console.warn('[!] [Bridge Server] Failed to install table-miss rule:', err instanceof Error ? err.message : String(err));
-      }
+      // Table-miss → CONTROLLER: bounded header-only packet sampling for live telemetry accounting.
+      // Council Invariant 3 (Fail-Closed): if this fails the switch's default routing state is
+      // unverified — crash so systemd restarts and retries on the next switch connection.
+      this.controller.openFlow.sendTableMissRule(0, 'CONTROLLER', 128);
+      console.log('[+] [Bridge Server] Table-Miss flow rule installed (CONTROLLER packet sampling, 128B bounded header).');
       // Mirror Port 1 (Pi data plane) → Port 3 (Jetson GPU sentinel tap) at priority 1.
       // Priority 1 is below quarantine rules at 65535, so a quarantined Pi MAC/IP still
       // hits the DROP rule first — fail-closed invariant is preserved (Ghemawat & Hassabis).

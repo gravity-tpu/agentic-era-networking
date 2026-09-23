@@ -353,6 +353,14 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
   }
 
   if (hasOutputActions) {
+    // Guard: OFPP_CONTROLLER in outputPorts would send 0 bytes of the frame (max_len=0) to the
+    // controller, which is almost certainly a bug. Use sendTableMissRule for controller output.
+    for (const port of ports) {
+      if (port === OFPP_CONTROLLER) {
+        throw new Error('buildOfpFlowMod outputPorts must not include OFPP_CONTROLLER; use sendTableMissRule instead');
+      }
+    }
+
     // OFPIT_APPLY_ACTIONS instruction (OpenFlow 1.3 §7.2.5)
     const instrOffset = 48 + matchPaddedLen;
     buf.writeUInt16BE(InstructionType.OFPIT_APPLY_ACTIONS, instrOffset);
