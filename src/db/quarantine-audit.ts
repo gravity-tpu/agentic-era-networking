@@ -72,8 +72,8 @@ function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
   // The write callback fires only after the chunk is flushed to the underlying
   // resource — both on the fast path (ok=true) and the backpressured path (ok=false).
   // This guarantees durability and propagates errors to the caller without needing
-  // drain/error listener gymnastics. Natural backpressure: the caller blocks on
-  // await, preventing unbounded queuing. Quarantine events are rare in practice.
+  // drain/error listener gymnastics. Concurrency is bounded by the caller
+  // (see MAX_INFLIGHT_WRITES in appendQuarantineEvent), not by an awaiting caller.
   return new Promise((resolve, reject) => {
     getAuditStream().write(JSON.stringify(entry) + '\n', (err) => {
       if (err) { reject(err); return; }
@@ -158,23 +158,70 @@ async function appendToNeon(entry: QuarantineAuditEntry): Promise<void> {
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
+// The real call site (zodiac-bridge-server.ts) invokes this fire-and-forget
+// from an HTTP handler that must respond immediately, so there is no caller
+// await to provide backpressure. Bound the number of concurrent audit writes
+// instead: once the bound is hit, drop the event and count it, rather than
+// letting promises accumulate unboundedly under an adversarial event flood.
+
+const DEFAULT_MAX_INFLIGHT_WRITES = 256;
+const parsedMaxInflight = process.env['QUARANTINE_AUDIT_MAX_INFLIGHT_WRITES']
+  ? parseInt(process.env['QUARANTINE_AUDIT_MAX_INFLIGHT_WRITES'], 10)
+  : NaN;
+// Bounded between 1 and 10000 to prevent a misconfigured env var from disabling
+// load shedding entirely or starving every write immediately.
+const MAX_INFLIGHT_WRITES = Number.isFinite(parsedMaxInflight) && parsedMaxInflight > 0
+  ? Math.min(Math.max(parsedMaxInflight, 1), 10_000)
+  : DEFAULT_MAX_INFLIGHT_WRITES;
+
+let inflightWrites = 0;
+let droppedEventCount = 0n;
+let failedWriteCount = 0n;
+
+export function getDroppedQuarantineAuditCount(): bigint {
+  return droppedEventCount;
+}
+
+export function getFailedQuarantineAuditWriteCount(): bigint {
+  return failedWriteCount;
+}
 
 /**
  * Persist a quarantine enforcement event to both local JSONL and Neon Postgres.
  * Uses Promise.allSettled so a failure in either path never rejects — errors
  * are logged and the function always resolves (SDN control plane invariant).
+ * Bounded concurrency: if MAX_INFLIGHT_WRITES writes are already in flight,
+ * the event is dropped (and counted via getDroppedQuarantineAuditCount)
+ * rather than queued indefinitely. Individual write failures are counted
+ * via getFailedQuarantineAuditWriteCount for control-plane health monitoring.
  */
 export async function appendQuarantineEvent(
   entry: QuarantineAuditEntry
 ): Promise<void> {
-  await Promise.allSettled([
-    appendToLocalAuditLog(entry).catch((err: unknown) => {
-      console.warn('[!] [Quarantine Audit] Local JSONL write failed:',
-        err instanceof Error ? err.message : String(err));
-    }),
-    appendToNeon(entry).catch((err: unknown) => {
-      console.warn('[!] [Quarantine Audit] Neon write failed:',
-        err instanceof Error ? err.message : String(err));
-    }),
-  ]);
+  if (inflightWrites >= MAX_INFLIGHT_WRITES) {
+    droppedEventCount += 1n;
+    console.warn(
+      `[!] [Quarantine Audit] Dropping audit event for rule ${entry.ruleId}: ` +
+      `${MAX_INFLIGHT_WRITES} writes already in flight (${droppedEventCount} dropped total).`
+    );
+    return;
+  }
+
+  inflightWrites += 1;
+  try {
+    await Promise.allSettled([
+      appendToLocalAuditLog(entry).catch((err: unknown) => {
+        failedWriteCount += 1n;
+        console.warn('[!] [Quarantine Audit] Local JSONL write failed:',
+          err instanceof Error ? err.message : String(err));
+      }),
+      appendToNeon(entry).catch((err: unknown) => {
+        failedWriteCount += 1n;
+        console.warn('[!] [Quarantine Audit] Neon write failed:',
+          err instanceof Error ? err.message : String(err));
+      }),
+    ]);
+  } finally {
+    inflightWrites -= 1;
+  }
 }
