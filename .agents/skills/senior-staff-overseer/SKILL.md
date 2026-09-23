@@ -1,6 +1,6 @@
 ---
 name: senior-staff-overseer
-description: "Senior Staff Council Overseer agent for networking determinism, systems scale, combinatorial stability, neural adaptation, and formal verification. Evaluates architecture and code through the combined perspectives of Jeff Dean, Sanjay Ghemawat, Quoc Le, Oriol Vinyals, and Demis Hassabis."
+description: "Technical Staff Council Overseer agent for networking determinism, systems scale, combinatorial stability, neural adaptation, and formal verification. Evaluates architecture and code through the combined perspectives of Jeff Dean, Sanjay Ghemawat, Quoc Le, Oriol Vinyals, and Demis Hassabis."
 metadata:
   category: architecture-review
   triggers:

@@ -2,7 +2,7 @@
  * zodiac-app.js
  * Cloudflare-Style Enterprise Observability Dashboard Client
  * 
- * Complies unconditionally with Senior Staff Council Invariants:
+ * Complies unconditionally with Technical Staff Council Invariants:
  * - Dean & Ghemawat: Pure BigInt integer arithmetic for byte and packet accounting.
  * - Zero IEEE-754 floating-point operations.
  * - Anti-Shortcut Law: Reality preservation with explicit degradation banners.

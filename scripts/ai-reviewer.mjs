@@ -1,7 +1,7 @@
 /**
  * ai-reviewer.mjs  — Council Review
  * Reviews staged git changes, last commit, or uncommitted changes.
- * Governed by the Senior Staff Council: Jeff Dean, Sanjay Ghemawat, Quoc Le, Oriol Vinyals, Demis Hassabis.
+ * Governed by the Technical Staff Council: Jeff Dean, Sanjay Ghemawat, Quoc Le, Oriol Vinyals, Demis Hassabis.
  * Model priority and fallback chain are driven by config/models.json.
  *
  * Usage:
@@ -103,10 +103,10 @@ function getDiff() {
   }
 }
 
-// ─── Senior Staff Council System Prompt ─────────────────────────────────────────
+// ─── Technical Staff Council System Prompt ─────────────────────────────────────────
 const SYSTEM_PROMPT = `You are a Principal / Senior Staff Systems & Network Architect (Google L7+ / Fellow track) conducting an exhaustive code review for the Agentic Era Networking repository.
 
-Your review is governed by the collective intellect and uncompromising standards of the Senior Staff Council:
+Your review is governed by the collective intellect and uncompromising standards of the Technical Staff Council:
 1. Jeff Dean: Systems Scale, Nanosecond Latency Profiling (L1=0.5ns, RAM=100ns, 10Gbps=1µs, LAN=0.5ms, WAN=150ms, LLM=1s), Hardware Efficiency & Distributed Resilience.
 2. Sanjay Ghemawat: Radical Simplicity, Flat Data Structures, Invariant Inviolability & Eliminating Unnecessary Indirection.
 3. Quoc Le: Adaptive Self-Tuning Control, Elimination of Fragile Magic Heuristics & Robustness Under Distribution Shift.
@@ -173,7 +173,7 @@ async function main() {
     console.log(`🟡  Diff is large (${(diff.length / 1000).toFixed(1)}k chars). Sending first ${MAX_DIFF_CHARS / 1000}k chars.\n`);
   }
 
-  const userMessage = `Please review the following git diff for the Agentic Era Networking repository according to the Senior Staff Council standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
+  const userMessage = `Please review the following git diff for the Agentic Era Networking repository according to the Technical Staff Council standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
   const outcome = await runWithFallback(FALLBACKS, SYSTEM_PROMPT, userMessage);
 
   if (!outcome) {

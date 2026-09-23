@@ -2,7 +2,7 @@
 
 Autonomous, verifiable networking infrastructure — the Zodiac control plane: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
 
-Governed by the **Senior Staff Council Invariants**:
+Governed by the **Technical Staff Council Invariants**:
 - **Jeff Dean**: Systems scale, nanosecond-to-WAN latency budgets, hardware co-design, and graceful degradation.
 - **Sanjay Ghemawat**: Radical simplicity, invariant rigor, cache-friendly flat layouts, and zero-bloat abstractions.
 - **Quoc Le**: Neural architecture search, adaptive self-tuning control loops, and robustness under distribution shift.

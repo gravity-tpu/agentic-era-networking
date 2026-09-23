@@ -4,7 +4,7 @@ This repository (`gravity-tpu/agentic-era-networking`) (Zodiac) designs autonomo
 
 ---
 
-# The Senior Staff Council: Determinism & Alignment Invariants
+# The Technical Staff Council: Determinism & Alignment Invariants
 **Governing Minds & Perspectives:**
 1. **Jeff Dean**: Systems Scale, Nanosecond-to-WAN Latency Budgets, Hardware Co-Design & Graceful Degradation.
 2. **Sanjay Ghemawat**: Radical Simplicity, Invariant Rigor, Cache-Friendly Flat Layouts & Zero-Bloat Abstractions.

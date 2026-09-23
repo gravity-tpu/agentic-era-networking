@@ -6,7 +6,7 @@
 
 ---
 
-## 1. The Senior Staff Council: Governing Perspectives
+## 1. The Technical Staff Council: Governing Perspectives
 
 This codebase is governed by the collective engineering rigor of five foundational systems and AI pioneers:
 
@@ -132,7 +132,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 The repository embeds stateful governance directly in the codebase:
 
 - **[AGENTS.md](file:///Users/andymorven/git/agentic-era-networking/AGENTS.md)**: Council rules and Dean latency numbers for any AI assistant working on the repo.
-- **[.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)**: The formal Senior Staff Council rulebook for networking systems.
+- **[.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)**: The formal Technical Staff Council rulebook for networking systems.
 - **[.agents/skills/senior-staff-overseer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/senior-staff-overseer/SKILL.md)**: Overseer skill definition (L7+ Fellow track).
 - **[.agents/workflows/overseer-audit.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/overseer-audit.md)**: 5-Gate Dialectic Review workflow (`@overseer` or `/grill-me`).
 - **[.agents/audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md)**: Persistent institutional memory tracking invariant decisions, gate runs, and technical debt.

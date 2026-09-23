@@ -144,7 +144,7 @@ During the burst, open the live web dashboard:
 
 ---
 
-## 4. Senior Staff Council Invariants Enforced
+## 4. Technical Staff Council Invariants Enforced
 
 - **Invariant 2 (Determinism - Dean & Ghemawat)**:
   All packet, byte, and size accounting uses pure integer counters. All timing uses monotonic nanosecond resolution (`time.monotonic_ns()`). Zero floating-point arithmetic on packet counters.
