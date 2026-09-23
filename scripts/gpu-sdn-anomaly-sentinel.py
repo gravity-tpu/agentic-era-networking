@@ -591,10 +591,13 @@ def run_sentinel(
                                 src_p, dst_p = struct.unpack('!HH', raw_data[l4_offset:l4_offset + 4])
 
                     window = extractor.ingest_packet(frame_len, proto, flags, src_p, dst_p, src_ip, src_mac)
-                except Exception:
+                except Exception as decode_err:
                     decode_errors += 1
                     if decode_errors % 1000 == 1:
-                        sys.stderr.write(f"[gpu-sentinel] Malformed frame decode errors: {decode_errors} total\n")
+                        sys.stderr.write(
+                            f"[gpu-sentinel] Malformed frame decode errors: {decode_errors} total"
+                            f" ({type(decode_err).__name__}: {decode_err})\n"
+                        )
                     continue
 
             # When a full window of 64 packets is ready, execute GPU inference
@@ -650,10 +653,7 @@ def run_sentinel(
                             print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for ip={target_ip} mac={target_mac}")
                         except queue.Full:
                             dropped_alerts += 1
-                            sys.stderr.write(
-                                f"[gpu-sentinel] CRITICAL: Alert queue saturated; dropped_alerts={dropped_alerts}"
-                                f" for ip={target_ip} mac={target_mac}\n"
-                            )
+                            # No synchronous I/O here — dropped_alerts surfaces in the 3s status report
 
             # Periodic status report
             if (now_ns - last_stat_ns) >= 3_000_000_000:
