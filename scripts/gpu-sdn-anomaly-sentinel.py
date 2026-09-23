@@ -28,6 +28,7 @@ Council Invariants Enforced:
 """
 
 import argparse
+import collections
 import ctypes
 import json
 import math
@@ -61,6 +62,7 @@ class QuarantineAlertItem:
     """Typed quarantine dispatch alert for the non-blocking worker queue."""
     controller_url: str
     target_ip: str
+    target_mac: str
     reason: str
     priority: int = 65535
 
@@ -310,10 +312,11 @@ class PacketFeatureExtractor:
         self.buffer: List[List[float]] = []
         self.last_pkt_ns: int = 0
         self.src_ips: List[str] = []
+        self.src_macs: List[str] = []
         self.max_observed_dt_us: float = 1000.0
         self.max_observed_frame_len: float = float(ETHERNET_STANDARD_MTU)
 
-    def ingest_packet(self, frame_len: int, protocol: int, tcp_flags: int, src_port: int, dst_port: int, src_ip: str) -> Optional[List[List[float]]]:
+    def ingest_packet(self, frame_len: int, protocol: int, tcp_flags: int, src_port: int, dst_port: int, src_ip: str, src_mac: str = 'unknown') -> Optional[List[List[float]]]:
         now_ns = time.monotonic_ns()
         dt_us = 0.0
         if self.last_pkt_ns > 0:
@@ -337,10 +340,12 @@ class PacketFeatureExtractor:
         feature_vector = [dt_norm, len_norm, flags_norm, port_entropy]
         self.buffer.append(feature_vector)
         self.src_ips.append(src_ip)
+        self.src_macs.append(src_mac)
 
         if len(self.buffer) > self.window_size:
             self.buffer.pop(0)
             self.src_ips.pop(0)
+            self.src_macs.pop(0)
 
         if len(self.buffer) == self.window_size:
             return list(self.buffer)
@@ -350,24 +355,31 @@ class PacketFeatureExtractor:
         known = [ip for ip in self.src_ips if ip != 'unknown']
         if not known:
             return 'unknown'
-        return max(set(known), key=known.count)
+        return collections.Counter(known).most_common(1)[0][0]
+
+    def get_predominant_src_mac(self) -> str:
+        known = [mac for mac in self.src_macs if mac != 'unknown']
+        if not known:
+            return 'unknown'
+        return collections.Counter(known).most_common(1)[0][0]
 
 
 # ---------------------------------------------------------------------------
 # SDN Quarantine Dispatch Client
 # ---------------------------------------------------------------------------
 
-def dispatch_quarantine_alert(controller_url: str, target_ip: str, reason: str, priority: int = 65535) -> bool:
+def dispatch_quarantine_alert(controller_url: str, target_ip: str, target_mac: str, reason: str, priority: int = 65535) -> bool:
     """
     Council Invariant 3 (Fail-Closed Isolation):
     Dispatches HTTP POST /api/sdn/quarantine to the local SDN controller.
+    Includes targetIp when valid, targetMac as L2 fallback when IP is non-IPv4.
     """
     endpoint = f"{controller_url.rstrip('/')}/api/sdn/quarantine"
-    payload = {
-        'targetIp': target_ip,
-        'reason': reason,
-        'priority': priority,
-    }
+    payload: dict = {'reason': reason, 'priority': priority}
+    if target_ip != 'unknown':
+        payload['targetIp'] = target_ip
+    if target_mac != 'unknown':
+        payload['targetMac'] = target_mac
     data_bytes = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
         endpoint,
@@ -431,7 +443,7 @@ def run_sentinel(
             success = False
             for attempt in range(1, max_retries + 1):
                 try:
-                    success = dispatch_quarantine_alert(item.controller_url, item.target_ip, item.reason, item.priority)
+                    success = dispatch_quarantine_alert(item.controller_url, item.target_ip, item.target_mac, item.reason, item.priority)
                     if success:
                         break
                 except Exception as exc:
@@ -440,7 +452,7 @@ def run_sentinel(
                     time.sleep(backoff_s)
                     backoff_s *= 2.0
             if not success:
-                sys.stderr.write(f"[gpu-sentinel] Quarantine alert failed after {max_retries} attempts for {item.target_ip}\n")
+                sys.stderr.write(f"[gpu-sentinel] Quarantine alert failed after {max_retries} attempts for ip={item.target_ip} mac={item.target_mac}\n")
             alert_queue.task_done()
 
     dispatch_thread = threading.Thread(target=alert_dispatcher_worker, daemon=True)
@@ -558,6 +570,8 @@ def run_sentinel(
                     src_p = 0
                     dst_p = 0
                     src_ip = 'unknown'
+                    # Ethernet source MAC: bytes 6-11 of every valid Ethernet frame
+                    src_mac = ':'.join(f'{b:02x}' for b in raw_data[6:12])
 
                     # IPv4 parsing with dynamic IHL (Internet Header Length) handling (Council Invariant 1)
                     if eth_proto == 0x0800 and frame_len >= (l3_offset + 20):
@@ -574,7 +588,7 @@ def run_sentinel(
                             elif proto == 17 and frame_len >= (l4_offset + 8):  # UDP
                                 src_p, dst_p = struct.unpack('!HH', raw_data[l4_offset:l4_offset + 4])
 
-                    window = extractor.ingest_packet(frame_len, proto, flags, src_p, dst_p, src_ip)
+                    window = extractor.ingest_packet(frame_len, proto, flags, src_p, dst_p, src_ip, src_mac)
                 except Exception as decode_err:
                     sys.stderr.write(f"[gpu-sentinel] Frame decode note: {decode_err}\n")
                     continue
@@ -588,6 +602,7 @@ def run_sentinel(
                 # Check if anomaly threshold breached via adaptive self-tuning controller (Council Invariant 5)
                 is_anomaly, dynamic_tau = threshold_controller.update_and_check(loss)
                 target_ip = extractor.get_predominant_src_ip()
+                target_mac = extractor.get_predominant_src_mac()
 
                 if total_inferences % 25 == 1:
                     print(f"   [inf #{total_inferences}] loss={loss:.4f} | tau={dynamic_tau:.4f} | top_ip={target_ip} | lat={latency_ns / 1_000_000.0:.2f}ms")
@@ -598,33 +613,42 @@ def run_sentinel(
                     latency_ms_display = latency_ns / 1_000_000.0
                     print(f"🚨 [ANOMALY DETECTED] {reason} | Offender: {target_ip} ({latency_ms_display:.2f}ms inference)")
 
-                    # Council Invariant 3 (Fail-Closed): only quarantine a verified IPv4 offender.
-                    # Non-IPv4 frames (ARP, etc.) yield 'unknown' — no quarantine target, skip dispatch.
+                    # Council Invariant 3 (Fail-Closed): quarantine by verified IPv4 first;
+                    # fall back to L2 MAC quarantine for non-IPv4 frames (ARP floods, L2 attacks).
+                    # Only skip if BOTH identifiers are unresolvable.
                     try:
                         socket.inet_aton(target_ip)
                         ip_valid = True
                     except OSError:
                         ip_valid = False
 
-                    if not ip_valid:
+                    mac_valid = (target_mac != 'unknown')
+
+                    if not ip_valid and not mac_valid:
                         sys.stderr.write(
-                            f"[gpu-sentinel] Anomaly detected but offender IP unresolvable ('{target_ip}'),"
-                            f" window dominated by non-IPv4 frames — skipping quarantine dispatch\n"
+                            f"[gpu-sentinel] Anomaly detected but no resolvable offender"
+                            f" (ip='{target_ip}', mac='{target_mac}') — skipping quarantine dispatch\n"
                         )
                     else:
-                        # Non-blocking Fail-Closed Quarantine dispatch
+                        # Fail-Closed Quarantine dispatch with bounded backpressure (50ms).
+                        # Blocking put applies backpressure to the packet loop when the control
+                        # plane is overwhelmed, preventing silent alert loss.
                         try:
                             alert_item = QuarantineAlertItem(
                                 controller_url=controller_url,
                                 target_ip=target_ip,
+                                target_mac=target_mac,
                                 reason=reason,
                                 priority=65535,
                             )
-                            alert_queue.put_nowait(alert_item)
+                            alert_queue.put(alert_item, block=True, timeout=0.050)
                             total_quarantines += 1
-                            print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for {target_ip}")
+                            print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for ip={target_ip} mac={target_mac}")
                         except queue.Full:
-                            sys.stderr.write(f"[gpu-sentinel] Alert queue full, dropping alert for {target_ip}\n")
+                            sys.stderr.write(
+                                f"[gpu-sentinel] CRITICAL: Alert queue saturated (maxsize=1024), backpressure"
+                                f" exhausted; dropping alert for ip={target_ip} mac={target_mac}\n"
+                            )
 
             # Periodic status report
             if (now_ns - last_stat_ns) >= 3_000_000_000:
