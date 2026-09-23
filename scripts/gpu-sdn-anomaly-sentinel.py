@@ -347,10 +347,10 @@ class PacketFeatureExtractor:
         return None
 
     def get_predominant_src_ip(self) -> str:
-        if not self.src_ips:
-            return '10.0.2.50'
-        # Return most frequent IP in the current window
-        return max(set(self.src_ips), key=self.src_ips.count)
+        known = [ip for ip in self.src_ips if ip != 'unknown']
+        if not known:
+            return 'unknown'
+        return max(set(known), key=known.count)
 
 
 # ---------------------------------------------------------------------------
@@ -598,19 +598,33 @@ def run_sentinel(
                     latency_ms_display = latency_ns / 1_000_000.0
                     print(f"🚨 [ANOMALY DETECTED] {reason} | Offender: {target_ip} ({latency_ms_display:.2f}ms inference)")
 
-                    # Non-blocking Fail-Closed Quarantine dispatch
+                    # Council Invariant 3 (Fail-Closed): only quarantine a verified IPv4 offender.
+                    # Non-IPv4 frames (ARP, etc.) yield 'unknown' — no quarantine target, skip dispatch.
                     try:
-                        alert_item = QuarantineAlertItem(
-                            controller_url=controller_url,
-                            target_ip=target_ip,
-                            reason=reason,
-                            priority=65535,
+                        socket.inet_aton(target_ip)
+                        ip_valid = True
+                    except OSError:
+                        ip_valid = False
+
+                    if not ip_valid:
+                        sys.stderr.write(
+                            f"[gpu-sentinel] Anomaly detected but offender IP unresolvable ('{target_ip}'),"
+                            f" window dominated by non-IPv4 frames — skipping quarantine dispatch\n"
                         )
-                        alert_queue.put_nowait(alert_item)
-                        total_quarantines += 1
-                        print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for {target_ip}")
-                    except queue.Full:
-                        sys.stderr.write(f"[gpu-sentinel] Alert queue full, dropping alert for {target_ip}\n")
+                    else:
+                        # Non-blocking Fail-Closed Quarantine dispatch
+                        try:
+                            alert_item = QuarantineAlertItem(
+                                controller_url=controller_url,
+                                target_ip=target_ip,
+                                reason=reason,
+                                priority=65535,
+                            )
+                            alert_queue.put_nowait(alert_item)
+                            total_quarantines += 1
+                            print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for {target_ip}")
+                        except queue.Full:
+                            sys.stderr.write(f"[gpu-sentinel] Alert queue full, dropping alert for {target_ip}\n")
 
             # Periodic status report
             if (now_ns - last_stat_ns) >= 3_000_000_000:
