@@ -465,15 +465,14 @@ export class ZodiacBridgeServer {
       } catch (err: unknown) {
         console.warn('[!] [Bridge Server] Failed to install table-miss rule:', err instanceof Error ? err.message : String(err));
       }
-      try {
-        // Mirror Port 1 (Pi data plane) → Port 3 (Jetson GPU sentinel tap) at priority 1.
-        // Priority 1 is below quarantine rules at 65535, so a quarantined Pi MAC/IP still
-        // hits the DROP rule first — fail-closed invariant is preserved (Ghemawat & Hassabis).
-        this.controller.openFlow.sendMirrorRule(1, 3, 1);
-        console.log('[+] [Bridge Server] Mirror rule installed: Port 1 → Port 3 (GPU sentinel tap, priority 1).');
-      } catch (err: unknown) {
-        console.warn('[!] [Bridge Server] Failed to install Port 1→3 mirror rule:', err instanceof Error ? err.message : String(err));
-      }
+      // Mirror Port 1 (Pi data plane) → Port 3 (Jetson GPU sentinel tap) at priority 1.
+      // Priority 1 is below quarantine rules at 65535, so a quarantined Pi MAC/IP still
+      // hits the DROP rule first — fail-closed invariant is preserved (Ghemawat & Hassabis).
+      // Council Invariant 3 (Fail-Closed): if this rule cannot be installed the sentinel
+      // is completely blind. We must not continue in an unverified state — crash here so
+      // systemd restarts the bridge and retries on the next switch connection.
+      this.controller.openFlow.sendMirrorRule(1, 3, 1);
+      console.log('[+] [Bridge Server] Mirror rule installed: Port 1 → Port 3 (GPU sentinel tap, priority 1).');
     });
 
     // Accumulate hardware counters for each physical port when packets arrive
