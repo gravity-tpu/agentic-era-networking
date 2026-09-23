@@ -120,6 +120,8 @@ extern "C" {
     static float* d_weights = NULL;
     static cudaStream_t stream = NULL;
 
+    void shutdown_cuda_engine(); // forward declaration — defined below
+
     int init_cuda_engine() {
         if (d_input != NULL) return 0; // Idempotent re-initialization guard (Systems Sanity)
 
