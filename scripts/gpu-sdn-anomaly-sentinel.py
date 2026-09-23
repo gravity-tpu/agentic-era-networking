@@ -428,13 +428,21 @@ def run_sentinel(
     # Dedicated non-blocking queue & background worker for SDN quarantine dispatches
     # Ensures raw tap packet ingestion loop never blocks on HTTP timeouts
     alert_queue: queue.Queue[QuarantineAlertItem] = queue.Queue(maxsize=1024)
+    # Emergency single-slot circuit breaker: bypasses saturated alert_queue so the
+    # most recent quarantine is always dispatched even under control-plane overload.
+    # Last-writer-wins semantics; non-blocking reads/writes preserve data-plane latency.
+    emergency_queue: queue.Queue[QuarantineAlertItem] = queue.Queue(maxsize=1)
 
     def alert_dispatcher_worker():
         while not stop_event:
+            # Drain circuit breaker first; falls through to main queue on Empty
             try:
-                item = alert_queue.get(timeout=0.2)
+                item = emergency_queue.get_nowait()
             except queue.Empty:
-                continue
+                try:
+                    item = alert_queue.get(timeout=0.2)
+                except queue.Empty:
+                    continue
             if item is None:
                 break
             # Bounded exponential retry (Dean latency & reliability invariant: max 3 attempts)
@@ -464,6 +472,8 @@ def run_sentinel(
     total_latency_ns: int = 0
     dropped_alerts: int = 0
     decode_errors: int = 0
+    decode_error_last_log_ns: int = 0
+    DECODE_ERROR_LOG_INTERVAL_NS: int = 1_000_000_000  # at most one stderr write per second
 
     start_ns = time.monotonic_ns()
     last_stat_ns = start_ns
@@ -591,9 +601,11 @@ def run_sentinel(
                                 src_p, dst_p = struct.unpack('!HH', raw_data[l4_offset:l4_offset + 4])
 
                     window = extractor.ingest_packet(frame_len, proto, flags, src_p, dst_p, src_ip, src_mac)
-                except Exception as decode_err:
+                except (struct.error, IndexError) as decode_err:
                     decode_errors += 1
-                    if decode_errors % 1000 == 1:
+                    now_err_ns = time.monotonic_ns()
+                    if (now_err_ns - decode_error_last_log_ns) >= DECODE_ERROR_LOG_INTERVAL_NS:
+                        decode_error_last_log_ns = now_err_ns
                         sys.stderr.write(
                             f"[gpu-sentinel] Malformed frame decode errors: {decode_errors} total"
                             f" ({type(decode_err).__name__}: {decode_err})\n"
@@ -653,7 +665,16 @@ def run_sentinel(
                             print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for ip={target_ip} mac={target_mac}")
                         except queue.Full:
                             dropped_alerts += 1
-                            # No synchronous I/O here — dropped_alerts surfaces in the 3s status report
+                            # Circuit breaker: evict stale slot and push latest alert so the worker
+                            # dispatches at least one quarantine even when main queue is saturated.
+                            try:
+                                emergency_queue.get_nowait()
+                            except queue.Empty:
+                                pass
+                            try:
+                                emergency_queue.put_nowait(alert_item)
+                            except queue.Full:
+                                pass  # Worker just claimed the slot; dropped_alerts already counted
 
             # Periodic status report
             if (now_ns - last_stat_ns) >= 3_000_000_000:
