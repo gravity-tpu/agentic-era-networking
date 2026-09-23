@@ -71,16 +71,22 @@ function getAuditStream(): fs.WriteStream {
 function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
   return new Promise((resolve, reject) => {
     const stream = getAuditStream();
-    const ok = stream.write(JSON.stringify(entry) + '\n', (err) => {
-      if (err) { reject(err); return; }
-      // Resolve only from the write callback (data durably flushed to the stream).
-      // `ok` is captured in the closure — `if (ok) resolve()` is only reachable
-      // on the non-backpressured path, so resolve() is called exactly once.
-      if (ok) resolve();
-    });
-    // Backpressure path: buffer full → `drain` unblocks the caller.
-    // The callback's `if (ok) resolve()` is false here so there is no double-resolve.
-    if (!ok) stream.once('drain', resolve);
+    const ok = stream.write(JSON.stringify(entry) + '\n');
+
+    if (ok) {
+      // Fast path: buffer has room — resolve immediately (throughput preserved).
+      // Write errors on this path are handled out-of-band by the global 'error'
+      // listener in getAuditStream(), which logs and resets the stream.
+      resolve();
+      return;
+    }
+
+    // Backpressure path: buffer full — cross-cleaned listeners prevent leaks.
+    // Exactly one of {drain, error} fires first; the other is removed immediately.
+    const onDrain = () => { stream.removeListener('error', onError); resolve(); };
+    const onError = (err: Error) => { stream.removeListener('drain', onDrain); reject(err); };
+    stream.once('drain', onDrain);
+    stream.once('error', onError);
   });
 }
 
