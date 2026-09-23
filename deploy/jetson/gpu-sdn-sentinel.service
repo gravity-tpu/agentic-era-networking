@@ -52,7 +52,7 @@ WorkingDirectory=/home/zodiac/agentic-era-networking
 # Activate the Python venv that has pycoral + numpy + PyTorch CUDA deps.
 # The sentinel requires hardware CUDA acceleration on the Jetson Orin Ampere
 # GPU — if unavailable it exits non-zero (fail-fast per Quoc Le invariant).
-ExecStart=/home/zodiac/.venv/bin/python3 \
+ExecStart=/home/zodiac/coral-venv/bin/python3 \
     /home/zodiac/agentic-era-networking/scripts/gpu-sdn-anomaly-sentinel.py
 
 Restart=on-failure
