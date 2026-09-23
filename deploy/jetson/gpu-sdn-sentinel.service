@@ -1,0 +1,81 @@
+# gpu-sdn-sentinel.service
+# Jetson Orin Ampere GPU — SDN Anomaly Detection Sentinel (24/7)
+#
+# Runs the 1D-CNN autoencoder on live SDN traffic captured from enP8p1s0.
+# When reconstruction error exceeds the adaptive threshold, triggers a
+# fail-closed OpenFlow quarantine rule via the local bridge API.
+#
+# Council Invariants Enforced:
+#   Dean:    Restart backoff caps at 120s; never floods the bridge quarantine API.
+#             MemoryMax=512M prevents OOM from taking down zodiac-bridge.
+#   Ghemawat: Simple Python process — no wrapper scripts or extra tooling.
+#   Hassabis: Primary fail-closed boundary is the Zodiac FX switch itself —
+#             `set failstate secure` ensures the KSZ8795 hardware drops all
+#             packets without a matching flow rule if the OpenFlow controller
+#             disconnects. The sentinel is a proactive anomaly detection layer
+#             on top; existing quarantine FlowMods persist in the switch hardware
+#             table across sentinel restarts, so previously identified rogue
+#             agents remain quarantined even while the sentinel is offline.
+#   Quoc Le:  If CUDA is unavailable the script must exit with a non-zero code
+#             (fail-fast) — pure-Python inference cannot meet line-rate latency
+#             budgets and must never silently degrade to a software-only path.
+#
+# Installation (run on Jetson as root):
+#   sudo cp gpu-sdn-sentinel.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now gpu-sdn-sentinel
+#
+# Dependency: starts after zodiac-bridge so the quarantine API is ready.
+#
+# Live logs:
+#   journalctl -u gpu-sdn-sentinel -f
+#
+# Manual restart:
+#   sudo systemctl restart gpu-sdn-sentinel
+
+[Unit]
+Description=Zodiac GPU SDN Anomaly Sentinel — Ampere 1D-CNN Autoencoder
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=network-online.target zodiac-bridge.service
+Wants=network-online.target
+Requires=zodiac-bridge.service
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=zodiac
+Group=zodiac
+
+WorkingDirectory=/home/zodiac/agentic-era-networking
+
+# Activate the Python venv that has pycoral + numpy + PyTorch CUDA deps.
+# The sentinel requires hardware CUDA acceleration on the Jetson Orin Ampere
+# GPU — if unavailable it exits non-zero (fail-fast per Quoc Le invariant).
+ExecStart=/home/zodiac/.venv/bin/python3 \
+    /home/zodiac/agentic-era-networking/scripts/gpu-sdn-anomaly-sentinel.py
+
+Restart=on-failure
+RestartSec=10s
+
+# Bound memory to prevent the autoencoder or packet buffer from OOMing
+# the Jetson and taking down the co-located zodiac-bridge service.
+MemoryAccounting=true
+MemoryMax=512M
+
+# Harden — the sentinel needs CAP_NET_RAW for raw socket access on enP8p1s0.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/lib/zodiac /run/zodiac
+
+# --- Logging ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gpu-sdn-sentinel
+
+[Install]
+WantedBy=multi-user.target
