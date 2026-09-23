@@ -55,6 +55,7 @@ import {
   queryLocalHistory,
   pruneLocalHistory,
 } from '../db/local-telemetry-db.js';
+import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -1100,7 +1101,7 @@ export class ZodiacBridgeServer {
               const oldestKey = this.flowRuleRegistry.keys().next().value;
               if (oldestKey !== undefined) this.flowRuleRegistry.delete(oldestKey);
             }
-            this.flowRuleRegistry.set(qResult.ruleId, {
+            const auditEntry = {
               ruleId: qResult.ruleId,
               priority: qResult.priority ?? 65535,
               action: qResult.action ?? 'DROP',
@@ -1111,6 +1112,12 @@ export class ZodiacBridgeServer {
               ...(qResult.rule?.dstMac !== undefined ? { dstMac: qResult.rule.dstMac } : {}),
               installedAtMs: Date.now(),
               openFlowInstalled: qResult.openFlowInstalled ?? false,
+            };
+            this.flowRuleRegistry.set(qResult.ruleId, auditEntry);
+            // Persist to local JSONL + Neon (fire-and-forget, best-effort)
+            void appendQuarantineEvent(auditEntry).catch((err: unknown) => {
+              console.warn('[!] [Quarantine Audit] Persistence failed:',
+                err instanceof Error ? err.message : String(err));
             });
           }
 
