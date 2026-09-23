@@ -69,24 +69,16 @@ function getAuditStream(): fs.WriteStream {
 }
 
 function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
+  // The write callback fires only after the chunk is flushed to the underlying
+  // resource — both on the fast path (ok=true) and the backpressured path (ok=false).
+  // This guarantees durability and propagates errors to the caller without needing
+  // drain/error listener gymnastics. Natural backpressure: the caller blocks on
+  // await, preventing unbounded queuing. Quarantine events are rare in practice.
   return new Promise((resolve, reject) => {
-    const stream = getAuditStream();
-    const ok = stream.write(JSON.stringify(entry) + '\n');
-
-    if (ok) {
-      // Fast path: buffer has room — resolve immediately (throughput preserved).
-      // Write errors on this path are handled out-of-band by the global 'error'
-      // listener in getAuditStream(), which logs and resets the stream.
+    getAuditStream().write(JSON.stringify(entry) + '\n', (err) => {
+      if (err) { reject(err); return; }
       resolve();
-      return;
-    }
-
-    // Backpressure path: buffer full — cross-cleaned listeners prevent leaks.
-    // Exactly one of {drain, error} fires first; the other is removed immediately.
-    const onDrain = () => { stream.removeListener('error', onError); resolve(); };
-    const onError = (err: Error) => { stream.removeListener('drain', onDrain); reject(err); };
-    stream.once('drain', onDrain);
-    stream.once('error', onError);
+    });
   });
 }
 
