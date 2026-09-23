@@ -456,14 +456,23 @@ export class ZodiacBridgeServer {
     // Start the flush pointer at now so the loaded rolling buffer isn't re-appended to disk
     this.lastLocalHistoryFlushMs = Date.now();
 
-    // Auto-install Table-Miss rule on connection to forward live traffic to controller
+    // Auto-install baseline flow rules on switch connection
     this.controller.openFlow.on('ready', () => {
       try {
-        // Bounded header-only packet sampling (max 128 bytes) to controller for live telemetry accounting
+        // Table-miss → CONTROLLER: bounded header-only packet sampling for live telemetry accounting
         this.controller.openFlow.sendTableMissRule(0, 'CONTROLLER', 128);
         console.log('[+] [Bridge Server] Table-Miss flow rule installed (CONTROLLER packet sampling, 128B bounded header).');
       } catch (err: unknown) {
         console.warn('[!] [Bridge Server] Failed to install table-miss rule:', err instanceof Error ? err.message : String(err));
+      }
+      try {
+        // Mirror Port 1 (Pi data plane) → Port 3 (Jetson GPU sentinel tap) at priority 1.
+        // Priority 1 is below quarantine rules at 65535, so a quarantined Pi MAC/IP still
+        // hits the DROP rule first — fail-closed invariant is preserved (Ghemawat & Hassabis).
+        this.controller.openFlow.sendMirrorRule(1, 3, 1);
+        console.log('[+] [Bridge Server] Mirror rule installed: Port 1 → Port 3 (GPU sentinel tap, priority 1).');
+      } catch (err: unknown) {
+        console.warn('[!] [Bridge Server] Failed to install Port 1→3 mirror rule:', err instanceof Error ? err.message : String(err));
       }
     });
 

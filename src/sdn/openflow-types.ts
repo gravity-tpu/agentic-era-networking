@@ -100,6 +100,7 @@ export interface FlowModMatchOptions {
   readonly srcIp?: string | undefined;
   readonly dstIp?: string | undefined;
   readonly etherType?: number | undefined;
+  readonly inPort?: number | undefined;
 }
 
 export interface FlowModOptions {
@@ -110,6 +111,7 @@ export interface FlowModOptions {
   readonly cookie?: bigint | undefined;
   readonly tableId?: number | undefined;
   readonly outPort?: number | undefined;
+  readonly outputPorts?: readonly number[] | undefined;
   readonly match?: FlowModMatchOptions | undefined;
 }
 
@@ -297,6 +299,14 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
       ipBuf.copy(tlv, 4);
       oxmTlvs.push(tlv);
     }
+
+    if (match.inPort !== undefined) {
+      // OFPXMT_OFB_IN_PORT: class 0x8000, field 0 (<< 9), length 4 -> 0x80000004
+      const tlv = Buffer.alloc(8);
+      tlv.writeUInt32BE(0x80000004, 0);
+      tlv.writeUInt32BE(match.inPort, 4);
+      oxmTlvs.push(tlv);
+    }
   }
 
   const oxmPayload = Buffer.concat(oxmTlvs);
@@ -306,7 +316,13 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
   // Padded to 8-byte boundary per OpenFlow 1.3 spec
   const matchPaddedLen = Math.max(8, Math.ceil(matchLen / 8) * 8);
 
-  const totalLength = 48 + matchPaddedLen;
+  // Each OUTPUT action is 16 bytes; each instruction header is 8 bytes.
+  // OFPIT_APPLY_ACTIONS instruction: 8-byte header + (16 bytes × N output ports).
+  const ports = options.outputPorts ?? [];
+  const hasOutputActions = ports.length > 0;
+  const instructionLen = hasOutputActions ? 8 + 16 * ports.length : 0;
+
+  const totalLength = 48 + matchPaddedLen + instructionLen;
   const buf = Buffer.alloc(totalLength);
 
   // Header (8 bytes)
@@ -334,6 +350,26 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
   buf.writeUInt16BE(matchLen, 50);
   if (oxmPayload.length > 0) {
     oxmPayload.copy(buf, 52);
+  }
+
+  if (hasOutputActions) {
+    // OFPIT_APPLY_ACTIONS instruction (OpenFlow 1.3 §7.2.5)
+    const instrOffset = 48 + matchPaddedLen;
+    buf.writeUInt16BE(InstructionType.OFPIT_APPLY_ACTIONS, instrOffset);
+    buf.writeUInt16BE(instructionLen, instrOffset + 2);
+    buf.writeUInt32BE(0, instrOffset + 4); // pad
+
+    let actionOffset = instrOffset + 8;
+    for (const port of ports) {
+      // OFPAT_OUTPUT action: type(2) + len(2) + port(4) + max_len(2) + pad(6) = 16 bytes
+      buf.writeUInt16BE(ActionType.OFPAT_OUTPUT, actionOffset);
+      buf.writeUInt16BE(16, actionOffset + 2);
+      buf.writeUInt32BE(port, actionOffset + 4);
+      buf.writeUInt16BE(0, actionOffset + 8); // max_len = 0 (full frame, non-controller)
+      buf.writeUInt32BE(0, actionOffset + 10); // pad
+      buf.writeUInt16BE(0, actionOffset + 14); // pad
+      actionOffset += 16;
+    }
   }
 
   return buf;

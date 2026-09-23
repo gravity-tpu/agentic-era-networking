@@ -140,6 +140,29 @@ export class OpenFlowServer extends EventEmitter {
   }
 
   /**
+   * Installs a low-priority mirror rule that copies frames arriving on inPort to outPort.
+   * Used to wire the Zodiac Port 3 tap so the GPU sentinel can observe data-plane traffic.
+   * Priority 1 ensures quarantine rules at 65535 always take precedence (fail-closed).
+   *
+   * Council Invariant 3 (Fail-Closed): quarantine DROP at 65535 overrides this mirror at 1.
+   * Council Invariant 6 (Anti-Simulation): mirror delivers real hardware frames to the sentinel.
+   */
+  public sendMirrorRule(inPort: number, outPort: number, priority: number = 1): void {
+    if (!this.clientSocket || this.state !== 'ESTABLISHED') {
+      throw new Error(`Cannot send MirrorRule: switch not in ESTABLISHED state (current: ${this.state})`);
+    }
+
+    const xid = this.nextXid++;
+    const packet = buildOfpFlowMod({
+      command: FlowModCommand.OFPFC_ADD,
+      priority,
+      outputPorts: [outPort],
+      match: { inPort },
+    }, xid);
+    this.clientSocket.write(packet);
+  }
+
+  /**
    * Installs an OpenFlow 1.3 Table-Miss rule (priority 0 wildcard matching all packets).
    * Council Invariant 3 (Fail-Closed): Defaults to 'DROP' unless explicitly configured for telemetry sampling.
    *
