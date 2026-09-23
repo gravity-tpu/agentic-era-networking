@@ -1114,11 +1114,9 @@ export class ZodiacBridgeServer {
               openFlowInstalled: qResult.openFlowInstalled ?? false,
             };
             this.flowRuleRegistry.set(qResult.ruleId, auditEntry);
-            // Persist to local JSONL + Neon (fire-and-forget, best-effort)
-            void appendQuarantineEvent(auditEntry).catch((err: unknown) => {
-              console.warn('[!] [Quarantine Audit] Persistence failed:',
-                err instanceof Error ? err.message : String(err));
-            });
+            // Persist to local JSONL + Neon (fire-and-forget; appendQuarantineEvent
+            // uses Promise.allSettled internally and never rejects).
+            void appendQuarantineEvent(auditEntry);
           }
 
           res.statusCode = 200;

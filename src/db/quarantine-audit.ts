@@ -4,12 +4,11 @@
  * and Neon Postgres for long-term retrieval independent of the live UI.
  *
  * Both writes are best-effort and fire-and-forget; failures are logged
- * but never propagate to the caller (Council Rule 1: Zero Suppression,
- * but the SDN control plane must never block on audit I/O).
+ * but never propagate to the caller (the SDN control plane must not
+ * block on audit I/O — Jeff Dean latency invariant).
  */
 
 import fs from 'node:fs';
-import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { neonConfig, neon } from '@neondatabase/serverless';
 import ws from 'ws';
@@ -31,7 +30,9 @@ export interface QuarantineAuditEntry {
   readonly openFlowInstalled: boolean;
 }
 
-// ─── Local JSONL ──────────────────────────────────────────────────────────────
+// ─── Local append-log via persistent write stream ────────────────────────────
+// A single open WriteStream avoids opening and closing a file descriptor on
+// every quarantine event (which under rapid-fire events would exhaust FDs).
 
 function resolveAuditFilePath(): string {
   for (const dir of [
@@ -45,20 +46,42 @@ function resolveAuditFilePath(): string {
       fs.writeFileSync(probe, '');
       fs.unlinkSync(probe);
       return path.join(dir, 'quarantine-audit.jsonl');
-    } catch { /* try next candidate */ }
+    } catch (err: unknown) {
+      console.warn(`[!] [Quarantine Audit] Directory ${dir} not usable:`,
+        err instanceof Error ? err.message : String(err));
+    }
   }
   return '/tmp/quarantine-audit.jsonl';
 }
 
 const AUDIT_FILE = resolveAuditFilePath();
 
-async function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
-  await fsp.appendFile(AUDIT_FILE, JSON.stringify(entry) + '\n');
+let auditStream: fs.WriteStream | null = null;
+
+function getAuditStream(): fs.WriteStream {
+  if (auditStream && !auditStream.destroyed) return auditStream;
+  auditStream = fs.createWriteStream(AUDIT_FILE, { flags: 'a', encoding: 'utf-8' });
+  auditStream.on('error', (err) => {
+    console.warn('[!] [Quarantine Audit] Write stream error:', err.message);
+    auditStream = null; // reset so the next call opens a fresh stream
+  });
+  return auditStream;
 }
 
-// ─── Neon persistence ─────────────────────────────────────────────────────────
+function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
+  return new Promise((resolve, reject) => {
+    getAuditStream().write(JSON.stringify(entry) + '\n', (err) => {
+      if (err) reject(err); else resolve();
+    });
+  });
+}
+
+// ─── Neon persistence with singleton DDL guard ───────────────────────────────
+// Concurrent quarantine events at startup could race on CREATE TABLE.
+// A singleton Promise ensures the DDL fires exactly once.
 
 let neonTableReady = false;
+let neonTableInitPromise: Promise<boolean> | null = null;
 
 function getNeonUrl(): string | null {
   return (
@@ -70,11 +93,13 @@ function getNeonUrl(): string | null {
   );
 }
 
-async function ensureNeonTable(): Promise<boolean> {
-  if (neonTableReady) return true;
-  const dbUrl = getNeonUrl();
-  if (!dbUrl) return false;
-  try {
+function ensureNeonTable(): Promise<boolean> {
+  if (neonTableReady) return Promise.resolve(true);
+  if (neonTableInitPromise) return neonTableInitPromise;
+
+  neonTableInitPromise = (async () => {
+    const dbUrl = getNeonUrl();
+    if (!dbUrl) return false;
     const sql = neon(dbUrl);
     await sql`
       CREATE TABLE IF NOT EXISTS "QuarantineAuditEvent" (
@@ -98,11 +123,14 @@ async function ensureNeonTable(): Promise<boolean> {
     `;
     neonTableReady = true;
     return true;
-  } catch (err: unknown) {
+  })().catch((err: unknown) => {
+    neonTableInitPromise = null; // allow retry on next event
     console.warn('[!] [Quarantine Audit] Failed to ensure Neon table:',
       err instanceof Error ? err.message : String(err));
     return false;
-  }
+  });
+
+  return neonTableInitPromise;
 }
 
 async function appendToNeon(entry: QuarantineAuditEntry): Promise<void> {
@@ -127,8 +155,8 @@ async function appendToNeon(entry: QuarantineAuditEntry): Promise<void> {
 
 /**
  * Persist a quarantine enforcement event to both local JSONL and Neon Postgres.
- * Both writes are parallel and best-effort — a failure in either path is logged
- * but never blocks or throws (SDN control plane must not stall on audit I/O).
+ * Uses Promise.allSettled so a failure in either path never rejects — errors
+ * are logged and the function always resolves (SDN control plane invariant).
  */
 export async function appendQuarantineEvent(
   entry: QuarantineAuditEntry
