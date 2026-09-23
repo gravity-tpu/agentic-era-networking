@@ -70,9 +70,16 @@ function getAuditStream(): fs.WriteStream {
 
 function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
   return new Promise((resolve, reject) => {
-    getAuditStream().write(JSON.stringify(entry) + '\n', (err) => {
-      if (err) reject(err); else resolve();
+    const stream = getAuditStream();
+    const ok = stream.write(JSON.stringify(entry) + '\n', (err) => {
+      if (err) { reject(err); return; }
+      resolve();
     });
+    // write() returns false when the internal buffer is full (backpressure signal).
+    // Registering a drain listener prevents the buffer from growing unboundedly under
+    // a rapid-fire quarantine storm. Promises settle only once — if the write callback
+    // fires first, the drain resolve() is a no-op, and vice versa.
+    if (!ok) stream.once('drain', resolve);
   });
 }
 
