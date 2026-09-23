@@ -72,14 +72,17 @@ function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
   return new Promise((resolve, reject) => {
     const stream = getAuditStream();
     const ok = stream.write(JSON.stringify(entry) + '\n', (err) => {
-      if (err) { reject(err); return; }
-      resolve();
+      // Per-write callback: only reachable on error when ok === false path
+      // (when ok === true, resolve() was already called below). Stream-level
+      // errors for the fast path are handled by the global 'error' listener
+      // in getAuditStream() which logs and resets the stream.
+      if (err) reject(err);
     });
-    // write() returns false when the internal buffer is full (backpressure signal).
-    // Registering a drain listener prevents the buffer from growing unboundedly under
-    // a rapid-fire quarantine storm. Promises settle only once — if the write callback
-    // fires first, the drain resolve() is a no-op, and vice versa.
-    if (!ok) stream.once('drain', resolve);
+    if (ok) {
+      resolve(); // Fast path: buffer not full — unblock caller immediately
+    } else {
+      stream.once('drain', resolve); // Backpressure path: throttle caller until buffer clears
+    }
   });
 }
 
