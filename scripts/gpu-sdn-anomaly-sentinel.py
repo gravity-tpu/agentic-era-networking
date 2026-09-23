@@ -311,8 +311,12 @@ class PacketFeatureExtractor:
         self.window_size = window_size
         self.buffer: List[List[float]] = []
         self.last_pkt_ns: int = 0
+        # Parallel deques for sliding window IP/MAC tracking
         self.src_ips: List[str] = []
         self.src_macs: List[str] = []
+        # Running frequency maps: O(1) ingest/evict, no Counter allocation on query
+        self.src_ip_counts: dict = {}
+        self.src_mac_counts: dict = {}
         self.max_observed_dt_us: float = 1000.0
         self.max_observed_frame_len: float = float(ETHERNET_STANDARD_MTU)
 
@@ -341,27 +345,35 @@ class PacketFeatureExtractor:
         self.buffer.append(feature_vector)
         self.src_ips.append(src_ip)
         self.src_macs.append(src_mac)
+        self.src_ip_counts[src_ip] = self.src_ip_counts.get(src_ip, 0) + 1
+        self.src_mac_counts[src_mac] = self.src_mac_counts.get(src_mac, 0) + 1
 
         if len(self.buffer) > self.window_size:
             self.buffer.pop(0)
-            self.src_ips.pop(0)
-            self.src_macs.pop(0)
+            old_ip = self.src_ips.pop(0)
+            old_mac = self.src_macs.pop(0)
+            self.src_ip_counts[old_ip] -= 1
+            if not self.src_ip_counts[old_ip]:
+                del self.src_ip_counts[old_ip]
+            self.src_mac_counts[old_mac] -= 1
+            if not self.src_mac_counts[old_mac]:
+                del self.src_mac_counts[old_mac]
 
         if len(self.buffer) == self.window_size:
             return list(self.buffer)
         return None
 
     def get_predominant_src_ip(self) -> str:
-        known = [ip for ip in self.src_ips if ip != 'unknown']
+        known = {ip: cnt for ip, cnt in self.src_ip_counts.items() if ip != 'unknown'}
         if not known:
             return 'unknown'
-        return collections.Counter(known).most_common(1)[0][0]
+        return max(known, key=known.__getitem__)
 
     def get_predominant_src_mac(self) -> str:
-        known = [mac for mac in self.src_macs if mac != 'unknown']
+        known = {mac: cnt for mac, cnt in self.src_mac_counts.items() if mac != 'unknown'}
         if not known:
             return 'unknown'
-        return collections.Counter(known).most_common(1)[0][0]
+        return max(known, key=known.__getitem__)
 
 
 # ---------------------------------------------------------------------------
@@ -582,8 +594,11 @@ def run_sentinel(
                     src_p = 0
                     dst_p = 0
                     src_ip = 'unknown'
-                    # Ethernet source MAC: bytes 6-11 (C-optimized hex formatting, no allocations)
-                    src_mac = raw_data[6:12].hex(':')
+                    # Ethernet source MAC: bytes 6-11 (C-optimized hex, no allocations).
+                    # Python slicing never raises IndexError on short buffers; validate
+                    # the resulting length (17 chars = 6 octets) to guard runt frames.
+                    src_mac_raw = raw_data[6:12].hex(':')
+                    src_mac = src_mac_raw if len(src_mac_raw) == 17 else 'unknown'
 
                     # IPv4 parsing with dynamic IHL (Internet Header Length) handling (Council Invariant 1)
                     if eth_proto == 0x0800 and frame_len >= (l3_offset + 20):
