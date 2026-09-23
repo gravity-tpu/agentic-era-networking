@@ -462,6 +462,8 @@ def run_sentinel(
     total_anomalies = 0
     total_quarantines = 0
     total_latency_ns: int = 0
+    dropped_alerts: int = 0
+    decode_errors: int = 0
 
     start_ns = time.monotonic_ns()
     last_stat_ns = start_ns
@@ -570,8 +572,8 @@ def run_sentinel(
                     src_p = 0
                     dst_p = 0
                     src_ip = 'unknown'
-                    # Ethernet source MAC: bytes 6-11 of every valid Ethernet frame
-                    src_mac = ':'.join(f'{b:02x}' for b in raw_data[6:12])
+                    # Ethernet source MAC: bytes 6-11 (C-optimized hex formatting, no allocations)
+                    src_mac = raw_data[6:12].hex(':')
 
                     # IPv4 parsing with dynamic IHL (Internet Header Length) handling (Council Invariant 1)
                     if eth_proto == 0x0800 and frame_len >= (l3_offset + 20):
@@ -589,8 +591,10 @@ def run_sentinel(
                                 src_p, dst_p = struct.unpack('!HH', raw_data[l4_offset:l4_offset + 4])
 
                     window = extractor.ingest_packet(frame_len, proto, flags, src_p, dst_p, src_ip, src_mac)
-                except Exception as decode_err:
-                    sys.stderr.write(f"[gpu-sentinel] Frame decode note: {decode_err}\n")
+                except Exception:
+                    decode_errors += 1
+                    if decode_errors % 1000 == 1:
+                        sys.stderr.write(f"[gpu-sentinel] Malformed frame decode errors: {decode_errors} total\n")
                     continue
 
             # When a full window of 64 packets is ready, execute GPU inference
@@ -630,9 +634,9 @@ def run_sentinel(
                             f" (ip='{target_ip}', mac='{target_mac}') — skipping quarantine dispatch\n"
                         )
                     else:
-                        # Fail-Closed Quarantine dispatch with bounded backpressure (50ms).
-                        # Blocking put applies backpressure to the packet loop when the control
-                        # plane is overwhelmed, preventing silent alert loss.
+                        # Non-blocking dispatch: tap sentinels must never stall the data plane.
+                        # queue.Full increments a deterministic counter (telemetry provenance, Invariant 6)
+                        # so control-plane saturation is always visible in the status report.
                         try:
                             alert_item = QuarantineAlertItem(
                                 controller_url=controller_url,
@@ -641,13 +645,14 @@ def run_sentinel(
                                 reason=reason,
                                 priority=65535,
                             )
-                            alert_queue.put(alert_item, block=True, timeout=0.050)
+                            alert_queue.put_nowait(alert_item)
                             total_quarantines += 1
                             print(f"   🔒 [SDN QUARANTINE ENQUEUED] Pushed OpenFlow 1.3 Priority 65535 DROP rule for ip={target_ip} mac={target_mac}")
                         except queue.Full:
+                            dropped_alerts += 1
                             sys.stderr.write(
-                                f"[gpu-sentinel] CRITICAL: Alert queue saturated (maxsize=1024), backpressure"
-                                f" exhausted; dropping alert for ip={target_ip} mac={target_mac}\n"
+                                f"[gpu-sentinel] CRITICAL: Alert queue saturated; dropped_alerts={dropped_alerts}"
+                                f" for ip={target_ip} mac={target_mac}\n"
                             )
 
             # Periodic status report
@@ -655,7 +660,7 @@ def run_sentinel(
                 elapsed_s = (now_ns - start_ns) / 1_000_000_000.0
                 inf_rate = (total_inferences / elapsed_s) if elapsed_s > 0 else 0
                 avg_lat = ((total_latency_ns / total_inferences) / 1_000_000.0) if total_inferences > 0 else 0.0
-                print(f"[{elapsed_s:03.0f}s] Processed: {pkt_count:,} pkts | Inferences: {total_inferences:,} ({inf_rate:.1f} inf/s, {avg_lat:.2f}ms) | Anomalies: {total_anomalies} | Quarantines: {total_quarantines}")
+                print(f"[{elapsed_s:03.0f}s] Processed: {pkt_count:,} pkts | Inferences: {total_inferences:,} ({inf_rate:.1f} inf/s, {avg_lat:.2f}ms) | Anomalies: {total_anomalies} | Quarantines: {total_quarantines} | DroppedAlerts: {dropped_alerts}")
                 last_stat_ns = now_ns
 
     finally:
