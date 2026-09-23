@@ -181,6 +181,7 @@ Governed by the **Technical Staff Council Invariants**:
 - [x] In-browser interactive CLI terminal emulator for Zodiac management commands.
 - [x] Epistemic Telemetry Provenance: Cryptographic `ZODIAC_BRIDGE_SECRET` authentication.
 - [x] Cloud Telemetry Relay to Vercel production with bounded rolling WAN window (HTTP 413 fix).
+- [ ] **Wireshark-style Flow Rule Registry inspector**: Web UI detail view over the in-memory `flowRuleRegistry` (`zodiac-bridge-server.ts`) surfacing the full `QuarantineAuditEntry` already captured per quarantine — rule ID, action, priority, source/destination CIDR, source/destination MAC, protocol, install timestamp, and OpenFlow install status — in a sortable/filterable table with per-rule drill-down, beyond the current summary counts.
 
 ### Phase 0.5: Enterprise Security & Historical Telemetry Persistence
 *Status: Complete (Commits `b33eb1f`, `32e102f`, `eb1dc5b`, `935b76e`, `5d1c0ba`, `e80f6d0`, `85857c2`)*
