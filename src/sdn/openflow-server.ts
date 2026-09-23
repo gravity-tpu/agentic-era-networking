@@ -32,6 +32,7 @@ export interface OpenFlowServerEvents {
   connected: (clientAddress: string) => void;
   ready: (features: SwitchFeatures) => void;
   echoLatency: (latencyNs: bigint) => void;
+  deadPeerTimeout: (clientAddress: string) => void;
   disconnected: (clientAddress: string) => void;
   error: (err: Error) => void;
   rawMessage: (type: OpenFlowType, length: number, xid: number) => void;
@@ -39,6 +40,29 @@ export interface OpenFlowServerEvents {
 }
 
 export type SwitchState = 'DISCONNECTED' | 'HANDSHAKE' | 'ESTABLISHED';
+
+const DEFAULT_ECHO_DEAD_PEER_TIMEOUT_MS = 8_000;
+const parsedEchoTimeoutMs = process.env['OPENFLOW_ECHO_DEAD_PEER_TIMEOUT_MS']
+  ? parseInt(process.env['OPENFLOW_ECHO_DEAD_PEER_TIMEOUT_MS'], 10)
+  : NaN;
+// Bounded between 3s (must exceed several ~2.5s poll cycles to tolerate transient
+// jitter without a false positive) and 60s (a dead peer must not look "online" indefinitely).
+const ECHO_DEAD_PEER_TIMEOUT_NS = BigInt(
+  Number.isFinite(parsedEchoTimeoutMs) && parsedEchoTimeoutMs > 0
+    ? Math.min(Math.max(parsedEchoTimeoutMs, 3_000), 60_000)
+    : DEFAULT_ECHO_DEAD_PEER_TIMEOUT_MS
+) * 1_000_000n;
+
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
+const parsedHandshakeTimeoutMs = process.env['OPENFLOW_HANDSHAKE_TIMEOUT_MS']
+  ? parseInt(process.env['OPENFLOW_HANDSHAKE_TIMEOUT_MS'], 10)
+  : NaN;
+// Bounded between 1s (must allow real hardware time to complete HELLO -> FEATURES_REPLY)
+// and 30s (a stalled client must not be able to hold a socket open indefinitely — Slowloris
+// style file descriptor exhaustion against the OpenFlow listener).
+const HANDSHAKE_TIMEOUT_MS = Number.isFinite(parsedHandshakeTimeoutMs) && parsedHandshakeTimeoutMs > 0
+  ? Math.min(Math.max(parsedHandshakeTimeoutMs, 1_000), 30_000)
+  : DEFAULT_HANDSHAKE_TIMEOUT_MS;
 
 export interface ControllerMetrics {
   readonly state: SwitchState;
@@ -69,6 +93,65 @@ export class OpenFlowServer extends EventEmitter {
   private _lastEchoLatencyNs: bigint = 0n;
   private echoSentNs: bigint = 0n;
   private activeEchoXid: number | null = null;
+  private lastRxNs: bigint = 0n;
+  private readonly echoDeadPeerTimeoutNs: bigint;
+  private readonly handshakeTimeoutMs: number;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private handshakeTimer: NodeJS.Timeout | null = null;
+
+  constructor(
+    echoDeadPeerTimeoutNs: bigint = ECHO_DEAD_PEER_TIMEOUT_NS,
+    handshakeTimeoutMs: number = HANDSHAKE_TIMEOUT_MS,
+  ) {
+    super();
+    this.echoDeadPeerTimeoutNs = echoDeadPeerTimeoutNs;
+    this.handshakeTimeoutMs = handshakeTimeoutMs;
+  }
+
+  /**
+   * Council Invariant 3 (Fail-Closed): dead-peer detection must not depend on an
+   * external caller remembering to invoke pingEcho() on its own poll cadence — if
+   * that caller stalls or stops polling, a dead socket would leak as falsely
+   * ESTABLISHED forever. Own the heartbeat internally at 1/4 the dead-peer
+   * timeout (floored at 1s, so at the 3s timeout minimum this is 3 ticks
+   * rather than 4), guaranteeing several heartbeats occur within the
+   * timeout window regardless of caller behavior.
+   */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    const intervalMs = Math.max(1000, Number(this.echoDeadPeerTimeoutNs / 4n / 1_000_000n));
+    this.heartbeatTimer = setInterval(() => this.pingEcho(), intervalMs);
+    this.heartbeatTimer.unref();
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * Council Invariant 3 (Fail-Closed): a client that opens a TCP connection but
+   * never completes OFPT_HELLO -> OFPT_FEATURES_REPLY must not be allowed to hold
+   * the socket (and its file descriptor) open indefinitely — Slowloris-style
+   * resource exhaustion against the OpenFlow listener.
+   */
+  private startHandshakeTimeout(socket: net.Socket): void {
+    this.handshakeTimer = setTimeout(() => {
+      if (this.clientSocket === socket && this.state === 'HANDSHAKE') {
+        socket.destroy();
+      }
+    }, this.handshakeTimeoutMs);
+    this.handshakeTimer.unref();
+  }
+
+  private clearHandshakeTimeout(): void {
+    if (this.handshakeTimer) {
+      clearTimeout(this.handshakeTimer);
+      this.handshakeTimer = null;
+    }
+  }
 
   public get metrics(): ControllerMetrics {
     return {
@@ -109,6 +192,8 @@ export class OpenFlowServer extends EventEmitter {
         this.clientSocket = null;
       }
       this.state = 'DISCONNECTED';
+      this.stopHeartbeat();
+      this.clearHandshakeTimeout();
       if (this.server) {
         this.server.close(() => {
           this.server = null;
@@ -192,13 +277,33 @@ export class OpenFlowServer extends EventEmitter {
 
   /**
    * Sends an OpenFlow Echo Request to measure nanosecond round-trip latency.
+   * Council Invariant 3 (Fail-Closed): if nothing has been received from the
+   * peer (echo reply or otherwise, see lastRxNs in handleMessage) within
+   * echoDeadPeerTimeoutNs, it vanished without a clean TCP close (e.g.
+   * unplugged / power loss) — force the socket closed so 'close' fires and
+   * state correctly transitions to DISCONNECTED instead of staying falsely
+   * ESTABLISHED forever.
    */
   public pingEcho(): void {
     if (!this.clientSocket || this.state !== 'ESTABLISHED') return;
 
+    const nowNs = process.hrtime.bigint();
+    if (this.lastRxNs > 0n && nowNs - this.lastRxNs > this.echoDeadPeerTimeoutNs) {
+      // Distinguish this from a clean shutdown: 'close' fires from destroy() below too,
+      // but only this event tells observability *why* (missed heartbeats vs. explicit stop).
+      const remoteAddr = `${this.clientSocket.remoteAddress}:${this.clientSocket.remotePort}`;
+      this.emit('deadPeerTimeout', remoteAddr);
+      this.clientSocket.destroy();
+      return;
+    }
+
+    // XID tracking is intentionally flat (single slot, not a Map<xid, sentNs>):
+    // a new pingEcho() call simply overwrites activeEchoXid/echoSentNs, trading
+    // per-request latency accuracy under reordering for O(1) memory instead of
+    // an unbounded map of in-flight requests.
     const xid = this.allocateXid();
     this.activeEchoXid = xid;
-    this.echoSentNs = process.hrtime.bigint();
+    this.echoSentNs = nowNs;
 
     const echoPacket = buildOfpEchoRequest(xid);
     this.clientSocket.write(echoPacket);
@@ -217,10 +322,14 @@ export class OpenFlowServer extends EventEmitter {
     if (this.clientSocket && !this.clientSocket.destroyed) {
       this.clientSocket.destroy();
     }
+    this.stopHeartbeat(); // ensure no leaked timer survives from a prior connection
+    this.clearHandshakeTimeout();
 
     this.clientSocket = socket;
     this.state = 'HANDSHAKE';
     this.rxBuffer = Buffer.alloc(0);
+    this.lastRxNs = 0n;
+    this.startHandshakeTimeout(socket);
     this.emit('connected', remoteAddr);
 
     socket.on('data', (data) => this.onData(data));
@@ -230,6 +339,8 @@ export class OpenFlowServer extends EventEmitter {
         this.state = 'DISCONNECTED';
         this.switchFeatures = undefined;
         this.clientSocket = null;
+        this.stopHeartbeat();
+        this.clearHandshakeTimeout();
         this.emit('disconnected', remoteAddr);
       }
     });
@@ -263,6 +374,11 @@ export class OpenFlowServer extends EventEmitter {
   }
 
   private handleMessage(type: OpenFlowType, length: number, xid: number, packet: Buffer): void {
+    // Any valid OpenFlow message proves peer liveness, not just OFPT_ECHO_REPLY —
+    // under heavy OFPT_PACKET_IN load the switch may delay echo processing while
+    // still very much alive, which would otherwise cause a false-positive dead-peer
+    // disconnect (Council Invariant 3: fail-closed must not mean trigger-happy).
+    this.lastRxNs = process.hrtime.bigint();
     this.emit('rawMessage', type, length, xid);
 
     switch (type) {
@@ -288,6 +404,8 @@ export class OpenFlowServer extends EventEmitter {
       case OpenFlowType.OFPT_FEATURES_REPLY: {
         this.switchFeatures = parseOfpFeaturesReply(packet);
         this.state = 'ESTABLISHED';
+        this.clearHandshakeTimeout(); // handshake completed; no longer a Slowloris risk
+        this.startHeartbeat();
         this.emit('ready', this.switchFeatures);
         break;
       }

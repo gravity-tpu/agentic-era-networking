@@ -339,6 +339,95 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     await handshakeComplete;
     switchSocket.destroy();
   });
+
+  it('detects a dead peer via missed OFPT_ECHO_REPLY heartbeats and transitions to DISCONNECTED (Anti-Simulation Law)', async () => {
+    const shortTimeoutNs = 50_000_000n; // 50ms, injected for fast test execution
+    server = new OpenFlowServer(shortTimeoutNs);
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    const handshakeComplete = new Promise<void>((resolve) => {
+      server.on('ready', () => resolve());
+    });
+
+    let switchRx = Buffer.alloc(0);
+    const switchSocket = net.connect({ port: testPort, host: '127.0.0.1' }, () => {
+      switchSocket.write(buildOfpHello(1));
+    });
+
+    switchSocket.on('data', (chunk) => {
+      const buf = typeof chunk === 'string'
+        ? Buffer.from(chunk, 'utf-8')
+        : Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      switchRx = Buffer.concat([switchRx, buf]);
+      while (switchRx.length >= 8) {
+        const header = decodeOfpHeader(switchRx);
+        if (switchRx.length < header.length) break;
+        switchRx = switchRx.subarray(header.length);
+
+        if (header.type === OpenFlowType.OFPT_FEATURES_REQUEST) {
+          const reply = Buffer.alloc(32);
+          reply.writeUInt8(OFP_VERSION_1_3, 0);
+          reply.writeUInt8(OpenFlowType.OFPT_FEATURES_REPLY, 1);
+          reply.writeUInt16BE(32, 2);
+          reply.writeUInt32BE(header.xid, 4);
+          reply.writeBigUInt64BE(0xdeadbeefn, 8);
+          reply.writeUInt32BE(128, 16);
+          reply.writeUInt8(1, 20);
+          reply.writeUInt8(0, 21);
+          reply.writeUInt32BE(0x01, 24);
+          switchSocket.write(reply);
+        }
+        // Deliberately never respond to OFPT_ECHO_REQUEST — simulates an unplugged
+        // physical switch that vanishes without sending a clean TCP FIN/RST.
+      }
+    });
+
+    await handshakeComplete;
+    expect(server.metrics.state).toBe('ESTABLISHED');
+
+    const disconnected = new Promise<void>((resolve) => {
+      server.on('disconnected', () => resolve());
+    });
+
+    // Manual pingEcho() calls, not the internal heartbeat timer: startHeartbeat()
+    // clamps its interval to a 1000ms floor, which would dwarf this test's 50ms
+    // injected timeout and hang the test waiting on the real heartbeat tick.
+    server.pingEcho(); // sent, never replied to
+    await new Promise((resolve) => setTimeout(resolve, 80)); // exceed the 50ms dead-peer timeout
+    server.pingEcho(); // this call observes the missed reply and forces the socket closed
+
+    await disconnected;
+    expect(server.metrics.state).toBe('DISCONNECTED');
+
+    switchSocket.destroy();
+  });
+
+  it('destroys a socket that stalls in HANDSHAKE without completing OFPT_FEATURES_REPLY (Slowloris guard)', async () => {
+    const shortEchoTimeoutNs = 50_000_000n; // unused in this test path; kept short so nothing lingers
+    const shortHandshakeTimeoutMs = 50;
+    server = new OpenFlowServer(shortEchoTimeoutNs, shortHandshakeTimeoutMs);
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    const disconnected = new Promise<void>((resolve) => {
+      server.on('disconnected', () => resolve());
+    });
+
+    // Client connects but never sends anything — never even completes OFPT_HELLO.
+    const stalledSocket = net.connect({ port: testPort, host: '127.0.0.1' });
+
+    await disconnected;
+    expect(server.metrics.state).toBe('DISCONNECTED');
+
+    stalledSocket.destroy();
+  });
 });
 
 describe('ZodiacController Invariant Protection Gate', () => {

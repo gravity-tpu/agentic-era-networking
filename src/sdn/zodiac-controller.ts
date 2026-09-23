@@ -36,6 +36,9 @@ export class ZodiacController {
     this.ofServer.on('clientError', (err: unknown, addr: string) => {
       console.warn(`[!] [OpenFlowServer] Client ${addr} socket error:`, err instanceof Error ? err.message : String(err));
     });
+    this.ofServer.on('deadPeerTimeout', (addr: string) => {
+      console.warn(`[!] [OpenFlowServer] Dead peer detected (${addr}): no OFPT_ECHO_REPLY within timeout, likely unplugged or powered off.`);
+    });
   }
 
   public get serialClient(): ZodiacSerialClient {
