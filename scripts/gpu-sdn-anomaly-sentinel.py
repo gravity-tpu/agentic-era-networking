@@ -43,7 +43,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List
 
 # Standard RFC / IEEE protocol boundary envelope constants
 ETHERNET_STANDARD_MTU = 1518  # IEEE 802.3 standard max envelope
@@ -56,6 +56,7 @@ DEFAULT_ANOMALY_THRESHOLD = float(os.environ.get('GPU_ANOMALY_THRESHOLD', '0.15'
 WINDOW_SIZE = 64  # Sliding packet sequence length
 NUM_FEATURES = 4   # [dt_us_norm, length_norm, flags_norm, port_entropy_norm]
 QUEUE_POLL_TIMEOUT_SEC = 0.1  # Bounded polling timeout for ingress queue
+EXPECTED_MAC_HEX_LEN = 17  # 6 octets × 2 hex digits + 5 colons: "ab:cd:ef:01:23:45"
 
 @dataclass(frozen=True)
 class QuarantineAlertItem:
@@ -309,14 +310,14 @@ class PacketFeatureExtractor:
 
     def __init__(self, window_size: int = WINDOW_SIZE):
         self.window_size = window_size
-        self.buffer: List[List[float]] = []
+        # O(1) append and popleft (deque, not list — avoids O(N) memory shift on eviction)
+        self.buffer: collections.deque = collections.deque()
+        self.src_ips: collections.deque = collections.deque()
+        self.src_macs: collections.deque = collections.deque()
         self.last_pkt_ns: int = 0
-        # Parallel deques for sliding window IP/MAC tracking
-        self.src_ips: List[str] = []
-        self.src_macs: List[str] = []
-        # Running frequency maps: O(1) ingest/evict, no Counter allocation on query
-        self.src_ip_counts: dict = {}
-        self.src_mac_counts: dict = {}
+        # Running frequency maps: O(1) ingest/evict, zero Counter allocation on query
+        self.src_ip_counts: Dict[str, int] = {}
+        self.src_mac_counts: Dict[str, int] = {}
         self.max_observed_dt_us: float = 1000.0
         self.max_observed_frame_len: float = float(ETHERNET_STANDARD_MTU)
 
@@ -349,9 +350,9 @@ class PacketFeatureExtractor:
         self.src_mac_counts[src_mac] = self.src_mac_counts.get(src_mac, 0) + 1
 
         if len(self.buffer) > self.window_size:
-            self.buffer.pop(0)
-            old_ip = self.src_ips.pop(0)
-            old_mac = self.src_macs.pop(0)
+            self.buffer.popleft()
+            old_ip = self.src_ips.popleft()
+            old_mac = self.src_macs.popleft()
             self.src_ip_counts[old_ip] -= 1
             if not self.src_ip_counts[old_ip]:
                 del self.src_ip_counts[old_ip]
@@ -364,16 +365,19 @@ class PacketFeatureExtractor:
         return None
 
     def get_predominant_src_ip(self) -> str:
-        known = {ip: cnt for ip, cnt in self.src_ip_counts.items() if ip != 'unknown'}
-        if not known:
-            return 'unknown'
-        return max(known, key=known.__getitem__)
+        # Zero-allocation: generator over existing dict, no intermediate collection
+        return max(
+            (ip for ip in self.src_ip_counts if ip != 'unknown'),
+            key=self.src_ip_counts.__getitem__,
+            default='unknown',
+        )
 
     def get_predominant_src_mac(self) -> str:
-        known = {mac: cnt for mac, cnt in self.src_mac_counts.items() if mac != 'unknown'}
-        if not known:
-            return 'unknown'
-        return max(known, key=known.__getitem__)
+        return max(
+            (mac for mac in self.src_mac_counts if mac != 'unknown'),
+            key=self.src_mac_counts.__getitem__,
+            default='unknown',
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +602,7 @@ def run_sentinel(
                     # Python slicing never raises IndexError on short buffers; validate
                     # the resulting length (17 chars = 6 octets) to guard runt frames.
                     src_mac_raw = raw_data[6:12].hex(':')
-                    src_mac = src_mac_raw if len(src_mac_raw) == 17 else 'unknown'
+                    src_mac = src_mac_raw if len(src_mac_raw) == EXPECTED_MAC_HEX_LEN else 'unknown'
 
                     # IPv4 parsing with dynamic IHL (Internet Header Length) handling (Council Invariant 1)
                     if eth_proto == 0x0800 and frame_len >= (l3_offset + 20):
