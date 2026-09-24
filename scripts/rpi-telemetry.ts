@@ -63,7 +63,7 @@ const server = createServer((req, res) => {
     }
 
     if (method === 'GET' && url === '/telemetry') {
-        const telemetry = getTelemtry()
+        const telemetry = getTelemetry()
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/json')
         return res.end(JSON.stringify({ telemetry }))
