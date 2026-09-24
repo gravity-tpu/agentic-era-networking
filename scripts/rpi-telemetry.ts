@@ -68,7 +68,10 @@ const server = createServer((req, res) => {
         res.setHeader('Content-Type', 'application/json')
         return res.end(JSON.stringify({ telemetry }))
     }
-   
+
+    res.statusCode = 404
+    res.setHeader('Content-Type', 'application/json')
+    return res.end(JSON.stringify({ error: 'Not Found' }))
 })
 
 function getTelemetry(): Pick<Telemetry, "uptime" | "vitals"> {
