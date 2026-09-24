@@ -1,0 +1,14 @@
+[Unit]
+Description=telemetry for zodiac linux systems (raspberry pi)
+
+[Service]
+WorkingDirectory=/home/agent/agentic-era-networking
+ExecStart=/usr/bin/env node --experimental-strip-types scripts/rpi-telemetry.ts
+Restart=always
+RestartSec=5
+User=agent
+Group=agent
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
