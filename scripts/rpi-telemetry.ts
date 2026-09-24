@@ -6,13 +6,17 @@
 import { createServer } from "node:http";
 import os from 'node:os';
 
+const KEEP_ALIVE_TIMEOUT_MS = 5_000
+const HEADERS_TIMEOUT_MS = 10_000
+const REQUEST_TIMEOUT_MS = 15_000
+
 type TelemetryVitals = {
     load1m: number
     load5m: number
     load15m: number
     // Byte counts serialized as decimal strings from BigInt values.
-    memoryTotalBytes: number
-    memoryAvailableBytes: number
+    memoryTotalBytes: string
+    memoryAvailableBytes: string
 }
 
 type InterfaceTelemetry = {
@@ -55,7 +59,7 @@ const server = createServer((req, res) => {
     if (method === 'GET' && url === '/healthz') {
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/json')
-        res.end()
+        return res.end()
     }
 
     if (method === 'GET' && url === '/telemetry') {
@@ -64,13 +68,10 @@ const server = createServer((req, res) => {
         res.setHeader('Content-Type', 'application/json')
         return res.end(JSON.stringify({ telemetry }))
     }
-
-    res.statusCode = 404
-    res.end()
    
 })
 
-function getTelemtry(): Pick<Telemetry, "uptime" | "vitals"> {
+function getTelemetry(): Pick<Telemetry, "uptime" | "vitals"> {
     const uptime = os.uptime()
     const loadAvg = os.loadavg()
 
@@ -80,10 +81,13 @@ function getTelemtry(): Pick<Telemetry, "uptime" | "vitals"> {
             load1m: loadAvg[0],
             load5m: loadAvg[1],
             load15m: loadAvg[2],
-            memoryTotalBytes: os.totalmem(),
-            memoryAvailableBytes: os.freemem()
+            memoryTotalBytes: BigInt(os.totalmem()).toString(),
+            memoryAvailableBytes: BigInt(os.freemem()).toString()
         }
     }
 }
 
-server.listen(PORT)
+server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS
+server.headersTimeout = HEADERS_TIMEOUT_MS
+server.requestTimeout = REQUEST_TIMEOUT_MS
+server.listen(PORT, '127.0.0.1')
