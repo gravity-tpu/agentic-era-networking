@@ -57,13 +57,22 @@ function resolveAuditFilePath(): string {
 const AUDIT_FILE = resolveAuditFilePath();
 
 let auditStream: fs.WriteStream | null = null;
+// Monotonic nanosecond timestamp (process.hrtime.bigint) — immune to NTP shifts
+// and leap-second clock rewinds that would corrupt Date.now()-based backoff math.
+let auditStreamFailedAtNs = 0n;
+const AUDIT_STREAM_BACKOFF_NS = 5_000_000_000n; // 5 s in nanoseconds
 
-function getAuditStream(): fs.WriteStream {
+function getAuditStream(): fs.WriteStream | null {
   if (auditStream && !auditStream.destroyed) return auditStream;
+  // Circuit breaker: don't spin-recreate on every call while disk/FD is unavailable.
+  if (auditStream === null && process.hrtime.bigint() - auditStreamFailedAtNs < AUDIT_STREAM_BACKOFF_NS) {
+    return null;
+  }
   auditStream = fs.createWriteStream(AUDIT_FILE, { flags: 'a', encoding: 'utf-8' });
   auditStream.on('error', (err) => {
     console.warn('[!] [Quarantine Audit] Write stream error:', err.message);
-    auditStream = null; // reset so the next call opens a fresh stream
+    auditStreamFailedAtNs = process.hrtime.bigint();
+    auditStream = null;
   });
   return auditStream;
 }
@@ -75,7 +84,12 @@ function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
   // drain/error listener gymnastics. Concurrency is bounded by the caller
   // (see MAX_INFLIGHT_WRITES in appendQuarantineEvent), not by an awaiting caller.
   return new Promise((resolve, reject) => {
-    getAuditStream().write(JSON.stringify(entry) + '\n', (err) => {
+    const stream = getAuditStream();
+    if (!stream) {
+      reject(new Error('Audit write stream unavailable (5s circuit breaker active)'));
+      return;
+    }
+    stream.write(JSON.stringify(entry) + '\n', (err) => {
       if (err) { reject(err); return; }
       resolve();
     });
@@ -140,6 +154,9 @@ function ensureNeonTable(): Promise<boolean> {
 }
 
 async function appendToNeon(entry: QuarantineAuditEntry): Promise<void> {
+  // No internal try/catch: rejections propagate to the caller.
+  // appendQuarantineEvent wraps this with .catch() via Promise.allSettled,
+  // satisfying the fail-closed invariant without suppressing the failure signal.
   if (!(await ensureNeonTable())) return;
   const dbUrl = getNeonUrl();
   if (!dbUrl) return;

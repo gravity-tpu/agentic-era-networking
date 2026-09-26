@@ -451,12 +451,18 @@ def run_sentinel(
 
     def alert_dispatcher_worker():
         while not stop_event:
+            # Track which queue the item originated from so task_done() is called
+            # on the correct queue; calling alert_queue.task_done() when the item
+            # came from emergency_queue raises ValueError (unmatched get/task_done).
+            source_queue: Optional[queue.Queue[QuarantineAlertItem]] = None
             # Drain circuit breaker first; falls through to main queue on Empty
             try:
                 item = emergency_queue.get_nowait()
+                source_queue = emergency_queue
             except queue.Empty:
                 try:
                     item = alert_queue.get(timeout=0.2)
+                    source_queue = alert_queue
                 except queue.Empty:
                     continue
             if item is None:
@@ -477,7 +483,7 @@ def run_sentinel(
                     backoff_s *= 2.0
             if not success:
                 sys.stderr.write(f"[gpu-sentinel] Quarantine alert failed after {max_retries} attempts for ip={item.target_ip} mac={item.target_mac}\n")
-            alert_queue.task_done()
+            source_queue.task_done()
 
     dispatch_thread = threading.Thread(target=alert_dispatcher_worker, daemon=True)
     dispatch_thread.start()

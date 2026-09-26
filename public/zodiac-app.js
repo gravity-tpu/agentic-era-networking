@@ -3072,11 +3072,14 @@
     return String(str).replace(/[&<>"']/g, (c) => HTML_ESCAPE_MAP[c]);
   }
 
-  let ofFlowsLastFetchMs = 0;
+  // Per-client jitter (Quoc Le): prevents thundering herd when multiple dashboard
+  // tabs open simultaneously and all try to poll /api/zodiac/flows in lockstep.
+  const OF_FLOWS_DEBOUNCE_MS = 5000 + Math.floor(Math.random() * 2500);
+  let ofFlowsLastFetchAt = 0; // performance.now() ms — monotonic, immune to NTP shifts
   async function fetchAndRenderOpenFlowRules() {
-    const nowMs = Date.now();
-    if (nowMs - ofFlowsLastFetchMs < 5000) return; // debounce 5s
-    ofFlowsLastFetchMs = nowMs;
+    const nowMs = performance.now();
+    if (nowMs - ofFlowsLastFetchAt < OF_FLOWS_DEBOUNCE_MS) return;
+    ofFlowsLastFetchAt = nowMs;
     const OF_FLOWS_FETCH_TIMEOUT_MS = 4000; // LAN latency budget; matches Dean Latency Invariant (<4s before abort)
     const abortCtrl = new AbortController();
     const abortTimer = setTimeout(() => abortCtrl.abort(), OF_FLOWS_FETCH_TIMEOUT_MS);
