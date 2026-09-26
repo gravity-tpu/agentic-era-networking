@@ -62,10 +62,95 @@ let auditStream: fs.WriteStream | null = null;
 let auditStreamFailedAtNs = 0n;
 const AUDIT_STREAM_BACKOFF_NS = 5_000_000_000n; // 5 s in nanoseconds
 
+// Bounded in-memory buffer preserves quarantine audit events during transient
+// disk unavailability. Entries are drained to the write stream when it recovers.
+// Sized at 1000 to bound memory; once full, events are shed (and rejection counted).
+const AUDIT_PENDING_BUFFER_MAX = 1000;
+// `let` enables the O(1) pointer-swap drain idiom inside drainPendingBuffer.
+let auditPendingBuffer: string[] = [];
+
+// Single in-flight drain guard. Never awaited by appendToLocalAuditLog callers —
+// this is a fire-and-forget pipeline consistent with the file-header contract.
+// No caller ever receives a rejection from the drain; errors are logged and counted.
+let drainPromise: Promise<void> | null = null;
+
+// One-shot retry timer: ensures buffered events are not stranded indefinitely
+// if traffic ceases before the circuit breaker clears. unref()'d so it never
+// blocks process exit.
+let drainRetryTimer: NodeJS.Timeout | null = null;
+
+function scheduleCircuitBreakerDrain(): void {
+  if (drainRetryTimer !== null) return; // already scheduled, no double-fire
+  // Dynamically compute the exact remaining backoff so there is no arbitrary
+  // padding heuristic — schedule fires the instant the circuit breaker clears.
+  const elapsed = auditStreamFailedAtNs !== 0n
+    ? process.hrtime.bigint() - auditStreamFailedAtNs
+    : 0n;
+  const remainingMs = elapsed < AUDIT_STREAM_BACKOFF_NS
+    ? Number((AUDIT_STREAM_BACKOFF_NS - elapsed) / 1_000_000n) + 1
+    : 1;
+  drainRetryTimer = setTimeout(() => {
+    drainRetryTimer = null;
+    if (auditPendingBuffer.length > 0) triggerDrain();
+  }, remainingMs);
+  drainRetryTimer.unref();
+}
+
+// triggerDrain() is the single entry point for initiating a drain.
+// If a drain is already in flight its while-loop will pick up any new entries,
+// so we only start a new one when drainPromise is null.
+function triggerDrain(): void {
+  const stream = getAuditStream();
+  if (!stream) { scheduleCircuitBreakerDrain(); return; }
+  if (drainPromise) return;
+  drainPromise = drainPendingBuffer(stream)
+    .catch((err: unknown) => {
+      // Count disk failures for control-plane health monitoring. Error is absorbed
+      // here: callers never receive drain rejections (fire-and-forget contract).
+      failedWriteCount += 1n;
+      console.warn('[!] [Quarantine Audit] Drain failed:',
+        err instanceof Error ? err.message : String(err));
+    })
+    .finally(() => {
+      drainPromise = null;
+      // Re-trigger if entries arrived in the microtask window between the drain
+      // loop evaluating length === 0 and drainPromise being cleared.
+      if (auditPendingBuffer.length > 0) triggerDrain();
+    });
+}
+
+async function drainPendingBuffer(stream: fs.WriteStream): Promise<void> {
+  while (auditPendingBuffer.length > 0) {
+    // O(1) pointer swap: new pushes land in the fresh array while this batch writes.
+    const batch = auditPendingBuffer;
+    auditPendingBuffer = [];
+    // Single write() per iteration — one libuv boundary crossing.
+    // Bounded: AUDIT_PENDING_BUFFER_MAX × max-entry-size ≈ 1000 × 512B = 512KB;
+    // V8 string concat at this scale completes in <1ms (well within the
+    // best-effort fire-and-forget audit budget).
+    const blob = batch.join('');
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // write() callback fires after OS accepts the data, even when write()
+        // returned false (backpressure): WriteStream guarantees callback delivery
+        // after the internal drain cycle — no extra 'drain' listener needed.
+        stream.write(blob, (err) => { if (err) reject(err); else resolve(); });
+      });
+    } catch (err) {
+      // Restore the NEWEST events from the failed batch (slice(-capacity) keeps
+      // the tail) — newer quarantine events carry higher security relevance and
+      // must be preserved over older ones when buffer capacity is constrained.
+      const capacity = AUDIT_PENDING_BUFFER_MAX - auditPendingBuffer.length;
+      if (capacity > 0) auditPendingBuffer.unshift(...batch.slice(-capacity));
+      throw err;
+    }
+  }
+}
+
 function getAuditStream(): fs.WriteStream | null {
   if (auditStream && !auditStream.destroyed) return auditStream;
   // Circuit breaker: don't spin-recreate on every call while disk/FD is unavailable.
-  if (auditStream === null && process.hrtime.bigint() - auditStreamFailedAtNs < AUDIT_STREAM_BACKOFF_NS) {
+  if (auditStream === null && auditStreamFailedAtNs !== 0n && process.hrtime.bigint() - auditStreamFailedAtNs < AUDIT_STREAM_BACKOFF_NS) {
     return null;
   }
   auditStream = fs.createWriteStream(AUDIT_FILE, { flags: 'a', encoding: 'utf-8' });
@@ -78,22 +163,19 @@ function getAuditStream(): fs.WriteStream | null {
 }
 
 function appendToLocalAuditLog(entry: QuarantineAuditEntry): Promise<void> {
-  // The write callback fires only after the chunk is flushed to the underlying
-  // resource — both on the fast path (ok=true) and the backpressured path (ok=false).
-  // This guarantees durability and propagates errors to the caller without needing
-  // drain/error listener gymnastics. Concurrency is bounded by the caller
-  // (see MAX_INFLIGHT_WRITES in appendQuarantineEvent), not by an awaiting caller.
-  return new Promise((resolve, reject) => {
-    const stream = getAuditStream();
-    if (!stream) {
-      reject(new Error('Audit write stream unavailable (5s circuit breaker active)'));
-      return;
-    }
-    stream.write(JSON.stringify(entry) + '\n', (err) => {
-      if (err) { reject(err); return; }
-      resolve();
-    });
-  });
+  // Best-effort fire-and-forget: resolves immediately after enqueueing, NOT after
+  // disk confirmation. Per the file header, the SDN control plane must never block
+  // on audit I/O (Jeff Dean latency invariant). Disk persistence is asynchronous
+  // via triggerDrain(); the Neon path provides the durable backup.
+  const line = JSON.stringify(entry) + '\n';
+  if (auditPendingBuffer.length >= AUDIT_PENDING_BUFFER_MAX) {
+    return Promise.reject(new Error(
+      `Audit pending buffer full (${AUDIT_PENDING_BUFFER_MAX} items): event shed`
+    ));
+  }
+  auditPendingBuffer.push(line);
+  triggerDrain();
+  return Promise.resolve();
 }
 
 // ─── Neon persistence with singleton DDL guard ───────────────────────────────
@@ -157,9 +239,11 @@ async function appendToNeon(entry: QuarantineAuditEntry): Promise<void> {
   // No internal try/catch: rejections propagate to the caller.
   // appendQuarantineEvent wraps this with .catch() via Promise.allSettled,
   // satisfying the fail-closed invariant without suppressing the failure signal.
-  if (!(await ensureNeonTable())) return;
+  // Early-exit conditions throw rather than return so the caller's .catch() path
+  // increments failedWriteCount and logs the failure (Zero Suppression of Reality).
+  if (!(await ensureNeonTable())) throw new Error('[Quarantine Audit] Neon table unavailable');
   const dbUrl = getNeonUrl();
-  if (!dbUrl) return;
+  if (!dbUrl) throw new Error('[Quarantine Audit] No Neon DATABASE_URL configured');
   const sql = neon(dbUrl);
   await sql`
     INSERT INTO "QuarantineAuditEvent"
