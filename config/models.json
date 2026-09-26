@@ -1,5 +1,6 @@
 {
   "lastUpdated": "2026-09-26T00:00:00Z",
+  "globalTimeoutMs": 180000,
   "ollama": {
     "baseUrl": "http://localhost:11434",
     "jetsonBaseUrl": "http://192.168.55.100:11434",

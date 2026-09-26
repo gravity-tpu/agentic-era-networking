@@ -36,10 +36,30 @@ export function loadEnv() {
 // ─── Model config ─────────────────────────────────────────────────────────────
 const IS_CI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
 
-export function buildModelFallbacks(filterTier = null) {
-  const configPath = join(ROOT, 'config', 'models.json');
+// Cached config singleton to eliminate redundant disk I/O on CLI utility calls
+let _cachedConfig = null;
 
+// Note: loadModelsConfig uses synchronous readFileSync on startup. This module is strictly CLI review
+// and developer tooling (off-critical-path) and is never invoked on high-performance packet pathways.
+export function loadModelsConfig() {
+  if (_cachedConfig) return _cachedConfig;
+  const configPath = join(ROOT, 'config', 'models.json');
   if (!existsSync(configPath)) {
+    return null;
+  }
+  try {
+    _cachedConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
+    return _cachedConfig;
+  } catch (err) {
+    console.warn('⚠️  Failed to parse config/models.json:', err.message);
+    return null;
+  }
+}
+
+export function buildModelFallbacks(filterTier = null) {
+  const config = loadModelsConfig();
+
+  if (!config) {
     console.warn('🟡  config/models.json not found — using hardcoded fallbacks.');
     return [
       { model: 'gemini-3.8-flash',  provider: 'google' },
@@ -47,7 +67,6 @@ export function buildModelFallbacks(filterTier = null) {
     ];
   }
 
-  const config = JSON.parse(readFileSync(configPath, 'utf-8'));
   const routing = config.routing ?? {};
   const ollamaConfig = config.ollama ?? {};
   const ollamaBaseUrl = ollamaConfig.baseUrl ?? 'http://localhost:11434';
@@ -88,7 +107,46 @@ export function buildModelFallbacks(filterTier = null) {
   return list;
 }
 
+export function getGlobalTimeoutMs() {
+  const config = loadModelsConfig();
+  if (!config) return 180_000;
+  return typeof config.globalTimeoutMs === 'number' ? config.globalTimeoutMs : 180_000;
+}
+
 // ─── Provider API calls ───────────────────────────────────────────────────────
+
+const MAX_ERROR_BODY_BYTES = 8192; // 8KB bound to prevent OOM on malicious or malformed response streams
+
+/**
+ * Safely extracts a bounded slice of error details from an HTTP response without
+ * risking unbounded memory allocation (OOM) or swallowing stream read errors.
+ */
+async function readErrorBody(res, maxBytes = MAX_ERROR_BODY_BYTES) {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json') && !contentType.includes('text/')) {
+    return `[non-text content-type: ${contentType || 'none'}]`;
+  }
+  if (!res.body) {
+    return '(empty body)';
+  }
+  try {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let text = '';
+    let receivedBytes = 0;
+    while (receivedBytes < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      const slice = value.slice(0, maxBytes - receivedBytes);
+      text += decoder.decode(slice, { stream: true });
+      receivedBytes += value.length;
+    }
+    text += decoder.decode();
+    return receivedBytes > maxBytes ? `${text} ...[truncated at ${maxBytes} bytes]` : text;
+  } catch (e) {
+    return `[stream read error: ${e.message}]`;
+  }
+}
 
 /**
  * callOllama — OpenAI-compatible local inference via Ollama.
@@ -121,7 +179,7 @@ export async function callOllama(
     }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => '(unreadable)');
+    const body = await readErrorBody(res);
     throw new Error(`Ollama ${res.status} from ${url}: ${body}`);
   }
   const data = await res.json();
@@ -147,7 +205,10 @@ export async function callGemini(model, systemPrompt, userMessage, signal) {
       generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await readErrorBody(res);
+    throw new Error(`Gemini API ${res.status}: ${body}`);
+  }
   const data = await res.json();
   const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {
@@ -175,7 +236,10 @@ export async function callAnthropic(model, systemPrompt, userMessage, signal) {
       messages: [{ role: 'user', content: userMessage }],
     }),
   });
-  if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await readErrorBody(res);
+    throw new Error(`Anthropic API ${res.status}: ${body}`);
+  }
   const data = await res.json();
   const content = data.content?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {
@@ -205,7 +269,10 @@ export async function callOpenAI(model, systemPrompt, userMessage, signal) {
       ],
     }),
   });
-  if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await readErrorBody(res);
+    throw new Error(`OpenAI API ${res.status}: ${body}`);
+  }
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content || typeof content !== 'string' || !content.trim()) {
@@ -239,15 +306,30 @@ export class NoAvailableModelsError extends Error {
 // ─── Fallback runner ──────────────────────────────────────────────────────────
 const PER_MODEL_TIMEOUT_MS = 90_000;
 
-export async function runWithFallback(fallbacks, systemPrompt, userMessage) {
+export async function runWithFallback(fallbacks, systemPrompt, userMessage, options = {}) {
+  const globalTimeoutMs = options.globalTimeoutMs ?? getGlobalTimeoutMs();
+  const globalTimeoutNs = BigInt(globalTimeoutMs) * 1_000_000n;
+  const startNs = process.hrtime.bigint();
+  const deadlineNs = startNs + globalTimeoutNs;
+
   for (const item of fallbacks) {
+    const nowNs = process.hrtime.bigint();
+    const remainingNs = deadlineNs - nowNs;
+    if (remainingNs <= 0n) {
+      throw new NoAvailableModelsError(
+        `Global fallback timeout exceeded (${globalTimeoutMs / 1000}s budget exhausted)`
+      );
+    }
+
     const { model, provider, timeoutMs: itemTimeout } = item;
-    const timeoutMs = itemTimeout ?? PER_MODEL_TIMEOUT_MS;
+    const modelTimeoutMs = itemTimeout ?? PER_MODEL_TIMEOUT_MS;
+    const remainingMs = Number(remainingNs / 1_000_000n);
+    const timeoutMs = Math.min(modelTimeoutMs, remainingMs);
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
       const label = provider === 'ollama' ? `${model} (local Ollama)` : `${model} (${provider})`;
-      console.log(`  ⏳  Trying ${label}...`);
+      console.log(`  ⏳  Trying ${label} (budget: ${(timeoutMs / 1000).toFixed(0)}s)...`);
       const dispatch = PROVIDER_DISPATCH[provider];
       if (!dispatch) {
         throw new Error(`Unknown provider: ${provider}`);
@@ -257,7 +339,7 @@ export async function runWithFallback(fallbacks, systemPrompt, userMessage) {
       console.log(`  ✅  Success with ${model}\n`);
       return { result, model };
     } catch (e) {
-      const reason = e.name === 'AbortError' ? `timed out after ${timeoutMs / 1000}s` : e.message;
+      const reason = e.name === 'AbortError' ? `timed out after ${(timeoutMs / 1000).toFixed(0)}s` : e.message;
       console.warn(`  🟡  ${model} failed: ${reason}`);
     } finally {
       clearTimeout(timer);

@@ -179,10 +179,10 @@ async function main() {
   try {
     outcome = await runWithFallback(FALLBACKS, SYSTEM_PROMPT, userMessage);
   } catch (err) {
-    if (err instanceof NoAvailableModelsError || err?.name === 'NoAvailableModelsError') {
-      console.warn('🟡  All models failed — skipping AI review. CI will continue.');
+    if (err instanceof NoAvailableModelsError) {
+      console.error(`🚫 Council Review failed: ${err.message}. Fail-closed verification enforced.`);
       console.log(`${'═'.repeat(70)}\n`);
-      process.exit(0);
+      process.exit(1);
     }
     throw err;
   }
