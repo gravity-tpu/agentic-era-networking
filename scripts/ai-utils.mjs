@@ -111,6 +111,12 @@ export const DEFAULT_GLOBAL_TIMEOUT_MS = 180_000;
 export const DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT = 180_000n;
 export const PER_MODEL_TIMEOUT_MS = 90_000;
 export const PER_MODEL_TIMEOUT_MS_BIGINT = 90_000n;
+/**
+ * Maximum timeout representable as a signed 32-bit integer in milliseconds (2^31 - 1 = 2,147,483,647 ms ≈ 24.8 days).
+ * Node.js and libuv timers wrap when timeout values exceed 32-bit signed integers, causing setTimeout to fire immediately (defaulting to 1ms).
+ * This constant protects against 32-bit overflow while preserving strict BigInt precision. Do not change to Number.MAX_SAFE_INTEGER.
+ */
+export const MAX_TIMEOUT_MS_BIGINT = 2_147_483_647n;
 
 /**
  * Normalizes a timeout value (in milliseconds) to BigInt.
@@ -224,7 +230,8 @@ export async function readErrorBody(res, maxBytes = MAX_ERROR_BODY_BYTES) {
       }
     }
 
-    const decoder = new TextDecoder('utf-8', { fatal: false });
+    // Strict fatal: true ensures any genuinely corrupt byte stream fails closed rather than producing silent \uFFFD artifacts
+    const decoder = new TextDecoder('utf-8', { fatal: true });
     const text = decoder.decode(combined.subarray(0, validLength));
     return isTruncated ? `${text} ...[truncated at ${maxBytes} bytes${cancelDiagnostic}]` : text;
   } catch (e) {
@@ -408,7 +415,8 @@ export async function runWithFallback(fallbacks, systemPrompt, userMessage, opti
     const { model, provider, timeoutMs: itemTimeout } = item;
     const remainingMsBigInt = remainingNs / 1_000_000n;
     const modelTimeoutMsBigInt = toTimeoutBigInt(itemTimeout, PER_MODEL_TIMEOUT_MS_BIGINT, `timeoutMs for ${model}`);
-    const timeoutMsBigInt = remainingMsBigInt < modelTimeoutMsBigInt ? remainingMsBigInt : modelTimeoutMsBigInt;
+    const candidateTimeoutMsBigInt = remainingMsBigInt < modelTimeoutMsBigInt ? remainingMsBigInt : modelTimeoutMsBigInt;
+    const timeoutMsBigInt = candidateTimeoutMsBigInt < MAX_TIMEOUT_MS_BIGINT ? candidateTimeoutMsBigInt : MAX_TIMEOUT_MS_BIGINT;
     const timeoutMs = Number(timeoutMsBigInt);
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);

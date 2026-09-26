@@ -105,4 +105,13 @@ describe('AI Reviewer Utils: readErrorBody Invariants', () => {
     expect(result.includes('\uFFFD')).toBe(false);
     expect(result).toContain('...[truncated at 3 bytes]');
   });
+
+  it('fails closed on genuinely corrupted UTF-8 byte stream', async () => {
+    // 0xFF and 0xC0 are invalid UTF-8 byte sequences
+    const corruptBytes = new Uint8Array([0x48, 0x65, 0xff, 0xc0, 0x6f]);
+    const res = createMockResponse(corruptBytes);
+    const result = await readErrorBody(res);
+
+    expect(result).toContain('[stream read error:');
+  });
 });
