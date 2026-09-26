@@ -107,21 +107,51 @@ export function buildModelFallbacks(filterTier = null) {
   return list;
 }
 
+export const DEFAULT_GLOBAL_TIMEOUT_MS = 180_000;
+export const DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT = 180_000n;
+export const PER_MODEL_TIMEOUT_MS = 90_000;
+export const PER_MODEL_TIMEOUT_MS_BIGINT = 90_000n;
+
+/**
+ * Normalizes a timeout value (in milliseconds) to BigInt.
+ * Enforces strict integer typing: rejects negative values, non-integers, and non-numeric types.
+ * Avoids magic heuristic coercion or silent fallbacks.
+ */
+export function toTimeoutBigInt(value, defaultValueBigInt, label = 'timeout') {
+  if (value === undefined || value === null) {
+    return defaultValueBigInt;
+  }
+  if (typeof value === 'bigint') {
+    if (value <= 0n) throw new RangeError(`${label} must be positive, got ${value}`);
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new TypeError(`${label} must be a positive integer, got ${value}`);
+    }
+    return BigInt(value);
+  }
+  throw new TypeError(`${label} must be a positive integer number or bigint, got ${typeof value}`);
+}
+
 export function getGlobalTimeoutMs() {
   const config = loadModelsConfig();
-  if (!config) return 180_000;
-  return typeof config.globalTimeoutMs === 'number' ? config.globalTimeoutMs : 180_000;
+  if (!config) return DEFAULT_GLOBAL_TIMEOUT_MS;
+  const timeout = config.globalTimeoutMs;
+  return typeof timeout === 'number' && Number.isInteger(timeout) && timeout > 0
+    ? timeout
+    : DEFAULT_GLOBAL_TIMEOUT_MS;
 }
 
 // ─── Provider API calls ───────────────────────────────────────────────────────
 
-const MAX_ERROR_BODY_BYTES = 8192; // 8KB bound to prevent OOM on malicious or malformed response streams
+export const MAX_ERROR_BODY_BYTES = 8192; // 8KB bound to prevent OOM on malicious or malformed response streams
 
 /**
  * Safely extracts a bounded slice of error details from an HTTP response without
  * risking unbounded memory allocation (OOM) or swallowing stream read errors.
  */
-async function readErrorBody(res, maxBytes = MAX_ERROR_BODY_BYTES) {
+export async function readErrorBody(res, maxBytes = MAX_ERROR_BODY_BYTES) {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json') && !contentType.includes('text/')) {
     return `[non-text content-type: ${contentType || 'none'}]`;
@@ -131,20 +161,75 @@ async function readErrorBody(res, maxBytes = MAX_ERROR_BODY_BYTES) {
   }
   try {
     const reader = res.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let text = '';
-    let receivedBytes = 0;
-    while (receivedBytes < maxBytes) {
+    const chunks = [];
+    let bytesRead = 0;
+    let isTruncated = false;
+    let cancelDiagnostic = '';
+
+    while (true) {
       const { done, value } = await reader.read();
       if (done || !value) break;
-      const slice = value.slice(0, maxBytes - receivedBytes);
-      text += decoder.decode(slice, { stream: true });
-      receivedBytes += value.length;
+
+      const remainingBudget = maxBytes - bytesRead;
+      if (value.length <= remainingBudget) {
+        chunks.push(value);
+        bytesRead += value.length;
+      } else {
+        const slice = value.subarray(0, remainingBudget);
+        chunks.push(slice);
+        bytesRead += slice.length;
+        try {
+          await reader.cancel('Error body size limit exceeded');
+        } catch (cancelErr) {
+          // Embed diagnostic into telemetry string rather than blocking stdout/stderr in packet/stream path
+          cancelDiagnostic = `; stream-cancel error: ${cancelErr?.message ?? cancelErr}`;
+        }
+        isTruncated = true;
+        break;
+      }
     }
-    text += decoder.decode();
-    return receivedBytes > maxBytes ? `${text} ...[truncated at ${maxBytes} bytes]` : text;
+
+    // Allocate flat Uint8Array and decode once to avoid O(N^2) string allocations
+    const combined = new Uint8Array(bytesRead);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // If truncated, avoid splitting a multi-byte UTF-8 code point at the boundary.
+    // In UTF-8:
+    // - Continuation bytes match bit pattern 10xxxxxx (byte & 0xC0 === 0x80)
+    // - 2-byte sequence lead byte matches 110xxxxx (byte & 0xE0 === 0xC0)
+    // - 3-byte sequence lead byte matches 1110xxxx (byte & 0xF0 === 0xE0)
+    // - 4-byte sequence lead byte matches 11110xxx (byte & 0xF8 === 0xF0)
+    let validLength = bytesRead;
+    if (isTruncated && validLength > 0) {
+      let i = validLength - 1;
+      let continuationBytes = 0;
+      while (i >= 0 && (combined[i] & 0xc0) === 0x80 && continuationBytes < 3) {
+        continuationBytes++;
+        i--;
+      }
+      if (i >= 0) {
+        const lead = combined[i];
+        let expectedTotal = 1;
+        if ((lead & 0xe0) === 0xc0) expectedTotal = 2;
+        else if ((lead & 0xf0) === 0xe0) expectedTotal = 3;
+        else if ((lead & 0xf8) === 0xf0) expectedTotal = 4;
+
+        if (continuationBytes + 1 < expectedTotal) {
+          validLength = i; // drop incomplete trailing multi-byte sequence to prevent \uFFFD corruption
+        }
+      }
+    }
+
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const text = decoder.decode(combined.subarray(0, validLength));
+    return isTruncated ? `${text} ...[truncated at ${maxBytes} bytes${cancelDiagnostic}]` : text;
   } catch (e) {
-    return `[stream read error: ${e.message}]`;
+    const errMsg = e instanceof Error ? e.message : String(e);
+    return `[stream read error: ${errMsg}]`;
   }
 }
 
@@ -304,11 +389,10 @@ export class NoAvailableModelsError extends Error {
 }
 
 // ─── Fallback runner ──────────────────────────────────────────────────────────
-const PER_MODEL_TIMEOUT_MS = 90_000;
 
 export async function runWithFallback(fallbacks, systemPrompt, userMessage, options = {}) {
   const globalTimeoutMs = options.globalTimeoutMs ?? getGlobalTimeoutMs();
-  const globalTimeoutNs = BigInt(globalTimeoutMs) * 1_000_000n;
+  const globalTimeoutNs = toTimeoutBigInt(globalTimeoutMs, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, 'globalTimeoutMs') * 1_000_000n;
   const startNs = process.hrtime.bigint();
   const deadlineNs = startNs + globalTimeoutNs;
 
@@ -317,14 +401,15 @@ export async function runWithFallback(fallbacks, systemPrompt, userMessage, opti
     const remainingNs = deadlineNs - nowNs;
     if (remainingNs <= 0n) {
       throw new NoAvailableModelsError(
-        `Global fallback timeout exceeded (${globalTimeoutMs / 1000}s budget exhausted)`
+        `Global fallback timeout exceeded (${Number(globalTimeoutNs / 1_000_000_000n)}s budget exhausted)`
       );
     }
 
     const { model, provider, timeoutMs: itemTimeout } = item;
-    const modelTimeoutMs = itemTimeout ?? PER_MODEL_TIMEOUT_MS;
-    const remainingMs = Number(remainingNs / 1_000_000n);
-    const timeoutMs = Math.min(modelTimeoutMs, remainingMs);
+    const remainingMsBigInt = remainingNs / 1_000_000n;
+    const modelTimeoutMsBigInt = toTimeoutBigInt(itemTimeout, PER_MODEL_TIMEOUT_MS_BIGINT, `timeoutMs for ${model}`);
+    const timeoutMsBigInt = remainingMsBigInt < modelTimeoutMsBigInt ? remainingMsBigInt : modelTimeoutMsBigInt;
+    const timeoutMs = Number(timeoutMsBigInt);
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
