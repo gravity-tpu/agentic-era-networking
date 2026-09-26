@@ -34,6 +34,8 @@ export function loadEnv() {
 }
 
 // ─── Model config ─────────────────────────────────────────────────────────────
+const IS_CI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+
 export function buildModelFallbacks(filterTier = null) {
   const configPath = join(ROOT, 'config', 'models.json');
 
@@ -47,8 +49,28 @@ export function buildModelFallbacks(filterTier = null) {
 
   const config = JSON.parse(readFileSync(configPath, 'utf-8'));
   const routing = config.routing ?? {};
+  const ollamaConfig = config.ollama ?? {};
+  const ollamaBaseUrl = ollamaConfig.baseUrl ?? 'http://localhost:11434';
+  const ollamaTimeoutMs = typeof ollamaConfig.timeoutMs === 'number' ? ollamaConfig.timeoutMs : 150_000;
+  const ollamaTemperature = typeof ollamaConfig.temperature === 'number' ? ollamaConfig.temperature : 0.2;
+  const ollamaNumPredict = typeof ollamaConfig.numPredict === 'number' ? ollamaConfig.numPredict : 8192;
   const seen = new Set();
   const list = [];
+
+  // Local Ollama tier: prepended first when running locally (not in CI).
+  // Ollama is unreachable from GitHub Actions runners — skip entirely in CI.
+  if (!IS_CI && !filterTier && routing.local?.ollama) {
+    const model = routing.local.ollama;
+    seen.add(model);
+    list.push({
+      model,
+      provider: 'ollama',
+      baseUrl: ollamaBaseUrl,
+      timeoutMs: ollamaTimeoutMs,
+      temperature: ollamaTemperature,
+      numPredict: ollamaNumPredict,
+    });
+  }
 
   const tiers = filterTier ? [filterTier] : ['pro', 'fast'];
 
@@ -67,6 +89,49 @@ export function buildModelFallbacks(filterTier = null) {
 }
 
 // ─── Provider API calls ───────────────────────────────────────────────────────
+
+/**
+ * callOllama — OpenAI-compatible local inference via Ollama.
+ * The Council system prompt is passed as the 'system' role message.
+ * No API key required; model must be pulled locally via `ollama pull <model>`.
+ */
+export async function callOllama(
+  model,
+  systemPrompt,
+  userMessage,
+  signal,
+  baseUrl = 'http://localhost:11434',
+  options = {}
+) {
+  const url = `${baseUrl}/api/chat`;
+  const temperature = options.temperature ?? 0.2;
+  const num_predict = options.numPredict ?? 8192;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({
+      model,
+      stream: false,
+      options: { temperature, num_predict },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMessage },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '(unreadable)');
+    throw new Error(`Ollama ${res.status} from ${url}: ${body}`);
+  }
+  const data = await res.json();
+  const content = data.message?.content;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    throw new Error(`Ollama returned empty response for ${model}`);
+  }
+  return content;
+}
+
 export async function callGemini(model, systemPrompt, userMessage, signal) {
   const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_GENERATIVE_AI_API_KEY not set (also checked GEMINI_API_KEY)');
@@ -84,7 +149,11 @@ export async function callGemini(model, systemPrompt, userMessage, signal) {
   });
   if (!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '(No response)';
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    throw new Error(`Gemini returned empty response for ${model}`);
+  }
+  return content;
 }
 
 export async function callAnthropic(model, systemPrompt, userMessage, signal) {
@@ -108,7 +177,11 @@ export async function callAnthropic(model, systemPrompt, userMessage, signal) {
   });
   if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data.content?.[0]?.text ?? '(No response)';
+  const content = data.content?.[0]?.text;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    throw new Error(`Anthropic returned empty response for ${model}`);
+  }
+  return content;
 }
 
 export async function callOpenAI(model, systemPrompt, userMessage, signal) {
@@ -134,34 +207,63 @@ export async function callOpenAI(model, systemPrompt, userMessage, signal) {
   });
   if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? '(No response)';
+  const content = data.choices?.[0]?.message?.content;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    throw new Error(`OpenAI returned empty response for ${model}`);
+  }
+  return content;
+}
+
+// ─── Provider Registry ────────────────────────────────────────────────────────
+const PROVIDER_DISPATCH = Object.freeze({
+  ollama: (model, systemPrompt, userMessage, signal, item) =>
+    callOllama(model, systemPrompt, userMessage, signal, item.baseUrl, {
+      temperature: item.temperature,
+      numPredict: item.numPredict,
+    }),
+  google: (model, systemPrompt, userMessage, signal) =>
+    callGemini(model, systemPrompt, userMessage, signal),
+  anthropic: (model, systemPrompt, userMessage, signal) =>
+    callAnthropic(model, systemPrompt, userMessage, signal),
+  openai: (model, systemPrompt, userMessage, signal) =>
+    callOpenAI(model, systemPrompt, userMessage, signal),
+});
+
+export class NoAvailableModelsError extends Error {
+  constructor(message = 'All model providers in fallback chain failed') {
+    super(message);
+    this.name = 'NoAvailableModelsError';
+  }
 }
 
 // ─── Fallback runner ──────────────────────────────────────────────────────────
 const PER_MODEL_TIMEOUT_MS = 90_000;
 
 export async function runWithFallback(fallbacks, systemPrompt, userMessage) {
-  for (const { model, provider } of fallbacks) {
+  for (const item of fallbacks) {
+    const { model, provider, timeoutMs: itemTimeout } = item;
+    const timeoutMs = itemTimeout ?? PER_MODEL_TIMEOUT_MS;
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), PER_MODEL_TIMEOUT_MS);
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
-      console.log(`  ⏳  Trying ${model} (${provider})...`);
-      let result;
-      if (provider === 'google')         result = await callGemini(model, systemPrompt, userMessage, ac.signal);
-      else if (provider === 'anthropic') result = await callAnthropic(model, systemPrompt, userMessage, ac.signal);
-      else if (provider === 'openai')    result = await callOpenAI(model, systemPrompt, userMessage, ac.signal);
-      else throw new Error(`Unknown provider: ${provider}`);
+      const label = provider === 'ollama' ? `${model} (local Ollama)` : `${model} (${provider})`;
+      console.log(`  ⏳  Trying ${label}...`);
+      const dispatch = PROVIDER_DISPATCH[provider];
+      if (!dispatch) {
+        throw new Error(`Unknown provider: ${provider}`);
+      }
+      const result = await dispatch(model, systemPrompt, userMessage, ac.signal, item);
 
       console.log(`  ✅  Success with ${model}\n`);
       return { result, model };
     } catch (e) {
-      const reason = e.name === 'AbortError' ? `timed out after ${PER_MODEL_TIMEOUT_MS / 1000}s` : e.message;
+      const reason = e.name === 'AbortError' ? `timed out after ${timeoutMs / 1000}s` : e.message;
       console.warn(`  🟡  ${model} failed: ${reason}`);
     } finally {
       clearTimeout(timer);
     }
   }
-  return null;
+  throw new NoAvailableModelsError('All model providers in fallback chain failed');
 }
 
 // ─── Diff processing & sanitization ──────────────────────────────────────────

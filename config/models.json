@@ -1,20 +1,33 @@
 {
-  "lastUpdated": "2026-09-12T18:30:00Z",
+  "lastUpdated": "2026-09-26T00:00:00Z",
+  "ollama": {
+    "baseUrl": "http://localhost:11434",
+    "jetsonBaseUrl": "http://192.168.55.100:11434",
+    "timeoutMs": 150000,
+    "temperature": 0.2,
+    "numPredict": 8192,
+    "description": "Local Ollama inference — zero API cost, zero latency, zero data egress. Mac serves Gemma to both local pre-push hook (localhost) and Jetson Orin (USB link 192.168.55.100)."
+  },
   "routing": {
+    "local": {
+      "description": "Local Ollama models — pre-push hook only (not available in CI). Council invariants loaded via system prompt.",
+      "ollama": "gemma4:26b"
+    },
     "fast": {
-      "description": "Fastest models — for fast code reviews, packet classification, and telemetry anomaly screening",
+      "description": "Fastest cloud models — CI fallback and offline pre-push fallback",
       "google": "gemini-3.8-flash",
       "anthropic": "claude-sonnet-4-6",
       "openai": "gpt-4o-mini"
     },
     "pro": {
-      "description": "Deep reasoning models — for protocol state machine validation, invariant proofs, and architectural audits",
+      "description": "Deep reasoning cloud models — for protocol state machine validation, invariant proofs, and architectural audits",
       "google": "gemini-pro-latest",
       "anthropic": "claude-opus-4-8",
       "openai": "gpt-4o"
     }
   },
   "allModels": [
+    "gemma4:26b",
     "gemini-3.8-flash",
     "gemini-pro-latest",
     "gemini-flash-latest",

@@ -14,7 +14,7 @@
 import { execSync } from 'child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadEnv, buildModelFallbacks, runWithFallback, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff } from './ai-utils.mjs';
+import { loadEnv, buildModelFallbacks, runWithFallback, NoAvailableModelsError, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff } from './ai-utils.mjs';
 
 loadEnv();
 
@@ -120,7 +120,7 @@ The repository builds autonomous, verifiable networking infrastructure:
 - Monolithic & distributed state machine invariants.
 
 Council Review Standards:
-- Zero Suppression of Reality: Never allow error swallowing (empty catch), unhandled Promise rejections, loose any casts, or // @ts-ignore.
+- Zero Suppression of Reality: Never allow error swallowing (empty catch), unhandled Promise rejections, loose any casts, or type suppression directives (@ts-*).
 - Determinism in Telemetry & Routing: All packet/byte counters and bandwidth metering MUST use integer units or BigInt. Floating-point arithmetic on counters or SLA percentiles is strictly forbidden. Monotonic clocks (hrtime) must be used for latency.
 - Fail-Closed Default (Default Drop): Unmatched flow queries, unauthenticated packets, or unresolvable DNS names must default to DROP/REJECT.
 - Symbolic Verification: Autonomous routing proposals must be proven loop-free (DAG check) before execution.
@@ -174,12 +174,17 @@ async function main() {
   }
 
   const userMessage = `Please review the following git diff for the Agentic Era Networking repository according to the Technical Staff Council standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
-  const outcome = await runWithFallback(FALLBACKS, SYSTEM_PROMPT, userMessage);
 
-  if (!outcome) {
-    console.warn('🟡  All models failed — skipping AI review. CI will continue.');
-    console.log(`${'═'.repeat(70)}\n`);
-    process.exit(0);
+  let outcome;
+  try {
+    outcome = await runWithFallback(FALLBACKS, SYSTEM_PROMPT, userMessage);
+  } catch (err) {
+    if (err instanceof NoAvailableModelsError || err?.name === 'NoAvailableModelsError') {
+      console.warn('🟡  All models failed — skipping AI review. CI will continue.');
+      console.log(`${'═'.repeat(70)}\n`);
+      process.exit(0);
+    }
+    throw err;
   }
 
   console.log(outcome.result);
