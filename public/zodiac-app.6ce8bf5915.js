@@ -1652,23 +1652,42 @@
       if (ws.usbTether) {
         const tether = ws.usbTether;
         const isTetherConnected = Boolean(tether.connected);
-        // Infer active relay path: if workstation is visible but USB-C is down, Wi-Fi LAN is carrying traffic
-        const wsOnline = Boolean(ws.detected || ws.online);
-        const isWifiActive = wsOnline && !isTetherConnected;
 
-        // Header badge reflects active path
+        // Derive active relay path directly from the backend-resolved agent endpoint
+        // (whichever candidate URL won Promise.any() in probeRemoteWorkstationHardware).
+        // This avoids client-side inference flap: the control plane already knows the truth.
+        let agentHost = '';
+        let agentSubnet = '';
+        try {
+          if (ws.endpoint) {
+            agentHost = new URL(ws.endpoint).host;
+            const ip = agentHost.split(':')[0];
+            const parts = ip.split('.');
+            agentSubnet = parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : '';
+          }
+        } catch (_) { /* malformed URL — leave blank */ }
+
+        const USB_SUBNET = '192.168.55.';
+        const isUsbPath = agentHost.startsWith(USB_SUBNET) || isTetherConnected;
+        const isWifiPath = agentHost.length > 0 && !agentHost.startsWith(USB_SUBNET) && !agentHost.startsWith('localhost') && !agentHost.startsWith('127.');
+        const isWifiActive = isWifiPath && !isTetherConnected;
+
+        // Header badge reflects actual active path from backend
         if (els.wsUsbLinkStatus) {
           els.wsUsbLinkStatus.innerText = isTetherConnected ? 'USB-C Tether Active' : isWifiActive ? 'Wi-Fi LAN Active' : 'Tether Disconnected';
           els.wsUsbLinkStatus.className = `cf-pill-badge ${isTetherConnected || isWifiActive ? 'green' : 'gray'}`;
         }
 
-        // Wi-Fi LAN relay row
+        // Wi-Fi LAN relay row — populated from backend-resolved endpoint
         if (els.wsWifiStatus) {
           els.wsWifiStatus.innerText = isWifiActive ? 'ACTIVE' : isTetherConnected ? 'STANDBY' : 'UNREACHABLE';
           els.wsWifiStatus.className = `cf-pill-badge ${isWifiActive ? 'green' : isTetherConnected ? 'blue' : 'gray'}`;
         }
         if (els.wsWifiEndpoint) {
-          els.wsWifiEndpoint.innerText = ws.endpoint ? ws.endpoint.replace('http://', '').replace('/api/hardware', '') : '10.0.0.119:11435';
+          els.wsWifiEndpoint.innerText = isWifiActive && agentHost ? agentHost : isWifiPath && agentHost ? agentHost : '—';
+        }
+        if (els.wsWifiSubnet) {
+          els.wsWifiSubnet.innerText = isWifiActive && agentSubnet ? `${agentSubnet} (Wi-Fi)` : isWifiPath && agentSubnet ? `${agentSubnet} (Wi-Fi)` : '—';
         }
         if (els.wsUsbHwStatus) {
           els.wsUsbHwStatus.innerText = isTetherConnected ? 'CONNECTED' : 'DISCONNECTED';
