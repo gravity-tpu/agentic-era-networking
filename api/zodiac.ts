@@ -15,6 +15,7 @@ import {
   resolveVerifiedProvenance,
   CLOUD_RELAY_BOUNDS,
   type ZodiacFullTelemetrySnapshot,
+  type WorkstationTimeSeriesPoint,
 } from '../src/sdn/zodiac-telemetry.js';
 import { requireOperatorAuth, isLocalDev } from '../src/auth/google-auth.js';
 import {
@@ -367,11 +368,34 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const config = RANGE_CONFIGS[range];
       const durationMs = RANGE_DURATION_MS[range];
       const cutoffMs = Date.now() - durationMs;
-      const wsSeries = latestSnapshot.workstation?.timeSeries ?? [];
-      const windowedWorkstation = wsSeries.slice(findCutoffIndex(wsSeries, cutoffMs));
-      const workstationPoints = downsampleWorkstationPoints(windowedWorkstation, config.maxPoints);
+      // DB failure is non-fatal for the dashboard: fall through and serve the
+      // current in-memory snapshot below rather than returning a 5xx.
+      let multi: Awaited<ReturnType<typeof getHistoricalMultiDeviceTelemetry>> | null = null;
+      try {
+        multi = await getHistoricalMultiDeviceTelemetry(range);
+      } catch (err: unknown) {
+        console.warn('[!] [API] Historical DB query failed, serving in-memory snapshot:',
+          err instanceof Error ? err.message : String(err));
+      }
+      if (!multi) {
+        // DB unavailable — fall through to in-memory snapshot response below.
+        res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
+        res.statusCode = 200;
+        res.end(serializeWithBigInt(latestSnapshot));
+        return;
+      }
 
-      const multi = await getHistoricalMultiDeviceTelemetry(range);
+      // Workstation: prefer DB-persisted history (covers 1h–30d);
+      // fall back to in-memory for the current window if no DB rows yet.
+      let workstationPoints: WorkstationTimeSeriesPoint[];
+      if (multi.workstationTimeSeries.length > 0) {
+        workstationPoints = downsampleWorkstationPoints(multi.workstationTimeSeries, config.maxPoints);
+      } else {
+        const wsSeries = latestSnapshot.workstation?.timeSeries ?? [];
+        const windowedWorkstation = wsSeries.slice(findCutoffIndex(wsSeries, cutoffMs));
+        workstationPoints = downsampleWorkstationPoints(windowedWorkstation, config.maxPoints);
+      }
+
       if (multi.timeSeries.length > 0 || multi.jetsonTimeSeries.length > 0 || multi.coralTimeSeries.length > 0 || workstationPoints.length > 0) {
         res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
         res.statusCode = 200;

@@ -138,6 +138,21 @@ function serializeCoralPointExplicit(point: CoralTimeSeriesPoint): Record<string
   };
 }
 
+function serializeWorkstationPointExplicit(point: WorkstationTimeSeriesPoint): Record<string, unknown> {
+  return {
+    timestampMs: point.timestampMs,
+    cpuUtilizationPct: point.cpuUtilizationPct,
+    gpuUtilizationPct: point.gpuUtilizationPct,
+    gpuMemoryUsedBytes: point.gpuMemoryUsedBytes.toString(),
+    ramUsedBytes: point.ramUsedBytes.toString(),
+    tokensPerSecond: point.tokensPerSecond,
+    promptTokensPerSecond: point.promptTokensPerSecond,
+    totalPromptTokens: point.totalPromptTokens.toString(),
+    totalCompletionTokens: point.totalCompletionTokens.toString(),
+    totalTokens: point.totalTokens.toString(),
+  };
+}
+
     let jetsonJson: Record<string, unknown> | null = null;
     if (snapshot.jetson) {
       const latestJetson = snapshot.jetson.timeSeries && snapshot.jetson.timeSeries.length > 0
@@ -192,6 +207,16 @@ function serializeCoralPointExplicit(point: CoralTimeSeriesPoint): Record<string
       }
     }
 
+    let workstationJson: Record<string, unknown> | null = null;
+    if (snapshot.workstation) {
+      const latestWs = snapshot.workstation.timeSeries && snapshot.workstation.timeSeries.length > 0
+        ? snapshot.workstation.timeSeries[snapshot.workstation.timeSeries.length - 1]
+        : null;
+      if (latestWs) {
+        workstationJson = serializeWorkstationPointExplicit(latestWs);
+      }
+    }
+
     const writePromise = prisma.zodiacTelemetryPoint.create({
       data: {
         timestampMs: BigInt(nowMs),
@@ -209,6 +234,7 @@ function serializeCoralPointExplicit(point: CoralTimeSeriesPoint): Record<string
         portsJson: JSON.parse(JSON.stringify(ports, (_, v) => typeof v === 'bigint' ? v.toString() : v)),
         jetsonJson: jetsonJson as Prisma.InputJsonValue,
         coralJson: coralJson as Prisma.InputJsonValue,
+        workstationJson: workstationJson as Prisma.InputJsonValue,
       },
     });
 
@@ -572,6 +598,7 @@ export interface MultiDeviceHistoricalTelemetry {
   readonly timeSeries: ZodiacTimeSeriesPoint[];
   readonly jetsonTimeSeries: JetsonTimeSeriesPoint[];
   readonly coralTimeSeries: CoralTimeSeriesPoint[];
+  readonly workstationTimeSeries: WorkstationTimeSeriesPoint[];
 }
 
 function parseHistoricalJetsonPoint(raw: unknown, defaultTimestampMs: number): JetsonTimeSeriesPoint | null {
@@ -610,6 +637,32 @@ function parseHistoricalCoralPoint(raw: unknown, defaultTimestampMs: number): Co
   };
 }
 
+function parseHistoricalWorkstationPoint(raw: unknown, defaultTimestampMs: number): WorkstationTimeSeriesPoint | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Record<string, unknown>;
+  // Council Invariant 2: integer-only units for utilization percentages and token rates.
+  // Math.floor enforces integer truncation; avoids floating-point in aggregations.
+  // Missing fields produce null-returns rather than fabricated zeros to preserve
+  // statistical correctness in moving averages and SLA percentile calculations.
+  const cpuUtil = p['cpuUtilizationPct'] != null ? Math.floor(Number(p['cpuUtilizationPct'])) : null;
+  const gpuUtil = p['gpuUtilizationPct'] != null ? Math.floor(Number(p['gpuUtilizationPct'])) : null;
+  const tps     = p['tokensPerSecond'] != null ? Math.floor(Number(p['tokensPerSecond'])) : null;
+  const ptps    = p['promptTokensPerSecond'] != null ? Math.floor(Number(p['promptTokensPerSecond'])) : null;
+  if (cpuUtil === null || gpuUtil === null || tps === null || ptps === null) return null;
+  return {
+    timestampMs: typeof p['timestampMs'] === 'number' ? p['timestampMs'] : defaultTimestampMs,
+    cpuUtilizationPct: cpuUtil,
+    gpuUtilizationPct: gpuUtil,
+    gpuMemoryUsedBytes: BigInt(String(p['gpuMemoryUsedBytes'] ?? 0)),
+    ramUsedBytes: BigInt(String(p['ramUsedBytes'] ?? 0)),
+    tokensPerSecond: tps,
+    promptTokensPerSecond: ptps,
+    totalPromptTokens: BigInt(String(p['totalPromptTokens'] ?? 0)),
+    totalCompletionTokens: BigInt(String(p['totalCompletionTokens'] ?? 0)),
+    totalTokens: BigInt(String(p['totalTokens'] ?? 0)),
+  };
+}
+
 /**
  * Fetches historical telemetry from Neon Postgres within the specified time range for all appliances
  * (Zodiac FX switch, NVIDIA Jetson Orin Nano, Google Coral Edge TPU),
@@ -620,7 +673,7 @@ export async function getHistoricalMultiDeviceTelemetry(
 ): Promise<MultiDeviceHistoricalTelemetry> {
   const prisma = getPrismaClient();
   if (!prisma) {
-    return { timeSeries: [], jetsonTimeSeries: [], coralTimeSeries: [] };
+    return { timeSeries: [], jetsonTimeSeries: [], coralTimeSeries: [], workstationTimeSeries: [] };
   }
 
   const config = RANGE_CONFIGS[range] ?? { bucketSeconds: 300, maxPoints: 288 };
@@ -628,8 +681,7 @@ export async function getHistoricalMultiDeviceTelemetry(
   const cutoffMs = BigInt(Date.now() - durationMs);
   const bucketMs = BigInt(config.bucketSeconds * 1000);
 
-  try {
-    const queryPromise = prisma.$queryRaw<Array<{
+  const queryPromise = prisma.$queryRaw<Array<{
       bucketTime: bigint;
       cpuTemperatureC: number | null;
       latencyNs: bigint | null;
@@ -643,6 +695,7 @@ export async function getHistoricalMultiDeviceTelemetry(
       txRateBps: bigint | null;
       jetsonJson: unknown;
       coralJson: unknown;
+      workstationJson: unknown;
     }>>(
       Prisma.sql`
         WITH RawWindow AS (
@@ -660,7 +713,8 @@ export async function getHistoricalMultiDeviceTelemetry(
             "rxRateBps",
             "txRateBps",
             "jetsonJson",
-            "coralJson"
+            "coralJson",
+            "workstationJson"
           FROM "ZodiacTelemetryPoint"
           WHERE "timestampMs" >= ${cutoffMs}
         ),
@@ -684,7 +738,8 @@ export async function getHistoricalMultiDeviceTelemetry(
           SELECT DISTINCT ON ("bucketTime")
             "bucketTime",
             "jetsonJson",
-            "coralJson"
+            "coralJson",
+            "workstationJson"
           FROM RawWindow
           ORDER BY "bucketTime", "timestampMs" DESC
         )
@@ -701,7 +756,8 @@ export async function getHistoricalMultiDeviceTelemetry(
           b."rxRateBps",
           b."txRateBps",
           j."jetsonJson",
-          j."coralJson"
+          j."coralJson",
+          j."workstationJson"
         FROM BucketAgg b
         LEFT JOIN LatestJsonPerBucket j ON b."bucketTime" = j."bucketTime"
         ORDER BY b."bucketTime" ASC
@@ -724,6 +780,7 @@ export async function getHistoricalMultiDeviceTelemetry(
     const timeSeries: ZodiacTimeSeriesPoint[] = [];
     const jetsonTimeSeries: JetsonTimeSeriesPoint[] = [];
     const coralTimeSeries: CoralTimeSeriesPoint[] = [];
+    const workstationTimeSeries: WorkstationTimeSeriesPoint[] = [];
 
     for (const r of rows) {
       const bucketTime = Number(r.bucketTime);
@@ -742,25 +799,24 @@ export async function getHistoricalMultiDeviceTelemetry(
       });
 
       const jp = parseHistoricalJetsonPoint(r.jetsonJson, bucketTime);
-      if (jp) {
-        jetsonTimeSeries.push(jp);
-      }
+      if (jp) jetsonTimeSeries.push(jp);
 
       const cp = parseHistoricalCoralPoint(r.coralJson, bucketTime);
-      if (cp) {
-        coralTimeSeries.push(cp);
-      }
+      if (cp) coralTimeSeries.push(cp);
+
+      const wp = parseHistoricalWorkstationPoint(r.workstationJson, bucketTime);
+      if (wp) workstationTimeSeries.push(wp);
     }
 
-    return {
-      timeSeries,
-      jetsonTimeSeries,
-      coralTimeSeries,
-    };
-  } catch (err: unknown) {
-    console.warn(`[!] [Telemetry DB] Error querying multi-device historical ${range} telemetry:`, err instanceof Error ? err.message : String(err));
-    return { timeSeries: [], jetsonTimeSeries: [], coralTimeSeries: [] };
-  }
+  return {
+    timeSeries,
+    jetsonTimeSeries,
+    coralTimeSeries,
+    workstationTimeSeries,
+  };
+  // Errors propagate to the caller (api/zodiac.ts range handler) so it can decide
+  // the appropriate fallback. Swallowing DB failures would silently serve "zero history"
+  // and corrupt downstream aggregations or SLA monitors that rely on this series.
 }
 
 /**

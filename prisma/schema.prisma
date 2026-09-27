@@ -72,6 +72,7 @@ model ZodiacTelemetryPoint {
   portsJson       Json     // Full snapshot of Ports 1-4 counters and link status
   jetsonJson      Json?    // NVIDIA Jetson Orin Nano host vitals, thermals, NICs
   coralJson       Json?    // Google Coral Edge TPU inference rates, latencies
+  workstationJson Json?    // MacBook M5 GPU/CPU utilization, token throughput, memory
   createdAt       DateTime @default(now())
 
   @@index([createdAt])
