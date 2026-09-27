@@ -76,9 +76,17 @@ export function buildModelFallbacks(filterTier = null) {
   const seen = new Set();
   const list = [];
 
-  // Local Ollama tier: prepended first when running locally (not in CI).
+  // Local Ollama tier: prepended first when running locally (not in CI), unless explicitly skipped
+  // or a cloud provider is explicitly requested (e.g. SKIP_OLLAMA=1 or AI_PROVIDER=google).
   // Ollama is unreachable from GitHub Actions runners — skip entirely in CI.
-  if (!IS_CI && !filterTier && routing.local?.ollama) {
+  const skipOllama = !!(
+    process.env.SKIP_OLLAMA === '1' ||
+    process.env.SKIP_OLLAMA === 'true' ||
+    process.env.AI_PROVIDER === 'google' ||
+    process.env.PREFER_GEMINI === '1' ||
+    process.env.PREFER_GEMINI === 'true'
+  );
+  if (!IS_CI && !skipOllama && !filterTier && routing.local?.ollama) {
     const model = routing.local.ollama;
     seen.add(model);
     list.push({

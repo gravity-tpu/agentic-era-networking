@@ -18,14 +18,18 @@ import { loadEnv, buildModelFallbacks, runWithFallback, NoAvailableModelsError, 
 
 loadEnv();
 
+// ─── Argument parsing ─────────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+if (args.includes('--skip-ollama') || args.includes('--gemini')) {
+  process.env.SKIP_OLLAMA = '1';
+}
+
 const FALLBACKS = buildModelFallbacks();
 
 // Bounded empty-state matching: strictly bound the entire string with end-of-string anchor ($)
 // to prevent prefix-match fail-open vulnerabilities (Demis Hassabis fail-closed invariant).
 export const EMPTY_STATE_REGEX = /^[-*>\s]*(none(\s+(found|identified|detected|observed|at this time))?|n\/a|nil|no(\s+(warnings?|issues?))?(\s+found)?)\.?$/i;
 
-// ─── Argument parsing ─────────────────────────────────────────────────────────
-const args = process.argv.slice(2);
 const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
 const isStrict = args.includes('--strict'); // exit(1) on Warnings too; used by pre-push hook
 const mode = args.includes('--last') ? 'last'

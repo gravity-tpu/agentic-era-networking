@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry, MAX_PENDING_TELEMETRY_TASKS, getPendingTelemetryTaskCount } from '../../scripts/ai-utils.mjs';
+import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry, MAX_PENDING_TELEMETRY_TASKS, getPendingTelemetryTaskCount, buildModelFallbacks } from '../../scripts/ai-utils.mjs';
 
 
 
@@ -170,5 +170,40 @@ describe('AI Reviewer Utils: Asynchronous Telemetry Task Registry', () => {
     await flushPendingTelemetry(1000);
     // Invariant: all settled tasks MUST be pruned from registry to prevent monotonic memory leaks
     expect(getPendingTelemetryTaskCount()).toBe(0);
+  });
+});
+
+describe('AI Reviewer Utils: buildModelFallbacks Invariants', () => {
+  it('skips local Ollama and falls back to Gemini when SKIP_OLLAMA is set', () => {
+    const orig = process.env.SKIP_OLLAMA;
+    try {
+      process.env.SKIP_OLLAMA = '1';
+      const fallbacks = buildModelFallbacks();
+      expect(fallbacks.length).toBeGreaterThan(0);
+      expect(fallbacks[0].provider).toBe('google');
+      expect(fallbacks[0].model).toBe('gemini-pro-latest');
+    } finally {
+      if (orig !== undefined) {
+        process.env.SKIP_OLLAMA = orig;
+      } else {
+        delete process.env.SKIP_OLLAMA;
+      }
+    }
+  });
+
+  it('skips local Ollama when PREFER_GEMINI is set', () => {
+    const orig = process.env.PREFER_GEMINI;
+    try {
+      process.env.PREFER_GEMINI = 'true';
+      const fallbacks = buildModelFallbacks();
+      expect(fallbacks.length).toBeGreaterThan(0);
+      expect(fallbacks[0].provider).toBe('google');
+    } finally {
+      if (orig !== undefined) {
+        process.env.PREFER_GEMINI = orig;
+      } else {
+        delete process.env.PREFER_GEMINI;
+      }
+    }
   });
 });

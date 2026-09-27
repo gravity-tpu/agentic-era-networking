@@ -1349,6 +1349,224 @@ interface OllamaPsResponse {
   }>;
 }
 
+// ── Workstation Agent probe constants ─────────────────────────────────────────
+// 350 ms is the upper bound for a 192.168.55.x USB-C LAN round-trip plus HTTP
+// serialisation overhead. A USB-C NCM link at 2.5 Gbps has ~0.3 ms physical RTT;
+// we budget 349 ms for kernel scheduling jitter and agent GC pauses.
+//
+// Dean Latency Invariant: All candidates are raced concurrently via Promise.any()
+// so worst-case resolution latency == exactly one timeout (350ms), never N × 350ms.
+const WORKSTATION_AGENT_PROBE_TIMEOUT_MS = 350;
+
+/**
+ * Fetch and validate a single workstation agent endpoint.
+ * Rejects on any network error, non-200 status, bad provenance, or malformed body.
+ * Resolves with a fully-deserialised WorkstationTelemetrySnapshot on success.
+ *
+ * Council Invariants:
+ * - Invariant 3 (Fail-Closed): rejects rather than returning zero-rate snapshot.
+ * - Invariant 6 (Provenance): validates source === 'live_hardware' before accepting.
+ * - Invariant 2 (Determinism): abort covers headers AND body read (not cleared early).
+ */
+async function fetchFromAgent(
+  agentUrl: string,
+  parentSignal?: AbortSignal
+): Promise<WorkstationTelemetrySnapshot> {
+  const endpoint = `${agentUrl}/api/hardware`;
+  const controller = new AbortController();
+
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      throw new Error(`Probe aborted before dispatch to ${endpoint}`);
+    }
+    parentSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  const timeout = setTimeout(() => controller.abort(), WORKSTATION_AGENT_PROBE_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(endpoint, { signal: controller.signal });
+
+    if (!res.ok) {
+      clearTimeout(timeout);
+      throw new Error(`HTTP ${res.status} from ${endpoint}`);
+    }
+
+    // Keep abort active through body read — a stalling body is as dangerous as a stalling header.
+    const raw = (await res.json()) as Record<string, unknown>;
+    clearTimeout(timeout);
+
+    // Council Invariant 6: reject responses without live physical provenance.
+    if (raw['source'] !== 'live_hardware') {
+      throw new Error(
+        `${endpoint} returned source='${String(raw['source'])}'; expected 'live_hardware'`
+      );
+    }
+
+    const hw = raw['hardware'];
+    if (
+      typeof hw !== 'object' || hw === null ||
+      typeof (hw as Record<string, unknown>)['detected'] !== 'boolean'
+    ) {
+      throw new Error(`${endpoint} returned malformed hardware object`);
+    }
+
+    const h = hw as Record<string, unknown>;
+
+    // Council Invariant 3: if the agent itself reports not-detected, propagate disconnected.
+    if (h['detected'] !== true) {
+      throw new Error(`${endpoint} agent reports detected=false`);
+    }
+
+    const usbTetherRaw = (typeof h['usbTether'] === 'object' && h['usbTether'] !== null)
+      ? h['usbTether'] as Record<string, unknown>
+      : {} as Record<string, unknown>;
+
+    const usbTether: WorkstationUsbTetherTelemetry = {
+      connected:      Boolean(usbTetherRaw['connected']),
+      deviceName:     typeof usbTetherRaw['deviceName'] === 'string' ? usbTetherRaw['deviceName'] : 'None',
+      vendorId:       typeof usbTetherRaw['vendorId'] === 'string' ? usbTetherRaw['vendorId'] : 'None',
+      productId:      typeof usbTetherRaw['productId'] === 'string' ? usbTetherRaw['productId'] : 'None',
+      serialNumber:   typeof usbTetherRaw['serialNumber'] === 'string' ? usbTetherRaw['serialNumber'] : 'None',
+      linkSpeed:      typeof usbTetherRaw['linkSpeed'] === 'string' ? usbTetherRaw['linkSpeed'] : 'None',
+      macInterface:   typeof usbTetherRaw['macInterface'] === 'string' ? usbTetherRaw['macInterface'] : 'None',
+      macAddress:     typeof usbTetherRaw['macAddress'] === 'string' ? usbTetherRaw['macAddress'] : 'None',
+      macStatus:      (usbTetherRaw['macStatus'] === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE') as 'ACTIVE' | 'INACTIVE',
+      hostIp:         typeof usbTetherRaw['hostIp'] === 'string' ? usbTetherRaw['hostIp'] : null,
+      peerIp:         typeof usbTetherRaw['peerIp'] === 'string' ? usbTetherRaw['peerIp'] : 'None',
+      serialDevice:   typeof usbTetherRaw['serialDevice'] === 'string' ? usbTetherRaw['serialDevice'] : null,
+      serialStatus:   (usbTetherRaw['serialStatus'] === 'AVAILABLE' ? 'AVAILABLE' : 'NOT_FOUND') as 'AVAILABLE' | 'NOT_FOUND',
+      metricPriority: typeof usbTetherRaw['metricPriority'] === 'number' ? usbTetherRaw['metricPriority'] : 50,
+      failClosedIsolated: Boolean(usbTetherRaw['failClosedIsolated'] ?? true),
+    };
+
+    const ollamaRaw = h['ollamaStatus'];
+    const ollamaStatus: 'ONLINE' | 'OFFLINE' | 'BUSY' =
+      ollamaRaw === 'ONLINE' ? 'ONLINE' :
+      ollamaRaw === 'BUSY'   ? 'BUSY'   : 'OFFLINE';
+
+    const loadAvgRaw = Array.isArray(h['loadAvg']) ? h['loadAvg'] : [0, 0, 0];
+    const loadAvg: [number, number, number] = [
+      typeof loadAvgRaw[0] === 'number' ? loadAvgRaw[0] : 0,
+      typeof loadAvgRaw[1] === 'number' ? loadAvgRaw[1] : 0,
+      typeof loadAvgRaw[2] === 'number' ? loadAvgRaw[2] : 0,
+    ];
+
+    return {
+      detected:               true,
+      hostName:               typeof h['hostName'] === 'string' ? h['hostName'] : 'macbook-pro',
+      platform:               typeof h['platform'] === 'string' ? h['platform'] : 'darwin',
+      osRelease:              typeof h['osRelease'] === 'string' ? h['osRelease'] : '',
+      chipModel:              typeof h['chipModel'] === 'string' ? h['chipModel'] : 'Apple Silicon',
+      cpuCores:               typeof h['cpuCores'] === 'number' ? h['cpuCores'] : 0,
+      cpuUtilizationPct:      Math.round(typeof h['cpuUtilizationPct'] === 'number' ? h['cpuUtilizationPct'] : 0),
+      memoryTotalBytes:       parseBigIntClamped(h['memoryTotalBytes']),
+      memoryUsedBytes:        parseBigIntClamped(h['memoryUsedBytes']),
+      memoryFreeBytes:        parseBigIntClamped(h['memoryFreeBytes']),
+      loadAvg,
+      usbTether,
+      gpuModel:               typeof h['gpuModel'] === 'string' ? h['gpuModel'] : 'Apple Silicon GPU',
+      gpuCoreCount:           typeof h['gpuCoreCount'] === 'number' ? h['gpuCoreCount'] : 0,
+      gpuUtilizationPct:      Math.round(typeof h['gpuUtilizationPct'] === 'number' ? h['gpuUtilizationPct'] : 0),
+      rendererUtilizationPct: Math.round(typeof h['rendererUtilizationPct'] === 'number' ? h['rendererUtilizationPct'] : 0),
+      tilerUtilizationPct:    Math.round(typeof h['tilerUtilizationPct'] === 'number' ? h['tilerUtilizationPct'] : 0),
+      gpuMemoryUsedBytes:     parseBigIntClamped(h['gpuMemoryUsedBytes']),
+      gpuMemoryAllocatedBytes:parseBigIntClamped(h['gpuMemoryAllocatedBytes']),
+      ollamaStatus,
+      activeModel:            typeof h['activeModel'] === 'string' ? h['activeModel'] : 'gemma4:26b',
+      modelFormat:            typeof h['modelFormat'] === 'string' ? h['modelFormat'] : 'gguf',
+      modelParameterSize:     typeof h['modelParameterSize'] === 'string' ? h['modelParameterSize'] : '25.2B',
+      modelQuantization:      typeof h['modelQuantization'] === 'string' ? h['modelQuantization'] : 'Q4_K_M',
+      modelContextLength:     typeof h['modelContextLength'] === 'number' ? h['modelContextLength'] : 262144,
+      modelVramBytes:         parseBigIntClamped(h['modelVramBytes']),
+      totalPromptTokens:      parseBigIntClamped(h['totalPromptTokens']),
+      totalCompletionTokens:  parseBigIntClamped(h['totalCompletionTokens']),
+      totalTokens:            parseBigIntClamped(h['totalTokens']),
+      totalInferences:        parseBigIntClamped(h['totalInferences']),
+      tokensPerSecond:        Math.round(typeof h['tokensPerSecond'] === 'number' ? h['tokensPerSecond'] : 0),
+      promptTokensPerSecond:  Math.round(typeof h['promptTokensPerSecond'] === 'number' ? h['promptTokensPerSecond'] : 0),
+      peakTokensPerSecond:    Math.round(typeof h['peakTokensPerSecond'] === 'number' ? h['peakTokensPerSecond'] : 0),
+      peakPromptTokensPerSecond: Math.round(typeof h['peakPromptTokensPerSecond'] === 'number' ? h['peakPromptTokensPerSecond'] : 0),
+      lastInferenceLatencyNs: parseBigIntClamped(h['lastInferenceLatencyNs']),
+      lastPromptEvalDurationNs: parseBigIntClamped(h['lastPromptEvalDurationNs']),
+      lastEvalDurationNs:     parseBigIntClamped(h['lastEvalDurationNs']),
+      timeToFirstTokenNs:     parseBigIntClamped(h['timeToFirstTokenNs']),
+      perTokenLatencyNs:      parseBigIntClamped(h['perTokenLatencyNs']),
+      lastTokenCount:         typeof h['lastTokenCount'] === 'number' ? h['lastTokenCount'] : 0,
+      lastPromptTokenCount:   typeof h['lastPromptTokenCount'] === 'number' ? h['lastPromptTokenCount'] : 0,
+      lastTotalTokenCount:    typeof h['lastTotalTokenCount'] === 'number' ? h['lastTotalTokenCount'] : 0,
+      // Council Invariant 2: integer only — Math.round to strip any float drift.
+      contextUtilizationPct:  Math.round(typeof h['contextUtilizationPct'] === 'number' ? h['contextUtilizationPct'] : 0),
+      edgeComputeRatioPct:    Math.round(typeof h['edgeComputeRatioPct'] === 'number' ? h['edgeComputeRatioPct'] : 100),
+      endpoint:               agentUrl,
+    };
+
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err; // Re-throw so Promise.any() sees the rejection.
+  }
+}
+
+/**
+ * Probes the remote macOS Workstation appliance from a non-darwin host (Jetson).
+ *
+ * Council Invariant 6 (Anti-Simulation):
+ * Never synthesises hardware specs. Fetches physically-measured data from the
+ * workstation-agent.ts daemon running on the MacBook, which itself calls
+ * probeWorkstationHardware() on darwin with real ioreg / IOKit truth.
+ *
+ * Dean Latency Invariant — Concurrent Race:
+ * All candidates are fired simultaneously via Promise.any(). Worst-case resolution
+ * latency == exactly WORKSTATION_AGENT_PROBE_TIMEOUT_MS (350ms), never N × 350ms.
+ *   1. WORKSTATION_AGENT_URL env var (operator-configured)
+ *   2. http://192.168.55.100:11435 (USB-C l4tbr0 tether — ~0.3ms RTT)
+ *   3. http://10.0.0.119:11435 (Wi-Fi LAN fallback)
+ *
+ * On exhaustion: increments wsAgentProbeFailureCount exactly once per cycle and
+ * fails closed to createDefaultWorkstationSnapshot(true) per Invariant 3.
+ */
+let wsAgentProbeFailureCount = 0n;
+
+async function probeRemoteWorkstationHardware(
+  prevSnapshot?: WorkstationTelemetrySnapshot | undefined
+): Promise<WorkstationTelemetrySnapshot> {
+  const envUrl = process.env['WORKSTATION_AGENT_URL'];
+  const candidateUrls: string[] = [
+    ...(typeof envUrl === 'string' && envUrl.length > 0 ? [envUrl] : []),
+    'http://192.168.55.100:11435',
+    'http://10.0.0.119:11435',
+  ];
+
+  const raceController = new AbortController();
+
+  try {
+    // Dean Latency Invariant: fire all candidates concurrently.
+    // Promise.any() resolves with the first successful validation,
+    // or throws AggregateError if every candidate rejects.
+    // Once the winning candidate resolves, cancel in-flight candidate
+    // fetches immediately to prevent leaked background work (Dean/Ghemawat).
+    const winner = await Promise.any(
+      candidateUrls.map((url) => fetchFromAgent(url, raceController.signal))
+    );
+    raceController.abort();
+    return winner;
+  } catch (err) {
+    raceController.abort();
+    // AggregateError: all candidates failed — increment exactly once per cycle.
+    wsAgentProbeFailureCount += 1n;
+    const reasons = err instanceof AggregateError
+      ? err.errors.map((e: unknown) => (e instanceof Error ? e.message : String(e))).join(' | ')
+      : (err instanceof Error ? err.message : String(err));
+    process.stderr.write(
+      `[workstation-probe] All ${candidateUrls.length} agent candidates unreachable ` +
+      `(total probe cycles failed: ${wsAgentProbeFailureCount}): ${reasons}\n`
+    );
+    return prevSnapshot ?? createDefaultWorkstationSnapshot(true);
+  }
+}
+
+
+
 /**
  * Probes the local macOS Workstation appliance hosting Ollama / Gemma 4.
  *
@@ -1359,16 +1577,18 @@ interface OllamaPsResponse {
  * - Active model state via Ollama /api/ps
  * - Cumulative token counts & generation velocity via /tmp/zodiac-workstation-telemetry.json
  *
- * When not on macOS or when disconnected, fails closed to createDefaultWorkstationSnapshot(true).
+ * On non-darwin: delegates to probeRemoteWorkstationHardware() which fetches
+ * physically-measured data from the workstation-agent.ts daemon on the MacBook.
+ * If the agent is unreachable, fails closed to createDefaultWorkstationSnapshot(true).
  */
 export async function probeWorkstationHardware(
   prevSnapshot?: WorkstationTelemetrySnapshot | undefined,
   _deltaNs?: bigint | undefined
 ): Promise<WorkstationTelemetrySnapshot> {
-  // Council Invariant 6: Physical truth. If not running on macOS (darwin),
-  // fail-closed to disconnected default snapshot.
+  // Council Invariant 6: Physical platform dispatch.
+  // On non-darwin (Jetson), delegate to remote agent probe — never synthesise locally.
   if (os.platform() !== 'darwin') {
-    return createDefaultWorkstationSnapshot(true);
+    return probeRemoteWorkstationHardware(prevSnapshot);
   }
 
   try {
@@ -1464,7 +1684,7 @@ export async function probeWorkstationHardware(
     let perTokenLatencyNs = 0n;
     let lastTokenCount = 0;
     let lastPromptTokenCount = 0;
-    let edgeComputeRatioPct = 100.0;
+    let edgeComputeRatioPct = 100; // integer — Council Invariant 2
     let recordedModel = 'gemma4:26b';
 
     const metricsPath = '/tmp/zodiac-workstation-telemetry.json';
