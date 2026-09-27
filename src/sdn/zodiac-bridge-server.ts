@@ -46,6 +46,7 @@ import {
   downsamplePoints,
   downsampleJetsonPoints,
   downsampleCoralPoints,
+  downsampleWorkstationPoints,
   RANGE_CONFIGS,
   RANGE_DURATION_MS,
   isValidRange,
@@ -899,10 +900,25 @@ export class ZodiacBridgeServer {
       if (range && isValidRange(range)) {
         const config = RANGE_CONFIGS[range];
 
+        const durationMs = RANGE_DURATION_MS[range];
+        const cutoffMs = Date.now() - durationMs;
+        // Sanjay Ghemawat - Algorithmic Efficiency Invariant:
+        // O(log N) bisection search + slice instead of O(N) linear filter on synchronous HTTP path
+        const windowedWorkstation = this.workstationTimeSeries.slice(findCutoffIndex(this.workstationTimeSeries, cutoffMs));
+        const workstationPoints = downsampleWorkstationPoints(windowedWorkstation, config.maxPoints);
+
         // 1. Local disk JSONL history (preferred: persistent, no network, 30-day retention)
         try {
           const local = await queryLocalHistory(range);
-          if (local.timeSeries.length > 0 || local.jetsonTimeSeries.length > 0 || local.coralTimeSeries.length > 0) {
+          if (
+            local.timeSeries.length > 0 ||
+            local.jetsonTimeSeries.length > 0 ||
+            local.coralTimeSeries.length > 0 ||
+            (local.workstationTimeSeries && local.workstationTimeSeries.length > 0)
+          ) {
+            const wsSeries = (local.workstationTimeSeries && local.workstationTimeSeries.length > 0)
+              ? local.workstationTimeSeries
+              : workstationPoints;
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
             res.end(this.serializeSnapshot({
@@ -915,7 +931,7 @@ export class ZodiacBridgeServer {
                 coral: { ...this.cachedSnapshot.coral, timeSeries: local.coralTimeSeries },
               } : {}),
               ...(this.cachedSnapshot.workstation ? {
-                workstation: { ...this.cachedSnapshot.workstation, timeSeries: this.workstationTimeSeries },
+                workstation: { ...this.cachedSnapshot.workstation, timeSeries: wsSeries },
               } : {}),
             }));
             return;
@@ -950,7 +966,7 @@ export class ZodiacBridgeServer {
                 ...(this.cachedSnapshot.workstation ? {
                   workstation: {
                     ...this.cachedSnapshot.workstation,
-                    timeSeries: this.workstationTimeSeries,
+                    timeSeries: workstationPoints,
                   },
                 } : {}),
               }));
@@ -961,12 +977,8 @@ export class ZodiacBridgeServer {
           }
         }
 
-        // 2. In-Memory Window Downsampling (Dean & Ghemawat Invariants)
+        // 3. In-Memory Window Downsampling (Dean & Ghemawat Invariants)
         // Strictly filter by requested range duration so 1h doesn't downsample 2.5+ hours of history
-        const durationMs = RANGE_DURATION_MS[range];
-        const cutoffMs = Date.now() - durationMs;
-        // Sanjay Ghemawat - Algorithmic Efficiency Invariant:
-        // O(log N) bisection search + slice instead of O(N) linear filter on synchronous HTTP path
         const windowedPoints = this.timeSeries.slice(findCutoffIndex(this.timeSeries, cutoffMs));
         const windowedJetson = this.jetsonTimeSeries.slice(findCutoffIndex(this.jetsonTimeSeries, cutoffMs));
         const windowedCoral = this.coralTimeSeries.slice(findCutoffIndex(this.coralTimeSeries, cutoffMs));
@@ -995,7 +1007,7 @@ export class ZodiacBridgeServer {
           ...(this.cachedSnapshot.workstation ? {
             workstation: {
               ...this.cachedSnapshot.workstation,
-              timeSeries: this.workstationTimeSeries,
+              timeSeries: workstationPoints,
             },
           } : {}),
         }));
@@ -1688,9 +1700,10 @@ export class ZodiacBridgeServer {
     this.lastLocalHistoryFlushMs = nowMs;
 
     // findCutoffIndex returns the first index with timestampMs >= cutoff+1 (strictly newer)
-    const zi = findCutoffIndex(this.timeSeries,       cutoff + 1);
-    const ji = findCutoffIndex(this.jetsonTimeSeries, cutoff + 1);
-    const ci = findCutoffIndex(this.coralTimeSeries,  cutoff + 1);
+    const zi = findCutoffIndex(this.timeSeries,            cutoff + 1);
+    const ji = findCutoffIndex(this.jetsonTimeSeries,      cutoff + 1);
+    const ci = findCutoffIndex(this.coralTimeSeries,       cutoff + 1);
+    const wi = findCutoffIndex(this.workstationTimeSeries, cutoff + 1);
 
     // Fire-and-forget async write — never blocks the SDN event loop (Jeff Dean latency invariant).
     // Explicit .catch() ensures unhandled rejections don't propagate to the process unhandledRejection handler.
@@ -1698,6 +1711,7 @@ export class ZodiacBridgeServer {
       this.timeSeries.slice(zi),
       this.jetsonTimeSeries.slice(ji),
       this.coralTimeSeries.slice(ci),
+      this.workstationTimeSeries.slice(wi),
     ).catch((err: unknown) => {
       console.warn('[!] [Bridge] Local history append failed:', err instanceof Error ? err.message : String(err));
     });

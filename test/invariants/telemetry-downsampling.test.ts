@@ -13,6 +13,7 @@ import {
   downsamplePoints,
   downsampleJetsonPoints,
   downsampleCoralPoints,
+  downsampleWorkstationPoints,
   RANGE_CONFIGS,
   RANGE_DURATION_MS,
   findCutoffIndex,
@@ -153,6 +154,34 @@ describe('Neon DB Historical Downsampling Engine', () => {
     expect(typeof downsampled[0]!.latencyP50Us).toBe('bigint');
     expect(typeof downsampled[0]!.latencyP99Us).toBe('bigint');
     expect(typeof downsampled[0]!.usbThroughputKbps).toBe('bigint');
+  });
+
+  it('correctly downsamples Workstation M5 time-series with BigInt integer precision', () => {
+    const rawWorkstation = Array.from({ length: 500 }, (_, i) => ({
+      timestampMs: 1789300000000 + i * 2500,
+      cpuUtilizationPct: 5 + (i % 20),
+      gpuUtilizationPct: 15 + (i % 30),
+      gpuMemoryUsedBytes: BigInt(2_000_000_000 + i * 1_000_000),
+      ramUsedBytes: BigInt(50_000_000_000 + i * 10_000_000),
+      tokensPerSecond: 70 + (i % 10),
+      promptTokensPerSecond: 800 + (i % 50),
+      totalPromptTokens: BigInt(100_000 + i * 500),
+      totalCompletionTokens: BigInt(20_000 + i * 100),
+      totalTokens: BigInt(120_000 + i * 600),
+    }));
+
+    const downsampled = downsampleWorkstationPoints(rawWorkstation, 120);
+    expect(downsampled.length).toBeLessThanOrEqual(120);
+    expect(downsampled.length).toBeGreaterThan(0);
+    expect(typeof downsampled[0]!.gpuMemoryUsedBytes).toBe('bigint');
+    expect(typeof downsampled[0]!.ramUsedBytes).toBe('bigint');
+    expect(typeof downsampled[0]!.totalPromptTokens).toBe('bigint');
+    expect(typeof downsampled[0]!.totalCompletionTokens).toBe('bigint');
+    expect(typeof downsampled[0]!.totalTokens).toBe('bigint');
+    expect(Number.isInteger(downsampled[0]!.cpuUtilizationPct)).toBe(true);
+    expect(Number.isInteger(downsampled[0]!.gpuUtilizationPct)).toBe(true);
+    expect(Number.isInteger(downsampled[0]!.tokensPerSecond)).toBe(true);
+    expect(Number.isInteger(downsampled[0]!.promptTokensPerSecond)).toBe(true);
   });
 
   it('fails safely and returns empty array or false when DATABASE_URL is not configured', async () => {

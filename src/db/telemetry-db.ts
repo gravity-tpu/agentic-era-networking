@@ -17,6 +17,7 @@ import type {
   ZodiacTimeSeriesPoint,
   JetsonTimeSeriesPoint,
   CoralTimeSeriesPoint,
+  WorkstationTimeSeriesPoint,
 } from '../sdn/zodiac-telemetry.js';
 
 // Required for Node.js environments connecting to Neon WebSockets
@@ -499,6 +500,66 @@ export function downsampleCoralPoints(
       coral2Ips: sumCoral2Ips / countBig,
       coral1LatencyP50Us: sumCoral1LatP50 / countBig,
       coral2LatencyP50Us: sumCoral2LatP50 / countBig,
+    });
+  }
+
+  return downsampled;
+}
+
+/**
+ * Pure deterministic bucketing function to downsample an array of raw Workstation time-series points
+ * into a bounded window of averaged points (Dean Latency & Ghemawat Memory Invariants).
+ */
+export function downsampleWorkstationPoints(
+  rawPoints: WorkstationTimeSeriesPoint[],
+  maxPoints: number = 360
+): WorkstationTimeSeriesPoint[] {
+  if (rawPoints.length <= maxPoints) {
+    return rawPoints;
+  }
+
+  const bucketSize = Math.ceil(rawPoints.length / maxPoints);
+  const downsampled: WorkstationTimeSeriesPoint[] = [];
+
+  for (let i = 0; i < rawPoints.length; i += bucketSize) {
+    const chunk = rawPoints.slice(i, i + bucketSize);
+    if (chunk.length === 0) continue;
+
+    const midPoint = chunk[Math.floor(chunk.length / 2)];
+    const lastPoint = chunk[chunk.length - 1];
+    if (!midPoint || !lastPoint) continue;
+
+    let sumCpu = 0;
+    let sumGpu = 0;
+    let sumGpuMem = 0n;
+    let sumRam = 0n;
+    let sumTok = 0;
+    let sumPromptTok = 0;
+
+    for (const pt of chunk) {
+      sumCpu += pt.cpuUtilizationPct;
+      sumGpu += pt.gpuUtilizationPct;
+      sumGpuMem += BigInt(pt.gpuMemoryUsedBytes || 0);
+      sumRam += BigInt(pt.ramUsedBytes || 0);
+      sumTok += pt.tokensPerSecond;
+      sumPromptTok += pt.promptTokensPerSecond;
+    }
+
+    const count = chunk.length;
+    const countBig = BigInt(count);
+    const isLastChunk = i + bucketSize >= rawPoints.length;
+
+    downsampled.push({
+      timestampMs: isLastChunk ? lastPoint.timestampMs : midPoint.timestampMs,
+      cpuUtilizationPct: Math.round(sumCpu / count),
+      gpuUtilizationPct: Math.round(sumGpu / count),
+      gpuMemoryUsedBytes: sumGpuMem / countBig,
+      ramUsedBytes: sumRam / countBig,
+      tokensPerSecond: Math.round(sumTok / count),
+      promptTokensPerSecond: Math.round(sumPromptTok / count),
+      totalPromptTokens: BigInt(lastPoint.totalPromptTokens || 0),
+      totalCompletionTokens: BigInt(lastPoint.totalCompletionTokens || 0),
+      totalTokens: BigInt(lastPoint.totalTokens || 0),
     });
   }
 

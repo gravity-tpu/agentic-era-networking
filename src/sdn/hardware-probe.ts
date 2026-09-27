@@ -1393,8 +1393,13 @@ async function fetchFromAgent(
     }
 
     // Keep abort active through body read — a stalling body is as dangerous as a stalling header.
-    const raw = (await res.json()) as Record<string, unknown>;
+    const text = await res.text();
     clearTimeout(timeout);
+    // Sanjay Ghemawat - Invariant Rigor: Enforce strict bounded allocation before JSON parsing.
+    if (text.length > 65536) {
+      throw new Error(`${endpoint} response exceeded 64KB safety limit (${text.length} bytes)`);
+    }
+    const raw = JSON.parse(text) as Record<string, unknown>;
 
     // Council Invariant 6: reject responses without live physical provenance.
     if (raw['source'] !== 'live_hardware') {
@@ -1518,9 +1523,9 @@ async function fetchFromAgent(
  * Dean Latency Invariant — Concurrent Race:
  * All candidates are fired simultaneously via Promise.any(). Worst-case resolution
  * latency == exactly WORKSTATION_AGENT_PROBE_TIMEOUT_MS (350ms), never N × 350ms.
- *   1. WORKSTATION_AGENT_URL env var (operator-configured)
- *   2. http://192.168.55.100:11435 (USB-C l4tbr0 tether — ~0.3ms RTT)
- *   3. http://10.0.0.119:11435 (Wi-Fi LAN fallback)
+ *   1. WORKSTATION_AGENT_URL env var (operator-configured primary)
+ *   2. http://192.168.55.100:11435 (deterministic USB-C l4tbr0 tether — ~0.3ms RTT)
+ *   3. WORKSTATION_AGENT_LAN_URL / WORKSTATION_LAN_URL env var (optional dynamic LAN fallback)
  *
  * On exhaustion: increments wsAgentProbeFailureCount exactly once per cycle and
  * fails closed to createDefaultWorkstationSnapshot(true) per Invariant 3.
@@ -1531,10 +1536,11 @@ async function probeRemoteWorkstationHardware(
   prevSnapshot?: WorkstationTelemetrySnapshot | undefined
 ): Promise<WorkstationTelemetrySnapshot> {
   const envUrl = process.env['WORKSTATION_AGENT_URL'];
+  const lanUrl = process.env['WORKSTATION_AGENT_LAN_URL'] ?? process.env['WORKSTATION_LAN_URL'];
   const candidateUrls: string[] = [
     ...(typeof envUrl === 'string' && envUrl.length > 0 ? [envUrl] : []),
     'http://192.168.55.100:11435',
-    'http://10.0.0.119:11435',
+    ...(typeof lanUrl === 'string' && lanUrl.length > 0 ? [lanUrl] : []),
   ];
 
   const raceController = new AbortController();

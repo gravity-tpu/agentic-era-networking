@@ -33,7 +33,9 @@ if (os.platform() !== 'darwin') {
   process.exit(1);
 }
 
-const PORT = parseInt(process.env['WORKSTATION_AGENT_PORT'] ?? '11435', 10);
+const rawPort = parseInt(process.env['WORKSTATION_AGENT_PORT'] ?? '11435', 10);
+// Sanjay Ghemawat - Bounds Rigor: Validate numeric parse and TCP port boundary [1, 65535].
+const PORT = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 11435;
 const PROBE_INTERVAL_MS = 3_000;
 
 // ── Probe failure counter (Council Invariant 2: BigInt integer accounting) ───
@@ -91,7 +93,8 @@ scheduleNextRefresh();
 const server = http.createServer((req, res) => {
   try {
     const origin = req.headers['origin'] ?? '';
-    const allowedOriginRe = /^https?:\/\/(192\.168\.55\.\d{1,3}|10\.0\.0\.\d{1,3})(:\d+)?$/;
+    // Demis Hassabis - Fail-Closed Isolation: Match exact valid IP octets (0-255) for local tether and LAN subnets.
+    const allowedOriginRe = /^https?:\/\/(?:192\.168\.55\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)|10\.0\.0\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d))(:\d+)?$/;
     if (typeof origin === 'string' && origin && allowedOriginRe.test(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
     }

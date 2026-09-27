@@ -23,11 +23,13 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import readline from 'node:readline';
 import type {
   ZodiacTimeSeriesPoint,
   JetsonTimeSeriesPoint,
   CoralTimeSeriesPoint,
   ZodiacPortSeriesPoint,
+  WorkstationTimeSeriesPoint,
 } from '../sdn/zodiac-telemetry.js';
 import {
   type HistoricalRange,
@@ -36,6 +38,7 @@ import {
   downsamplePoints,
   downsampleJetsonPoints,
   downsampleCoralPoints,
+  downsampleWorkstationPoints,
 } from './telemetry-db.js';
 
 export const LOCAL_HISTORY_RETENTION_DAYS = 30;
@@ -86,9 +89,10 @@ function utcDateSuffix(ms: number): string {
   return `${y}-${mo}-${da}`;
 }
 
-const zodiacFile = (suffix: string) => path.join(HISTORY_DIR, `zodiac-${suffix}.jsonl`);
-const jetsonFile = (suffix: string) => path.join(HISTORY_DIR, `jetson-${suffix}.jsonl`);
-const coralFile  = (suffix: string) => path.join(HISTORY_DIR, `coral-${suffix}.jsonl`);
+const zodiacFile      = (suffix: string) => path.join(HISTORY_DIR, `zodiac-${suffix}.jsonl`);
+const jetsonFile      = (suffix: string) => path.join(HISTORY_DIR, `jetson-${suffix}.jsonl`);
+const coralFile       = (suffix: string) => path.join(HISTORY_DIR, `coral-${suffix}.jsonl`);
+const workstationFile = (suffix: string) => path.join(HISTORY_DIR, `workstation-${suffix}.jsonl`);
 
 const bigintReplacer = (_: string, v: unknown) => typeof v === 'bigint' ? v.toString() : v;
 
@@ -106,8 +110,14 @@ export async function appendLocalHistoryPoints(
   newZodiacPoints: ZodiacTimeSeriesPoint[],
   newJetsonPoints: JetsonTimeSeriesPoint[],
   newCoralPoints: CoralTimeSeriesPoint[],
+  newWorkstationPoints: WorkstationTimeSeriesPoint[] = [],
 ): Promise<void> {
-  if (newZodiacPoints.length === 0 && newJetsonPoints.length === 0 && newCoralPoints.length === 0) {
+  if (
+    newZodiacPoints.length === 0 &&
+    newJetsonPoints.length === 0 &&
+    newCoralPoints.length === 0 &&
+    newWorkstationPoints.length === 0
+  ) {
     return;
   }
 
@@ -115,7 +125,7 @@ export async function appendLocalHistoryPoints(
   const writes: Promise<void>[] = [];
 
   if (newZodiacPoints.length > 0) {
-    const summary = downsamplePoints([...newZodiacPoints], 1);
+    const summary = downsamplePoints(newZodiacPoints, 1);
     if (summary.length > 0) {
       writes.push(
         fsp.appendFile(zodiacFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
@@ -126,7 +136,7 @@ export async function appendLocalHistoryPoints(
   }
 
   if (newJetsonPoints.length > 0) {
-    const summary = downsampleJetsonPoints([...newJetsonPoints], 1);
+    const summary = downsampleJetsonPoints(newJetsonPoints, 1);
     if (summary.length > 0) {
       writes.push(
         fsp.appendFile(jetsonFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
@@ -137,11 +147,22 @@ export async function appendLocalHistoryPoints(
   }
 
   if (newCoralPoints.length > 0) {
-    const summary = downsampleCoralPoints([...newCoralPoints], 1);
+    const summary = downsampleCoralPoints(newCoralPoints, 1);
     if (summary.length > 0) {
       writes.push(
         fsp.appendFile(coralFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
           console.warn('[!] [Local Telemetry DB] Failed to append coral history:', err instanceof Error ? err.message : String(err));
+        })
+      );
+    }
+  }
+
+  if (newWorkstationPoints.length > 0) {
+    const summary = downsampleWorkstationPoints(newWorkstationPoints, 1);
+    if (summary.length > 0) {
+      writes.push(
+        fsp.appendFile(workstationFile(suffix), JSON.stringify(summary[0], bigintReplacer) + '\n').catch((err: unknown) => {
+          console.warn('[!] [Local Telemetry DB] Failed to append workstation history:', err instanceof Error ? err.message : String(err));
         })
       );
     }
@@ -229,76 +250,74 @@ function parseCoralLine(p: Record<string, unknown>): CoralTimeSeriesPoint {
   };
 }
 
-// ─── Async read path ─────────────────────────────────────────────────────────
-
-async function readZodiacFile(filePath: string, cutoffMs: number): Promise<ZodiacTimeSeriesPoint[]> {
-  let raw: string;
-  try {
-    raw = await fsp.readFile(filePath, 'utf-8');
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // normal on first run
-    console.warn(`[!] [Local Telemetry DB] I/O error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
-    return [];
-  }
-  const result: ZodiacTimeSeriesPoint[] = [];
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue;
+function parseWorkstationLine(p: Record<string, unknown>): WorkstationTimeSeriesPoint {
+  // Council Invariant 2 (Deterministic Integer Arithmetic): Coerce numeric values strictly
+  // to integer via Math.trunc / Math.round to banish floating-point leakage across the protocol boundary.
+  const toBigIntClamped = (val: unknown): bigint => {
+    if (typeof val === 'bigint') return val;
+    const str = String(val ?? '0').split('.')[0] || '0';
     try {
-      const p = JSON.parse(line) as Record<string, unknown>;
-      if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseZodiacLine(p));
-    } catch (parseErr: unknown) {
-      corruptLinesTotal++;
-      console.warn(`[!] [Local Telemetry DB] Skipping corrupt zodiac line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
+      return BigInt(str);
+    } catch {
+      return 0n;
     }
+  };
+
+  return {
+    timestampMs:           Math.trunc(Number(p['timestampMs'] ?? 0)),
+    cpuUtilizationPct:     Math.round(Number(p['cpuUtilizationPct'] ?? 0)),
+    gpuUtilizationPct:     Math.round(Number(p['gpuUtilizationPct'] ?? 0)),
+    gpuMemoryUsedBytes:    toBigIntClamped(p['gpuMemoryUsedBytes']),
+    ramUsedBytes:          toBigIntClamped(p['ramUsedBytes']),
+    tokensPerSecond:       Math.round(Number(p['tokensPerSecond'] ?? 0)),
+    promptTokensPerSecond: Math.round(Number(p['promptTokensPerSecond'] ?? 0)),
+    totalPromptTokens:     toBigIntClamped(p['totalPromptTokens']),
+    totalCompletionTokens: toBigIntClamped(p['totalCompletionTokens']),
+    totalTokens:           toBigIntClamped(p['totalTokens']),
+  };
+}
+
+// ─── Async read path (Sanjay Ghemawat: O(1) Memory Streaming) ────────────────
+
+/**
+ * Streams a JSONL history file line-by-line using readline over a ReadStream.
+ * Bounded memory overhead prevents V8 garbage collection pauses from jittering
+ * the SDN OpenFlow event loop (Council Invariant 1 & 2).
+ */
+async function readJsonlFileStream<T>(
+  filePath: string,
+  cutoffMs: number,
+  parser: (raw: Record<string, unknown>) => T,
+  deviceLabel: string,
+): Promise<T[]> {
+  if (!fs.existsSync(filePath)) return [];
+  const result: T[] = [];
+  const fileStream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        const p = JSON.parse(line) as Record<string, unknown>;
+        if (Number(p['timestampMs'] ?? 0) >= cutoffMs) {
+          result.push(parser(p));
+        }
+      } catch (parseErr: unknown) {
+        corruptLinesTotal++;
+        console.warn(`[!] [Local Telemetry DB] Skipping corrupt ${deviceLabel} line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
+      }
+    }
+  } catch (err: unknown) {
+    console.warn(`[!] [Local Telemetry DB] Stream error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
   }
   return result;
 }
 
-async function readJetsonFile(filePath: string, cutoffMs: number): Promise<JetsonTimeSeriesPoint[]> {
-  let raw: string;
-  try {
-    raw = await fsp.readFile(filePath, 'utf-8');
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    console.warn(`[!] [Local Telemetry DB] I/O error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
-    return [];
-  }
-  const result: JetsonTimeSeriesPoint[] = [];
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      const p = JSON.parse(line) as Record<string, unknown>;
-      if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseJetsonLine(p));
-    } catch (parseErr: unknown) {
-      corruptLinesTotal++;
-      console.warn(`[!] [Local Telemetry DB] Skipping corrupt jetson line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
-    }
-  }
-  return result;
-}
-
-async function readCoralFile(filePath: string, cutoffMs: number): Promise<CoralTimeSeriesPoint[]> {
-  let raw: string;
-  try {
-    raw = await fsp.readFile(filePath, 'utf-8');
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    console.warn(`[!] [Local Telemetry DB] I/O error reading ${path.basename(filePath)}:`, err instanceof Error ? err.message : String(err));
-    return [];
-  }
-  const result: CoralTimeSeriesPoint[] = [];
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      const p = JSON.parse(line) as Record<string, unknown>;
-      if (Number(p['timestampMs'] ?? 0) >= cutoffMs) result.push(parseCoralLine(p));
-    } catch (parseErr: unknown) {
-      corruptLinesTotal++;
-      console.warn(`[!] [Local Telemetry DB] Skipping corrupt coral line in ${path.basename(filePath)} (total skipped: ${corruptLinesTotal}):`, parseErr instanceof Error ? parseErr.message : String(parseErr));
-    }
-  }
-  return result;
-}
+const readZodiacFile      = (filePath: string, cutoffMs: number) => readJsonlFileStream(filePath, cutoffMs, parseZodiacLine, 'zodiac');
+const readJetsonFile      = (filePath: string, cutoffMs: number) => readJsonlFileStream(filePath, cutoffMs, parseJetsonLine, 'jetson');
+const readCoralFile       = (filePath: string, cutoffMs: number) => readJsonlFileStream(filePath, cutoffMs, parseCoralLine, 'coral');
+const readWorkstationFile = (filePath: string, cutoffMs: number) => readJsonlFileStream(filePath, cutoffMs, parseWorkstationLine, 'workstation');
 
 // ─── Public query API ────────────────────────────────────────────────────────
 
@@ -306,14 +325,15 @@ export interface LocalHistoricalResult {
   timeSeries: ZodiacTimeSeriesPoint[];
   jetsonTimeSeries: JetsonTimeSeriesPoint[];
   coralTimeSeries: CoralTimeSeriesPoint[];
+  workstationTimeSeries?: WorkstationTimeSeriesPoint[];
 }
 
 /**
  * Read all local JSONL history files overlapping the requested time range and
  * downsample to the range's configured maxPoints.
  *
- * All file reads are async and fanned out in parallel across the three device types
- * to keep total query latency bounded (worst case 30d: ~13 MB, three-way parallel read).
+ * All file reads are async and fanned out in parallel across all device types
+ * to keep total query latency bounded (worst case 30d: ~13 MB, four-way parallel read).
  * Never blocks the SDN OpenFlow event loop (Jeff Dean latency invariant).
  */
 export async function queryLocalHistory(range: HistoricalRange): Promise<LocalHistoricalResult> {
@@ -330,26 +350,30 @@ export async function queryLocalHistory(range: HistoricalRange): Promise<LocalHi
     suffixes.push(utcDateSuffix(nowMs - i * DAY_MS));
   }
 
-  // Parallel reads across all three device types simultaneously
-  const [zodiacArrays, jetsonArrays, coralArrays] = await Promise.all([
+  // Parallel reads across all four device types simultaneously
+  const [zodiacArrays, jetsonArrays, coralArrays, workstationArrays] = await Promise.all([
     Promise.all(suffixes.map(s => readZodiacFile(zodiacFile(s), cutoffMs))),
     Promise.all(suffixes.map(s => readJetsonFile(jetsonFile(s), cutoffMs))),
     Promise.all(suffixes.map(s => readCoralFile(coralFile(s), cutoffMs))),
+    Promise.all(suffixes.map(s => readWorkstationFile(workstationFile(s), cutoffMs))),
   ]);
 
-  const zodiacPoints = zodiacArrays.flat();
-  const jetsonPoints = jetsonArrays.flat();
-  const coralPoints  = coralArrays.flat();
+  const zodiacPoints      = zodiacArrays.flat();
+  const jetsonPoints      = jetsonArrays.flat();
+  const coralPoints       = coralArrays.flat();
+  const workstationPoints = workstationArrays.flat();
 
   // Files are scanned newest-first (i=0 is today); sort ascending before downsampling
   zodiacPoints.sort((a, b) => a.timestampMs - b.timestampMs);
   jetsonPoints.sort((a, b) => a.timestampMs - b.timestampMs);
   coralPoints.sort((a, b)  => a.timestampMs - b.timestampMs);
+  workstationPoints.sort((a, b) => a.timestampMs - b.timestampMs);
 
   return {
-    timeSeries:       downsamplePoints(zodiacPoints, config.maxPoints),
-    jetsonTimeSeries: downsampleJetsonPoints(jetsonPoints, config.maxPoints),
-    coralTimeSeries:  downsampleCoralPoints(coralPoints, config.maxPoints),
+    timeSeries:            downsamplePoints(zodiacPoints, config.maxPoints),
+    jetsonTimeSeries:      downsampleJetsonPoints(jetsonPoints, config.maxPoints),
+    coralTimeSeries:       downsampleCoralPoints(coralPoints, config.maxPoints),
+    workstationTimeSeries: downsampleWorkstationPoints(workstationPoints, config.maxPoints),
   };
 }
 
