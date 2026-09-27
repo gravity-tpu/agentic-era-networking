@@ -10,6 +10,7 @@
  */
 
 import fs from 'node:fs';
+import { isIPv4 } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -605,13 +606,20 @@ export interface CoralDaemonTelemetryData {
  * values > 2^53. Truncate any decimal suffix and clamp to [0, ∞).
  */
 function deriveAgentSubnet(agentUrl: string): string {
+  let hostname: string;
   try {
-    const hostname = new URL(agentUrl).hostname;
-    const parts = hostname.split('.');
-    return parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : '';
-  } catch {
+    hostname = new URL(agentUrl).hostname;
+  } catch (err) {
+    process.stderr.write(
+      `[workstation-probe] deriveAgentSubnet: malformed agentUrl ${JSON.stringify(agentUrl)}: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`
+    );
     return '';
   }
+  if (!isIPv4(hostname)) return '';
+  const parts = hostname.split('.');
+  return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
 }
 
 function parseBigIntClamped(val: unknown): bigint {
