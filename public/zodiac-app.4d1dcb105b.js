@@ -1657,18 +1657,17 @@
         // (whichever candidate URL won Promise.any() in probeRemoteWorkstationHardware).
         // This avoids client-side inference flap: the control plane already knows the truth.
         let agentHost = '';
-        let agentSubnet = '';
         try {
           if (ws.endpoint) {
-            agentHost = new URL(ws.endpoint).host;
-            const ip = agentHost.split(':')[0];
-            const parts = ip.split('.');
-            agentSubnet = parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : '';
+            agentHost = new URL(ws.endpoint).hostname;
           }
         } catch (urlErr) {
           // Malformed ws.endpoint from control plane — signals a contract violation, not a UI edge case.
           console.error('[zodiac] ws.endpoint URL parse failed — control plane state may be corrupt:', urlErr, ws.endpoint);
         }
+        // agentSubnet is computed by the control plane (hardware-probe.ts) and delivered in the snapshot.
+        // The UI must not infer network topology — it reads flat authoritative data from the backend.
+        const agentSubnet = typeof ws.agentSubnet === 'string' ? ws.agentSubnet : '';
 
         // isTetherConnected is the backend's authoritative interface-type flag (set by hardware-probe.ts).
         // No client-side subnet heuristics needed: if tether is up, it's USB; otherwise any resolved

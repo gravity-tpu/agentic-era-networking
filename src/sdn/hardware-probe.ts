@@ -604,6 +604,16 @@ export interface CoralDaemonTelemetryData {
  * IEEE 754 double before becoming BigInt — `Number(x)` can silently truncate
  * values > 2^53. Truncate any decimal suffix and clamp to [0, ∞).
  */
+function deriveAgentSubnet(agentUrl: string): string {
+  try {
+    const hostname = new URL(agentUrl).hostname;
+    const parts = hostname.split('.');
+    return parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : '';
+  } catch {
+    return '';
+  }
+}
+
 function parseBigIntClamped(val: unknown): bigint {
   try {
     // Truncate decimals (e.g. "123.0" → "123"), then parse directly to BigInt
@@ -1537,6 +1547,7 @@ async function fetchFromAgent(
       contextUtilizationPct:  Math.round(typeof h['contextUtilizationPct'] === 'number' ? h['contextUtilizationPct'] : 0),
       edgeComputeRatioPct:    Math.round(typeof h['edgeComputeRatioPct'] === 'number' ? h['edgeComputeRatioPct'] : 100),
       endpoint:               agentUrl,
+      agentSubnet:            deriveAgentSubnet(agentUrl),
     };
 
   } catch (err) {
@@ -1826,6 +1837,7 @@ export async function probeWorkstationHardware(
       contextUtilizationPct,
       edgeComputeRatioPct,
       endpoint: 'http://localhost:11434',
+      agentSubnet: '',
     };
   } catch (err) {
     process.stderr.write(

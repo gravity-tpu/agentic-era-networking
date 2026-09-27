@@ -314,6 +314,8 @@ export interface WorkstationTelemetrySnapshot {
   readonly contextUtilizationPct: number;
   readonly edgeComputeRatioPct: number;
   readonly endpoint: string;
+  /** IPv4 /24 CIDR of the resolved agent endpoint, computed by the control plane. Empty string if not determinable. */
+  readonly agentSubnet: string;
   readonly timeSeries?: readonly WorkstationTimeSeriesPoint[];
 }
 
@@ -806,6 +808,7 @@ export function createDefaultWorkstationSnapshot(isDisconnected: boolean = true)
     contextUtilizationPct: 0,
     edgeComputeRatioPct: 100.0,
     endpoint: 'http://localhost:11434',
+    agentSubnet: '',
     usbTether: {
       connected: !isDisconnected,
       deviceName: isDisconnected ? 'None' : 'NVIDIA Linux for Tegra',
