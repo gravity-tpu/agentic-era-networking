@@ -1757,9 +1757,10 @@ export class ZodiacBridgeServer {
       // Coordinated bounds provide a 12.5-17m continuous live telemetry window with ample headroom
       // for the 10m Live dashboard view without exceeding serverless payload thresholds.
       const maxRelayPoints = CLOUD_RELAY_BOUNDS.MAX_RELAY_POINTS;
-      const boundedTimeSeries      = snapshot.timeSeries?.slice(-maxRelayPoints) ?? [];
-      const boundedJetsonSeries    = snapshot.jetson?.timeSeries?.slice(-maxRelayPoints) ?? [];
-      const boundedCoralSeries     = snapshot.coral?.timeSeries?.slice(-maxRelayPoints) ?? [];
+      const boundedTimeSeries        = snapshot.timeSeries?.slice(-maxRelayPoints) ?? [];
+      const boundedJetsonSeries      = snapshot.jetson?.timeSeries?.slice(-maxRelayPoints) ?? [];
+      const boundedCoralSeries       = snapshot.coral?.timeSeries?.slice(-maxRelayPoints) ?? [];
+      const boundedWorkstationSeries = (snapshot.workstation?.timeSeries ?? this.workstationTimeSeries).slice(-maxRelayPoints);
 
       const boundedSnapshot: ZodiacFullTelemetrySnapshot = {
         ...snapshot,
@@ -1767,6 +1768,12 @@ export class ZodiacBridgeServer {
         source: snapshot.source === 'disconnected' ? 'disconnected' : 'live_hardware',
         ...(snapshot.jetson ? { jetson: { ...snapshot.jetson, timeSeries: boundedJetsonSeries } } : {}),
         ...(snapshot.coral  ? { coral:  { ...snapshot.coral,  timeSeries: boundedCoralSeries  } } : {}),
+        ...(snapshot.workstation ? {
+          workstation: {
+            ...snapshot.workstation,
+            timeSeries: boundedWorkstationSeries,
+          },
+        } : {}),
       };
 
       const payload = this.serializeSnapshot(boundedSnapshot);

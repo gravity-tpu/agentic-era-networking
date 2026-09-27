@@ -23,6 +23,9 @@ import {
   isValidRange,
   isPersistingTelemetry,
   findCutoffIndex,
+  downsampleWorkstationPoints,
+  RANGE_CONFIGS,
+  RANGE_DURATION_MS,
 } from '../src/db/telemetry-db.js';
 
 const MAX_PAYLOAD_BYTES = CLOUD_RELAY_BOUNDS.MAX_PAYLOAD_BYTES;
@@ -190,26 +193,36 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
       });
 
+      // Council Invariant 6 (Anti-Simulation Law): If transitioning from synthetic cloud_snapshot
+      // to verified live_hardware, discard synthetic rolling points entirely so fake waves
+      // never pollute live telemetry buffers.
+      const isFirstLivePush = latestSnapshot.source === 'cloud_snapshot' && verifiedSource === 'live_hardware';
+
+      const existingZodiacSeries = isFirstLivePush ? undefined : latestSnapshot.timeSeries;
+      const existingJetsonSeries = isFirstLivePush ? undefined : latestSnapshot.jetson?.timeSeries;
+      const existingCoralSeries = isFirstLivePush ? undefined : latestSnapshot.coral?.timeSeries;
+      const existingWorkstationSeries = isFirstLivePush ? undefined : latestSnapshot.workstation?.timeSeries;
+
       const mergedZodiacSeries = mergeRollingSeries(
-        latestSnapshot.timeSeries,
+        existingZodiacSeries,
         parsed.timeSeries,
         MAX_SERVERLESS_BUFFER_POINTS
       ) ?? [];
 
       const mergedJetsonSeries = mergeRollingSeries(
-        latestSnapshot.jetson?.timeSeries,
+        existingJetsonSeries,
         parsed.jetson?.timeSeries,
         MAX_SERVERLESS_BUFFER_POINTS
       );
 
       const mergedCoralSeries = mergeRollingSeries(
-        latestSnapshot.coral?.timeSeries,
+        existingCoralSeries,
         parsed.coral?.timeSeries,
         MAX_SERVERLESS_BUFFER_POINTS
       );
 
       const mergedWorkstationSeries = mergeRollingSeries(
-        latestSnapshot.workstation?.timeSeries,
+        existingWorkstationSeries,
         parsed.workstation?.timeSeries,
         MAX_SERVERLESS_BUFFER_POINTS
       );
@@ -224,27 +237,29 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           ...(parsed.system ?? {}),
           timestampNs: process.hrtime.bigint(),
         },
+        ports: (parsed.ports && parsed.ports.length > 0) ? parsed.ports : latestSnapshot.ports,
+        openflow: parsed.openflow ?? latestSnapshot.openflow,
         ...(parsed.jetson ? {
           jetson: {
             ...latestSnapshot.jetson,
             ...parsed.jetson,
             ...(mergedJetsonSeries ? { timeSeries: mergedJetsonSeries } : {}),
           }
-        } : {}),
+        } : (latestSnapshot.jetson ? { jetson: latestSnapshot.jetson } : {})),
         ...(parsed.coral ? {
           coral: {
             ...latestSnapshot.coral,
             ...parsed.coral,
             ...(mergedCoralSeries ? { timeSeries: mergedCoralSeries } : {}),
           }
-        } : {}),
+        } : (latestSnapshot.coral ? { coral: latestSnapshot.coral } : {})),
         ...(parsed.workstation ? {
           workstation: {
             ...latestSnapshot.workstation,
             ...parsed.workstation,
             ...(mergedWorkstationSeries ? { timeSeries: mergedWorkstationSeries } : {}),
           }
-        } : {}),
+        } : (latestSnapshot.workstation ? { workstation: latestSnapshot.workstation } : {})),
       };
 
       // Persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
@@ -317,6 +332,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // Historical Range Query from Neon Postgres (up to 30 days)
     const range = url.searchParams.get('range');
     if (isValidRange(range)) {
+      const config = RANGE_CONFIGS[range];
+      const durationMs = RANGE_DURATION_MS[range];
+      const cutoffMs = Date.now() - durationMs;
+      const wsSeries = latestSnapshot.workstation?.timeSeries ?? [];
+      const windowedWorkstation = wsSeries.slice(findCutoffIndex(wsSeries, cutoffMs));
+      const workstationPoints = downsampleWorkstationPoints(windowedWorkstation, config.maxPoints);
+
       const multi = await getHistoricalMultiDeviceTelemetry(range);
       if (multi.timeSeries.length > 0 || multi.jetsonTimeSeries.length > 0 || multi.coralTimeSeries.length > 0) {
         res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
@@ -334,6 +356,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             coral: {
               ...latestSnapshot.coral,
               timeSeries: multi.coralTimeSeries,
+            },
+          } : {}),
+          ...(latestSnapshot.workstation ? {
+            workstation: {
+              ...latestSnapshot.workstation,
+              timeSeries: workstationPoints,
             },
           } : {}),
         }));

@@ -3610,7 +3610,7 @@
       void fetchAndRenderOpenFlowRules();
     } else if (activeDeviceId === 'workstation') {
       const wsPoints = getWorkstationPointsForDisplay();
-      if (wsPoints.length > 0 && els.chartWorkstationCanvas) {
+      if (els.chartWorkstationCanvas) {
         drawWorkstationChart(els.chartWorkstationCanvas, wsPoints);
       }
     }
@@ -4709,6 +4709,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Expose global app
   window.ZodiacApp = {
     fetchTelemetry,
+    renderTelemetry,
     executeTerminalCommand,
     selectPort,
     switchDevice,

@@ -337,8 +337,8 @@ export interface ZodiacFullTelemetrySnapshot {
  * (Council Invariants 2 & 4: Dean Latency Budgets & Coordinated Bounds).
  */
 export const CLOUD_RELAY_BOUNDS = {
-  /** Maximum points sent over WAN in a single bridge push (300 points = ~12.5–17m live window). */
-  MAX_RELAY_POINTS: 300,
+  /** Maximum points sent over WAN in a single bridge push (150 points = ~6.25–10m live window across 4 appliances). */
+  MAX_RELAY_POINTS: 150,
   /** Maximum points maintained in rolling serverless in-memory buffer (360 points = ~15–20m live window). */
   MAX_SERVERLESS_POINTS: 360,
   /** Strict byte threshold for WAN push to prevent 413 Payload Too Large limits. */
