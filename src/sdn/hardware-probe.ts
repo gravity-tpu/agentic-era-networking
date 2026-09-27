@@ -1724,9 +1724,11 @@ export async function probeWorkstationHardware(
         return {
           connected: isConnected,
           deviceName: isConnected ? 'NVIDIA Linux for Tegra' : 'None',
-          vendorId: isConnected ? '0x0955' : 'None',
-          productId: isConnected ? '0x7020' : 'None',
-          serialNumber: isConnected ? '1791626120820' : 'None',
+          // vendorId/productId/serialNumber cannot be verified from the network interface scan alone.
+          // Marking UNKNOWN avoids asserting specific unit identity from a subnet heuristic (Council Invariant 6).
+          vendorId: isConnected ? 'UNKNOWN' : 'None',
+          productId: isConnected ? 'UNKNOWN' : 'None',
+          serialNumber: isConnected ? 'UNKNOWN' : 'None',
           linkSpeed: isConnected ? '5 Gbps (SuperSpeed USB 3.0 / USB-C)' : 'None',
           macInterface: tetherIfaceName ?? 'None',
           macAddress: isConnected ? tetherMac : 'None',
