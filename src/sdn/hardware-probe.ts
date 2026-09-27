@@ -1699,14 +1699,28 @@ export async function probeWorkstationHardware(
       })(),
       (async (): Promise<WorkstationUsbTetherTelemetry> => {
         const ifaces = os.networkInterfaces();
-        const en8If = ifaces['en8'];
-        const en8Ipv4 = en8If?.find((i) => i.family === 'IPv4')?.address || null;
-        const en8Mac = en8If?.[0]?.mac || 'None';
-        const isEn8Active = Boolean(en8If && en8If.length > 0);
+
+        // Scan all interfaces for the Jetson tether subnet instead of hardcoding 'en8'.
+        // macOS assigns enN numbers dynamically; 'en8' drifts as other USB devices are added.
+        const JETSON_TETHER_SUBNET = '192.168.55.';
+        let tetherIfaceName: string | null = null;
+        let tetherIpv4: string | null = null;
+        let tetherMac = 'None';
+        for (const [name, addrs] of Object.entries(ifaces)) {
+          if (!addrs) continue;
+          const match = addrs.find((a) => a.family === 'IPv4' && a.address.startsWith(JETSON_TETHER_SUBNET));
+          if (match) {
+            tetherIfaceName = name;
+            tetherIpv4 = match.address;
+            tetherMac = addrs[0]?.mac ?? 'None';
+            break;
+          }
+        }
+        const isIfaceActive = tetherIfaceName !== null;
 
         const serialDevice = await getCachedUsbModemDev();
 
-        const isConnected = isEn8Active || Boolean(serialDevice);
+        const isConnected = isIfaceActive || Boolean(serialDevice);
         return {
           connected: isConnected,
           deviceName: isConnected ? 'NVIDIA Linux for Tegra' : 'None',
@@ -1714,10 +1728,10 @@ export async function probeWorkstationHardware(
           productId: isConnected ? '0x7020' : 'None',
           serialNumber: isConnected ? '1791626120820' : 'None',
           linkSpeed: isConnected ? '5 Gbps (SuperSpeed USB 3.0 / USB-C)' : 'None',
-          macInterface: isConnected ? 'en8' : 'None',
-          macAddress: isConnected ? en8Mac : 'None',
-          macStatus: isEn8Active ? 'ACTIVE' : 'INACTIVE',
-          hostIp: en8Ipv4,
+          macInterface: tetherIfaceName ?? 'None',
+          macAddress: isConnected ? tetherMac : 'None',
+          macStatus: isIfaceActive ? 'ACTIVE' : 'INACTIVE',
+          hostIp: tetherIpv4,
           peerIp: '192.168.55.1',
           serialDevice,
           serialStatus: serialDevice ? 'AVAILABLE' : 'NOT_FOUND',
