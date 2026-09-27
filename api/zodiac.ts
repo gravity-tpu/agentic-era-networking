@@ -340,7 +340,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const workstationPoints = downsampleWorkstationPoints(windowedWorkstation, config.maxPoints);
 
       const multi = await getHistoricalMultiDeviceTelemetry(range);
-      if (multi.timeSeries.length > 0 || multi.jetsonTimeSeries.length > 0 || multi.coralTimeSeries.length > 0) {
+      if (multi.timeSeries.length > 0 || multi.jetsonTimeSeries.length > 0 || multi.coralTimeSeries.length > 0 || workstationPoints.length > 0) {
         res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
         res.statusCode = 200;
         res.end(serializeWithBigInt({
