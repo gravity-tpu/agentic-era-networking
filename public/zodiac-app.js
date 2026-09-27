@@ -1665,11 +1665,15 @@
             const parts = ip.split('.');
             agentSubnet = parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : '';
           }
-        } catch (_) { /* malformed URL — leave blank */ }
+        } catch (urlErr) {
+          // Malformed ws.endpoint from control plane — signals a contract violation, not a UI edge case.
+          console.error('[zodiac] ws.endpoint URL parse failed — control plane state may be corrupt:', urlErr, ws.endpoint);
+        }
 
-        const USB_SUBNET = '192.168.55.';
-        const isUsbPath = agentHost.startsWith(USB_SUBNET) || isTetherConnected;
-        const isWifiPath = agentHost.length > 0 && !agentHost.startsWith(USB_SUBNET) && !agentHost.startsWith('localhost') && !agentHost.startsWith('127.');
+        // isTetherConnected is the backend's authoritative interface-type flag (set by hardware-probe.ts).
+        // No client-side subnet heuristics needed: if tether is up, it's USB; otherwise any resolved
+        // non-loopback endpoint is Wi-Fi LAN.
+        const isWifiPath = agentHost.length > 0 && !agentHost.startsWith('localhost') && !agentHost.startsWith('127.');
         const isWifiActive = isWifiPath && !isTetherConnected;
 
         // Header badge reflects actual active path from backend
@@ -1684,10 +1688,10 @@
           els.wsWifiStatus.className = `cf-pill-badge ${isWifiActive ? 'green' : isTetherConnected ? 'blue' : 'gray'}`;
         }
         if (els.wsWifiEndpoint) {
-          els.wsWifiEndpoint.innerText = isWifiActive && agentHost ? agentHost : isWifiPath && agentHost ? agentHost : '—';
+          els.wsWifiEndpoint.innerText = isWifiPath && agentHost ? agentHost : '—';
         }
         if (els.wsWifiSubnet) {
-          els.wsWifiSubnet.innerText = isWifiActive && agentSubnet ? `${agentSubnet} (Wi-Fi)` : isWifiPath && agentSubnet ? `${agentSubnet} (Wi-Fi)` : '—';
+          els.wsWifiSubnet.innerText = isWifiPath && agentSubnet ? `${agentSubnet} (Wi-Fi)` : '—';
         }
         if (els.wsUsbHwStatus) {
           els.wsUsbHwStatus.innerText = isTetherConnected ? 'CONNECTED' : 'DISCONNECTED';
