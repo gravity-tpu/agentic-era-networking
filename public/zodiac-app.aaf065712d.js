@@ -320,6 +320,21 @@
     wsChartPromptLegend: document.getElementById('ws-chart-prompt-legend'),
     chartWorkstationCanvas: document.getElementById('chart-workstation'),
 
+    // Workstation USB-C Jetson Tether Elements
+    wsUsbLinkStatus: document.getElementById('ws-usb-link-status'),
+    wsUsbPriorityBadge: document.getElementById('ws-usb-priority-badge'),
+    wsUsbSpeedBadge: document.getElementById('ws-usb-speed-badge'),
+    wsUsbDeviceName: document.getElementById('ws-usb-device-name'),
+    wsUsbDeviceIds: document.getElementById('ws-usb-device-ids'),
+    wsUsbBusSpeed: document.getElementById('ws-usb-bus-speed'),
+    wsUsbHwStatus: document.getElementById('ws-usb-hw-status'),
+    wsUsbIfName: document.getElementById('ws-usb-if-name'),
+    wsUsbIfMac: document.getElementById('ws-usb-if-mac'),
+    wsUsbIfIps: document.getElementById('ws-usb-if-ips'),
+    wsUsbNetStatus: document.getElementById('ws-usb-net-status'),
+    wsUsbSerialDev: document.getElementById('ws-usb-serial-dev'),
+    wsUsbSerialStatus: document.getElementById('ws-usb-serial-status'),
+
     // Jetson Orin Nano Elements
     orinJetpack: document.getElementById('orin-jetpack'),
     orinUptime: document.getElementById('orin-uptime'),
@@ -364,6 +379,15 @@
     orinIfTapBytes: document.getElementById('orin-if-tap-bytes'),
     orinIfTapPkts: document.getElementById('orin-if-tap-pkts'),
     orinIfTapDrops: document.getElementById('orin-if-tap-drops'),
+    orinIfL4tbr0Row: document.getElementById('orin-if-l4tbr0-row'),
+    orinIfL4tbr0Dot: document.getElementById('orin-if-l4tbr0-dot'),
+    orinIfL4tbr0Name: document.getElementById('orin-if-l4tbr0-name'),
+    orinIfL4tbr0Speed: document.getElementById('orin-if-l4tbr0-speed'),
+    orinIfL4tbr0Mac: document.getElementById('orin-if-l4tbr0-mac'),
+    orinIfL4tbr0Status: document.getElementById('orin-if-l4tbr0-status'),
+    orinIfL4tbr0Bytes: document.getElementById('orin-if-l4tbr0-bytes'),
+    orinIfL4tbr0Pkts: document.getElementById('orin-if-l4tbr0-pkts'),
+    orinIfL4tbr0Drops: document.getElementById('orin-if-l4tbr0-drops'),
     orinDiskStat: document.getElementById('orin-disk-stat'),
     orinBarDisk: document.getElementById('orin-bar-disk'),
     orinSvcPid: document.getElementById('orin-svc-pid'),
@@ -1156,6 +1180,38 @@
         if (els.orinIfTapRow) els.orinIfTapRow.style.display = 'none';
       }
 
+      // USB-C Device Mode Tether Interface (l4tbr0) -> MacBook M5 (en8)
+      const l4tIf = Array.isArray(j.interfaces)
+        ? j.interfaces.find((i) => i.name === 'l4tbr0' || (i.role && i.role.includes('USB-C')))
+        : null;
+
+      if (l4tIf) {
+        const l4tUp = l4tIf.status === 'UP';
+        if (els.orinNicBadge) els.orinNicBadge.innerText = 'Quad-Interface Stack (USB-C Tether Active)';
+        if (els.orinIfL4tbr0Row) els.orinIfL4tbr0Row.style.display = '';
+        if (els.orinIfL4tbr0Dot) els.orinIfL4tbr0Dot.className = `cf-status-dot ${l4tUp ? 'green' : 'gray'}`;
+        if (els.orinIfL4tbr0Name) els.orinIfL4tbr0Name.innerText = l4tIf.name;
+        if (els.orinIfL4tbr0Mac) els.orinIfL4tbr0Mac.innerText = l4tIf.macAddress || '3e:c7:e7:79:f3:87';
+        if (els.orinIfL4tbr0Speed) els.orinIfL4tbr0Speed.innerText = 'USB 3.0 (5000 Mbps)';
+        if (els.orinIfL4tbr0Status) {
+          els.orinIfL4tbr0Status.className = `cf-pill-badge ${l4tUp ? 'green' : 'gray'}`;
+          els.orinIfL4tbr0Status.innerText = l4tUp ? 'UP · 5000M' : 'DOWN';
+        }
+        if (els.orinIfL4tbr0Bytes) {
+          els.orinIfL4tbr0Bytes.innerText = `${formatBytes(l4tIf.rxBytes)} / ${formatBytes(l4tIf.txBytes)}`;
+        }
+        if (els.orinIfL4tbr0Pkts) {
+          els.orinIfL4tbr0Pkts.innerText = `${formatNumber(l4tIf.rxPackets)} / ${formatNumber(l4tIf.txPackets)}`;
+        }
+        if (els.orinIfL4tbr0Drops) {
+          const drops = safeBigInt(l4tIf.rxDropped) + safeBigInt(l4tIf.txDropped);
+          const errs = safeBigInt(l4tIf.rxErrors) + safeBigInt(l4tIf.txErrors);
+          els.orinIfL4tbr0Drops.innerText = `${formatNumber(drops)} drops · ${formatNumber(errs)} err`;
+        }
+      } else {
+        if (els.orinIfL4tbr0Row) els.orinIfL4tbr0Row.style.display = 'none';
+      }
+
       // Memory & NVMe
       const memUsed = safeBigInt(j.ramUsedBytes ?? j.memory?.usedBytes);
       const memTot = safeBigInt(j.ramTotalBytes ?? j.memory?.totalBytes);
@@ -1586,6 +1642,51 @@
       }
       if (els.wsTblEndpoint) {
         els.wsTblEndpoint.innerText = ws.endpoint || 'http://localhost:11434';
+      }
+
+      // Workstation USB-C Jetson Tether Link
+      if (ws.usbTether) {
+        const tether = ws.usbTether;
+        const isTetherConnected = Boolean(tether.connected);
+        if (els.wsUsbLinkStatus) {
+          els.wsUsbLinkStatus.innerText = isTetherConnected ? 'USB-C Tether Active' : 'Tether Disconnected';
+          els.wsUsbLinkStatus.className = `cf-pill-badge ${isTetherConnected ? 'green' : 'gray'}`;
+        }
+        if (els.wsUsbHwStatus) {
+          els.wsUsbHwStatus.innerText = isTetherConnected ? 'CONNECTED' : 'DISCONNECTED';
+          els.wsUsbHwStatus.className = `cf-pill-badge ${isTetherConnected ? 'green' : 'gray'}`;
+        }
+        if (els.wsUsbDeviceName) {
+          els.wsUsbDeviceName.innerText = tether.deviceName || 'NVIDIA Linux for Tegra';
+        }
+        if (els.wsUsbDeviceIds) {
+          els.wsUsbDeviceIds.innerText = `VID: ${tether.vendorId || '0x0955'} · PID: ${tether.productId || '0x7020'} · S/N: ${tether.serialNumber || '1791626120820'}`;
+        }
+        if (els.wsUsbBusSpeed) {
+          els.wsUsbBusSpeed.innerText = tether.linkSpeed || 'USB 3.0 SuperSpeed (5.0 Gbps)';
+        }
+        if (els.wsUsbIfName) {
+          els.wsUsbIfName.innerText = tether.macInterface || 'en8';
+        }
+        if (els.wsUsbIfMac) {
+          els.wsUsbIfMac.innerText = `${tether.macAddress || '86:2c:05:b5:93:46'} (2500Base-T)`;
+        }
+        if (els.wsUsbIfIps) {
+          els.wsUsbIfIps.innerText = `Host: ${tether.hostIp || '169.254.91.144'} · Peer: ${tether.peerIp || '192.168.55.1'}`;
+        }
+        if (els.wsUsbNetStatus) {
+          const isNetActive = tether.macStatus === 'ACTIVE';
+          els.wsUsbNetStatus.innerText = isNetActive ? 'ACTIVE' : 'INACTIVE';
+          els.wsUsbNetStatus.className = `cf-pill-badge ${isNetActive ? 'green' : 'gray'}`;
+        }
+        if (els.wsUsbSerialDev) {
+          els.wsUsbSerialDev.innerText = tether.serialDevice || '/dev/cu.usbmodem17916261208203';
+        }
+        if (els.wsUsbSerialStatus) {
+          const isSerialAvail = tether.serialStatus === 'AVAILABLE';
+          els.wsUsbSerialStatus.innerText = isSerialAvail ? 'AVAILABLE' : 'NOT_FOUND';
+          els.wsUsbSerialStatus.className = `cf-pill-badge ${isSerialAvail ? 'green' : 'gray'}`;
+        }
       }
 
       // Time series buffer update for Workstation

@@ -102,9 +102,12 @@ export class ZodiacSerialClient {
     const platform = process.platform;
 
     if (platform === 'darwin') {
-      // macOS: sysfs unavailable; match first call-out USB modem device.
+      // macOS: sysfs unavailable; match first call-out USB modem device that is not
+      // the Jetson Orin Nano USB-C CDC-ACM serial console (S/N: 1791626120820).
       const devFiles = readdirSync('/dev');
-      const modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
+      const modem = devFiles.find(
+        (f) => f.startsWith('cu.usbmodem') && !f.includes('1791626120820')
+      );
       if (!modem) {
         throw new Error(
           'No Zodiac FX serial device found under /dev/cu.usbmodem*. ' +

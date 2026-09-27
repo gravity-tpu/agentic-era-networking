@@ -65,27 +65,45 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
         │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
-        │                        |  * USB-C Device Mode: Linux for Tegra (l4tbr0 / CDC-ACM) |
+        │                        |  * USB-C Port: L4T Device Mode (192.168.55.1 / CDC-ACM)  |
         │                        +──────────────┬───────────────────────────┬───────────────+
-        │                                       │ Dual USB 3.0              │ USB-C High-Speed Cable
-        │                                       ▼                           │ (L4T Virtual Eth + Serial)
+        │                                       │                           │
+        │                                       │ Dual USB 3.0              │ DIRECT HIGH-SPEED USB-C CABLE
+        │                                       │ (Tap DPI & DNS Sentinel)  │ [Link 9: Management Tether]
+        │                                       ▼                           │ * CDC-NCM: 192.168.55.1 <-> en8
+        │                           +───────────────────────────────────+   │ * CDC-ACM: /dev/cu.usbmodem*
+        │                           | Dual Google Coral Edge TPUs       |   │ * 5 Gbps SuperSpeed USB 3.0
+        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │ * Priority: Tier 1 (Metric 50)
+        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │ * Fail-Closed (Zero Route Bleed)
         │                           +───────────────────────────────────+   │
-        │                           | Dual Google Coral Edge TPUs       |   │
-        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │
-        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │
-        │                           +───────────────────────────────────+   ▼
-        ▼                                           +───────────────────────────────────────────────────+
-+───────────────────────────────────+               | MacBook M5 · Gemma 4 Local Workstation Plane      |
-| Raspberry Pi 3 Model B+ (Workload)|               |                                                   |
-|                                   |  Wireless     | * Direct USB-C L4T Tether (en8 & /dev/cu.usbmodem)|
-| * eth0: <workload-subnet> (Static)|  WiFi (<mgmt>)| * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-|   Untrusted SDN Agent Data Plane  |   . . . . . > | * Local Ollama Engine: gemma4:26b (:11434)        |
-|                                   |               | * Dual-Stage Council Review Gate                  |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|   Out-of-Band Wireless Management |               | * Deterministic BigInt Token Accounting Ledger    |
-|                                   |               | * Epistemic Process Liveness Mutex (Signal 0)     |
+        ▼                                                                   ▼
++───────────────────────────────────+               +───────────────────────────────────────────────────+
+| Raspberry Pi 3 Model B+ (Workload)|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+|                                   |               |                                                   |
+| * eth0: <workload-subnet> (Static)| (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
+|   Untrusted SDN Agent Data Plane  |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+|   (Zodiac Port 1 VLAN 100)        |  BETWEEN RPi  |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
+|                                   |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+|   Out-of-Band Wireless Management |               | * Dual-Stage Council Review Gate                  |
+|   (Home WiFi LAN Only)            |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Operator Console: http://localhost:3000 & Cloud |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
+```
+
+### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
+
+```
++─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
+|    NVIDIA Jetson Orin Nano Super Appliance  |                 |       Apple MacBook M5 Workstation          |
+|                                             |                 |                                             |
+|  [USB-C Device Mode Controller]             |                 |  [Thunderbolt 4 / USB-C Port]               |
+|  * Linux for Tegra (L4T) Gadget Stack       |                 |  * VID: 0x0955 (NVIDIA), PID: 0x7020        |
+|  * CDC-NCM Bridge: l4tbr0 (192.168.55.1/24) |================>|  * en8 Point-to-Point IP: 169.254.91.144   |
+|  * CDC-ACM Serial Debug TTY (115200 8N1)    |  HIGH-SPEED     |  * Direct TTY: /dev/cu.usbmodem17916261208203|
+|  * Fail-Closed: net.ipv4.ip_forward = 0     |  USB-C CABLE    |  * Routing Priority: Tier 1 (Metric 50)     |
+|    (Zero Leakage into SDN Tenant Flows)     |  (5 Gbps Link)  |  * Physical IOKit IOUSBHostDevice Verified  |
++─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
 ```
 
 ### 2.1 Physical Interconnect & Interface Mapping Matrix

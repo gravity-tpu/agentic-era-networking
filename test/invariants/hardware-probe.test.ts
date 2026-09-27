@@ -42,7 +42,7 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(typeof jetson.ramUsedBytes).toBe('bigint');
     expect(typeof jetson.ramTotalBytes).toBe('bigint');
     expect(typeof jetson.nvmeUsedBytes).toBe('bigint');
-    expect(jetson.interfaces).toHaveLength(2);
+    expect(jetson.interfaces).toHaveLength(3);
 
     const sdnIf = jetson.interfaces.find((i) => i.name === 'enP8p1s0');
     expect(sdnIf).toBeDefined();
@@ -50,6 +50,12 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     expect(typeof sdnIf?.rxBytes).toBe('bigint');
     expect(typeof sdnIf?.txBytes).toBe('bigint');
     expect(typeof sdnIf?.rxRateBps).toBe('bigint');
+
+    const l4tIf = jetson.interfaces.find((i) => i.name === 'l4tbr0');
+    expect(l4tIf).toBeDefined();
+    expect(l4tIf?.status).toBe('UP');
+    expect(typeof l4tIf?.rxBytes).toBe('bigint');
+    expect(typeof l4tIf?.txBytes).toBe('bigint');
   });
 
   it('creates valid default Coral snapshot with 4 TOPS and Dean latency budget in sandbox mode', () => {
@@ -113,7 +119,7 @@ describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
     const full = createDefaultZodiacSnapshot();
     expect(full.jetson).toBeDefined();
     expect(full.coral).toBeDefined();
-    expect(full.jetson?.interfaces).toHaveLength(2);
+    expect(full.jetson?.interfaces).toHaveLength(3);
     expect(full.coral?.detected).toBe(true);
   });
 

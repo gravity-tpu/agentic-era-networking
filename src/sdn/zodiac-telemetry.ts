@@ -243,6 +243,24 @@ export interface WorkstationTimeSeriesPoint {
   readonly totalTokens: bigint;
 }
 
+export interface WorkstationUsbTetherTelemetry {
+  readonly connected: boolean;
+  readonly deviceName: string;
+  readonly vendorId: string;
+  readonly productId: string;
+  readonly serialNumber: string;
+  readonly linkSpeed: string;
+  readonly macInterface: string;
+  readonly macAddress: string;
+  readonly macStatus: 'ACTIVE' | 'INACTIVE';
+  readonly hostIp: string | null;
+  readonly peerIp: string;
+  readonly serialDevice: string | null;
+  readonly serialStatus: 'AVAILABLE' | 'NOT_FOUND';
+  readonly metricPriority: number;
+  readonly failClosedIsolated: boolean;
+}
+
 export interface WorkstationTelemetrySnapshot {
   readonly detected: boolean;
   readonly hostName: string;
@@ -255,6 +273,8 @@ export interface WorkstationTelemetrySnapshot {
   readonly memoryUsedBytes: bigint;
   readonly memoryFreeBytes: bigint;
   readonly loadAvg: readonly [number, number, number];
+  // Direct USB-C Tether to NVIDIA Jetson Orin Nano Appliance
+  readonly usbTether: WorkstationUsbTetherTelemetry;
   // Apple Silicon Metal GPU Telemetry (Physical IOKit truth via ioreg)
   readonly gpuModel: string;
   readonly gpuCoreCount: number;
@@ -547,6 +567,26 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = true): Jet
       rxRatePps: isDisconnected ? 0n : 75n,
       txRatePps: isDisconnected ? 0n : 30n,
     },
+    {
+      name: 'l4tbr0',
+      role: 'USB-C Device Mode Tether -> MacBook M5 (en8)',
+      macAddress: isDisconnected ? 'None' : '3e:c7:e7:79:f3:87',
+      ipAddress: '192.168.55.1',
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 5000,
+      rxBytes: isDisconnected ? 0n : 20537474n,
+      txBytes: isDisconnected ? 0n : 5148796850n,
+      rxPackets: isDisconnected ? 0n : 362176n,
+      txPackets: isDisconnected ? 0n : 3409625n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 51200n,
+      txRateBps: isDisconnected ? 0n : 84200n,
+      rxRatePps: isDisconnected ? 0n : 120n,
+      txRatePps: isDisconnected ? 0n : 180n,
+    },
   ];
 
   return {
@@ -696,6 +736,23 @@ export function createDefaultWorkstationSnapshot(isDisconnected: boolean = true)
     contextUtilizationPct: 0,
     edgeComputeRatioPct: 100.0,
     endpoint: 'http://localhost:11434',
+    usbTether: {
+      connected: !isDisconnected,
+      deviceName: isDisconnected ? 'None' : 'NVIDIA Linux for Tegra',
+      vendorId: isDisconnected ? 'None' : '0x0955',
+      productId: isDisconnected ? 'None' : '0x7020',
+      serialNumber: isDisconnected ? 'None' : '1791626120820',
+      linkSpeed: isDisconnected ? 'None' : '5 Gbps (SuperSpeed USB 3.0 / USB-C)',
+      macInterface: isDisconnected ? 'None' : 'en8',
+      macAddress: isDisconnected ? 'None' : '86:2c:05:b5:93:46',
+      macStatus: isDisconnected ? 'INACTIVE' : 'ACTIVE',
+      hostIp: isDisconnected ? null : '169.254.91.144',
+      peerIp: '192.168.55.1',
+      serialDevice: isDisconnected ? null : '/dev/cu.usbmodem17916261208203',
+      serialStatus: isDisconnected ? 'NOT_FOUND' : 'AVAILABLE',
+      metricPriority: 50,
+      failClosedIsolated: true,
+    },
   };
 }
 

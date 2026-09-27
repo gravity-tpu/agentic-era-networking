@@ -81,27 +81,45 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
         │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
-        │                        |  * USB-C Device Mode: Linux for Tegra (l4tbr0 / CDC-ACM) |
+        │                        |  * USB-C Port: L4T Device Mode (192.168.55.1 / CDC-ACM)  |
         │                        +──────────────┬───────────────────────────┬───────────────+
-        │                                       │ Dual USB 3.0              │ USB-C High-Speed Cable
-        │                                       ▼                           │ (L4T Virtual Eth + Serial)
+        │                                       │                           │
+        │                                       │ Dual USB 3.0              │ DIRECT HIGH-SPEED USB-C CABLE
+        │                                       │ (Tap DPI & DNS Sentinel)  │ [Link 9: Management Tether]
+        │                                       ▼                           │ * CDC-NCM: 192.168.55.1 <-> en8
+        │                           +───────────────────────────────────+   │ * CDC-ACM: /dev/cu.usbmodem*
+        │                           | Dual Google Coral Edge TPUs       |   │ * 5 Gbps SuperSpeed USB 3.0
+        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │ * Priority: Tier 1 (Metric 50)
+        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │ * Fail-Closed (Zero Route Bleed)
         │                           +───────────────────────────────────+   │
-        │                           | Dual Google Coral Edge TPUs       |   │
-        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │
-        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │
-        │                           +───────────────────────────────────+   ▼
-        ▼                                           +───────────────────────────────────────────────────+
-+───────────────────────────────────+               | MacBook M5 · Gemma 4 Local Workstation Plane      |
-| Raspberry Pi 3 Model B+ (Workload)|               |                                                   |
-|                                   |  Wireless     | * Direct USB-C L4T Tether (en8 & /dev/cu.usbmodem)|
-| * eth0: <workload-subnet> (Static)|  WiFi (<mgmt>)| * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-|   Untrusted SDN Agent Data Plane  |   . . . . . > | * Local Ollama Engine: gemma4:26b (:11434)        |
-|                                   |               | * Dual-Stage Council Review Gate                  |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|   Out-of-Band Wireless Management |               | * Deterministic BigInt Token Accounting Ledger    |
-|                                   |               | * Epistemic Process Liveness Mutex (Signal 0)     |
+        ▼                                                                   ▼
++───────────────────────────────────+               +───────────────────────────────────────────────────+
+| Raspberry Pi 3 Model B+ (Workload)|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+|                                   |               |                                                   |
+| * eth0: <workload-subnet> (Static)| (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
+|   Untrusted SDN Agent Data Plane  |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+|   (Zodiac Port 1 VLAN 100)        |  BETWEEN RPi  |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
+|                                   |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+|   Out-of-Band Wireless Management |               | * Dual-Stage Council Review Gate                  |
+|   (Home WiFi LAN Only)            |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Operator Console: http://localhost:3000 & Cloud |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
+```
+
+### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
+
+```
++─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
+|    NVIDIA Jetson Orin Nano Super Appliance  |                 |       Apple MacBook M5 Workstation          |
+|                                             |                 |                                             |
+|  [USB-C Device Mode Controller]             |                 |  [Thunderbolt 4 / USB-C Port]               |
+|  * Linux for Tegra (L4T) Gadget Stack       |                 |  * VID: 0x0955 (NVIDIA), PID: 0x7020        |
+|  * CDC-NCM Bridge: l4tbr0 (192.168.55.1/24) |================>|  * en8 Point-to-Point IP: 169.254.91.144   |
+|  * CDC-ACM Serial Debug TTY (115200 8N1)    |  HIGH-SPEED     |  * Direct TTY: /dev/cu.usbmodem17916261208203|
+|  * Fail-Closed: net.ipv4.ip_forward = 0     |  USB-C CABLE    |  * Routing Priority: Tier 1 (Metric 50)     |
+|    (Zero Leakage into SDN Tenant Flows)     |  (5 Gbps Link)  |  * Physical IOKit IOUSBHostDevice Verified  |
++─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
 ```
 
 ### Physical Interconnect Matrix
@@ -123,12 +141,24 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | **Link 10** | MacBook M5 Workstation | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
 
 
+### Management Plane Routing Hierarchy & Fail-Closed Invariants
+
+To eliminate routing ambiguity, split-brain conditions, and non-deterministic interface flapping between the USB-C hardware tether and wireless network (Council Invariants 3 & 5), the management plane enforces a strict metric priority and interface isolation:
+
+1. **Deterministic Recovery Hierarchy**:
+   - **Tier 1 — Direct Hardware Tether (Highest Priority, Metric 50)**: USB-C CDC-NCM point-to-point network (`en8` <-> `l4tbr0`, invariant subnet `192.168.55.0/24`). Lowest administrative distance for deterministic, ultra-low-latency operator access and telemetry bridging.
+   - **Tier 2 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
+   - **Tier 3 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
+2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
+   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Kernel IP forwarding between `192.168.55.0/24`, `<ctrl-subnet>` (`10.0.1.0/24`), and `<workload-subnet>` (`10.0.2.0/24`) is permanently disabled (`net.ipv4.conf.all.forwarding = 0`), preventing cross-plane packet leakage or routing bleed into SDN tenant flows.
+
 ### The 5 Autonomous Appliance Invariant Roles:
 1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
 2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
 3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
 4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
 5. *Local Edge Reasoning & Token Ledger* (Apple Silicon Metal GPU local inference, pre-push Council verification, and deterministic 64-bit BigInt token accounting).
+
 
 ---
 

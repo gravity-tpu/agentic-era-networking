@@ -88,6 +88,11 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
     expect(disconnected.contextUtilizationPct).toBe(0);
     expect(disconnected.edgeComputeRatioPct).toBe(100.0);
     expect(disconnected.gpuMemoryUsedBytes).toBe(0n);
+    expect(disconnected.usbTether).toBeDefined();
+    expect(disconnected.usbTether.connected).toBe(false);
+    expect(disconnected.usbTether.macStatus).toBe('INACTIVE');
+    expect(disconnected.usbTether.metricPriority).toBe(50);
+    expect(disconnected.usbTether.failClosedIsolated).toBe(true);
   });
 
   it('generates zeroed historical time series when workstation is offline', () => {

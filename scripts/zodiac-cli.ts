@@ -183,7 +183,13 @@ async function main(): Promise<void> {
       console.log(`✨ Dashboard is live at : http://localhost:${boundPort}`);
       console.log(`   - REST Telemetry API : http://localhost:${boundPort}/api/zodiac`);
       console.log(`   - OpenFlow 1.3 Daemon : ${controllerIp}:${openFlowPort}`);
-      console.log(`   - Serial Management   : ${controller.serialClient.path}`);
+      let serialPath = 'Detached / Remote';
+      try {
+        serialPath = controller.serialClient.path;
+      } catch (serialErr) {
+        serialPath = `Detached (${serialErr instanceof Error ? serialErr.message : String(serialErr)})`;
+      }
+      console.log(`   - Serial Management   : ${serialPath}`);
       if (cloudRelayUrl) {
         console.log(`   - Cloud Production   : ${cloudRelayUrl}`);
       }

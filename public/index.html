@@ -245,6 +245,13 @@
             </svg>
             Gemma 4 Gateway
           </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-usb-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            USB-C Jetson Tether
+          </a>
           <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -1200,6 +1207,33 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                           <div id="orin-if-tap-drops" style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
                         </td>
                       </tr>
+                      <tr id="orin-if-l4tbr0-row">
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot green" id="orin-if-l4tbr0-dot" style="width: 8px; height: 8px;"></span>
+                            <strong id="orin-if-l4tbr0-name">l4tbr0</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">USB-C Device Mode Tether → MacBook M5 (en8)</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Direct C-to-C cable · Linux for Tegra CDC-NCM point-to-point link (192.168.55.1)</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" id="orin-if-l4tbr0-speed" style="font-size: 0.75rem;">USB 3.0 (5000 Mbps)</div>
+                          <div class="cf-mono" id="orin-if-l4tbr0-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">3e:c7:e7:79:f3:87</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="orin-if-l4tbr0-status">UP · 5000M</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-l4tbr0-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="orin-if-l4tbr0-pkts" style="font-weight: 600;">-- / --</div>
+                          <div id="orin-if-l4tbr0-drops" style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -1784,6 +1818,114 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 <div class="cf-stat-footer">
                   <span id="ws-kpi-active-model">Model: <strong>gemma4:26b</strong></span>
                   <span id="ws-kpi-last-latency">TTFT: <strong class="cf-mono" id="ws-kpi-ttft">-- ms</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Workstation USB-C Hardware Interconnect Card -->
+            <div class="cf-card" id="workstation-usb-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Hardware Interconnect &amp; Management Link: Direct USB-C Tether</h3>
+                  <div class="cf-card-subtitle">MacBook M5 ↔ NVIDIA Jetson Orin Nano point-to-point management plane &amp; emergency serial console</div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <span class="cf-pill-badge green" id="ws-usb-link-status">USB-C Tether Active</span>
+                  <span class="cf-pill-badge blue" id="ws-usb-priority-badge">Tier 1 · Metric 50</span>
+                  <span class="cf-pill-badge purple" id="ws-usb-speed-badge">5 Gbps SuperSpeed</span>
+                </div>
+              </div>
+              <div class="cf-card-body" style="padding: 0;">
+                <div class="table-responsive">
+                  <table class="cf-table">
+                    <thead>
+                      <tr>
+                        <th>Channel / Layer</th>
+                        <th>Device &amp; Endpoint</th>
+                        <th>Subnet &amp; Addressing</th>
+                        <th>Routing Priority</th>
+                        <th>Operational Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <div style="font-weight: 600;">USB Physical Medium</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Direct C-to-C Cable</div>
+                        </td>
+                        <td>
+                          <div id="ws-usb-device-name" style="font-weight: 600;">NVIDIA Linux for Tegra</div>
+                          <div class="cf-mono" id="ws-usb-device-ids" style="font-size: 0.72rem; color: var(--cf-text-secondary);">VID: 0x0955 · PID: 0x7020 · S/N: 1791626120820</div>
+                        </td>
+                        <td>
+                          <div id="ws-usb-bus-speed" class="cf-mono" style="font-size: 0.75rem;">USB 3.0 SuperSpeed (5.0 Gbps)</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Direct Bus 0x01 / Port 2 (IOKit Verified)</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge amber" style="font-size: 0.72rem;">Hardware Bus</span>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="ws-usb-hw-status">CONNECTED</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div style="font-weight: 600;">CDC-NCM Virtual Ethernet</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Point-to-Point Management IP</div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600;">Mac Interface: <span class="cf-mono" id="ws-usb-if-name">en8</span></div>
+                          <div class="cf-mono" id="ws-usb-if-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">86:2c:05:b5:93:46 (2500Base-T)</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" id="ws-usb-if-ips" style="font-size: 0.75rem;">Host: 169.254.91.144 · Peer: 192.168.55.1</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Jetson l4tbr0 Target Subnet (192.168.55.0/24)</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge blue" style="font-size: 0.72rem;">Tier 1 · Metric 50</span>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="ws-usb-net-status">ACTIVE</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div style="font-weight: 600;">CDC-ACM Hardware Serial</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Zero-Network Debugging Console</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" id="ws-usb-serial-dev" style="font-weight: 600;">/dev/cu.usbmodem17916261208203</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">115200 Baud · 8N1 · Kernel Out-of-Band</div>
+                        </td>
+                        <td>
+                          <div style="font-size: 0.75rem;">TTY Rescue Channel</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Direct Jetson Kernel TTY (immune to TCP/IP flushes)</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge gray" style="font-size: 0.72rem;">Tier 3 · Emergency</span>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="ws-usb-serial-status">AVAILABLE</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div style="font-weight: 600;">Council Subnet Isolation</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Invariants 3 &amp; 5 Enforcement</div>
+                        </td>
+                        <td colspan="2">
+                          <div style="font-size: 0.75rem;">net.ipv4.conf.all.forwarding = 0</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">192.168.55.0/24 strictly isolated — zero routing bleed into SDN tenant flows (10.0.1.0/24 &amp; 10.0.2.0/24)</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge purple" style="font-size: 0.72rem;">Fail-Closed</span>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green">ENFORCED</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -2390,7 +2532,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.7660add08d.js"></script>
+  <script defer src="zodiac-app.aaf065712d.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
