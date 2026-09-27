@@ -375,17 +375,20 @@ const DEFAULT_POLL_INTERVAL_NS = 2_500_000_000n;
 /**
  * Sanjay Ghemawat Invariant: Radical Simplicity & DRY History Merge.
  * Prepends historical points strictly older than the current in-memory buffer without sorting or duplicate timestamps.
+ * Preserves the full operational day history in memory up to CLOUD_RELAY_BOUNDS.MAX_BRIDGE_MEMORY_POINTS so service restarts retain test data.
  */
 function mergeHistoricalSeries<T extends { readonly timestampMs: number }>(
   current: readonly T[],
   history: readonly T[] | undefined,
-  maxPoints: number = CLOUD_RELAY_BOUNDS.MAX_SERVERLESS_POINTS
+  maxPoints: number = CLOUD_RELAY_BOUNDS.MAX_BRIDGE_MEMORY_POINTS
 ): T[] {
   if (!history || history.length === 0) return [...current];
   const earliestMemTs = current[0]?.timestampMs ?? Number.MAX_SAFE_INTEGER;
   const older = history.filter((p) => p.timestampMs < earliestMemTs);
   if (older.length === 0) return [...current];
-  return [...older, ...current].slice(-maxPoints);
+  const combined = [...older, ...current];
+  if (combined.length <= maxPoints) return combined;
+  return combined.slice(-maxPoints);
 }
 
 export class ZodiacBridgeServer {

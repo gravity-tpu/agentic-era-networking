@@ -359,6 +359,49 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
       }
     }
   });
+
+  it('preserves historical anchor and prepends older telemetry in serverless buffer (mergeRollingSeries)', async () => {
+    const { mergeRollingSeries } = await import('../../api/zodiac.js');
+
+    // Simulate existing Vercel buffer that only started at 04:00 (100 points, 2s apart)
+    const time0400 = 1790496000000;
+    const existing = Array.from({ length: 100 }, (_, i) => ({
+      timestampMs: time0400 + i * 2000,
+      cpuUtilizationPct: 15,
+    }));
+
+    // Incoming payload from Jetson with historical points from 01:58 (1790488650000)
+    // and live points extending past 04:00
+    const time0158 = 1790488650000;
+    const incomingHistorical = Array.from({ length: 50 }, (_, i) => ({
+      timestampMs: time0158 + i * 120_000,
+      cpuUtilizationPct: 12,
+    }));
+    const incomingLive = Array.from({ length: 10 }, (_, i) => ({
+      timestampMs: existing[existing.length - 1].timestampMs + (i + 1) * 2000,
+      cpuUtilizationPct: 20,
+    }));
+    const incoming = [...incomingHistorical, ...incomingLive];
+
+    // Merge with strict limit = 120 points
+    const merged = mergeRollingSeries(existing, incoming, 120);
+    expect(merged).toBeDefined();
+    if (!merged) return;
+
+    expect(merged.length).toBeLessThanOrEqual(120);
+
+    // Invariant: The 01:58 historical anchor must be preserved
+    expect(merged[0]?.timestampMs).toBe(time0158);
+
+    // Invariant: The latest live point must be preserved
+    expect(merged[merged.length - 1]?.timestampMs).toBe(incomingLive[incomingLive.length - 1].timestampMs);
+
+    // Invariant: Strict monotonicity
+    for (let i = 1; i < merged.length; i++) {
+      expect(merged[i].timestampMs).toBeGreaterThan(merged[i - 1].timestampMs);
+    }
+  });
 });
+
 
 

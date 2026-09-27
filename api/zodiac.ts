@@ -37,30 +37,62 @@ let latestSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
 /**
  * Merges incoming time series points into existing in-memory buffer,
  * preserving continuity across bridge pushes and serverless invocations.
- * Sanjay Ghemawat Invariant: Strict monotone retention — never destroys
- * existing points when incoming payload contains identical or older timestamps.
+ * Sanjay Ghemawat Invariant: Cache-friendly flat O(N) two-pointer merge with strict deduplication.
+ * Bounded to limit while preserving the earliest historical anchor if truncating.
  */
-function mergeRollingSeries<T extends { timestampMs: number }>(
-  existing: T[] | undefined,
-  incoming: T[] | undefined,
+export function mergeRollingSeries<T extends { readonly timestampMs: number }>(
+  existing: readonly T[] | undefined,
+  incoming: readonly T[] | undefined,
   limit: number = MAX_SERVERLESS_BUFFER_POINTS
-): T[] | undefined {
+): readonly T[] | undefined {
   if (!incoming || !Array.isArray(incoming) || incoming.length === 0) {
     return existing ? (existing.length > limit ? existing.slice(-limit) : existing) : undefined;
   }
   if (!existing || !Array.isArray(existing) || existing.length === 0) {
     return incoming.length > limit ? incoming.slice(-limit) : incoming;
   }
-  const lastExistingTs = existing[existing.length - 1]?.timestampMs ?? 0;
-  const newPoints = incoming.filter((p) => p.timestampMs > lastExistingTs);
-  if (newPoints.length > 0) {
-    const combined = existing.concat(newPoints);
-    return combined.length > limit ? combined.slice(-limit) : combined;
+
+  // Sanjay Ghemawat Invariant: Flat O(N) two-pointer merge with zero heap churn
+  const result: T[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < existing.length && j < incoming.length) {
+    const pExisting = existing[i]!;
+    const pIncoming = incoming[j]!;
+    if (pExisting.timestampMs < pIncoming.timestampMs) {
+      result.push(pExisting);
+      i++;
+    } else if (pExisting.timestampMs > pIncoming.timestampMs) {
+      result.push(pIncoming);
+      j++;
+    } else {
+      // Identical timestamp: favor incoming payload (live physical truth)
+      result.push(pIncoming);
+      i++;
+      j++;
+    }
   }
-  // Council Invariant (Sanjay Ghemawat): If no strictly newer points are present
-  // (lastIncomingTs <= lastExistingTs), ALWAYS retain existing buffer to prevent
-  // destructive truncations of accumulated historical telemetry.
-  return existing.length > limit ? existing.slice(-limit) : existing;
+  while (i < existing.length) {
+    result.push(existing[i]!);
+    i++;
+  }
+  while (j < incoming.length) {
+    result.push(incoming[j]!);
+    j++;
+  }
+
+  if (result.length <= limit) {
+    return result;
+  }
+
+  // Bounded buffer with anchor preservation: if truncation is required,
+  // ensure the historical anchor (result[0]) is preserved alongside recent live points.
+  const sliced = result.slice(-(limit - 1));
+  const anchor = result[0];
+  if (anchor && sliced[0] && anchor.timestampMs < sliced[0].timestampMs) {
+    return [anchor, ...sliced];
+  }
+  return result.slice(-limit);
 }
 
 function serializeWithBigInt(obj: unknown): string {

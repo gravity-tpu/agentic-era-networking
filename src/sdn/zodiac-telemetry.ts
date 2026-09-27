@@ -171,7 +171,7 @@ export interface JetsonTelemetrySnapshot {
   readonly jetpackVersion: string;
   readonly uptime: string;
   readonly interfaces: JetsonNetworkInterfaceTelemetry[];
-  readonly timeSeries?: JetsonTimeSeriesPoint[];
+  readonly timeSeries?: readonly JetsonTimeSeriesPoint[];
 }
 
 export interface CoralTimeSeriesPoint {
@@ -227,7 +227,7 @@ export interface CoralTelemetrySnapshot {
   readonly loadedModel: string;
   readonly powerMode: string;
   readonly temperatureC: number | null;
-  readonly timeSeries?: CoralTimeSeriesPoint[];
+  readonly timeSeries?: readonly CoralTimeSeriesPoint[];
 }
 
 export interface WorkstationTimeSeriesPoint {
@@ -314,7 +314,7 @@ export interface WorkstationTelemetrySnapshot {
   readonly contextUtilizationPct: number;
   readonly edgeComputeRatioPct: number;
   readonly endpoint: string;
-  readonly timeSeries?: WorkstationTimeSeriesPoint[];
+  readonly timeSeries?: readonly WorkstationTimeSeriesPoint[];
 }
 
 export interface ZodiacFullTelemetrySnapshot {
@@ -322,7 +322,7 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly ports: ZodiacPortTelemetry[];
   readonly openflow: ZodiacOpenFlowTelemetry;
   readonly source: 'live_hardware' | 'cloud_snapshot' | 'disconnected';
-  readonly timeSeries?: ZodiacTimeSeriesPoint[] | undefined;
+  readonly timeSeries?: readonly ZodiacTimeSeriesPoint[] | undefined;
   readonly jetson?: JetsonTelemetrySnapshot | undefined;
   readonly coral?: CoralTelemetrySnapshot | undefined;
   readonly workstation?: WorkstationTelemetrySnapshot | undefined;
@@ -339,6 +339,8 @@ export interface ZodiacFullTelemetrySnapshot {
 export const CLOUD_RELAY_BOUNDS = {
   /** Maximum points sent over WAN in a single bridge push (150 points = ~6.25–10m live window across 4 appliances). */
   MAX_RELAY_POINTS: 150,
+  /** Maximum points maintained in bridge server in-memory buffer (7200 points = 5h continuous 2.5s / full day merge ceiling). */
+  MAX_BRIDGE_MEMORY_POINTS: 7200,
   /** Maximum points maintained in rolling serverless in-memory buffer (1200 points = ~10h historical / ~40m live window). */
   MAX_SERVERLESS_POINTS: 1200,
   /** Strict byte threshold for WAN push to prevent 413 Payload Too Large limits. */
