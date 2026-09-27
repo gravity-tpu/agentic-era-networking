@@ -1254,18 +1254,25 @@ export function parseAppleSiliconGpuXml(xml: string): AppleSiliconGpuInfo {
 }
 
 async function queryAppleGpuMetrics(timeoutMs: number = 200): Promise<AppleSiliconGpuInfo> {
+  const fallback: AppleSiliconGpuInfo = {
+    gpuModel: 'Apple Silicon Metal GPU',
+    gpuCoreCount: 0,
+    gpuUtilizationPct: 0,
+    rendererUtilizationPct: 0,
+    tilerUtilizationPct: 0,
+    gpuMemoryUsedBytes: 0n,
+    gpuMemoryAllocatedBytes: 0n,
+  };
+
+  // Fail-closed platform boundary (Sanjay Ghemawat): never spawn ioreg on Linux / Jetson
+  if (os.platform() !== 'darwin') {
+    return fallback;
+  }
+
   return new Promise((resolve) => {
     execFile('ioreg', ['-r', '-c', 'IOAccelerator', '-d', '1', '-a'], { timeout: timeoutMs }, (err, stdout) => {
       if (err || !stdout) {
-        resolve({
-          gpuModel: 'Apple Silicon Metal GPU',
-          gpuCoreCount: 0,
-          gpuUtilizationPct: 0,
-          rendererUtilizationPct: 0,
-          tilerUtilizationPct: 0,
-          gpuMemoryUsedBytes: 0n,
-          gpuMemoryAllocatedBytes: 0n,
-        });
+        resolve(fallback);
         return;
       }
       resolve(parseAppleSiliconGpuXml(stdout));

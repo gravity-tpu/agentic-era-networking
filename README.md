@@ -30,7 +30,7 @@ This codebase is governed by the collective engineering rigor of five foundation
 
 ## 2. Physical Hardware Architecture: Autonomous Master Appliance Co-Design
 
-This repository grounds autonomous SDN invariants in physical hardware, elevating the appliance from a passive coprocessor into a **dedicated 24/7 Autonomous Master Controller**:
+This repository grounds autonomous SDN invariants in physical hardware, elevating the appliance from a passive coprocessor into a **dedicated 24/7 Autonomous Master Controller** supported by a multi-tier hardware ecosystem:
 
 - **Detailed Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
 - **Data Plane Switch**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
@@ -39,7 +39,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 - **Dedicated Tap Ingress**: ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous mode attached to Zodiac Port 3).
 - **Untrusted Client Workload**: Raspberry Pi 3 Model B+ (isolated workload data plane on `eth0` attached to Zodiac Port 1, out-of-band management via `wlan0`).
 - **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX to Zodiac Port 2.
-- **Untethered Workstation**: Operator workstation (MacBook Pro) operates untethered over wireless WiFi 6/6E with zero downtime risk.
+- **Local AI Workstation**: MacBook Pro M5 (20-core Apple Silicon Metal GPU, Unified Memory Architecture, 26B Gemma 4 local inference, zero-dependency Property List XML parser, 64-bit BigInt token accounting ledger).
 
 ### System Architecture Diagram
 
@@ -94,12 +94,17 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 +───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
 | Raspberry Pi 3 Model B+ (Workload)|                           ▼
 |                                   |       +───────────────────────────────────────────────────+
-| * eth0: <workload-subnet> (Static)┼       | Untethered Operator Workstation (MacBook Pro)     |
-|   Untrusted SDN Agent Data Plane  |       | * Web UI: http://<jetson-mgmt-ip>:3003 & Cloud    |
-|                                   |       | * SSH Operator: ssh zodiac@<jetson-mgmt-ip>       |
-| * wlan0: <mgmt-subnet> (Wi-Fi) <──+───────| * Out-of-Band Safety: ssh agent@<pi-mgmt-ip>      |
-|   Out-of-Band Management Backdoor |       +───────────────────────────────────────────────────+
-+───────────────────────────────────+
+| * eth0: <workload-subnet> (Static)┼       | MacBook M5 · Gemma 4 Local Workstation Plane      |
+|   Untrusted SDN Agent Data Plane  |       |                                                   |
+|                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * wlan0: <mgmt-subnet> (Wi-Fi) <──+───────| * Local Ollama Engine: gemma4:26b (:11434)        |
+|   Out-of-Band Management Backdoor |       | * Council Review Gate (Pre-push verification)     |
+|                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
+|                                   |       | * Deterministic BigInt Token Accounting Ledger    |
+|                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
+|                                   |       | * Operator Console: http://localhost:3000 & Cloud |
+|                                   |       | * Out-of-Band Safety: ssh agent@<pi-mgmt-ip>      |
++───────────────────────────────────+       +───────────────────────────────────────────────────+
 ```
 
 ### Physical Interconnect Matrix
@@ -117,13 +122,14 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | **Link 6** | Dual Coral Edge TPUs | Dual USB 3.0 | Jetson Orin (USB-A) | USB 3.0 (`18d1:9302`, `1a6e:089a`) | **Dedicated Edge Accelerators**: 8 TOPS INT8 total (TPU 0 Tap DPI, TPU 1 DNS Sentinel). |
 | **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Home Wi-Fi LAN | WiFi (<mgmt-subnet>) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
 | **Link 8** | Jetson Orin (`wlP1p1s0`)| Wireless 802.11ax | Home Wi-Fi LAN | WiFi (<mgmt-subnet>) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
-| **Link 9** | MacBook Pro | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Untethered Console**: Zero data plane dependency during operator sessions. |
+| **Link 9** | MacBook M5 Workstation | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
 
-### The 4 Autonomous Appliance Invariant Roles:
+### The 5 Autonomous Appliance Invariant Roles:
 1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
 2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
 3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
 4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
+5. *Local Edge Reasoning & Token Ledger* (Apple Silicon Metal GPU local inference, pre-push Council verification, and deterministic 64-bit BigInt token accounting).
 
 ---
 

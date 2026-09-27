@@ -1,12 +1,12 @@
 # Physical SDN & Autonomous Master Appliance Architecture
 
 > **Zodiac Hardware Specification & Integration Blueprint**  
-> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Google Coral Edge TPU + Raspberry Pi 3B+ (Client Workload)  
+> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Dual Google Coral Edge TPUs + Raspberry Pi 3B+ (Client Workload) + MacBook M5 Pro (Local AI Workstation & Review Plane)  
 > **Autonomous Master Appliance:** NVIDIA Jetson Orin Nano Super (24/7 dedicated controller host, 67 TOPS Ampere GPU, TensorRT INT8 engine, Tri-Interface Stack)  
-> **Inference Accelerator:** Google Coral Edge TPU (4 TOPS INT8 accelerator, USB 3.0 line-rate packet classifier)  
+> **Inference Accelerators:** Dual Google Coral Edge TPUs (8 TOPS INT8 total compute, USB 3.0 line-rate packet classifier & DNS intent sentinel)  
+> **Local AI Workstation & Review Plane:** MacBook M5 Pro (20-core Apple Silicon Metal GPU, 26B Gemma 4 local inference, zero-dependency Property List XML parser, 64-bit BigInt token accounting ledger)  
 > **Untrusted Client Workload:** Raspberry Pi 3 Model B+ (isolated workload data plane on `eth0`, out-of-band management via `wlan0`)  
 > **Dedicated Tap Interface:** ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous capture mode)  
-> **Untethered Workstation:** MacBook Pro (remote operator console via wireless WiFi 6/6E)  
 > **Governing Paradigms:** Jeff Dean (Latency Budgets), Sanjay Ghemawat (Fail-Closed Simplicity), Quoc Le (Self-Tuning Control), Oriol Vinyals (Graph Routing), Demis Hassabis (Symbolic Proof Asymmetry).
 
 ---
@@ -15,13 +15,13 @@
 
 In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts away critical physical artifacts: hardware buffer overruns, physical link state bounces, serialization jitter, and thermal throttle events. 
 
-This architecture grounds the Zodiac control plane in **physical hardware**, elevating the compute node from a secondary peripheral into a **24/7 Autonomous Master Appliance**:
+This architecture grounds the Zodiac control plane in **physical hardware**, elevating the appliances into a multi-tier, hardware-co-designed ecosystem:
 - **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
 - **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, line-rate TensorRT neural anomaly detection (67 TOPS INT8), and physical SSD1306 OLED telemetry daemon.
-- **Google Coral Edge TPU**: Dedicated 4 TOPS INT8 USB 3.0 coprocessor executing sub-millisecond shallow packet classification on mirrored data streams without taxing the Jetson GPU pipeline.
+- **Dual Google Coral Edge TPUs**: Dedicated 8 TOPS INT8 USB 3.0 coprocessors executing sub-millisecond shallow packet classification on mirrored data streams (TPU 0) and RFC 1035 DNS intent analysis (TPU 1) without taxing the Jetson GPU pipeline.
 - **Dedicated Mirror Tap Interface (ASIX AX88179 USB GbE)**: Dedicated secondary physical NIC (`enx*`) on the Jetson Orin operating in promiscuous mode, directly cabled to Zodiac Port 3 for zero-loss packet inspection.
 - **Untrusted Client Workload (Raspberry Pi 3 Model B+)**: Physical client agent running on an isolated test subnet via `eth0` attached to Zodiac Port 1, protected by an out-of-band management backdoor via `wlan0`.
-- **Untethered Operator Workstation (MacBook Pro)**: Completely decoupled from physical data plane dependencies. The laptop can sleep, reboot, or travel without causing network flapping or interrupting traffic flow.
+- **Local AI Workstation (MacBook M5 · Gemma 4)**: High-performance Apple Silicon Metal GPU workstation executing autonomous code synthesis, the 5-Council pre-push code verification gate, real-time physical IOKit hardware profiling, and high-precision BigInt token accounting ledger. Decoupled from physical data plane dependencies while providing 100% local, air-gapped code reasoning.
 
 ---
 
@@ -78,12 +78,17 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 +───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
 | Raspberry Pi 3 Model B+ (Workload)|                           ▼
 |                                   |       +───────────────────────────────────────────────────+
-| * eth0: <workload-subnet> (Static)┼       | Untethered Operator Workstation (MacBook Pro)     |
-|   Untrusted SDN Agent Data Plane  |       | * Web UI: http://<jetson-mgmt-ip>:3003 & Cloud    |
-|                                   |       | * SSH Operator: ssh zodiac@<jetson-mgmt-ip>       |
-| * wlan0: <mgmt-subnet> (Wi-Fi) <──+───────| * Out-of-Band Safety: ssh agent@<pi-mgmt-ip>      |
-|   Out-of-Band Management Backdoor |       +───────────────────────────────────────────────────+
-+───────────────────────────────────+
+| * eth0: <workload-subnet> (Static)┼       | MacBook M5 · Gemma 4 Local Workstation Plane      |
+|   Untrusted SDN Agent Data Plane  |       |                                                   |
+|                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * wlan0: <mgmt-subnet> (Wi-Fi) <──+───────| * Local Ollama Engine: gemma4:26b (:11434)        |
+|   Out-of-Band Management Backdoor |       | * Council Review Gate (Pre-push verification)     |
+|                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
+|                                   |       | * Deterministic BigInt Token Accounting Ledger    |
+|                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
+|                                   |       | * Operator Console: http://localhost:3000 & Cloud |
+|                                   |       | * Out-of-Band Safety: ssh agent@<pi-mgmt-ip>      |
++───────────────────────────────────+       +───────────────────────────────────────────────────+
 ```
 
 ### 2.1 Physical Interconnect & Interface Mapping Matrix
@@ -106,7 +111,7 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
 | **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | Zodiac Port 1 | **Untrusted Agent Workload**: Target for SDN policy enforcement. |
 | **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
-| **MacBook Pro** | Wi-Fi 6/6E | Client Workstation | Management Plane Subnet | Home Wireless LAN | **Untethered Console**: Zero-risk development and monitoring console. |
+| **MacBook M5 Workstation** | Wi-Fi 6/6E (802.11ax) | Apple M5 Pro Metal GPU | Management Plane Subnet | Home Wireless LAN / Cloud | **Local AI Workstation & Review Plane**: 20-Core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
 
 ### 2.2 Dual-Homed Workload Architecture & Asymmetric Routing Invariant
 
@@ -301,4 +306,57 @@ On recovery, `consecutiveRelayFailures` resets to 0 and the bridge logs the outa
 
 4. **Why Cloud Relay Cadence Stays at ~2.5 s (with Backoff)**:
    The relay payload is bounded to `MAX_RELAY_POINTS` points, keeping WAN payloads under 512 KB. Neon's `persistTelemetrySnapshot()` enforces a 10 s minimum write cadence server-side (deduplication), so frequent relay calls don't cause write amplification — they just keep the serverless RAM cache warm for the live Vercel dashboard.
+
+---
+
+## 5. The Local AI Workstation Tier: MacBook M5 & Local Gemma 4 Engine
+ 
+ ### 5.1 Architecture & Computational Role
+ The MacBook Pro M5 is elevated from a passive management console into an active **Local AI Workstation Tier** within the Zodiac topology:
+ - **Silicon Acceleration:** 20-core Apple Silicon Metal GPU coupled with Unified Memory Architecture (UMA) providing high-bandwidth memory access for local model weights.
+ - **Local Inference Engine:** Hosts Google's `gemma4:26b` (26B parameter model) on Ollama (`http://localhost:11434`), executing local code reviews, patch audits, and agent policy verification with zero cloud latency and zero API cost.
+-- **Dual-Stage Council Review Architecture (Demis Hassabis & Oriol Vinyals):**
+-  - **Stage 1 (Local Edge Workstation Gate):** Executes the 5-Council pre-push code audit locally using local Metal GPU compute, providing instant feedback to the engineer before git push.
+-  - **Stage 2 (Server-Side Symbolic Invariant Gate):** To enforce true **Verification Asymmetry** (*"Probabilistic generation proposes. Deterministic systems dispose"*), local pre-push evaluation is complemented by mandatory, immutable server-side CI/CD verification gates. Unverified agentic modifications are deterministically blocked from merging to `main` until passing formal symbolic verification, BigInt invariant suites, and cryptographic provenance checks.
++
++### 5.2 Physical IOKit Telemetry Engine & Fail-Closed Platform Boundary (`src/sdn/hardware-probe.ts`)
++To satisfy Council Invariant 6 (Goodhart's Law & Epistemic Telemetry Provenance) and Sanjay Ghemawat's invariant rigor:
++- **Strict Platform Boundary & Fail-Closed Isolation:** Darwin-specific tools (`ioreg`, `sysctl`) are strictly confined to macOS. `probeWorkstationHardware()` and `queryAppleGpuMetrics()` evaluate `os.platform() !== 'darwin'` at the entry boundary, immediately failing closed to safe offline defaults (`connected: false`, `gpuUtilizationPct: 0`, `0` counters) without spawning child processes. The Master Appliance (Jetson Orin) executes its own Linux sysfs/tegrastats probes independently, ensuring zero platform cross-contamination.
++- **Metal GPU Statistics:** On Darwin, probed via `ioreg -r -c IOAccelerator -d 1 -a` to extract exact physical metrics: `gpuUtilizationPct` (Device Utilization %), `rendererUtilizationPct`, `tilerUtilizationPct`, `gpuMemoryUsedBytes` (In use system memory), and `gpuMemoryAllocatedBytes` (Alloc system memory).
++- **Formal Property List XML Parser:** Implements `parseApplePlistXml`, a deterministic, zero-dependency character-by-character scanner and bounded AST parser supporting CDATA blocks, DOCTYPE declarations, entity unescaping, and depth bounds (`MAX_PLIST_DEPTH = 32`) to eliminate fragile regex heuristics and protect against stack exhaustion.
++- **Fail-Closed Offline Reporting:** When Ollama or IOKit is disconnected, metrics evaluate to physical truth: `0` velocities, `0%` utilization, and explicit `OFFLINE` badges. Synthetic wave generation is strictly prohibited.
++
++### 5.3 Deterministic 64-Bit BigInt Token Accounting Ledger
++Council Invariant 2 mandates absolute determinism in telemetry and metering. All token counters avoid IEEE-754 floating-point casting:
++- **Counters:** `totalTokens`, `totalPromptTokens`, `totalCompletionTokens`, and `totalInferences` are computed using native `BigInt`.
++- **Wire Serialization:** Transported over JSON boundaries as decimal strings (e.g. `"14820"` rather than raw floats or scientific notation), preventing precision drift past $2^{53}-1$ across heterogeneous consumers.
++- **Real-Time Velocities & Latency Profiling:**
++  - Token Generation Velocity (`tok/s` = `(completionTokens * 1e9) / evalDurationNs`)
++  - Prompt Evaluation / Prefill Velocity (`tok/s` = `(promptTokens * 1e9) / promptEvalDurationNs`)
++  - Peak velocities (`peakTokensPerSecond`, `peakPromptTokensPerSecond`)
++  - Time-To-First-Token (TTFT) and Inter-Token Latency (ITL) jitter evaluated against Jeff Dean's Systems Latency standard (500ms–2000ms SLA).
++  - Per-token generation latency (`ms/token`).
++  - Context window saturation (`tokens / maxTokens · pct`) and edge compute ratio (`edgeComputeRatioPct: 100.0%`).
++
++### 5.4 Multi-Process Concurrency & Mutex (`scripts/ai-utils.mjs`)
++To prevent Read-Modify-Write (RMW) race conditions when concurrent inference tasks or pre-push gates execute:
++- **Intra-Process Serialization:** An asynchronous Promise queue (`enqueueTelemetryMutation`) guarantees serial execution of telemetry file mutations within the Node.js runtime.
++- **Inter-Process Mutual Exclusion:** A file-level mutex (`withTelemetryFileLock`) uses `open(lockPath, 'wx')` for atomic lock acquisition.
++- **Epistemic Process Liveness Detection:** Abandoned locks from crashed processes are recovered by probing kernel signal 0 (`process.kill(pid, 0)` -> `ESRCH`), eliminating brittle hardcoded timeouts while ensuring deterministic lock clearance.
++
++### 5.5 Hybrid Edge-to-Cloud Offload Plane & Anti-Runaway Controls (Quoc Le Invariant)
++The workstation operates as the primary edge reasoning tier with an autonomous fallback chain:
++1. `gemma4:26b` (Local Apple Silicon Metal GPU — primary)
++2. `gemini-pro-latest` (Google Cloud fallback)
++3. `claude-opus-4-8` (Anthropic Cloud fallback)
++4. `gpt-4o` (OpenAI Cloud fallback)
++5. `gemini-3.8-flash` → `claude-sonnet-4-6` → `gpt-4o-mini` (High-speed fallbacks)
++
++To prevent non-deterministic distribution shifts, latency runaway, and unbounded cloud recursion:
++- **Circuit Breaker:** Hard cap of 3 consecutive cloud attempts before failing closed to local edge quarantine.
++- **Strict Timeout Budget:** Every cloud API request enforces an immutable 10-second timeout (`AbortSignal.timeout(10000)`), preventing lagging WAN links from blocking agentic reasoning loops.
++- **Edge Compute Ratio Invariant:** Continuous telemetry tracking of `edgeComputeRatioPct`. If edge compute falls below the 90.0% SLA threshold, the system flags an invariant warning (`WARN_CLOUD_DISTRIBUTION_SHIFT`) and throttles background tasks to preserve edge sovereignty and prevent runaway cloud billing.
++- **Verifiable Ledger:** All cloud token consumption is recorded in `recordCloudInferenceMetrics` with cryptographic attribution and model metadata.
++
+
 

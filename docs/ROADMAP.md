@@ -14,48 +14,67 @@ Governed by the **Technical Staff Council Invariants**:
 ## Physical Hardware Architecture
 
 ```
-+───────────────────────────────────+                             +─────────────────────────+
-| NVIDIA Jetson Orin Nano Super     |                             | Raspberry Pi 3 Model B+ |
-| 67 TOPS Ampere, 24/7 Controller   |                             | Untrusted Workload      |
-+───┬───────────┬───────────────────+                             +────────────┬────────────+
-    │ Serial    │ Port 4 (:6633)                                               │ eth0
-    │ CDC       │                                                              │
-    ▼           │ RJ-45 Patch                                                  │ RJ-45 Patch
-+───────────────▼──────────+                                                   │
-| Zodiac FX 4-Port Switch  |                                                   │
-| OpenFlow 1.3 Data Plane  |                                                   │
-+───┬───────────┬──────────+                                                   │
-    │ Port 1    │ Port 3 (Mirror Tap)                                          │
-    │           └────────────────────┐                                         │
-    │                                │                                         │
-    │                                ▼ RJ-45 Patch                             │
-    │                     +─────────────────────+                              │
-    │                     | ASIX AX88179 USB GbE|                              │
-    │                     | (enx* Promiscuous)  |                              │
-    │                     +──────────┬──────────+                              │
-    │                                │ USB 3.0                                 │
-    │                                ▼                                         │
-    │                   +──────────────────────────────────+                   │
-    │                   | Jetson Orin Tri-Interface Stack  |                   │
-    │                   | * Ctrl: enP8p1s0 (<ctrl-subnet>) |                   │
-    │                   | * Tap:  enx* (Promiscuous)       |                   │
-    │                   | * Mgmt: wlP1p1s0 (<mgmt-subnet>) |                   │
-    │                   +────────────────┬─────────────────+                   │
-    │                                    │                                     │
-    │                                    │ Dual USB 3.0 SuperSpeed             │
-    │                                    ▼                                     │
-    │                          +───────────────────────────────────+           │
-    │                          | Dual Coral Edge TPUs (8 TOPS)     |           │
-    │                          | * TPU 0: Tap Packet Classifier    |           │
-    │                          | * TPU 1: DNS Intent Sentinel      |           │
-    │                          +───────────────────────────────────+           │
-    │                                                                          │
-    └──────────────────────────────────────────────────────────────────────────┘
-                                         │
-                                         ▼ Wireless WiFi (<mgmt-subnet>)
-         MacBook Pro (Untethered — connect via WiFi/SSH to push code changes only)
-         ↕ ssh zodiac@<jetson-mgmt-ip>   |   https://agentic-era-networking.vercel.app
-         ↕ ssh agent@<pi-mgmt-ip> (Out-of-Band Safety Link)
+                                            +───────────────────────────────────+
+                                            |    Public Internet / Home LAN     |
+                                            +-----------------+-----------------+
+                                                              │ (Mesh WiFi)
+                                                              ▼
+                                            +───────────────────────────────────+
+                                            |     ISP Gateway / Mesh Node       |
+                                            +-----------------+-----------------+
+                                                              │ 100BASE-TX Ethernet
+                                                              ▼
++─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+|                                  Zodiac FX OpenFlow Switch (Data Plane)                                 |
+|                                                                                                         |
+|   [Port 1]                      [Port 2]                  [Port 3]                    [Port 4]          |
+|   Untrusted Agent Workload      Gateway Uplink            Hardware Mirror Tap         OpenFlow 1.3 Ctrl |
+|   VLAN 100 (OpenFlow)           VLAN 100 (OpenFlow)       VLAN 100 (OpenFlow)         VLAN 200 (Native) |
+|   100BASE-TX                    100BASE-TX                100BASE-TX                  100BASE-TX        |
++───────┬─────────────────────────────▲─────────────────────────┬───────────────────────────▲─────────────+
+        │                             │                         │                           │
+        │ RJ-45 Patch                 │ RJ-45 Patch             │ RJ-45 Patch               │ RJ-45 Patch
+        │                             │                         ▼                           │
+        │                             │             +───────────────────────+               │
+        │                             │             | ASIX AX88179 USB GbE  |               │
+        │                             │             | (enx* Promiscuous)    |               │
+        │                             │             +───────────┬───────────+               │
+        │                             │                         │ USB 3.0                   │
+        │                             │                         ▼                           │
+        │                        +----+-----------------------------------------------------+   Micro-USB
+        │                        |         NVIDIA Jetson Orin Nano Super Master Appliance   |<──Serial CDC
+        │                        |                                                          |   /dev/ttyACM0
+        │                        |  * Controller Plane: enP8p1s0 (<ctrl-subnet>) <──────────+───(115200 8N1)
+        │                        |  * Mirror Tap Ingress: enx* (Promiscuous)                |
+        │                        |  * Management Plane: wlP1p1s0 (<mgmt-subnet>)            |
+        │                        |  * OpenFlow 1.3 Controller Plane (:6633)                 |
+        │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
+        │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
+        │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
+        │                        +──────────────────────────────┬───────────────────────────+
+        │                                                       │ Dual USB 3.0 SuperSpeed
+        │                                                       ▼
+        │                                           +───────────────────────────────────────+
+        │                                           | Dual Google Coral Edge TPUs (8 TOPS)  |
+        │                                           | * TPU 0: Port 3 Mirror Tap DPI        |
+        │                                           | * TPU 1: RFC 1035 DNS Intent Sentinel |
+        │                                           +───────────────────────────────────────+
+        │                                                       │
+        ▼                                                       │ Management Plane
++───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
+| Raspberry Pi 3 Model B+ (Workload)|                           ▼
+|                                   |       +───────────────────────────────────────────────────+
+| * eth0: <workload-subnet> (Static)┼       | MacBook M5 · Gemma 4 Local Workstation Plane      |
+|   Untrusted SDN Agent Data Plane  |       |                                                   |
+|                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * wlan0: <mgmt-subnet> (Wi-Fi) <──+───────| * Local Ollama Engine: gemma4:26b (:11434)        |
+|   Out-of-Band Management Backdoor |       | * Council Review Gate (Pre-push verification)     |
+|                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
+|                                   |       | * Deterministic BigInt Token Accounting Ledger    |
+|                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
+|                                   |       | * Operator Console: http://localhost:3000 & Cloud |
+|                                   |       | * Out-of-Band Safety: ssh agent@<pi-mgmt-ip>      |
++───────────────────────────────────+       +───────────────────────────────────────────────────+
 ```
 
 > [!NOTE]
@@ -70,7 +89,7 @@ Governed by the **Technical Staff Council Invariants**:
 | **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism (Phase 2A) | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
 | **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (<workload-subnet>), `wlan0` (<mgmt-subnet>) | ✅ Yes |
-| **MacBook Pro** | Dev Workstation — SSH coding, web dashboard monitoring | WiFi 6/6E (<mgmt-subnet>) | ❌ Untethered |
+| **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU | ❌ On-Demand / Dev Session |
 
 ## Phase Overview
 
@@ -127,6 +146,16 @@ Governed by the **Technical Staff Council Invariants**:
 | - src/db/local-telemetry-db.ts: append-only per-day JSONL, async parallel reads, 30d pruning    |
 | - Query priority on localhost: local NVMe first -> Neon fallback -> in-memory (no internet req.) |
 | - Cloud relay exponential backoff: 5s->10s->20s->60s cap on monotonic performance.now() clock   |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+| Phase 0.10: Local AI Workstation Tier & Deterministic Token Accounting Ledger (COMPLETE)          |
+| - Elevated MacBook M5 to 6th active appliance tier (MacBook M5 · Gemma 4 Workstation)             |
+| - Direct Apple Silicon IOKit hardware profiling: ioreg -r -c IOAccelerator, zero-dep XML parser   |
+| - Deterministic BigInt token accounting ledger: prompt, completion, total tok/s, peak velocity     |
+| - Jeff Dean TTFT latency budget tracking: monotonic hrtime nanoseconds, ms/token profiling       |
+| - Epistemic concurrency mutex: kernel signal 0 orphaned lock recovery, TOCTOU-free state updates  |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v
@@ -274,6 +303,33 @@ Governed by the **Technical Staff Council Invariants**:
   - Backoff schedule: `consecutiveRelayFailures` 0 → immediate | 1 → 5 s | 2 → 10 s | 3 → 20 s | 4 → 40 s | ≥5 → 60 s cap.
   - `currentRelayBackoffMs` getter is the single source of truth for the formula (eliminates duplication).
   - Recovery logged with outage failure count; `consecutiveRelayFailures` resets to 0 on `res.ok`.
+
+### Phase 0.10: Local AI Workstation Tier & Deterministic Token Accounting Ledger
+*Status: Complete (Commit `e602654`)*
+- [x] **Milestone 0.10A: 6th Active Appliance Tier — MacBook M5 & Gemma 4 Engine**:
+  - Elevated the local MacBook from a passive dev terminal into a first-class autonomous AI Workstation tier (`MacBook M5 · Gemma 4 Workstation`).
+  - Added dedicated navigation tab, breadcrumbs, status badges, and responsive UI views to the operator console.
+- [x] **Milestone 0.10B: Physical Apple Silicon IOKit Hardware Profiling**:
+  - Direct hardware interrogation via `ioreg -r -c IOAccelerator -d 1 -a` without third-party CLI dependencies.
+  - Implemented zero-dependency Property List XML recursive-descent parser (`tokenizeApplePlistXml`, `parseApplePlistXml`) with CDATA, entity decoding, and depth bounds (`MAX_PLIST_DEPTH = 32`).
+  - Extracted physical Metal GPU utilization (`Device Utilization %`), allocated VRAM, in-use system memory, CPU load, and core counts.
+  - Strictly adhering to Council Invariant 6 (Epistemic Provenance): evaluates to 0 utilization and offline badge when disconnected; zero synthetic waveforms.
+- [x] **Milestone 0.10C: Deterministic BigInt Token Accounting Ledger**:
+  - Track cumulative prompt tokens, completion tokens, and total token throughput.
+  - Native 64-bit `BigInt` arithmetic serialized as decimal strings across JSON wire boundaries to prevent IEEE-754 float precision loss beyond $2^{53}-1$ (Council Invariant 2).
+  - High-precision telemetry metrics: Generation Velocity (`tok/s`), Prompt Prefill Velocity (`tok/s`), Peak Velocities, Context Window Saturation %, and Edge vs Cloud Offload Ratio.
+- [x] **Milestone 0.10D: Jeff Dean TTFT Latency Budget Tracking**:
+  - High-precision nanosecond timing (`process.hrtime.bigint()`) tracking Time-to-First-Token (TTFT) and per-token generation latency (`ms/token`).
+  - Evaluated against the Jeff Dean datacenter and LLM latency budget (500 ms – 2,000 ms target for TTFT).
+- [x] **Milestone 0.10E: Atomic Concurrency & Epistemic Mutex Lock**:
+  - Implemented Promise-chained in-memory mutation queue (`enqueueTelemetryMutation`) with single-flight file lock (`withTelemetryFileLock`).
+  - Kernel signal 0 orphaned lock recovery (`process.kill(pid, 0)`) recovering stale locks deterministically without artificial time heuristics.
+  - Comprehensive invariant test suite validating 20 concurrent parallel inferences under heavy contention with zero dropped counts.
+- [x] **Milestone 0.10F: Dual-Stage Council Verification & Edge Anti-Runaway Controls**:
+  - Dual-Stage Verification Gate (Hassabis & Vinyals): Stage 1 local workstation pre-push audit paired with Stage 2 mandatory server-side CI/CD symbolic invariant verifier.
+  - Platform-Isolated Telemetry (Ghemawat): `probeWorkstationHardware()` and `queryAppleGpuMetrics()` fail closed immediately on non-Darwin platforms (`os.platform() !== 'darwin'`).
+  - Anti-Runaway Offload Controls (Quoc Le): 3-attempt circuit breaker, 10s strict timeout budget (`AbortSignal.timeout(10000)`), and 90% edge compute ratio SLA alert to prevent cloud-loop distribution runaway.
+
 
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
