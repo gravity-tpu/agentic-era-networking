@@ -30,6 +30,7 @@
   let activeDeviceId = 'zodiac';
   let jetsonTimeSeriesBuffer = [];
   let coralTimeSeriesBuffer = [];
+  let workstationTimeSeriesBuffer = [];
   let coralBufferSeq = 0; // Monotonic sequence counter for coral buffer mutations (Council Invariant: Zero cache collision risk)
 
   // Restore persisted time range from URL search param or localStorage (Council Invariant: Deterministic Operator UX)
@@ -60,6 +61,7 @@
   let historicalTimeSeriesBuffer = [];
   let historicalJetsonTimeSeriesBuffer = [];
   let historicalCoralTimeSeriesBuffer = [];
+  let historicalWorkstationTimeSeriesBuffer = [];
 
   // ── History + live stitch cache ───────────────────────────────────────────
   // Merging historical (JSONL) and live buffer tails is called every 2s from the
@@ -69,6 +71,7 @@
     zodiac: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
     jetson: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
     coral:  { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
+    workstation: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
   };
 
   function stitchWithLive(histBuf, liveBuf, slot) {
@@ -240,17 +243,82 @@
     btnDeviceCoral1: document.getElementById('btn-device-coral-1'),
     btnDeviceCoral2: document.getElementById('btn-device-coral-2'),
     btnDeviceCoral: document.getElementById('btn-device-coral'),
+    btnDeviceWorkstation: document.getElementById('btn-device-workstation'),
+    btnDeviceWorkstationBadge: document.getElementById('btn-device-workstation-badge'),
     btnDeviceOpenflow: document.getElementById('btn-device-openflow'),
     dotDeviceZodiac: document.getElementById('dot-device-zodiac'),
     dotDeviceOrin: document.getElementById('dot-device-orin'),
     dotDeviceCoral1: document.getElementById('dot-device-coral-1'),
     dotDeviceCoral2: document.getElementById('dot-device-coral-2'),
     dotDeviceCoral: document.getElementById('dot-device-coral'),
+    dotDeviceWorkstation: document.getElementById('dot-device-workstation'),
     viewDeviceZodiac: document.getElementById('view-device-zodiac'),
     viewDeviceOrin: document.getElementById('view-device-orin'),
     viewDeviceCoral1: document.getElementById('view-device-coral-1'),
     viewDeviceCoral2: document.getElementById('view-device-coral-2'),
     viewDeviceCoral: document.getElementById('view-device-coral'),
+    viewDeviceWorkstation: document.getElementById('view-device-workstation'),
+
+    // Workstation (MacBook M5 / Gemma 4) Elements
+    wsChipBadge: document.getElementById('ws-chip-badge'),
+    wsGpuBadge: document.getElementById('ws-gpu-badge'),
+    wsModelBadge: document.getElementById('ws-model-badge'),
+    wsOllamaBadge: document.getElementById('ws-ollama-badge'),
+    wsKpiGpuUtil: document.getElementById('ws-kpi-gpu-util'),
+    wsBarGpuUtil: document.getElementById('ws-bar-gpu-util'),
+    wsKpiGpuModel: document.getElementById('ws-kpi-gpu-model'),
+    wsKpiRenderTile: document.getElementById('ws-kpi-render-tile'),
+    wsKpiTokRate: document.getElementById('ws-kpi-tok-rate'),
+    wsBarTokRate: document.getElementById('ws-bar-tok-rate'),
+    wsKpiPromptRate: document.getElementById('ws-kpi-prompt-rate'),
+    wsKpiTotalTokens: document.getElementById('ws-kpi-total-tokens'),
+    wsKpiVramUsage: document.getElementById('ws-kpi-vram-usage'),
+    wsBarVram: document.getElementById('ws-bar-vram'),
+    wsKpiRamSummary: document.getElementById('ws-kpi-ram-summary'),
+    wsKpiCpuSummary: document.getElementById('ws-kpi-cpu-summary'),
+    wsKpiGatewayStatus: document.getElementById('ws-kpi-gateway-status'),
+    wsKpiActiveModel: document.getElementById('ws-kpi-active-model'),
+    wsKpiLastLatency: document.getElementById('ws-kpi-last-latency'),
+    wsHwStatusBadge: document.getElementById('ws-hw-status-badge'),
+    wsTblGpuSpec: document.getElementById('ws-tbl-gpu-spec'),
+    wsTblGpuTelemetry: document.getElementById('ws-tbl-gpu-telemetry'),
+    wsTblGpuBar: document.getElementById('ws-tbl-gpu-bar'),
+    wsTblGpuPct: document.getElementById('ws-tbl-gpu-pct'),
+    wsTblGpuBadge: document.getElementById('ws-tbl-gpu-badge'),
+    wsTblCpuSpec: document.getElementById('ws-tbl-cpu-spec'),
+    wsTblCpuTelemetry: document.getElementById('ws-tbl-cpu-telemetry'),
+    wsTblCpuBar: document.getElementById('ws-tbl-cpu-bar'),
+    wsTblCpuPct: document.getElementById('ws-tbl-cpu-pct'),
+    wsTblRamSpec: document.getElementById('ws-tbl-ram-spec'),
+    wsTblRamTelemetry: document.getElementById('ws-tbl-ram-telemetry'),
+    wsTblRamBar: document.getElementById('ws-tbl-ram-bar'),
+    wsTblRamPct: document.getElementById('ws-tbl-ram-pct'),
+    wsTblVramTelemetry: document.getElementById('ws-tbl-vram-telemetry'),
+    wsTblVramBar: document.getElementById('ws-tbl-vram-bar'),
+    wsTblVramPct: document.getElementById('ws-tbl-vram-pct'),
+    wsTblVramBadge: document.getElementById('ws-tbl-vram-badge'),
+    wsKpiPeakTokRate: document.getElementById('ws-kpi-peak-tok-rate'),
+    wsKpiTtft: document.getElementById('ws-kpi-ttft'),
+    wsOllamaModelBadge: document.getElementById('ws-ollama-model-badge'),
+    wsTblTokenModel: document.getElementById('ws-tbl-token-model'),
+    wsTblEdgeRatio: document.getElementById('ws-tbl-edge-ratio'),
+    wsTblContextLen: document.getElementById('ws-tbl-context-len'),
+    wsTblTotalInferences: document.getElementById('ws-tbl-total-inferences'),
+    wsTblTotalAllTok: document.getElementById('ws-tbl-total-all-tok'),
+    wsTblTotalPromptTok: document.getElementById('ws-tbl-total-prompt-tok'),
+    wsTblTotalCompTok: document.getElementById('ws-tbl-total-comp-tok'),
+    wsTblAvgTokens: document.getElementById('ws-tbl-avg-tokens'),
+    wsTblLastTokens: document.getElementById('ws-tbl-last-tokens'),
+    wsTblGenToks: document.getElementById('ws-tbl-gen-toks'),
+    wsTblPromptToks: document.getElementById('ws-tbl-prompt-toks'),
+    wsTblTtft: document.getElementById('ws-tbl-ttft'),
+    wsTblPerTokLat: document.getElementById('ws-tbl-per-tok-lat'),
+    wsTblLastLatency: document.getElementById('ws-tbl-last-latency'),
+    wsTblEndpoint: document.getElementById('ws-tbl-endpoint'),
+    wsChartGpuLegend: document.getElementById('ws-chart-gpu-legend'),
+    wsChartTokLegend: document.getElementById('ws-chart-tok-legend'),
+    wsChartPromptLegend: document.getElementById('ws-chart-prompt-legend'),
+    chartWorkstationCanvas: document.getElementById('chart-workstation'),
 
     // Jetson Orin Nano Elements
     orinJetpack: document.getElementById('orin-jetpack'),
@@ -595,6 +663,10 @@
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (activeDeviceId === 'coral-2') {
         els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel';
+      } else if (activeDeviceId === 'openflow') {
+        els.breadcrumbName.innerText = 'OpenFlow 1.3 Controller';
+      } else if (activeDeviceId === 'workstation') {
+        els.breadcrumbName.innerText = 'MacBook M5 · Gemma 4 Workstation (26B)';
       } else {
         els.breadcrumbName.innerText = devName;
       }
@@ -607,6 +679,10 @@
         els.sidebarDevName.innerText = 'Coral_TPU_Tap_DPI';
       } else if (activeDeviceId === 'coral-2') {
         els.sidebarDevName.innerText = 'Coral_TPU_DNS_Sentinel';
+      } else if (activeDeviceId === 'openflow') {
+        els.sidebarDevName.innerText = 'OpenFlow_Controller';
+      } else if (activeDeviceId === 'workstation') {
+        els.sidebarDevName.innerText = 'MacBook_M5_Gemma4';
       } else {
         els.sidebarDevName.innerText = devName;
       }
@@ -619,6 +695,10 @@
         els.sidebarIp.innerText = 'USB 3.1 · Bus 002 Dev 018 (Port 2)';
       } else if (activeDeviceId === 'coral-2') {
         els.sidebarIp.innerText = 'USB 3.1 · Bus 002 Dev 023 (Port 3)';
+      } else if (activeDeviceId === 'openflow') {
+        els.sidebarIp.innerText = 'TCP 6653 · OpenFlow 1.3';
+      } else if (activeDeviceId === 'workstation') {
+        els.sidebarIp.innerText = '127.0.0.1:11434 · Metal 20-Core';
       } else {
         els.sidebarIp.innerText = devIp !== '--' ? `${devIp} · Port 4` : 'Port 4 (SDN Link)';
       }
@@ -1309,6 +1389,225 @@
           }
         }
       }
+    }
+
+    // 9. MacBook M5 Gemma 4 Workstation Appliance Telemetry
+    if (snapshot.workstation) {
+      const ws = snapshot.workstation;
+      const isOnline = Boolean(ws.detected && ws.ollamaStatus !== 'OFFLINE');
+
+      if (els.dotDeviceWorkstation) {
+        els.dotDeviceWorkstation.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
+      }
+      if (els.btnDeviceWorkstationBadge) {
+        els.btnDeviceWorkstationBadge.innerText = ws.activeModel ? ws.activeModel.split(':')[0] : 'Gemma 4';
+        els.btnDeviceWorkstationBadge.className = `cf-pill-badge ${isOnline ? 'amber' : 'gray'}`;
+      }
+
+      // Badges
+      if (els.wsChipBadge) els.wsChipBadge.innerText = ws.chipModel || 'Apple Silicon';
+      if (els.wsGpuBadge) els.wsGpuBadge.innerText = `${ws.gpuCoreCount || 20}-Core Metal GPU`;
+      if (els.wsModelBadge) els.wsModelBadge.innerText = `${ws.activeModel || 'gemma4:26b'} · ${ws.modelParameterSize || '25.2B'}`;
+      if (els.wsOllamaBadge) {
+        els.wsOllamaBadge.innerText = isOnline ? `Ollama ${ws.ollamaStatus}` : 'Ollama Offline';
+        els.wsOllamaBadge.className = `cf-pill-badge ${isOnline ? 'green' : 'gray'}`;
+      }
+
+      // KPI 1: GPU Compute
+      const gpuPct = ws.gpuUtilizationPct ?? 0;
+      if (els.wsKpiGpuUtil) els.wsKpiGpuUtil.innerText = `${gpuPct}%`;
+      if (els.wsBarGpuUtil) els.wsBarGpuUtil.style.width = `${Math.min(100, Math.max(0, gpuPct))}%`;
+      if (els.wsKpiGpuModel) els.wsKpiGpuModel.innerText = `${ws.gpuModel || 'Apple M5 Pro'} (${ws.gpuCoreCount || 20} Cores)`;
+      if (els.wsKpiRenderTile) {
+        els.wsKpiRenderTile.innerText = `R: ${ws.rendererUtilizationPct ?? 0}% | T: ${ws.tilerUtilizationPct ?? 0}%`;
+      }
+
+      // KPI 2: Token Velocity & Totals
+      const tokRate = ws.tokensPerSecond ?? 0;
+      const promptTokRate = ws.promptTokensPerSecond ?? 0;
+      const peakTokRate = ws.peakTokensPerSecond ?? tokRate;
+      const totalTokens = safeBigInt(ws.totalTokens || (safeBigInt(ws.totalPromptTokens) + safeBigInt(ws.totalCompletionTokens)));
+      if (els.wsKpiTokRate) {
+        els.wsKpiTokRate.innerHTML = `${tokRate.toFixed(1)} <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`;
+      }
+      if (els.wsKpiPeakTokRate) {
+        els.wsKpiPeakTokRate.innerText = peakTokRate > 0 ? `Peak: ${peakTokRate.toFixed(1)} t/s` : 'Gemma 4';
+      }
+      if (els.wsBarTokRate) {
+        const peakTokCeil = Math.max(100, Math.ceil(peakTokRate / 20) * 20);
+        const tokPct = Math.min(100, Math.max(0, (tokRate / peakTokCeil) * 100));
+        els.wsBarTokRate.style.width = `${tokPct}%`;
+      }
+      if (els.wsKpiPromptRate) {
+        els.wsKpiPromptRate.innerHTML = `Prefill: <strong>${promptTokRate.toFixed(1)} tok/s</strong>`;
+      }
+      if (els.wsKpiTotalTokens) {
+        els.wsKpiTotalTokens.innerHTML = `Ledger: <strong>${formatNumber(totalTokens)} tok</strong>`;
+      }
+
+      // KPI 3: Unified Memory
+      const vramInUse = safeBigInt(ws.gpuMemoryUsedBytes);
+      const vramAlloc = safeBigInt(ws.gpuMemoryAllocatedBytes);
+      if (els.wsKpiVramUsage) {
+        els.wsKpiVramUsage.innerText = `${formatBytes(vramInUse)} / ${formatBytes(vramAlloc)}`;
+      }
+      if (els.wsBarVram) {
+        const vramPct = vramAlloc > 0n ? Math.min(100, Number((vramInUse * 100n) / vramAlloc)) : 0;
+        els.wsBarVram.style.width = `${vramPct}%`;
+      }
+      const ramUsed = safeBigInt(ws.memoryUsedBytes);
+      const ramTotal = safeBigInt(ws.memoryTotalBytes);
+      if (els.wsKpiRamSummary) {
+        els.wsKpiRamSummary.innerText = `RAM: ${formatBytes(ramUsed)} / ${formatBytes(ramTotal)}`;
+      }
+      if (els.wsKpiCpuSummary) {
+        els.wsKpiCpuSummary.innerText = `CPU: ${ws.cpuUtilizationPct ?? 0}% (${ws.cpuCores || 18}-Core)`;
+      }
+
+      // KPI 4: Council Verification Gateway
+      if (els.wsKpiGatewayStatus) {
+        els.wsKpiGatewayStatus.innerText = isOnline ? 'Verified Active' : 'Offline / Standby';
+        els.wsKpiGatewayStatus.style.color = isOnline ? '#7e22ce' : 'var(--cf-text-secondary)';
+      }
+      if (els.wsKpiActiveModel) {
+        els.wsKpiActiveModel.innerHTML = `Model: <strong>${escapeHtml(ws.activeModel || 'gemma4:26b')}</strong>`;
+      }
+      const ttftNs = safeBigInt(ws.timeToFirstTokenNs || ws.lastPromptEvalDurationNs);
+      const ttftMs = (Number(ttftNs) / 1e6).toFixed(0);
+      if (els.wsKpiTtft) {
+        els.wsKpiTtft.innerText = `${ttftMs} ms`;
+      }
+
+      // Deep Dive Table 1: Apple Silicon Hardware
+      if (els.wsTblGpuSpec) els.wsTblGpuSpec.innerText = `${ws.gpuModel || 'Apple M5 Pro Metal GPU'} (${ws.gpuCoreCount || 20} Cores)`;
+      if (els.wsTblGpuTelemetry) {
+        els.wsTblGpuTelemetry.innerText = `Device: ${ws.gpuUtilizationPct ?? 0}% | Renderer: ${ws.rendererUtilizationPct ?? 0}% | Tiler: ${ws.tilerUtilizationPct ?? 0}%`;
+      }
+      if (els.wsTblGpuBar) els.wsTblGpuBar.style.width = `${Math.min(100, Math.max(0, gpuPct))}%`;
+      if (els.wsTblGpuPct) els.wsTblGpuPct.innerText = `${gpuPct}%`;
+      if (els.wsTblGpuBadge) {
+        els.wsTblGpuBadge.innerText = isOnline ? 'Metal Active' : 'Metal Idle';
+        els.wsTblGpuBadge.className = `cf-pill-badge ${isOnline ? 'green' : 'gray'}`;
+      }
+
+      if (els.wsTblCpuSpec) els.wsTblCpuSpec.innerText = `${ws.cpuCores || 18} Cores (${ws.chipModel || 'Apple Silicon'})`;
+      const loadArr = ws.loadAvg;
+      if (els.wsTblCpuTelemetry) {
+        els.wsTblCpuTelemetry.innerText = `Load Avg: ${Array.isArray(loadArr) ? loadArr.map(v => typeof v === 'number' ? v.toFixed(2) : String(v)).join(', ') : '--'}`;
+      }
+      const cpuPct = ws.cpuUtilizationPct ?? 0;
+      if (els.wsTblCpuBar) els.wsTblCpuBar.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
+      if (els.wsTblCpuPct) els.wsTblCpuPct.innerText = `${cpuPct}%`;
+
+      if (els.wsTblRamSpec) els.wsTblRamSpec.innerText = `${formatBytes(ramTotal)} LPDDR5X Unified Architecture`;
+      const ramFree = safeBigInt(ws.memoryFreeBytes);
+      if (els.wsTblRamTelemetry) {
+        els.wsTblRamTelemetry.innerText = `Used: ${formatBytes(ramUsed)} | Free: ${formatBytes(ramFree)}`;
+      }
+      const ramPct = ramTotal > 0n ? Math.min(100, Number((ramUsed * 100n) / ramTotal)) : 0;
+      if (els.wsTblRamBar) els.wsTblRamBar.style.width = `${ramPct}%`;
+      if (els.wsTblRamPct) els.wsTblRamPct.innerText = `${ramPct}%`;
+
+      if (els.wsTblVramTelemetry) {
+        els.wsTblVramTelemetry.innerText = `In-Use: ${formatBytes(vramInUse)} | Allocated: ${formatBytes(vramAlloc)}`;
+      }
+      const vramPct2 = vramAlloc > 0n ? Math.min(100, Number((vramInUse * 100n) / vramAlloc)) : 0;
+      if (els.wsTblVramBar) els.wsTblVramBar.style.width = `${vramPct2}%`;
+      if (els.wsTblVramPct) els.wsTblVramPct.innerText = `${vramPct2}%`;
+      if (els.wsTblVramBadge) {
+        const hasVram = vramInUse > 0n;
+        els.wsTblVramBadge.innerText = hasVram ? 'Weights Mapped' : 'Standby';
+        els.wsTblVramBadge.className = `cf-pill-badge ${hasVram ? 'green' : 'gray'}`;
+      }
+
+      // Deep Dive Table 2: Gemma 4 Token Accounting
+      if (els.wsOllamaModelBadge) {
+        els.wsOllamaModelBadge.innerText = `${ws.activeModel || 'gemma4:26b'} ${ws.modelQuantization || 'Q4_K_M'}`;
+      }
+      if (els.wsTblTokenModel) {
+        els.wsTblTokenModel.innerText = `${ws.activeModel || 'gemma4:26b'} (${ws.modelParameterSize || '25.2B'} parameters, ${ws.modelQuantization || 'Q4_K_M'}, ${ws.modelFormat || 'gguf'})`;
+      }
+      if (els.wsTblEdgeRatio) {
+        const edgeRatio = typeof ws.edgeComputeRatioPct === 'number' ? ws.edgeComputeRatioPct : 100.0;
+        els.wsTblEdgeRatio.innerText = `${edgeRatio.toFixed(1)}% Local Metal GPU (Zero Cloud Tokens)`;
+      }
+      if (els.wsTblTotalInferences) {
+        els.wsTblTotalInferences.innerText = formatNumber(ws.totalInferences || 0n);
+      }
+      if (els.wsTblTotalAllTok) {
+        els.wsTblTotalAllTok.innerText = `${formatNumber(totalTokens)} tokens`;
+      }
+      if (els.wsTblTotalPromptTok) {
+        els.wsTblTotalPromptTok.innerText = formatNumber(ws.totalPromptTokens || 0n);
+      }
+      if (els.wsTblTotalCompTok) {
+        els.wsTblTotalCompTok.innerText = formatNumber(ws.totalCompletionTokens || 0n);
+      }
+      if (els.wsTblAvgTokens) {
+        const infCount = safeBigInt(ws.totalInferences);
+        const avgToks = infCount > 0n ? totalTokens / infCount : 0n;
+        els.wsTblAvgTokens.innerText = `${formatNumber(avgToks)} tokens/run`;
+      }
+      if (els.wsTblLastTokens) {
+        const lastP = ws.lastPromptTokenCount ?? 0;
+        const lastC = ws.lastTokenCount ?? 0;
+        els.wsTblLastTokens.innerText = `${formatNumber(lastP)} prompt / ${formatNumber(lastC)} completion`;
+      }
+      if (els.wsTblContextLen) {
+        const ctxLen = ws.modelContextLength || 262144;
+        const lastTotal = ws.lastTotalTokenCount ?? ((ws.lastPromptTokenCount ?? 0) + (ws.lastTokenCount ?? 0));
+        const ctxPct = ctxLen > 0 ? ((lastTotal / ctxLen) * 100).toFixed(1) : '0.0';
+        els.wsTblContextLen.innerText = `${formatNumber(lastTotal)} / ${formatNumber(ctxLen)} tokens (${ctxPct}% used)`;
+      }
+      if (els.wsTblGenToks) {
+        const peakGen = ws.peakTokensPerSecond ? ` (Peak: ${ws.peakTokensPerSecond.toFixed(1)} tok/s)` : '';
+        els.wsTblGenToks.innerText = `${(ws.tokensPerSecond || 0).toFixed(1)} tok/s${peakGen}`;
+      }
+      if (els.wsTblPromptToks) {
+        const peakPrompt = ws.peakPromptTokensPerSecond ? ` (Peak: ${ws.peakPromptTokensPerSecond.toFixed(1)} tok/s)` : '';
+        els.wsTblPromptToks.innerText = `${(ws.promptTokensPerSecond || 0).toFixed(1)} tok/s${peakPrompt}`;
+      }
+      if (els.wsTblTtft) {
+        const ttftValMs = (Number(ttftNs) / 1e6).toFixed(1);
+        const isSlaOk = Number(ttftValMs) < 2000;
+        els.wsTblTtft.innerHTML = `${ttftValMs} ms <span class="cf-pill-badge ${isSlaOk ? 'green' : 'amber'}" style="margin-left:0.5rem; font-size:0.7rem;">${isSlaOk ? 'Dean SLA Passed (<2s)' : 'SLA Exceeded'}</span>`;
+      }
+      if (els.wsTblPerTokLat) {
+        const perTokNs = safeBigInt(ws.perTokenLatencyNs);
+        const perTokMs = perTokNs > 0n
+          ? (Number(perTokNs) / 1e6).toFixed(2)
+          : (ws.tokensPerSecond > 0 ? (1000 / ws.tokensPerSecond).toFixed(2) : '--');
+        els.wsTblPerTokLat.innerText = `${perTokMs} ms/token`;
+      }
+      if (els.wsTblLastLatency) {
+        const latNs = safeBigInt(ws.lastInferenceLatencyNs);
+        const latMs = (Number(latNs) / 1e6).toFixed(1);
+        els.wsTblLastLatency.innerText = `${formatNumber(latNs)} ns (${latMs} ms)`;
+      }
+      if (els.wsTblEndpoint) {
+        els.wsTblEndpoint.innerText = ws.endpoint || 'http://localhost:11434';
+      }
+
+      // Time series buffer update for Workstation
+      if (Array.isArray(ws.timeSeries) && ws.timeSeries.length > 0) {
+        const lastServerTs = ws.timeSeries[ws.timeSeries.length - 1].timestampMs;
+        if (workstationTimeSeriesBuffer.length === 0 || (workstationTimeSeriesBuffer[0] && lastServerTs < workstationTimeSeriesBuffer[0].timestampMs)) {
+          workstationTimeSeriesBuffer = ws.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        } else {
+          const lastLocalTs = workstationTimeSeriesBuffer[workstationTimeSeriesBuffer.length - 1].timestampMs;
+          const newPts = ws.timeSeries.filter((p) => p.timestampMs > lastLocalTs);
+          if (newPts.length > 0) {
+            workstationTimeSeriesBuffer.push(...newPts);
+            if (workstationTimeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
+              workstationTimeSeriesBuffer = workstationTimeSeriesBuffer.slice(-MAX_FRONTEND_BUFFER_POINTS);
+            }
+          }
+        }
+      }
+
+      if (els.wsChartGpuLegend) els.wsChartGpuLegend.innerText = `GPU: ${gpuPct}%`;
+      if (els.wsChartTokLegend) els.wsChartTokLegend.innerText = `Tokens: ${(ws.tokensPerSecond || 0).toFixed(1)} tok/s`;
+      if (els.wsChartPromptLegend) els.wsChartPromptLegend.innerText = `Prefill: ${(ws.promptTokensPerSecond || 0).toFixed(1)} tok/s`;
     }
 
     updateCharts();
@@ -2240,6 +2539,154 @@
     return mapped;
   }
 
+  function getWorkstationPointsForDisplay() {
+    if (currentRange !== 'live') {
+      if (historicalWorkstationTimeSeriesBuffer.length > 0) {
+        return stitchWithLive(historicalWorkstationTimeSeriesBuffer, workstationTimeSeriesBuffer, _stitchCache.workstation);
+      }
+      return [];
+    }
+
+    const durationMs = getRangeDurationMs('live');
+    const cutoffMs = Date.now() - durationMs;
+    if (workstationTimeSeriesBuffer.length > 0) {
+      const windowPoints = workstationTimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
+      if (windowPoints.length > 0) return windowPoints;
+      return workstationTimeSeriesBuffer;
+    }
+    if (currentSnapshot?.workstation?.timeSeries && currentSnapshot.workstation.timeSeries.length > 0) {
+      return currentSnapshot.workstation.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
+    }
+    return [];
+  }
+
+  // --- Workstation Chart: Metal GPU Utilization vs Token Velocity (tok/s) ---
+  function drawWorkstationChart(canvas, points) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = (rect.width > 10 ? rect.width : canvas.parentElement?.clientWidth) || 800;
+    const height = (rect.height > 10 ? rect.height : 240);
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    if (!points || points.length === 0) {
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Awaiting live workstation telemetry ticks...', width / 2, height / 2);
+      return;
+    }
+
+    const padLeft = 45;
+    const padRight = 50;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    // Peak Token Velocity computation for right Y-axis scaling
+    let peakTok = 0;
+    for (const p of points) {
+      const rate = typeof p.tokensPerSecond === 'number' ? p.tokensPerSecond : Number(p.tokensPerSecond || 0);
+      if (rate > peakTok) peakTok = rate;
+      const promptRate = typeof p.promptTokensPerSecond === 'number' ? p.promptTokensPerSecond : Number(p.promptTokensPerSecond || 0);
+      if (promptRate > peakTok) peakTok = promptRate;
+    }
+    // Round upper bound to clean ceiling (minimum 100 tok/s for M5 Pro)
+    const maxTokRate = Math.max(100, Math.ceil(peakTok / 20) * 20);
+
+    // Grid lines: 0%, 25%, 50%, 75%, 100% on left; corresponding tok/s on right
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textBaseline = 'middle';
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+
+      // Left axis label (Percentage)
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`${i * 25}%`, padLeft - 6, y);
+
+      // Right axis label (tok/s in Emerald)
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#059669';
+      const tokVal = Math.round((maxTokRate * i) / steps);
+      ctx.fillText(`${tokVal} t/s`, width - padRight + 6, y);
+    }
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis timestamps
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
+
+    // Coordinate mapper for percentage metrics (0% to 100%)
+    const getPctCoord = (pt, val) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const num = typeof val === 'number' ? val : Number(val || 0);
+      const y = padTop + plotH - (Math.max(0, Math.min(100, num)) / 100) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // Coordinate mapper for token velocity metrics (0 to maxTokRate)
+    const getTokCoord = (pt, val) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const num = typeof val === 'number' ? val : Number(val || 0);
+      const y = padTop + plotH - (Math.max(0, Math.min(maxTokRate, num)) / maxTokRate) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // 1. Metal GPU Utilization Line & Subtle Fill (Amber #f59e0b)
+    const gpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.gpuUtilizationPct);
+    drawSegmentedPath(ctx, gpuSegments, (pt) => getPctCoord(pt, pt.gpuUtilizationPct), '#f59e0b', 'rgba(245, 158, 11, 0.12)', 2.0, padTop + plotH);
+
+    // 2. Host CPU Utilization Line (Blue #0051c3)
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.cpuUtilizationPct);
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getPctCoord(pt, pt.cpuUtilizationPct), '#0051c3', null, 1.5, padTop + plotH);
+
+    // 3. Prompt Evaluation (Prefill) Velocity (tok/s) Line (Cyan #0284c7)
+    const promptSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.promptTokensPerSecond);
+    drawSegmentedPath(ctx, promptSegments, (pt) => getTokCoord(pt, pt.promptTokensPerSecond), '#0284c7', null, 1.8, padTop + plotH);
+
+    // 4. Gemma 4 Token Generation Velocity (tok/s) Line & Fill (Emerald #059669)
+    const tokSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.tokensPerSecond);
+    drawSegmentedPath(ctx, tokSegments, (pt) => getTokCoord(pt, pt.tokensPerSecond), '#059669', 'rgba(5, 150, 105, 0.15)', 2.2, padTop + plotH);
+
+    // Header Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText('● Metal GPU (%)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● Host CPU (%)', padLeft + 115, padTop - 6);
+    ctx.fillStyle = '#059669';
+    ctx.fillText('● Generation (tok/s)', padLeft + 215, padTop - 6);
+    ctx.fillStyle = '#0284c7';
+    ctx.fillText('● Prefill (tok/s)', padLeft + 335, padTop - 6);
+  }
+
   // --- Orin Chart 1: Compute (CPU vs GPU Utilization %) ---
   function drawOrinComputeChart(canvas, points) {
     if (!canvas || !points || points.length === 0) return;
@@ -3060,6 +3507,11 @@
         }
       }
       void fetchAndRenderOpenFlowRules();
+    } else if (activeDeviceId === 'workstation') {
+      const wsPoints = getWorkstationPointsForDisplay();
+      if (wsPoints.length > 0 && els.chartWorkstationCanvas) {
+        drawWorkstationChart(els.chartWorkstationCanvas, wsPoints);
+      }
     }
   }
 
@@ -3606,6 +4058,27 @@ Please connect the physical switch via USB to execute '${command}' on device har
     return `<div style="font-weight: 700; color: #94a3b8;">${timeStr} · Latency</div>`;
   });
 
+  // 10. MacBook M5 Gemma 4 Workstation Chart Tooltip
+  bindChartHoverTooltip('canvas-wrapper-workstation', getWorkstationPointsForDisplay, 45, 50, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const gpuVal = closestPt.gpuUtilizationPct ?? 0;
+    const cpuVal = closestPt.cpuUtilizationPct ?? 0;
+    const tokRate = (closestPt.tokensPerSecond ?? 0).toFixed(1);
+    const promptTokRate = (closestPt.promptTokensPerSecond ?? 0).toFixed(1);
+    const promptTok = safeBigInt(closestPt.totalPromptTokens);
+    const compTok = safeBigInt(closestPt.totalCompletionTokens);
+    const totalTok = safeBigInt(closestPt.totalTokens || (promptTok + compTok));
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · M5 Gemma 4 Workstation</div>
+      <div style="color: #f59e0b; font-weight: 600;">● Metal GPU: ${gpuVal}%</div>
+      <div style="color: #0051c3; font-weight: 600;">● Host CPU: ${cpuVal}%</div>
+      <div style="color: #059669; font-weight: 600;">● Generation: ${tokRate} tok/s</div>
+      <div style="color: #0284c7; font-weight: 600;">● Prefill: ${promptTokRate} tok/s</div>
+      <div style="color: #94a3b8; font-size: 0.68rem; margin-top: 2px;">Ledger: ${formatNumber(totalTok)} tok (${formatNumber(promptTok)} in / ${formatNumber(compTok)} out)</div>
+    `;
+  });
+
 
   // Bind Unit Toggles
   if (els.btnUnitPps) {
@@ -3653,6 +4126,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
         historicalTimeSeriesBuffer = [];
         historicalJetsonTimeSeriesBuffer = [];
         historicalCoralTimeSeriesBuffer = [];
+        historicalWorkstationTimeSeriesBuffer = [];
         return;
       }
       const data = await res.json();
@@ -3678,12 +4152,19 @@ Please connect the physical switch via USB to execute '${command}' on device har
         historicalCoralTimeSeriesBuffer = [];
         coralBufferSeq++;
       }
+      if (data?.workstation && Array.isArray(data.workstation.timeSeries) && data.workstation.timeSeries.length > 0) {
+        // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
+        historicalWorkstationTimeSeriesBuffer = data.workstation.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        historicalWorkstationTimeSeriesBuffer = [];
+      }
     } catch (err) {
       console.warn('[!] [Historical Range] Failed to fetch historical telemetry:', err);
       historicalDataUnavailable = true;
       historicalTimeSeriesBuffer = [];
       historicalJetsonTimeSeriesBuffer = [];
       historicalCoralTimeSeriesBuffer = [];
+      historicalWorkstationTimeSeriesBuffer = [];
       coralBufferSeq++;
     } finally {
       clearTimeout(timeoutId);
@@ -3826,12 +4307,13 @@ Please connect the physical switch via USB to execute '${command}' on device har
    * @type {{ [device: string]: { hwName: string, firmware: string, navId: string } }}
    */
   const DEVICE_META = {
-    zodiac:    { hwName: 'Zodiac FX Hardware \u00b7 Rev B',           firmware: 'Firmware v0.86',                  navId: 'cf-nav-zodiac' },
-    orin:      { hwName: 'NVIDIA Jetson Orin Nano \u00b7 Dev Kit',    firmware: 'JetPack 6.x \u00b7 Ubuntu 22.04', navId: 'cf-nav-orin'   },
-    'coral-1': { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
-    'coral-2': { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
-    coral:     { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
-    openflow:  { hwName: 'OpenFlow 1.3 Controller',               firmware: 'Zodiac FX \u00b7 KSZ8795 Data Plane', navId: 'cf-nav-openflow' },
+    zodiac:      { hwName: 'Zodiac FX Hardware \u00b7 Rev B',           firmware: 'Firmware v0.86',                  navId: 'cf-nav-zodiac' },
+    orin:        { hwName: 'NVIDIA Jetson Orin Nano \u00b7 Dev Kit',    firmware: 'JetPack 6.x \u00b7 Ubuntu 22.04', navId: 'cf-nav-orin'   },
+    'coral-1':   { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
+    'coral-2':   { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
+    coral:       { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
+    openflow:    { hwName: 'OpenFlow 1.3 Controller',               firmware: 'Zodiac FX \u00b7 KSZ8795 Data Plane', navId: 'cf-nav-openflow' },
+    workstation: { hwName: 'Apple M5 Pro \u00b7 20-Core Metal GPU',     firmware: 'macOS 26 \u00b7 Ollama Gemma 4 (25.2B)', navId: 'cf-nav-workstation' },
   };
 
   // Cached section elements (queried once — stable IDs, never recreated)
@@ -3882,7 +4364,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
    * footer metadata.  O(1): display-property writes + two text writes.
    * Resets the active tab to the first item in the incoming nav group.
    *
-   * @param {'zodiac'|'orin'|'coral-1'|'coral-2'|'coral'} device
+   * @param {'zodiac'|'orin'|'coral-1'|'coral-2'|'coral'|'openflow'|'workstation'} device
    */
   function updateSidebarNav(device) {
     const meta = DEVICE_META[device];
@@ -3919,7 +4401,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Active Appliance Tier Switching Logic
   function switchDevice(device) {
     if (device === 'coral') device = 'coral-1';
-    if (!['zodiac', 'orin', 'coral-1', 'coral-2', 'openflow'].includes(device)) return;
+    if (!['zodiac', 'orin', 'coral-1', 'coral-2', 'openflow', 'workstation'].includes(device)) return;
     activeDeviceId = device;
 
     if (els.btnDeviceZodiac) {
@@ -3946,6 +4428,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
       els.btnDeviceOpenflow.classList.toggle('active', device === 'openflow');
       els.btnDeviceOpenflow.setAttribute('aria-selected', String(device === 'openflow'));
     }
+    if (els.btnDeviceWorkstation) {
+      els.btnDeviceWorkstation.classList.toggle('active', device === 'workstation');
+      els.btnDeviceWorkstation.setAttribute('aria-selected', String(device === 'workstation'));
+    }
 
     if (els.viewDeviceZodiac) els.viewDeviceZodiac.style.display = device === 'zodiac' ? 'block' : 'none';
     if (els.viewDeviceOrin) els.viewDeviceOrin.style.display = device === 'orin' ? 'block' : 'none';
@@ -3953,6 +4439,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     if (els.viewDeviceCoral2) els.viewDeviceCoral2.style.display = device === 'coral-2' ? 'block' : 'none';
     if (els.viewDeviceCoral) els.viewDeviceCoral.style.display = device === 'coral-1' ? 'block' : 'none';
     if (els.ofDeviceSection) els.ofDeviceSection.style.display = device === 'openflow' ? 'block' : 'none';
+    if (els.viewDeviceWorkstation) els.viewDeviceWorkstation.style.display = device === 'workstation' ? 'block' : 'none';
 
     if (els.breadcrumbName) {
       if (device === 'zodiac') {
@@ -3965,6 +4452,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
         els.breadcrumbName.innerText = 'Google Coral TPU · DNS Sentinel';
       } else if (device === 'openflow') {
         els.breadcrumbName.innerText = 'OpenFlow 1.3 Controller';
+      } else if (device === 'workstation') {
+        els.breadcrumbName.innerText = 'MacBook M5 · Gemma 4 Workstation (26B)';
       }
     }
 
@@ -3976,6 +4465,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
     }
 
     updateCharts();
+    requestAnimationFrame(() => {
+      updateCharts();
+    });
   }
 
 
@@ -3998,6 +4490,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
   if (els.btnDeviceOpenflow) {
     els.btnDeviceOpenflow.addEventListener('click', () => switchDevice('openflow'));
   }
+  if (els.btnDeviceWorkstation) {
+    els.btnDeviceWorkstation.addEventListener('click', () => switchDevice('workstation'));
+  }
 
   // URL Hash & Deep Linking Navigation
   function handleHashChange() {
@@ -4012,6 +4507,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
       switchDevice('zodiac');
     } else if (hash === '#sec-openflow' || hash === '#openflow') {
       switchDevice('openflow');
+    } else if (hash === '#sec-workstation' || hash === '#workstation') {
+      switchDevice('workstation');
     }
   }
 

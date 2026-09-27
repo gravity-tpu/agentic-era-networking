@@ -15,6 +15,7 @@ import type {
   ZodiacTimeSeriesPoint,
   JetsonTimeSeriesPoint,
   CoralTimeSeriesPoint,
+  WorkstationTimeSeriesPoint,
   ZodiacPortSeriesPoint,
 } from './zodiac-telemetry.js';
 
@@ -24,6 +25,7 @@ export interface PersistentTelemetryState {
   readonly timeSeries: ZodiacTimeSeriesPoint[];
   readonly jetsonTimeSeries: JetsonTimeSeriesPoint[];
   readonly coralTimeSeries: CoralTimeSeriesPoint[];
+  readonly workstationTimeSeries?: WorkstationTimeSeriesPoint[];
 }
 
 export function resolveTelemetryStateFilePath(): string {
@@ -137,12 +139,30 @@ export function deserializeTelemetryState(jsonString: string): PersistentTelemet
       };
     });
 
+    const rawWorkstation = Array.isArray(raw['workstationTimeSeries']) ? raw['workstationTimeSeries'] : [];
+    const workstationTimeSeries: WorkstationTimeSeriesPoint[] = rawWorkstation.map((item: unknown) => {
+      const p = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      return {
+        timestampMs: Number(p['timestampMs'] ?? 0),
+        cpuUtilizationPct: Number(p['cpuUtilizationPct'] ?? 0),
+        gpuUtilizationPct: Number(p['gpuUtilizationPct'] ?? 0),
+        gpuMemoryUsedBytes: BigInt(String(p['gpuMemoryUsedBytes'] ?? '0')),
+        ramUsedBytes: BigInt(String(p['ramUsedBytes'] ?? '0')),
+        tokensPerSecond: Number(p['tokensPerSecond'] ?? 0),
+        promptTokensPerSecond: Number(p['promptTokensPerSecond'] ?? 0),
+        totalPromptTokens: BigInt(String(p['totalPromptTokens'] ?? '0')),
+        totalCompletionTokens: BigInt(String(p['totalCompletionTokens'] ?? '0')),
+        totalTokens: BigInt(String(p['totalTokens'] ?? '0')),
+      };
+    });
+
     return {
       version: 1,
       savedAtMs: Number(raw['savedAtMs'] ?? Date.now()),
       timeSeries,
       jetsonTimeSeries,
       coralTimeSeries,
+      workstationTimeSeries,
     };
   } catch (err: unknown) {
     console.warn('[!] [Telemetry State] Failed to deserialize telemetry state file:', err instanceof Error ? err.message : String(err));

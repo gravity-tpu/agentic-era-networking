@@ -12,15 +12,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import type {
   JetsonTelemetrySnapshot,
   JetsonNetworkInterfaceTelemetry,
   CoralTelemetrySnapshot,
   CoralDeviceDescriptor,
+  WorkstationTelemetrySnapshot,
 } from './zodiac-telemetry.js';
 import {
   createDefaultJetsonSnapshot,
   createDefaultCoralSnapshot,
+  createDefaultWorkstationSnapshot,
 } from './zodiac-telemetry.js';
 
 interface PrevCpuSample {
@@ -906,3 +909,572 @@ export async function probeCoralHardware(
 
   return createDefaultCoralSnapshot(true);
 }
+
+// ── Workstation (MacBook M5 / Apple Silicon) Prober ──────────────────────────
+
+interface WorkstationCpuSample {
+  total: bigint;
+  idle: bigint;
+}
+let prevWorkstationCpu: WorkstationCpuSample | null = null;
+
+export interface AppleSiliconGpuInfo {
+  gpuModel: string;
+  gpuCoreCount: number;
+  gpuUtilizationPct: number;
+  rendererUtilizationPct: number;
+  tilerUtilizationPct: number;
+  gpuMemoryUsedBytes: bigint;
+  gpuMemoryAllocatedBytes: bigint;
+}
+
+export type PlistValue =
+  | string
+  | bigint
+  | number
+  | boolean
+  | PlistValue[]
+  | { [key: string]: PlistValue };
+
+export const DEFAULT_MAX_PLIST_DEPTH = 32;
+
+export function getMaxPlistDepth(): number {
+  const custom = process.env['ZODIAC_MAX_PLIST_DEPTH'];
+  if (custom) {
+    const parsed = Number.parseInt(custom, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_MAX_PLIST_DEPTH;
+}
+
+function unescapeXml(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+export interface PlistXmlToken {
+  type: 'open' | 'close' | 'selfClosing' | 'text';
+  tag?: string;
+  text?: string;
+}
+
+/**
+ * Deterministic character-by-character scanner for Apple Property List XML.
+ * Correctly processes DOCTYPE declarations, processing instructions, XML comments (<!-- -->),
+ * CDATA blocks (<![CDATA[ ... ]]>), XML entity escaping, and self-closing tags without regex heuristics.
+ * Preserves character boundaries without lossy early trimming (Sanjay Ghemawat Invariant).
+ */
+export function tokenizeApplePlistXml(xml: string): PlistXmlToken[] {
+  const tokens: PlistXmlToken[] = [];
+  const len = xml.length;
+  let i = 0;
+
+  while (i < len) {
+    if (xml[i] === '<') {
+      // 1. Comment: <!-- ... -->
+      if (xml.startsWith('<!--', i)) {
+        const end = xml.indexOf('-->', i + 4);
+        i = end === -1 ? len : end + 3;
+        continue;
+      }
+      // 2. CDATA block: <![CDATA[ ... ]]>
+      if (xml.startsWith('<![CDATA[', i)) {
+        const end = xml.indexOf(']]>', i + 9);
+        const cdataText = end === -1 ? xml.slice(i + 9) : xml.slice(i + 9, end);
+        tokens.push({ type: 'text', text: cdataText });
+        i = end === -1 ? len : end + 3;
+        continue;
+      }
+      // 3. XML Prolog / DOCTYPE: <? ... ?> or <!DOCTYPE ... >
+      if (xml.startsWith('<?', i) || xml.startsWith('<!', i)) {
+        const end = xml.indexOf('>', i);
+        i = end === -1 ? len : end + 1;
+        continue;
+      }
+
+      // 4. Element tag
+      const end = xml.indexOf('>', i);
+      if (end === -1) break;
+      const tagContent = xml.slice(i + 1, end).trim();
+      i = end + 1;
+
+      if (tagContent.startsWith('/')) {
+        tokens.push({ type: 'close', tag: tagContent.slice(1).trim() });
+      } else if (tagContent.endsWith('/')) {
+        tokens.push({ type: 'selfClosing', tag: tagContent.slice(0, -1).trim() });
+      } else {
+        const tagName = tagContent.split(/\s+/)[0] ?? '';
+        tokens.push({ type: 'open', tag: tagName });
+      }
+    } else {
+      // Character data: ignore inter-element whitespace, preserve meaningful text content
+      const nextOpen = xml.indexOf('<', i);
+      const textRaw = nextOpen === -1 ? xml.slice(i) : xml.slice(i, nextOpen);
+      i = nextOpen === -1 ? len : nextOpen;
+      if (textRaw.trim().length > 0) {
+        tokens.push({ type: 'text', text: unescapeXml(textRaw) });
+      }
+    }
+  }
+
+  return tokens;
+}
+
+/**
+ * Formal, zero-dependency parser for Apple Property List XML (Darwin / IOKit).
+ * Builds a structured object graph from <dict>, <array>, <string>, <integer>, <real>,
+ * and boolean tags with an adaptive recursion depth limit to protect against stack exhaustion
+ * (Council Invariant 6, Hassabis symbolic bounds, and Quoc Le stability).
+ */
+export function parseApplePlistXml(xml: string): PlistValue | null {
+  if (!xml || typeof xml !== 'string') return null;
+
+  const maxDepth = getMaxPlistDepth();
+  const tokens = tokenizeApplePlistXml(xml);
+  let cursor = 0;
+
+  function parseNode(depth: number = 0): PlistValue | null {
+    if (depth > maxDepth) {
+      // Fail-closed bound: reject maliciously deep or cyclic XML constructs
+      return null;
+    }
+    if (cursor >= tokens.length) return null;
+    const token = tokens[cursor++];
+    if (!token) return null;
+
+    if (token.type === 'selfClosing') {
+      if (token.tag === 'true') return true;
+      if (token.tag === 'false') return false;
+      return null;
+    }
+
+    if (token.type !== 'open') return null;
+    const tag = token.tag;
+
+    if (tag === 'plist') {
+      const inner = parseNode(depth + 1);
+      if (cursor < tokens.length && tokens[cursor]?.type === 'close' && tokens[cursor]?.tag === 'plist') {
+        cursor++;
+      }
+      return inner;
+    }
+
+    if (tag === 'dict') {
+      const dict: Record<string, PlistValue> = {};
+      let currentKey: string | null = null;
+
+      while (cursor < tokens.length) {
+        const next = tokens[cursor];
+        if (next?.type === 'close' && next.tag === 'dict') {
+          cursor++;
+          break;
+        }
+
+        if (next?.type === 'open' && next.tag === 'key') {
+          cursor++;
+          const textToken = tokens[cursor];
+          currentKey = textToken?.type === 'text' ? (textToken.text ?? '') : '';
+          cursor++;
+          if (cursor < tokens.length && tokens[cursor]?.type === 'close' && tokens[cursor]?.tag === 'key') {
+            cursor++;
+          }
+        } else if (currentKey !== null) {
+          const val = parseNode(depth + 1);
+          if (val !== null) {
+            dict[currentKey] = val;
+          }
+          currentKey = null;
+        } else {
+          cursor++;
+        }
+      }
+      return dict;
+    }
+
+    if (tag === 'array') {
+      const arr: PlistValue[] = [];
+      while (cursor < tokens.length) {
+        const next = tokens[cursor];
+        if (next?.type === 'close' && next.tag === 'array') {
+          cursor++;
+          break;
+        }
+        const val = parseNode(depth + 1);
+        if (val !== null) {
+          arr.push(val);
+        }
+      }
+      return arr;
+    }
+
+    if (tag === 'string') {
+      let text = '';
+      if (tokens[cursor]?.type === 'text') {
+        text = tokens[cursor]?.text ?? '';
+        cursor++;
+      }
+      if (cursor < tokens.length && tokens[cursor]?.type === 'close' && tokens[cursor]?.tag === 'string') {
+        cursor++;
+      }
+      return text;
+    }
+
+    if (tag === 'integer') {
+      let numStr = '0';
+      if (tokens[cursor]?.type === 'text') {
+        numStr = tokens[cursor]?.text ?? '0';
+        cursor++;
+      }
+      if (cursor < tokens.length && tokens[cursor]?.type === 'close' && tokens[cursor]?.tag === 'integer') {
+        cursor++;
+      }
+      try {
+        return BigInt(numStr);
+      } catch {
+        return 0n;
+      }
+    }
+
+    if (tag === 'real') {
+      let numStr = '0';
+      if (tokens[cursor]?.type === 'text') {
+        numStr = tokens[cursor]?.text ?? '0';
+        cursor++;
+      }
+      if (cursor < tokens.length && tokens[cursor]?.type === 'close' && tokens[cursor]?.tag === 'real') {
+        cursor++;
+      }
+      const val = Number.parseFloat(numStr);
+      return Number.isNaN(val) ? 0 : val;
+    }
+
+    if (tag === 'data') {
+      let dataStr = '';
+      if (tokens[cursor]?.type === 'text') {
+        dataStr = tokens[cursor]?.text ?? '';
+        cursor++;
+      }
+      if (cursor < tokens.length && tokens[cursor]?.type === 'close' && tokens[cursor]?.tag === 'data') {
+        cursor++;
+      }
+      return dataStr;
+    }
+
+    return null;
+  }
+
+  return parseNode(0);
+}
+
+function findPlistDictEntry(node: PlistValue | null, targetKey: string): PlistValue | undefined {
+  if (!node || typeof node !== 'object') return undefined;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findPlistDictEntry(item, targetKey);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+
+  const dict = node as Record<string, PlistValue>;
+  if (targetKey in dict) {
+    return dict[targetKey];
+  }
+
+  for (const key of Object.keys(dict)) {
+    const sub = dict[key];
+    if (sub && typeof sub === 'object') {
+      const found = findPlistDictEntry(sub, targetKey);
+      if (found !== undefined) return found;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Parses Apple Silicon GPU statistics from `ioreg -r -c IOAccelerator -d 1 -a` XML output
+ * via structured Property List tokenization.
+ * Council Invariant 6 (Anti-Simulation): Extracts exact physical Metal device utilization,
+ * core count, and memory allocation without third-party dependencies or fragile regex matching.
+ */
+export function parseAppleSiliconGpuXml(xml: string): AppleSiliconGpuInfo {
+  const fallback: AppleSiliconGpuInfo = {
+    gpuModel: 'Apple Silicon Metal GPU',
+    gpuCoreCount: 0,
+    gpuUtilizationPct: 0,
+    rendererUtilizationPct: 0,
+    tilerUtilizationPct: 0,
+    gpuMemoryUsedBytes: 0n,
+    gpuMemoryAllocatedBytes: 0n,
+  };
+
+  try {
+    const root = parseApplePlistXml(xml);
+    if (!root) return fallback;
+
+    const modelVal = findPlistDictEntry(root, 'model');
+    const coreVal = findPlistDictEntry(root, 'gpu-core-count');
+    const devUtilVal = findPlistDictEntry(root, 'Device Utilization %');
+    const renUtilVal = findPlistDictEntry(root, 'Renderer Utilization %');
+    const tilUtilVal = findPlistDictEntry(root, 'Tiler Utilization %');
+    const inUseMemVal = findPlistDictEntry(root, 'In use system memory');
+    const allocMemVal = findPlistDictEntry(root, 'Alloc system memory');
+
+    const modelStr = typeof modelVal === 'string' && modelVal.trim()
+      ? `${modelVal.trim()} Metal GPU`
+      : 'Apple Silicon Metal GPU';
+
+    const gpuCoreCount = typeof coreVal === 'bigint' ? Number(coreVal) : 0;
+    const gpuUtilizationPct = typeof devUtilVal === 'bigint' ? Number(devUtilVal) : 0;
+    const rendererUtilizationPct = typeof renUtilVal === 'bigint' ? Number(renUtilVal) : 0;
+    const tilerUtilizationPct = typeof tilUtilVal === 'bigint' ? Number(tilUtilVal) : 0;
+    const gpuMemoryUsedBytes = typeof inUseMemVal === 'bigint' ? inUseMemVal : 0n;
+    const gpuMemoryAllocatedBytes = typeof allocMemVal === 'bigint' ? allocMemVal : 0n;
+
+    return {
+      gpuModel: modelStr,
+      gpuCoreCount,
+      gpuUtilizationPct,
+      rendererUtilizationPct,
+      tilerUtilizationPct,
+      gpuMemoryUsedBytes,
+      gpuMemoryAllocatedBytes,
+    };
+  } catch (err) {
+    process.stderr.write(`[hardware-probe] Failed to parse Apple Silicon GPU plist XML: ${
+      err instanceof Error ? err.message : String(err)
+    }\n`);
+    return fallback;
+  }
+}
+
+async function queryAppleGpuMetrics(timeoutMs: number = 200): Promise<AppleSiliconGpuInfo> {
+  return new Promise((resolve) => {
+    execFile('ioreg', ['-r', '-c', 'IOAccelerator', '-d', '1', '-a'], { timeout: timeoutMs }, (err, stdout) => {
+      if (err || !stdout) {
+        resolve({
+          gpuModel: 'Apple Silicon Metal GPU',
+          gpuCoreCount: 0,
+          gpuUtilizationPct: 0,
+          rendererUtilizationPct: 0,
+          tilerUtilizationPct: 0,
+          gpuMemoryUsedBytes: 0n,
+          gpuMemoryAllocatedBytes: 0n,
+        });
+        return;
+      }
+      resolve(parseAppleSiliconGpuXml(stdout));
+    });
+  });
+}
+
+interface OllamaPsResponse {
+  models?: Array<{
+    name?: string;
+    model?: string;
+    size?: number;
+    size_vram?: number;
+    context_length?: number;
+    details?: {
+      format?: string;
+      parameter_size?: string;
+      quantization_level?: string;
+    };
+  }>;
+}
+
+/**
+ * Probes the local macOS Workstation appliance hosting Ollama / Gemma 4.
+ *
+ * Council Invariant 6 (Anti-Simulation):
+ * Reads direct physical metrics:
+ * - CPU & host architecture via node:os
+ * - Apple Silicon Metal GPU utilization & VRAM via ioreg IOAccelerator
+ * - Active model state via Ollama /api/ps
+ * - Cumulative token counts & generation velocity via /tmp/zodiac-workstation-telemetry.json
+ *
+ * When not on macOS or when disconnected, fails closed to createDefaultWorkstationSnapshot(true).
+ */
+export async function probeWorkstationHardware(
+  prevSnapshot?: WorkstationTelemetrySnapshot | undefined,
+  _deltaNs?: bigint | undefined
+): Promise<WorkstationTelemetrySnapshot> {
+  // Council Invariant 6: Physical truth. If not running on macOS (darwin),
+  // fail-closed to disconnected default snapshot.
+  if (os.platform() !== 'darwin') {
+    return createDefaultWorkstationSnapshot(true);
+  }
+
+  try {
+    const cpus = os.cpus();
+    const cpuCores = cpus.length;
+    const chipModel = cpus[0]?.model || 'Apple Silicon';
+
+    // Calculate CPU utilization delta
+    let cpuUtilizationPct = 0;
+    const idle = cpus.reduce((acc, c) => acc + BigInt(c.times.idle), 0n);
+    const total = cpus.reduce(
+      (acc, c) => acc + BigInt(c.times.user + c.times.nice + c.times.sys + c.times.idle + c.times.irq),
+      0n
+    );
+    if (prevWorkstationCpu && total > prevWorkstationCpu.total) {
+      const dTotal = total - prevWorkstationCpu.total;
+      const dIdle = idle >= prevWorkstationCpu.idle ? idle - prevWorkstationCpu.idle : 0n;
+      const util = 100n - (dIdle * 100n) / dTotal;
+      cpuUtilizationPct = Math.max(0, Math.min(100, Number(util)));
+    }
+    prevWorkstationCpu = { total, idle };
+
+    const totalMemBytes = BigInt(os.totalmem());
+    const freeMemBytes = BigInt(os.freemem());
+    const usedMemBytes = totalMemBytes >= freeMemBytes ? totalMemBytes - freeMemBytes : 0n;
+
+    const load = os.loadavg();
+    const loadAvg: [number, number, number] = [
+      parseFloat(load[0]!.toFixed(2)),
+      parseFloat(load[1]!.toFixed(2)),
+      parseFloat(load[2]!.toFixed(2)),
+    ];
+
+    // Query Apple Silicon GPU via IOKit & query Ollama status concurrently
+    const [gpuInfo, ollamaInfo] = await Promise.all([
+      queryAppleGpuMetrics(200),
+      (async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 300);
+        try {
+          const res = await fetch('http://localhost:11434/api/ps', { signal: controller.signal });
+          clearTimeout(timeout);
+          if (!res.ok) return { online: false, model: null };
+          const data = (await res.json()) as OllamaPsResponse;
+          return { online: true, model: data.models?.[0] ?? null };
+        } catch {
+          clearTimeout(timeout);
+          return { online: false, model: null };
+        }
+      })(),
+    ]);
+
+    // Read recorded inference token metrics from /tmp/zodiac-workstation-telemetry.json
+    let totalPromptTokens = 0n;
+    let totalCompletionTokens = 0n;
+    let totalInferences = 0n;
+    let tokensPerSecond = 0;
+    let promptTokensPerSecond = 0;
+    let peakTokensPerSecond = 0;
+    let peakPromptTokensPerSecond = 0;
+    let lastInferenceLatencyNs = 0n;
+    let lastPromptEvalDurationNs = 0n;
+    let lastEvalDurationNs = 0n;
+    let timeToFirstTokenNs = 0n;
+    let perTokenLatencyNs = 0n;
+    let lastTokenCount = 0;
+    let lastPromptTokenCount = 0;
+    let edgeComputeRatioPct = 100.0;
+    let recordedModel = 'gemma4:26b';
+
+    const metricsPath = '/tmp/zodiac-workstation-telemetry.json';
+    try {
+      if (fs.existsSync(metricsPath)) {
+        const content = await fs.promises.readFile(metricsPath, 'utf8');
+        const parsed = JSON.parse(content) as Record<string, unknown>;
+        totalPromptTokens = parseBigIntClamped(parsed['totalPromptTokens']);
+        totalCompletionTokens = parseBigIntClamped(parsed['totalCompletionTokens']);
+        totalInferences = parseBigIntClamped(parsed['totalInferences']);
+        tokensPerSecond = typeof parsed['tokensPerSecond'] === 'number' ? parsed['tokensPerSecond'] : Number(parsed['tokensPerSecond'] || 0);
+        promptTokensPerSecond = typeof parsed['promptTokensPerSecond'] === 'number' ? parsed['promptTokensPerSecond'] : Number(parsed['promptTokensPerSecond'] || 0);
+        peakTokensPerSecond = typeof parsed['peakTokensPerSecond'] === 'number' ? parsed['peakTokensPerSecond'] : Number(parsed['peakTokensPerSecond'] || tokensPerSecond);
+        peakPromptTokensPerSecond = typeof parsed['peakPromptTokensPerSecond'] === 'number' ? parsed['peakPromptTokensPerSecond'] : Number(parsed['peakPromptTokensPerSecond'] || promptTokensPerSecond);
+        lastInferenceLatencyNs = parseBigIntClamped(parsed['lastInferenceLatencyNs']);
+        lastPromptEvalDurationNs = parseBigIntClamped(parsed['lastPromptEvalDurationNs']);
+        lastEvalDurationNs = parseBigIntClamped(parsed['lastEvalDurationNs']);
+        timeToFirstTokenNs = parseBigIntClamped(parsed['timeToFirstTokenNs'] ?? lastPromptEvalDurationNs);
+        perTokenLatencyNs = parseBigIntClamped(parsed['perTokenLatencyNs']);
+        lastTokenCount = typeof parsed['lastTokenCount'] === 'number' ? parsed['lastTokenCount'] : Number(parsed['lastTokenCount'] || 0);
+        lastPromptTokenCount = typeof parsed['lastPromptTokenCount'] === 'number' ? parsed['lastPromptTokenCount'] : Number(parsed['lastPromptTokenCount'] || 0);
+        if (typeof parsed['edgeComputeRatioPct'] === 'number') {
+          edgeComputeRatioPct = parsed['edgeComputeRatioPct'];
+        }
+        if (typeof parsed['activeModel'] === 'string' && parsed['activeModel']) {
+          recordedModel = parsed['activeModel'];
+        }
+      }
+    } catch (err) {
+      process.stderr.write(`[workstation-probe] Error reading ${metricsPath}: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+
+    const totalTokens = totalPromptTokens + totalCompletionTokens;
+    const lastTotalTokenCount = lastPromptTokenCount + lastTokenCount;
+    if (perTokenLatencyNs === 0n && lastTokenCount > 0 && lastEvalDurationNs > 0n) {
+      perTokenLatencyNs = lastEvalDurationNs / BigInt(lastTokenCount);
+    }
+    if (timeToFirstTokenNs === 0n && lastPromptEvalDurationNs > 0n) {
+      timeToFirstTokenNs = lastPromptEvalDurationNs;
+    }
+
+    const activeModelName = ollamaInfo.model?.name || recordedModel;
+    const modelVramBytes = BigInt(ollamaInfo.model?.size_vram || ollamaInfo.model?.size || 0);
+    const modelContextLength = ollamaInfo.model?.context_length || 262144;
+    const contextUtilizationPct = modelContextLength > 0 && lastTotalTokenCount > 0
+      ? parseFloat(((lastTotalTokenCount / modelContextLength) * 100).toFixed(2))
+      : 0;
+
+    return {
+      detected: true,
+      hostName: os.hostname(),
+      platform: `darwin (${os.type()})`,
+      osRelease: os.release(),
+      chipModel,
+      cpuCores,
+      cpuUtilizationPct,
+      memoryTotalBytes: totalMemBytes,
+      memoryUsedBytes: usedMemBytes,
+      memoryFreeBytes: freeMemBytes,
+      loadAvg,
+      gpuModel: gpuInfo.gpuModel,
+      gpuCoreCount: gpuInfo.gpuCoreCount,
+      gpuUtilizationPct: gpuInfo.gpuUtilizationPct,
+      rendererUtilizationPct: gpuInfo.rendererUtilizationPct,
+      tilerUtilizationPct: gpuInfo.tilerUtilizationPct,
+      gpuMemoryUsedBytes: gpuInfo.gpuMemoryUsedBytes,
+      gpuMemoryAllocatedBytes: gpuInfo.gpuMemoryAllocatedBytes,
+      ollamaStatus: ollamaInfo.online ? 'ONLINE' : 'OFFLINE',
+      activeModel: activeModelName,
+      modelFormat: ollamaInfo.model?.details?.format || 'gguf',
+      modelParameterSize: ollamaInfo.model?.details?.parameter_size || '25.2B',
+      modelQuantization: ollamaInfo.model?.details?.quantization_level || 'Q4_K_M',
+      modelContextLength,
+      modelVramBytes,
+      totalPromptTokens,
+      totalCompletionTokens,
+      totalTokens,
+      totalInferences,
+      tokensPerSecond,
+      promptTokensPerSecond,
+      peakTokensPerSecond,
+      peakPromptTokensPerSecond,
+      lastInferenceLatencyNs,
+      lastPromptEvalDurationNs,
+      lastEvalDurationNs,
+      timeToFirstTokenNs,
+      perTokenLatencyNs,
+      lastTokenCount,
+      lastPromptTokenCount,
+      lastTotalTokenCount,
+      contextUtilizationPct,
+      edgeComputeRatioPct,
+      endpoint: 'http://localhost:11434',
+    };
+  } catch (err) {
+    process.stderr.write(
+      `[workstation-probe] probeWorkstationHardware failed: ${err instanceof Error ? err.message : String(err)}\n`
+    );
+    return prevSnapshot ?? createDefaultWorkstationSnapshot(true);
+  }
+}
+

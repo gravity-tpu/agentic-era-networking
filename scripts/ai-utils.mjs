@@ -4,7 +4,7 @@
  * Uses only Node built-ins so it executes in CI without a prior build step.
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, promises as fsPromises } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -240,6 +240,294 @@ export async function readErrorBody(res, maxBytes = MAX_ERROR_BODY_BYTES) {
   }
 }
 
+export const WORKSTATION_METRICS_FILE = '/tmp/zodiac-workstation-telemetry.json';
+
+function parseBigIntSafe(val, fallback = 0n) {
+  if (typeof val === 'bigint') return val < 0n ? 0n : val;
+  if (typeof val === 'number') {
+    if (!Number.isFinite(val) || !Number.isInteger(val) || val < 0) {
+      return fallback;
+    }
+    return BigInt(val);
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return fallback;
+    }
+    try {
+      const n = BigInt(trimmed);
+      return n < 0n ? 0n : n;
+    } catch (err) {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+// ─── Serialized Telemetry Mutation Queue & Cross-Process File Lock ──────────
+// Council Invariant 2 (Determinism in Telemetry & Metering)
+// Eliminates Read-Modify-Write race conditions across concurrent inferences.
+
+let telemetryMutationQueue = Promise.resolve();
+
+export const DEFAULT_TELEMETRY_LOCK_TIMEOUT_NS = 5_000_000_000n; // 5.0 seconds in monotonic nanoseconds (Jeff Dean Latency Standard)
+
+/**
+ * Acquires a cross-process mutual exclusion lock using 'wx' atomic file creation,
+ * executes the given async mutation, and safely releases the lock.
+ * Uses monotonic process.hrtime.bigint() to prevent clock jump vulnerabilities (Jeff Dean Invariant)
+ * and verifies process liveness via OS kernel signal 0 (ESRCH) to recover genuinely
+ * orphaned locks without relying on brittle timing heuristics (Quoc Le Invariant).
+ */
+async function withTelemetryFileLock(filePath, fn) {
+  const lockPath = `${filePath}.lock`;
+  const maxWaitNs = process.env['ZODIAC_TELEMETRY_LOCK_TIMEOUT_NS']
+    ? BigInt(process.env['ZODIAC_TELEMETRY_LOCK_TIMEOUT_NS'])
+    : DEFAULT_TELEMETRY_LOCK_TIMEOUT_NS;
+  const startNs = process.hrtime.bigint();
+  let delay = 10;
+
+  while (true) {
+    try {
+      const handle = await fsPromises.open(lockPath, 'wx');
+      try {
+        await handle.write(JSON.stringify({ pid: process.pid, createdAtNs: process.hrtime.bigint().toString() }));
+      } finally {
+        await handle.close();
+      }
+      break; // Lock acquired
+    } catch (lockErr) {
+      if (lockErr && lockErr.code === 'EEXIST') {
+        // Epistemic Liveness Check: verify if the lock holder process is still alive in the OS kernel
+        try {
+          const stats = await fsPromises.stat(lockPath);
+          const lockRaw = await fsPromises.readFile(lockPath, 'utf-8');
+          let orphaned = false;
+
+          if (!lockRaw.trim()) {
+            // 0-byte or empty lockfile older than 500ms indicates crashed initializer
+            if (Date.now() - stats.mtimeMs > 500) {
+              orphaned = true;
+            }
+          } else {
+            try {
+              const lockData = JSON.parse(lockRaw);
+              if (lockData && typeof lockData.pid === 'number') {
+                try {
+                  // Signal 0 tests for process existence without sending an actual kill signal
+                  process.kill(lockData.pid, 0);
+                } catch (sigErr) {
+                  if (sigErr && sigErr.code === 'ESRCH') {
+                    // Process no longer exists — lock is genuinely orphaned
+                    orphaned = true;
+                  }
+                }
+              }
+            } catch (jsonErr) {
+              if (Date.now() - stats.mtimeMs > 500) {
+                orphaned = true;
+              }
+            }
+          }
+
+          if (orphaned) {
+            await fsPromises.unlink(lockPath).catch(() => {});
+          }
+        } catch (statErr) {
+          // File might have been unlinked concurrently
+        }
+
+        if (process.hrtime.bigint() - startNs > maxWaitNs) {
+          throw new Error(`Timed out waiting for telemetry lock: ${lockPath}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, 200);
+      } else {
+        throw lockErr;
+      }
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    try {
+      await fsPromises.unlink(lockPath);
+    } catch (unlinkErr) {
+      // Ignored if unlinked concurrently
+    }
+  }
+}
+
+/**
+ * Enqueues a telemetry mutation into a serialized Promise chain and executes it under
+ * cross-process file-level mutual exclusion. Guarantees deterministic, sequential RMW.
+ */
+export function enqueueTelemetryMutation(filePath, mutateFn) {
+  const task = async () => {
+    try {
+      return await withTelemetryFileLock(filePath, mutateFn);
+    } catch (err) {
+      process.stderr.write(`[ai-utils] Telemetry file lock failure: ${err?.message ?? err}\n`);
+      return undefined;
+    }
+  };
+  const next = telemetryMutationQueue.then(task, task);
+  telemetryMutationQueue = next.catch((err) => {
+    process.stderr.write(`[ai-utils] Telemetry mutation queue error: ${err?.message ?? err}\n`);
+  });
+  return next;
+}
+
+/**
+ * Records Ollama inference token metrics into local telemetry file asynchronously.
+ * Used by probeWorkstationHardware to report physical token velocities and totals.
+ * Council Invariant 2: Uses BigInt counters to prevent precision loss for counts > 2^53 - 1.
+ * Council Invariant 1: Serialized transaction queue eliminates Read-Modify-Write race conditions.
+ * Jeff Dean Latency Budget: Non-blocking asynchronous I/O; serialized queue guarantees atomic increments.
+ */
+export async function recordOllamaInferenceMetrics(data, model = 'gemma4:26b', filePath = WORKSTATION_METRICS_FILE) {
+  if (!data || typeof data !== 'object') return;
+  return enqueueTelemetryMutation(filePath, async () => {
+    let totalPromptTokens = 0n;
+    let totalCompletionTokens = 0n;
+    let totalInferences = 0n;
+    let peakTokensPerSecond = 0;
+    let peakPromptTokensPerSecond = 0;
+    let cloudTokens = 0n;
+
+    if (existsSync(filePath)) {
+      try {
+        const raw = await fsPromises.readFile(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          totalPromptTokens = parseBigIntSafe(parsed.totalPromptTokens);
+          totalCompletionTokens = parseBigIntSafe(parsed.totalCompletionTokens);
+          totalInferences = parseBigIntSafe(parsed.totalInferences);
+          peakTokensPerSecond = typeof parsed.peakTokensPerSecond === 'number' ? parsed.peakTokensPerSecond : Number(parsed.peakTokensPerSecond || 0);
+          peakPromptTokensPerSecond = typeof parsed.peakPromptTokensPerSecond === 'number' ? parsed.peakPromptTokensPerSecond : Number(parsed.peakPromptTokensPerSecond || 0);
+          cloudTokens = parseBigIntSafe(parsed.totalCloudTokens);
+        }
+      } catch (readErr) {
+        if (readErr?.code !== 'ENOENT') {
+          process.stderr.write(`[ai-utils] Warning reading telemetry state file: ${readErr?.message ?? readErr}\n`);
+        }
+      }
+    }
+
+    const promptTokens = parseBigIntSafe(data.prompt_eval_count);
+    const completionTokens = parseBigIntSafe(data.eval_count);
+    const evalDurationNs = parseBigIntSafe(data.eval_duration);
+    const promptEvalDurationNs = parseBigIntSafe(data.prompt_eval_duration);
+    const totalDurationNs = parseBigIntSafe(data.total_duration);
+    const loadDurationNs = parseBigIntSafe(data.load_duration);
+
+    const tokPerSec = evalDurationNs > 0n
+      ? parseFloat(((Number(completionTokens) * 1e9) / Number(evalDurationNs)).toFixed(1))
+      : 0;
+    const promptTokPerSec = promptEvalDurationNs > 0n
+      ? parseFloat(((Number(promptTokens) * 1e9) / Number(promptEvalDurationNs)).toFixed(1))
+      : 0;
+
+    peakTokensPerSecond = Math.max(peakTokensPerSecond, tokPerSec);
+    peakPromptTokensPerSecond = Math.max(peakPromptTokensPerSecond, promptTokPerSec);
+
+    const newTotalPromptTokens = totalPromptTokens + promptTokens;
+    const newTotalCompletionTokens = totalCompletionTokens + completionTokens;
+    const newTotalInferences = totalInferences + 1n;
+    const totalLocalTokens = newTotalPromptTokens + newTotalCompletionTokens;
+    const allTokens = totalLocalTokens + cloudTokens;
+    const edgeComputeRatioPct = allTokens > 0n
+      ? parseFloat(((Number(totalLocalTokens) / Number(allTokens)) * 100).toFixed(1))
+      : 100.0;
+
+    const perTokenLatencyNs = completionTokens > 0n ? evalDurationNs / completionTokens : 0n;
+
+    const updated = {
+      totalPromptTokens: newTotalPromptTokens.toString(),
+      totalCompletionTokens: newTotalCompletionTokens.toString(),
+      totalTokens: totalLocalTokens.toString(),
+      totalInferences: newTotalInferences.toString(),
+      tokensPerSecond: tokPerSec,
+      promptTokensPerSecond: promptTokPerSec,
+      peakTokensPerSecond,
+      peakPromptTokensPerSecond,
+      lastInferenceLatencyNs: totalDurationNs.toString(),
+      lastPromptEvalDurationNs: promptEvalDurationNs.toString(),
+      lastEvalDurationNs: evalDurationNs.toString(),
+      lastLoadDurationNs: loadDurationNs.toString(),
+      timeToFirstTokenNs: promptEvalDurationNs.toString(),
+      perTokenLatencyNs: perTokenLatencyNs.toString(),
+      lastTokenCount: Number(completionTokens),
+      lastPromptTokenCount: Number(promptTokens),
+      lastTotalTokenCount: Number(promptTokens + completionTokens),
+      activeModel: model,
+      edgeComputeRatioPct,
+      lastUpdatedMs: Date.now(),
+    };
+
+    const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await fsPromises.writeFile(tmpPath, JSON.stringify(updated, null, 2), 'utf-8');
+    await fsPromises.rename(tmpPath, filePath);
+    return updated;
+  });
+}
+
+/**
+ * Records cloud fallback tokens into telemetry file to accurately account for edge offload ratio.
+ * Council Invariant 6: Physical truth & Epistemic Telemetry Provenance.
+ * Council Invariant 2: Deterministic BigInt counters guarded by serialized queue.
+ */
+export async function recordCloudInferenceMetrics(provider, model, promptTokensCount, completionTokensCount, filePath = WORKSTATION_METRICS_FILE) {
+  return enqueueTelemetryMutation(filePath, async () => {
+    let totalPromptTokens = 0n;
+    let totalCompletionTokens = 0n;
+    let totalCloudTokens = 0n;
+    let currentData = {};
+
+    if (existsSync(filePath)) {
+      try {
+        const raw = await fsPromises.readFile(filePath, 'utf-8');
+        currentData = JSON.parse(raw);
+        if (currentData && typeof currentData === 'object') {
+          totalPromptTokens = parseBigIntSafe(currentData.totalPromptTokens);
+          totalCompletionTokens = parseBigIntSafe(currentData.totalCompletionTokens);
+          totalCloudTokens = parseBigIntSafe(currentData.totalCloudTokens);
+        }
+      } catch (readErr) {
+        if (readErr?.code !== 'ENOENT') {
+          process.stderr.write(`[ai-utils] Warning reading telemetry state file for cloud metrics: ${readErr?.message ?? readErr}\n`);
+        }
+      }
+    }
+
+    const pTok = parseBigIntSafe(promptTokensCount);
+    const cTok = parseBigIntSafe(completionTokensCount);
+    const addedCloud = pTok + cTok;
+    const newCloudTokens = totalCloudTokens + addedCloud;
+    const totalLocalTokens = totalPromptTokens + totalCompletionTokens;
+    const allTokens = totalLocalTokens + newCloudTokens;
+    const edgeComputeRatioPct = allTokens > 0n
+      ? parseFloat(((Number(totalLocalTokens) / Number(allTokens)) * 100).toFixed(1))
+      : 100.0;
+
+    const updated = {
+      ...currentData,
+      totalCloudTokens: newCloudTokens.toString(),
+      lastCloudProvider: provider,
+      lastCloudModel: model,
+      edgeComputeRatioPct,
+      lastUpdatedMs: Date.now(),
+    };
+
+    const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await fsPromises.writeFile(tmpPath, JSON.stringify(updated, null, 2), 'utf-8');
+    await fsPromises.rename(tmpPath, filePath);
+    return updated;
+  });
+}
+
 /**
  * callOllama — OpenAI-compatible local inference via Ollama.
  * The Council system prompt is passed as the 'system' role message.
@@ -275,6 +563,8 @@ export async function callOllama(
     throw new Error(`Ollama ${res.status} from ${url}: ${body}`);
   }
   const data = await res.json();
+  // Record live token telemetry asynchronously (non-blocking)
+  void recordOllamaInferenceMetrics(data, model);
   const content = data.message?.content;
   if (!content || typeof content !== 'string' || !content.trim()) {
     throw new Error(`Ollama returned empty response for ${model}`);
@@ -302,6 +592,9 @@ export async function callGemini(model, systemPrompt, userMessage, signal) {
     throw new Error(`Gemini API ${res.status}: ${body}`);
   }
   const data = await res.json();
+  if (data.usageMetadata) {
+    void recordCloudInferenceMetrics('google', model, data.usageMetadata.promptTokenCount, data.usageMetadata.candidatesTokenCount);
+  }
   const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {
     throw new Error(`Gemini returned empty response for ${model}`);
@@ -333,6 +626,9 @@ export async function callAnthropic(model, systemPrompt, userMessage, signal) {
     throw new Error(`Anthropic API ${res.status}: ${body}`);
   }
   const data = await res.json();
+  if (data.usage) {
+    void recordCloudInferenceMetrics('anthropic', model, data.usage.input_tokens, data.usage.output_tokens);
+  }
   const content = data.content?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {
     throw new Error(`Anthropic returned empty response for ${model}`);
@@ -366,6 +662,9 @@ export async function callOpenAI(model, systemPrompt, userMessage, signal) {
     throw new Error(`OpenAI API ${res.status}: ${body}`);
   }
   const data = await res.json();
+  if (data.usage) {
+    void recordCloudInferenceMetrics('openai', model, data.usage.prompt_tokens, data.usage.completion_tokens);
+  }
   const content = data.choices?.[0]?.message?.content;
   if (!content || typeof content !== 'string' || !content.trim()) {
     throw new Error(`OpenAI returned empty response for ${model}`);

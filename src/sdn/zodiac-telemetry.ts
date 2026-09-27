@@ -230,6 +230,73 @@ export interface CoralTelemetrySnapshot {
   readonly timeSeries?: CoralTimeSeriesPoint[];
 }
 
+export interface WorkstationTimeSeriesPoint {
+  readonly timestampMs: number;
+  readonly cpuUtilizationPct: number;
+  readonly gpuUtilizationPct: number;
+  readonly gpuMemoryUsedBytes: bigint;
+  readonly ramUsedBytes: bigint;
+  readonly tokensPerSecond: number;
+  readonly promptTokensPerSecond: number;
+  readonly totalPromptTokens: bigint;
+  readonly totalCompletionTokens: bigint;
+  readonly totalTokens: bigint;
+}
+
+export interface WorkstationTelemetrySnapshot {
+  readonly detected: boolean;
+  readonly hostName: string;
+  readonly platform: string;
+  readonly osRelease: string;
+  readonly chipModel: string;
+  readonly cpuCores: number;
+  readonly cpuUtilizationPct: number;
+  readonly memoryTotalBytes: bigint;
+  readonly memoryUsedBytes: bigint;
+  readonly memoryFreeBytes: bigint;
+  readonly loadAvg: readonly [number, number, number];
+  // Apple Silicon Metal GPU Telemetry (Physical IOKit truth via ioreg)
+  readonly gpuModel: string;
+  readonly gpuCoreCount: number;
+  readonly gpuUtilizationPct: number;
+  readonly rendererUtilizationPct: number;
+  readonly tilerUtilizationPct: number;
+  readonly gpuMemoryUsedBytes: bigint;
+  readonly gpuMemoryAllocatedBytes: bigint;
+  // Ollama / Local Gemma 4 Inference & Token Telemetry
+  readonly ollamaStatus: 'ONLINE' | 'OFFLINE' | 'BUSY';
+  readonly activeModel: string;
+  readonly modelFormat: string;
+  readonly modelParameterSize: string;
+  readonly modelQuantization: string;
+  readonly modelContextLength: number;
+  readonly modelVramBytes: bigint;
+  // Cumulative Token Accounting Ledger (Council Invariant 2: BigInt)
+  readonly totalPromptTokens: bigint;
+  readonly totalCompletionTokens: bigint;
+  readonly totalTokens: bigint;
+  readonly totalInferences: bigint;
+  // Real-Time Token Generation & Prompt Evaluation Velocity
+  readonly tokensPerSecond: number;
+  readonly promptTokensPerSecond: number;
+  readonly peakTokensPerSecond: number;
+  readonly peakPromptTokensPerSecond: number;
+  // Nanosecond Precision Latency & Durations (Jeff Dean Latency Budgets)
+  readonly lastInferenceLatencyNs: bigint;
+  readonly lastPromptEvalDurationNs: bigint;
+  readonly lastEvalDurationNs: bigint;
+  readonly timeToFirstTokenNs: bigint;
+  readonly perTokenLatencyNs: bigint;
+  // Per-Inference Token Counts & Context Window Saturation
+  readonly lastTokenCount: number;
+  readonly lastPromptTokenCount: number;
+  readonly lastTotalTokenCount: number;
+  readonly contextUtilizationPct: number;
+  readonly edgeComputeRatioPct: number;
+  readonly endpoint: string;
+  readonly timeSeries?: WorkstationTimeSeriesPoint[];
+}
+
 export interface ZodiacFullTelemetrySnapshot {
   readonly system: ZodiacSystemTelemetry;
   readonly ports: ZodiacPortTelemetry[];
@@ -238,6 +305,7 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly timeSeries?: ZodiacTimeSeriesPoint[] | undefined;
   readonly jetson?: JetsonTelemetrySnapshot | undefined;
   readonly coral?: CoralTelemetrySnapshot | undefined;
+  readonly workstation?: WorkstationTelemetrySnapshot | undefined;
   /** Live OS process ID of the bridge daemon — Council Invariant 6: physical truth. */
   readonly bridgePid?: number | undefined;
   /** Live RSS memory bytes from process.memoryUsage() as bigint — structurally enforces integer-only invariant (Council Invariant 2). */
@@ -411,6 +479,7 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
 
   const jetson = createDefaultJetsonSnapshot(false);
   const coral = createDefaultCoralSnapshot(false);
+  const workstation = createDefaultWorkstationSnapshot(false);
 
   return {
     ...base,
@@ -422,6 +491,10 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
     coral: {
       ...coral,
       timeSeries: generateCoralHistoricalTelemetry(coral, 1, 60),
+    },
+    workstation: {
+      ...workstation,
+      timeSeries: generateWorkstationHistoricalTelemetry(workstation, 1, 60),
     },
   };
 }
@@ -572,6 +645,61 @@ export function createDefaultCoralSnapshot(isDisconnected: boolean = true): Cora
 }
 
 /**
+ * Creates a default telemetry snapshot for the MacBook Gemma 4 Workstation appliance.
+ * Council Invariant 6 (Anti-Simulation & Goodhart's Law):
+ * Default must be fail-closed (isDisconnected = true). When disconnected,
+ * detected evaluates to physical truth (false, 'OFFLINE', zero tokens/rates).
+ */
+export function createDefaultWorkstationSnapshot(isDisconnected: boolean = true): WorkstationTelemetrySnapshot {
+  return {
+    detected: !isDisconnected,
+    hostName: isDisconnected ? 'Offline Workstation' : 'macbook-pro',
+    platform: isDisconnected ? 'Offline' : 'darwin (macOS)',
+    osRelease: isDisconnected ? 'None' : 'Darwin',
+    chipModel: isDisconnected ? 'None' : 'Apple M5 Pro',
+    cpuCores: isDisconnected ? 0 : 18,
+    cpuUtilizationPct: 0,
+    memoryTotalBytes: isDisconnected ? 0n : 68719476736n, // 64 GB Unified Memory
+    memoryUsedBytes: 0n,
+    memoryFreeBytes: isDisconnected ? 0n : 68719476736n,
+    loadAvg: [0, 0, 0],
+    gpuModel: isDisconnected ? 'None' : 'Apple M5 Pro Metal GPU',
+    gpuCoreCount: isDisconnected ? 0 : 20,
+    gpuUtilizationPct: 0,
+    rendererUtilizationPct: 0,
+    tilerUtilizationPct: 0,
+    gpuMemoryUsedBytes: 0n,
+    gpuMemoryAllocatedBytes: 0n,
+    ollamaStatus: isDisconnected ? 'OFFLINE' : 'ONLINE',
+    activeModel: isDisconnected ? 'None' : 'gemma4:26b',
+    modelFormat: isDisconnected ? 'None' : 'gguf',
+    modelParameterSize: isDisconnected ? 'None' : '25.2B',
+    modelQuantization: isDisconnected ? 'None' : 'Q4_K_M',
+    modelContextLength: isDisconnected ? 0 : 262144,
+    modelVramBytes: 0n,
+    totalPromptTokens: 0n,
+    totalCompletionTokens: 0n,
+    totalTokens: 0n,
+    totalInferences: 0n,
+    tokensPerSecond: 0,
+    promptTokensPerSecond: 0,
+    peakTokensPerSecond: 0,
+    peakPromptTokensPerSecond: 0,
+    lastInferenceLatencyNs: 0n,
+    lastPromptEvalDurationNs: 0n,
+    lastEvalDurationNs: 0n,
+    timeToFirstTokenNs: 0n,
+    perTokenLatencyNs: 0n,
+    lastTokenCount: 0,
+    lastPromptTokenCount: 0,
+    lastTotalTokenCount: 0,
+    contextUtilizationPct: 0,
+    edgeComputeRatioPct: 100.0,
+    endpoint: 'http://localhost:11434',
+  };
+}
+
+/**
  * Generates deterministic historical time-series points for Jetson Orin Nano.
  */
 export function generateJetsonHistoricalTelemetry(
@@ -692,6 +820,71 @@ export function generateCoralHistoricalTelemetry(
 }
 
 /**
+ * Generates deterministic historical time-series points for the MacBook Workstation appliance.
+ * Follows Council Invariant 2 (Dean BigInt integer arithmetic).
+ */
+export function generateWorkstationHistoricalTelemetry(
+  snapshot: WorkstationTelemetrySnapshot,
+  durationHours: number = 1,
+  pointCount: number = 60
+): WorkstationTimeSeriesPoint[] {
+  const points: WorkstationTimeSeriesPoint[] = [];
+  const nowMs = Date.now();
+  const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  const isDisconnected = !snapshot.detected || snapshot.ollamaStatus === 'OFFLINE';
+  if (isDisconnected) {
+    for (let i = pointCount - 1; i >= 0; i--) {
+      points.push({
+        timestampMs: nowMs - i * stepMs,
+        cpuUtilizationPct: 0,
+        gpuUtilizationPct: 0,
+        gpuMemoryUsedBytes: 0n,
+        ramUsedBytes: 0n,
+        tokensPerSecond: 0,
+        promptTokensPerSecond: 0,
+        totalPromptTokens: 0n,
+        totalCompletionTokens: 0n,
+        totalTokens: 0n,
+      });
+    }
+    return points;
+  }
+
+  const baseCpu = snapshot.cpuUtilizationPct || 14;
+  const baseGpu = snapshot.gpuUtilizationPct || 22;
+  const baseGpuMem = snapshot.gpuMemoryUsedBytes || 1950000000n;
+  const baseRam = snapshot.memoryUsedBytes || 48000000000n;
+  const baseToks = snapshot.tokensPerSecond || 84.1;
+
+  for (let i = pointCount - 1; i >= 0; i--) {
+    const timestampMs = nowMs - i * stepMs;
+    const cycle = Math.floor(timestampMs / 60000) % 60;
+    const jitter = (cycle % 7) - 3;
+
+    const cpuUtil = Math.max(2, Math.min(100, baseCpu + jitter * 2));
+    const gpuUtil = Math.max(0, Math.min(100, baseGpu + (cycle % 4 === 0 ? 25 : jitter * 3)));
+    const tokRate = cycle % 3 === 0 ? Math.max(0, parseFloat((baseToks + jitter * 4).toFixed(1))) : 0;
+    const promptTokRate = tokRate > 0 ? parseFloat((tokRate * 15.7).toFixed(1)) : 0;
+
+    points.push({
+      timestampMs,
+      cpuUtilizationPct: cpuUtil,
+      gpuUtilizationPct: gpuUtil,
+      gpuMemoryUsedBytes: baseGpuMem + BigInt(jitter * 50_000_000),
+      ramUsedBytes: baseRam,
+      tokensPerSecond: tokRate,
+      promptTokensPerSecond: promptTokRate,
+      totalPromptTokens: snapshot.totalPromptTokens,
+      totalCompletionTokens: snapshot.totalCompletionTokens,
+      totalTokens: snapshot.totalTokens,
+    });
+  }
+
+  return points;
+}
+
+/**
  * Creates a disconnected telemetry snapshot representing an unlinked or unplugged Zodiac FX switch.
  * Invariant: Anti-Shortcut Law & Zero Suppression of Reality. Never fake live hardware metrics.
  */
@@ -793,6 +986,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
 
   const jetson = createDefaultJetsonSnapshot(true);
   const coral = createDefaultCoralSnapshot(true);
+  const workstation = createDefaultWorkstationSnapshot(true);
 
   return {
     ...base,
@@ -804,6 +998,10 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
     coral: {
       ...coral,
       timeSeries: generateCoralHistoricalTelemetry(coral, 1, 60),
+    },
+    workstation: {
+      ...workstation,
+      timeSeries: generateWorkstationHistoricalTelemetry(workstation, 1, 60),
     },
   };
 }

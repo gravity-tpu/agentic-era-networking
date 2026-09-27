@@ -29,11 +29,19 @@ import {
   JetsonTimeSeriesPoint,
   CoralTelemetrySnapshot,
   CoralTimeSeriesPoint,
+  WorkstationTelemetrySnapshot,
+  WorkstationTimeSeriesPoint,
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
   CLOUD_RELAY_BOUNDS,
 } from './zodiac-telemetry.js';
-import { probeJetsonHardware, probeCoralHardware, readCoralDaemonTelemetry, readCoralBurstTelemetry } from './hardware-probe.js';
+import {
+  probeJetsonHardware,
+  probeCoralHardware,
+  readCoralDaemonTelemetry,
+  readCoralBurstTelemetry,
+  probeWorkstationHardware,
+} from './hardware-probe.js';
 import {
   downsamplePoints,
   downsampleJetsonPoints,
@@ -372,6 +380,7 @@ export class ZodiacBridgeServer {
   private timeSeries: ZodiacTimeSeriesPoint[] = [];
   private jetsonTimeSeries: JetsonTimeSeriesPoint[] = [];
   private coralTimeSeries: CoralTimeSeriesPoint[] = [];
+  private workstationTimeSeries: WorkstationTimeSeriesPoint[] = [];
   private lastProbeNs: bigint = process.hrtime.bigint();
   private lastSwitchPollNs: bigint = process.hrtime.bigint();
   private readonly portRxCounters = new Map<number, bigint>();
@@ -427,6 +436,7 @@ export class ZodiacBridgeServer {
     this.timeSeries = generateHistoricalTelemetry(this.cachedSnapshot, 1, 60);
     this.jetsonTimeSeries = this.cachedSnapshot.jetson?.timeSeries ? [...this.cachedSnapshot.jetson.timeSeries] : [];
     this.coralTimeSeries = this.cachedSnapshot.coral?.timeSeries ? [...this.cachedSnapshot.coral.timeSeries] : [];
+    this.workstationTimeSeries = this.cachedSnapshot.workstation?.timeSeries ? [...this.cachedSnapshot.workstation.timeSeries] : [];
 
     // Sanjay Ghemawat & Jeff Dean Invariant: Restore state checkpoint from local disk on startup
     const loadedState = loadTelemetryState(this.stateFilePath);
@@ -440,6 +450,9 @@ export class ZodiacBridgeServer {
       if (loadedState.coralTimeSeries.length > 0) {
         this.coralTimeSeries = loadedState.coralTimeSeries.slice(-MAX_TIME_SERIES_POINTS);
       }
+      if (loadedState.workstationTimeSeries && loadedState.workstationTimeSeries.length > 0) {
+        this.workstationTimeSeries = loadedState.workstationTimeSeries.slice(-MAX_TIME_SERIES_POINTS);
+      }
     }
 
     this.cachedSnapshot = {
@@ -452,6 +465,10 @@ export class ZodiacBridgeServer {
       coral: this.cachedSnapshot.coral ? {
         ...this.cachedSnapshot.coral,
         timeSeries: this.coralTimeSeries,
+      } : undefined,
+      workstation: this.cachedSnapshot.workstation ? {
+        ...this.cachedSnapshot.workstation,
+        timeSeries: this.workstationTimeSeries,
       } : undefined,
     };
 
@@ -702,6 +719,7 @@ export class ZodiacBridgeServer {
       timeSeries: this.timeSeries,
       jetsonTimeSeries: this.jetsonTimeSeries,
       coralTimeSeries: this.coralTimeSeries,
+      workstationTimeSeries: this.workstationTimeSeries,
     });
   }
 
@@ -715,6 +733,7 @@ export class ZodiacBridgeServer {
       timeSeries: this.timeSeries,
       jetsonTimeSeries: this.jetsonTimeSeries,
       coralTimeSeries: this.coralTimeSeries,
+      workstationTimeSeries: this.workstationTimeSeries,
     });
   }
 
@@ -860,11 +879,17 @@ export class ZodiacBridgeServer {
           const { timeSeries: _ts, ...restCoral } = this.cachedSnapshot.coral;
           coralSummary = restCoral;
         }
+        let workstationSummary: WorkstationTelemetrySnapshot | undefined = undefined;
+        if (this.cachedSnapshot.workstation) {
+          const { timeSeries: _ts, ...restWorkstation } = this.cachedSnapshot.workstation;
+          workstationSummary = restWorkstation;
+        }
         const { timeSeries: _rootTs, ...restSnapshot } = this.cachedSnapshot;
         const responsePayload: ZodiacFullTelemetrySnapshot = {
           ...restSnapshot,
           jetson: jetsonSummary,
           coral: coralSummary,
+          workstation: workstationSummary,
         };
         res.end(this.serializeSnapshot(responsePayload));
         return;
@@ -888,6 +913,9 @@ export class ZodiacBridgeServer {
               } : {}),
               ...(this.cachedSnapshot.coral ? {
                 coral: { ...this.cachedSnapshot.coral, timeSeries: local.coralTimeSeries },
+              } : {}),
+              ...(this.cachedSnapshot.workstation ? {
+                workstation: { ...this.cachedSnapshot.workstation, timeSeries: this.workstationTimeSeries },
               } : {}),
             }));
             return;
@@ -917,6 +945,12 @@ export class ZodiacBridgeServer {
                   coral: {
                     ...this.cachedSnapshot.coral,
                     timeSeries: multi.coralTimeSeries,
+                  },
+                } : {}),
+                ...(this.cachedSnapshot.workstation ? {
+                  workstation: {
+                    ...this.cachedSnapshot.workstation,
+                    timeSeries: this.workstationTimeSeries,
                   },
                 } : {}),
               }));
@@ -956,6 +990,12 @@ export class ZodiacBridgeServer {
             coral: {
               ...this.cachedSnapshot.coral,
               timeSeries: coralPoints,
+            },
+          } : {}),
+          ...(this.cachedSnapshot.workstation ? {
+            workstation: {
+              ...this.cachedSnapshot.workstation,
+              timeSeries: this.workstationTimeSeries,
             },
           } : {}),
         }));
@@ -1522,10 +1562,11 @@ export class ZodiacBridgeServer {
       const deltaNs = nowNs - this.lastProbeNs;
       this.lastProbeNs = nowNs;
 
-      const [liveJetson, daemonData, burstData] = await Promise.all([
+      const [liveJetson, daemonData, burstData, liveWorkstation] = await Promise.all([
         probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs),
         readCoralDaemonTelemetry(),
         readCoralBurstTelemetry(),
+        probeWorkstationHardware(this.cachedSnapshot.workstation, deltaNs),
       ]);
       const liveCoral = await probeCoralHardware(daemonData, burstData);
 
@@ -1574,6 +1615,23 @@ export class ZodiacBridgeServer {
         this.coralTimeSeries.shift();
       }
 
+      this.workstationTimeSeries.push({
+        timestampMs: nowMs,
+        cpuUtilizationPct: liveWorkstation.cpuUtilizationPct,
+        gpuUtilizationPct: liveWorkstation.gpuUtilizationPct,
+        gpuMemoryUsedBytes: liveWorkstation.gpuMemoryUsedBytes,
+        ramUsedBytes: liveWorkstation.memoryUsedBytes,
+        tokensPerSecond: liveWorkstation.tokensPerSecond,
+        promptTokensPerSecond: liveWorkstation.promptTokensPerSecond,
+        totalPromptTokens: liveWorkstation.totalPromptTokens,
+        totalCompletionTokens: liveWorkstation.totalCompletionTokens,
+        totalTokens: liveWorkstation.totalTokens,
+      });
+
+      if (this.workstationTimeSeries.length > MAX_TIME_SERIES_POINTS) {
+        this.workstationTimeSeries.shift();
+      }
+
       this.cachedSnapshot = {
         ...this.cachedSnapshot,
         timeSeries: this.timeSeries,
@@ -1591,6 +1649,10 @@ export class ZodiacBridgeServer {
         coral: {
           ...liveCoral,
           timeSeries: this.coralTimeSeries,
+        },
+        workstation: {
+          ...liveWorkstation,
+          timeSeries: this.workstationTimeSeries,
         },
       };
 

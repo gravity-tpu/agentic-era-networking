@@ -98,7 +98,7 @@ function analyzeFile(filePath: string): Finding[] {
 
     // Rule 4: Hardware probes returning mock/connected defaults (Council Invariant 3 & 6)
     // Physical probes in hardware-probe.ts must fail closed to isDisconnected=true.
-    if (relPath.includes('hardware-probe.ts') && /createDefault(Coral|Jetson)Snapshot\s*\(\s*false\s*\)/.test(line)) {
+    if (relPath.includes('hardware-probe.ts') && /createDefault(Coral|Jetson|Workstation)Snapshot\s*\(\s*false\s*\)/.test(line)) {
       findings.push({
         file: relPath,
         line: lineNum,

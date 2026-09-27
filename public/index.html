@@ -64,6 +64,11 @@
             <span class="cf-device-btn-name">Coral TPU</span>
             <span class="cf-pill-badge blue" id="btn-device-coral-2-badge">DNS Sentinel</span>
           </button>
+          <button class="cf-device-btn" id="btn-device-workstation" role="tab" aria-selected="false" data-device="workstation">
+            <span class="cf-status-dot green" id="dot-device-workstation"></span>
+            <span class="cf-device-btn-name">MacBook M5</span>
+            <span class="cf-pill-badge amber" id="btn-device-workstation-badge">Gemma 4</span>
+          </button>
           <button class="cf-device-btn" id="btn-device-openflow" role="tab" aria-selected="false" data-device="openflow">
             <span class="cf-status-dot green" id="dot-device-openflow"></span>
             <span class="cf-device-btn-name">OpenFlow 1.3</span>
@@ -205,6 +210,40 @@
               <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
             </svg>
             DGA &amp; Tunneling Sentinel
+          </a>
+          <a class="cf-nav-item" data-section="council" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Council Invariants
+          </a>
+        </nav>
+
+        <!-- ── MacBook M5 Gemma 4 Workstation ── (hidden until device switch) -->
+        <nav class="cf-nav-group" id="cf-nav-workstation" style="display:none">
+          <a class="cf-nav-item active" data-section="overview" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            System Overview
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-token-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Token Velocity
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-metal-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>
+            </svg>
+            Metal GPU &amp; Unified RAM
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-gemma-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+            </svg>
+            Gemma 4 Gateway
           </a>
           <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1666,6 +1705,312 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
           </div><!-- /view-device-coral-2 -->
 
+          <!-- MACBOOK M5 / GEMMA 4 WORKSTATION VIEW -->
+          <div id="view-device-workstation" style="display: none;">
+            <div class="cf-page-header">
+              <div>
+                <h1 class="cf-page-title" id="ws-page-title">MacBook M5 Workstation — Local Gemma 4 AI Gateway</h1>
+                <p class="cf-page-desc" id="ws-page-desc">Apple Silicon Metal GPU accelerated local AI code reviewer &amp; Council verification gateway running Gemma 4 (25.2B Q4_K_M).</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="cf-pill-badge amber" id="ws-chip-badge">Apple M5 Pro</span>
+                <span class="cf-pill-badge blue" id="ws-gpu-badge">20-Core Metal GPU</span>
+                <span class="cf-pill-badge purple" id="ws-model-badge">Gemma 4 · 25.2B</span>
+                <span class="cf-pill-badge green" id="ws-ollama-badge">Ollama Online</span>
+              </div>
+            </div>
+
+            <!-- Workstation Top 4 KPI Cards -->
+            <div class="cf-stats-grid">
+              
+              <!-- KPI 1: GPU Compute & Utilization -->
+              <div class="cf-stat-card" id="workstation-metal-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Metal GPU Compute</span>
+                  <span class="cf-pill-badge amber">IOKit Physical</span>
+                </div>
+                <div class="cf-stat-value" style="color: #d97706;" id="ws-kpi-gpu-util">--%</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill" id="ws-bar-gpu-util" style="width: 0%; background: #d97706;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span id="ws-kpi-gpu-model">Apple M5 Pro (20 Cores)</span>
+                  <span id="ws-kpi-render-tile">R: --% | T: --%</span>
+                </div>
+              </div>
+
+              <!-- KPI 2: Gemma 4 Token Generation Velocity -->
+              <div class="cf-stat-card" id="workstation-token-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Token Generation Velocity</span>
+                  <span class="cf-pill-badge green" id="ws-kpi-peak-tok-rate">Gemma 4</span>
+                </div>
+                <div class="cf-stat-value" style="color: #059669;" id="ws-kpi-tok-rate">0.0 <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span></div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="ws-bar-tok-rate" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span id="ws-kpi-prompt-rate">Prefill: <strong>0.0 tok/s</strong></span>
+                  <span id="ws-kpi-total-tokens">Ledger: <strong>0 tok</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 3: Unified Memory Architecture -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Unified Memory &amp; VRAM</span>
+                  <span class="cf-pill-badge blue">64 GB Total</span>
+                </div>
+                <div class="cf-stat-value blue" id="ws-kpi-vram-usage">-- / -- GB</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill blue" id="ws-bar-vram" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span id="ws-kpi-ram-summary">RAM: -- / -- GB</span>
+                  <span id="ws-kpi-cpu-summary">CPU: --% (18-Core)</span>
+                </div>
+              </div>
+
+              <!-- KPI 4: Council Verification Gateway -->
+              <div class="cf-stat-card" id="workstation-gemma-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Council AI Gateway</span>
+                  <span class="cf-pill-badge purple">AlphaProof</span>
+                </div>
+                <div class="cf-stat-value" style="color: #7e22ce;" id="ws-kpi-gateway-status">Verified</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill purple" style="width: 100%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span id="ws-kpi-active-model">Model: <strong>gemma4:26b</strong></span>
+                  <span id="ws-kpi-last-latency">TTFT: <strong class="cf-mono" id="ws-kpi-ttft">-- ms</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deep Dive Card 1: Apple Silicon & Metal Hardware Architecture -->
+            <div class="cf-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Apple Silicon Metal Hardware &amp; Unified Memory Architecture</h3>
+                  <div class="cf-card-subtitle">Direct physical telemetry via IOKit IOAccelerator driver &amp; Darwin kernel interfaces</div>
+                </div>
+                <span class="cf-pill-badge amber" id="ws-hw-status-badge">Apple M5 Pro Active</span>
+              </div>
+              <div class="cf-card-body" style="padding: 0;">
+                <div class="table-responsive">
+                  <table class="cf-table">
+                    <thead>
+                      <tr>
+                        <th>Subsystem</th>
+                        <th>Physical Specifications</th>
+                        <th>Real-Time Telemetry</th>
+                        <th>Load Metric</th>
+                        <th>Hardware Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>Metal GPU</strong></td>
+                        <td id="ws-tbl-gpu-spec">Apple M5 Pro Metal GPU (20 Cores)</td>
+                        <td id="ws-tbl-gpu-telemetry">Device: --% | Renderer: --% | Tiler: --%</td>
+                        <td>
+                          <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="cf-mini-bar" style="width: 120px;">
+                              <div class="cf-mini-bar-fill" id="ws-tbl-gpu-bar" style="width:0%; background:#d97706;"></div>
+                            </div>
+                            <span class="cf-mono" id="ws-tbl-gpu-pct">--%</span>
+                          </div>
+                        </td>
+                        <td><span class="cf-pill-badge green" id="ws-tbl-gpu-badge">Metal Active</span></td>
+                      </tr>
+                      <tr>
+                        <td><strong>CPU Cores</strong></td>
+                        <td id="ws-tbl-cpu-spec">18 Cores (High-Performance &amp; Efficiency)</td>
+                        <td id="ws-tbl-cpu-telemetry">Load Avg: --, --, --</td>
+                        <td>
+                          <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="cf-mini-bar" style="width: 120px;">
+                              <div class="cf-mini-bar-fill blue" id="ws-tbl-cpu-bar" style="width:0%;"></div>
+                            </div>
+                            <span class="cf-mono" id="ws-tbl-cpu-pct">--%</span>
+                          </div>
+                        </td>
+                        <td><span class="cf-pill-badge blue">Darwin 25.x</span></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Unified RAM</strong></td>
+                        <td id="ws-tbl-ram-spec">64 GB LPDDR5X Unified Architecture</td>
+                        <td id="ws-tbl-ram-telemetry">Used: -- GB | Free: -- GB</td>
+                        <td>
+                          <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="cf-mini-bar" style="width: 120px;">
+                              <div class="cf-mini-bar-fill purple" id="ws-tbl-ram-bar" style="width:0%;"></div>
+                            </div>
+                            <span class="cf-mono" id="ws-tbl-ram-pct">--%</span>
+                          </div>
+                        </td>
+                        <td><span class="cf-pill-badge green">Zero Copy</span></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Metal VRAM Alloc</strong></td>
+                        <td>Dynamic OS Allocation for LLM Weights</td>
+                        <td id="ws-tbl-vram-telemetry">In-Use: -- GB | Allocated: -- GB</td>
+                        <td>
+                          <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="cf-mini-bar" style="width: 120px;">
+                              <div class="cf-mini-bar-fill green" id="ws-tbl-vram-bar" style="width:0%;"></div>
+                            </div>
+                            <span class="cf-mono" id="ws-tbl-vram-pct">--%</span>
+                          </div>
+                        </td>
+                        <td><span class="cf-pill-badge green" id="ws-tbl-vram-badge">Weights Mapped</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deep Dive Card 2: Gemma 4 & Ollama Token Accounting Ledger -->
+            <div class="cf-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Local Gemma 4 Token Accounting &amp; Council Inference Velocity</h3>
+                  <div class="cf-card-subtitle">Deterministic BigInt token counters &amp; nanosecond precision durations (Council Invariant 2)</div>
+                </div>
+                <span class="cf-pill-badge purple" id="ws-ollama-model-badge">gemma4:26b Q4_K_M</span>
+              </div>
+              <div class="cf-card-body" style="padding: 0;">
+                <div class="table-responsive">
+                  <table class="cf-table">
+                    <thead>
+                      <tr>
+                        <th>Metric / Parameter</th>
+                        <th>Accounting Unit</th>
+                        <th>Physical Value</th>
+                        <th>Council Invariant Standard</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>Active Review Model</strong></td>
+                        <td>Ollama GGUF Weights</td>
+                        <td id="ws-tbl-token-model">gemma4:26b (25.2B parameters, Q4_K_M)</td>
+                        <td>Symbolic Loop-Free Review Gate</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Edge Compute Offload</strong></td>
+                        <td>Silicon Execution Ratio</td>
+                        <td id="ws-tbl-edge-ratio" style="font-weight: 600; color: #059669;">100.0% Local Metal GPU (Zero Cloud Tokens)</td>
+                        <td>Council Invariant 6 (Physical Epistemic Provenance)</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Council Inferences Executed</strong></td>
+                        <td>Review Runs Completed</td>
+                        <td class="cf-mono" id="ws-tbl-total-inferences">0</td>
+                        <td>Deterministic BigInt Counter</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Total Tokens Processed</strong></td>
+                        <td>Combined (Prompt + Output)</td>
+                        <td class="cf-mono" id="ws-tbl-total-all-tok" style="font-weight: 700; color: #1e293b;">0 tokens</td>
+                        <td>Integer Accounting (Zero Float Drift)</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Cumulative Prompt Tokens</strong></td>
+                        <td>Repository Diffs &amp; Code Ingress</td>
+                        <td class="cf-mono" id="ws-tbl-total-prompt-tok">0</td>
+                        <td>Integer Accounting (Zero Float Drift)</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Cumulative Completion Tokens</strong></td>
+                        <td>Council Verdicts &amp; Egress</td>
+                        <td class="cf-mono" id="ws-tbl-total-comp-tok">0</td>
+                        <td>Integer Accounting (Zero Float Drift)</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Average Tokens Per Review</strong></td>
+                        <td>Total / Review Inferences</td>
+                        <td class="cf-mono" id="ws-tbl-avg-tokens">-- tokens/run</td>
+                        <td>Telemetry Downsampling Balance</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Last Review Token Footprint</strong></td>
+                        <td>Prompt In / Completion Out</td>
+                        <td class="cf-mono" id="ws-tbl-last-tokens">-- prompt / -- completion</td>
+                        <td>Single Invocational Scope</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Context Window Saturation</strong></td>
+                        <td>Active / Max Context</td>
+                        <td class="cf-mono" id="ws-tbl-context-len">0 / 262,144 tokens (0.0%)</td>
+                        <td>Differential Context Headroom Bounds</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Completion Generation Velocity</strong></td>
+                        <td>tok/s (Tokens per Second)</td>
+                        <td class="cf-mono" id="ws-tbl-gen-toks" style="color: #059669; font-weight:600;">0.0 tok/s</td>
+                        <td>Physical Metal Compute Output Rate</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Prompt Evaluation (Prefill) Velocity</strong></td>
+                        <td>tok/s (Prompt Tokens per Second)</td>
+                        <td class="cf-mono" id="ws-tbl-prompt-toks" style="color: #2563eb; font-weight:600;">0.0 tok/s</td>
+                        <td>Prefill Throughput on M5 Unified Memory</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Time-To-First-Token (TTFT)</strong></td>
+                        <td>Prompt Prefill Latency</td>
+                        <td class="cf-mono" id="ws-tbl-ttft">0 ms (Dean Budget: &lt; 2,000 ms)</td>
+                        <td>Jeff Dean TTFT Latency Standard (0.5–2.0s)</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Per-Token Generation Latency</strong></td>
+                        <td>Milliseconds per Token</td>
+                        <td class="cf-mono" id="ws-tbl-per-tok-lat">-- ms/tok</td>
+                        <td>Kernel Dispatch Latency Invariant</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Total Review Wall Latency</strong></td>
+                        <td>Nanoseconds / Milliseconds</td>
+                        <td class="cf-mono" id="ws-tbl-last-latency">0 ns (0.0 ms)</td>
+                        <td>process.hrtime.bigint() Dean Budget</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Local Gateway Socket</strong></td>
+                        <td>HTTP REST Socket</td>
+                        <td class="cf-mono" id="ws-tbl-endpoint">http://localhost:11434</td>
+                        <td>Fail-Closed Local Review Boundary</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deep Dive Card 3: Workstation Telemetry Graph -->
+            <div class="cf-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Workstation Metal GPU &amp; Token Velocity Telemetry History</h3>
+                  <div class="cf-card-subtitle">Real-time rolling hardware load, token generation, and prompt prefill velocity</div>
+                </div>
+                <div class="cf-card-actions">
+                  <span class="cf-pill-badge amber" id="ws-chart-gpu-legend">GPU: --%</span>
+                  <span class="cf-pill-badge green" id="ws-chart-tok-legend">Tokens: 0 tok/s</span>
+                  <span class="cf-pill-badge blue" id="ws-chart-prompt-legend">Prefill: 0 tok/s</span>
+                </div>
+              </div>
+              <div class="cf-card-body">
+                <div class="cf-canvas-container" id="canvas-wrapper-workstation" style="position: relative; height: 240px;">
+                  <canvas id="chart-workstation"></canvas>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /view-device-workstation -->
+
           <!-- OpenFlow 1.3 Controller Page -->
           <div id="openflow-device-section" style="display:none; padding: 1.5rem 0;">
 
@@ -2045,7 +2390,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.19fd64487d.js"></script>
+  <script defer src="zodiac-app.7660add08d.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

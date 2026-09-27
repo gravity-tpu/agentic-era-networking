@@ -66,21 +66,65 @@ function serializeWithBigInt(obj: unknown): string {
   );
 }
 
+function isJsonObject(val: unknown): val is Record<string, unknown> {
+  return typeof val === 'object' && val !== null && !Array.isArray(val);
+}
+
+function isValidWorkstationPayload(val: unknown): boolean {
+  if (!isJsonObject(val)) {
+    return false;
+  }
+  if ('detected' in val && typeof val['detected'] !== 'boolean') {
+    return false;
+  }
+  if ('cpuUtilizationPct' in val && (typeof val['cpuUtilizationPct'] !== 'number' || !Number.isFinite(val['cpuUtilizationPct']))) {
+    return false;
+  }
+  if ('gpuUtilizationPct' in val && (typeof val['gpuUtilizationPct'] !== 'number' || !Number.isFinite(val['gpuUtilizationPct']))) {
+    return false;
+  }
+  // Council Invariant 2 (Determinism in Telemetry): Wire token counters MUST serialize as decimal strings
+  if ('totalTokens' in val && typeof val['totalTokens'] !== 'string') {
+    return false;
+  }
+  if ('totalPromptTokens' in val && typeof val['totalPromptTokens'] !== 'string') {
+    return false;
+  }
+  if ('totalCompletionTokens' in val && typeof val['totalCompletionTokens'] !== 'string') {
+    return false;
+  }
+  if ('totalInferences' in val && typeof val['totalInferences'] !== 'string') {
+    return false;
+  }
+  if ('tokensPerSecond' in val && (typeof val['tokensPerSecond'] !== 'number' || !Number.isFinite(val['tokensPerSecond']))) {
+    return false;
+  }
+  if ('promptTokensPerSecond' in val && (typeof val['promptTokensPerSecond'] !== 'number' || !Number.isFinite(val['promptTokensPerSecond']))) {
+    return false;
+  }
+  if ('timeSeries' in val && !Array.isArray(val['timeSeries'])) {
+    return false;
+  }
+  return true;
+}
+
 function isValidTelemetryPayload(val: unknown): val is Partial<ZodiacFullTelemetrySnapshot> {
-  if (typeof val !== 'object' || val === null || Array.isArray(val)) {
+  if (!isJsonObject(val)) {
     return false;
   }
-  const obj = val as Record<string, unknown>;
-  if ('system' in obj && (typeof obj['system'] !== 'object' || obj['system'] === null || Array.isArray(obj['system']))) {
+  if ('system' in val && !isJsonObject(val['system'])) {
     return false;
   }
-  if ('ports' in obj && !Array.isArray(obj['ports'])) {
+  if ('ports' in val && !Array.isArray(val['ports'])) {
     return false;
   }
-  if ('openflow' in obj && (typeof obj['openflow'] !== 'object' || obj['openflow'] === null || Array.isArray(obj['openflow']))) {
+  if ('openflow' in val && !isJsonObject(val['openflow'])) {
     return false;
   }
-  if ('timeSeries' in obj && !Array.isArray(obj['timeSeries'])) {
+  if ('timeSeries' in val && !Array.isArray(val['timeSeries'])) {
+    return false;
+  }
+  if ('workstation' in val && !isValidWorkstationPayload(val['workstation'])) {
     return false;
   }
   return true;
@@ -164,6 +208,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         MAX_SERVERLESS_BUFFER_POINTS
       );
 
+      const mergedWorkstationSeries = mergeRollingSeries(
+        latestSnapshot.workstation?.timeSeries,
+        parsed.workstation?.timeSeries,
+        MAX_SERVERLESS_BUFFER_POINTS
+      );
+
       latestSnapshot = {
         ...latestSnapshot,
         ...parsed,
@@ -186,6 +236,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             ...latestSnapshot.coral,
             ...parsed.coral,
             ...(mergedCoralSeries ? { timeSeries: mergedCoralSeries } : {}),
+          }
+        } : {}),
+        ...(parsed.workstation ? {
+          workstation: {
+            ...latestSnapshot.workstation,
+            ...parsed.workstation,
+            ...(mergedWorkstationSeries ? { timeSeries: mergedWorkstationSeries } : {}),
           }
         } : {}),
       };
@@ -318,6 +375,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         } : {}),
         ...(latestSnapshot.coral ? {
           coral: { ...latestSnapshot.coral, timeSeries: trimSince(latestSnapshot.coral.timeSeries) },
+        } : {}),
+        ...(latestSnapshot.workstation ? {
+          workstation: { ...latestSnapshot.workstation, timeSeries: trimSince(latestSnapshot.workstation.timeSeries) },
         } : {}),
       }));
       return;
