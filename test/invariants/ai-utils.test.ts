@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT } from '../../scripts/ai-utils.mjs';
+import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry } from '../../scripts/ai-utils.mjs';
 
 function createMockResponse(bodyBytes: Uint8Array | null, contentType = 'text/plain; charset=utf-8'): Response {
   if (!bodyBytes) {
@@ -113,5 +113,40 @@ describe('AI Reviewer Utils: readErrorBody Invariants', () => {
     const result = await readErrorBody(res);
 
     expect(result).toContain('[stream read error:');
+  });
+});
+
+describe('AI Reviewer Utils: Asynchronous Telemetry Task Registry', () => {
+  it('handles non-promises or null gracefully without throwing', () => {
+    expect(() => trackTelemetryTask(null)).not.toThrow();
+    expect(() => trackTelemetryTask(undefined)).not.toThrow();
+    expect(() => trackTelemetryTask('not a promise')).not.toThrow();
+  });
+
+  it('drains tracked background telemetry tasks upon flushPendingTelemetry', async () => {
+    let completed = false;
+    const task = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        completed = true;
+        resolve();
+      }, 20);
+    });
+
+    trackTelemetryTask(task);
+    expect(completed).toBe(false);
+
+    await flushPendingTelemetry(1000);
+    expect(completed).toBe(true);
+  });
+
+  it('handles rejected background telemetry tasks without crashing flushPendingTelemetry', async () => {
+    const failingTask = new Promise<void>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Simulated telemetry failure'));
+      }, 10);
+    });
+
+    trackTelemetryTask(failingTask);
+    await expect(flushPendingTelemetry(500)).resolves.not.toThrow();
   });
 });

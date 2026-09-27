@@ -447,6 +447,44 @@ export function enqueueTelemetryMutation(filePath, mutateFn) {
   return next;
 }
 
+// ─── Asynchronous Telemetry Task Registry ────────────────────────────────────
+// Jeff Dean Latency Budget & Systems Decoupling:
+// Recording metrics to disk must NEVER block the inference response microtask
+// on the critical path. Background tasks are tracked in a set and drained via
+// flushPendingTelemetry() before process exit to prevent floating promise drops.
+const pendingTelemetryTasks = new Set();
+
+export function trackTelemetryTask(promise) {
+  if (!promise || typeof promise.then !== 'function') return;
+  pendingTelemetryTasks.add(promise);
+  promise
+    .catch((err) => {
+      process.stderr.write(`[ai-utils] Pending telemetry task rejected: ${err?.message ?? err}\n`);
+    })
+    .finally(() => {
+      pendingTelemetryTasks.delete(promise);
+    });
+}
+
+export async function flushPendingTelemetry(timeoutMs = 5000) {
+  if (pendingTelemetryTasks.size === 0) return;
+  const tasks = Array.from(pendingTelemetryTasks);
+  let timerId;
+  const timeoutPromise = new Promise((resolve) => {
+    timerId = setTimeout(resolve, timeoutMs);
+  });
+  try {
+    await Promise.race([
+      Promise.allSettled(tasks),
+      timeoutPromise,
+    ]);
+  } catch (err) {
+    process.stderr.write(`[ai-utils] Error flushing telemetry tasks: ${err?.message ?? err}\n`);
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
 /**
  * Records Ollama inference token metrics into local telemetry file asynchronously.
  * Used by probeWorkstationHardware to report physical token velocities and totals.
@@ -635,8 +673,8 @@ export async function callOllama(
     throw new Error(`Ollama ${res.status} from ${url}: ${body}`);
   }
   const data = await res.json();
-  // Record live token telemetry with deterministic completion before returning
-  await recordOllamaInferenceMetrics(data, model);
+  // Decouple telemetry recording from the inference response critical path
+  trackTelemetryTask(recordOllamaInferenceMetrics(data, model));
   const content = data.message?.content;
   if (!content || typeof content !== 'string' || !content.trim()) {
     throw new Error(`Ollama returned empty response for ${model}`);
@@ -665,7 +703,7 @@ export async function callGemini(model, systemPrompt, userMessage, signal) {
   }
   const data = await res.json();
   if (data.usageMetadata) {
-    await recordCloudInferenceMetrics('google', model, data.usageMetadata.promptTokenCount, data.usageMetadata.candidatesTokenCount);
+    trackTelemetryTask(recordCloudInferenceMetrics('google', model, data.usageMetadata.promptTokenCount, data.usageMetadata.candidatesTokenCount));
   }
   const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {
@@ -699,7 +737,7 @@ export async function callAnthropic(model, systemPrompt, userMessage, signal) {
   }
   const data = await res.json();
   if (data.usage) {
-    await recordCloudInferenceMetrics('anthropic', model, data.usage.input_tokens, data.usage.output_tokens);
+    trackTelemetryTask(recordCloudInferenceMetrics('anthropic', model, data.usage.input_tokens, data.usage.output_tokens));
   }
   const content = data.content?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {
@@ -735,7 +773,7 @@ export async function callOpenAI(model, systemPrompt, userMessage, signal) {
   }
   const data = await res.json();
   if (data.usage) {
-    await recordCloudInferenceMetrics('openai', model, data.usage.prompt_tokens, data.usage.completion_tokens);
+    trackTelemetryTask(recordCloudInferenceMetrics('openai', model, data.usage.prompt_tokens, data.usage.completion_tokens));
   }
   const content = data.choices?.[0]?.message?.content;
   if (!content || typeof content !== 'string' || !content.trim()) {

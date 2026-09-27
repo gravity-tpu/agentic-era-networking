@@ -78,16 +78,15 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 +───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
 | Raspberry Pi 3 Model B+ (Workload)|                           ▼
 |                                   |       +───────────────────────────────────────────────────+
-| * eth0: <workload-subnet> (Static)┼       | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| * eth0: <workload-subnet> (Static)|       | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |   Untrusted SDN Agent Data Plane  |       |                                                   |
 |                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi) <──+───────| * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Management Backdoor |       | * Council Review Gate (Pre-push verification)     |
+| * wlan0: <mgmt-subnet> (Wi-Fi)    |       | * Local Ollama Engine: gemma4:26b (:11434)        |
+|   Out-of-Band Wireless Management |       | * Dual-Stage Council Review Gate                  |
 |                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |       | * Deterministic BigInt Token Accounting Ledger    |
 |                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
 |                                   |       | * Operator Console: http://localhost:3000 & Cloud |
-|                                   |       | * Out-of-Band Safety: ssh agent@<pi-mgmt-ip>      |
 +───────────────────────────────────+       +───────────────────────────────────────────────────+
 ```
 
