@@ -52,23 +52,32 @@ jobs:
       - name: Council Review — AI Code Review
         timeout-minutes: 12
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          # Exit codes from ai-reviewer.mjs:
+          #   0 = approved (no criticals, no warnings)
+          #   1 = definitive rejection: Critical Issues found, all models unavailable, or crash
+          #   2 = strict-mode warning block only (no criticals; LLM may flip on re-evaluation)
+          # Verification Asymmetry (Hassabis): only exit-2 is retryable — definitive rejections
+          # must fail immediately so the gate is not probabilistically bypassed.
           MAX_ATTEMPTS=3
           attempt=1
           while [ $attempt -le $MAX_ATTEMPTS ]; do
             echo "::group::Council Review attempt $attempt / $MAX_ATTEMPTS"
-            if npm run council:review:last -- --strict; then
-              echo "::endgroup::"
-              exit 0
-            fi
+            npm run council:review:last -- --strict || review_exit=$?
+            review_exit=${review_exit:-0}
             echo "::endgroup::"
+            if [ "$review_exit" -eq 0 ]; then exit 0; fi
+            if [ "$review_exit" -ne 2 ]; then
+              echo "::error::Council review: definitive rejection (exit $review_exit) — no retry."
+              exit "$review_exit"
+            fi
             attempt=$((attempt + 1))
             if [ $attempt -le $MAX_ATTEMPTS ]; then
-              echo "::notice::Council review did not pass — re-evaluating (attempt $attempt / $MAX_ATTEMPTS)..."
+              echo "::notice::Council review: warning-only block — re-evaluating (attempt $attempt / $MAX_ATTEMPTS)..."
             fi
           done
-          echo "::error::Council review failed after $MAX_ATTEMPTS attempts."
-          exit 1
+          echo "::error::Council review: warning-only block persisted after $MAX_ATTEMPTS attempts."
+          exit 2
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}
