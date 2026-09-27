@@ -1358,6 +1358,9 @@ interface OllamaPsResponse {
 // so worst-case resolution latency == exactly one timeout (350ms), never N × 350ms.
 const WORKSTATION_AGENT_PROBE_TIMEOUT_MS = 350;
 
+// Sanjay Ghemawat - Bounded Allocation Invariant: Maximum allowed payload from agent before aborting stream.
+const MAX_WORKSTATION_AGENT_PAYLOAD_BYTES = 65_536;
+
 /**
  * Fetch and validate a single workstation agent endpoint.
  * Rejects on any network error, non-200 status, bad provenance, or malformed body.
@@ -1392,13 +1395,43 @@ async function fetchFromAgent(
       throw new Error(`HTTP ${res.status} from ${endpoint}`);
     }
 
-    // Keep abort active through body read — a stalling body is as dangerous as a stalling header.
-    const text = await res.text();
-    clearTimeout(timeout);
-    // Sanjay Ghemawat - Invariant Rigor: Enforce strict bounded allocation before JSON parsing.
-    if (text.length > 65536) {
-      throw new Error(`${endpoint} response exceeded 64KB safety limit (${text.length} bytes)`);
+    if (!res.body) {
+      clearTimeout(timeout);
+      throw new Error(`HTTP response from ${endpoint} has no body`);
     }
+
+    // Sanjay Ghemawat - Bounded Allocation Invariant: Stream chunks with immediate abort on byte overflow
+    // to prevent malicious or runaway agent responses from exhausting V8 heap.
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytesReceived = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          bytesReceived += value.byteLength;
+          if (bytesReceived > MAX_WORKSTATION_AGENT_PAYLOAD_BYTES) {
+            controller.abort();
+            throw new Error(
+              `${endpoint} response exceeded safety limit (${bytesReceived} > ${MAX_WORKSTATION_AGENT_PAYLOAD_BYTES} bytes)`
+            );
+          }
+          chunks.push(value);
+        }
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const totalBuffer = new Uint8Array(bytesReceived);
+    let offset = 0;
+    for (const chunk of chunks) {
+      totalBuffer.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const text = new TextDecoder('utf-8').decode(totalBuffer);
     const raw = JSON.parse(text) as Record<string, unknown>;
 
     // Council Invariant 6: reject responses without live physical provenance.

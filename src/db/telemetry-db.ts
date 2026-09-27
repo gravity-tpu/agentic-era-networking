@@ -548,15 +548,17 @@ export function downsampleWorkstationPoints(
     const count = chunk.length;
     const countBig = BigInt(count);
     const isLastChunk = i + bucketSize >= rawPoints.length;
+    // Council Invariant 2 (Deterministic Integer Arithmetic): Pure integer rounding with half-count offset.
+    const halfCount = Math.floor(count / 2);
 
     downsampled.push({
       timestampMs: isLastChunk ? lastPoint.timestampMs : midPoint.timestampMs,
-      cpuUtilizationPct: Math.round(sumCpu / count),
-      gpuUtilizationPct: Math.round(sumGpu / count),
+      cpuUtilizationPct: Math.floor((sumCpu + halfCount) / count),
+      gpuUtilizationPct: Math.floor((sumGpu + halfCount) / count),
       gpuMemoryUsedBytes: sumGpuMem / countBig,
       ramUsedBytes: sumRam / countBig,
-      tokensPerSecond: Math.round(sumTok / count),
-      promptTokensPerSecond: Math.round(sumPromptTok / count),
+      tokensPerSecond: Math.floor((sumTok + halfCount) / count),
+      promptTokensPerSecond: Math.floor((sumPromptTok + halfCount) / count),
       totalPromptTokens: BigInt(lastPoint.totalPromptTokens || 0),
       totalCompletionTokens: BigInt(lastPoint.totalCompletionTokens || 0),
       totalTokens: BigInt(lastPoint.totalTokens || 0),
