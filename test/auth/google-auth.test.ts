@@ -44,12 +44,14 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
   });
 
   describe('isEmailAllowed', () => {
-    it('approves operators on the default approved list (sekyereandy and natborks)', () => {
+    it('approves operators on the default approved list (sekyereandy, natborks, and encompassdevelopmentinc)', () => {
       expect(isEmailAllowed('sekyereandy@gmail.com')).toBe(true);
       expect(isEmailAllowed('SEKYEREANDY@GMAIL.COM')).toBe(true); // Case-insensitive
       expect(isEmailAllowed('  sekyereandy@gmail.com  ')).toBe(true); // Trims whitespace
       expect(isEmailAllowed('natborks@gmail.com')).toBe(true);
       expect(isEmailAllowed('NATBORKS@GMAIL.COM')).toBe(true);
+      expect(isEmailAllowed('encompassdevelopmentinc@gmail.com')).toBe(true);
+      expect(isEmailAllowed('ENCOMPASSDEVELOPMENTINC@GMAIL.COM')).toBe(true);
     });
 
     it('rejects unauthorized emails by default (Fail-Closed Invariant)', () => {

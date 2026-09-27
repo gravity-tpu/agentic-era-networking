@@ -34,6 +34,7 @@ import {
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
   CLOUD_RELAY_BOUNDS,
+  boundSeriesWithHistory,
 } from './zodiac-telemetry.js';
 import {
   probeJetsonHardware,
@@ -371,6 +372,22 @@ const MIME_TYPES: Record<string, string> = {
 const NANOSECONDS_PER_SECOND = 1_000_000_000n;
 const DEFAULT_POLL_INTERVAL_NS = 2_500_000_000n;
 
+/**
+ * Sanjay Ghemawat Invariant: Radical Simplicity & DRY History Merge.
+ * Prepends historical points strictly older than the current in-memory buffer without sorting or duplicate timestamps.
+ */
+function mergeHistoricalSeries<T extends { readonly timestampMs: number }>(
+  current: readonly T[],
+  history: readonly T[] | undefined,
+  maxPoints: number = CLOUD_RELAY_BOUNDS.MAX_SERVERLESS_POINTS
+): T[] {
+  if (!history || history.length === 0) return [...current];
+  const earliestMemTs = current[0]?.timestampMs ?? Number.MAX_SAFE_INTEGER;
+  const older = history.filter((p) => p.timestampMs < earliestMemTs);
+  if (older.length === 0) return [...current];
+  return [...older, ...current].slice(-maxPoints);
+}
+
 export class ZodiacBridgeServer {
   public controlPlaneState: 'INITIALIZING' | 'ACTIVE' | 'DEGRADED_FAULT' = 'INITIALIZING';
   private readonly controller: ZodiacController;
@@ -391,6 +408,8 @@ export class ZodiacBridgeServer {
   private isRelaying = false;
   private pollTimer: NodeJS.Timeout | null = null;
   private isRefreshing = false;
+  /** Observability counter tracking failures when hydrating local day history on startup. */
+  public historyLoadFailures = 0;
   private consecutiveMissedProbes = 0;
   public static readonly MAX_MISSED_PROBES_BEFORE_DISCONNECT = 3;
   private coralDaemon: ChildProcess | null = null;
@@ -546,6 +565,25 @@ export class ZodiacBridgeServer {
     // to accurately track startup completion and enabling WatchdogSec liveness.
     // No-ops silently outside systemd (NOTIFY_SOCKET absent).
     sdNotify('READY=1\n');
+
+    // Prepend persistent day history from local JSONL files so service restarts preserve the day's tests
+    try {
+      const dayHistory = await queryLocalHistory('24h');
+      this.workstationTimeSeries = mergeHistoricalSeries(this.workstationTimeSeries, dayHistory.workstationTimeSeries);
+      this.timeSeries = mergeHistoricalSeries(this.timeSeries, dayHistory.timeSeries);
+      this.jetsonTimeSeries = mergeHistoricalSeries(this.jetsonTimeSeries, dayHistory.jetsonTimeSeries);
+      this.coralTimeSeries = mergeHistoricalSeries(this.coralTimeSeries, dayHistory.coralTimeSeries);
+      this.cachedSnapshot = {
+        ...this.cachedSnapshot,
+        timeSeries: this.timeSeries,
+        ...(this.cachedSnapshot.jetson ? { jetson: { ...this.cachedSnapshot.jetson, timeSeries: this.jetsonTimeSeries } } : {}),
+        ...(this.cachedSnapshot.coral ? { coral: { ...this.cachedSnapshot.coral, timeSeries: this.coralTimeSeries } } : {}),
+        ...(this.cachedSnapshot.workstation ? { workstation: { ...this.cachedSnapshot.workstation, timeSeries: this.workstationTimeSeries } } : {}),
+      };
+    } catch (err: unknown) {
+      this.historyLoadFailures++;
+      console.warn('[!] Failed to merge local day history into startup buffers:', err instanceof Error ? err.message : String(err));
+    }
 
     // 3. Start decoupled asynchronous background telemetry polling loop with backpressure
     this.scheduleNextPoll(0);
@@ -1757,10 +1795,10 @@ export class ZodiacBridgeServer {
       // Coordinated bounds provide a 12.5-17m continuous live telemetry window with ample headroom
       // for the 10m Live dashboard view without exceeding serverless payload thresholds.
       const maxRelayPoints = CLOUD_RELAY_BOUNDS.MAX_RELAY_POINTS;
-      const boundedTimeSeries        = snapshot.timeSeries?.slice(-maxRelayPoints) ?? [];
-      const boundedJetsonSeries      = snapshot.jetson?.timeSeries?.slice(-maxRelayPoints) ?? [];
-      const boundedCoralSeries       = snapshot.coral?.timeSeries?.slice(-maxRelayPoints) ?? [];
-      const boundedWorkstationSeries = (snapshot.workstation?.timeSeries ?? this.workstationTimeSeries).slice(-maxRelayPoints);
+      const boundedTimeSeries        = boundSeriesWithHistory(snapshot.timeSeries ?? this.timeSeries, downsamplePoints, maxRelayPoints);
+      const boundedJetsonSeries      = boundSeriesWithHistory(snapshot.jetson?.timeSeries ?? this.jetsonTimeSeries, downsampleJetsonPoints, maxRelayPoints);
+      const boundedCoralSeries       = boundSeriesWithHistory(snapshot.coral?.timeSeries ?? this.coralTimeSeries, downsampleCoralPoints, maxRelayPoints);
+      const boundedWorkstationSeries = boundSeriesWithHistory(snapshot.workstation?.timeSeries ?? this.workstationTimeSeries, downsampleWorkstationPoints, maxRelayPoints);
 
       const boundedSnapshot: ZodiacFullTelemetrySnapshot = {
         ...snapshot,

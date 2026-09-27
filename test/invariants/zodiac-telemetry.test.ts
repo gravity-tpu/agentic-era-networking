@@ -318,6 +318,47 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
     expect(deserializeTelemetryState('invalid json')).toBeNull();
     expect(deserializeTelemetryState('{"version": 99}')).toBeNull();
   });
+
+  it('preserves long-range history and live points within strict WAN bounds (boundSeriesWithHistory)', async () => {
+    const { boundSeriesWithHistory } = await import('../../src/sdn/zodiac-telemetry.js');
+    const { downsampleWorkstationPoints } = await import('../../src/db/telemetry-db.js');
+
+    // Generate 600 synthetic points across a 4-hour window (1 point every 24s)
+    const baseTime = 1790488650000; // ~01:57:30
+    const points = Array.from({ length: 600 }, (_, i) => ({
+      timestampMs: baseTime + i * 24_000,
+      cpuUtilizationPct: 10,
+      gpuUtilizationPct: 50,
+      gpuMemoryUsedBytes: '2000000000',
+      ramUsedBytes: '60000000000',
+      tokensPerSecond: 72,
+      promptTokensPerSecond: 2000,
+      totalPromptTokens: String(i * 1000),
+      totalCompletionTokens: String(i * 200),
+      totalTokens: String(i * 1200),
+    }));
+
+    const maxRelayPoints = 150;
+    const bounded = boundSeriesWithHistory(points, downsampleWorkstationPoints, maxRelayPoints);
+
+    expect(bounded.length).toBeLessThanOrEqual(maxRelayPoints);
+    expect(bounded.length).toBeGreaterThan(50);
+
+    // Invariant: The earliest timestamp must be preserved so 01:58 test history is retained
+    expect(bounded[0]?.timestampMs).toBe(points[0]?.timestampMs);
+
+    // Invariant: The latest timestamp must be preserved so live real-time metrics are intact
+    expect(bounded[bounded.length - 1]?.timestampMs).toBe(points[points.length - 1]?.timestampMs);
+
+    // Invariant: Monotonically increasing timestamps (zero time regression)
+    for (let i = 1; i < bounded.length; i++) {
+      const prev = bounded[i - 1];
+      const curr = bounded[i];
+      if (prev && curr) {
+        expect(curr.timestampMs).toBeGreaterThan(prev.timestampMs);
+      }
+    }
+  });
 });
 
 

@@ -25,6 +25,7 @@ export interface GoogleUserClaims {
 export const DEFAULT_ALLOWED_EMAILS: readonly string[] = Object.freeze([
   'sekyereandy@gmail.com',
   'natborks@gmail.com',
+  'encompassdevelopmentinc@gmail.com',
 ]);
 
 // Static environment flags hoisted to module scope per Jeff Dean Latency Invariant (Eliminates getenv C++ proxy crossing in hot path)

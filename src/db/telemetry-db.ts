@@ -293,11 +293,11 @@ export function findCutoffIndex<T extends { readonly timestampMs: number }>(
  * into a bounded window of averaged points (Dean Latency & Memory Invariant).
  */
 export function downsamplePoints(
-  rawPoints: ZodiacTimeSeriesPoint[],
+  rawPoints: readonly ZodiacTimeSeriesPoint[],
   maxPoints: number = 360
 ): ZodiacTimeSeriesPoint[] {
   if (rawPoints.length <= maxPoints) {
-    return rawPoints;
+    return [...rawPoints];
   }
 
   const bucketSize = Math.ceil(rawPoints.length / maxPoints);
@@ -361,11 +361,11 @@ export function downsamplePoints(
  * into a bounded window of averaged points (Dean Latency & Memory Invariant).
  */
 export function downsampleJetsonPoints(
-  rawPoints: JetsonTimeSeriesPoint[],
+  rawPoints: readonly JetsonTimeSeriesPoint[],
   maxPoints: number = 360
 ): JetsonTimeSeriesPoint[] {
   if (rawPoints.length <= maxPoints) {
-    return rawPoints;
+    return [...rawPoints];
   }
 
   const bucketSize = Math.ceil(rawPoints.length / maxPoints);
@@ -445,11 +445,11 @@ export function downsampleJetsonPoints(
  * into a bounded window of averaged points (Dean Latency & Memory Invariant).
  */
 export function downsampleCoralPoints(
-  rawPoints: CoralTimeSeriesPoint[],
+  rawPoints: readonly CoralTimeSeriesPoint[],
   maxPoints: number = 360
 ): CoralTimeSeriesPoint[] {
   if (rawPoints.length <= maxPoints) {
-    return rawPoints;
+    return [...rawPoints];
   }
 
   const bucketSize = Math.ceil(rawPoints.length / maxPoints);
@@ -511,11 +511,11 @@ export function downsampleCoralPoints(
  * into a bounded window of averaged points (Dean Latency & Ghemawat Memory Invariants).
  */
 export function downsampleWorkstationPoints(
-  rawPoints: WorkstationTimeSeriesPoint[],
+  rawPoints: readonly WorkstationTimeSeriesPoint[],
   maxPoints: number = 360
 ): WorkstationTimeSeriesPoint[] {
   if (rawPoints.length <= maxPoints) {
-    return rawPoints;
+    return [...rawPoints];
   }
 
   const bucketSize = Math.ceil(rawPoints.length / maxPoints);

@@ -339,13 +339,81 @@ export interface ZodiacFullTelemetrySnapshot {
 export const CLOUD_RELAY_BOUNDS = {
   /** Maximum points sent over WAN in a single bridge push (150 points = ~6.25–10m live window across 4 appliances). */
   MAX_RELAY_POINTS: 150,
-  /** Maximum points maintained in rolling serverless in-memory buffer (360 points = ~15–20m live window). */
-  MAX_SERVERLESS_POINTS: 360,
+  /** Maximum points maintained in rolling serverless in-memory buffer (1200 points = ~10h historical / ~40m live window). */
+  MAX_SERVERLESS_POINTS: 1200,
   /** Strict byte threshold for WAN push to prevent 413 Payload Too Large limits. */
   MAX_PAYLOAD_BYTES: 1024 * 1024, // 1 MB
   /** Safe WAN payload transmission ceiling (512 KB) providing 2x headroom below serverless edge limit. */
   MAX_SAFE_WAN_PAYLOAD_BYTES: 512 * 1024,
 } as const;
+
+/**
+ * Strict time window reserved for high-frequency live points (120 seconds / 2 minutes).
+ * Quoc Le Invariant: Time-domain windowing rather than point-count heuristics prevents
+ * polling jitter or distribution shifts from starving historical downsampler budgets.
+ */
+export const LIVE_TELEMETRY_WINDOW_MS = 120_000;
+
+/**
+ * Maximum percentage of the WAN relay budget allocated to live points.
+ * Ensures the historical downsampler always receives at least 50% of the budget.
+ */
+export const MAX_LIVE_BUDGET_PERCENT = 50;
+
+/**
+ * Minimum live points to retain for real-time responsiveness even during sparse polling.
+ */
+export const MIN_LIVE_POINTS = 10;
+
+/**
+ * Council Invariant 2 & 6: Deterministic WAN Series Bounding with Long-Range History.
+ * Combines high-frequency recent points for real-time live graphs with downsampled historical
+ * points spanning the entire operational day, while strictly respecting maxPoints payload limits.
+ */
+export function boundSeriesWithHistory<T extends { readonly timestampMs: number }>(
+  series: readonly T[] | undefined,
+  downsampleFn: (pts: readonly T[], target: number) => T[],
+  maxPoints: number = CLOUD_RELAY_BOUNDS.MAX_RELAY_POINTS,
+  liveWindowMs: number = LIVE_TELEMETRY_WINDOW_MS
+): T[] {
+  if (!series || series.length === 0) return [];
+  if (series.length <= maxPoints) return [...series];
+
+  // Strictly define live boundary in the time domain relative to newest point
+  const latestTs = series[series.length - 1]?.timestampMs ?? 0;
+  const liveCutoffMs = latestTs - liveWindowMs;
+
+  // Filter live points within the time-domain window
+  const liveCandidate = series.filter((p) => p.timestampMs >= liveCutoffMs);
+
+  // Bound live points so live high-frequency data never starves the historical budget (integer arithmetic)
+  const maxLivePoints = Math.max(MIN_LIVE_POINTS, Math.floor((maxPoints * MAX_LIVE_BUDGET_PERCENT) / 100));
+  const livePoints = liveCandidate.length > maxLivePoints
+    ? liveCandidate.slice(-maxLivePoints)
+    : liveCandidate.length < MIN_LIVE_POINTS
+      ? series.slice(-Math.min(MIN_LIVE_POINTS, maxPoints))
+      : liveCandidate;
+
+  const actualCutoffMs = livePoints[0]?.timestampMs ?? liveCutoffMs;
+  const historicalPortion = series.filter((p) => p.timestampMs < actualCutoffMs);
+
+  if (historicalPortion.length === 0) {
+    return series.slice(-maxPoints);
+  }
+
+  const historyBudget = Math.max(1, maxPoints - livePoints.length);
+  const downsampledHistory = downsampleFn(historicalPortion, historyBudget);
+
+  if (downsampledHistory.length > 0 && historicalPortion[0]) {
+    const firstHist = historicalPortion[0];
+    const firstDown = downsampledHistory[0];
+    if (firstDown && firstDown.timestampMs !== firstHist.timestampMs) {
+      downsampledHistory[0] = { ...firstDown, timestampMs: firstHist.timestampMs };
+    }
+  }
+
+  return [...downsampledHistory, ...livePoints];
+}
 
 /**
  * Parses raw HTML exported by the Zodiac FX /d_ports.htm into structured port telemetry.
