@@ -334,6 +334,10 @@
     wsUsbNetStatus: document.getElementById('ws-usb-net-status'),
     wsUsbSerialDev: document.getElementById('ws-usb-serial-dev'),
     wsUsbSerialStatus: document.getElementById('ws-usb-serial-status'),
+    // Workstation Wi-Fi LAN Relay Elements
+    wsWifiStatus: document.getElementById('ws-wifi-status'),
+    wsWifiEndpoint: document.getElementById('ws-wifi-endpoint'),
+    wsWifiSubnet: document.getElementById('ws-wifi-subnet'),
 
     // Jetson Orin Nano Elements
     orinJetpack: document.getElementById('orin-jetpack'),
@@ -1644,13 +1648,27 @@
         els.wsTblEndpoint.innerText = ws.endpoint || 'http://localhost:11434';
       }
 
-      // Workstation USB-C Jetson Tether Link
+      // Workstation USB-C Jetson Tether Link + Wi-Fi LAN Relay
       if (ws.usbTether) {
         const tether = ws.usbTether;
         const isTetherConnected = Boolean(tether.connected);
+        // Infer active relay path: if workstation is visible but USB-C is down, Wi-Fi LAN is carrying traffic
+        const wsOnline = Boolean(ws.detected || ws.online);
+        const isWifiActive = wsOnline && !isTetherConnected;
+
+        // Header badge reflects active path
         if (els.wsUsbLinkStatus) {
-          els.wsUsbLinkStatus.innerText = isTetherConnected ? 'USB-C Tether Active' : 'Tether Disconnected';
-          els.wsUsbLinkStatus.className = `cf-pill-badge ${isTetherConnected ? 'green' : 'gray'}`;
+          els.wsUsbLinkStatus.innerText = isTetherConnected ? 'USB-C Tether Active' : isWifiActive ? 'Wi-Fi LAN Active' : 'Tether Disconnected';
+          els.wsUsbLinkStatus.className = `cf-pill-badge ${isTetherConnected || isWifiActive ? 'green' : 'gray'}`;
+        }
+
+        // Wi-Fi LAN relay row
+        if (els.wsWifiStatus) {
+          els.wsWifiStatus.innerText = isWifiActive ? 'ACTIVE' : isTetherConnected ? 'STANDBY' : 'UNREACHABLE';
+          els.wsWifiStatus.className = `cf-pill-badge ${isWifiActive ? 'green' : isTetherConnected ? 'blue' : 'gray'}`;
+        }
+        if (els.wsWifiEndpoint) {
+          els.wsWifiEndpoint.innerText = ws.endpoint ? ws.endpoint.replace('http://', '').replace('/api/hardware', '') : '10.0.0.119:11435';
         }
         if (els.wsUsbHwStatus) {
           els.wsUsbHwStatus.innerText = isTetherConnected ? 'CONNECTED' : 'DISCONNECTED';

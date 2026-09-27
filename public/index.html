@@ -1874,12 +1874,12 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               </div>
             </div>
 
-            <!-- Workstation USB-C Hardware Interconnect Card -->
+            <!-- Workstation Hardware Interconnect Card -->
             <div class="cf-card" id="workstation-usb-card" style="margin-top: 1.5rem;">
               <div class="cf-card-header">
                 <div>
-                  <h3 class="cf-card-title">Hardware Interconnect &amp; Management Link: Direct USB-C Tether</h3>
-                  <div class="cf-card-subtitle">MacBook M5 ↔ NVIDIA Jetson Orin Nano point-to-point management plane &amp; emergency serial console</div>
+                  <h3 class="cf-card-title">Hardware Interconnect &amp; Management Link: USB-C Tether · Wi-Fi LAN</h3>
+                  <div class="cf-card-subtitle">MacBook M5 ↔ NVIDIA Jetson Orin Nano — dual-path relay: direct USB-C SuperSpeed or Wi-Fi LAN fallback</div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                   <span class="cf-pill-badge green" id="ws-usb-link-status">USB-C Tether Active</span>
@@ -1938,6 +1938,26 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         </td>
                         <td>
                           <span class="cf-pill-badge green" id="ws-usb-net-status">ACTIVE</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div style="font-weight: 600;">Wi-Fi LAN Relay</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Fallback when USB-C tether absent</div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600;">Mac Workstation Agent</div>
+                          <div class="cf-mono" id="ws-wifi-endpoint" style="font-size: 0.72rem; color: var(--cf-text-secondary);">10.0.0.119:11435</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" id="ws-wifi-subnet" style="font-size: 0.75rem;">10.0.0.0/24 (Wi-Fi)</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">WORKSTATION_AGENT_LAN_URL systemd drop-in</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge blue" style="font-size: 0.72rem;">Tier 2 · Fallback</span>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge gray" id="ws-wifi-status">STANDBY</span>
                         </td>
                       </tr>
                       <tr>
@@ -2565,7 +2585,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.345f66077e.js"></script>
+  <script defer src="zodiac-app.40ac3dd55e.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
