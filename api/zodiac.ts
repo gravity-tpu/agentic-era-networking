@@ -96,10 +96,10 @@ function isValidWorkstationPayload(val: unknown): boolean {
   if ('totalInferences' in val && typeof val['totalInferences'] !== 'string') {
     return false;
   }
-  if ('tokensPerSecond' in val && (typeof val['tokensPerSecond'] !== 'number' || !Number.isFinite(val['tokensPerSecond']))) {
+  if ('tokensPerSecond' in val && (typeof val['tokensPerSecond'] !== 'number' || !Number.isInteger(val['tokensPerSecond']))) {
     return false;
   }
-  if ('promptTokensPerSecond' in val && (typeof val['promptTokensPerSecond'] !== 'number' || !Number.isFinite(val['promptTokensPerSecond']))) {
+  if ('promptTokensPerSecond' in val && (typeof val['promptTokensPerSecond'] !== 'number' || !Number.isInteger(val['promptTokensPerSecond']))) {
     return false;
   }
   if ('timeSeries' in val && !Array.isArray(val['timeSeries'])) {

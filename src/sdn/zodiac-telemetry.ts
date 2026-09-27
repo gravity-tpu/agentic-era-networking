@@ -855,7 +855,7 @@ export function generateWorkstationHistoricalTelemetry(
   const baseGpu = snapshot.gpuUtilizationPct || 22;
   const baseGpuMem = snapshot.gpuMemoryUsedBytes || 1950000000n;
   const baseRam = snapshot.memoryUsedBytes || 48000000000n;
-  const baseToks = snapshot.tokensPerSecond || 84.1;
+  const baseToks = snapshot.tokensPerSecond || 84;
 
   for (let i = pointCount - 1; i >= 0; i--) {
     const timestampMs = nowMs - i * stepMs;
@@ -864,8 +864,8 @@ export function generateWorkstationHistoricalTelemetry(
 
     const cpuUtil = Math.max(2, Math.min(100, baseCpu + jitter * 2));
     const gpuUtil = Math.max(0, Math.min(100, baseGpu + (cycle % 4 === 0 ? 25 : jitter * 3)));
-    const tokRate = cycle % 3 === 0 ? Math.max(0, parseFloat((baseToks + jitter * 4).toFixed(1))) : 0;
-    const promptTokRate = tokRate > 0 ? parseFloat((tokRate * 15.7).toFixed(1)) : 0;
+    const tokRate = cycle % 3 === 0 ? Math.max(0, Math.round(baseToks + jitter * 4)) : 0;
+    const promptTokRate = tokRate > 0 ? Math.round(tokRate * 16) : 0;
 
     points.push({
       timestampMs,

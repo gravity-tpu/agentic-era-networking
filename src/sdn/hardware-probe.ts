@@ -1196,6 +1196,16 @@ function findPlistDictEntry(node: PlistValue | null, targetKey: string): PlistVa
   return undefined;
 }
 
+export const OFFLINE_APPLE_GPU_METRICS: AppleSiliconGpuInfo = Object.freeze({
+  gpuModel: 'Apple Silicon Metal GPU',
+  gpuCoreCount: 0,
+  gpuUtilizationPct: 0,
+  rendererUtilizationPct: 0,
+  tilerUtilizationPct: 0,
+  gpuMemoryUsedBytes: 0n,
+  gpuMemoryAllocatedBytes: 0n,
+});
+
 /**
  * Parses Apple Silicon GPU statistics from `ioreg -r -c IOAccelerator -d 1 -a` XML output
  * via structured Property List tokenization.
@@ -1203,19 +1213,9 @@ function findPlistDictEntry(node: PlistValue | null, targetKey: string): PlistVa
  * core count, and memory allocation without third-party dependencies or fragile regex matching.
  */
 export function parseAppleSiliconGpuXml(xml: string): AppleSiliconGpuInfo {
-  const fallback: AppleSiliconGpuInfo = {
-    gpuModel: 'Apple Silicon Metal GPU',
-    gpuCoreCount: 0,
-    gpuUtilizationPct: 0,
-    rendererUtilizationPct: 0,
-    tilerUtilizationPct: 0,
-    gpuMemoryUsedBytes: 0n,
-    gpuMemoryAllocatedBytes: 0n,
-  };
-
   try {
     const root = parseApplePlistXml(xml);
-    if (!root) return fallback;
+    if (!root) return OFFLINE_APPLE_GPU_METRICS;
 
     const modelVal = findPlistDictEntry(root, 'model');
     const coreVal = findPlistDictEntry(root, 'gpu-core-count');
@@ -1249,30 +1249,26 @@ export function parseAppleSiliconGpuXml(xml: string): AppleSiliconGpuInfo {
     process.stderr.write(`[hardware-probe] Failed to parse Apple Silicon GPU plist XML: ${
       err instanceof Error ? err.message : String(err)
     }\n`);
-    return fallback;
+    return OFFLINE_APPLE_GPU_METRICS;
   }
 }
 
 async function queryAppleGpuMetrics(timeoutMs: number = 200): Promise<AppleSiliconGpuInfo> {
-  const fallback: AppleSiliconGpuInfo = {
-    gpuModel: 'Apple Silicon Metal GPU',
-    gpuCoreCount: 0,
-    gpuUtilizationPct: 0,
-    rendererUtilizationPct: 0,
-    tilerUtilizationPct: 0,
-    gpuMemoryUsedBytes: 0n,
-    gpuMemoryAllocatedBytes: 0n,
-  };
-
   // Fail-closed platform boundary (Sanjay Ghemawat): never spawn ioreg on Linux / Jetson
   if (os.platform() !== 'darwin') {
-    return fallback;
+    return OFFLINE_APPLE_GPU_METRICS;
   }
 
   return new Promise((resolve) => {
     execFile('ioreg', ['-r', '-c', 'IOAccelerator', '-d', '1', '-a'], { timeout: timeoutMs }, (err, stdout) => {
-      if (err || !stdout) {
-        resolve(fallback);
+      if (err) {
+        process.stderr.write(`[hardware-probe] IOKit IOAccelerator query error (${(err as NodeJS.ErrnoException).code ?? err.message}): ${err.message}\n`);
+        resolve(OFFLINE_APPLE_GPU_METRICS);
+        return;
+      }
+      if (!stdout || !stdout.trim()) {
+        process.stderr.write(`[hardware-probe] IOKit IOAccelerator query returned empty output\n`);
+        resolve(OFFLINE_APPLE_GPU_METRICS);
         return;
       }
       resolve(parseAppleSiliconGpuXml(stdout));
@@ -1393,10 +1389,18 @@ export async function probeWorkstationHardware(
         totalPromptTokens = parseBigIntClamped(parsed['totalPromptTokens']);
         totalCompletionTokens = parseBigIntClamped(parsed['totalCompletionTokens']);
         totalInferences = parseBigIntClamped(parsed['totalInferences']);
-        tokensPerSecond = typeof parsed['tokensPerSecond'] === 'number' ? parsed['tokensPerSecond'] : Number(parsed['tokensPerSecond'] || 0);
-        promptTokensPerSecond = typeof parsed['promptTokensPerSecond'] === 'number' ? parsed['promptTokensPerSecond'] : Number(parsed['promptTokensPerSecond'] || 0);
-        peakTokensPerSecond = typeof parsed['peakTokensPerSecond'] === 'number' ? parsed['peakTokensPerSecond'] : Number(parsed['peakTokensPerSecond'] || tokensPerSecond);
-        peakPromptTokensPerSecond = typeof parsed['peakPromptTokensPerSecond'] === 'number' ? parsed['peakPromptTokensPerSecond'] : Number(parsed['peakPromptTokensPerSecond'] || promptTokensPerSecond);
+        tokensPerSecond = typeof parsed['tokensPerSecond'] === 'number' && Number.isInteger(parsed['tokensPerSecond'])
+          ? parsed['tokensPerSecond']
+          : Math.round(Number(parsed['tokensPerSecond'] || 0));
+        promptTokensPerSecond = typeof parsed['promptTokensPerSecond'] === 'number' && Number.isInteger(parsed['promptTokensPerSecond'])
+          ? parsed['promptTokensPerSecond']
+          : Math.round(Number(parsed['promptTokensPerSecond'] || 0));
+        peakTokensPerSecond = typeof parsed['peakTokensPerSecond'] === 'number' && Number.isInteger(parsed['peakTokensPerSecond'])
+          ? parsed['peakTokensPerSecond']
+          : Math.round(Number(parsed['peakTokensPerSecond'] || tokensPerSecond));
+        peakPromptTokensPerSecond = typeof parsed['peakPromptTokensPerSecond'] === 'number' && Number.isInteger(parsed['peakPromptTokensPerSecond'])
+          ? parsed['peakPromptTokensPerSecond']
+          : Math.round(Number(parsed['peakPromptTokensPerSecond'] || promptTokensPerSecond));
         lastInferenceLatencyNs = parseBigIntClamped(parsed['lastInferenceLatencyNs']);
         lastPromptEvalDurationNs = parseBigIntClamped(parsed['lastPromptEvalDurationNs']);
         lastEvalDurationNs = parseBigIntClamped(parsed['lastEvalDurationNs']);
@@ -1405,7 +1409,7 @@ export async function probeWorkstationHardware(
         lastTokenCount = typeof parsed['lastTokenCount'] === 'number' ? parsed['lastTokenCount'] : Number(parsed['lastTokenCount'] || 0);
         lastPromptTokenCount = typeof parsed['lastPromptTokenCount'] === 'number' ? parsed['lastPromptTokenCount'] : Number(parsed['lastPromptTokenCount'] || 0);
         if (typeof parsed['edgeComputeRatioPct'] === 'number') {
-          edgeComputeRatioPct = parsed['edgeComputeRatioPct'];
+          edgeComputeRatioPct = Math.round(parsed['edgeComputeRatioPct']);
         }
         if (typeof parsed['activeModel'] === 'string' && parsed['activeModel']) {
           recordedModel = parsed['activeModel'];
