@@ -640,14 +640,18 @@ function parseHistoricalCoralPoint(raw: unknown, defaultTimestampMs: number): Co
 function parseHistoricalWorkstationPoint(raw: unknown, defaultTimestampMs: number): WorkstationTimeSeriesPoint | null {
   if (!raw || typeof raw !== 'object') return null;
   const p = raw as Record<string, unknown>;
-  // Council Invariant 2: integer-only units for utilization percentages and token rates.
-  // Math.floor enforces integer truncation; avoids floating-point in aggregations.
-  // Missing fields produce null-returns rather than fabricated zeros to preserve
-  // statistical correctness in moving averages and SLA percentile calculations.
-  const cpuUtil = p['cpuUtilizationPct'] != null ? Math.floor(Number(p['cpuUtilizationPct'])) : null;
-  const gpuUtil = p['gpuUtilizationPct'] != null ? Math.floor(Number(p['gpuUtilizationPct'])) : null;
-  const tps     = p['tokensPerSecond'] != null ? Math.floor(Number(p['tokensPerSecond'])) : null;
-  const ptps    = p['promptTokensPerSecond'] != null ? Math.floor(Number(p['promptTokensPerSecond'])) : null;
+  // Council Invariant 2: strict finite-number guard prevents NaN from non-numeric JSON strings
+  // (e.g. "N/A", "") bypassing the null-check below and poisoning downstream SLA aggregations.
+  // Math.floor enforces integer truncation; missing or non-finite fields return null so the
+  // point is dropped rather than propagating a corrupt value.
+  const rawCpu  = p['cpuUtilizationPct'];
+  const rawGpu  = p['gpuUtilizationPct'];
+  const rawTps  = p['tokensPerSecond'];
+  const rawPtps = p['promptTokensPerSecond'];
+  const cpuUtil = (typeof rawCpu  === 'number' && Number.isFinite(rawCpu))  ? Math.floor(rawCpu)  : null;
+  const gpuUtil = (typeof rawGpu  === 'number' && Number.isFinite(rawGpu))  ? Math.floor(rawGpu)  : null;
+  const tps     = (typeof rawTps  === 'number' && Number.isFinite(rawTps))  ? Math.floor(rawTps)  : null;
+  const ptps    = (typeof rawPtps === 'number' && Number.isFinite(rawPtps)) ? Math.floor(rawPtps) : null;
   if (cpuUtil === null || gpuUtil === null || tps === null || ptps === null) return null;
   return {
     timestampMs: typeof p['timestampMs'] === 'number' ? p['timestampMs'] : defaultTimestampMs,
