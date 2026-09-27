@@ -139,7 +139,7 @@ export class ZodiacController {
     let config: ZodiacConfig | undefined;
 
     try {
-      const path = this.serial.detectDevice();
+      const path = await this.serial.detectDevice();
       if (path) {
         serialDetected = true;
       }
@@ -221,7 +221,7 @@ export class ZodiacController {
 
     let serialPresent = false;
     try {
-      const path = this.serial.detectDevice();
+      const path = await this.serial.detectDevice();
       if (path) serialPresent = true;
     } catch {
       serialPresent = false;

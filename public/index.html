@@ -227,23 +227,11 @@
             </svg>
             System Overview
           </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-token-card">
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-chart-card">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
             </svg>
-            Token Velocity
-          </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-metal-card">
-            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>
-            </svg>
-            Metal GPU &amp; Unified RAM
-          </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-gemma-card">
-            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
-            </svg>
-            Gemma 4 Gateway
+            Telemetry History
           </a>
           <a class="cf-nav-item" data-section="overview" data-scroll="workstation-usb-card">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -251,6 +239,24 @@
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
             </svg>
             USB-C Jetson Tether
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-metal-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>
+            </svg>
+            Metal GPU &amp; Unified RAM
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-token-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Token Velocity
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-gemma-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+            </svg>
+            Gemma 4 Gateway
           </a>
           <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1822,6 +1828,52 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               </div>
             </div>
 
+            <!-- Workstation Telemetry History Graph -->
+            <div class="cf-card" id="workstation-chart-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <h3 class="cf-card-title">Workstation Metal GPU &amp; Token Velocity Telemetry History</h3>
+                  <div class="cf-card-subtitle">Real-time rolling hardware load, token generation, and prompt prefill velocity</div>
+                </div>
+                
+                <!-- Filter Controls: Time Range -->
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                  <div class="cf-time-range-group" id="cf-workstation-time-selectors">
+                    <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                    <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                    <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                    <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                    <button class="cf-time-btn" data-range="7d">7 Days</button>
+                    <button class="cf-time-btn" data-range="30d">30 Days</button>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span class="cf-pill-badge amber">Metal GPU</span>
+                    <span class="cf-pill-badge green">Token Gen</span>
+                    <span class="cf-pill-badge blue">Prompt Prefill</span>
+                  </div>
+                </div>
+              </div>
+              <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                <div class="cf-chart-legend-row" style="margin-bottom: 0.75rem;">
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot amber"></span>
+                    <span>Metal GPU Load: <strong id="ws-chart-gpu-legend" class="cf-mono">--%</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot green"></span>
+                    <span>Token Generation: <strong id="ws-chart-tok-legend" class="cf-mono">0 tok/s</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot blue"></span>
+                    <span>Prompt Prefill: <strong id="ws-chart-prompt-legend" class="cf-mono">0 tok/s</strong></span>
+                  </div>
+                </div>
+                <div class="cf-canvas-container" id="canvas-wrapper-workstation" style="position: relative; height: 240px;">
+                  <canvas id="chart-workstation"></canvas>
+                </div>
+              </div>
+            </div>
+
             <!-- Workstation USB-C Hardware Interconnect Card -->
             <div class="cf-card" id="workstation-usb-card" style="margin-top: 1.5rem;">
               <div class="cf-card-header">
@@ -2131,25 +2183,6 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               </div>
             </div>
 
-            <!-- Deep Dive Card 3: Workstation Telemetry Graph -->
-            <div class="cf-card" style="margin-top: 1.5rem;">
-              <div class="cf-card-header">
-                <div>
-                  <h3 class="cf-card-title">Workstation Metal GPU &amp; Token Velocity Telemetry History</h3>
-                  <div class="cf-card-subtitle">Real-time rolling hardware load, token generation, and prompt prefill velocity</div>
-                </div>
-                <div class="cf-card-actions">
-                  <span class="cf-pill-badge amber" id="ws-chart-gpu-legend">GPU: --%</span>
-                  <span class="cf-pill-badge green" id="ws-chart-tok-legend">Tokens: 0 tok/s</span>
-                  <span class="cf-pill-badge blue" id="ws-chart-prompt-legend">Prefill: 0 tok/s</span>
-                </div>
-              </div>
-              <div class="cf-card-body">
-                <div class="cf-canvas-container" id="canvas-wrapper-workstation" style="position: relative; height: 240px;">
-                  <canvas id="chart-workstation"></canvas>
-                </div>
-              </div>
-            </div>
 
           </div><!-- /view-device-workstation -->
 
@@ -2532,7 +2565,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.aaf065712d.js"></script>
+  <script defer src="zodiac-app.b9aa957439.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

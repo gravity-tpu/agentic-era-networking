@@ -8,7 +8,7 @@
  * - Dean: Explicit timeouts preventing indefinite blocking on physical I/O.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
 
 /**
@@ -91,22 +91,27 @@ export class ZodiacSerialClient {
    *                       serial cables, or other CDC-ACM devices on the same bus.
    *            Fallback:  First /dev/ttyUSB* if no VID-matched ttyACM* is found.
    *
-   * Dean Invariant: synchronous I/O here is acceptable — detectDevice() is called
-   * only during one-shot CLI startup, never on the hot OpenFlow or telemetry paths.
+   * Dean Invariant: Asynchronous non-blocking I/O via fs.promises prevents event-loop
+   * starvation during hardware discovery on the serial path.
    *
    * Council Invariant 3 (Fail-Closed): throws deterministically if the device is
    * absent. Callers must not swallow this error. Offline testing must be gated
    * via the MOCK_SERIAL environment variable, not by catching this exception.
    */
-  public detectDevice(): string {
+  public async detectDevice(): Promise<string> {
     const platform = process.platform;
 
     if (platform === 'darwin') {
-      // macOS: sysfs unavailable; match first call-out USB modem device that is not
-      // the Jetson Orin Nano USB-C CDC-ACM serial console (S/N: 1791626120820).
-      const devFiles = readdirSync('/dev');
+      // macOS: sysfs unavailable; allow explicit port override or match first call-out
+      // USB modem device that does not belong to the Jetson Orin Nano USB-C CDC-ACM console.
+      const override = process.env['ZODIAC_SERIAL_PORT'];
+      if (override) {
+        return override;
+      }
+      const jetsonSerial = process.env['JETSON_SERIAL_NUMBER'] || '1791626120820';
+      const devFiles = await fs.readdir('/dev');
       const modem = devFiles.find(
-        (f) => f.startsWith('cu.usbmodem') && !f.includes('1791626120820')
+        (f) => f.startsWith('cu.usbmodem') && !f.includes(jetsonSerial)
       );
       if (!modem) {
         throw new Error(
@@ -119,7 +124,7 @@ export class ZodiacSerialClient {
 
     // Linux (Jetson Orin ARM64): use sysfs VID matching to deterministically
     // identify the Zodiac FX among potentially many CDC-ACM devices on the bus.
-    const devFiles = readdirSync('/dev');
+    const devFiles = await fs.readdir('/dev');
     const candidates = devFiles.filter((f) => f.startsWith('ttyACM'));
 
     for (const candidate of candidates) {
@@ -129,7 +134,7 @@ export class ZodiacSerialClient {
       ];
       for (const vidPath of vidCandidates) {
         try {
-          const vid = readFileSync(vidPath, 'utf8').trim().toLowerCase();
+          const vid = (await fs.readFile(vidPath, 'utf8')).trim().toLowerCase();
           if (vid === ZodiacSerialClient.ZODIAC_USB_VENDOR_ID) {
             return `/dev/${candidate}`;
           }
@@ -163,29 +168,28 @@ export class ZodiacSerialClient {
     );
   }
 
+  private _cachedDevicePath: string | null = null;
+
+  public async getResolvedPath(): Promise<string> {
+    if (this._explicitPath) return this._explicitPath;
+    if (this._cachedDevicePath) return this._cachedDevicePath;
+    this._cachedDevicePath = await this.detectDevice();
+    return this._cachedDevicePath;
+  }
+
   public get path(): string {
     return this.devicePath;
   }
 
   public get devicePath(): string {
     if (this._explicitPath) return this._explicitPath;
-    // Council Invariant 1 (Zero Suppression of Reality / Anti-Shortcut Law):
-    // Never swallow detectDevice() errors with a synthetic fallback path.
-    // A hardcoded path when the device is absent masks the root cause and
-    // produces a confusing downstream ENOENT / EACCES error.
-    //
-    // Offline / CI testing: set MOCK_SERIAL=1. Methods that spawn Python
-    // (e.g. _executeRaw) guard themselves against MOCK_SERIAL and return
-    // empty mock data before ever accessing devicePath, so this getter
-    // is never reached when MOCK_SERIAL is active. If it is somehow called,
-    // surface the intent clearly rather than returning a misleading path.
-    if (process.env['MOCK_SERIAL']) {
-      throw new Error(
-        '[ZodiacSerial] devicePath accessed with MOCK_SERIAL=1. ' +
-          'Callers must check process.env["MOCK_SERIAL"] and bypass hardware I/O.',
-      );
-    }
-    return this.detectDevice();
+    if (this._cachedDevicePath) return this._cachedDevicePath;
+    // Council Invariant 3 (Fail-Closed Isolation): throw deterministically if accessed before resolution.
+    // Callers must await getResolvedPath() or detectDevice(); never silently return an empty string.
+    throw new Error(
+      '[ZodiacSerial] devicePath accessed before hardware resolution. ' +
+        'Callers must await getResolvedPath() or detectDevice() (Fail-Closed).',
+    );
   }
 
   private mutexPromise: Promise<void> = Promise.resolve();
@@ -217,12 +221,14 @@ export class ZodiacSerialClient {
     // mock is an explicit override, not a silent suppression).
     if (process.env['MOCK_SERIAL']) return '';
 
+    const devPath = await this.getResolvedPath();
+
     return new Promise((resolve, reject) => {
       const pythonScript = `
 import serial, time, sys
 
 try:
-    ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0, write_timeout=2.0, rtscts=False, dsrdtr=False)
+    ser = serial.Serial('${devPath}', 115200, timeout=1.0, write_timeout=2.0, rtscts=False, dsrdtr=False)
     ser.dtr = True
     ser.rts = True
     time.sleep(0.1)
@@ -370,6 +376,8 @@ except Exception as e:
   }
 
   private async _executeSequence(commands: string[], timeoutMs: number = 5000): Promise<string> {
+    const devPath = await this.getResolvedPath();
+
     return new Promise((resolve, reject) => {
       const cmdsJson = JSON.stringify(commands);
       const pythonScript = `
@@ -377,7 +385,7 @@ import serial, time, sys, json
 
 try:
     cmds = json.loads('''${cmdsJson}''')
-    ser = serial.Serial('${this.devicePath}', 115200, timeout=1.0, write_timeout=2.0, rtscts=False, dsrdtr=False)
+    ser = serial.Serial('${devPath}', 115200, timeout=1.0, write_timeout=2.0, rtscts=False, dsrdtr=False)
     ser.dtr = True
     ser.rts = True
     time.sleep(0.1)

@@ -1191,7 +1191,7 @@
         if (els.orinIfL4tbr0Row) els.orinIfL4tbr0Row.style.display = '';
         if (els.orinIfL4tbr0Dot) els.orinIfL4tbr0Dot.className = `cf-status-dot ${l4tUp ? 'green' : 'gray'}`;
         if (els.orinIfL4tbr0Name) els.orinIfL4tbr0Name.innerText = l4tIf.name;
-        if (els.orinIfL4tbr0Mac) els.orinIfL4tbr0Mac.innerText = l4tIf.macAddress || '3e:c7:e7:79:f3:87';
+        if (els.orinIfL4tbr0Mac) els.orinIfL4tbr0Mac.innerText = l4tIf.macAddress || 'None';
         if (els.orinIfL4tbr0Speed) els.orinIfL4tbr0Speed.innerText = 'USB 3.0 (5000 Mbps)';
         if (els.orinIfL4tbr0Status) {
           els.orinIfL4tbr0Status.className = `cf-pill-badge ${l4tUp ? 'green' : 'gray'}`;

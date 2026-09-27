@@ -69,6 +69,58 @@ function getCachedNetworkInterfaceIp(name: string, fallback: string | null): str
   return fallback;
 }
 
+let cachedUsbModemDev: string | null = null;
+let lastUsbModemScanNs = 0n;
+// Council Invariant 5 (Quoc Le): Configurable adaptive USB modem scan TTL via env variable,
+// eliminating unprincipled heuristic magic numbers.
+const DEFAULT_USB_MODEM_CACHE_TTL_NS = 10_000_000_000n; // 10 seconds default
+function getUsbModemCacheTtlNs(): bigint {
+  const envMs = process.env['USB_MODEM_CACHE_TTL_MS'];
+  if (envMs) {
+    const parsed = Number(envMs);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return BigInt(parsed) * 1_000_000n;
+    }
+  }
+  return DEFAULT_USB_MODEM_CACHE_TTL_NS;
+}
+
+/**
+ * Formal Physical Interface Speed Specifications & Derivations (Jeff Dean & Sanjay Ghemawat):
+ * - GBE_SDN_CONTROL_MBPS: 1000 Mbps (IEEE 802.3ab 1000Base-T Gigabit Ethernet link to Zodiac Port 4)
+ * - MANAGEMENT_WIFI_MBPS: 866 Mbps (IEEE 802.11ac 2x2 MIMO VHT80 MCS9 physical signaling link budget)
+ * - USBC_TETHER_SUPERSPEED_MBPS: 5000 Mbps (USB 3.2 Gen 1 SuperSpeed 5 Gbps CDC-NCM point-to-point interconnect)
+ */
+export const NOMINAL_INTERFACE_SPEEDS = {
+  GBE_SDN_CONTROL_MBPS: 1000,
+  MANAGEMENT_WIFI_MBPS: 866,
+  USBC_TETHER_SUPERSPEED_MBPS: 5000,
+} as const;
+
+export interface NetworkInterfaceTarget {
+  readonly name: string;
+  readonly role: string;
+  readonly defaultIp: string | null;
+  readonly nominalSpeedMbps?: number;
+}
+
+async function getCachedUsbModemDev(): Promise<string | null> {
+  const nowNs = process.hrtime.bigint();
+  const ttlNs = getUsbModemCacheTtlNs();
+  if (lastUsbModemScanNs !== 0n && nowNs - lastUsbModemScanNs < ttlNs) {
+    return cachedUsbModemDev;
+  }
+  try {
+    const devFiles = await fs.promises.readdir('/dev');
+    const modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
+    cachedUsbModemDev = modem ? `/dev/${modem}` : null;
+    lastUsbModemScanNs = nowNs;
+  } catch (err) {
+    process.stderr.write(`[workstation-probe] readdir(/dev) error: ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+  return cachedUsbModemDev;
+}
+
 /**
  * Safe error code extractor without unchecked type assertions.
  * Enforces strict type narrowing (Council Invariant 1: Zero Suppression of Reality).
@@ -297,10 +349,10 @@ async function executeJetsonHardwareProbe(
   try {
     const netDevLines = (await fs.promises.readFile('/proc/net/dev', 'utf8')).split('\n');
 
-    const targetIfs: Array<{ name: string; role: string; defaultIp: string | null }> = [
-      { name: 'enP8p1s0', role: 'SDN Control Link -> Zodiac Port 4', defaultIp: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1' },
-      { name: 'wlP1p1s0', role: 'Management Plane & Cloud Relay (Wi-Fi)', defaultIp: process.env['JETSON_HOST'] ?? '127.0.0.1' },
-      { name: 'l4tbr0', role: 'USB-C Device Mode Tether -> MacBook M5 (en8)', defaultIp: '192.168.55.1' },
+    const targetIfs: NetworkInterfaceTarget[] = [
+      { name: 'enP8p1s0', role: 'SDN Control Link -> Zodiac Port 4', defaultIp: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1', nominalSpeedMbps: NOMINAL_INTERFACE_SPEEDS.GBE_SDN_CONTROL_MBPS },
+      { name: 'wlP1p1s0', role: 'Management Plane & Cloud Relay (Wi-Fi)', defaultIp: process.env['JETSON_HOST'] ?? '127.0.0.1', nominalSpeedMbps: NOMINAL_INTERFACE_SPEEDS.MANAGEMENT_WIFI_MBPS },
+      { name: 'l4tbr0', role: 'USB-C Device Mode Tether -> MacBook M5 (en8)', defaultIp: '192.168.55.1', nominalSpeedMbps: NOMINAL_INTERFACE_SPEEDS.USBC_TETHER_SUPERSPEED_MBPS },
     ];
 
     // Auto-discover USB Ethernet / Mirror Tap adapters (e.g. enx9c69d39dd0a6 or eth1)
@@ -368,7 +420,7 @@ async function executeJetsonHardwareProbe(
       const mac = macVal ?? 'None';
       const operstate = operstateVal?.toUpperCase();
       const status: 'UP' | 'DOWN' = operstate === 'UP' ? 'UP' : (rxBytes > 0n ? 'UP' : 'DOWN');
-      const speedMbps = speedVal && speedVal > 0 ? speedVal : (target.name === 'l4tbr0' ? 5000 : 0);
+      const speedMbps = speedVal && speedVal > 0 ? speedVal : (target.nominalSpeedMbps ?? 0);
 
       interfaces.push({
         name: target.name,
@@ -1367,19 +1419,10 @@ export async function probeWorkstationHardware(
         const ifaces = os.networkInterfaces();
         const en8If = ifaces['en8'];
         const en8Ipv4 = en8If?.find((i) => i.family === 'IPv4')?.address || null;
-        const en8Mac = en8If?.[0]?.mac || '86:2c:05:b5:93:46';
+        const en8Mac = en8If?.[0]?.mac || 'None';
         const isEn8Active = Boolean(en8If && en8If.length > 0);
 
-        let serialDevice: string | null = null;
-        try {
-          const devFiles = await fs.promises.readdir('/dev');
-          const modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
-          if (modem) {
-            serialDevice = `/dev/${modem}`;
-          }
-        } catch (err) {
-          process.stderr.write(`[workstation-probe] readdir(/dev) error: ${err instanceof Error ? err.message : String(err)}\n`);
-        }
+        const serialDevice = await getCachedUsbModemDev();
 
         const isConnected = isEn8Active || Boolean(serialDevice);
         return {
