@@ -1558,7 +1558,7 @@ async function fetchFromAgent(
  * latency == exactly WORKSTATION_AGENT_PROBE_TIMEOUT_MS (350ms), never N × 350ms.
  *   1. WORKSTATION_AGENT_URL env var (operator-configured primary)
  *   2. http://192.168.55.100:11435 (deterministic USB-C l4tbr0 tether — ~0.3ms RTT)
- *   3. WORKSTATION_AGENT_LAN_URL / WORKSTATION_LAN_URL env var (optional dynamic LAN fallback)
+ *   3. http://10.0.0.119:11435 via WORKSTATION_AGENT_LAN_URL (Wi-Fi fallback when USB-C tether absent)
  *
  * On exhaustion: increments wsAgentProbeFailureCount exactly once per cycle and
  * fails closed to createDefaultWorkstationSnapshot(true) per Invariant 3.
