@@ -185,7 +185,7 @@ async function main(): Promise<void> {
       console.log(`   - OpenFlow 1.3 Daemon : ${controllerIp}:${openFlowPort}`);
       let serialPath = 'Detached / Remote';
       try {
-        serialPath = controller.serialClient.path;
+        serialPath = await controller.serialClient.detectDevice();
       } catch (serialErr) {
         serialPath = `Detached (${serialErr instanceof Error ? serialErr.message : String(serialErr)})`;
       }

@@ -114,9 +114,13 @@ async function getCachedUsbModemDev(): Promise<string | null> {
     const devFiles = await fs.promises.readdir('/dev');
     const modem = devFiles.find((f) => f.startsWith('cu.usbmodem'));
     cachedUsbModemDev = modem ? `/dev/${modem}` : null;
-    lastUsbModemScanNs = nowNs;
   } catch (err) {
+    cachedUsbModemDev = null;
     process.stderr.write(`[workstation-probe] readdir(/dev) error: ${err instanceof Error ? err.message : String(err)}\n`);
+  } finally {
+    // Backoff invariant (Jeff Dean & Sanjay Ghemawat): enforce cache TTL backoff even on error
+    // to prevent hot-path event-loop starvation and stderr log flooding.
+    lastUsbModemScanNs = nowNs;
   }
   return cachedUsbModemDev;
 }
