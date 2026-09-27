@@ -59,19 +59,25 @@ if [ ! -t 0 ]; then
     fi
 
     # Established range: same anchors as github.event.before..GITHUB_SHA.
-    # `|| true` is intentional under `set -euo pipefail`: a git error here
-    # means we collect no files for this ref's static scan (Gates 3 & 4).
-    # Gate 5 is the authoritative review gate and handles its own diff independently.
-    CHANGED=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)
+    # Fail-closed: if git diff cannot resolve the range (corrupted index,
+    # missing objects), block the push rather than silently scanning no files.
+    if ! CHANGED=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null); then
+      echo -e "  ${RED}✗ git diff $remote_sha..$local_sha failed — cannot determine push scope. Push blocked.${RESET}"
+      exit 1
+    fi
     if [ -n "$CHANGED" ]; then
       while IFS= read -r f; do
         [ -n "$f" ] && FILES_TO_SCAN+=("$f")
       done <<< "$CHANGED"
     fi
 
-    # First non-zero remote_sha is the "before" anchor — mirrors github.event.before
+    # Note: for simultaneous multi-ref pushes (multiple branches in one push),
+    # PUSH_BEFORE/PUSH_AFTER capture the first established ref's range. This is
+    # the correct behaviour for this repository's single-branch-to-main workflow.
+    # The AI reviewer (Gate 5) reviews the first ref's full commit range;
+    # subsequent refs in the same push are covered by the FILES_TO_SCAN union
+    # (Gates 3 & 4 still scan all changed files across all refs).
     [ -z "$PUSH_BEFORE" ] && PUSH_BEFORE="$remote_sha"
-    # First pushed local_sha is the "after" anchor — mirrors GITHUB_SHA
     [ -z "$PUSH_AFTER" ] && PUSH_AFTER="$local_sha"
   done
 fi
@@ -79,7 +85,9 @@ fi
 if [ ${#FILES_TO_SCAN[@]} -eq 0 ]; then
   # No files collected via stdin (manual hook invocation or new-branch push).
   # Use PUSH_BEFORE..PUSH_AFTER if available (consistent with Gate 5 range);
-  # otherwise fall back to @{u}...HEAD or HEAD~1..HEAD for static scanning only.
+  # fall back to @{u}...HEAD or HEAD~1..HEAD for static scanning only.
+  # `|| true` is acceptable here: this path is for best-effort static scanning
+  # on local manual invocations, not for the authoritative Gate 5 AI review.
   if [ -n "$PUSH_BEFORE" ] && [ -n "$PUSH_AFTER" ]; then
     CHANGED=$(git diff --name-only "$PUSH_BEFORE" "$PUSH_AFTER" 2>/dev/null || true)
   else

@@ -462,6 +462,14 @@ export const DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS = 5000;
 const pendingTelemetryTasks = new Set();
 
 /**
+ * Returns current count of in-flight telemetry mutation promises.
+ * @returns {number}
+ */
+export function getPendingTelemetryTaskCount() {
+  return pendingTelemetryTasks.size;
+}
+
+/**
  * Tracks a non-critical background telemetry promise to allow graceful draining
  * without blocking critical-path TTFT latency budgets.
  * Applies backpressure fail-closed if pending task queue reaches capacity.
@@ -474,20 +482,22 @@ export function trackTelemetryTask(promise) {
   if (pendingTelemetryTasks.size >= MAX_PENDING_TELEMETRY_TASKS) {
     process.stderr.write(`[ai-utils] Warning: telemetry queue saturated (${pendingTelemetryTasks.size}/${MAX_PENDING_TELEMETRY_TASKS}), dropping newest task\n`);
     promise.catch((err) => {
-      process.stderr.write(`[ai-utils] Dropped telemetry task rejected: ${err?.message ?? err}\n`);
+      process.stderr.write(`[ai-utils] Dropped telemetry task rejected: ${String(err?.message ?? err)}\n`);
     });
     return;
   }
 
   pendingTelemetryTasks.add(promise);
+  // Guarantee task pruning upon resolution or rejection to prevent monotonic queue saturation
   promise
     .catch((err) => {
-      process.stderr.write(`[ai-utils] Pending telemetry task rejected: ${err?.message ?? err}\n`);
+      process.stderr.write(`[ai-utils] Pending telemetry task rejected: ${String(err?.message ?? err)}\n`);
     })
     .finally(() => {
       pendingTelemetryTasks.delete(promise);
     });
 }
+
 
 /**
  * Drains all in-flight background telemetry mutations prior to process exit.

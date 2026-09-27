@@ -218,9 +218,12 @@ async function main() {
   }
 }
 
+export const MAX_SIGNAL_DRAIN_TIMEOUT_MS = 2000;
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   let isTerminating = false;
-  const SIGNAL_DRAIN_TIMEOUT_MS = Math.min(2000, DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS);
+  const SIGNAL_DRAIN_TIMEOUT_MS = Math.min(MAX_SIGNAL_DRAIN_TIMEOUT_MS, DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS);
+
 
   const onSignal = (sig) => {
     if (isTerminating) return;

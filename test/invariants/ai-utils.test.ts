@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry, MAX_PENDING_TELEMETRY_TASKS } from '../../scripts/ai-utils.mjs';
+import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry, MAX_PENDING_TELEMETRY_TASKS, getPendingTelemetryTaskCount } from '../../scripts/ai-utils.mjs';
+
 
 
 function createMockResponse(bodyBytes: Uint8Array | null, contentType = 'text/plain; charset=utf-8'): Response {
@@ -151,7 +152,7 @@ describe('AI Reviewer Utils: Asynchronous Telemetry Task Registry', () => {
     await expect(flushPendingTelemetry(500)).resolves.not.toThrow();
   });
 
-  it('enforces maximum in-flight capacity and drops excess telemetry tasks fail-closed', async () => {
+  it('enforces maximum in-flight capacity and prunes settled tasks to zero', async () => {
     const resolvers: (() => void)[] = [];
     for (let i = 0; i < MAX_PENDING_TELEMETRY_TASKS + 5; i++) {
       const p = new Promise<void>((resolve) => {
@@ -160,10 +161,14 @@ describe('AI Reviewer Utils: Asynchronous Telemetry Task Registry', () => {
       trackTelemetryTask(p);
     }
 
+    expect(getPendingTelemetryTaskCount()).toBe(MAX_PENDING_TELEMETRY_TASKS);
+
     // Resolving all pending tasks
     for (const r of resolvers) {
       r();
     }
     await flushPendingTelemetry(1000);
+    // Invariant: all settled tasks MUST be pruned from registry to prevent monotonic memory leaks
+    expect(getPendingTelemetryTaskCount()).toBe(0);
   });
 });
