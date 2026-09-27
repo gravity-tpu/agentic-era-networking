@@ -51,29 +51,27 @@ Governed by the **Technical Staff Council Invariants**:
         │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
-        │                        +──────────────────────────────┬───────────────────────────+
-        │                                                       │ Dual USB 3.0 SuperSpeed
-        │                                                       ▼
-        │                                           +───────────────────────────────────────+
-        │                                           | Dual Google Coral Edge TPUs (8 TOPS)  |
-        │                                           | * TPU 0: Port 3 Mirror Tap DPI        |
-        │                                           | * TPU 1: RFC 1035 DNS Intent Sentinel |
-        │                                           +───────────────────────────────────────+
-        │                                                       │
-        ▼                                                       │ Management Plane
-+───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
-| Raspberry Pi 3 Model B+ (Workload)|                           ▼
-|                                   |       +───────────────────────────────────────────────────+
-| * eth0: <workload-subnet> (Static)|       | MacBook M5 · Gemma 4 Local Workstation Plane      |
-|   Untrusted SDN Agent Data Plane  |       |                                                   |
-|                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |       | * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Wireless Management |       | * Dual-Stage Council Review Gate                  |
-|                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|                                   |       | * Deterministic BigInt Token Accounting Ledger    |
-|                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
-|                                   |       | * Operator Console: http://localhost:3000 & Cloud |
-+───────────────────────────────────+       +───────────────────────────────────────────────────+
+        │                        |  * USB-C Device Mode: Linux for Tegra (l4tbr0 / CDC-ACM) |
+        │                        +──────────────┬───────────────────────────┬───────────────+
+        │                                       │ Dual USB 3.0              │ USB-C High-Speed Cable
+        │                                       ▼                           │ (L4T Virtual Eth + Serial)
+        │                           +───────────────────────────────────+   │
+        │                           | Dual Google Coral Edge TPUs       |   │
+        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │
+        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │
+        │                           +───────────────────────────────────+   ▼
+        ▼                                           +───────────────────────────────────────────────────+
++───────────────────────────────────+               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| Raspberry Pi 3 Model B+ (Workload)|               |                                                   |
+|                                   |  Wireless     | * Direct USB-C L4T Tether (en8 & /dev/cu.usbmodem)|
+| * eth0: <workload-subnet> (Static)|  WiFi (<mgmt>)| * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+|   Untrusted SDN Agent Data Plane  |   . . . . . > | * Local Ollama Engine: gemma4:26b (:11434)        |
+|                                   |               | * Dual-Stage Council Review Gate                  |
+| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+|   Out-of-Band Wireless Management |               | * Deterministic BigInt Token Accounting Ledger    |
+|                                   |               | * Epistemic Process Liveness Mutex (Signal 0)     |
+|                                   |               | * Operator Console: http://localhost:3000 & Cloud |
++───────────────────────────────────+               +───────────────────────────────────────────────────+
 ```
 
 > [!NOTE]
@@ -84,11 +82,12 @@ Governed by the **Technical Staff Council Invariants**:
 | Node | Role | Hardware / Logical Plane | Always On? |
 |---|---|---|---|
 | **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 | ✅ Yes |
-| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`) | ✅ Yes |
+| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`) | ✅ Yes |
 | **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism (Phase 2A) | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
 | **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (<workload-subnet>), `wlan0` (<mgmt-subnet>) | ✅ Yes |
-| **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU | ❌ On-Demand / Dev Session |
+| **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU, Direct USB-C Tether (`en8` / `/dev/cu.usbmodem*`) | ❌ On-Demand / Dev Session |
+
 
 ## Phase Overview
 

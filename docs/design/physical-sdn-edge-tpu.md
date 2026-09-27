@@ -65,29 +65,27 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
         │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
-        │                        +──────────────────────────────┬───────────────────────────+
-        │                                                       │ Dual USB 3.0 SuperSpeed
-        │                                                       ▼
-        │                                           +───────────────────────────────────────+
-        │                                           | Dual Google Coral Edge TPUs (8 TOPS)  |
-        │                                           | * TPU 0: Port 3 Mirror Tap DPI        |
-        │                                           | * TPU 1: RFC 1035 DNS Intent Sentinel |
-        │                                           +───────────────────────────────────────+
-        │                                                       │
-        ▼                                                       │ Management Plane
-+───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
-| Raspberry Pi 3 Model B+ (Workload)|                           ▼
-|                                   |       +───────────────────────────────────────────────────+
-| * eth0: <workload-subnet> (Static)|       | MacBook M5 · Gemma 4 Local Workstation Plane      |
-|   Untrusted SDN Agent Data Plane  |       |                                                   |
-|                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |       | * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Wireless Management |       | * Dual-Stage Council Review Gate                  |
-|                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|                                   |       | * Deterministic BigInt Token Accounting Ledger    |
-|                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
-|                                   |       | * Operator Console: http://localhost:3000 & Cloud |
-+───────────────────────────────────+       +───────────────────────────────────────────────────+
+        │                        |  * USB-C Device Mode: Linux for Tegra (l4tbr0 / CDC-ACM) |
+        │                        +──────────────┬───────────────────────────┬───────────────+
+        │                                       │ Dual USB 3.0              │ USB-C High-Speed Cable
+        │                                       ▼                           │ (L4T Virtual Eth + Serial)
+        │                           +───────────────────────────────────+   │
+        │                           | Dual Google Coral Edge TPUs       |   │
+        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │
+        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │
+        │                           +───────────────────────────────────+   ▼
+        ▼                                           +───────────────────────────────────────────────────+
++───────────────────────────────────+               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| Raspberry Pi 3 Model B+ (Workload)|               |                                                   |
+|                                   |  Wireless     | * Direct USB-C L4T Tether (en8 & /dev/cu.usbmodem)|
+| * eth0: <workload-subnet> (Static)|  WiFi (<mgmt>)| * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+|   Untrusted SDN Agent Data Plane  |   . . . . . > | * Local Ollama Engine: gemma4:26b (:11434)        |
+|                                   |               | * Dual-Stage Council Review Gate                  |
+| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+|   Out-of-Band Wireless Management |               | * Deterministic BigInt Token Accounting Ledger    |
+|                                   |               | * Epistemic Process Liveness Mutex (Signal 0)     |
+|                                   |               | * Operator Console: http://localhost:3000 & Cloud |
++───────────────────────────────────+               +───────────────────────────────────────────────────+
 ```
 
 ### 2.1 Physical Interconnect & Interface Mapping Matrix
@@ -110,9 +108,25 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
 | **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | Zodiac Port 1 | **Untrusted Agent Workload**: Target for SDN policy enforcement. |
 | **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
+| **MacBook M5 Workstation** | USB-C to USB-C (High-Speed) | Apple T8142 USBXHCI | Direct Tether (`192.168.55.1/24` ↔ `en8`, metric 50) | Jetson USB-C Device Port (L4T Gadget: `l4tbr0` CDC-NCM + `g_serial` CDC-ACM) | **Direct Hardware Management Tether**: Point-to-point subnet `192.168.55.0/24` (metric 50, highest priority). CDC-ACM serial console at `115200 8N1` (`/dev/cu.usbmodem*`). MTU 1500 on `en8`. IP forwarding between `192.168.55.0/24` and SDN subnets permanently disabled (`net.ipv4.conf.l4tbr0.forwarding=0`) — strictly bound to OOB management, zero data-plane transit. L4T USB Gadget modules (`g_ether`, `g_serial`) must be loaded in initramfs before network stack init to guarantee enumeration before the management plane comes up. |
 | **MacBook M5 Workstation** | Wi-Fi 6/6E (802.11ax) | Apple M5 Pro Metal GPU | Management Plane Subnet | Home Wireless LAN / Cloud | **Local AI Workstation & Review Plane**: 20-Core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
 
-### 2.2 Dual-Homed Workload Architecture & Asymmetric Routing Invariant
+### 2.2 Management Plane Routing Hierarchy & Fail-Closed Invariants
+
+To eliminate routing ambiguity, split-brain conditions, and non-deterministic interface flapping between the USB-C hardware tether and wireless network (Council Invariants 3 & 5), the management plane enforces a strict metric priority and interface isolation:
+
+1. **Deterministic Recovery Hierarchy**:
+   - **Tier 1 — Direct Hardware Tether (Highest Priority, Metric 50)**: USB-C CDC-NCM point-to-point network (`en8` <-> `l4tbr0`, invariant subnet `192.168.55.0/24`). Lowest administrative distance for deterministic, ultra-low-latency operator access and telemetry bridging.
+   - **Tier 2 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
+   - **Tier 3 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
+2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
+   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Kernel IP forwarding between `192.168.55.0/24`, `<ctrl-subnet>` (`10.0.1.0/24`), and `<workload-subnet>` (`10.0.2.0/24`) is permanently disabled (`net.ipv4.conf.all.forwarding = 0`), preventing cross-plane packet leakage or routing bleed into SDN tenant flows.
+   - **No contradiction with Control Plane functionality**: The Jetson is an OpenFlow *controller*, not a software *router*. All inter-subnet packet forwarding (workload ↔ control) is performed in hardware by the Zodiac FX switch's 128-entry OpenFlow flow table (KSZ8795 ASIC). The Jetson kernel never routes data-plane packets; it only sends OpenFlow `PACKET_OUT` and `FLOW_MOD` messages over the switch serial link. `all.forwarding = 0` is therefore correct and complete.
+3. **USB Gadget Boot Determinism**:
+   - L4T USB Gadget modules (`g_ether` for CDC-NCM, `g_serial` for CDC-ACM) must be specified in `initramfs` and declared as `BindsTo=` dependencies in the `zodiac-bridge.service` systemd unit. If the USB gadget subsystem fails to enumerate before the management plane comes up, `zodiac-bridge.service` must not start — the Tier 2 (Wi-Fi) fallback activates instead. This prevents a silent management-plane blackout caused by a USB enumeration race at the `initramfs` → rootfs handoff.
+
+### 2.3 Dual-Homed Workload Architecture & Asymmetric Routing Invariant
+
 
 > [!IMPORTANT]
 > **Subnet Isolation Law (Ghemawat Invariant)**:  

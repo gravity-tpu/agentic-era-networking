@@ -81,29 +81,27 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
         │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
-        │                        +──────────────────────────────┬───────────────────────────+
-        │                                                       │ Dual USB 3.0 SuperSpeed
-        │                                                       ▼
-        │                                           +───────────────────────────────────────+
-        │                                           | Dual Google Coral Edge TPUs (8 TOPS)  |
-        │                                           | * TPU 0: Port 3 Mirror Tap DPI        |
-        │                                           | * TPU 1: RFC 1035 DNS Intent Sentinel |
-        │                                           +───────────────────────────────────────+
-        │                                                       │
-        ▼                                                       │ Management Plane
-+───────────────────────────────────+                           │ Wireless WiFi (<mgmt-subnet>)
-| Raspberry Pi 3 Model B+ (Workload)|                           ▼
-|                                   |       +───────────────────────────────────────────────────+
-| * eth0: <workload-subnet> (Static)|       | MacBook M5 · Gemma 4 Local Workstation Plane      |
-|   Untrusted SDN Agent Data Plane  |       |                                                   |
-|                                   |       | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |       | * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Wireless Management |       | * Dual-Stage Council Review Gate                  |
-|                                   |       | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|                                   |       | * Deterministic BigInt Token Accounting Ledger    |
-|                                   |       | * Epistemic Process Liveness Mutex (Signal 0)     |
-|                                   |       | * Operator Console: http://localhost:3000 & Cloud |
-+───────────────────────────────────+       +───────────────────────────────────────────────────+
+        │                        |  * USB-C Device Mode: Linux for Tegra (l4tbr0 / CDC-ACM) |
+        │                        +──────────────┬───────────────────────────┬───────────────+
+        │                                       │ Dual USB 3.0              │ USB-C High-Speed Cable
+        │                                       ▼                           │ (L4T Virtual Eth + Serial)
+        │                           +───────────────────────────────────+   │
+        │                           | Dual Google Coral Edge TPUs       |   │
+        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │
+        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │
+        │                           +───────────────────────────────────+   ▼
+        ▼                                           +───────────────────────────────────────────────────+
++───────────────────────────────────+               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| Raspberry Pi 3 Model B+ (Workload)|               |                                                   |
+|                                   |  Wireless     | * Direct USB-C L4T Tether (en8 & /dev/cu.usbmodem)|
+| * eth0: <workload-subnet> (Static)|  WiFi (<mgmt>)| * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+|   Untrusted SDN Agent Data Plane  |   . . . . . > | * Local Ollama Engine: gemma4:26b (:11434)        |
+|                                   |               | * Dual-Stage Council Review Gate                  |
+| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+|   Out-of-Band Wireless Management |               | * Deterministic BigInt Token Accounting Ledger    |
+|                                   |               | * Epistemic Process Liveness Mutex (Signal 0)     |
+|                                   |               | * Operator Console: http://localhost:3000 & Cloud |
++───────────────────────────────────+               +───────────────────────────────────────────────────+
 ```
 
 ### Physical Interconnect Matrix
@@ -121,7 +119,9 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | **Link 6** | Dual Coral Edge TPUs | Dual USB 3.0 | Jetson Orin (USB-A) | USB 3.0 (`18d1:9302`, `1a6e:089a`) | **Dedicated Edge Accelerators**: 8 TOPS INT8 total (TPU 0 Tap DPI, TPU 1 DNS Sentinel). |
 | **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Home Wi-Fi LAN | WiFi (<mgmt-subnet>) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
 | **Link 8** | Jetson Orin (`wlP1p1s0`)| Wireless 802.11ax | Home Wi-Fi LAN | WiFi (<mgmt-subnet>) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
-| **Link 9** | MacBook M5 Workstation | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
+| **Link 9** | Jetson Orin (USB-C) | USB-C to USB-C Cable | MacBook M5 (USB-C) | USB CDC-NCM (`en8`) + CDC-ACM (`/dev/cu.usbmodem*`) | **Direct Hardware Management Tether**: Point-to-point IP plane (`192.168.55.1` <-> `en8`) & serial console immune to network failure. |
+| **Link 10** | MacBook M5 Workstation | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
+
 
 ### The 5 Autonomous Appliance Invariant Roles:
 1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
