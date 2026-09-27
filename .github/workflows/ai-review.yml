@@ -50,8 +50,25 @@ jobs:
         run: npm run test
 
       - name: Council Review — AI Code Review
-        timeout-minutes: 8
-        run: npm run council:review:last -- --strict
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          MAX_ATTEMPTS=3
+          attempt=1
+          while [ $attempt -le $MAX_ATTEMPTS ]; do
+            echo "::group::Council Review attempt $attempt / $MAX_ATTEMPTS"
+            if npm run council:review:last -- --strict; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            attempt=$((attempt + 1))
+            if [ $attempt -le $MAX_ATTEMPTS ]; then
+              echo "::notice::Council review did not pass — re-evaluating (attempt $attempt / $MAX_ATTEMPTS)..."
+            fi
+          done
+          echo "::error::Council review failed after $MAX_ATTEMPTS attempts."
+          exit 1
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}

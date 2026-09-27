@@ -637,21 +637,25 @@ function parseHistoricalCoralPoint(raw: unknown, defaultTimestampMs: number): Co
   };
 }
 
+// Council Invariant 2: accepts both JSON number and string-encoded number (e.g. from legacy agents),
+// rejects NaN / Infinity / non-numeric strings. Returns null so callers drop the point rather than
+// propagating a corrupt value into downstream SLA aggregations.
+function parseFiniteInt(raw: unknown): number | null {
+  // Empty/whitespace strings must be rejected before Number() coercion: Number("") === 0,
+  // which would pass isFinite and silently record a fabricated zero into SLA aggregations.
+  const n = typeof raw === 'number' ? raw
+          : (typeof raw === 'string' && raw.trim() !== '') ? Number(raw)
+          : NaN;
+  return Number.isFinite(n) ? Math.floor(n) : null;
+}
+
 function parseHistoricalWorkstationPoint(raw: unknown, defaultTimestampMs: number): WorkstationTimeSeriesPoint | null {
   if (!raw || typeof raw !== 'object') return null;
   const p = raw as Record<string, unknown>;
-  // Council Invariant 2: strict finite-number guard prevents NaN from non-numeric JSON strings
-  // (e.g. "N/A", "") bypassing the null-check below and poisoning downstream SLA aggregations.
-  // Math.floor enforces integer truncation; missing or non-finite fields return null so the
-  // point is dropped rather than propagating a corrupt value.
-  const rawCpu  = p['cpuUtilizationPct'];
-  const rawGpu  = p['gpuUtilizationPct'];
-  const rawTps  = p['tokensPerSecond'];
-  const rawPtps = p['promptTokensPerSecond'];
-  const cpuUtil = (typeof rawCpu  === 'number' && Number.isFinite(rawCpu))  ? Math.floor(rawCpu)  : null;
-  const gpuUtil = (typeof rawGpu  === 'number' && Number.isFinite(rawGpu))  ? Math.floor(rawGpu)  : null;
-  const tps     = (typeof rawTps  === 'number' && Number.isFinite(rawTps))  ? Math.floor(rawTps)  : null;
-  const ptps    = (typeof rawPtps === 'number' && Number.isFinite(rawPtps)) ? Math.floor(rawPtps) : null;
+  const cpuUtil = parseFiniteInt(p['cpuUtilizationPct']);
+  const gpuUtil = parseFiniteInt(p['gpuUtilizationPct']);
+  const tps     = parseFiniteInt(p['tokensPerSecond']);
+  const ptps    = parseFiniteInt(p['promptTokensPerSecond']);
   if (cpuUtil === null || gpuUtil === null || tps === null || ptps === null) return null;
   return {
     timestampMs: typeof p['timestampMs'] === 'number' ? p['timestampMs'] : defaultTimestampMs,
