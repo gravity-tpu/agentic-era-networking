@@ -14,7 +14,7 @@
 import { execSync } from 'child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadEnv, buildModelFallbacks, runWithFallback, NoAvailableModelsError, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff, flushPendingTelemetry } from './ai-utils.mjs';
+import { loadEnv, buildModelFallbacks, runWithFallback, NoAvailableModelsError, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff, flushPendingTelemetry, DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS } from './ai-utils.mjs';
 
 loadEnv();
 
@@ -220,11 +220,13 @@ async function main() {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   let isTerminating = false;
+  const SIGNAL_DRAIN_TIMEOUT_MS = Math.min(2000, DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS);
+
   const onSignal = (sig) => {
     if (isTerminating) return;
     isTerminating = true;
     process.stderr.write(`\n[ai-reviewer] Received ${sig} — draining pending telemetry...\n`);
-    flushPendingTelemetry(2000)
+    flushPendingTelemetry(SIGNAL_DRAIN_TIMEOUT_MS)
       .catch((err) => {
         process.stderr.write(`[ai-reviewer] Error draining telemetry on ${sig}: ${err?.message ?? err}\n`);
       })

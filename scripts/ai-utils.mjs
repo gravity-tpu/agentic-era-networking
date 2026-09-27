@@ -452,10 +452,33 @@ export function enqueueTelemetryMutation(filePath, mutateFn) {
 // Recording metrics to disk must NEVER block the inference response microtask
 // on the critical path. Background tasks are tracked in a set and drained via
 // flushPendingTelemetry() before process exit to prevent floating promise drops.
+//
+// Sanjay Ghemawat Invariant (Bounded Flat Resource Bounds):
+// Hard concurrency cap on in-flight telemetry tasks prevents unbounded heap growth
+// or memory leaks during high-frequency inference loops or degraded I/O sinks.
+export const MAX_PENDING_TELEMETRY_TASKS = 64;
+export const DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS = 5000;
+
 const pendingTelemetryTasks = new Set();
 
+/**
+ * Tracks a non-critical background telemetry promise to allow graceful draining
+ * without blocking critical-path TTFT latency budgets.
+ * Applies backpressure fail-closed if pending task queue reaches capacity.
+ *
+ * @param {Promise<unknown>} promise
+ */
 export function trackTelemetryTask(promise) {
   if (!promise || typeof promise.then !== 'function') return;
+
+  if (pendingTelemetryTasks.size >= MAX_PENDING_TELEMETRY_TASKS) {
+    process.stderr.write(`[ai-utils] Warning: telemetry queue saturated (${pendingTelemetryTasks.size}/${MAX_PENDING_TELEMETRY_TASKS}), dropping newest task\n`);
+    promise.catch((err) => {
+      process.stderr.write(`[ai-utils] Dropped telemetry task rejected: ${err?.message ?? err}\n`);
+    });
+    return;
+  }
+
   pendingTelemetryTasks.add(promise);
   promise
     .catch((err) => {
@@ -466,7 +489,13 @@ export function trackTelemetryTask(promise) {
     });
 }
 
-export async function flushPendingTelemetry(timeoutMs = 5000) {
+/**
+ * Drains all in-flight background telemetry mutations prior to process exit.
+ * Prevents process shutdown from dropping active file locks or partial atomic writes.
+ *
+ * @param {number} [timeoutMs=DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS]
+ */
+export async function flushPendingTelemetry(timeoutMs = DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS) {
   if (pendingTelemetryTasks.size === 0) return;
   const tasks = Array.from(pendingTelemetryTasks);
   let timerId;
@@ -484,6 +513,7 @@ export async function flushPendingTelemetry(timeoutMs = 5000) {
     clearTimeout(timerId);
   }
 }
+
 
 /**
  * Records Ollama inference token metrics into local telemetry file asynchronously.
