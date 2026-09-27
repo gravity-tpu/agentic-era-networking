@@ -35,6 +35,13 @@ echo ""
 # ── Read refs being pushed from stdin (standard Git pre-push protocol) ──
 FILES_TO_SCAN=()
 
+# Capture the push range so Gate 5 (AI Council Review) uses the same
+# GITHUB_BEFORE..GITHUB_SHA diff that GitHub Actions will see — not just
+# HEAD~1..HEAD (which only covers the last commit and diverges when multiple
+# commits are pushed in a single push or after a force-push).
+PUSH_BEFORE=""
+PUSH_AFTER=""
+
 if [ ! -t 0 ]; then
   while read -t 1 -r local_ref local_sha remote_ref remote_sha 2>/dev/null || [ -n "${local_ref:-}" ]; do
     [ -z "${local_sha:-}" ] && break
@@ -44,22 +51,40 @@ if [ ! -t 0 ]; then
     fi
 
     if [[ "$remote_sha" =~ ^0+$ ]]; then
-      RANGE="$local_sha --not --remotes"
-    else
-      RANGE="$remote_sha..$local_sha"
+      # New branch push — no established before-anchor; skip static file scanning
+      # for this ref. Gate 5 (AI reviewer) handles new branches via its own
+      # HEAD~1..HEAD fallback when PUSH_BEFORE is empty.
+      [ -z "$PUSH_AFTER" ] && PUSH_AFTER="$local_sha"
+      continue
     fi
 
-    CHANGED=$(git diff --name-only $RANGE 2>/dev/null || git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+    # Established range: same anchors as github.event.before..GITHUB_SHA.
+    # `|| true` is intentional under `set -euo pipefail`: a git error here
+    # means we collect no files for this ref's static scan (Gates 3 & 4).
+    # Gate 5 is the authoritative review gate and handles its own diff independently.
+    CHANGED=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)
     if [ -n "$CHANGED" ]; then
       while IFS= read -r f; do
         [ -n "$f" ] && FILES_TO_SCAN+=("$f")
       done <<< "$CHANGED"
     fi
+
+    # First non-zero remote_sha is the "before" anchor — mirrors github.event.before
+    [ -z "$PUSH_BEFORE" ] && PUSH_BEFORE="$remote_sha"
+    # First pushed local_sha is the "after" anchor — mirrors GITHUB_SHA
+    [ -z "$PUSH_AFTER" ] && PUSH_AFTER="$local_sha"
   done
 fi
 
 if [ ${#FILES_TO_SCAN[@]} -eq 0 ]; then
-  CHANGED=$(git diff --name-only @{u}...HEAD 2>/dev/null || git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+  # No files collected via stdin (manual hook invocation or new-branch push).
+  # Use PUSH_BEFORE..PUSH_AFTER if available (consistent with Gate 5 range);
+  # otherwise fall back to @{u}...HEAD or HEAD~1..HEAD for static scanning only.
+  if [ -n "$PUSH_BEFORE" ] && [ -n "$PUSH_AFTER" ]; then
+    CHANGED=$(git diff --name-only "$PUSH_BEFORE" "$PUSH_AFTER" 2>/dev/null || true)
+  else
+    CHANGED=$(git diff --name-only @{u}...HEAD 2>/dev/null || git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+  fi
   if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
       [ -n "$f" ] && FILES_TO_SCAN+=("$f")
@@ -269,9 +294,13 @@ while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
     echo ""
   fi
 
-  # Capture exit code without aborting the script (set -e is active)
+  # Capture exit code without aborting the script (set -e is active).
+  # Export GITHUB_BEFORE/GITHUB_SHA so the reviewer uses the same diff range
+  # as GitHub Actions (PUSH_BEFORE..PUSH_AFTER rather than HEAD~1..HEAD),
+  # ensuring local and CI reviews are identical for multi-commit pushes.
   COUNCIL_EXIT=0
-  node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
+  GITHUB_BEFORE="$PUSH_BEFORE" GITHUB_SHA="$PUSH_AFTER" \
+    node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
 
   if [ "$COUNCIL_EXIT" -eq 0 ]; then
     echo -e "  ${GREEN}✓ Council Review passed — no Critical Issues or Warnings${RESET}"
