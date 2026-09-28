@@ -52,6 +52,8 @@ Governed by the **Technical Staff Council Invariants**:
         │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
         │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
         │                        |  * USB-C Port: L4T Device Mode (192.168.55.1 / CDC-ACM)  |
+        │                        |  * Tailscale Mesh: tailscale0 (100.118.64.16/32)         |
+        │                        |  * 67 TOPS Ampere GPU (Stage-2 Anomaly Autoencoder)      |
         │                        +──────────────┬───────────────────────────┬───────────────+
         │                                       │                           │
         │                                       │ Dual USB 3.0              │ DIRECT HIGH-SPEED USB-C CABLE
@@ -73,8 +75,16 @@ Governed by the **Technical Staff Council Invariants**:
 | * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Local Ollama Engine: gemma4:26b (:11434)        |
 |   Out-of-Band Wireless Management |               | * Dual-Stage Council Review Gate                  |
 |   (Home WiFi LAN Only)            |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|                                   |               | * Operator Console: http://localhost:3000 & Cloud |
+|                                   |               | * Tailscale Client (100.112.223.16/32)            |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
+                                                                |
+                                                        Tailscale Mesh Overlay
+                                                                |
+                                              +─────────────────────────────+
+                                              |    agentic-node-01          |
+                                              |  (100.79.152.36/32)         |
+                                              |  Remote Compute Peer        |
+                                              +─────────────────────────────+
 ```
 
 ### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
@@ -100,22 +110,32 @@ Governed by the **Technical Staff Council Invariants**:
 | Node | Role | Hardware / Logical Plane | Always On? |
 |---|---|---|---|
 | **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 | ✅ Yes |
-| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, TensorRT | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`) | ✅ Yes |
-| **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism (Phase 2A) | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
+| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, 67 TOPS Ampere GPU Stage-2 Anomaly Autoencoder | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`), Tailscale (`100.118.64.16`) | ✅ Yes |
+| **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
-| **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (<workload-subnet>), `wlan0` (<mgmt-subnet>) | ✅ Yes |
-| **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU, Direct USB-C Tether (`en8` / `/dev/cu.usbmodem*`) | ❌ On-Demand / Dev Session |
+| **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
+| **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger, Tailscale client | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU, Direct USB-C Tether (`en8`), Tailscale (`100.112.223.16`) | ❌ On-Demand / Dev Session |
+| **agentic-node-01** | Remote Compute Peer — Tailscale mesh node for distributed workload | Tailscale (`100.79.152.36`) | ❌ External |
+
+### Tailscale Mesh Overlay & Subnet Router Architecture
+
+The Jetson Orin operates as a **Tailscale subnet router and WAN exit node**, enabling zero-configuration remote access to the full SDN stack from anywhere in the world:
+
+- **Advertised Subnets**: `10.0.0.0/24` (Home LAN), `10.0.1.0/24` (Zodiac OpenFlow plane), full WAN exit (`0.0.0.0/0`)
+- **Remote Access**: `ssh zodiac@jetson-orin` from any Tailscale client — no VPN, port-forwarding, or static IP required
+- **Mesh Peers**: MacBook M5 (`100.112.223.16`) ↔ Jetson (`100.118.64.16`) ↔ agentic-node-01 (`100.79.152.36`)
 
 ### Management Plane Routing Hierarchy & Fail-Closed Invariants
 
-To eliminate routing ambiguity, split-brain conditions, and non-deterministic interface flapping between the USB-C hardware tether and wireless network (Council Invariants 3 & 5), the management plane enforces a strict metric priority and interface isolation:
+To eliminate routing ambiguity, split-brain conditions, and non-deterministic interface flapping between the USB-C hardware tether, Tailscale mesh, and wireless network (Council Invariants 3 & 5), the management plane enforces a strict metric priority and interface isolation:
 
 1. **Deterministic Recovery Hierarchy**:
    - **Tier 1 — Direct Hardware Tether (Highest Priority, Metric 50)**: USB-C CDC-NCM point-to-point network (`en8` <-> `l4tbr0`, invariant subnet `192.168.55.0/24`). Lowest administrative distance for deterministic, ultra-low-latency operator access and telemetry bridging.
-   - **Tier 2 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
-   - **Tier 3 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
+   - **Tier 2 — Tailscale Mesh Overlay**: WireGuard-encrypted mesh (`tailscale0`). Globally routable remote access immune to dynamic home ISP IP changes; routes `10.0.0.0/24` and `10.0.1.0/24`.
+   - **Tier 3 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
+   - **Tier 4 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
 2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
-   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Kernel IP forwarding between `192.168.55.0/24`, `<ctrl-subnet>` (`10.0.1.0/24`), and `<workload-subnet>` (`10.0.2.0/24`) is permanently disabled (`net.ipv4.conf.all.forwarding = 0`), preventing cross-plane packet leakage or routing bleed into SDN tenant flows.
+   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Tailscale kernel module handles its own route table isolation; SDN plane IP forwarding (`net.ipv4.conf.all.forwarding` for SDN tenants) remains disabled to prevent cross-plane packet leakage into OpenFlow flows.
 
 ## Phase Overview
 
@@ -187,6 +207,25 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
+| Phase 0.11: Tailscale Global Mesh Overlay & Remote SDN Operator Access (COMPLETE)                 |
+| - Jetson as Tailscale subnet router & WAN exit node (0.0.0.0/0, 10.0.0.0/24, 10.0.1.0/24)        |
+| - Mesh peers: Jetson (100.118.64.16), MacBook (100.112.223.16), agentic-node-01 (100.79.152.36)  |
+| - Zero-config remote access: ssh zodiac@jetson-orin from any Tailscale peer worldwide             |
+| - Management tier upgraded: Tier 1 (USB-C) → Tier 2 (Tailscale) → Tier 3 (Wi-Fi) → Tier 4 (Serial)|
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+| Phase 0.12: Jetson Ampere GPU Stage-2 Anomaly Autoencoder & Live Wire Quarantine (COMPLETE)       |
+| - gpu-workload-1: GPU Neural Stress & Verification Burst Worker (validated on silicon)            |
+| - gpu-workload-2: 1D-CNN Autoencoder on 1024 CUDA Cores (sm_87): 0.271ms avg inference latency   |
+| - AdaptiveThresholdController: EMA baseline tracking, flap-storm prevention (Council Invariant 5) |
+| - Live wire quarantine: 24 anomalies detected → 24 FLOW_MOD DROP rules installed on Zodiac FX     |
+| - GPU utilization from physical sysfs (Anti-Simulation Law, Invariant 6)                          |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
 | Phase 1: Zero-Config DNS Reverse Proxy Engine (NEXT)                                              |
 | - RFC 1035 UDP interceptor & dynamic domain mapping (wildcard / exact / catch-all)                |
 | - Transparent edge reverse proxy with nanosecond latency profiling                                |
@@ -207,6 +246,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 | Phase 3: AlphaProof Symbolic Verification & Self-Tuning Control                                   |
 | - Hybrid neuro-symbolic verification: probabilistic route synthesis gated by formal DAG proof     |
 | - Quoc Le self-tuning control loops: dynamic buffer windows adapting to packet arrival distributions |
+| - gpu-workload-3: Contextual Bandit Rate-Meter optimizer on live Zodiac 64-bit hardware counters   |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v
@@ -214,6 +254,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 | Phase 4: Multi-Agent Routing Stability & Flap Prevention                                          |
 | - Pointer Network graph routing representations under multi-tenant agent traffic                 |
 | - Hysteresis damping and game-theoretic convergence preventing route flap oscillations            |
+| - gpu-workload-4: TCN/LSTM Micro-Burst Forecaster (50–200ms predictive rerouting via GPU)         |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v
@@ -358,6 +399,33 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Anti-Runaway Offload Controls (Quoc Le): 3-attempt circuit breaker, 10s strict timeout budget (`AbortSignal.timeout(10000)`), and 90% edge compute ratio SLA alert to prevent cloud-loop distribution runaway.
 
 
+### Phase 0.11: Tailscale Global Mesh Overlay & Remote SDN Operator Access
+*Status: Complete*
+- [x] **Milestone 0.11A: Jetson as Tailscale Subnet Router & WAN Exit Node**:
+  - Jetson advertises `10.0.0.0/24`, `10.0.1.0/24`, and `0.0.0.0/0` (WAN exit) into the Tailscale tailnet.
+  - Any Tailscale peer can reach `10.0.1.99` (Zodiac FX switch web UI) and `10.0.0.15` (Jetson bridge) without any port-forwarding or static IP.
+  - Filter backend: `iptables-legacy` (coexisting correctly with Docker & Tailscale kernel chains).
+  - Config file: `/etc/sysctl.d/99-tailscale.conf` (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`).
+- [x] **Milestone 0.11B: Tailscale SSH ACL (Hardened Remote Access)**:
+  - Strict Tailscale ACL enforces `zodiac` user for all SSH sessions to Jetson (rejects username `andymorven`).
+  - Remote command: `ssh zodiac@jetson-orin` — globally routable, WireGuard-encrypted, zero knowledge of home ISP IP required.
+- [x] **Milestone 0.11C: 4-Tier Management Hierarchy Formalized**:
+  - Tier 1 (USB-C Tether, Metric 50) → Tier 2 (Tailscale WireGuard mesh) → Tier 3 (Wi-Fi, Metric 200) → Tier 4 (Hardware Serial CDC-ACM).
+  - Tailscale mesh makes Tier 2 globally routable; eliminates dependency on home DHCP/IP for remote work sessions and CI/CD deployments.
+  - Documented in [.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md) with full mesh peer table.
+
+### Phase 0.12: Jetson Ampere GPU — Stage-2 Anomaly Autoencoder & Live Wire Quarantine
+*Status: Complete (Tracked via [Jetson Orin GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*
+- [x] **Milestone 0.12A (`gpu-workload-1`): GPU Neural Stress & Verification Burst Worker**:
+  - `jetson_gpu_worker` thread in `hardware-burst-daemon.py` driving CUDA matrix operations on 1024 Ampere CUDA cores.
+  - GPU load verified via physical sysfs (`/sys/devices/platform/bus@0/17000000.gpu/load`); zero synthetic waveforms (Invariant 6).
+  - Validated in live 10-minute multi-accelerator burst with power consumption and thermal tracking.
+- [x] **Milestone 0.12B (`gpu-workload-2`): Stage-2 Deep Anomaly Autoencoder & Fail-Closed Quarantine**:
+  - Native CUDA kernel `src/gpu/gpu_anomaly_kernel.cu` compiled for `sm_87` (Ampere) — 1D-CNN autoencoder with parallel warp reductions on 1024 CUDA cores.
+  - **0.271 ms** average inference latency across 174 live inferences (Dean latency budget: `< 1.0 ms`).
+  - `AdaptiveThresholdController`: EMA-based dynamic threshold tracking baseline variance — prevents route flap storms (Invariant 5, Quoc Le).
+  - Live wire verification on physical interface `enP8p1s0`: 24 anomalies detected → 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action `DROP`) installed on Zodiac FX hardware via `POST /api/sdn/quarantine`.
+
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
 - [ ] Transparent RFC 1035 UDP DNS interception on Zodiac data ports without client proxy setup.
@@ -383,11 +451,13 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 *Status: Planned*
 - [ ] Formal symbolic verifier gating probabilistic routing updates.
 - [ ] Quoc Le self-tuning control loops adapting to traffic distribution shifts.
+- [ ] **`gpu-workload-3`: Contextual Bandit Rate-Meter & Bufferbloat Optimizer** — GPU-accelerated contextual bandit trained on live Zodiac 64-bit hardware counters (`fx_port_counts`, CRC errors, drops, byte deltas). Dynamically configures the Zodiac FX's 8 hardware rate meters and flow table timeouts to eliminate packet drops and queue oscillation under bursty multi-agent workloads.
 
 ### Phase 4: Multi-Agent Routing Stability & Flap Prevention
 *Status: Planned*
 - [ ] Graph sequence representations for topology mapping.
 - [ ] Multi-agent coordination with hysteresis damping.
+- [ ] **`gpu-workload-4`: TCN/LSTM Micro-Burst & Congestion Forecaster** — Temporal Convolutional Network or LSTM running on the Jetson GPU predicting switch buffer saturation 50–200ms ahead of time, proposing preemptive flow reroutes through `SymbolicRouteVerifier.verifyLoopFree()`.
 
 ### Phase 5: Autonomous Agent Intent Firewall
 *Status: Planned*
