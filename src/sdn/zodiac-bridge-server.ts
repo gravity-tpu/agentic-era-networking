@@ -1427,6 +1427,27 @@ export class ZodiacBridgeServer {
     return result;
   }
 
+  private async fetchSwitchHttpStatus(): Promise<import('./zodiac-serial.js').ZodiacDeviceStatus | undefined> {
+    try {
+      const res = await fetch(`http://${this.switchIp}/home.htm`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) return undefined;
+      const html = await res.text();
+      const tempMatch = html.match(/CPU Temp:\s*(\d+)\s*C/i);
+      const fwMatch = html.match(/Firmware Version:\s*([^<\r\n]+)/i);
+      const uptimeMatch = html.match(/Uptime:\s*([^<\r\n]+)/i);
+      const uidMatch = html.match(/CPU UID:\s*([^<\r\n]+)/i);
+      if (!tempMatch && !fwMatch && !uptimeMatch) return undefined;
+      return {
+        cpuTempC: tempMatch ? parseInt(tempMatch[1]!, 10) : null,
+        firmwareVersion: fwMatch?.[1]?.trim() ?? 'Unknown',
+        uptime: uptimeMatch?.[1]?.trim() ?? 'Unknown',
+        cpuUid: uidMatch?.[1]?.trim() ?? 'Unknown',
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   private async refreshTelemetry(): Promise<void> {
     if (this.isRefreshing) return;
     this.isRefreshing = true;
@@ -1553,6 +1574,12 @@ export class ZodiacBridgeServer {
             })
           : this.cachedSnapshot.ports;
 
+        // If serial returned unknown system info, probe home.htm via HTTP as authoritative source.
+        const serialStatus = health.deviceStatus;
+        const deviceStatus = (!serialStatus || serialStatus.cpuTempC === null)
+          ? (await this.fetchSwitchHttpStatus() ?? serialStatus)
+          : serialStatus;
+
         this.cachedSnapshot = {
           ...this.cachedSnapshot,
           source: 'live_hardware',
@@ -1565,10 +1592,10 @@ export class ZodiacBridgeServer {
             openFlowController: health.config?.controllerIp ?? this.controllerIp,
             openFlowPort: health.config?.controllerPort ?? 6633,
             failstate: health.config?.failstate ?? 'Secure',
-            cpuTemperatureC: health.deviceStatus?.cpuTempC ?? this.cachedSnapshot.system.cpuTemperatureC,
-            cpuUid: health.deviceStatus?.cpuUid ?? this.cachedSnapshot.system.cpuUid ?? 'N/A',
-            firmwareVersion: health.deviceStatus?.firmwareVersion ?? this.cachedSnapshot.system.firmwareVersion ?? '0.86',
-            uptime: health.deviceStatus?.uptime ?? this.cachedSnapshot.system.uptime ?? '00:00:00',
+            cpuTemperatureC: deviceStatus?.cpuTempC ?? this.cachedSnapshot.system.cpuTemperatureC,
+            cpuUid: deviceStatus?.cpuUid ?? this.cachedSnapshot.system.cpuUid ?? 'N/A',
+            firmwareVersion: deviceStatus?.firmwareVersion ?? this.cachedSnapshot.system.firmwareVersion ?? '0.86',
+            uptime: deviceStatus?.uptime ?? this.cachedSnapshot.system.uptime ?? '00:00:00',
             timestampNs: process.hrtime.bigint(),
           },
           ports: livePorts,

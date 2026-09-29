@@ -48,7 +48,7 @@ export interface ZodiacPortInfo {
 
 export interface ZodiacDeviceStatus {
   readonly firmwareVersion: string;
-  readonly cpuTempC: number;
+  readonly cpuTempC: number | null;
   readonly uptime: string;
   readonly cpuUid: string;
 }
@@ -294,7 +294,7 @@ except Exception as e:
 
     return {
       firmwareVersion: firmwareMatch?.[1]?.trim() ?? 'Unknown',
-      cpuTempC: tempMatch ? parseInt(tempMatch[1]!, 10) : 0,
+      cpuTempC: tempMatch ? parseInt(tempMatch[1]!, 10) : null,
       uptime: uptimeMatch?.[1]?.trim() ?? 'Unknown',
       cpuUid: uidMatch?.[1]?.trim() ?? 'Unknown',
     };
