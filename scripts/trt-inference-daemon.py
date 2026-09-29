@@ -32,6 +32,11 @@ TELEMETRY_FILE     = 'trt-telemetry.json'
 REPORT_INTERVAL_NS = 1_000_000_000   # 1 second in nanoseconds (integer)
 WARMUP_N           = 10              # more warmup than Coral to fully initialise TRT CUDA context
 
+# Rate-anomaly quarantine (Council Invariant 2: integer arithmetic throughout)
+QUARANTINE_THRESHOLD_PPS = int(os.environ.get('QUARANTINE_PPS_THRESHOLD', '10'))
+RATE_WINDOW_NS           = 5_000_000_000  # 5-second sliding window per source MAC
+BRIDGE_QUARANTINE_URL    = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/quarantine'
+
 
 def atomic_write_telemetry(filename: str, data: dict) -> None:
     candidate_dirs = ['/run/zodiac', '/tmp']
@@ -174,6 +179,53 @@ def allocate_cuda_buffers(engine, cuda, np):
     return trt_ctx, host_bufs, device_bufs, bindings, stream, tensor_names
 
 
+def parse_src_ip(frame: bytes) -> str | None:
+    """Extract IPv4 source address from an Ethernet frame.
+
+    IP-based tracking avoids a critical false-positive: all gateway-routed packets
+    share the router MAC as source, so MAC tracking would quarantine the default
+    gateway immediately. Internet traffic arrives from thousands of unique IPs so
+    no external IP accumulates to threshold. A local flood (e.g. RPi eth0 at
+    10.0.1.50) presents one IP consistently and triggers quarantine correctly.
+    """
+    if len(frame) < 34:
+        return None
+    etype = (frame[12] << 8) | frame[13]
+    if etype != 0x0800:  # IPv4 only
+        return None
+    src = frame[26:30]
+    if src[0] in (0, 127, 255) or src[0] >= 224:  # skip loopback, unspecified, multicast, broadcast
+        return None
+    return f'{src[0]}.{src[1]}.{src[2]}.{src[3]}'
+
+
+def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
+    """POST quarantine-by-IP to bridge server. Fire-and-forget, 5 s timeout."""
+    import urllib.request
+    quarantined.add(src_ip)
+    body = json.dumps({
+        'targetIp': src_ip,
+        'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
+        'priority': 200,
+    }).encode()
+    req = urllib.request.Request(
+        BRIDGE_QUARANTINE_URL,
+        data=body,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read())
+            print(
+                f'[trt-daemon] [QUARANTINE] {src_ip} @ {pps} pps -> '
+                f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
+                flush=True,
+            )
+    except Exception as exc:
+        sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+
+
 def main() -> None:
     print('[trt-daemon] Starting TensorRT GPU inference daemon.', flush=True)
 
@@ -264,6 +316,11 @@ def main() -> None:
     window_start_ns  = time.monotonic_ns()
     last_report_ns   = window_start_ns
 
+    # Per-source-IP rate tracking (INV-2: integer arithmetic, monotonic ns)
+    mac_window_start: dict[str, int] = {}   # keyed by src IP string
+    mac_window_count: dict[str, int] = {}
+    quarantined_macs: set[str] = set()      # IPs already quarantined (suppress repeats)
+
     write_standby(total_inferences)
 
     def handle_shutdown(sig, frame):
@@ -295,6 +352,9 @@ def main() -> None:
                 try:
                     frame = raw_sock.recv(65535)
                     if frame:
+                        src_ip = parse_src_ip(frame)
+                        t_recv = time.monotonic_ns()  # timestamp at drain time, not post-inference
+
                         n_bytes = min(len(frame), inp_size)
                         inp_flat[:n_bytes] = np.frombuffer(frame[:n_bytes], dtype=np.uint8).view(inp_host.dtype)
                         if n_bytes < inp_size:
@@ -308,6 +368,26 @@ def main() -> None:
 
                         window_latencies.append(t1 - t0)
                         total_inferences += 1
+
+                        # Rate-anomaly: sliding window on IPv4 src IP (not MAC — see parse_src_ip docstring).
+                        # Drain timestamp used so inference latency (~1ms) doesn't distort the window.
+                        if src_ip and src_ip not in quarantined_macs:
+                            ws = mac_window_start.get(src_ip)
+                            if ws is None or t_recv - ws >= RATE_WINDOW_NS:
+                                mac_window_start[src_ip] = t_recv
+                                mac_window_count[src_ip] = 1
+                            else:
+                                mac_window_count[src_ip] = mac_window_count.get(src_ip, 0) + 1
+                                elapsed = t_recv - ws
+                                if elapsed >= 500_000_000:  # require >=0.5 s of data before acting
+                                    pps = (mac_window_count[src_ip] * 1_000_000_000) // elapsed
+                                    if pps > QUARANTINE_THRESHOLD_PPS:
+                                        print(
+                                            f'[trt-daemon] [ALERT] {src_ip}: {pps} pps exceeds '
+                                            f'threshold {QUARANTINE_THRESHOLD_PPS} pps -- quarantining',
+                                            flush=True,
+                                        )
+                                        try_quarantine(src_ip, pps, quarantined_macs)
                 except socket.timeout:
                     pass
                 except Exception as exc:
