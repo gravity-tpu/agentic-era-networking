@@ -2,11 +2,17 @@
 """
 coral-inference-daemon.py
 =========================
-Continuous Edge TPU inference daemon for real-time telemetry.
+Continuous Edge TPU inference daemon for real-time wire-tap DPI telemetry.
 
-Runs MobileNet V2 INT8 inference continuously, computes rolling P50/P99
-latency + inferences/sec, and writes results atomically to
-/tmp/coral-telemetry.json every REPORT_INTERVAL_S seconds.
+Primary + standby architecture:
+  Primary:  Coral USB TPU at CORAL_PRIMARY_USB_PATH  (default 2-1.3)
+  Standby:  Coral USB TPU at CORAL_STANDBY_USB_PATH  (default 2-1.2)
+
+On startup the daemon targets the primary TPU. If the primary is absent or
+fails during inference (MAX_CONSECUTIVE_ERRORS consecutive USB errors), the
+daemon exits cleanly so systemd can restart it; on restart it again tries the
+primary first, then falls back to standby. Only one TPU is ever active at a
+time — this eliminates USB hub contention on the shared tegra-xusb controller.
 
 Council Invariant 6 (Anti-Simulation / Goodhart's Law):
   All reported values are derived exclusively from real physical Edge TPU
@@ -26,9 +32,16 @@ import sys
 import time
 import traceback
 
-MODEL_PATH         = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite'
-REPORT_INTERVAL_NS = 1_000_000_000   # 1 second in nanoseconds (integer)
-WARMUP_N           = 5
+MODEL_PATH              = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite'
+REPORT_INTERVAL_NS      = 1_000_000_000   # 1 second in nanoseconds (integer)
+WARMUP_N                = 5
+# USB path of the primary Edge TPU (wire tap DPI role).
+CORAL_PRIMARY_USB_PATH  = os.environ.get('CORAL_PRIMARY_USB_PATH',  '2-1.3')
+# USB path of the standby Edge TPU — activated automatically if primary fails.
+CORAL_STANDBY_USB_PATH  = os.environ.get('CORAL_STANDBY_USB_PATH',  '2-1.2')
+# Exit after this many consecutive inference errors so systemd can restart
+# and re-attempt the primary TPU before falling back to standby.
+MAX_CONSECUTIVE_ERRORS  = 5
 
 
 def atomic_write_telemetry_json(filename: str, data: dict):
@@ -67,7 +80,7 @@ def write_offline(reason):
     })
 
 
-def write_standby(total_inf, usb_p, usb_t):
+def write_standby(total_inf, usb_p, usb_t, standby_mode: bool = False):
     atomic_write_telemetry_json('coral-telemetry.json', {
         'detected': True,
         'status': 'STANDBY',
@@ -79,6 +92,7 @@ def write_standby(total_inf, usb_p, usb_t):
         'windowSampleCount': 0,
         'usbPath': usb_p,
         'usbType': usb_t,
+        'standbyMode': standby_mode,
         'timestampNs': time.monotonic_ns(),
     })
 
@@ -128,23 +142,40 @@ def main():
         write_offline(msg)
         sys.exit(0)
 
-    target_usb_path = os.environ.get('CORAL_PRIMARY_USB_PATH', '2-1.3')
-    target_idx = None
-    for idx, t in enumerate(tpus):
-        if target_usb_path in t.get('path', ''):
-            target_idx = idx
-            break
+    def _find_tpu_by_path(tpu_list, usb_path_fragment):
+        for i, t in enumerate(tpu_list):
+            if usb_path_fragment in t.get('path', ''):
+                return i, t
+        return None, None
+
+    target_idx, tpu = _find_tpu_by_path(tpus, CORAL_PRIMARY_USB_PATH)
+    standby_mode = False
 
     if target_idx is None:
-        msg = f'Required Edge TPU matching topology {target_usb_path} not found among {tpus}'
-        print(f'[coral-daemon] ERROR: {msg}', file=sys.stderr, flush=True)
-        write_offline(msg)
-        sys.exit(1)
+        print(
+            f'[coral-daemon] Primary TPU {CORAL_PRIMARY_USB_PATH} not found among {tpus} — '
+            f'trying standby {CORAL_STANDBY_USB_PATH}',
+            flush=True,
+        )
+        target_idx, tpu = _find_tpu_by_path(tpus, CORAL_STANDBY_USB_PATH)
+        if target_idx is None:
+            msg = (
+                f'No Edge TPU found at primary {CORAL_PRIMARY_USB_PATH} or '
+                f'standby {CORAL_STANDBY_USB_PATH} among detected: {tpus}'
+            )
+            print(f'[coral-daemon] ERROR: {msg}', file=sys.stderr, flush=True)
+            write_offline(msg)
+            sys.exit(1)
+        standby_mode = True
+        print(
+            f'[coral-daemon] Standby TPU activated: {CORAL_STANDBY_USB_PATH} (index :{target_idx})',
+            flush=True,
+        )
+    else:
+        print(f'[coral-daemon] Primary TPU activated: {CORAL_PRIMARY_USB_PATH} (index :{target_idx})', flush=True)
 
-    tpu = tpus[target_idx]
     usb_path = tpu.get('path', 'unknown')
     usb_type = tpu.get('type', 'usb')
-    print(f'[coral-daemon] TPU detected: {tpu} (index :{target_idx})', flush=True)
 
     if not os.path.exists(MODEL_PATH):
         msg = f'Model not found: {MODEL_PATH}'
@@ -192,7 +223,9 @@ def main():
     last_report_ns     = window_start_ns
 
     # Emit initial STANDBY state with zero rates (Council Invariant 6: Anti-Simulation Law)
-    write_standby(total_inferences, usb_path, usb_type)
+    write_standby(total_inferences, usb_path, usb_type, standby_mode)
+
+    consecutive_errors = 0
 
     while True:
         try:
@@ -211,6 +244,7 @@ def main():
                         interp.invoke()
                         t1 = time.monotonic_ns()
 
+                        consecutive_errors = 0  # reset on successful inference
                         window_latencies.append(t1 - t0)
                         total_inferences += 1
                 except socket.timeout:
@@ -252,6 +286,7 @@ def main():
                     'windowSampleCount':   n,
                     'usbPath':             usb_path,
                     'usbType':             usb_type,
+                    'standbyMode':         standby_mode,
                     'timestampNs':         now_ns,
                 })
 
@@ -261,7 +296,7 @@ def main():
 
         except KeyboardInterrupt:
             print('[coral-daemon] Received SIGINT, shutting down cleanly.', flush=True)
-            write_standby(total_inferences, usb_path, usb_type)
+            write_standby(total_inferences, usb_path, usb_type, standby_mode)
             if raw_sock:
                 try:
                     raw_sock.close()
@@ -272,6 +307,15 @@ def main():
             err = traceback.format_exc()
             print(f'[coral-daemon] ERROR in inference loop:\n{err}',
                   file=sys.stderr, flush=True)
+            consecutive_errors += 1
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                sys.stderr.write(
+                    f'[coral-daemon] {MAX_CONSECUTIVE_ERRORS} consecutive inference errors '
+                    f'({"standby" if standby_mode else "primary"} TPU {usb_path}) — '
+                    f'exiting for systemd restart\n'
+                )
+                write_offline(f'Too many consecutive errors on {usb_path}, exiting for restart')
+                sys.exit(1)
             write_offline(f'Inference loop error: {err[:200]}')
             time.sleep(2)
 

@@ -1,0 +1,116 @@
+# zodiac-coral.service
+# Zodiac Coral Wire-Tap Inference Daemon — Primary + Standby Edge TPU (24/7)
+#
+# Runs MobileNet V2 INT8 inference on the primary Google Coral USB Edge TPU
+# (USB path 2-1.3, Zodiac Port 3 mirror tap via AF_PACKET raw socket).
+#
+# Primary + Standby failover:
+#   Primary:  Coral USB TPU at CORAL_PRIMARY_USB_PATH  (default 2-1.3)
+#   Standby:  Coral USB TPU at CORAL_STANDBY_USB_PATH  (default 2-1.2)
+#
+#   On startup the daemon targets the primary TPU. After MAX_CONSECUTIVE_ERRORS
+#   consecutive USB inference failures, it exits non-zero so systemd restarts it;
+#   on each restart it tries the primary first, then falls back to standby.
+#   Only one TPU is ever active at a time — this eliminates USB hub contention
+#   on the shared tegra-xusb controller on the Jetson Orin Nano.
+#
+# Writes telemetry to /run/zodiac/coral-telemetry.json every second.
+# Includes 'standbyMode' field so the dashboard can indicate which TPU is live.
+#
+# Council Invariants Enforced:
+#   Dean:    Restart=always + StartLimitBurst=10/300s keeps the daemon alive
+#            across transient USB disconnects without flooding the kernel log.
+#            MemoryMax=256M keeps the EdgeTPU runtime well below the Jetson budget.
+#   Ghemawat: Single Python process in coral-venv — no wrapper scripts.
+#            Telemetry written atomically via rename to /run/zodiac, falls back
+#            to /tmp if /run/zodiac is unavailable (zodiac-bridge not running).
+#   Hassabis: Fail-closed by exit on consecutive errors — systemd restarts and
+#            re-attempts the primary TPU before falling back to standby. A daemon
+#            that silently swallows USB errors produces fabricated telemetry (INV-6).
+#   Quoc Le:  USB timeout budget: consecutive_errors threshold (MAX_CONSECUTIVE_ERRORS=5)
+#            exits before the libedgetpu USB scheduler can enter a wedged state,
+#            triggering a clean kernel USB re-enumeration on restart.
+#   Anti-Simulation (INV-6): All reported counters are derived exclusively from
+#            real physical Edge TPU execution. Zero rates at startup and shutdown;
+#            standbyMode=true when the fallback TPU is active.
+#
+# Prerequisites — ensure coral-venv has pycoral installed:
+#   python3 -m venv /home/zodiac/coral-venv --system-site-packages
+#   /home/zodiac/coral-venv/bin/pip install pycoral tflite-runtime numpy
+#
+# Installation (run on Jetson as root):
+#   sudo cp deploy/jetson/zodiac-coral.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now zodiac-coral
+#
+# Check active TPU:
+#   cat /run/zodiac/coral-telemetry.json | python3 -m json.tool | grep -E 'status|standbyMode|usbPath'
+#
+# Live logs:
+#   journalctl -u zodiac-coral -f
+#
+# Manual restart (forces re-probe of primary TPU):
+#   sudo systemctl restart zodiac-coral
+
+[Unit]
+Description=Zodiac Coral Wire-Tap Inference Daemon — Primary + Standby Edge TPU
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=network-online.target zodiac-bridge.service
+Wants=network-online.target
+# Not Requires= — this daemon is a telemetry emitter only. If zodiac-bridge
+# is not running, the daemon still infers on the TPU and writes to /tmp fallback.
+# StartLimitBurst=10 / StartLimitIntervalSec=300s: more generous than the default
+# to accommodate the primary→standby restart cycle and transient USB disconnects.
+StartLimitIntervalSec=300s
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=zodiac
+Group=zodiac
+
+WorkingDirectory=/home/zodiac/agentic-era-networking
+
+# coral-venv contains pycoral, tflite-runtime, and numpy.
+# -u disables output buffering so log lines reach journald immediately.
+ExecStart=/home/zodiac/coral-venv/bin/python3 -u \
+    /home/zodiac/agentic-era-networking/scripts/coral-inference-daemon.py
+
+# USB path overrides — change only if the Coral TPUs are on different hub ports.
+# Run `lsusb -t` on the Jetson to discover the actual USB paths.
+# Environment=CORAL_PRIMARY_USB_PATH=2-1.3
+# Environment=CORAL_STANDBY_USB_PATH=2-1.2
+
+# Tap interface override (default: auto-detect enx*).
+# Environment=TAP_INTERFACE=enx9c69d39dd0a6
+
+# Restart=always: recover from both clean (no TPU found) and error exits so the
+# daemon survives transient USB disconnects and automatic primary→standby cycling.
+Restart=always
+RestartSec=5s
+
+# 256M ceiling: EdgeTPU runtime + pycoral + numpy + packet buffers.
+# MobileNet V2 INT8 model is ~4 MB; pycoral runtime overhead is ~50–100 MB.
+MemoryAccounting=true
+MemoryMax=256M
+MemorySwapMax=0
+
+# CAP_NET_RAW: required for AF_PACKET raw socket on the enx* tap interface.
+# Without this capability the socket() call fails immediately with EPERM.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+# /run/zodiac is created by zodiac-bridge RuntimeDirectory; this daemon
+# writes coral-telemetry.json there atomically via rename.
+ReadWritePaths=/var/lib/zodiac /run/zodiac
+
+# --- Logging ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zodiac-coral
+
+[Install]
+WantedBy=multi-user.target

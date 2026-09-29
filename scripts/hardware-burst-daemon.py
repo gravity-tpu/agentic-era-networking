@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 scripts/hardware-burst-daemon.py
 ================================
@@ -49,7 +50,7 @@ import urllib.error
 import urllib.request
 from typing import TypedDict
 
-MODEL_PATH = os.environ.get('CORAL_MODEL_PATH', '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant_edgetpu.tflite')
+TRT_ENGINE_PATH_BURST = os.environ.get('TRT_ENGINE_PATH_BURST', '/home/zodiac/coral-models/trt-mobilenet-v2-gpu-burst.engine')
 DEFAULT_LOG_PATH = os.environ.get(
     'BURST_LOG_PATH',
     '/home/zodiac/burst-telemetry.log' if os.path.isdir('/home/zodiac') else '/tmp/burst-telemetry.log'
@@ -57,8 +58,8 @@ DEFAULT_LOG_PATH = os.environ.get(
 DEFAULT_SWITCH_IP = os.environ.get('ZODIAC_SWITCH_IP', '127.0.0.1')
 DEFAULT_CTRL_IP = os.environ.get('SDN_CONTROLLER_IP', '0.0.0.0')
 DEFAULT_WORKLOAD_IP = os.environ.get('RPI_WORKLOAD_IP', '127.0.0.1')
-CUSTOM_BURST_CORAL_PATH = os.environ.get('BURST_CORAL_TELEMETRY_PATH')
-_custom_burst_dir = os.path.dirname(CUSTOM_BURST_CORAL_PATH) if CUSTOM_BURST_CORAL_PATH else None
+CUSTOM_BURST_TRT_PATH = os.environ.get('BURST_TRT_TELEMETRY_PATH')
+_custom_burst_dir = os.path.dirname(CUSTOM_BURST_TRT_PATH) if CUSTOM_BURST_TRT_PATH else None
 CANDIDATE_BURST_DIRS = [_custom_burst_dir] if _custom_burst_dir else ['/run/zodiac', '/tmp']
 
 
@@ -112,9 +113,9 @@ stop_event = threading.Event()
 stats_lock = threading.Lock()
 
 counters = {
-    'coral_total_inferences': 0,
-    'coral_tpu0_inferences': 0,
-    'coral_tpu1_inferences': 0,
+    'trt_total_inferences': 0,
+    'trt_tap_inferences': 0,
+    'trt_burst_inferences': 0,
     'telemetry_drops': 0,
     'zodiac_p3_frames': 0,
     'zodiac_p3_bytes': 0,
@@ -132,36 +133,36 @@ _gpu_err_backoff_ns: int = 50_000_000  # 50ms initial; doubles per error, capped
 
 # Bounded async queue decoupling telemetry file writes from the inference hot loop.
 # Capacity=4: at 1Hz emission rate a full queue means the writer is stalled >4s — drop silently.
-_coral_write_q: queue.Queue = queue.Queue(maxsize=4)
+_trt_write_q: queue.Queue = queue.Queue(maxsize=4)
 
 
-def _enqueue_coral_write(filename: str, data: dict) -> None:
+def _enqueue_trt_write(filename: str, data: dict) -> None:
     try:
-        _coral_write_q.put_nowait((filename, data))
+        _trt_write_q.put_nowait((filename, data))
     except queue.Full:
         with stats_lock:
             counters['telemetry_drops'] += 1
 
 
-def _coral_telemetry_writer() -> None:
+def _trt_telemetry_writer() -> None:
     while True:
-        item = _coral_write_q.get()
+        item = _trt_write_q.get()
         if item is None:
-            _coral_write_q.task_done()
+            _trt_write_q.task_done()
             break
         filename, data = item
         atomic_write_coral_file(filename, data)
-        _coral_write_q.task_done()
+        _trt_write_q.task_done()
 
 
-_coral_writer_thread: threading.Thread | None = None
+_trt_writer_thread: threading.Thread | None = None
 
 
-def _start_coral_telemetry_writer() -> threading.Thread:
-    global _coral_writer_thread
-    t = threading.Thread(target=_coral_telemetry_writer, name='coral-telemetry-writer', daemon=True)
+def _start_trt_telemetry_writer() -> threading.Thread:
+    global _trt_writer_thread
+    t = threading.Thread(target=_trt_telemetry_writer, name='trt-telemetry-writer', daemon=True)
     t.start()
-    _coral_writer_thread = t
+    _trt_writer_thread = t
     return t
 
 
@@ -278,48 +279,81 @@ def cleanup_burst_coral_telemetry(filename: str = 'coral-burst-telemetry.json'):
                 sys.stderr.write(f'[burst-coral] Failed cleanup {target}: {e}\n')
 
 
-def coral_tpu_worker(
-    dev_spec: str,
+def trt_gpu_burst_worker(
+    engine_path: str,
     max_bytes: int = 0,
     active_event: threading.Event | None = None,
-    telemetry_file: str = 'coral-burst-telemetry.json',
-    model_role: str = 'Burst Parallel',
-    counter_key: str = 'coral_total_inferences'
+    telemetry_file: str = 'trt-burst-telemetry.json',
+    model_role: str = 'DNS Sentinel',
+    counter_key: str = 'trt_total_inferences',
 ):
-    """Drives continuous high-throughput INT8 inference on a dedicated Coral Edge TPU."""
+    """Drives continuous high-throughput INT8 inference on the Jetson Ampere GPU via TensorRT."""
     try:
+        import tensorrt as trt  # type: ignore[import-untyped]  # Jetson JetPack only
+        import pycuda.driver as cuda  # type: ignore[import-untyped]
+        import pycuda.autoinit  # noqa: F401
         import numpy as np
-        from pycoral.utils.edgetpu import (
-            make_interpreter,  # type: ignore[import-untyped]  # Jetson Linux only
+    except ImportError as exc:
+        sys.stderr.write(f'[trt_burst_worker] TensorRT/pycuda not available: {exc}\n')
+        return
+
+    if not os.path.exists(engine_path):
+        sys.stderr.write(
+            f'[trt_burst_worker] Engine not found: {engine_path}\n'
+            f'Build it first: python3 /home/zodiac/scripts/build-trt-engine.py\n'
         )
+        return
 
-        if not os.path.exists(MODEL_PATH):
-            sys.stderr.write(f'[coral_worker_{dev_spec}] Model not found at {MODEL_PATH}\n')
-            return
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+    runtime = trt.Runtime(TRT_LOGGER)
+    try:
+        with open(engine_path, 'rb') as f:
+            engine = runtime.deserialize_cuda_engine(f.read())
+    except OSError as e:
+        sys.stderr.write(f'[trt_burst_worker] Failed reading engine {engine_path}: {e}\n')
+        return
+    if engine is None:
+        sys.stderr.write(f'[trt_burst_worker] Failed deserializing engine {engine_path}\n')
+        return
 
-        interp = make_interpreter(MODEL_PATH, device=dev_spec)
-        interp.allocate_tensors()
-        inp_detail = interp.get_input_details()[0]
-        dummy = np.zeros(inp_detail['shape'], dtype=np.uint8)
+    context = engine.create_execution_context()
+    if context is None:
+        sys.stderr.write('[trt_burst_worker] create_execution_context() returned None\n')
+        return
 
-        # Warmup
-        for _ in range(5):
-            interp.set_tensor(inp_detail['index'], dummy)
-            interp.invoke()
+    host_bufs   = []
+    device_bufs = []
+    for i in range(engine.num_bindings):
+        shape = tuple(engine.get_binding_shape(i))
+        h_buf = np.zeros(shape, dtype=np.int8)
+        d_buf = cuda.mem_alloc(h_buf.nbytes)
+        host_bufs.append(h_buf)
+        device_bufs.append(d_buf)
+    bindings = [int(d) for d in device_bufs]
+    stream   = cuda.Stream()
+    inp_host = host_bufs[0]
+    inp_dev  = device_bufs[0]
 
-        batch_size = 10
-        total_worker_inf = 0
-        w_start_ns = time.monotonic_ns()
-        w_latencies = []
+    for _ in range(5):
+        cuda.memcpy_htod_async(inp_dev, inp_host, stream)
+        context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
+        stream.synchronize()
 
-        is_in_standby = False
+    batch_size       = 10
+    total_worker_inf = 0
+    w_start_ns       = time.monotonic_ns()
+    w_latencies: list = []
+
+    is_in_standby = False
+    try:
         while not stop_event.is_set():
             if active_event is not None and not active_event.is_set():
                 if not is_in_standby:
-                    _enqueue_coral_write(telemetry_file, {
+                    _enqueue_trt_write(telemetry_file, {
                         'detected': True,
                         'status': 'STANDBY',
-                        'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - {model_role}',
+                        'source': 'jetson_trt_gpu',
+                        'model': f'MobileNet V2 INT8 (TensorRT Ampere GPU) — {model_role}',
                         'inferencesPerSecond': 0,
                         'totalInferences': total_worker_inf,
                         'latencyP50Ns': 0,
@@ -328,7 +362,7 @@ def coral_tpu_worker(
                     })
                     is_in_standby = True
                 active_event.wait(timeout=0.1)
-                w_start_ns = time.monotonic_ns()
+                w_start_ns  = time.monotonic_ns()
                 w_latencies = []
                 continue
 
@@ -337,32 +371,35 @@ def coral_tpu_worker(
             if max_bytes > 0 and check_size_limit_reached(max_bytes):
                 stop_event.set()
                 break
+
             for _ in range(batch_size):
                 t0 = time.monotonic_ns()
-                interp.set_tensor(inp_detail['index'], dummy)
-                interp.invoke()
+                cuda.memcpy_htod_async(inp_dev, inp_host, stream)
+                context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
+                stream.synchronize()
                 t1 = time.monotonic_ns()
                 w_latencies.append(t1 - t0)
 
             total_worker_inf += batch_size
             with stats_lock:
-                counters['coral_total_inferences'] += batch_size
-                if counter_key != 'coral_total_inferences' and counter_key in counters:
+                counters['trt_total_inferences'] += batch_size
+                if counter_key != 'trt_total_inferences' and counter_key in counters:
                     counters[counter_key] += batch_size
 
             now_ns = time.monotonic_ns()
             if now_ns - w_start_ns >= 1_000_000_000:
                 elapsed_ns = now_ns - w_start_ns
-                w_sorted = sorted(w_latencies)
-                n = len(w_sorted)
-                p50_ns = w_sorted[n // 2] if n > 0 else 0
-                p99_ns = w_sorted[min((n * 99) // 100, n - 1)] if n > 0 else 0
-                inf_sec = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
+                w_sorted   = sorted(w_latencies)
+                n          = len(w_sorted)
+                p50_ns     = w_sorted[n // 2] if n > 0 else 0
+                p99_ns     = w_sorted[min((n * 99) // 100, n - 1)] if n > 0 else 0
+                inf_sec    = (n * 1_000_000_000) // elapsed_ns if elapsed_ns > 0 else 0
 
-                _enqueue_coral_write(telemetry_file, {
+                _enqueue_trt_write(telemetry_file, {
                     'detected': True,
                     'status': 'ACTIVE',
-                    'model': f'MobileNet V2 INT8 (EdgeTPU {dev_spec}) - {model_role}',
+                    'source': 'jetson_trt_gpu',
+                    'model': f'MobileNet V2 INT8 (TensorRT Ampere GPU) — {model_role}',
                     'inferencesPerSecond': inf_sec,
                     'totalInferences': total_worker_inf,
                     'latencyP50Ns': p50_ns,
@@ -370,11 +407,16 @@ def coral_tpu_worker(
                     'timestampNs': now_ns,
                 })
                 w_latencies = []
-                w_start_ns = now_ns
+                w_start_ns  = now_ns
     except (OSError, RuntimeError, ImportError, ValueError) as e:
-        sys.stderr.write(f'[coral_worker_{dev_spec}] Error: {e}\n')
+        sys.stderr.write(f'[trt_burst_worker] Error: {e}\n')
         sys.stderr.flush()
     finally:
+        for d in device_bufs:
+            try:
+                d.free()
+            except Exception as free_err:
+                sys.stderr.write(f'[trt_burst_worker] CUDA free error: {free_err}\n')
         cleanup_burst_coral_telemetry(telemetry_file)
 
 
@@ -701,7 +743,8 @@ def telemetry_poller_worker():
     Zero synchronous I/O or HTTP blocking in the main daemon loop.
     """
     global cached_live_summary
-    candidate_paths = ['/run/zodiac/coral-telemetry.json', '/tmp/coral-telemetry.json']
+    candidate_paths = ['/run/zodiac/trt-telemetry.json', '/tmp/trt-telemetry.json',
+                       '/run/zodiac/coral-telemetry.json', '/tmp/coral-telemetry.json']
 
     last_load_check_ns = 0
     staleness_limit_ns = int(DEFAULT_CORAL_STALENESS_LIMIT_S * 1_000_000_000)
@@ -942,8 +985,8 @@ def main():
     tpu1_active = threading.Event()
     tpu2_active = threading.Event()
 
-    # Start the coral telemetry file writer and async telemetry poller
-    _start_coral_telemetry_writer()
+    # Start the TRT telemetry file writer and async telemetry poller
+    _start_trt_telemetry_writer()
     t_poller = threading.Thread(target=telemetry_poller_worker, name='telemetry-poller', daemon=True)
     threads.append(t_poller)
     t_poller.start()
@@ -958,52 +1001,38 @@ def main():
         if is_coral_all or is_coral_2:
             tpu2_active.set()
 
-    # 1. Coral TPU #2 (dedicated accelerator worker)
+    # 1. TRT GPU burst worker (DNS Sentinel — replaces Coral TPU #2)
     if is_coral_all or is_coral_2 or args.staggered:
-        active_tpu_devs = []
-        sentinel_target_path = os.environ.get('CORAL_SENTINEL_USB_PATH', '2-1.2')
-        try:
-            from pycoral.utils.edgetpu import (
-                list_edge_tpus,  # type: ignore[import-untyped]  # Jetson Linux only
-            )
-            detected_tpus = list_edge_tpus()
-            for i, tpu_info in enumerate(detected_tpus):
-                dev_path = tpu_info.get('path')
-                if dev_path and sentinel_target_path in dev_path:
-                    active_tpu_devs.append(f':{i}')
-                    break
-            if not active_tpu_devs:
-                # Fail-closed (Council Invariant 3 & 4): unmatched topology constraint drops worker
-                sys.stderr.write(f'[burst-daemon] Fail-closed: Sentinel Edge TPU matching {sentinel_target_path} not found among {detected_tpus}\n')
-        except (ImportError, OSError, ValueError) as exc:
-            sys.stderr.write(f'[burst-daemon] Note: Edge TPU worker discovery error: {exc}\n')
-
-        for dev in active_tpu_devs:
-            t = threading.Thread(
-                target=coral_tpu_worker,
-                args=(dev, max_bytes, tpu2_active),
+        if os.path.exists(TRT_ENGINE_PATH_BURST):
+            t_trt = threading.Thread(
+                target=trt_gpu_burst_worker,
+                args=(TRT_ENGINE_PATH_BURST, max_bytes, tpu2_active),
                 kwargs={
-                    'telemetry_file': 'coral-tpu1-burst-telemetry.json',
+                    'telemetry_file': 'trt-burst-telemetry.json',
                     'model_role': 'DNS Sentinel',
-                    'counter_key': 'coral_tpu1_inferences',
+                    'counter_key': 'trt_burst_inferences',
                 },
-                name=f'coral-burst-{dev}',
+                name='trt-gpu-burst',
                 daemon=True,
             )
-            threads.append(t)
-            t.start()
-            log_message(f'   [+] Spawned dedicated Edge TPU worker on {dev} (Coral TPU #2 DNS Sentinel)', log_file)
-        if not active_tpu_devs:
-            log_message('   [-] No free Edge TPU found for dedicated burst worker', log_file)
+            threads.append(t_trt)
+            t_trt.start()
+            log_message('   [+] Spawned TRT GPU burst worker (Ampere INT8 — DNS Sentinel)', log_file)
+        else:
+            sys.stderr.write(
+                f'[burst-daemon] TRT burst engine not found at {TRT_ENGINE_PATH_BURST}\n'
+                f'Build it first: python3 /home/zodiac/scripts/build-trt-engine.py\n'
+            )
+            log_message(f'   [-] TRT GPU burst worker skipped — engine not found: {TRT_ENGINE_PATH_BURST}', log_file)
     else:
-        log_message('   [-] Coral TPU #2 worker omitted by target filter', log_file)
+        log_message('   [-] TRT GPU burst worker omitted by target filter', log_file)
 
     # 2. Zodiac Port 3 (Wire-tap raw frame worker driving Coral TPU #1)
     if is_coral_all or is_coral_1 or is_target_enabled('zodiac-p3', enabled_targets) or args.staggered:
         t_p3 = threading.Thread(target=zodiac_p3_raw_worker, args=(tap_iface, max_bytes, tpu1_active), name='zodiac-p3-raw', daemon=True)
         threads.append(t_p3)
         t_p3.start()
-        log_message('   [+] Spawned Zodiac Port 3 raw frame burst worker (Coral TPU #1 Tap DPI)', log_file)
+        log_message('   [+] Spawned Zodiac Port 3 raw frame burst worker (TRT GPU Tap DPI)', log_file)
     else:
         log_message('   [-] Zodiac Port 3 raw worker omitted by target filter', log_file)
 
@@ -1065,11 +1094,11 @@ def main():
         t5 = max(t4 + 1, total_duration_sec)
 
         stagger_stages = [
-            (1, 'Coral TPU #1 (Tap DPI) Solo Burst', 'Transmitting wire-tap frames to Zodiac Port 3; TPU 2 in STANDBY', 0, t1, True, False),
-            (2, 'Settling Baseline (Both Standby)', 'Zeroing wire traffic; observing both TPUs return to STANDBY (0 inf/s)', t1, t2, False, False),
-            (3, 'Coral TPU #2 (DNS Sentinel) Solo Burst', 'Driving dedicated Edge TPU accelerator :1; TPU 1 in STANDBY', t2, t3, False, True),
+            (1, 'TRT GPU Tap DPI Solo Burst', 'Transmitting wire-tap frames to Zodiac Port 3; burst worker in STANDBY', 0, t1, True, False),
+            (2, 'Settling Baseline (Both Standby)', 'Zeroing wire traffic; observing both workers return to STANDBY (0 inf/s)', t1, t2, False, False),
+            (3, 'TRT GPU DNS Sentinel Solo Burst', 'Driving dedicated TRT burst worker; tap DPI in STANDBY', t2, t3, False, True),
             (4, 'Settling Baseline (Both Standby)', 'Zeroing burst worker; verifying zero drift baseline (0 inf/s)', t3, t4, False, False),
-            (5, 'Dual Coral TPUs Concurrently (Peak Parallelism)', 'Driving both accelerators simultaneously (~450 inf/s combined peak target)', t4, t5, True, True),
+            (5, 'Dual TRT Workers Concurrently (Peak Parallelism)', 'Driving tap DPI + DNS Sentinel simultaneously via CUDA streams', t4, t5, True, True),
         ]
         current_stage_idx = -1
 
@@ -1130,14 +1159,14 @@ def main():
                 with stats_lock:
                     curr = counters.copy()
 
-                d_coral = curr['coral_total_inferences'] - prev_counters['coral_total_inferences']
+                d_trt = curr['trt_total_inferences'] - prev_counters['trt_total_inferences']
                 d_p3_pkts = curr['zodiac_p3_frames'] - prev_counters['zodiac_p3_frames']
                 d_p3_bytes = curr['zodiac_p3_bytes'] - prev_counters['zodiac_p3_bytes']
                 d_p4_pkts = curr['zodiac_p4_packets'] - prev_counters['zodiac_p4_packets']
                 d_rpi_pkts = curr['rpi_packets'] - prev_counters['rpi_packets']
                 d_gpu_ops = curr['jetson_gpu_ops'] - prev_counters['jetson_gpu_ops']
 
-                burst_coral_rate = (d_coral * 1_000_000_000) // window_elapsed_ns
+                burst_trt_rate = (d_trt * 1_000_000_000) // window_elapsed_ns
                 p3_pps = (d_p3_pkts * 1_000_000_000) // window_elapsed_ns
                 p3_kbps = ((d_p3_bytes * 8) * 1_000_000) // window_elapsed_ns
                 p4_pps = (d_p4_pkts * 1_000_000_000) // window_elapsed_ns
@@ -1163,7 +1192,7 @@ def main():
                 if args.staggered and current_stage_idx > 0:
                     stat_parts.append(f'Stage {current_stage_idx}/5')
                 if is_coral_all or is_coral_1 or is_coral_2 or args.staggered:
-                    stat_parts.append(f'Coral #1 (Tap DPI): {daemon_coral_rate}/s | Coral #2 (DNS Sentinel): {burst_coral_rate}/s')
+                    stat_parts.append(f'TRT Tap DPI: {daemon_coral_rate}/s | TRT DNS Sentinel: {burst_trt_rate}/s')
                 if is_target_enabled('zodiac-p3', enabled_targets) and not args.staggered:
                     stat_parts.append(f'Zodiac P3: {p3_pps} pps ({p3_kbps} kbps, Rx {p3_rx_str} pkts)')
                 if is_target_enabled('zodiac-p4', enabled_targets):
@@ -1195,19 +1224,19 @@ def main():
 
         cleanup_burst_coral_telemetry()
 
-        # Drain and shut down the coral telemetry writer thread (poison pill).
+        # Drain and shut down the TRT telemetry writer thread (poison pill).
         # Use put with timeout to avoid blocking the main thread if the writer is hung on a
         # stalled filesystem and the queue is still full at shutdown time.
         try:
-            _coral_write_q.put(None, timeout=SHUTDOWN_QUEUE_TIMEOUT_SEC)
+            _trt_write_q.put(None, timeout=SHUTDOWN_QUEUE_TIMEOUT_SEC)
         except queue.Full:
             sys.stderr.write(
-                f'[burst-daemon] Coral telemetry writer queue full during shutdown '
-                f'(qsize={_coral_write_q.qsize()}); writer thread likely hung on stalled '
+                f'[burst-daemon] TRT telemetry writer queue full during shutdown '
+                f'(qsize={_trt_write_q.qsize()}); writer thread likely hung on stalled '
                 f'filesystem. Dropping poison pill — daemon thread will be reaped on exit.\n'
             )
-        if _coral_writer_thread is not None:
-            _coral_writer_thread.join(timeout=SHUTDOWN_JOIN_TIMEOUT_SEC)
+        if _trt_writer_thread is not None:
+            _trt_writer_thread.join(timeout=SHUTDOWN_JOIN_TIMEOUT_SEC)
 
         total_elapsed_sec = (time.monotonic_ns() - start_ns) // 1_000_000_000
         tot_bytes = counters['zodiac_p3_bytes'] + counters['zodiac_p4_bytes'] + counters['rpi_bytes'] + counters['jetson_gpu_bytes']
@@ -1215,9 +1244,9 @@ def main():
         log_message('\n======================================================================', log_file)
         log_message(f'✅ BURST COMPLETED: Total Run Time {total_elapsed_sec}s ({total_elapsed_sec//60}m{total_elapsed_sec%60:02d}s)', log_file)
         if is_target_enabled('coral', enabled_targets):
-            log_message(f'   Coral Total Inferences  : {counters["coral_total_inferences"]:,}', log_file)
-            if counters['coral_tpu1_inferences'] > 0:
-                log_message(f'     └─ Coral TPU #2 (DNS Sentinel): {counters["coral_tpu1_inferences"]:,}', log_file)
+            log_message(f'   TRT Total Inferences    : {counters["trt_total_inferences"]:,}', log_file)
+            if counters['trt_burst_inferences'] > 0:
+                log_message(f'     └─ TRT Burst (DNS Sentinel): {counters["trt_burst_inferences"]:,}', log_file)
         if is_target_enabled('zodiac-p3', enabled_targets):
             log_message(f'   Zodiac Port 3 Frames    : {counters["zodiac_p3_frames"]:,} ({format_bytes_int(counters["zodiac_p3_bytes"])})', log_file)
         if is_target_enabled('zodiac-p4', enabled_targets):

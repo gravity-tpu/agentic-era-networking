@@ -1,0 +1,111 @@
+# zodiac-trt.service
+# Zodiac TRT Wire-Tap Inference Daemon — Jetson Orin Nano Super (Headless, 24/7)
+#
+# Replaces the Google Coral USB TPU inference path. Runs MobileNet V2 INT8
+# subnet-clustering inference on the Ampere GPU (1024 CUDA cores, 32 Tensor
+# Cores) via TensorRT, reading raw Ethernet frames from the Zodiac Port 3
+# mirror tap (AF_PACKET socket on enx*).
+#
+# Writes telemetry to /run/zodiac/trt-telemetry.json every second.
+# Provenance: source='jetson_trt_gpu' — physical silicon, not USB.
+#
+# Council Invariants Enforced:
+#   Dean:    Restart backoff caps at 120s. MemoryMax=512M prevents CUDA context
+#            growth from OOMing the co-located zodiac-bridge service.
+#   Ghemawat: Single Python process — no wrapper scripts, no extra tooling.
+#            Falls back to /tmp for telemetry if /run/zodiac is unavailable.
+#   Hassabis: Daemon is fail-open for the broader system — if it dies,
+#            zodiac-bridge continues serving the SDN control plane normally.
+#            The TRT engine is built once, verified once; at runtime the
+#            daemon loads the serialized engine and asserts non-None context
+#            before entering the inference loop. Bad engine = hard exit, no
+#            silent degradation.
+#   Quoc Le:  If TRT or pycuda is unavailable the script exits non-zero
+#            (fail-fast). Pure-Python fallback cannot meet wire-rate latency
+#            requirements and must never silently replace hardware inference.
+#
+# Prerequisites — run once on Jetson as zodiac user:
+#
+#   # 1. Create a venv that inherits the system TensorRT 10.3 installation.
+#   #    --system-site-packages pulls in the JetPack-installed TRT without
+#   #    reinstalling it; only pycuda is added on top.
+#   python3 -m venv /home/zodiac/trt-venv --system-site-packages
+#   /home/zodiac/trt-venv/bin/pip install pycuda tf2onnx onnx
+#
+#   # 2. Build the TRT GPU engines (takes 2–5 minutes).
+#   /home/zodiac/trt-venv/bin/python3 \
+#       /home/zodiac/agentic-era-networking/scripts/build-trt-engine.py
+#
+# Installation (run on Jetson as root):
+#   sudo cp deploy/jetson/zodiac-trt.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now zodiac-trt
+#
+# Stop the old Coral daemon first (if it was running):
+#   sudo systemctl disable --now zodiac-coral.service
+#
+# Live logs:
+#   journalctl -u zodiac-trt -f
+#
+# Manual restart:
+#   sudo systemctl restart zodiac-trt
+
+[Unit]
+Description=Zodiac TRT Wire-Tap Inference Daemon — Ampere INT8 MobileNet V2
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=network-online.target zodiac-bridge.service
+Wants=network-online.target
+# Not Requires= — this daemon is a telemetry emitter only. If zodiac-bridge
+# is not running, the daemon still operates and writes to /tmp fallback.
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=zodiac
+Group=zodiac
+
+WorkingDirectory=/home/zodiac/agentic-era-networking
+
+# trt-venv inherits system TensorRT via --system-site-packages; pycuda is
+# installed into the venv on top. -u disables output buffering so every
+# log line reaches journald immediately without latency from buffered I/O.
+ExecStart=/home/zodiac/trt-venv/bin/python3 -u \
+    /home/zodiac/agentic-era-networking/scripts/trt-inference-daemon.py
+
+# TRT engine path override (default set in trt-inference-daemon.py).
+# Uncomment to use a non-default engine location.
+# Environment=TRT_ENGINE_PATH=/home/zodiac/coral-models/trt-mobilenet-v2-gpu.engine
+
+# Tap interface override (default: auto-detect enx*).
+# Environment=TAP_INTERFACE=enx9c69d39dd0a6
+
+Restart=on-failure
+RestartSec=10s
+
+# 512M ceiling: TRT CUDA context + engine weights + inference buffers.
+# MobileNet V2 engine is ~10–30 MB; CUDA context overhead is ~200–300 MB.
+# Keeps the daemon well below the Jetson's 8 GB unified LPDDR5 budget.
+MemoryAccounting=true
+MemoryMax=512M
+MemorySwapMax=0
+
+# CAP_NET_RAW: required for AF_PACKET raw socket on the enx* tap interface.
+# Without this capability the socket() call fails immediately with EPERM.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+# /run/zodiac is created by zodiac-bridge RuntimeDirectory; this daemon
+# writes trt-telemetry.json there atomically via rename.
+ReadWritePaths=/var/lib/zodiac /run/zodiac
+
+# --- Logging ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zodiac-trt
+
+[Install]
+WantedBy=multi-user.target
