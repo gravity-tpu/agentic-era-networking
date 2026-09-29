@@ -1242,6 +1242,106 @@ export class ZodiacBridgeServer {
       return;
     }
 
+    // API: POST /api/sdn/allow (Push a verified forwarding flow rule to the physical switch)
+    // INV-4 (Verification Asymmetry): topology verified loop-free before hardware install.
+    // INV-3 (Fail-Closed): action is ALLOW only; DROP is /api/sdn/quarantine.
+    if (url.pathname === '/api/sdn/allow' && req.method === 'POST') {
+      const MAX_PAYLOAD = 32 * 1024;
+      const chunks: Buffer[] = [];
+      let bytesReceived = 0;
+      let aborted = false;
+      req.setTimeout(5000, () => {
+        aborted = true;
+        if (!res.headersSent) {
+          res.statusCode = 408;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Request Timeout' }));
+        }
+        req.destroy();
+      });
+      req.on('error', (err: Error) => {
+        aborted = true;
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      req.on('data', (c: Buffer) => {
+        if (aborted || res.headersSent) return;
+        bytesReceived += c.length;
+        if (bytesReceived > MAX_PAYLOAD) {
+          aborted = true;
+          res.statusCode = 413;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Payload Too Large' }));
+          req.destroy();
+          return;
+        }
+        chunks.push(c);
+      });
+      req.on('end', () => {
+        if (aborted || res.headersSent) return;
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+          const { srcMac, dstMac, outPort, priority = 10, description = '' } = body;
+          const MAC_RE = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+          if (typeof outPort !== 'number' || outPort < 1 || outPort > 4) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'outPort (1–4) required' }));
+            return;
+          }
+          const cleanSrcMac = typeof srcMac === 'string' && MAC_RE.test(srcMac.trim()) ? srcMac.trim() : undefined;
+          const cleanDstMac = typeof dstMac === 'string' && MAC_RE.test(dstMac.trim()) ? dstMac.trim() : undefined;
+          const ruleId = `allow-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const rule = {
+            id: ruleId,
+            priority,
+            srcCidr: '0.0.0.0/0',
+            dstCidr: '0.0.0.0/0',
+            protocol: 'ANY' as const,
+            ...(cleanSrcMac ? { srcMac: cleanSrcMac } : {}),
+            ...(cleanDstMac ? { dstMac: cleanDstMac } : {}),
+            action: 'FORWARD' as const,
+          };
+          let openFlowInstalled = false;
+          try {
+            if (this.controller.openFlow.metrics.state === 'ESTABLISHED') {
+              const fromHop = cleanSrcMac ?? cleanDstMac ?? 'ANY_SRC';
+              const toHop = `PORT_${outPort}`;
+              this.controller.pushVerifiedRule(rule, [{ fromNode: fromHop, toNode: toHop, cost: outPort }], outPort);
+              openFlowInstalled = true;
+            }
+          } catch (ofErr) {
+            console.warn('[!] [Bridge/allow] OpenFlow install error:', ofErr instanceof Error ? ofErr.message : String(ofErr));
+          }
+          if (openFlowInstalled && this.flowRuleRegistry.size >= 1000) {
+            const oldest = this.flowRuleRegistry.keys().next().value;
+            if (oldest !== undefined) this.flowRuleRegistry.delete(oldest);
+          }
+          const entry = {
+            ruleId, priority, action: 'FORWARD' as const,
+            srcCidr: '0.0.0.0/0', dstCidr: '0.0.0.0/0', protocol: 'ANY' as const,
+            ...(cleanSrcMac ? { srcMac: cleanSrcMac } : {}),
+            ...(cleanDstMac ? { dstMac: cleanDstMac } : {}),
+            installedAtMs: Date.now(),
+            openFlowInstalled,
+            description,
+          };
+          if (openFlowInstalled) this.flowRuleRegistry.set(ruleId, entry);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true, ruleId, openFlowInstalled, entry }));
+        } catch (err) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+      return;
+    }
+
     // API: GET /api/zodiac/flows (OpenFlow flow rule registry — controller-pushed rules)
     if (url.pathname === '/api/zodiac/flows' && req.method === 'GET') {
       const isOperator = isLanOperator(req);

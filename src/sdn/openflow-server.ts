@@ -218,7 +218,9 @@ export class OpenFlowServer extends EventEmitter {
     const flowModPacket = buildOfpFlowMod({
       command: FlowModCommand.OFPFC_ADD,
       priority: rule.priority,
-      outPort: isDrop ? undefined : outPort,
+      // outputPorts drives the OpenFlow OUTPUT action list; outPort (offset 36) is the
+      // delete-match field and must not be used for forwarding rules.
+      outputPorts: isDrop || outPort === undefined ? [] : [outPort],
       match: {
         srcMac: rule.srcMac,
         dstMac: rule.dstMac,
