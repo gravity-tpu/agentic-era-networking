@@ -130,24 +130,27 @@ def load_trt_engine(engine_path: str):
     return runtime, engine
 
 
-def allocate_cuda_buffers(engine):
-    """Allocates host and device memory for all engine bindings."""
-    try:
-        import pycuda.driver as cuda  # type: ignore[import-untyped]  # Jetson only
-        import pycuda.autoinit  # noqa: F401  # initialises CUDA context
-        import numpy as np
-    except ImportError as e:
-        raise RuntimeError(f'pycuda not importable: {e}') from e
+def allocate_cuda_buffers(engine, cuda, np):
+    """Allocates host and device memory for all engine bindings.
 
-    context = engine.create_execution_context()
-    if context is None:
+    pycuda.autoinit must already be imported before this is called so that the
+    primary CUDA context exists and TRT can share it (no second context created).
+    """
+    trt_ctx = engine.create_execution_context()
+    if trt_ctx is None:
         raise RuntimeError('engine.create_execution_context() returned None')
 
     host_bufs   = []
     device_bufs = []
-    for i in range(engine.num_bindings):
-        shape = tuple(engine.get_binding_shape(i))
-        dtype = engine.get_binding_dtype(i)
+    n_tensors = engine.num_io_tensors if hasattr(engine, 'num_io_tensors') else engine.num_bindings
+    for i in range(n_tensors):
+        if hasattr(engine, 'get_tensor_name'):
+            name  = engine.get_tensor_name(i)
+            shape = tuple(engine.get_tensor_shape(name))
+            dtype = engine.get_tensor_dtype(name)
+        else:
+            shape = tuple(engine.get_binding_shape(i))
+            dtype = engine.get_binding_dtype(i)
         if dtype.name == 'INT8':
             np_dtype = np.int8
         elif dtype.name == 'HALF':
@@ -159,9 +162,16 @@ def allocate_cuda_buffers(engine):
         host_bufs.append(h_buf)
         device_bufs.append(d_buf)
 
+    tensor_names = []
+    for i in range(n_tensors):
+        if hasattr(engine, 'get_tensor_name'):
+            tensor_names.append(engine.get_tensor_name(i))
+        else:
+            tensor_names.append(str(i))
+
     bindings = [int(d) for d in device_bufs]
     stream   = cuda.Stream()
-    return context, host_bufs, device_bufs, bindings, stream
+    return trt_ctx, host_bufs, device_bufs, bindings, stream, tensor_names
 
 
 def main() -> None:
@@ -177,6 +187,17 @@ def main() -> None:
         write_offline(f'Engine missing: {ENGINE_PATH}')
         sys.exit(1)
 
+    # Import pycuda BEFORE TRT engine load so pycuda owns the primary CUDA context
+    # and TRT reuses it — avoids two-context SEGV on process exit.
+    try:
+        import pycuda.autoinit  # noqa: F401  # creates primary CUDA context
+        import pycuda.driver as cuda  # type: ignore[import-untyped]
+        import numpy as np
+    except ImportError as e:
+        sys.stderr.write(f'[trt-daemon] ERROR: pycuda not importable: {e}\n')
+        write_offline(f'pycuda missing: {e}')
+        sys.exit(1)
+
     try:
         _runtime, engine = load_trt_engine(ENGINE_PATH)
     except RuntimeError as exc:
@@ -185,9 +206,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        import pycuda.driver as cuda  # type: ignore[import-untyped]
-        import numpy as np
-        context, host_bufs, device_bufs, bindings, stream = allocate_cuda_buffers(engine)
+        context, host_bufs, device_bufs, bindings, stream, tensor_names = allocate_cuda_buffers(engine, cuda, np)
     except RuntimeError as exc:
         sys.stderr.write(f'[trt-daemon] ERROR allocating CUDA buffers: {exc}\n')
         write_offline(str(exc)[:200])
@@ -198,17 +217,28 @@ def main() -> None:
     inp_size  = inp_flat.size
     inp_dev   = device_bufs[0]
 
+    n_io = engine.num_io_tensors if hasattr(engine, 'num_io_tensors') else engine.num_bindings
     print(
         f'[trt-daemon] Engine loaded. Input: shape={inp_host.shape} dtype={inp_host.dtype} '
-        f'size={inp_size}B | TRT bindings={engine.num_bindings}',
+        f'size={inp_size}B | TRT io_tensors={n_io}',
         flush=True,
     )
+
+    _use_v3 = hasattr(context, 'execute_async_v3') and hasattr(context, 'set_tensor_address')
+
+    def _run_inference():
+        if _use_v3:
+            for name, d_buf in zip(tensor_names, device_bufs):
+                context.set_tensor_address(name, int(d_buf))
+            context.execute_async_v3(stream.handle)
+        else:
+            context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
 
     print(f'[trt-daemon] Warming up Ampere GPU ({WARMUP_N} inferences)...', flush=True)
     for _ in range(WARMUP_N):
         try:
             cuda.memcpy_htod_async(inp_dev, inp_host, stream)
-            context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
+            _run_inference()
             stream.synchronize()
         except Exception as exc:
             sys.stderr.write(f'[trt-daemon] Warmup inference error: {exc}\n')
@@ -244,6 +274,9 @@ def main() -> None:
                 raw_sock.close()
             except OSError as e:
                 sys.stderr.write(f'[trt-daemon] Notice: error closing raw socket: {e}\n')
+        # Free device memory and delete TRT objects before pycuda.autoinit's atexit
+        # pops the CUDA context — prevents SEGV from TRT C++ dtors running after
+        # the context is gone.
         for d in device_bufs:
             try:
                 d.free()
@@ -269,7 +302,7 @@ def main() -> None:
 
                         t0 = time.monotonic_ns()
                         cuda.memcpy_htod_async(inp_dev, inp_host, stream)
-                        context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
+                        _run_inference()
                         stream.synchronize()
                         t1 = time.monotonic_ns()
 

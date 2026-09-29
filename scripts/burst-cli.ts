@@ -55,6 +55,8 @@ if (typeof process.loadEnvFile === 'function') {
 const JETSON_HOST = process.env['JETSON_SSH_HOST'] ?? process.env['JETSON_HOST'] ?? '127.0.0.1';
 const JETSON_USER = process.env['JETSON_SSH_USER'] ?? 'zodiac';
 const JETSON_TARGET = `${JETSON_USER}@${JETSON_HOST}`;
+const RPI_WORKLOAD_IP = process.env['RPI_WORKLOAD_IP'] ?? '';
+const ZODIAC_SWITCH_IP = process.env['ZODIAC_SWITCH_IP'] ?? '';
 const REMOTE_SCRIPT_PATH = '/home/zodiac/burst-daemon.py';
 const REMOTE_LOG_PATH = '/home/zodiac/burst-telemetry.log';
 
@@ -153,7 +155,12 @@ async function startBurst(options: BurstOptions): Promise<void> {
     }
   }
 
-  let pyCmd = `/home/zodiac/coral-venv/bin/python3 ${REMOTE_SCRIPT_PATH} --duration ${duration} --interval ${interval} --target ${target} --log-file ${REMOTE_LOG_PATH}`;
+  const envPrefix = [
+    RPI_WORKLOAD_IP   ? `RPI_WORKLOAD_IP=${RPI_WORKLOAD_IP}`     : '',
+    ZODIAC_SWITCH_IP  ? `ZODIAC_SWITCH_IP=${ZODIAC_SWITCH_IP}`   : '',
+  ].filter(Boolean).join(' ');
+  const sudoEnv = envPrefix ? `env ${envPrefix} ` : '';
+  let pyCmd = `${sudoEnv}/home/zodiac/coral-venv/bin/python3 ${REMOTE_SCRIPT_PATH} --duration ${duration} --interval ${interval} --target ${target} --log-file ${REMOTE_LOG_PATH}`;
   if (size) {
     pyCmd += ` --size ${size}`;
   }
@@ -179,8 +186,9 @@ async function startBurst(options: BurstOptions): Promise<void> {
 
   // Live streaming mode
   console.log('📡 Streaming live hardware telemetry (Press Ctrl+C to abort cleanly)...\n');
+  const localEnv = { ...process.env, ...(RPI_WORKLOAD_IP ? { RPI_WORKLOAD_IP } : {}), ...(ZODIAC_SWITCH_IP ? { ZODIAC_SWITCH_IP } : {}) };
   const runner = isRunningOnJetson()
-    ? spawn('sudo', ['/home/zodiac/coral-venv/bin/python3', REMOTE_SCRIPT_PATH, '--duration', duration, '--interval', String(interval), '--target', target, ...(size ? ['--size', size] : []), ...(staggered ? ['--staggered'] : []), ...(staggerRestSec ? ['--stagger-rest-sec', String(staggerRestSec)] : [])], { stdio: 'inherit' })
+    ? spawn('sudo', ['env', ...Object.entries(localEnv).filter(([k]) => ['RPI_WORKLOAD_IP','ZODIAC_SWITCH_IP'].includes(k)).map(([k,v]) => `${k}=${v}`), '/home/zodiac/coral-venv/bin/python3', REMOTE_SCRIPT_PATH, '--duration', duration, '--interval', String(interval), '--target', target, ...(size ? ['--size', size] : []), ...(staggered ? ['--staggered'] : []), ...(staggerRestSec ? ['--stagger-rest-sec', String(staggerRestSec)] : [])], { stdio: 'inherit', env: localEnv })
     : spawn('ssh', ['-tt', '-o', 'ConnectTimeout=5', JETSON_TARGET, `sudo ${pyCmd}`], { stdio: 'inherit' });
 
   const cleanExit = () => {
