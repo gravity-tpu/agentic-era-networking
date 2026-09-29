@@ -205,6 +205,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - Threshold for "bot collective" classification adapts to baseline traffic distributions.
   - EMA (Exponential Moving Average) of historical subnet request rates as baseline.
   - Classification only fires when subnet rate exceeds `baseline + k * σ` (k learned, not hardcoded).
+  - **Integer quantization boundary (INV-002)**: EMA and σ are computed entirely in fixed-point `BigInt` arithmetic using a compile-time scale factor (e.g., `SCALE = 1_000_000n`): `ema = (alpha_num * value + alpha_den_minus_num * ema) / alpha_den` where all operands are `BigInt`. No `Number` or `float` crosses the `AdaptiveThresholdController` boundary.
 - [ ] **Milestone S1.C: Coral TPU 0 Mirror Tap Correlation**:
   - Wire-level packet counts from the Coral mirror tap correlated with API-layer `report` events.
   - Discrepancy detection: high packet counts but low API reports = possible origin-bypass attacker (direct IP access, not via Cloudflare).
@@ -212,7 +213,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 - [ ] **Milestone S1.D: Jetson GPU Collective Anomaly Scorer**:
   - Extend the existing `gpu_anomaly_kernel.cu` Stage-2 autoencoder to accept subnet-aggregated feature vectors.
   - Input features: `[subnet_req_rate, 4xx_rate, path_entropy, ua_diversity, time_of_day_norm]`.
-  - Output: reconstruction error → mapped to `[0–100]` threat score via `AdaptiveThresholdController`.
+  - Output: reconstruction error (FP16/FP32 GPU tensor) → **quantized to integer at the hardware boundary** before entering the `AdaptiveThresholdController`: `threatScore = BigInt(Math.trunc(reconstructionError * SCORE_SCALE_FACTOR))` where `SCORE_SCALE_FACTOR = 1_000_000`. No floating-point value may cross into the routing state machine (INV-002).
 
 ### Sentinel Phase 2: OpenFlow Hardware Enforcement Integration
 *Status: Planned*
