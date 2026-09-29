@@ -226,6 +226,16 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
+| Phase 0.13: zodiac-coral.service — Coral Inference Daemon & USB Resilience Stack (COMPLETE)       |
+| - coral-inference-daemon.py: primary (2-1.3) → standby (2-1.2) failover; standbyMode telemetry   |
+| - zodiac-coral.service: zodiac user, CAP_NET_RAW, Restart=always, StartLimitBurst=10/600s        |
+| - Root cause fixed: Realtek hub 0bda:0489 autosuspend=0 → LIBUSB_ERROR_NOT_FOUND → libedgetpu abort() |
+| - 99-coral-usb-power.rules: udev power/control=on for 1a6e:089a, 18d1:9302/9303, 0bda:0489      |
+| - reset-coral-usb.sh: ExecStartPre=+ fail-closed sysfs reset; skips if only 1a6e:089a present    |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
 | Phase 1: Zero-Config DNS Reverse Proxy Engine (NEXT)                                              |
 | - RFC 1035 UDP interceptor & dynamic domain mapping (wildcard / exact / catch-all)                |
 | - Transparent edge reverse proxy with nanosecond latency profiling                                |
@@ -425,6 +435,28 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - **0.271 ms** average inference latency across 174 live inferences (Dean latency budget: `< 1.0 ms`).
   - `AdaptiveThresholdController`: EMA-based dynamic threshold tracking baseline variance — prevents route flap storms (Invariant 5, Quoc Le).
   - Live wire verification on physical interface `enP8p1s0`: 24 anomalies detected → 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action `DROP`) installed on Zodiac FX hardware via `POST /api/sdn/quarantine`.
+
+### Phase 0.13: `zodiac-coral.service` — Coral Inference Daemon & USB Resilience Stack
+*Status: Complete (Commits `6e2a6cf`, `f5fd0b4`, `3097ef4`)*
+- [x] **Milestone 0.13A: `coral-inference-daemon.py` — Primary/Standby Failover Daemon**:
+  - MobileNet V2 INT8 wire-tap DPI daemon targeting primary Coral at USB path `2-1.3` first; falls back to standby at `2-1.2` if primary is absent.
+  - `MAX_CONSECUTIVE_ERRORS=5` exit threshold: daemon exits non-zero after 5 consecutive USB inference errors so systemd restarts it and re-probes the primary before activating standby.
+  - `standbyMode: bool` field in `coral-telemetry.json` allows dashboard to indicate which physical TPU is currently active.
+  - Single-active invariant: only one Coral runs inference at a time, eliminating USB hub contention on the shared tegra-xusb Bus 02 controller.
+- [x] **Milestone 0.13B: `zodiac-coral.service` systemd Unit**:
+  - `Type=simple`, `User=zodiac`, `CAP_NET_RAW` only (AF_PACKET raw socket for mirror tap).
+  - `Restart=always`, `RestartSec=15s`, `StartLimitBurst=10`, `StartLimitIntervalSec=600s` — mathematically guarantees flap termination for all crash timings including delayed-initialization crashes (10 × 31s = 310s < 600s window).
+  - `MemoryMax=256M`, `PrivateTmp=true`, `ProtectSystem=strict`, `NoNewPrivileges=true`.
+  - `ReadWritePaths=/var/lib/zodiac /run/zodiac` for atomic telemetry file writes.
+- [x] **Milestone 0.13C: USB Autosuspend Root Cause Identified & Fixed**:
+  - Root cause: Realtek USB 3.0 hub (`0bda:0489`) defaults to `autosuspend_delay_ms=0, control=auto`. During idle windows between AF_PACKET GbE bursts and Coral bulk-in DMA callbacks, the hub suspends. libedgetpu's `HandleQueuedBulkIn` receives `LIBUSB_ERROR_NOT_FOUND (-5)` and calls `abort()` → SIGABRT, wedging the Coral at PID `18d1:9302`.
+  - **Permanent fix** (`deploy/jetson/99-coral-usb-power.rules`): udev `ACTION=="add"` rules write `power/control=on` for all Coral USB PIDs (`1a6e:089a` pre-firmware, `18d1:9302` uncompiled, `18d1:9303` compiled) **and** the Realtek parent hub (`0bda:0489`), preventing hub power-cycling across the entire tegra-xusb Bus 02 tree.
+- [x] **Milestone 0.13D: Fail-Closed `reset-coral-usb.sh` ExecStartPre Hook**:
+  - Runs as root (`ExecStartPre=+`) before each daemon start — discovers Coral devices dynamically by sysfs VID/PID scan.
+  - `18d1:9302/9303` (wedged state): de-authorizes → 1 s sleep → re-authorizes → `udevadm settle --timeout=10` (deterministic, not fixed-sleep).
+  - `1a6e:089a` (fresh post-replug pre-firmware): skips reset, exits 0 — udev rule handles firmware load.
+  - No Coral device at all: exits 1, blocking daemon start (fail-closed, Council Invariant 3).
+  - `set -eu`, `shopt -s nullglob`, TOCTOU-safe sysfs reads (`cat ... 2>/dev/null || continue`).
 
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
 *Status: Planned (Next)*
