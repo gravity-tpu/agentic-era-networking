@@ -181,13 +181,28 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
 
 ## 4. The 4 Autonomous Appliance Roles in Agentic Networking
 
-### Role 1: Real-Time Flow Anomaly Detection & Fail-Closed Quarantine (Coral + Jetson Split Inference)
+### Role 1: Real-Time Flow Anomaly Detection & Fail-Closed Quarantine
+
+> [!NOTE]
+> **Deployed topology (Phases 0.12–0.13)**: The Coral and Jetson GPU run as **two independent parallel inference paths on separate interfaces** — not as a Stage 1 → Stage 2 pipeline. No handoff occurs between them in the current codebase. The staged pipeline is the Phase 2 target once USB hub contention is resolved and dedicated per-TPU host controllers are available.
+
 * **Challenge**: Autonomous AI agents executing tool-use loops can trigger rogue network behaviors (DDoS against local services, aggressive subnet scanning, abnormal packet burst frequencies, exfiltration bursts).
-* **Split-Inference Hardware Mechanism**: 
-  * Port 3 of the Zodiac FX hardware-mirrors all data plane packet traffic (VLAN 100) directly to the Jetson Orin's dedicated ASIX AX88179 USB GbE adapter (`enx*`) in promiscuous mode.
-  * **Stage 1 — Google Coral Edge TPU #1 (`usb:0`, 4 TOPS INT8)**: Dedicated exclusively to the Port 3 mirror tap. Executes ultra-fast, shallow INT8 quantized frame header anomaly classification (<100 µs), assessing inter-arrival time deltas ($\Delta t$), packet size distributions, and burst frequencies without consuming GPU/CPU cycles.
-  * **Stage 2 — Jetson Orin TensorRT (67 TOPS Ampere)**: Deep anomaly detection models (1D-CNN autoencoder) evaluate suspicious sequences flagged by Stage 1 within a `< 1.0 ms` budget.
-  * If the anomaly reconstruction error exceeds the policy boundary, the controller pushes an immediate OpenFlow `FLOW_MOD` with highest priority (`65535`) to drop or quarantine the offending agent's MAC/IP traffic on Port 1.
+
+* **Deployed Path A — Google Coral Edge TPU (Phase 0.13, live)**:
+  * `zodiac-coral.service` captures frames via AF_PACKET raw socket on `enx*` (the ASIX AX88179 USB GbE adapter in promiscuous mode on Zodiac Port 3 mirror tap).
+  * Runs MobileNet V2 INT8 as a standalone wire-tap DPI classifier: 1 wire frame ingested = 1 physical Coral inference (<500 µs per inference).
+  * Outputs telemetry to `/run/zodiac/coral-telemetry.json` — inference rate, USB path, `standbyMode` flag. **Does not feed output to the Jetson GPU.** Operates independently.
+  * Primary TPU at USB path `2-1.3`; standby failover to `2-1.2` after `MAX_CONSECUTIVE_ERRORS=5`.
+
+* **Deployed Path B — Jetson Ampere GPU 1D-CNN Autoencoder (Phase 0.12, live)**:
+  * Native CUDA kernel (`src/gpu/gpu_anomaly_kernel.cu`, compiled for `sm_87`) runs a 1D-CNN autoencoder on live wire packet feature vectors.
+  * **Operates independently** — does not consume Coral output. Captures its own packet stream via `hardware-burst-daemon.py`.
+  * **0.271 ms** average inference latency (verified: 174 live inferences; Dean budget < 1.0 ms).
+  * `AdaptiveThresholdController` (EMA-based, no magic constants) gates quarantine decisions.
+  * Verified end-to-end: **24 anomalies detected → 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action DROP) installed on Zodiac FX hardware** via `POST /api/sdn/quarantine`.
+
+* **Aspirational Phase 2 — Staged Split-Inference Pipeline**:
+  * Once USB hub contention is eliminated (dedicated USB host controller per TPU or PCIe Coral), the Coral will act as Stage 1 (shallow frame-level triage, <100 µs), feeding only anomalous packet windows to the Jetson GPU Stage 2 (deep 1D-CNN autoencoder, <1.0 ms). This eliminates redundant full-stream GPU processing and maximises CPU/memory headroom.
 * **Deployed Architecture — Primary/Standby Single-Active Mode (Phase 0.13)**:
   * **`zodiac-coral.service`** (`deploy/jetson/zodiac-coral.service`) runs `scripts/coral-inference-daemon.py` as a `zodiac` service user (CAP_NET_RAW only) with `Restart=always` and `StartLimitBurst=10/600s` flap termination.
   * **Single-Active Invariant (Ghemawat)**: Only one Coral TPU runs inference at any time. Attempting concurrent dual-TPU execution on the shared tegra-xusb hub (Realtek `0bda:0489`) causes hub autosuspend races during idle gaps between AF_PACKET GbE bursts and Coral bulk-in callbacks — producing `LIBUSB_ERROR_NOT_FOUND` and libedgetpu `abort()` (SIGABRT). One active TPU eliminates the contention window.
@@ -213,11 +228,15 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
   * An INT8 contextual bandit model running on the Jetson Orin observes real-time packet loss and latency feedback.
   * Dynamically reconfigures the Zodiac FX's 8 hardware rate meters and the software `AdaptiveFlowController` window using exact integer basis points (`BigInt`), completely eliminating magic constants.
 
-### Role 4: DNS Sentinel & Agent Intent Classification (Dedicated Coral TPU #2)
+### Role 4: DNS Sentinel & Agent Intent Classification (Planned — Phase 2)
+
+> [!NOTE]
+> **Status: Planned, not yet deployed.** The standby Coral TPU (`2-1.2`) currently runs the same MobileNet V2 wire-tap DPI model as the primary, activated only on primary failover. The DNS Sentinel role requires USB hub contention to be resolved and a dedicated character-level INT8 FQDN model to be trained and compiled.
+
 * **Challenge**: Malicious or drifting agents can employ DNS exfiltration or algorithmic domain generation (DGA) to communicate outside approved environments.
-* **Google Coral Edge TPU #2 (`usb:1`, 4 TOPS INT8) Sentinel**:
+* **Target Architecture (Phase 2)**:
   * All agent DNS requests are serviced by the internal [src/dns/server.ts](file:///Users/andymorven/git/agentic-era-networking/src/dns/server.ts) resolver.
-  * Rather than consuming Jetson GPU/CPU cycles, Coral #2 runs a dedicated character-level quantized sequence model in SRAM, evaluating the semantic intent, entropy, and DGA likelihood of requested FQDNs in <300 µs.
+  * The standby Coral TPU will be reassigned a dedicated character-level quantized sequence model in its 8 MB on-chip SRAM, evaluating the semantic intent, entropy, and DGA likelihood of requested FQDNs in <300 µs — without consuming Jetson GPU/CPU cycles.
   * Queries identified as suspicious are rejected with `NXDOMAIN`, and an OpenFlow rule is dynamically synthesized to isolate the querying agent's MAC address on the Zodiac FX data plane.
 
 ---

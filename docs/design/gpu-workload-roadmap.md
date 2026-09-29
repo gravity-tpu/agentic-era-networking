@@ -17,17 +17,25 @@ The `gpu-workload` initiative establishes a structured progression to harness th
 |               NVIDIA Jetson Orin Nano Super (Master Appliance)                |
 |                                                                               |
 |  [ ARM Cortex-A78AE CPU ]          [ Dual Google Coral Edge TPUs (USB 3.0) ]  |
-|  * OpenFlow 1.3 Controller (:6633) * TPU #1: Wire-Tap Shallow Triage (<100 µs)|
-|  * Telemetry Bridge Server (:3003) * TPU #2: RFC 1035 DNS Sentinel (<300 µs) |
-|  * I2C OLED Telemetry Daemon                                                  |
+|  * OpenFlow 1.3 Controller (:6633)                                            |
+|  * Telemetry Bridge Server (:3003) * Primary (2-1.3): MobileNet V2 INT8      |
+|  * I2C OLED Telemetry Daemon         Wire-Tap DPI on enx* mirror tap         |
+|                                      DEPLOYED ✅ — zodiac-coral.service       |
+|                                    * Standby (2-1.2): Failover only;         |
+|                                      DNS Sentinel role PLANNED (Phase 2)     |
+|                                                                               |
+|  NOTE: Coral and GPU run as INDEPENDENT parallel paths on separate            |
+|  interfaces. No Stage 1→Stage 2 handoff exists in deployed code.             |
+|  Staged pipeline is the Phase 2 target once USB hub contention is resolved.  |
 |                                                                               |
 |  ===========================================================================  |
 |  [ 67 TOPS Ampere GPU — 1024 CUDA Cores + 32 Tensor Cores ]                  |
 |  ───────────────────────────────────────────────────────────────────────────  |
-|  * Phase 1 / Quick Win : GPU Neural Burst Engine (Hardware Stress & Bench)     |
-|  * Phase 2 / Real SDN  : Stage-2 Deep Anomaly Autoencoder & Quarantine        |
-|  * Phase 3 / Adaptive  : Quoc Le Rate-Meter Optimizer (Contextual Bandit)     |
-|  * Phase 4 / Temporal  : Micro-Burst & Congestion Forecaster (TCN / LSTM)     |
+|  * gpu-workload-1 ✅ : GPU Neural Stress & Verification Burst Worker          |
+|  * gpu-workload-2 ✅ : Standalone Full-Stack Anomaly Autoencoder & Quarantine |
+|                        (independent of Coral; 0.271ms; 24 live quarantines)  |
+|  * gpu-workload-3    : Quoc Le Rate-Meter Optimizer (Contextual Bandit)      |
+|  * gpu-workload-4    : Micro-Burst & Congestion Forecaster (TCN / LSTM)      |
 +───────────────────────────────────────────────────────────────────────────────+
 ```
 
@@ -48,9 +56,9 @@ The `gpu-workload` initiative establishes a structured progression to harness th
 
 ---
 
-### Item 2: `gpu-workload-2` — Stage-2 Deep Traffic Anomaly Autoencoder & Fail-Closed Quarantine (Real SDN App)
+### Item 2: `gpu-workload-2` — Standalone Full-Stack Deep Traffic Anomaly Autoencoder & Fail-Closed Quarantine
 * **Status**: `COMPLETED` (Verified on Live Wire & Silicon)
-* **Goal**: Implement the second tier of the Split-Inference pipeline defined in [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md#role-1-real-time-flow-anomaly-detection--fail-closed-quarantine-coral--jetson-split-inference).
+* **Goal**: Deploy an independent, end-to-end GPU anomaly detection and quarantine pipeline on the Jetson. Originally described as "Stage 2 of the Split-Inference pipeline" (Coral Stage 1 → GPU Stage 2), the deployed implementation runs **standalone** — the GPU captures its own packet stream via `hardware-burst-daemon.py` and does not consume Coral output. The Coral (`zodiac-coral.service`) operates as a parallel independent inference path on the mirror tap. See [docs/design/physical-sdn-edge-tpu.md Role 1](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md#role-1-real-time-flow-anomaly-detection--fail-closed-quarantine) for the deployed topology and the Phase 2 staged-pipeline target.
 * **Architecture & Verification**:
   1. **Native CUDA Kernel**: [src/gpu/gpu_anomaly_kernel.cu](file:///Users/andymorven/git/agentic-era-networking/src/gpu/gpu_anomaly_kernel.cu) compiled for Ampere (`sm_87`) executing 1D-CNN autoencoder reconstruction with parallel CUDA warp reductions directly on the 1024 CUDA cores.
   2. **Sub-Millisecond Inference**: Achieved **0.271 ms** average inference latency (Dean latency budget: < 1.0 ms) across 174 live inferences.
