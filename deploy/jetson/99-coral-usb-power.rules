@@ -13,6 +13,12 @@
 #   sudo udevadm control --reload-rules
 #   sudo udevadm trigger --subsystem-match=usb
 
+# Coral Edge TPU — pre-firmware state (fresh physical replug, before libedgetpu
+# loads firmware; Global Unichip Corp. VID/PID). Disabling autosuspend here
+# prevents the hub from suspending before the firmware load completes.
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="1a6e", ATTRS{idProduct}=="089a", \
+    TEST=="power/control", ATTR{power/control}="on"
+
 # Coral Edge TPU — uncompiled state (initial enumeration, PID 9302)
 ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", \
     TEST=="power/control", ATTR{power/control}="on"

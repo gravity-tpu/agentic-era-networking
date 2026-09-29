@@ -62,9 +62,12 @@ Wants=network-online.target
 # StartLimitBurst=10 / StartLimitIntervalSec=300s: more generous than the default
 # to accommodate the primary→standby restart cycle and transient USB disconnects.
 # StartLimitIntervalSec + StartLimitBurst bound the Restart=always flap loop:
-# after 10 restarts within 300s the unit enters a permanent failed state,
+# after 10 restarts within 600s the unit enters a permanent failed state,
 # preventing indefinite log pollution if the TPU is physically disconnected.
-StartLimitIntervalSec=300s
+# 600s (not 300s): with RestartSec=15s a daemon that successfully initializes
+# but crashes after ~16s takes 31s per cycle; 10 × 31s = 310s > 300s, which
+# would bypass the burst limit. 600s guarantees termination for all crash timing.
+StartLimitIntervalSec=600s
 StartLimitBurst=10
 
 [Service]
