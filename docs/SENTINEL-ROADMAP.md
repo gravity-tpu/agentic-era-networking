@@ -59,14 +59,14 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 | Characteristic | Sentinel Target | Council Invariant |
 |---|---|---|
 | **Scalability** | Absorb sudden crawler traffic bursts at line rate via SDN hardware DROP (not software firewall) | Jeff Dean: hardware enforcement < 100µs |
-| **Accuracy** | False-positive rate < 0.1% on legitimate users; evaluated against real traffic traces | Quoc Le: adaptive threshold, no magic constants |
-| **Fault Tolerance** | **Fail-Open** on detection engine failure (never block real users due to Sentinel crash); **Fail-Closed** only at confirmed quarantine threshold | Ghemawat + Hassabis: explicit failure mode |
+| **Accuracy** | False-positive rate < 10 bps (10 per 10 000 requests) on legitimate users; evaluated against real traffic traces | Quoc Le: adaptive threshold, no magic constants |
+| **Fault Tolerance** | **Fail-Closed via local circuit breaker** on detection API timeout (local Bloom filter + in-memory subnet blocklist engage; known-good sister-site CIDRs exempt); **Fail-Closed at confirmed quarantine threshold** | Ghemawat + Hassabis: fail-closed isolation |
 | **Minimal Footprint** | Edge middleware < 5ms overhead per request on the hot path | Jeff Dean: LAN RTT = 0.5ms; stay within 10× |
 | **Epistemic Provenance** | All threat scores sourced from real physical packet observations, never synthetic | Invariant 6: Anti-Simulation Law |
 
 ### Failure Mode Decision (from §2.4 open question)
-**Sentinel is Fail-Open at the detection layer, Fail-Closed at the enforcement layer:**
-- If the Sentinel detection API is unavailable → traffic passes through normally (no false positives).
+**Sentinel is Fail-Closed at both the detection layer and the enforcement layer:**
+- If the Sentinel detection API is unavailable (timeout/error) → the middleware engages a **local circuit breaker**: an in-memory Bloom filter of confirmed-bad subnets + LRU subnet blocklist. Known-good sister-site CIDRs in the allowlist always return score = 0 and are never blocked. Traffic from unknown IPs while the circuit is open receives score = MAX_THREAT — the adversarial load that caused the API outage must not be rewarded with a bypass.
 - If the Zodiac SDN enforcement quarantine is triggered → it is a confirmed, time-bounded OpenFlow rule (Priority 65535, with TTL) that expires deterministically. No permanent blocking without human review.
 
 ---
@@ -155,8 +155,8 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 | - Lightweight npm package: sentinel-middleware (zero prod dependencies)           |
 | - Express/Koa/Apache module: pluggable async reputation check hook               |
 | - Apache mod_lua / mod_rewrite integration for non-Node origins                  |
-| - Graceful degradation: timeout = fail-open, never stall request pipeline        |
-| - Documented SLO: < 5ms P99, 99.9% uptime (Vercel edge), < 0.1% false positives |
+| - Graceful degradation: timeout → local circuit breaker (Bloom filter + subnet LRU); never stall|
+| - Documented SLO: < 5ms P99, 9990/10000 uptime (Vercel edge), < 10/10000 false positives       |
 +──────────────────────────────────────────────────────────────────────────────────+
                                        |
                                        v
@@ -186,7 +186,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - Authenticated with `X-Sentinel-Secret` (same HMAC-SHA256 pattern as `X-Zodiac-Bridge-Secret`).
   - Non-blocking async write to Neon with exponential backoff (same pattern as cloud relay, INV-009).
 - [ ] **Milestone S0.C: `/api/sentinel/check` — Fast Reputation Lookup**:
-  - Checks Neon IP reputation table; falls back to fail-open (score = 0) on timeout/error.
+  - Checks Neon IP reputation table; on timeout/error engages local circuit breaker (Bloom filter + in-memory subnet LRU); unknown IPs while circuit is open return score = MAX_THREAT (fail-closed); sister-site allowlist CIDRs always return score = 0.
   - In-memory LRU cache (bounded, 10k entries) for hot-path IPs: < 1ms local, < 5ms Neon P99.
   - Sister-site CIDR allowlist checked first — allowlisted IPs always return score = 0 (never blocked).
 - [ ] **Milestone S0.D: Sentinel Dashboard in Zodiac Operator Console**:
@@ -235,15 +235,15 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 
 - [ ] **Milestone S3.A: `sentinel-middleware` npm Package**:
   - Zero production dependencies (Ghemawat: Radical Simplicity).
-  - Express/Koa/Fastify plugin: async reputation check with configurable `timeoutMs` (default 3000ms) and `failOpen: true`.
+  - Express/Koa/Fastify plugin: async reputation check with configurable `timeoutMs` (default 3000ms) and `failOpen: false`; on timeout the plugin consults the local circuit-breaker state (Bloom filter + subnet LRU) rather than passing traffic blindly.
   - `X-Sentinel-Score` response header for audit logging.
 - [ ] **Milestone S3.B: Apache Integration**:
   - `mod_lua` or `mod_rewrite` + `curl` hook calling `/api/sentinel/check` for non-Node origins.
   - Pre-fork worker model compatible — no shared state in Apache workers.
 - [ ] **Milestone S3.C: SLO Definition & Measurement**:
   - P99 check latency ≤ 5ms (cached) / ≤ 50ms (Neon live query).
-  - False-positive rate < 0.1% (validated against test traffic from known-legitimate users).
-  - Uptime SLO: 99.9% (backed by Vercel edge serverless reliability).
+  - False-positive rate < 10 bps (10 per 10 000 requests), validated against test traffic from known-legitimate users; tracked as integer counters in Neon (no floating-point arithmetic in the accounting path).
+  - Uptime SLO: 9990/10000 (backed by Vercel edge serverless reliability); tracked as integer uptime-seconds / total-seconds in Neon.
   - All SLO metrics tracked in Neon and surfaced on Sentinel dashboard.
 
 ### Sentinel Phase 4: Sister-Site Traffic Isolation & Trusted Origin Proxy
@@ -268,7 +268,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 | Sentinel Component | Invariant | How It Complies |
 |---|---|---|
 | IP reputation counters, request rates | **INV-002** (BigInt/Integer only) | All counters `BigInt`, timestamps `hrtime.bigint()` nanoseconds |
-| Detection API timeout handling | **INV-003** (Zero Error Suppression) | Explicit timeout → fail-open path; errors surface in telemetry, never silently swallowed |
+| Detection API timeout handling | **INV-003** (Zero Error Suppression) | Explicit timeout → local circuit-breaker path (Bloom filter + subnet LRU); errors surface in telemetry, never silently swallowed; fail-closed by default |
 | Quarantine enforcement | **INV-003** (Fail-Closed Isolation) | Default-drop when quarantine confirmed; always TTL-bounded |
 | GPU anomaly scorer + collective detector | **INV-004** (Verification Asymmetry) | Agent-proposed quarantine must pass `SymbolicRouteVerifier` before hardware install |
 | Adaptive collective threshold | **INV-005** (Adaptive Control) | EMA-based, no hardcoded magic numbers; eliminates false-positive oscillation |
@@ -452,7 +452,7 @@ The Zodiac FX **never sees production internet crawler traffic** — it is a loc
 2. **Local development enforcement**: quarantines test adversarial agents (e.g., the Raspberry Pi workload) during development and integration testing.
 3. **DNS sentinel signal**: TPU 1 DNS Sentinel feeds into the reputation ledger for domain-level bot fingerprinting.
 
-For the production attack scenario (crawlers hitting the real Apache origin server), the enforcement plane is **Vercel edge (rate-limiting) + Apache middleware (fail-open check hook) + Neon (reputation state)**.
+For the production attack scenario (crawlers hitting the real Apache origin server), the enforcement plane is **Vercel edge (rate-limiting) + Apache middleware (fail-closed circuit-breaker check hook) + Neon (reputation state)**.
 
 ---
 
@@ -466,7 +466,7 @@ For the production attack scenario (crawlers hitting the real Apache origin serv
 | OpenFlow quarantine rule enforcement | **128 rules max simultaneously** | 🔴 **Must use supernet /16 rules** (S2.A) |
 | Coral mirror tap packet sampling | **~450 packets/s sampled** | ✅ Not the critical Sentinel path |
 | Jetson GPU collective anomaly scorer | **0.271ms/inference** | ✅ Not a bottleneck |
-| Apache middleware hook overhead | **< 5ms, fail-open on timeout** | ✅ Fine |
+| Apache middleware hook overhead | **< 5ms; circuit-breaker on timeout (fail-closed)** | ✅ Fine |
 | Sister-site CIDR allowlist check | **< 1µs (in-memory, constant-time)** | ✅ Fine |
 
 ---

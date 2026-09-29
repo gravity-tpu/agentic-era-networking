@@ -135,7 +135,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
    - **Tier 3 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
    - **Tier 4 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
 2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
-   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Tailscale kernel module handles its own route table isolation; SDN plane IP forwarding (`net.ipv4.conf.all.forwarding` for SDN tenants) remains disabled to prevent cross-plane packet leakage into OpenFlow flows.
+   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Tailscale requires `net.ipv4.ip_forward = 1` globally for WAN exit-node routing; however, SDN plane cross-leakage is prevented by explicitly disabling per-interface forwarding on all non-Tailscale interfaces (`net.ipv4.conf.enP8p1s0.forwarding = 0`, `net.ipv4.conf.l4tbr0.forwarding = 0`) and by nftables forward-chain DROP rules on SDN bridge interfaces. Only `tailscale0` and the WAN exit interface have forwarding enabled.
 
 ## Phase Overview
 
@@ -405,7 +405,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Jetson advertises `10.0.0.0/24`, `10.0.1.0/24`, and `0.0.0.0/0` (WAN exit) into the Tailscale tailnet.
   - Any Tailscale peer can reach `10.0.1.99` (Zodiac FX switch web UI) and `10.0.0.15` (Jetson bridge) without any port-forwarding or static IP.
   - Filter backend: `iptables-legacy` (coexisting correctly with Docker & Tailscale kernel chains).
-  - Config file: `/etc/sysctl.d/99-tailscale.conf` (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`).
+  - Config file: `/etc/sysctl.d/99-tailscale.conf` (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`) — required for Tailscale exit-node routing. SDN interface leakage is blocked per-interface: `net.ipv4.conf.enP8p1s0.forwarding = 0`, `net.ipv4.conf.l4tbr0.forwarding = 0` in `/etc/sysctl.d/99-zodiac-sdn.conf`, plus nftables forward-chain DROP on SDN bridge interfaces.
 - [x] **Milestone 0.11B: Tailscale SSH ACL (Hardened Remote Access)**:
   - Strict Tailscale ACL enforces `zodiac` user for all SSH sessions to Jetson (rejects username `andymorven`).
   - Remote command: `ssh zodiac@jetson-orin` — globally routable, WireGuard-encrypted, zero knowledge of home ISP IP required.
