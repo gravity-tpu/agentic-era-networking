@@ -73,6 +73,20 @@ WorkingDirectory=/home/zodiac/agentic-era-networking
 
 # coral-venv contains pycoral, tflite-runtime, and numpy.
 # -u disables output buffering so log lines reach journald immediately.
+# Force a clean USB re-enumeration of both Coral TPUs before each start.
+# Runs as root (+) so it can write sysfs authorized nodes even though the
+# service user is zodiac. This prevents the libedgetpu wedged-device state
+# that occurs after repeated SIGABRT crashes (USB error 5 / NOT_FOUND during
+# bulk transfer callbacks leaves the device stuck at PID 18d1:9302 and unable
+# to accept a new delegate on the next start attempt).
+ExecStartPre=+/bin/sh -c '\
+  for p in 2-1.2 2-1.3; do \
+    d=/sys/bus/usb/devices/$$p; \
+    [ -f "$$d/authorized" ] || continue; \
+    printf 0 > "$$d/authorized" && sleep 0.5 && printf 1 > "$$d/authorized" || true; \
+  done; \
+  sleep 2'
+
 ExecStart=/home/zodiac/coral-venv/bin/python3 -u \
     /home/zodiac/agentic-era-networking/scripts/coral-inference-daemon.py
 
@@ -86,8 +100,10 @@ ExecStart=/home/zodiac/coral-venv/bin/python3 -u \
 
 # Restart=always: recover from both clean (no TPU found) and error exits so the
 # daemon survives transient USB disconnects and automatic primary→standby cycling.
+# RestartSec=15s: gives the USB host controller enough time to complete the
+# ExecStartPre re-enumeration cycle and stabilise before Python loads libedgetpu.
 Restart=always
-RestartSec=5s
+RestartSec=15s
 
 # 256M ceiling: EdgeTPU runtime + pycoral + numpy + packet buffers.
 # MobileNet V2 INT8 model is ~4 MB; pycoral runtime overhead is ~50–100 MB.
