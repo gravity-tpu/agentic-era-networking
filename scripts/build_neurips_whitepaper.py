@@ -12,23 +12,38 @@ import base64
 import subprocess
 import re
 import fitz
+import shutil
+import tempfile
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS_DIR = os.path.join(BASE_DIR, "docs", "design")
 FONTS_DIR = os.path.join(DOCS_DIR, "fonts")
 FIGURES_DIR = os.path.join(DOCS_DIR, "figures")
 OUTPUT_PDF = os.path.join(DOCS_DIR, "sentinel-whitepaper-preview.pdf")
-HTML_STAGE1 = "/tmp/sentinel_stage1.html"
-PDF_STAGE1 = "/tmp/sentinel_stage1.pdf"
-HTML_STAGE2 = "/tmp/sentinel_stage2.html"
-PDF_STAGE2 = "/tmp/sentinel_stage2.pdf"
 
-CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+def get_chrome_binary():
+    env_bin = os.environ.get("CHROME_BIN") or os.environ.get("CHROME_PATH")
+    if env_bin and os.path.isfile(env_bin):
+        return env_bin
+    for candidate in [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "chrome",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ]:
+        resolved = shutil.which(candidate) if not candidate.startswith("/") else (candidate if os.path.isfile(candidate) else None)
+        if resolved:
+            return resolved
+    raise FileNotFoundError(
+        "Chrome or Chromium binary not found. Set CHROME_BIN environment variable."
+    )
 
 def b64_file(path):
     if not os.path.exists(path):
-        print(f"Warning: File not found: {path}")
-        return ""
+        raise FileNotFoundError(f"Missing required whitepaper asset: {path}")
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
@@ -1746,18 +1761,18 @@ sudo nft list set inet filter zodiac_quarantine
     return html
 
 def render_pdf_with_chrome(html_path, pdf_path):
+    chrome_bin = get_chrome_binary()
     cmd = [
-        CHROME_BIN,
+        chrome_bin,
         "--headless=new",
         "--disable-gpu",
         "--no-pdf-header-footer",
         f"--print-to-pdf={pdf_path}",
         html_path
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if res.returncode != 0:
-        print("Chrome error:", res.stderr)
-        return False
+        raise RuntimeError(f"Chrome rendering failed (exit code {res.returncode}): {res.stderr}")
     return True
 
 def detect_heading_pages(pdf_path):
@@ -1875,36 +1890,36 @@ def post_process_headers_footers(input_pdf, final_pdf):
     print(f"Final PDF saved to: {final_pdf}")
 
 def main():
-    print("=== Step 1: Generating Initial HTML (Pass 1) ===")
-    html_stage1 = generate_html(None)
-    with open(HTML_STAGE1, "w", encoding="utf-8") as f:
-        f.write(html_stage1)
-    
-    print("=== Step 2: Compiling Stage 1 PDF via Headless Chrome ===")
-    success = render_pdf_with_chrome(HTML_STAGE1, PDF_STAGE1)
-    if not success:
-        print("Stage 1 compilation failed!")
-        sys.exit(1)
+    with tempfile.TemporaryDirectory(prefix="sentinel_build_") as tmpdir:
+        html_stage1 = os.path.join(tmpdir, "sentinel_stage1.html")
+        pdf_stage1 = os.path.join(tmpdir, "sentinel_stage1.pdf")
+        html_stage2 = os.path.join(tmpdir, "sentinel_stage2.html")
+        pdf_stage2 = os.path.join(tmpdir, "sentinel_stage2.pdf")
+
+        print("=== Step 1: Generating Initial HTML (Pass 1) ===")
+        html_content_stage1 = generate_html(None)
+        with open(html_stage1, "w", encoding="utf-8") as f:
+            f.write(html_content_stage1)
         
-    print("=== Step 3: Detecting Exact Section Headings for Table of Contents ===")
-    toc_pages = detect_heading_pages(PDF_STAGE1)
-    print("TOC Pages detected:", toc_pages)
-    
-    print("=== Step 4: Generating Final Synchronized HTML (Pass 2) ===")
-    html_stage2 = generate_html(toc_pages)
-    with open(HTML_STAGE2, "w", encoding="utf-8") as f:
-        f.write(html_stage2)
+        print("=== Step 2: Compiling Stage 1 PDF via Headless Chrome ===")
+        render_pdf_with_chrome(html_stage1, pdf_stage1)
+            
+        print("=== Step 3: Detecting Exact Section Headings for Table of Contents ===")
+        toc_pages = detect_heading_pages(pdf_stage1)
+        print("TOC Pages detected:", toc_pages)
         
-    print("=== Step 5: Compiling Stage 2 PDF via Headless Chrome ===")
-    success = render_pdf_with_chrome(HTML_STAGE2, PDF_STAGE2)
-    if not success:
-        print("Stage 2 compilation failed!")
-        sys.exit(1)
+        print("=== Step 4: Generating Final Synchronized HTML (Pass 2) ===")
+        html_content_stage2 = generate_html(toc_pages)
+        with open(html_stage2, "w", encoding="utf-8") as f:
+            f.write(html_content_stage2)
+            
+        print("=== Step 5: Compiling Stage 2 PDF via Headless Chrome ===")
+        render_pdf_with_chrome(html_stage2, pdf_stage2)
+            
+        print("=== Step 6: Post-Processing Running Headers and Footers via PyMuPDF ===")
+        post_process_headers_footers(pdf_stage2, OUTPUT_PDF)
         
-    print("=== Step 6: Post-Processing Running Headers and Footers via PyMuPDF ===")
-    post_process_headers_footers(PDF_STAGE2, OUTPUT_PDF)
-    
-    print(f"=== Complete! Whitepaper ready at {OUTPUT_PDF} ===")
+        print(f"=== Complete! Whitepaper ready at {OUTPUT_PDF} ===")
 
 if __name__ == "__main__":
     main()

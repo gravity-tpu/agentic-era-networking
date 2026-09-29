@@ -1,10 +1,35 @@
 #!/usr/bin/env python3
 import os
+import sys
 import base64
 import subprocess
+import shutil
+import tempfile
+
+def get_chrome_binary():
+    env_bin = os.environ.get("CHROME_BIN") or os.environ.get("CHROME_PATH")
+    if env_bin and os.path.isfile(env_bin):
+        return env_bin
+    for candidate in [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "chrome",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ]:
+        resolved = shutil.which(candidate) if not candidate.startswith("/") else (candidate if os.path.isfile(candidate) else None)
+        if resolved:
+            return resolved
+    raise FileNotFoundError(
+        "Chrome or Chromium binary not found. Set CHROME_BIN environment variable."
+    )
 
 # Load PlusJakartaSans (Google Sans geometric twin) for complete unicode glyph coverage
 font_path = "docs/design/fonts/PlusJakartaSans.ttf"
+if not os.path.exists(font_path):
+    raise FileNotFoundError(f"Missing required whitepaper font: {font_path}")
 with open(font_path, "rb") as f:
     pjs_b64 = base64.b64encode(f.read()).decode("ascii")
 
@@ -802,18 +827,22 @@ def main():
         ("sentinel_data_model", generate_figure_4(), 1200, 430),
     ]
     
-    for name, svg_content, width, height in figures:
-        svg_path = f"docs/design/figures/{name}.svg"
-        html_path = f"/tmp/{name}.html"
-        png_path = f"docs/design/figures/{name}.png"
-        jpg_path = f"docs/design/figures/{name}.jpg"
-        
-        with open(svg_path, "w", encoding="utf-8") as f:
-            f.write(svg_content)
-        print(f"Wrote {svg_path}")
-        
-        # HTML wrapper for headless Chrome render with embedded Google fonts
-        html_wrapper = f"""<!DOCTYPE html>
+    chrome_bin = get_chrome_binary()
+    sips_bin = shutil.which("sips")
+    
+    with tempfile.TemporaryDirectory(prefix="sentinel_figures_") as tmpdir:
+        for name, svg_content, width, height in figures:
+            svg_path = f"docs/design/figures/{name}.svg"
+            html_path = os.path.join(tmpdir, f"{name}.html")
+            png_path = f"docs/design/figures/{name}.png"
+            jpg_path = f"docs/design/figures/{name}.jpg"
+            
+            with open(svg_path, "w", encoding="utf-8") as f:
+                f.write(svg_content)
+            print(f"Wrote {svg_path}")
+            
+            # HTML wrapper for headless Chrome render with embedded Google fonts
+            html_wrapper = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
@@ -835,25 +864,34 @@ svg {{
 {svg_content}
 </body>
 </html>"""
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html_wrapper)
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(html_wrapper)
+                
+            # Render via headless Chrome
+            cmd = [
+                chrome_bin,
+                "--headless=new",
+                "--disable-gpu",
+                f"--window-size={width},{height}",
+                f"--screenshot={png_path}",
+                "--default-background-color=ffffff",
+                html_path
+            ]
+            subprocess.run(cmd, check=True, timeout=120)
+            print(f"Rendered {png_path} via Chrome")
             
-        # Render via headless Chrome
-        cmd = [
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "--headless=new",
-            "--disable-gpu",
-            f"--window-size={width},{height}",
-            f"--screenshot={png_path}",
-            "--default-background-color=ffffff",
-            html_path
-        ]
-        subprocess.run(cmd, check=True)
-        print(f"Rendered {png_path} via Chrome")
-        
-        # Convert PNG to JPG as well
-        subprocess.run(["sips", "-s", "format", "jpeg", png_path, "--out", jpg_path], check=True)
-        print(f"Converted {jpg_path}")
+            # Convert PNG to JPG if sips or PIL is available
+            if sips_bin:
+                subprocess.run([sips_bin, "-s", "format", "jpeg", png_path, "--out", jpg_path], check=True, timeout=60)
+                print(f"Converted {jpg_path} via sips")
+            else:
+                try:
+                    from PIL import Image
+                    with Image.open(png_path) as im:
+                        im.convert("RGB").save(jpg_path, "JPEG")
+                    print(f"Converted {jpg_path} via PIL")
+                except ImportError:
+                    print(f"Notice: sips and PIL not found, skipping JPG conversion for {jpg_path}")
 
 if __name__ == "__main__":
     main()

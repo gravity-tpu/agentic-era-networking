@@ -1,11 +1,35 @@
 import os
+import sys
 import base64
+import shutil
+import tempfile
+import subprocess
+
+def get_chrome_binary():
+    env_bin = os.environ.get("CHROME_BIN") or os.environ.get("CHROME_PATH")
+    if env_bin and os.path.isfile(env_bin):
+        return env_bin
+    for candidate in [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "chrome",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ]:
+        resolved = shutil.which(candidate) if not candidate.startswith("/") else (candidate if os.path.isfile(candidate) else None)
+        if resolved:
+            return resolved
+    raise FileNotFoundError(
+        "Chrome or Chromium binary not found. Set CHROME_BIN environment variable."
+    )
 
 def get_b64(path):
-    if os.path.exists(path):
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode("ascii")
-    return ""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing required whitepaper asset: {path}")
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii")
 
 fig_deployment = get_b64("docs/design/figures/sentinel_deployment_options.png")
 fig_alternatives = get_b64("docs/design/figures/sentinel_alternatives_compared.png")
@@ -422,11 +446,6 @@ Sentinel demonstrates that autonomous origin protection can be achieved without 
 | **INV-5: Multi-Agent Stability (Quoc Le & Vinyals)** | No brittle magic numbers; flap prevention via bounded state. | EMA self-tuning thresholds. Mandatory 300s TTL on all quarantine elements prevents route flapping. | `adaptive-threshold.ts` |
 | **INV-6: Anti-Simulation Law** | Telemetry must represent physical silicon truth; no synthetic waveforms. | Metrics derived strictly from physical kernel counters and Coral/Orin hardware probes. | `hardware-probe.ts`, `zodiac-telemetry.ts` |
 """
-
-with open("docs/design/sentinel-design-doc.md", "w", encoding="utf-8") as f:
-    f.write(markdown_content)
-
-print("Generated docs/design/sentinel-design-doc.md successfully!")
 
 # Now build the publication-grade HTML following Google Cloud Whitepaper styling
 html = f"""<!DOCTYPE html>
@@ -1200,23 +1219,25 @@ sudo nft list set inet filter zodiac_quarantine
 </html>
 """
 
-with open("/tmp/sentinel_whitepaper_gdocs.html", "w", encoding="utf-8") as f:
-    f.write(html)
+with tempfile.TemporaryDirectory(prefix="sentinel_whitepaper_") as tmpdir:
+    html_path = os.path.join(tmpdir, "sentinel_whitepaper_gdocs.html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html)
 
-print(f"Generated /tmp/sentinel_whitepaper_gdocs.html ({len(html)} bytes)")
+    print(f"Generated intermediate HTML ({len(html)} bytes)")
 
-# Compile to PDF via headless Chrome with Google Sans fonts
-pdf_path = "docs/design/sentinel-whitepaper-preview.pdf"
-cmd = [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "--headless=new",
-    "--disable-gpu",
-    f"--print-to-pdf={pdf_path}",
-    "--no-pdf-header-footer",
-    "/tmp/sentinel_whitepaper_gdocs.html"
-]
-print("Compiling sentinel-whitepaper-preview.pdf via Chrome...")
-import subprocess
-subprocess.run(cmd, check=True)
-print(f"Successfully generated {pdf_path} ({os.path.getsize(pdf_path)} bytes)")
+    # Compile to PDF via headless Chrome with Google Sans fonts
+    pdf_path = "docs/design/sentinel-whitepaper-v1.pdf"
+    chrome_bin = get_chrome_binary()
+    cmd = [
+        chrome_bin,
+        "--headless=new",
+        "--disable-gpu",
+        f"--print-to-pdf={pdf_path}",
+        "--no-pdf-header-footer",
+        html_path
+    ]
+    print(f"Compiling {pdf_path} via Chrome ({chrome_bin})...")
+    subprocess.run(cmd, check=True, timeout=120)
+    print(f"Successfully generated {pdf_path} ({os.path.getsize(pdf_path)} bytes)")
 
