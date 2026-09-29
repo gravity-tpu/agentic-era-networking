@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # reset-coral-usb.sh
 # Resets all Google Coral Edge TPU USB devices by de-authorizing and
 # re-authorizing each one via sysfs.
@@ -24,11 +24,9 @@ set -eu
 
 CORAL_VENDOR='18d1'
 # 9302 = uncompiled (initial enumeration); 9303 = compiled (delegate loaded)
-CORAL_PRODUCTS='9302 9303'
 
 USB_SYSFS='/sys/bus/usb/devices'
-SLEEP_DEAUTH=0.5   # seconds between deauth and reauth for a single device
-SLEEP_SETTLE=2     # seconds after all resets complete, for hub re-enumeration
+SLEEP_DEAUTH=1     # integer seconds between deauth and reauth (POSIX sleep requires integers)
 
 found=0
 
@@ -46,17 +44,16 @@ for dev_path in "$USB_SYSFS"/*/; do
 
     [ "$vendor" = "$CORAL_VENDOR" ] || continue
 
-    match=0
-    for p in $CORAL_PRODUCTS; do
-        [ "$product" = "$p" ] && match=1 && break
-    done
-    [ "$match" = "1" ] || continue
+    case "$product" in
+        9302|9303) ;;
+        *) continue ;;
+    esac
 
     dev_name=$(basename "$dev_path")
     echo "[reset-coral-usb] Resetting Coral TPU at $dev_name (idVendor=$vendor idProduct=$product)"
 
     printf '0' > "$authorized_file"
-    sleep "$SLEEP_DEAUTH"
+    sleep $SLEEP_DEAUTH
     printf '1' > "$authorized_file"
 
     echo "[reset-coral-usb] Reset complete: $dev_name"
@@ -68,6 +65,9 @@ if [ "$found" -eq 0 ]; then
     exit 1
 fi
 
-echo "[reset-coral-usb] $found Coral TPU(s) reset. Waiting ${SLEEP_SETTLE}s for hub re-enumeration..."
-sleep "$SLEEP_SETTLE"
+echo "[reset-coral-usb] $found Coral TPU(s) reset. Waiting for udev to settle..."
+# udevadm settle is deterministic: waits until all pending udev events are
+# processed (device nodes created, symlinks updated) rather than sleeping a
+# fixed interval that may be too short under kernel interrupt load.
+udevadm settle --timeout=10
 echo "[reset-coral-usb] Done."

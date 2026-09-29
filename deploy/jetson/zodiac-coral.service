@@ -61,6 +61,9 @@ Wants=network-online.target
 # is not running, the daemon still infers on the TPU and writes to /tmp fallback.
 # StartLimitBurst=10 / StartLimitIntervalSec=300s: more generous than the default
 # to accommodate the primary→standby restart cycle and transient USB disconnects.
+# StartLimitIntervalSec + StartLimitBurst bound the Restart=always flap loop:
+# after 10 restarts within 300s the unit enters a permanent failed state,
+# preventing indefinite log pollution if the TPU is physically disconnected.
 StartLimitIntervalSec=300s
 StartLimitBurst=10
 

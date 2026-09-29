@@ -1,0 +1,29 @@
+# 99-coral-usb-power.rules
+# Disables USB autosuspend for Google Coral Edge TPU devices and their
+# parent hub on the Jetson Orin Nano tegra-xusb controller.
+#
+# Root cause: the hub has autosuspend_delay_ms=0 by default, causing it
+# to suspend immediately during idle gaps between AF_PACKET GbE transfers
+# and Coral bulk-in callbacks. With autosuspend enabled, the Coral's queued
+# bulk-in transfer returns LIBUSB_ERROR_NOT_FOUND, which causes libedgetpu
+# to call abort() (SIGABRT), wedging the device.
+#
+# Installation (run on Jetson as root):
+#   sudo cp deploy/jetson/99-coral-usb-power.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=usb
+
+# Coral Edge TPU — uncompiled state (initial enumeration, PID 9302)
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", \
+    TEST=="power/control", ATTR{power/control}="on"
+
+# Coral Edge TPU — compiled state (delegate loaded, PID 9303)
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9303", \
+    TEST=="power/control", ATTR{power/control}="on"
+
+# Realtek USB 3.0 hub (0bda:0489) — parent of both Coral TPUs and the
+# ASIX GbE tap adapter on the tegra-xusb Bus 02 controller.
+# Disabling hub autosuspend prevents the hub from power-cycling ports
+# during idle windows between concurrent USB transfer bursts.
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0489", \
+    TEST=="power/control", ATTR{power/control}="on"
