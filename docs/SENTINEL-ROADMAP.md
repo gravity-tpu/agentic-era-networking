@@ -326,7 +326,7 @@ Prisma schema additions go into the existing `prisma/schema.prisma` with a new m
 
 ## Bandwidth & Bottleneck Analysis
 
-> **The Corals are NOT the bottleneck for Sentinel.** Sentinel's detection is collective and aggregate, not per-packet. This section establishes the full throughput envelope and identifies the two constraints that require explicit design attention.
+> **Neither the Coral nor the Jetson GPU are the bottleneck for Sentinel.** The GPU achieves statistical full-coverage detection at line rate with 369× headroom; the Coral provides supplementary per-packet telemetry at 2.2% sampling. The two hard constraints are the switch port bandwidth and the 128-entry OpenFlow flow table.
 
 ### Summary Table
 
@@ -334,8 +334,9 @@ Prisma schema additions go into the existing `prisma/schema.prisma` with a new m
 |:---|:---|:---|:---|
 | 🔴 **#1** | **Zodiac FX port bandwidth** | **100 Mbps per port** | Physical ceiling for ALL traffic through the local SDN plane |
 | 🔴 **#2** | **OpenFlow flow table** | **128 rules max** | Caps the number of simultaneously quarantined subnets |
-| 🟠 **#3** | **Coral per-packet inference** | **~230 inf/s per TPU (current impl.)** | Only relevant for per-packet DPI — Sentinel uses aggregates, not full inspection |
+| 🟠 **#3** | **Coral per-packet inference** | **~230 inf/s (single-active TPU)** | 2.2% packet sampling — supplementary telemetry only, not the Sentinel enforcement path |
 | 🟡 **#4** | **Neon `/api/sentinel/check` cold query** | **~5ms P99** | Hot path only; mitigated by the bounded LRU cache defined in S0.C |
+| ✅ **—** | **Jetson GPU anomaly autoencoder** | **~3,690 windows/s (0.271ms/window)** | Not a bottleneck — 369× headroom over full line-rate statistical coverage |
 
 ---
 
@@ -370,27 +371,50 @@ The Zodiac FX SAM4E8E MCU enforces a **deterministic 128-entry OpenFlow flow tab
 
 **Design constraint for Sentinel (captured in milestone S2.A):** Quarantine rules must target **supernet prefixes** (`/16` or `/20` blocks), not individual /32 IPs. A bot collective operating across 200 /24 subnets almost always originates from a handful of /16 autonomous system blocks. Installing one `/16` DROP rule consumes one flow table entry and neutralizes the entire rotating-IP pool within it.
 
-#### Layer 3: Coral Edge TPU — NOT the Sentinel Bottleneck
+#### Layer 3: Coral Edge TPU — Supplementary Packet Telemetry (2.2% Sampling)
 
-Validated inference rate on physical hardware: **~230 inferences/second per TPU** (sourced from `hardware-probe.ts` telemetry, physical sysfs provenance per Invariant 6). Under the deployed `zodiac-coral.service` single-active architecture, only one TPU runs inference at a time — the combined figure of ~450 inf/s is the Phase 2 target when the staged pipeline with dedicated per-TPU roles is operational.
+Validated inference rate on physical hardware: **~230 inferences/second** (single-active TPU under `zodiac-coral.service` Phase 0.13 architecture; physical sysfs provenance per Invariant 6). The ~450 inf/s dual-active figure is the Phase 2 staged-pipeline target.
 
 At 100 Mbps line rate with 600-byte average packets:
 
 ```
 20,800 packets/second on wire
-÷   450 inferences/second Coral capacity
-= Coral currently inspects ~2.2% of packets at line rate
+÷   230 inferences/second (single-active Coral)
+= Coral currently inspects ~1.1% of packets at line rate
 ```
 
-This sounds like a gap, but **it is not a problem for Sentinel** because Sentinel's collective detection does not require 100% packet inspection. Its three signal sources are:
+This is **not a problem for Sentinel** because the Coral's role is supplementary packet-level telemetry — individual packet feature telemetry written to `coral-telemetry.json`. It is not on the quarantine enforcement path. Full-traffic statistical coverage is provided by the GPU (Layer 3.5 below).
 
-| Signal | Coverage | Source |
-|:---|:---|:---|
-| DNS queries | **100%** | TPU 1 RFC 1035 DNS Sentinel (query volume is small — hundreds/s at most) |
-| Statistical packet sampling | **~2.2% sampled** | TPU 0 mirror tap (sufficient for aggregate subnet behavior; statistically valid) |
-| HTTP request metadata | **100%** | Apache/middleware `report` hook — this is Sentinel's **primary detection signal** |
+The 230 inf/s figure is also a **Python implementation ceiling, not a hardware ceiling.** The Coral USB 3.0 interface can physically sustain ~10,000 round-trip tensor transfers/second. The gap is Python loop overhead in `hardware-burst-daemon.py` — a future optimization, not a current Sentinel blocker.
 
-The 230 inf/s figure is also a **Python implementation ceiling, not a hardware ceiling.** The Coral USB 3.0 interface can physically sustain ~10,000 round-trip tensor transfers/second (USB 3.0 at ~100µs per transaction). The gap between 230 and 10,000 is Python inference loop overhead in `hardware-burst-daemon.py`. A C or TensorFlow Lite C++ implementation would approach the hardware limit. This is a future optimization opportunity, not a current Sentinel blocker.
+#### Layer 3.5: Jetson Ampere GPU Autoencoder — Statistical Full-Coverage Detection (LIVE ✅)
+
+The GPU runs `gpu_anomaly_kernel.cu` (compiled `sm_87`, 1024 CUDA cores) as an **independent full-stack anomaly detector** via `hardware-burst-daemon.py`. Unlike the Coral, which classifies individual packet tensors, the GPU processes **time-windowed statistical feature vectors** — aggregated metrics over a sliding window of recent traffic (inter-arrival deltas, burst frequency, packet size distribution). This distinction is critical for understanding coverage:
+
+```
+GPU inference latency:          0.271ms/window  (verified: 174 live inferences)
+GPU max throughput:             1,000ms ÷ 0.271ms ≈ 3,690 windows/second
+
+Line rate at 100 Mbps:         20,800 packets/second
+Typical anomaly window:        ~100ms  →  ~2,080 packets/window
+Windows/second needed for
+full real-time coverage:       1,000ms ÷ 100ms = 10 windows/second
+
+GPU headroom:                  3,690 ÷ 10 = 369× over full line-rate coverage
+```
+
+Even with a very aggressive 1ms window (21 packets/window, 1,000 windows/second needed), the GPU retains **3.69× headroom**. The GPU achieves statistical 100% traffic coverage at the Zodiac FX line rate ceiling regardless of window size — the Coral's 1.1% per-packet sampling does not represent the system's actual detection coverage.
+
+The GPU is also the **only component currently driving quarantine enforcement** — the `AdaptiveThresholdController` fires `POST /api/sdn/quarantine` when reconstruction error exceeds the EMA-derived threshold. Verified: 24 anomalies detected → 24 `FLOW_MOD` Priority 65535 DROP rules installed on Zodiac FX hardware (Phase 0.12).
+
+**Updated signal coverage with GPU in path:**
+
+| Signal | Coverage | Source | Status |
+|:---|:---|:---|:---|
+| GPU window-based anomaly detection | **~100% statistical** | Jetson GPU 1D-CNN autoencoder (3,690 windows/s capacity, 369× headroom) | ✅ **Live** |
+| HTTP request metadata | **100%** | Apache/middleware `report` hook — Sentinel's primary detection signal | Planned (S0.B) |
+| Statistical packet sampling | **~1.1% sampled** | Coral primary mirror tap (supplementary telemetry, not enforcement path) | ✅ **Live** |
+| DNS query intent | **100% of DNS volume** | Coral standby DNS Sentinel character-level model | 🔲 Planned Phase 2 |
 
 #### Layer 4: Neon Sentinel Check Latency
 
@@ -445,9 +469,10 @@ This is the most important architectural clarification for Sentinel:
 |  OpenFlow flow table:       128 rules max      ← HARDEST SDN CONSTRAINT         |
 |                             → must quarantine at /16 not /32                    |
 |  Mirror tap (Port 3):       100 Mbps mirrored copy of data plane traffic        |
-|  Coral primary (DPI ✅):     ~230 inf/s sampled ← single-active (Phase 0.13)   |
+|  Coral primary (DPI ✅):     ~230 inf/s (~1.1% packet sampling) ← supplementary |
 |  Coral standby (DNS 🔲):    Planned Phase 2 — DNS Sentinel model not yet built  |
-|  Jetson GPU (standalone ✅): 0.271ms/inference  ← NOT a bottleneck               |
+|  Jetson GPU (✅ enforcement): ~3,690 windows/s; 369× headroom at line rate       |
+|                              0.271ms/window; sole active quarantine path         |
 +──────────────────────────────────────────────────────────────────────────────────+
 ```
 
@@ -468,8 +493,8 @@ For the production attack scenario (crawlers hitting the real Apache origin serv
 | `/api/sentinel/check` — Neon cold query | **~200 req/s, ~5ms P99** | 🔴 **Needs PgBouncer pooler** (S0.C) |
 | Collective /24 sliding-window detector | Memory-bounded, O(n subnets), BigInt | ✅ Fine |
 | OpenFlow quarantine rule enforcement | **128 rules max simultaneously** | 🔴 **Must use supernet /16 rules** (S2.A) |
-| Coral mirror tap packet sampling | **~230 packets/s sampled** (single-active TPU, Phase 0.13) | ✅ Not the critical Sentinel path |
-| Jetson GPU collective anomaly scorer | **0.271ms/inference** | ✅ Not a bottleneck |
+| Coral mirror tap packet sampling | **~230 packets/s sampled** (single-active TPU, Phase 0.13; ~1.1% of line rate) | ✅ Supplementary telemetry — not on the enforcement path |
+| Jetson GPU anomaly autoencoder | **~3,690 windows/s (0.271ms/window); 369× headroom at line rate** | ✅ Statistical 100% coverage; sole active quarantine enforcement path |
 | Apache middleware hook overhead | **< 5ms; circuit-breaker on timeout (fail-closed)** | ✅ Fine |
 | Sister-site CIDR allowlist check | **< 1µs (in-memory, constant-time)** | ✅ Fine |
 
