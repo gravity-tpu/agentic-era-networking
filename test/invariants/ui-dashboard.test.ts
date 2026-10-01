@@ -176,7 +176,7 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('chart-workstation')).not.toBeNull();
     expect(document.getElementById('chart-orin-compute')).not.toBeNull();
     expect(document.getElementById('chart-orin-network')).not.toBeNull();
-    expect(document.getElementById('chart-orin-thermals')).not.toBeNull();
+    expect(document.getElementById('orin-ollama-panel')).not.toBeNull();
     expect(document.getElementById('chart-orin-power')).not.toBeNull();
     expect(document.getElementById('chart-orin-nvme')).not.toBeNull();
     expect(document.getElementById('chart-coral1-rate')).not.toBeNull();

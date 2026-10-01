@@ -993,6 +993,22 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
+              <!-- KPI 6: Ollama LLM Velocity -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Ollama LLM Velocity</span>
+                  <span class="cf-pill-badge green" style="font-size: 0.68rem;" id="orin-kpi-ollama-badge">OFFLINE</span>
+                </div>
+                <div class="cf-stat-value green" id="orin-kpi-ollama-rate">-- <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span></div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="orin-bar-ollama-rate" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Model: <strong class="cf-mono" id="orin-kpi-ollama-model">--</strong></span>
+                  <span>Peak: <strong class="cf-mono" id="orin-kpi-ollama-peak">-- tok/s</strong></span>
+                </div>
+              </div>
+
             </div>
 
             <!-- Primary Horizontal Network Interface Throughput Chart (Spans page similar to Zodiac lines) -->
@@ -1055,18 +1071,41 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- Chart 2: Thermal Zones -->
-              <div class="cf-card">
+              <!-- Ollama Token Metrics Panel (replaces Thermal chart) -->
+              <div class="cf-card" id="orin-ollama-panel">
                 <div class="cf-card-header">
                   <div>
-                    <h3 class="cf-card-title">Hardware Thermal Zones</h3>
-                    <div class="cf-card-subtitle">Live Linux sysfs temperatures: CPU, GPU, and Junction (°C)</div>
+                    <h3 class="cf-card-title">Ollama LLM Inference</h3>
+                    <div class="cf-card-subtitle" id="orin-ollama-subtitle">qwen2.5:3b · Q4_K_M · 32768 ctx · Jetson Orin Nano</div>
                   </div>
-                  <span class="cf-pill-badge teal">Thermal Invariant</span>
+                  <span class="cf-pill-badge green" id="orin-ollama-status-badge">OFFLINE</span>
                 </div>
-                <div class="cf-card-body">
-                  <div class="cf-canvas-container" id="canvas-wrapper-orin-thermals" style="position: relative; height: 220px;">
-                    <canvas id="chart-orin-thermals"></canvas>
+                <div class="cf-card-body" style="padding: 1rem 1.5rem;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1.5rem; align-items: start;">
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Token Velocity</div>
+                      <div style="font-size: 2rem; font-weight: 800; color: var(--cf-green); font-family: var(--cf-font-mono);" id="orin-ollama-tok-rate">--</div>
+                      <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 0.15rem;">tok/s &nbsp;·&nbsp; Peak: <span id="orin-ollama-peak-rate" class="cf-mono">--</span></div>
+                    </div>
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Per-Token Latency</div>
+                      <div style="font-size: 2rem; font-weight: 800; color: var(--cf-blue); font-family: var(--cf-font-mono);" id="orin-ollama-latency">--</div>
+                      <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 0.15rem;">ms/token</div>
+                    </div>
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Total Inferences</div>
+                      <div style="font-size: 1.4rem; font-weight: 700; color: var(--cf-text-primary); font-family: var(--cf-font-mono);" id="orin-ollama-inferences">--</div>
+                    </div>
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Total Tokens</div>
+                      <div style="font-size: 1.4rem; font-weight: 700; color: var(--cf-text-primary); font-family: var(--cf-font-mono);" id="orin-ollama-total-tokens">--</div>
+                    </div>
+                  </div>
+                  <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--cf-border); display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Model: <strong class="cf-mono" id="orin-ollama-model-detail">qwen2.5:3b</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Params: <strong class="cf-mono" id="orin-ollama-params">3B</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Quant: <strong class="cf-mono" id="orin-ollama-quant">Q4_K_M</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Context: <strong class="cf-mono" id="orin-ollama-ctx">32768</strong></span>
                   </div>
                 </div>
               </div>

@@ -365,6 +365,22 @@
     orinBarCpuTemp: document.getElementById('orin-bar-cpu-temp'),
     orinKpiGpuTemp: document.getElementById('orin-kpi-gpu-temp'),
     orinKpiJuncTemp: document.getElementById('orin-kpi-junc-temp'),
+    orinKpiOllamaRate: document.getElementById('orin-kpi-ollama-rate'),
+    orinBarOllamaRate: document.getElementById('orin-bar-ollama-rate'),
+    orinKpiOllamaBadge: document.getElementById('orin-kpi-ollama-badge'),
+    orinKpiOllamaModel: document.getElementById('orin-kpi-ollama-model'),
+    orinKpiOllamaPeak: document.getElementById('orin-kpi-ollama-peak'),
+    orinOllamaStatusBadge: document.getElementById('orin-ollama-status-badge'),
+    orinOllamaSubtitle: document.getElementById('orin-ollama-subtitle'),
+    orinOllamaTokRate: document.getElementById('orin-ollama-tok-rate'),
+    orinOllamaPeakRate: document.getElementById('orin-ollama-peak-rate'),
+    orinOllamaLatency: document.getElementById('orin-ollama-latency'),
+    orinOllamaInferences: document.getElementById('orin-ollama-inferences'),
+    orinOllamaTotalTokens: document.getElementById('orin-ollama-total-tokens'),
+    orinOllamaModelDetail: document.getElementById('orin-ollama-model-detail'),
+    orinOllamaParams: document.getElementById('orin-ollama-params'),
+    orinOllamaQuant: document.getElementById('orin-ollama-quant'),
+    orinOllamaCtx: document.getElementById('orin-ollama-ctx'),
     orinIfSdnMac: document.getElementById('orin-if-sdn-mac'),
     orinIfSdnStatus: document.getElementById('orin-if-sdn-status'),
     orinIfSdnBytes: document.getElementById('orin-if-sdn-bytes'),
@@ -1264,6 +1280,54 @@
         if (els.orinKpiGpuTemp) els.orinKpiGpuTemp.innerText = temps.gpuC !== null && temps.gpuC !== undefined ? `${temps.gpuC}°C` : '--°C';
         if (els.orinKpiJuncTemp) els.orinKpiJuncTemp.innerText = temps.junctionC !== null && temps.junctionC !== undefined ? `${temps.junctionC}°C` : '--°C';
       }
+
+      // Ollama LLM Telemetry
+      const ollamaOnline = j.ollamaStatus === 'ONLINE';
+      const ollamaTok = j.ollamaToksPerSecond ?? 0;
+      const ollamaPeak = j.ollamaPeakToksPerSecond ?? 0;
+      const ollamaModel = j.ollamaModel || 'qwen2.5:3b';
+      const ollamaParams = j.ollamaModelParamSize || '3B';
+      const ollamaQuant = j.ollamaModelQuant || 'Q4_K_M';
+      const ollamaCtx = j.ollamaContextLength || 32768;
+      const ollamaInferences = j.ollamaTotalInferences ?? 0n;
+      const ollamaTokens = j.ollamaTotalTokens ?? 0n;
+      const ollamaPerTokenNs = j.ollamaPerTokenLatencyNs ?? 0n;
+      const ollamaLatencyMs = ollamaPerTokenNs > 0n ? (Number(ollamaPerTokenNs) / 1_000_000).toFixed(1) : '--';
+
+      if (els.orinKpiOllamaBadge) {
+        els.orinKpiOllamaBadge.innerText = ollamaOnline ? 'ONLINE' : 'OFFLINE';
+        els.orinKpiOllamaBadge.className = `cf-pill-badge ${ollamaOnline ? 'green' : 'gray'}`;
+      }
+      if (els.orinKpiOllamaRate) {
+        els.orinKpiOllamaRate.innerHTML = ollamaTok > 0
+          ? `${ollamaTok} <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`
+          : `-- <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`;
+      }
+      if (els.orinBarOllamaRate) {
+        const peakRef = ollamaPeak > 0 ? ollamaPeak : 100;
+        els.orinBarOllamaRate.style.width = `${Math.min(100, Math.max(0, Math.round((ollamaTok / peakRef) * 100)))}%`;
+      }
+      if (els.orinKpiOllamaModel) els.orinKpiOllamaModel.innerText = ollamaModel.split(':')[0] || '--';
+      if (els.orinKpiOllamaPeak) els.orinKpiOllamaPeak.innerText = ollamaPeak > 0 ? `${ollamaPeak} tok/s` : '-- tok/s';
+
+      if (els.orinOllamaStatusBadge) {
+        els.orinOllamaStatusBadge.innerText = ollamaOnline ? 'ONLINE' : 'OFFLINE';
+        els.orinOllamaStatusBadge.className = `cf-pill-badge ${ollamaOnline ? 'green' : 'gray'}`;
+      }
+      if (els.orinOllamaSubtitle) {
+        els.orinOllamaSubtitle.innerText = `${ollamaModel} · ${ollamaQuant} · ${ollamaCtx.toLocaleString()} ctx · Jetson Orin Nano`;
+      }
+      if (els.orinOllamaTokRate) {
+        els.orinOllamaTokRate.innerText = ollamaTok > 0 ? String(ollamaTok) : '--';
+      }
+      if (els.orinOllamaPeakRate) els.orinOllamaPeakRate.innerText = ollamaPeak > 0 ? String(ollamaPeak) : '--';
+      if (els.orinOllamaLatency) els.orinOllamaLatency.innerText = ollamaLatencyMs;
+      if (els.orinOllamaInferences) els.orinOllamaInferences.innerText = formatNumber(ollamaInferences);
+      if (els.orinOllamaTotalTokens) els.orinOllamaTotalTokens.innerText = formatNumber(ollamaTokens);
+      if (els.orinOllamaModelDetail) els.orinOllamaModelDetail.innerText = ollamaModel;
+      if (els.orinOllamaParams) els.orinOllamaParams.innerText = ollamaParams;
+      if (els.orinOllamaQuant) els.orinOllamaQuant.innerText = ollamaQuant;
+      if (els.orinOllamaCtx) els.orinOllamaCtx.innerText = ollamaCtx.toLocaleString();
 
       // Service card: live PID and RSS from bridge process (Council Invariant 2: integer-only byte accounting)
       if (els.orinSvcPid && snapshot.bridgePid) {

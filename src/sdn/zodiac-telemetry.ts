@@ -171,6 +171,18 @@ export interface JetsonTelemetrySnapshot {
   readonly jetpackVersion: string;
   readonly uptime: string;
   readonly interfaces: JetsonNetworkInterfaceTelemetry[];
+  // Ollama LLM Inference Telemetry (qwen2.5:3b on Jetson Orin Nano)
+  readonly ollamaStatus: 'ONLINE' | 'OFFLINE';
+  readonly ollamaModel: string;
+  readonly ollamaModelParamSize: string;
+  readonly ollamaModelQuant: string;
+  readonly ollamaContextLength: number;
+  readonly ollamaToksPerSecond: number;
+  readonly ollamaPeakToksPerSecond: number;
+  readonly ollamaLastInferenceTimestampMs: number;
+  readonly ollamaTotalInferences: bigint;
+  readonly ollamaTotalTokens: bigint;
+  readonly ollamaPerTokenLatencyNs: bigint;
   readonly timeSeries?: readonly JetsonTimeSeriesPoint[];
 }
 
@@ -702,6 +714,17 @@ export function createDefaultJetsonSnapshot(isDisconnected: boolean = true): Jet
     jetpackVersion: 'JetPack 6.1 (L4T 36.4.7)',
     uptime: isDisconnected ? 'Offline' : '01:05:22',
     interfaces,
+    ollamaStatus: 'OFFLINE',
+    ollamaModel: '',
+    ollamaModelParamSize: '',
+    ollamaModelQuant: '',
+    ollamaContextLength: 0,
+    ollamaToksPerSecond: 0,
+    ollamaPeakToksPerSecond: 0,
+    ollamaLastInferenceTimestampMs: 0,
+    ollamaTotalInferences: 0n,
+    ollamaTotalTokens: 0n,
+    ollamaPerTokenLatencyNs: 0n,
   };
 }
 

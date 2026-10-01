@@ -484,6 +484,89 @@ async function executeJetsonHardwareProbe(
     gpuUtilizationPct = rawGpuLoad > 100 ? Math.floor(rawGpuLoad / 10) : rawGpuLoad;
   }
 
+  // ── Jetson Ollama LLM Telemetry ──────────────────────────────────────────────
+  // Poll /api/tags for model info; read /tmp/zodiac-jetson-ollama-telemetry.json
+  // for cumulative metrics. Monotonic staleness guard mirrors workstation pattern.
+  let ollamaStatus: 'ONLINE' | 'OFFLINE' = 'OFFLINE';
+  let ollamaModel = '';
+  let ollamaModelParamSize = '';
+  let ollamaModelQuant = '';
+  let ollamaContextLength = 0;
+  let ollamaToksPerSecond = 0;
+  let ollamaPeakToksPerSecond = 0;
+  let ollamaLastInferenceTimestampMs = 0;
+  let ollamaTotalInferences = 0n;
+  let ollamaTotalTokens = 0n;
+  let ollamaPerTokenLatencyNs = 0n;
+
+  const tagsController = new AbortController();
+  const tagsTimeout = setTimeout(() => tagsController.abort(), 500);
+  try {
+    const tagsRes = await fetch('http://localhost:11434/api/tags', { signal: tagsController.signal });
+    clearTimeout(tagsTimeout);
+    if (tagsRes.ok) {
+      const tagsData = (await tagsRes.json()) as OllamaPsResponse;
+      const firstModel = tagsData.models?.[0];
+      if (firstModel) {
+        ollamaStatus = 'ONLINE';
+        ollamaModel = firstModel.name ?? firstModel.model ?? '';
+        ollamaModelParamSize = firstModel.details?.parameter_size ?? '';
+        ollamaModelQuant = firstModel.details?.quantization_level ?? '';
+      }
+    }
+  } catch (err) {
+    clearTimeout(tagsTimeout);
+    const code = err instanceof Error ? err.name : String(err);
+    if (code !== 'AbortError') {
+      process.stderr.write(`[jetson-probe] Ollama /api/tags unreachable (${code}): ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+
+  const jetsonOllamaMetricsPath = '/tmp/zodiac-jetson-ollama-telemetry.json';
+  try {
+    const content = await fs.promises.readFile(jetsonOllamaMetricsPath, 'utf8');
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    ollamaTotalInferences = parseBigIntClamped(parsed['totalInferences']);
+    ollamaTotalTokens = parseBigIntClamped(parsed['totalTokens']);
+    ollamaToksPerSecond = typeof parsed['tokensPerSecond'] === 'number' && Number.isInteger(parsed['tokensPerSecond'])
+      ? parsed['tokensPerSecond']
+      : Math.round(Number(parsed['tokensPerSecond'] || 0));
+    ollamaPeakToksPerSecond = typeof parsed['peakTokensPerSecond'] === 'number' && Number.isInteger(parsed['peakTokensPerSecond'])
+      ? parsed['peakTokensPerSecond']
+      : Math.round(Number(parsed['peakTokensPerSecond'] || ollamaToksPerSecond));
+    ollamaPerTokenLatencyNs = parseBigIntClamped(parsed['perTokenLatencyNs']);
+    if (typeof parsed['contextLength'] === 'number' && parsed['contextLength'] > 0) {
+      ollamaContextLength = parsed['contextLength'];
+    }
+    const rawTs = parsed['lastUpdatedMs'];
+    if (typeof rawTs === 'number' && rawTs > 0) {
+      ollamaLastInferenceTimestampMs = rawTs;
+    } else if (typeof rawTs === 'string') {
+      const n = parseInt(rawTs, 10);
+      if (Number.isFinite(n) && n > 0) ollamaLastInferenceTimestampMs = n;
+    }
+  } catch (err) {
+    const code = getErrorCode(err);
+    if (code !== 'ENOENT') {
+      process.stderr.write(`[jetson-probe] Error reading ${jetsonOllamaMetricsPath}: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+
+  // Monotonic staleness: zero tok/s if the telemetry file has not changed within INFERENCE_STALE_THRESHOLD_MS.
+  // Anchor is set to process.hrtime.bigint() when lastUpdatedMs first changes — purely monotonic,
+  // no wall-clock mixing (Invariants 2 & 6).
+  if (ollamaLastInferenceTimestampMs > 0 && ollamaLastInferenceTimestampMs !== _jetsonLastSeenOllamaUpdatedMs) {
+    _jetsonLastSeenOllamaUpdatedMs = ollamaLastInferenceTimestampMs;
+    _jetsonLastSeenOllamaMonotonicNs = process.hrtime.bigint();
+  }
+  const OLLAMA_STALE_NS = BigInt(INFERENCE_STALE_THRESHOLD_MS) * 1_000_000n;
+  const ollamaAgeNs = _jetsonLastSeenOllamaMonotonicNs > 0n
+    ? process.hrtime.bigint() - _jetsonLastSeenOllamaMonotonicNs
+    : OLLAMA_STALE_NS + 1n;
+  if (ollamaAgeNs > OLLAMA_STALE_NS) {
+    ollamaToksPerSecond = 0;
+  }
+
   return {
     status: 'online',
     deviceName: 'jetson-orin',
@@ -523,6 +606,17 @@ async function executeJetsonHardwareProbe(
     jetpackVersion: 'JetPack 6.1 (L4T 36.4.7)',
     uptime: uptimeStr,
     interfaces: interfaces.length > 0 ? interfaces : createDefaultJetsonSnapshot(true).interfaces,
+    ollamaStatus,
+    ollamaModel,
+    ollamaModelParamSize,
+    ollamaModelQuant,
+    ollamaContextLength,
+    ollamaToksPerSecond,
+    ollamaPeakToksPerSecond,
+    ollamaLastInferenceTimestampMs,
+    ollamaTotalInferences,
+    ollamaTotalTokens,
+    ollamaPerTokenLatencyNs,
   };
 }
 
@@ -590,6 +684,10 @@ export async function probeJetsonHardware(
 // Council Invariant 3 (Fail-Closed): stale → null → STANDBY.
 const CORAL_STALENESS_LIMIT_MS          = 5_000;
 const INFERENCE_STALE_THRESHOLD_MS      = 10_000;
+
+// Jetson Ollama monotonic staleness anchor (same pattern as workstation _wsLastSeen*)
+let _jetsonLastSeenOllamaUpdatedMs = 0;
+let _jetsonLastSeenOllamaMonotonicNs = 0n;
 
 export interface CoralDaemonTelemetryData {
   inferencesPerSecond: bigint;
