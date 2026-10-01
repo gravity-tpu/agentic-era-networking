@@ -1488,7 +1488,9 @@
       const peakTokRate = ws.peakTokensPerSecond ?? tokRate;
       const totalTokens = safeBigInt(ws.totalTokens || (safeBigInt(ws.totalPromptTokens) + safeBigInt(ws.totalCompletionTokens)));
       if (els.wsKpiTokRate) {
-        els.wsKpiTokRate.innerHTML = `${tokRate.toFixed(1)} <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`;
+        els.wsKpiTokRate.innerHTML = tokRate > 0
+          ? `${tokRate.toFixed(1)} <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`
+          : `-- <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`;
       }
       if (els.wsKpiPeakTokRate) {
         els.wsKpiPeakTokRate.innerText = peakTokRate > 0 ? `Peak: ${peakTokRate.toFixed(1)} t/s` : 'Gemma 4';

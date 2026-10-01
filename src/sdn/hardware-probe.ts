@@ -588,7 +588,8 @@ export async function probeJetsonHardware(
 // ── Coral Daemon IPC ─────────────────────────────────────────────────────────
 // Staleness guard: if the daemon JSON is older than this the daemon is dead.
 // Council Invariant 3 (Fail-Closed): stale → null → STANDBY.
-const CORAL_STALENESS_LIMIT_MS   = 5_000;
+const CORAL_STALENESS_LIMIT_MS          = 5_000;
+const INFERENCE_STALE_THRESHOLD_MS      = 10_000;
 
 export interface CoralDaemonTelemetryData {
   inferencesPerSecond: bigint;
@@ -1543,6 +1544,7 @@ async function fetchFromAgent(
       promptTokensPerSecond:  Math.round(typeof h['promptTokensPerSecond'] === 'number' ? h['promptTokensPerSecond'] : 0),
       peakTokensPerSecond:    Math.round(typeof h['peakTokensPerSecond'] === 'number' ? h['peakTokensPerSecond'] : 0),
       peakPromptTokensPerSecond: Math.round(typeof h['peakPromptTokensPerSecond'] === 'number' ? h['peakPromptTokensPerSecond'] : 0),
+      lastInferenceTimestampMs: typeof h['lastInferenceTimestampMs'] === 'number' ? h['lastInferenceTimestampMs'] : 0,
       lastInferenceLatencyNs: parseBigIntClamped(h['lastInferenceLatencyNs']),
       lastPromptEvalDurationNs: parseBigIntClamped(h['lastPromptEvalDurationNs']),
       lastEvalDurationNs:     parseBigIntClamped(h['lastEvalDurationNs']),
@@ -1749,6 +1751,7 @@ export async function probeWorkstationHardware(
     let totalInferences = 0n;
     let tokensPerSecond = 0;
     let promptTokensPerSecond = 0;
+    let lastInferenceTimestampMs = 0;
     let peakTokensPerSecond = 0;
     let peakPromptTokensPerSecond = 0;
     let lastInferenceLatencyNs = 0n;
@@ -1794,9 +1797,22 @@ export async function probeWorkstationHardware(
         if (typeof parsed['activeModel'] === 'string' && parsed['activeModel']) {
           recordedModel = parsed['activeModel'];
         }
+        const rawTs = parsed['lastUpdatedMs'];
+        if (typeof rawTs === 'number' && rawTs > 0) {
+          lastInferenceTimestampMs = rawTs;
+        } else if (typeof rawTs === 'string') {
+          const n = Number(rawTs);
+          if (Number.isFinite(n) && n > 0) lastInferenceTimestampMs = n;
+        }
       }
     } catch (err) {
       process.stderr.write(`[workstation-probe] Error reading ${metricsPath}: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+
+    // Invariant 6: Zero out stale rates — lastUpdatedMs older than threshold means no active generation.
+    if (lastInferenceTimestampMs > 0 && Date.now() - lastInferenceTimestampMs > INFERENCE_STALE_THRESHOLD_MS) {
+      tokensPerSecond = 0;
+      promptTokensPerSecond = 0;
     }
 
     const totalTokens = totalPromptTokens + totalCompletionTokens;
@@ -1850,6 +1866,7 @@ export async function probeWorkstationHardware(
       promptTokensPerSecond,
       peakTokensPerSecond,
       peakPromptTokensPerSecond,
+      lastInferenceTimestampMs,
       lastInferenceLatencyNs,
       lastPromptEvalDurationNs,
       lastEvalDurationNs,

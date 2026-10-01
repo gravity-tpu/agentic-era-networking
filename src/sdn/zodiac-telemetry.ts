@@ -301,6 +301,8 @@ export interface WorkstationTelemetrySnapshot {
   readonly promptTokensPerSecond: number;
   readonly peakTokensPerSecond: number;
   readonly peakPromptTokensPerSecond: number;
+  /** Unix epoch ms of the last completed inference; 0 when unknown. Used to zero-out stale rates (Invariant 6). */
+  readonly lastInferenceTimestampMs: number;
   // Nanosecond Precision Latency & Durations (Jeff Dean Latency Budgets)
   readonly lastInferenceLatencyNs: bigint;
   readonly lastPromptEvalDurationNs: bigint;
@@ -797,6 +799,7 @@ export function createDefaultWorkstationSnapshot(isDisconnected: boolean = true)
     promptTokensPerSecond: 0,
     peakTokensPerSecond: 0,
     peakPromptTokensPerSecond: 0,
+    lastInferenceTimestampMs: 0,
     lastInferenceLatencyNs: 0n,
     lastPromptEvalDurationNs: 0n,
     lastEvalDurationNs: 0n,
