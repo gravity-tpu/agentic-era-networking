@@ -523,27 +523,34 @@ async function executeJetsonHardwareProbe(
   }
 
   const jetsonOllamaMetricsPath = '/tmp/zodiac-jetson-ollama-telemetry.json';
+  // Bounded read: stat first and reject files > 4 KiB to prevent OOM from a rogue write.
+  const JETSON_OLLAMA_MAX_BYTES = 4096;
   try {
-    const content = await fs.promises.readFile(jetsonOllamaMetricsPath, 'utf8');
-    const parsed = JSON.parse(content) as Record<string, unknown>;
-    ollamaTotalInferences = parseBigIntClamped(parsed['totalInferences']);
-    ollamaTotalTokens = parseBigIntClamped(parsed['totalTokens']);
-    ollamaToksPerSecond = typeof parsed['tokensPerSecond'] === 'number' && Number.isInteger(parsed['tokensPerSecond'])
-      ? parsed['tokensPerSecond']
-      : Math.round(Number(parsed['tokensPerSecond'] || 0));
-    ollamaPeakToksPerSecond = typeof parsed['peakTokensPerSecond'] === 'number' && Number.isInteger(parsed['peakTokensPerSecond'])
-      ? parsed['peakTokensPerSecond']
-      : Math.round(Number(parsed['peakTokensPerSecond'] || ollamaToksPerSecond));
-    ollamaPerTokenLatencyNs = parseBigIntClamped(parsed['perTokenLatencyNs']);
-    if (typeof parsed['contextLength'] === 'number' && parsed['contextLength'] > 0) {
-      ollamaContextLength = parsed['contextLength'];
-    }
-    const rawTs = parsed['lastUpdatedMs'];
-    if (typeof rawTs === 'number' && rawTs > 0) {
-      ollamaLastInferenceTimestampMs = rawTs;
-    } else if (typeof rawTs === 'string') {
-      const n = parseInt(rawTs, 10);
-      if (Number.isFinite(n) && n > 0) ollamaLastInferenceTimestampMs = n;
+    const fileStat = await fs.promises.stat(jetsonOllamaMetricsPath);
+    if (fileStat.size > JETSON_OLLAMA_MAX_BYTES) {
+      process.stderr.write(`[jetson-probe] ${jetsonOllamaMetricsPath} oversized (${fileStat.size} bytes > ${JETSON_OLLAMA_MAX_BYTES}) — skipping (Invariant 3)\n`);
+    } else {
+      const content = await fs.promises.readFile(jetsonOllamaMetricsPath, 'utf8');
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      ollamaTotalInferences = parseBigIntClamped(parsed['totalInferences']);
+      ollamaTotalTokens = parseBigIntClamped(parsed['totalTokens']);
+      // Council Invariant 2 (Determinism): Number.isFinite guards NaN propagation from
+      // non-numeric strings (e.g. "N/A") before integer coercion.
+      const rawTps = Number(parsed['tokensPerSecond']);
+      ollamaToksPerSecond = Number.isFinite(rawTps) ? Math.round(rawTps) : 0;
+      const rawPeak = Number(parsed['peakTokensPerSecond']);
+      ollamaPeakToksPerSecond = Number.isFinite(rawPeak) ? Math.round(rawPeak) : ollamaToksPerSecond;
+      ollamaPerTokenLatencyNs = parseBigIntClamped(parsed['perTokenLatencyNs']);
+      if (typeof parsed['contextLength'] === 'number' && parsed['contextLength'] > 0) {
+        ollamaContextLength = parsed['contextLength'];
+      }
+      const rawTs = parsed['lastUpdatedMs'];
+      if (typeof rawTs === 'number' && rawTs > 0) {
+        ollamaLastInferenceTimestampMs = rawTs;
+      } else if (typeof rawTs === 'string') {
+        const n = parseInt(rawTs, 10);
+        if (Number.isFinite(n) && n > 0) ollamaLastInferenceTimestampMs = n;
+      }
     }
   } catch (err) {
     const code = getErrorCode(err);

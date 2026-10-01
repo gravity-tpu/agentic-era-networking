@@ -1292,7 +1292,7 @@
       const ollamaInferences = j.ollamaTotalInferences ?? 0n;
       const ollamaTokens = j.ollamaTotalTokens ?? 0n;
       const ollamaPerTokenNs = j.ollamaPerTokenLatencyNs ?? 0n;
-      const ollamaLatencyMs = ollamaPerTokenNs > 0n ? (Number(ollamaPerTokenNs) / 1_000_000).toFixed(1) : '--';
+      const ollamaLatencyMs = ollamaPerTokenNs > 0n ? (Number(ollamaPerTokenNs / 100_000n) / 10).toFixed(1) : '--';
 
       if (els.orinKpiOllamaBadge) {
         els.orinKpiOllamaBadge.innerText = ollamaOnline ? 'ONLINE' : 'OFFLINE';
