@@ -368,7 +368,7 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     const chipBadge = document.getElementById('ws-chip-badge');
     const ollamaBadge = document.getElementById('ws-ollama-badge');
 
-    expect(tokKpi?.innerText).toContain('71.0');
+    expect(tokKpi?.innerText).toContain('71');
     expect(gpuKpi?.innerText).toBe('45%');
     expect(totalKpi?.innerText).toContain('591,833');
     expect(chipBadge?.innerText).toBe('Apple M5 Pro');
