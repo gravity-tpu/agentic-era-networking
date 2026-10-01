@@ -515,6 +515,10 @@ export class ZodiacBridgeServer {
       // systemd restarts the bridge and retries on the next switch connection.
       this.controller.openFlow.sendMirrorRule(1, 3, 1);
       console.log('[+] [Bridge Server] Mirror rule installed: Port 1 → Port 3 (GPU sentinel tap, priority 1).');
+      // Return path: Port 3 (Jetson tap) → Port 1 (RPi) so ARP replies from the
+      // tap interface reach the RPi and close the bidirectional data-plane loop.
+      this.controller.openFlow.sendMirrorRule(3, 1, 1);
+      console.log('[+] [Bridge Server] Mirror rule installed: Port 3 → Port 1 (tap return path, priority 1).');
     });
 
     // Accumulate hardware counters for each physical port when packets arrive
