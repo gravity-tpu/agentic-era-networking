@@ -247,13 +247,18 @@ threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker
 
 
 def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
-    """Enqueue an IP for quarantine; fire-and-forget via the single worker thread."""
-    # Evict an arbitrary entry when the set is full so it stays bounded.
-    if len(quarantined) >= _RATE_WINDOW_CAP:
-        quarantined.discard(next(iter(quarantined)))
-    quarantined.add(src_ip)
+    """Enqueue an IP for quarantine; fire-and-forget via the single worker thread.
+
+    quarantined.add() runs only on successful enqueue — if the queue is full the
+    IP is NOT suppressed so the next packet still triggers the alert path and
+    retries until the worker drains the backlog (fail-closed, no silent gaps).
+    """
     try:
         _quarantine_queue.put_nowait((src_ip, pps))
+        # Evict an arbitrary entry when the set is full so it stays bounded.
+        if len(quarantined) >= _RATE_WINDOW_CAP:
+            quarantined.discard(next(iter(quarantined)))
+        quarantined.add(src_ip)
     except queue.Full:
         sys.stderr.write(f'[trt-daemon] Quarantine queue full; dropping {src_ip}\n')
 
