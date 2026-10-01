@@ -22,13 +22,14 @@ Council Invariants:
 import importlib
 import json
 import os
+import queue
 import signal
 import socket
 import sys
 import threading
 import time
 import traceback
-from typing import Any
+import types
 
 ENGINE_PATH        = os.environ.get('TRT_ENGINE_PATH', '/home/zodiac/coral-models/trt-mobilenet-v2-gpu.engine')
 TELEMETRY_FILE     = 'trt-telemetry.json'
@@ -114,7 +115,7 @@ def find_tap_interface() -> str:
 def load_trt_engine(engine_path: str):
     """Loads a serialized TensorRT engine. Returns (runtime, engine) or raises RuntimeError."""
     try:
-        trt: Any = importlib.import_module('tensorrt')  # JetPack-only; no published type stubs
+        trt: types.ModuleType = importlib.import_module('tensorrt')  # JetPack-only; no published stubs
     except ImportError as e:
         raise RuntimeError(
             f'tensorrt not importable — ensure JetPack is installed: {e}'
@@ -204,18 +205,24 @@ def parse_src_ip(frame: bytes) -> str | None:
 
 _RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
 
+# Single bounded worker queue for all outbound quarantine POSTs — prevents
+# thread explosion under distributed IP-spoofing floods (Dean Invariant).
+_quarantine_queue: queue.Queue[tuple[str, int] | None] = queue.Queue(maxsize=256)
 
-def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
-    """POST quarantine-by-IP to bridge server on a daemon thread (non-blocking)."""
+
+def _quarantine_worker() -> None:
+    """Background daemon thread: drains _quarantine_queue and POSTs to bridge."""
     import urllib.request
-    quarantined.add(src_ip)
-    body = json.dumps({
-        'targetIp': src_ip,
-        'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
-        'priority': 200,
-    }).encode()
-
-    def _post() -> None:
+    while True:
+        item = _quarantine_queue.get()
+        if item is None:
+            break
+        src_ip, pps = item
+        body = json.dumps({
+            'targetIp': src_ip,
+            'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
+            'priority': 200,
+        }).encode()
         req = urllib.request.Request(
             BRIDGE_QUARANTINE_URL,
             data=body,
@@ -232,8 +239,23 @@ def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
                 )
         except Exception as exc:
             sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+        finally:
+            _quarantine_queue.task_done()
 
-    threading.Thread(target=_post, daemon=True, name=f'quarantine-{src_ip}').start()
+
+threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker').start()
+
+
+def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
+    """Enqueue an IP for quarantine; fire-and-forget via the single worker thread."""
+    # Evict an arbitrary entry when the set is full so it stays bounded.
+    if len(quarantined) >= _RATE_WINDOW_CAP:
+        quarantined.discard(next(iter(quarantined)))
+    quarantined.add(src_ip)
+    try:
+        _quarantine_queue.put_nowait((src_ip, pps))
+    except queue.Full:
+        sys.stderr.write(f'[trt-daemon] Quarantine queue full; dropping {src_ip}\n')
 
 
 def main() -> None:
@@ -253,7 +275,7 @@ def main() -> None:
     # and TRT reuses it — avoids two-context SEGV on process exit.
     try:
         importlib.import_module('pycuda.autoinit')  # creates primary CUDA context
-        cuda: Any = importlib.import_module('pycuda.driver')  # JetPack-only; no published type stubs
+        cuda: types.ModuleType = importlib.import_module('pycuda.driver')  # JetPack-only; no published stubs
         import numpy as np
     except ImportError as e:
         sys.stderr.write(f'[trt-daemon] ERROR: pycuda not importable: {e}\n')
@@ -414,7 +436,6 @@ def main() -> None:
                     idle_cycles += 1
                 except Exception as exc:
                     sys.stderr.write(f'[trt-daemon] Frame/inference warning: {exc}\n')
-                    time.sleep(0.05)
             else:
                 time.sleep(0.2)
 

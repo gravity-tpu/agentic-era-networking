@@ -1296,8 +1296,20 @@ export class ZodiacBridgeServer {
             res.end(JSON.stringify({ error: 'outPort (1–4) required' }));
             return;
           }
-          const cleanSrcMac = typeof srcMac === 'string' && MAC_RE.test(srcMac.trim()) ? srcMac.trim() : undefined;
-          const cleanDstMac = typeof dstMac === 'string' && MAC_RE.test(dstMac.trim()) ? dstMac.trim() : undefined;
+          if (typeof srcMac === 'string' && !MAC_RE.test(srcMac.trim())) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Invalid srcMac format (expected xx:xx:xx:xx:xx:xx)' }));
+            return;
+          }
+          if (typeof dstMac === 'string' && !MAC_RE.test(dstMac.trim())) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Invalid dstMac format (expected xx:xx:xx:xx:xx:xx)' }));
+            return;
+          }
+          const cleanSrcMac = typeof srcMac === 'string' ? srcMac.trim() : undefined;
+          const cleanDstMac = typeof dstMac === 'string' ? dstMac.trim() : undefined;
           const ruleId = `allow-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
           const rule = {
             id: ruleId,
@@ -1442,7 +1454,7 @@ export class ZodiacBridgeServer {
       const uidMatch = html.match(/CPU UID:\s*([^<\r\n]+)/i);
       if (!tempMatch && !fwMatch && !uptimeMatch) return undefined;
       return {
-        cpuTempC: tempMatch ? parseInt(tempMatch[1]!, 10) : null,
+        cpuTempC: tempMatch && tempMatch[1] !== undefined ? parseInt(tempMatch[1], 10) : null,
         firmwareVersion: fwMatch?.[1]?.trim() ?? 'Unknown',
         uptime: uptimeMatch?.[1]?.trim() ?? 'Unknown',
         cpuUid: uidMatch?.[1]?.trim() ?? 'Unknown',

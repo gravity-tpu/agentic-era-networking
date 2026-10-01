@@ -20,9 +20,11 @@ Usage:
     python3 /home/zodiac/scripts/build-trt-engine.py
 """
 
+import importlib
 import os
 import subprocess
 import sys
+import types
 
 TFLITE_MODEL_FLOAT = '/home/zodiac/coral-models/mobilenet_v2_1.0_224.tflite'
 TFLITE_MODEL_PLAIN = '/home/zodiac/coral-models/mobilenet_v2_1.0_224_quant.tflite'
@@ -35,7 +37,7 @@ ENGINE_BURST       = os.path.join(MODEL_DIR, 'trt-mobilenet-v2-gpu-burst.engine'
 
 def check_prerequisites() -> None:
     try:
-        import tensorrt as trt  # type: ignore[import-untyped]
+        trt: types.ModuleType = importlib.import_module('tensorrt')  # JetPack-only; no published stubs
         print(f'[build-trt] TensorRT version: {trt.__version__}', flush=True)
         logger  = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(logger)
@@ -50,8 +52,8 @@ def check_prerequisites() -> None:
         sys.exit(1)
 
     try:
-        import pycuda.driver as cuda  # type: ignore[import-untyped]
-        import pycuda.autoinit  # noqa: F401
+        importlib.import_module('pycuda.autoinit')  # creates primary CUDA context; noqa: F401
+        cuda: types.ModuleType = importlib.import_module('pycuda.driver')  # JetPack-only; no published stubs
         print(f'[build-trt] pycuda OK — CUDA device: {cuda.Device(0).name()}', flush=True)
     except ImportError as e:
         sys.stderr.write(f'[build-trt] pycuda not importable: {e}\n')
@@ -65,7 +67,7 @@ def convert_tflite_to_onnx(tflite_path: str, onnx_path: str) -> None:
 
     print(f'[build-trt] Converting {tflite_path} → {onnx_path} via tflite2onnx...', flush=True)
     try:
-        import tflite2onnx  # type: ignore[import-untyped]
+        tflite2onnx: types.ModuleType = importlib.import_module('tflite2onnx')  # JetPack pip install; no published stubs
         tflite2onnx.convert(tflite_path, onnx_path)
     except Exception as e:
         sys.stderr.write(
@@ -117,10 +119,10 @@ def build_trt_engine(onnx_path: str, engine_path: str, label: str) -> None:
 
 
 def verify_engine(engine_path: str, label: str) -> None:
-    import tensorrt as trt  # type: ignore[import-untyped]
+    trt: types.ModuleType = importlib.import_module('tensorrt')  # JetPack-only; no published stubs
     import numpy as np
-    import pycuda.driver as cuda  # type: ignore[import-untyped]
-    import pycuda.autoinit  # noqa: F401
+    importlib.import_module('pycuda.autoinit')  # creates primary CUDA context; noqa: F401
+    cuda: types.ModuleType = importlib.import_module('pycuda.driver')  # JetPack-only; no published stubs
 
     logger  = trt.Logger(trt.Logger.WARNING)
     runtime = trt.Runtime(logger)
