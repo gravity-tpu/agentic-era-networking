@@ -19,13 +19,16 @@ Council Invariants:
   INV-6 (Epistemic Provenance): Physical silicon truth — Ampere GPU on Jetson Orin Nano Super.
 """
 
+import importlib
 import json
 import os
 import signal
 import socket
 import sys
+import threading
 import time
 import traceback
+from typing import Any
 
 ENGINE_PATH        = os.environ.get('TRT_ENGINE_PATH', '/home/zodiac/coral-models/trt-mobilenet-v2-gpu.engine')
 TELEMETRY_FILE     = 'trt-telemetry.json'
@@ -111,7 +114,7 @@ def find_tap_interface() -> str:
 def load_trt_engine(engine_path: str):
     """Loads a serialized TensorRT engine. Returns (runtime, engine) or raises RuntimeError."""
     try:
-        import tensorrt as trt  # type: ignore[import-untyped]  # Jetson JetPack only
+        trt: Any = importlib.import_module('tensorrt')  # JetPack-only; no published type stubs
     except ImportError as e:
         raise RuntimeError(
             f'tensorrt not importable — ensure JetPack is installed: {e}'
@@ -199,8 +202,11 @@ def parse_src_ip(frame: bytes) -> str | None:
     return f'{src[0]}.{src[1]}.{src[2]}.{src[3]}'
 
 
+_RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
+
+
 def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
-    """POST quarantine-by-IP to bridge server. Fire-and-forget, 5 s timeout."""
+    """POST quarantine-by-IP to bridge server on a daemon thread (non-blocking)."""
     import urllib.request
     quarantined.add(src_ip)
     body = json.dumps({
@@ -208,22 +214,26 @@ def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
         'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
         'priority': 200,
     }).encode()
-    req = urllib.request.Request(
-        BRIDGE_QUARANTINE_URL,
-        data=body,
-        headers={'Content-Type': 'application/json'},
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            result = json.loads(resp.read())
-            print(
-                f'[trt-daemon] [QUARANTINE] {src_ip} @ {pps} pps -> '
-                f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
-                flush=True,
-            )
-    except Exception as exc:
-        sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+
+    def _post() -> None:
+        req = urllib.request.Request(
+            BRIDGE_QUARANTINE_URL,
+            data=body,
+            headers={'Content-Type': 'application/json'},
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                result = json.loads(resp.read())
+                print(
+                    f'[trt-daemon] [QUARANTINE] {src_ip} @ {pps} pps -> '
+                    f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
+                    flush=True,
+                )
+        except Exception as exc:
+            sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+
+    threading.Thread(target=_post, daemon=True, name=f'quarantine-{src_ip}').start()
 
 
 def main() -> None:
@@ -242,8 +252,8 @@ def main() -> None:
     # Import pycuda BEFORE TRT engine load so pycuda owns the primary CUDA context
     # and TRT reuses it — avoids two-context SEGV on process exit.
     try:
-        import pycuda.autoinit  # noqa: F401  # creates primary CUDA context
-        import pycuda.driver as cuda  # type: ignore[import-untyped]
+        importlib.import_module('pycuda.autoinit')  # creates primary CUDA context
+        cuda: Any = importlib.import_module('pycuda.driver')  # JetPack-only; no published type stubs
         import numpy as np
     except ImportError as e:
         sys.stderr.write(f'[trt-daemon] ERROR: pycuda not importable: {e}\n')
@@ -316,10 +326,13 @@ def main() -> None:
     window_start_ns  = time.monotonic_ns()
     last_report_ns   = window_start_ns
 
-    # Per-source-IP rate tracking (INV-2: integer arithmetic, monotonic ns)
+    # Per-source-IP rate tracking (INV-2: integer arithmetic, monotonic ns).
+    # Bounded to _RATE_WINDOW_CAP entries; oldest IP evicted when full to prevent
+    # OOM under random-IP spoofing attacks.
     mac_window_start: dict[str, int] = {}   # keyed by src IP string
     mac_window_count: dict[str, int] = {}
     quarantined_macs: set[str] = set()      # IPs already quarantined (suppress repeats)
+    idle_cycles = 0                         # recv() timeout counter for observability
 
     write_standby(total_inferences)
 
@@ -355,10 +368,14 @@ def main() -> None:
                         src_ip = parse_src_ip(frame)
                         t_recv = time.monotonic_ns()  # timestamp at drain time, not post-inference
 
-                        n_bytes = min(len(frame), inp_size)
-                        inp_flat[:n_bytes] = np.frombuffer(frame[:n_bytes], dtype=np.uint8).view(inp_host.dtype)
-                        if n_bytes < inp_size:
-                            inp_flat[n_bytes:] = 0
+                        # Align frame bytes to float32 boundary before view() to avoid dtype-divisor error
+                        # on small/odd-length frames (e.g. 15-byte ARP keepalives).
+                        elm_size = inp_host.dtype.itemsize  # 4 for float32
+                        n_raw = min(len(frame), inp_size * elm_size)
+                        n_aligned = (n_raw // elm_size) * elm_size
+                        if n_aligned > 0:
+                            inp_flat[:n_aligned // elm_size] = np.frombuffer(frame[:n_aligned], dtype=np.uint8).view(inp_host.dtype)
+                        inp_flat[n_aligned // elm_size:] = 0
 
                         t0 = time.monotonic_ns()
                         cuda.memcpy_htod_async(inp_dev, inp_host, stream)
@@ -372,6 +389,11 @@ def main() -> None:
                         # Rate-anomaly: sliding window on IPv4 src IP (not MAC — see parse_src_ip docstring).
                         # Drain timestamp used so inference latency (~1ms) doesn't distort the window.
                         if src_ip and src_ip not in quarantined_macs:
+                            # Evict oldest entry when the tracking table is full (bounded memory).
+                            if len(mac_window_start) >= _RATE_WINDOW_CAP and src_ip not in mac_window_start:
+                                oldest = next(iter(mac_window_start))
+                                mac_window_start.pop(oldest, None)
+                                mac_window_count.pop(oldest, None)
                             ws = mac_window_start.get(src_ip)
                             if ws is None or t_recv - ws >= RATE_WINDOW_NS:
                                 mac_window_start[src_ip] = t_recv
@@ -389,7 +411,7 @@ def main() -> None:
                                         )
                                         try_quarantine(src_ip, pps, quarantined_macs)
                 except socket.timeout:
-                    pass
+                    idle_cycles += 1
                 except Exception as exc:
                     sys.stderr.write(f'[trt-daemon] Frame/inference warning: {exc}\n')
                     time.sleep(0.05)

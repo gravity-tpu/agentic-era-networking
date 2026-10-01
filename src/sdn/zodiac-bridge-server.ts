@@ -1447,7 +1447,8 @@ export class ZodiacBridgeServer {
         uptime: uptimeMatch?.[1]?.trim() ?? 'Unknown',
         cpuUid: uidMatch?.[1]?.trim() ?? 'Unknown',
       };
-    } catch {
+    } catch (err: unknown) {
+      console.warn('[!] [Bridge/httpStatus] Switch home.htm scrape failed:', err instanceof Error ? err.message : String(err));
       return undefined;
     }
   }
