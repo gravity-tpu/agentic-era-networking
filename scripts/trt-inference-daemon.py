@@ -40,15 +40,17 @@ WARMUP_N           = 10              # more warmup than Coral to fully initialis
 QUARANTINE_THRESHOLD_PPS = int(os.environ.get('QUARANTINE_PPS_THRESHOLD', '10'))
 RATE_WINDOW_NS           = 5_000_000_000  # 5-second sliding window per source MAC
 BRIDGE_QUARANTINE_URL    = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/quarantine'
+BRIDGE_RELEASE_URL       = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/release'
 
 
 def atomic_write_telemetry(filename: str, data: dict) -> None:
     candidate_dirs = ['/run/zodiac', '/tmp']
     last_err = None
     for d in candidate_dirs:
-        tmp    = os.path.join(d, filename + '.tmp')
-        target = os.path.join(d, filename)
         try:
+            os.makedirs(d, exist_ok=True)
+            tmp    = os.path.join(d, filename + '.tmp')
+            target = os.path.join(d, filename)
             with open(tmp, 'w') as f:
                 json.dump(data, f, separators=(',', ':'))
             os.replace(tmp, target)
@@ -205,24 +207,101 @@ def parse_src_ip(frame: bytes) -> str | None:
 
 _RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
 
-# Single bounded worker queue for all outbound quarantine POSTs — prevents
-# thread explosion under distributed IP-spoofing floods (Dean Invariant).
+# Fast, bounded worker queue for immediate fail-closed quarantine POSTs.
+# Drains in <5ms without blocking packet capture (Dean Invariant).
 _quarantine_queue: queue.Queue[tuple[str, int] | None] = queue.Queue(maxsize=256)
 _quarantine_drops: int = 0  # monotonic drop counter; logged at report interval, never in hot path
 
+# Asynchronous, out-of-band triage queue for Qwen 2.5 evaluation.
+# Keeps LLM evaluation completely detached from the line-rate quarantine path (Council Invariant 3).
+_triage_queue: queue.Queue[tuple[str, int] | None] = queue.Queue(maxsize=32)
+_triage_shed_drops: int = 0  # monotonic load-shedding counter for epistemic telemetry provenance
+
+# Single module-level set of active quarantined IPs for suppress & out-of-band release
+_quarantined_ips: set[str] = set()
+
+
+OLLAMA_API_URL     = os.environ.get('OLLAMA_API_URL', 'http://localhost:11434/api/generate')
+QWEN_MODEL         = os.environ.get('QWEN_MODEL', 'qwen2.5:3b')
+QWEN_TRIAGE_ENABLE = os.environ.get('QWEN_TRIAGE_ENABLED', '1') == '1'
+
+
+def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
+    """Evaluates an anomaly via Qwen 2.5 on local Ollama asynchronously out-of-band.
+
+    Council Invariant 1 (Anti-Shortcut) & Invariant 3 (Fail-Closed):
+    If Ollama times out (4s budget) or returns an unparsable response, falls back
+    to deterministic fail-closed quarantine.
+    """
+    if not QWEN_TRIAGE_ENABLE:
+        return {
+            'verdict': 'QUARANTINE',
+            'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {threshold} pps',
+            'priority': 200,
+        }
+
+    import urllib.request
+    prompt = (
+        f"System: You are the Zodiac SDN Security Sentinel running locally on Jetson Orin.\n"
+        f"Evaluate this network rate-anomaly event. Output strictly valid JSON with keys: "
+        f"\"verdict\" (\"QUARANTINE\" or \"ALLOW\"), \"reason\" (concise string), \"priority\" (integer 100-65535).\n\n"
+        f"Event:\n"
+        f"Source IPv4: {src_ip}\n"
+        f"Observed Rate: {pps} pps\n"
+        f"Threshold: {threshold} pps\n"
+        f"Target Subnet: 10.0.1.0/24 (Zodiac SDN Tap)\n"
+        f"Verdict JSON:"
+    )
+    req_body = json.dumps({
+        'model': QWEN_MODEL,
+        'prompt': prompt,
+        'format': 'json',
+        'options': {'temperature': 0.1, 'num_predict': 120},
+        'stream': False,
+    }).encode()
+    req = urllib.request.Request(
+        OLLAMA_API_URL,
+        data=req_body,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            response_text = data.get('response', '{}')
+            parsed = json.loads(response_text)
+            verdict = str(parsed.get('verdict', 'QUARANTINE')).strip().upper()
+            reason = str(parsed.get('reason', f'Qwen evaluated anomaly: {pps} pps from {src_ip}')).strip()
+            raw_p = parsed.get('priority', 200)
+            priority = int(raw_p) if isinstance(raw_p, int) or (isinstance(raw_p, str) and raw_p.isdigit()) else 200
+            return {
+                'verdict': verdict if verdict in ('QUARANTINE', 'ALLOW') else 'QUARANTINE',
+                'reason': reason,
+                'priority': max(100, min(65535, priority)),
+            }
+    except Exception as e:
+        sys.stderr.write(f'[trt-daemon] Qwen triage fallback to fail-closed quarantine: {e}\n')
+        return {
+            'verdict': 'QUARANTINE',
+            'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {threshold} pps (Ollama offline fallback)',
+            'priority': 200,
+        }
+
 
 def _quarantine_worker() -> None:
-    """Background daemon thread: drains _quarantine_queue and POSTs to bridge."""
+    """Immediate line-rate quarantine worker: posts fail-closed DROP immediately (<5ms)."""
     import urllib.request
     while True:
         item = _quarantine_queue.get()
         if item is None:
             break
         src_ip, pps = item
+
+        # 1. Immediately install fail-closed DROP on the OpenFlow data plane
         body = json.dumps({
             'targetIp': src_ip,
             'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
-            'priority': 200,
+            'priority': 65535,
         }).encode()
         req = urllib.request.Request(
             BRIDGE_QUARANTINE_URL,
@@ -231,10 +310,10 @@ def _quarantine_worker() -> None:
             method='POST',
         )
         try:
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 result = json.loads(resp.read())
                 print(
-                    f'[trt-daemon] [QUARANTINE] {src_ip} @ {pps} pps -> '
+                    f'[trt-daemon] [FAIL-CLOSED DROP] {src_ip} @ {pps} pps -> '
                     f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
                     flush=True,
                 )
@@ -243,14 +322,68 @@ def _quarantine_worker() -> None:
         finally:
             _quarantine_queue.task_done()
 
+        # 2. Enqueue out-of-band for Qwen triage to determine if quarantine should be lifted
+        if QWEN_TRIAGE_ENABLE:
+            try:
+                _triage_queue.put_nowait((src_ip, pps))
+            except queue.Full:
+                global _triage_shed_drops
+                _triage_shed_drops += 1
+
+def _qwen_triage_worker() -> None:
+    """Asynchronous out-of-band neuro-symbolic triage thread (evaluates whether to release)."""
+    import urllib.request
+    while True:
+        item = _triage_queue.get()
+        if item is None:
+            break
+        src_ip, pps = item
+
+        try:
+            triage = query_qwen_triage(src_ip, pps, QUARANTINE_THRESHOLD_PPS)
+            if triage['verdict'] == 'ALLOW':
+                print(
+                    f'[trt-daemon] [QWEN-ALLOW] {src_ip} @ {pps} pps verified benign: {triage["reason"]} — releasing quarantine',
+                    flush=True,
+                )
+                rel_body = json.dumps({
+                    'targetIp': src_ip,
+                    'reason': f'[Qwen 2.5 Sentinel] {triage["reason"]}',
+                }).encode()
+                rel_req = urllib.request.Request(
+                    BRIDGE_RELEASE_URL,
+                    data=rel_body,
+                    headers={'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                try:
+                    with urllib.request.urlopen(rel_req, timeout=3) as rel_resp:
+                        rel_res = json.loads(rel_resp.read())
+                        released_count = rel_res.get('releasedCount', 0)
+                        print(f'[trt-daemon] [RELEASE] {src_ip} released -> {released_count} rules', flush=True)
+                        if rel_res.get('released', False) or released_count > 0:
+                            _quarantined_ips.discard(src_ip)
+                except Exception as rel_err:
+                    sys.stderr.write(f'[trt-daemon] Release POST error for {src_ip}: {rel_err}\n')
+            else:
+                print(
+                    f'[trt-daemon] [QWEN-CONFIRM] {src_ip} quarantine confirmed by local AI: {triage["reason"]}',
+                    flush=True,
+                )
+        except Exception as e:
+            sys.stderr.write(f'[trt-daemon] Out-of-band triage error for {src_ip}: {e}\n')
+        finally:
+            _triage_queue.task_done()
+
 
 threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker').start()
+threading.Thread(target=_qwen_triage_worker, daemon=True, name='qwen-triage-worker').start()
 
 
-def try_quarantine(src_ip: str, pps: int, quarantined: set[str]) -> None:
-    """Enqueue an IP for quarantine; fire-and-forget via the single worker thread.
+def try_quarantine(src_ip: str, pps: int) -> None:
+    """Enqueue an IP for immediate fail-closed quarantine; fire-and-forget.
 
-    quarantined.add() runs only on successful enqueue — if the queue is full the
+    _quarantined_ips.add() runs only on successful enqueue — if the queue is full the
     IP is NOT suppressed so the next packet still triggers the alert path and
     retries until the worker drains the backlog (fail-closed, no silent gaps).
     No I/O is performed here; the drop counter is reported at the telemetry interval.
@@ -259,9 +392,9 @@ def try_quarantine(src_ip: str, pps: int, quarantined: set[str]) -> None:
     try:
         _quarantine_queue.put_nowait((src_ip, pps))
         # Evict an arbitrary entry when the set is full so it stays bounded.
-        if len(quarantined) >= _RATE_WINDOW_CAP:
-            quarantined.discard(next(iter(quarantined)))
-        quarantined.add(src_ip)
+        if len(_quarantined_ips) >= _RATE_WINDOW_CAP:
+            _quarantined_ips.discard(next(iter(_quarantined_ips)))
+        _quarantined_ips.add(src_ip)
     except queue.Full:
         _quarantine_drops += 1  # counted; flushed to telemetry report, not stderr
 
@@ -361,7 +494,6 @@ def main() -> None:
     # OOM under random-IP spoofing attacks.
     mac_window_start: dict[str, int] = {}   # keyed by src IP string
     mac_window_count: dict[str, int] = {}
-    quarantined_macs: set[str] = set()      # IPs already quarantined (suppress repeats)
     idle_cycles = 0                         # recv() timeout counter for observability
 
     write_standby(total_inferences)
@@ -418,7 +550,7 @@ def main() -> None:
 
                         # Rate-anomaly: sliding window on IPv4 src IP (not MAC — see parse_src_ip docstring).
                         # Drain timestamp used so inference latency (~1ms) doesn't distort the window.
-                        if src_ip and src_ip not in quarantined_macs:
+                        if src_ip and src_ip not in _quarantined_ips:
                             # Evict oldest entry when the tracking table is full (bounded memory).
                             if len(mac_window_start) >= _RATE_WINDOW_CAP and src_ip not in mac_window_start:
                                 oldest = next(iter(mac_window_start))
@@ -438,8 +570,8 @@ def main() -> None:
                                             f'[trt-daemon] [ALERT] {src_ip}: {pps} pps exceeds '
                                             f'threshold {QUARANTINE_THRESHOLD_PPS} pps -- quarantining',
                                             flush=True,
-                                        )
-                                        try_quarantine(src_ip, pps, quarantined_macs)
+                                         )
+                                        try_quarantine(src_ip, pps)
                 except socket.timeout:
                     idle_cycles += 1
                 except Exception as exc:
@@ -466,6 +598,8 @@ def main() -> None:
 
                 if _quarantine_drops > 0:
                     sys.stderr.write(f'[trt-daemon] Quarantine queue saturation: {_quarantine_drops} total drops\n')
+                if _triage_shed_drops > 0:
+                    sys.stderr.write(f'[trt-daemon] Triage queue load-shedding: {_triage_shed_drops} total drops\n')
 
                 atomic_write_telemetry(TELEMETRY_FILE, {
                     'detected':               True,
@@ -478,6 +612,7 @@ def main() -> None:
                     'latencyP99Ns':           p99_ns,
                     'windowSampleCount':      n,
                     'quarantineQueueDrops':   _quarantine_drops,
+                    'triageQueueShedDrops':   _triage_shed_drops,
                     'timestampNs':            now_ns,
                 })
 

@@ -830,6 +830,11 @@ async function readCoralTelemetryFile(filename: string): Promise<CoralDaemonTele
 }
 
 export async function readCoralDaemonTelemetry(): Promise<CoralDaemonTelemetryData | null> {
+  // Council Invariant 6 (Epistemic Telemetry Provenance):
+  // Prioritize physical Jetson Ampere GPU TensorRT wire-tap daemon (trt-telemetry.json),
+  // falling back to legacy/external Coral USB TPU daemon (coral-telemetry.json) if present.
+  const trt = await readCoralTelemetryFile('trt-telemetry.json');
+  if (trt) return trt;
   return readCoralTelemetryFile('coral-telemetry.json');
 }
 

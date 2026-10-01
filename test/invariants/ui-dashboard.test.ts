@@ -141,6 +141,20 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
           json: async () => JSON.parse(JSON.stringify(snap, (_, v) => typeof v === 'bigint' ? v.toString() : v)),
         };
       }
+      if (url.includes('/api/sdn/copilot/summary')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: 'HEALTHY',
+            headline: 'Physical SDN Fabric Operational',
+            bullets: ['OpenFlow controller established', 'Jetson Orin silicon nominal', 'Wire-tap inference active'],
+            model: 'qwen2.5:3b (Jetson Orin Nano Super)',
+            timestampMs: Date.now(),
+            cached: false,
+          }),
+        };
+      }
       return { ok: false, status: 404, json: async () => ({}) };
     });
 
@@ -183,6 +197,13 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('chart-coral1-latency')).not.toBeNull();
     expect(document.getElementById('chart-coral2-rate')).not.toBeNull();
     expect(document.getElementById('chart-coral2-latency')).not.toBeNull();
+
+    // Executive AI Copilot Elements
+    expect(document.getElementById('cf-copilot-card')).not.toBeNull();
+    expect(document.getElementById('copilot-headline')).not.toBeNull();
+    expect(document.getElementById('copilot-status-badge')).not.toBeNull();
+    expect(document.getElementById('copilot-bullets')).not.toBeNull();
+    expect(document.getElementById('copilot-refresh-btn')).not.toBeNull();
 
     // Workstation specific KPI cards & elements
     expect(document.getElementById('ws-kpi-gpu-util')).not.toBeNull();

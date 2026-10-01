@@ -124,6 +124,42 @@ export class ZodiacController {
     };
   }
 
+  /**
+   * Releases an emergency quarantine rule from the OpenFlow data plane.
+   * Council Invariant 1 (Anti-Shortcut Law): Returns true ONLY when deleteFlow successfully
+   * dispatches the OFPFC_DELETE command to an ESTABLISHED OpenFlow switch connection.
+   */
+  public liftQuarantine(rule: FlowRuleEntry): {
+    success: boolean;
+    timestampNs: bigint;
+    error?: string;
+  } {
+    if (this.ofServer.metrics.state !== 'ESTABLISHED') {
+      return {
+        success: false,
+        timestampNs: process.hrtime.bigint(),
+        error: `OpenFlow control plane not ESTABLISHED (state: ${this.ofServer.metrics.state})`,
+      };
+    }
+
+    try {
+      const dispatched = this.ofServer.deleteFlow(rule);
+      return {
+        success: dispatched,
+        timestampNs: process.hrtime.bigint(),
+        ...(dispatched ? {} : { error: 'Failed to dispatch deleteFlow to OpenFlow client socket' }),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[!] [ZodiacController] OpenFlow quarantine release error:', msg);
+      return {
+        success: false,
+        timestampNs: process.hrtime.bigint(),
+        error: msg,
+      };
+    }
+  }
+
   private cachedConfig: ZodiacConfig | undefined;
   private cachedStatus: ZodiacDeviceStatus | undefined;
   private cachedPorts: ZodiacPortInfo[] | undefined;

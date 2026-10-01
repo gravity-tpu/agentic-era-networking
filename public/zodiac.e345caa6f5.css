@@ -397,6 +397,35 @@ body {
   border: 1px solid rgba(220, 38, 38, 0.25);
 }
 
+.cf-pill-badge.orange {
+  background: rgba(234, 88, 12, 0.08);
+  color: #ea580c;
+  border: 1px solid rgba(234, 88, 12, 0.22);
+}
+
+/* Inside KPI stat-card headers and chart card headers: strip the pill chrome
+   and replace with a small colored dot preceding the label text. The color
+   is inherited from the existing .green / .blue / .gray / etc. modifier. */
+.cf-stat-header .cf-pill-badge,
+.cf-card-header .cf-pill-badge {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  gap: 0.2rem;
+}
+
+.cf-stat-header .cf-pill-badge::before,
+.cf-card-header .cf-pill-badge::before {
+  content: '●';
+  font-size: 0.4rem;
+  opacity: 0.8;
+  line-height: 1;
+  vertical-align: middle;
+}
+
 .cf-btn {
   display: inline-flex;
   align-items: center;

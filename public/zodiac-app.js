@@ -259,6 +259,15 @@
     viewDeviceCoral: document.getElementById('view-device-coral'),
     viewDeviceWorkstation: document.getElementById('view-device-workstation'),
 
+    // Executive AI Copilot Elements (Workflow 3: Qwen 2.5 on Jetson Orin Nano)
+    copilotCard: document.getElementById('cf-copilot-card'),
+    copilotHeadline: document.getElementById('copilot-headline'),
+    copilotStatusBadge: document.getElementById('copilot-status-badge'),
+    copilotModelBadge: document.getElementById('copilot-model-badge'),
+    copilotBullets: document.getElementById('copilot-bullets'),
+    copilotTimestamp: document.getElementById('copilot-timestamp'),
+    copilotRefreshBtn: document.getElementById('copilot-refresh-btn'),
+
     // Workstation (MacBook M5 / Gemma 4) Elements
     wsChipBadge: document.getElementById('ws-chip-badge'),
     wsGpuBadge: document.getElementById('ws-gpu-badge'),
@@ -690,6 +699,79 @@
       isFetching = false;
       const jitter = Math.floor(Math.random() * (2 * TELEMETRY_POLL_JITTER_MS + 1)) - TELEMETRY_POLL_JITTER_MS;
       pollTimeoutId = setTimeout(fetchTelemetry, TELEMETRY_POLL_INTERVAL_MS + jitter);
+    }
+  }
+
+  // ─── Executive AI Copilot (Workflow 3: Qwen 2.5 on Jetson Orin Nano) ───────
+  let isFetchingCopilot = false;
+  let copilotPollIntervalId = null;
+
+  function startCopilotPolling() {
+    fetchCopilotSummary();
+    if (copilotPollIntervalId) {
+      clearInterval(copilotPollIntervalId);
+    }
+    copilotPollIntervalId = setInterval(fetchCopilotSummary, 20000);
+  }
+
+  async function fetchCopilotSummary(force = false) {
+    if (isFetchingCopilot) return;
+    isFetchingCopilot = true;
+    if (els.copilotRefreshBtn) {
+      els.copilotRefreshBtn.disabled = true;
+      els.copilotRefreshBtn.innerText = '↻ Evaluating...';
+    }
+    const abortCtrl = new AbortController();
+    const timeoutId = setTimeout(() => abortCtrl.abort(), 7000);
+    try {
+      const resp = await fetch('/api/sdn/copilot/summary', {
+        cache: force ? 'no-cache' : 'default',
+        signal: abortCtrl.signal,
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      renderCopilotSummary(data);
+    } catch (err) {
+      console.warn('[!] Copilot summary poll failed:', err instanceof Error ? err.message : String(err));
+      if (els.copilotStatusBadge) {
+        els.copilotStatusBadge.className = 'cf-pill-badge gray';
+        els.copilotStatusBadge.innerText = 'OFFLINE';
+      }
+      if (els.copilotHeadline) {
+        els.copilotHeadline.innerText = 'Executive AI Copilot Offline';
+      }
+      if (els.copilotBullets) {
+        els.copilotBullets.innerHTML = '<li>Unable to connect to Jetson Orin executive copilot endpoint.</li>';
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      isFetchingCopilot = false;
+      if (els.copilotRefreshBtn) {
+        els.copilotRefreshBtn.disabled = false;
+        els.copilotRefreshBtn.innerText = '↻ Refresh';
+      }
+    }
+  }
+
+  function renderCopilotSummary(data) {
+    if (!data) return;
+    if (els.copilotHeadline && data.headline) {
+      els.copilotHeadline.innerText = data.headline;
+    }
+    if (els.copilotStatusBadge && data.status) {
+      const badgeCls = data.status === 'HEALTHY' ? 'green' : data.status === 'DEGRADED' ? 'amber' : data.status === 'ALERT' ? 'red' : 'gray';
+      els.copilotStatusBadge.className = `cf-pill-badge ${badgeCls}`;
+      els.copilotStatusBadge.innerText = data.status;
+    }
+    if (els.copilotModelBadge && data.model) {
+      els.copilotModelBadge.innerText = data.model;
+    }
+    if (els.copilotBullets && Array.isArray(data.bullets)) {
+      els.copilotBullets.innerHTML = data.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('');
+    }
+    if (els.copilotTimestamp) {
+      const timeStr = new Date(data.timestampMs || Date.now()).toLocaleTimeString();
+      els.copilotTimestamp.innerText = `Last evaluated: ${timeStr}${data.cached ? ' (cached)' : ''}`;
     }
   }
 
@@ -4786,6 +4868,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
         // Start real-time telemetry polling
         fetchTelemetry();
+        startCopilotPolling();
       } else {
         // Unauthenticated -> present Google SSO modal gate
         if (userProfileEl) userProfileEl.style.display = 'none';
@@ -4797,12 +4880,20 @@ Please connect the physical switch via USB to execute '${command}' on device har
       const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (isLocalHost) {
         fetchTelemetry();
+        startCopilotPolling();
       } else {
         if (userProfileEl) userProfileEl.style.display = 'none';
         if (signInBtnEl) signInBtnEl.style.display = 'inline-flex';
         if (authGateEl) authGateEl.style.display = 'flex';
       }
     }
+  }
+
+  // Hook up Copilot manual refresh button
+  if (els.copilotRefreshBtn) {
+    els.copilotRefreshBtn.addEventListener('click', () => {
+      fetchCopilotSummary(true);
+    });
   }
 
   // Check auth and start polling once DOM is fully ready
@@ -4816,6 +4907,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
   window.ZodiacApp = {
     fetchTelemetry,
     renderTelemetry,
+    fetchCopilotSummary,
+    startCopilotPolling,
     executeTerminalCommand,
     selectPort,
     switchDevice,

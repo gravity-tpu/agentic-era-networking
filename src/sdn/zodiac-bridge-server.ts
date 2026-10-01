@@ -108,6 +108,28 @@ export function parseIpv4ToUint32(ip: string): number | null {
   return uint32;
 }
 
+export interface CopilotSummaryMetrics {
+  openFlowState: string;
+  activeRules: number;
+  quarantinedCount: number;
+  switchTempC: number | null;
+  jetsonTempC: number | null;
+  jetsonPowerMw: number | null;
+  jetsonFreeRamMb: number | null;
+  wireTapInferencesPerSec: number;
+}
+
+export interface CopilotSummaryResponse {
+  status: 'HEALTHY' | 'DEGRADED' | 'ALERT' | 'OFFLINE';
+  headline: string;
+  bullets: string[];
+  model: string;
+  timestampMs: number;
+  cached: boolean;
+  ttlSeconds: number;
+  metrics: CopilotSummaryMetrics;
+}
+
 /**
  * Determines whether an IPv4 address falls within private/local scopes:
  * - 127.0.0.0/8    (Loopback - RFC 1122)
@@ -431,18 +453,85 @@ export class ZodiacBridgeServer {
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
   private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
   private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
-  private readonly flowRuleRegistry: Map<string, {
-    ruleId: string;
-    priority: number;
-    action: string;
-    srcCidr: string;
-    dstCidr: string;
-    protocol: string;
-    srcMac?: string;
-    dstMac?: string;
-    installedAtMs: number;
-    openFlowInstalled: boolean;
-  }> = new Map();
+  private copilotSummaryCache: {
+    data: CopilotSummaryResponse;
+    cachedAtPerfMs: number;
+  } | null = null;
+  private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
+  private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
+
+  /**
+   * Registers a flow rule entry in the bridge server's local registry.
+   */
+  public registerFlowRule(entry: ZodiacFlowRuleEntry): void {
+    if (this.flowRuleRegistry.size >= 1000) {
+      const oldest = this.flowRuleRegistry.keys().next().value;
+      if (oldest !== undefined) this.flowRuleRegistry.delete(oldest);
+    }
+    this.flowRuleRegistry.set(entry.ruleId, entry);
+  }
+
+  /**
+   * Releases an emergency quarantine rule matching targetIp or targetMac.
+   * Invokes OpenFlow OFPFC_DELETE via controller and cleans up registry.
+   */
+  public releaseQuarantineRule(options: { targetIp?: string | undefined; targetMac?: string | undefined; reason?: string | undefined }): {
+    ok: boolean;
+    released: boolean;
+    releasedCount: number;
+    releasedRules: string[];
+    reason: string;
+    timestampNs: string;
+  } {
+    const cleanMac = typeof options.targetMac === 'string' ? options.targetMac.trim() : undefined;
+    const cleanIp = typeof options.targetIp === 'string' ? options.targetIp.trim() : undefined;
+
+    if (!cleanMac && !cleanIp) {
+      throw new Error('targetMac or targetIp required');
+    }
+
+    const releasedRules: string[] = [];
+    const srcCidrMatch = cleanIp ? `${cleanIp}/32` : undefined;
+
+    for (const [key, rule] of this.flowRuleRegistry.entries()) {
+      const matchesMac = cleanMac !== undefined && rule.srcMac === cleanMac;
+      const matchesIp = srcCidrMatch !== undefined && rule.srcCidr === srcCidrMatch;
+      if (rule.action === 'DROP' && (matchesMac || matchesIp)) {
+        let canDeleteFromRegistry = true;
+        if (rule.openFlowInstalled) {
+          const proto = (rule.protocol === 'TCP' || rule.protocol === 'UDP' || rule.protocol === 'ICMP') ? rule.protocol : 'ANY';
+          const liftResult = this.controller.liftQuarantine({
+            id: rule.ruleId,
+            priority: rule.priority,
+            srcCidr: rule.srcCidr,
+            dstCidr: rule.dstCidr,
+            protocol: proto,
+            srcMac: rule.srcMac,
+            dstMac: rule.dstMac,
+            action: 'DROP',
+          });
+          if (!liftResult.success) {
+            canDeleteFromRegistry = false;
+            console.warn(`[!] [Bridge] Cannot lift quarantine rule ${rule.ruleId}: OpenFlow hardware release failed: ${liftResult.error}`);
+          }
+        }
+
+        if (canDeleteFromRegistry) {
+          this.flowRuleRegistry.delete(key);
+          releasedRules.push(rule.ruleId);
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      released: releasedRules.length > 0,
+      releasedCount: releasedRules.length,
+      releasedRules,
+      reason: options.reason || 'Out-of-band triage verified benign',
+      timestampNs: process.hrtime.bigint().toString(),
+    };
+  }
 
   constructor(
     controller?: ZodiacController,
@@ -1246,6 +1335,79 @@ export class ZodiacBridgeServer {
       return;
     }
 
+    // API: POST /api/sdn/release (Lifts an emergency quarantine rule after out-of-band triage)
+    if (url.pathname === '/api/sdn/release' && req.method === 'POST') {
+      const MAX_PAYLOAD = 32 * 1024;
+      const chunks: Buffer[] = [];
+      let bytesReceived = 0;
+      let aborted = false;
+
+      req.setTimeout(5000, () => {
+        aborted = true;
+        if (!res.headersSent) {
+          res.statusCode = 408;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Request Timeout' }));
+        }
+        req.destroy();
+      });
+
+      req.on('error', (err: Error) => {
+        aborted = true;
+        if (res.headersSent) return;
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: err.message }));
+      });
+
+      req.on('data', (c: Buffer) => {
+        if (aborted || res.headersSent) return;
+        bytesReceived += c.length;
+        if (bytesReceived > MAX_PAYLOAD) {
+          aborted = true;
+          res.statusCode = 413;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Payload Too Large' }));
+          req.destroy();
+          return;
+        }
+        chunks.push(c);
+      });
+
+      req.on('end', () => {
+        if (aborted || res.headersSent) return;
+        try {
+          const raw = Buffer.concat(chunks).toString('utf-8');
+          const body = JSON.parse(raw);
+          const { targetMac, targetIp, reason } = body;
+          const cleanMac = typeof targetMac === 'string' ? targetMac.trim() : undefined;
+          const cleanIp = typeof targetIp === 'string' ? targetIp.trim() : undefined;
+
+          if (!cleanMac && !cleanIp) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'targetMac or targetIp required' }));
+            return;
+          }
+
+          const result = this.releaseQuarantineRule({
+            targetMac: cleanMac,
+            targetIp: cleanIp,
+            reason: typeof reason === 'string' ? reason : undefined,
+          });
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(result));
+        } catch (err: unknown) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+      return;
+    }
+
     // API: POST /api/sdn/allow (Push a verified forwarding flow rule to the physical switch)
     // INV-4 (Verification Asymmetry): topology verified loop-free before hardware install.
     // INV-3 (Fail-Closed): action is ALLOW only; DROP is /api/sdn/quarantine.
@@ -1379,6 +1541,30 @@ export class ZodiacBridgeServer {
       return;
     }
 
+    // API: GET /api/sdn/copilot/summary (Executive AI Telemetry Copilot)
+    // Council Invariant 1 (Anti-Shortcut), Invariant 3 (Fail-Closed) & Invariant 6 (Epistemic Provenance):
+    // Synthesizes a plain-English executive triage of physical SDN signals via local Qwen 2.5 on Jetson Orin.
+    if (url.pathname === '/api/sdn/copilot/summary' && req.method === 'GET') {
+      try {
+        const summary = await this.generateCopilotSummary();
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        res.statusCode = 200;
+        res.end(JSON.stringify(summary));
+      } catch (err: unknown) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          status: 'OFFLINE',
+          headline: 'Executive Copilot Fault',
+          bullets: ['Copilot evaluation encountered an internal error.'],
+          error: err instanceof Error ? err.message : String(err),
+          timestampMs: Date.now(),
+        }));
+      }
+      return;
+    }
+
     // Static File Serving from public/ (Asynchronous & Path-Traversal Protected)
     let reqPath = url.pathname;
     if (reqPath === '/' || reqPath === '') {
@@ -1441,6 +1627,160 @@ export class ZodiacBridgeServer {
       if (result.length >= cap) break;
     }
     return result;
+  }
+
+  public async generateCopilotSummary(): Promise<CopilotSummaryResponse> {
+    const nowPerf = performance.now();
+    const TTL_SECONDS = 20;
+
+    // Dean Latency Invariant: Check memory cache first
+    if (this.copilotSummaryCache && (nowPerf - this.copilotSummaryCache.cachedAtPerfMs) < TTL_SECONDS * 1000) {
+      return {
+        ...this.copilotSummaryCache.data,
+        cached: true,
+      };
+    }
+
+    if (this.copilotInFlightPromise) {
+      return await this.copilotInFlightPromise;
+    }
+
+    this.copilotInFlightPromise = (async (): Promise<CopilotSummaryResponse> => {
+      const ofState = this.controller.openFlow.metrics.state || this.cachedSnapshot.openflow?.status || 'Disconnected';
+      const totalRules = this.flowRuleRegistry.size;
+      let quarantinedCount = 0;
+      for (const rule of this.flowRuleRegistry.values()) {
+        if (rule.action === 'DROP' || rule.ruleId.startsWith('quarantine-')) {
+          quarantinedCount++;
+        }
+      }
+
+      const switchTempC = this.cachedSnapshot.system?.cpuTemperatureC ?? null;
+      const jetsonTempC = this.cachedSnapshot.jetson?.temperatures?.socC ?? this.cachedSnapshot.jetson?.temperatures?.gpuC ?? this.cachedSnapshot.jetson?.temperatures?.cpuC ?? null;
+      const vddInMw = this.cachedSnapshot.jetson?.powerMw?.vddIn;
+      // Council Invariant 2 (Dean & Ghemawat): Integer milliwatts, zero floating-point division
+      const jetsonPowerMw = vddInMw != null ? Math.trunc(vddInMw) : null;
+      const ramUsedBytes = this.cachedSnapshot.jetson?.ramUsedBytes;
+      const ramTotalBytes = this.cachedSnapshot.jetson?.ramTotalBytes;
+      const jetsonFreeRamMb = (ramTotalBytes != null && ramUsedBytes != null && ramTotalBytes > ramUsedBytes)
+        ? Number((ramTotalBytes - ramUsedBytes) / (1024n * 1024n))
+        : null;
+      const wireTapInferencesPerSec = Number(this.cachedSnapshot.coral?.inferencesPerSecond ?? 0n);
+
+      const portsSummary = (this.cachedSnapshot.ports || [])
+        .map(p => `Port ${p.port} (${p.name}): ${p.status}`)
+        .join(', ');
+
+      const metrics: CopilotSummaryMetrics = {
+        openFlowState: ofState,
+        activeRules: totalRules,
+        quarantinedCount,
+        switchTempC,
+        jetsonTempC,
+        jetsonPowerMw,
+        jetsonFreeRamMb,
+        wireTapInferencesPerSec,
+      };
+
+      const ollamaUrl = process.env['OLLAMA_API_URL'] || 'http://localhost:11434/api/generate';
+      const qwenModel = process.env['QWEN_MODEL'] || 'qwen2.5:3b';
+
+      const prompt = `You are the Zodiac Executive AI Copilot running on Jetson Orin Nano Super.
+Provide a concise, 3-bullet plain-English executive triage of the physical SDN infrastructure.
+Telemetry Signals:
+- OpenFlow 1.3 State: ${ofState} (${totalRules} active rules, ${quarantinedCount} quarantined hosts)
+- Physical Switch Ports: ${portsSummary || 'Port 1..4 monitored'}
+- Switch CPU Temp: ${switchTempC != null ? switchTempC + '°C' : 'N/A'}
+- Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
+- Wire-Tap Inference: ${wireTapInferencesPerSec > 0 ? `Active at ${wireTapInferencesPerSec} inf/s` : 'Standby / Idle'}
+
+Respond ONLY with valid JSON having the structure:
+{"status": "HEALTHY" | "DEGRADED" | "ALERT", "headline": string, "bullets": [string, string, string]}`;
+
+      let resultData: CopilotSummaryResponse;
+
+      try {
+        const response = await fetch(ollamaUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: qwenModel,
+            prompt,
+            format: 'json',
+            stream: false,
+            options: { temperature: 0.2, num_predict: 250 },
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Ollama returned HTTP ${response.status}`);
+        }
+
+        const resJson = (await response.json()) as { response?: string };
+        const parsed = JSON.parse(resJson.response || '{}') as {
+          status?: string;
+          headline?: string;
+          bullets?: string[];
+        };
+
+        const statusRaw = String(parsed.status || 'HEALTHY').toUpperCase();
+        const validStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
+          statusRaw === 'ALERT' ? 'ALERT' : statusRaw === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY';
+
+        resultData = {
+          status: validStatus,
+          headline: String(parsed.headline || 'Physical SDN Infrastructure Triage').trim(),
+          bullets: Array.isArray(parsed.bullets) && parsed.bullets.length > 0
+            ? parsed.bullets.map(b => String(b).trim()).slice(0, 4)
+            : ['SDN data plane operational', 'OpenFlow controller established', 'Telemetry counters monotonic'],
+          model: `${qwenModel} (Jetson Orin Nano Super)`,
+          timestampMs: Date.now(),
+          cached: false,
+          ttlSeconds: TTL_SECONDS,
+          metrics,
+        };
+      } catch (err: unknown) {
+        // Council Invariant 1 & 3: Fail-closed deterministic fallback
+        console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
+
+        const hasQuarantine = quarantinedCount > 0;
+        const ofDisconnected = ofState !== 'ESTABLISHED';
+        const fallbackStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
+          ofDisconnected ? 'ALERT' : hasQuarantine ? 'DEGRADED' : 'HEALTHY';
+
+        const fallbackBullets: string[] = [
+          `OpenFlow 1.3 control plane is ${ofState} with ${totalRules} active rules (${quarantinedCount} isolated).`,
+          `Switch CPU is ${switchTempC != null ? switchTempC + '°C' : 'monitored'}; Jetson Orin silicon at ${jetsonTempC != null ? jetsonTempC + '°C' : 'nominal'} (${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'idle'}).`,
+          wireTapInferencesPerSec > 0
+            ? `Ampere GPU wire-tap inference active at ${wireTapInferencesPerSec} inferences/second.`
+            : 'Ampere GPU wire-tap inference in standby mode awaiting frame ingress.',
+        ];
+
+        resultData = {
+          status: fallbackStatus,
+          headline: 'Deterministic SDN Telemetry Triage (Ollama Offline Fallback)',
+          bullets: fallbackBullets,
+          model: 'deterministic_rules (fail-closed fallback)',
+          timestampMs: Date.now(),
+          cached: false,
+          ttlSeconds: TTL_SECONDS,
+          metrics,
+        };
+      }
+
+      this.copilotSummaryCache = {
+        data: resultData,
+        cachedAtPerfMs: performance.now(),
+      };
+      return resultData;
+    })();
+
+    try {
+      return await this.copilotInFlightPromise;
+    } finally {
+      this.copilotInFlightPromise = null;
+    }
   }
 
   private async fetchSwitchHttpStatus(): Promise<import('./zodiac-serial.js').ZodiacDeviceStatus | undefined> {

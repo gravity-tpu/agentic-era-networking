@@ -359,6 +359,35 @@
         <!-- OVERVIEW / HARDWARE VIEW -->
         <div id="section-overview">
 
+          <!-- Executive AI Copilot Triage Banner (Workflow 3: Qwen 2.5 on Jetson Orin Nano) -->
+          <div class="cf-card" id="cf-copilot-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(16, 24, 40, 0.95), rgba(15, 23, 42, 0.95)); border: 1px solid rgba(59, 130, 246, 0.3); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+            <div class="cf-card-header" style="padding: 0.85rem 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.25rem;">⚡</span>
+                <div>
+                  <h3 class="cf-card-title" style="font-size: 0.95rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                    Executive AI Copilot
+                    <span class="cf-pill-badge blue" style="font-size: 0.65rem;" id="copilot-model-badge">qwen2.5:3b · Orin GPU</span>
+                  </h3>
+                  <div class="cf-card-subtitle" style="font-size: 0.75rem; margin-top: 2px;" id="copilot-headline">Evaluating physical SDN telemetry...</div>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span class="cf-pill-badge gray" id="copilot-status-badge">STANDBY</span>
+                <button id="copilot-refresh-btn" class="cf-btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; cursor: pointer;" title="Re-evaluate Telemetry with Qwen">↻ Refresh</button>
+              </div>
+            </div>
+            <div class="cf-card-body" style="padding: 1rem 1.25rem;">
+              <ul id="copilot-bullets" style="margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.82rem; color: var(--cf-text-secondary); line-height: 1.45;">
+                <li>Connecting to local Qwen 2.5 3B on Jetson Orin Nano...</li>
+              </ul>
+              <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--cf-text-muted); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 0.5rem;">
+                <span>Neuro-symbolic edge inference via Ollama (Port 11434) · Zero cloud egress</span>
+                <span id="copilot-timestamp">Last updated: --:--:--</span>
+              </div>
+            </div>
+          </div>
+
           <!-- ZODIAC FX SWITCH VIEW -->
           <div id="view-device-zodiac">
           
@@ -2624,7 +2653,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </div>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.31d942281c.js"></script>
+  <script defer src="zodiac-app.dfd430730c.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

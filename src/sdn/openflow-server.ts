@@ -233,6 +233,33 @@ export class OpenFlowServer extends EventEmitter {
   }
 
   /**
+   * Deletes a flow matching the specified rule criteria from the OpenFlow data plane.
+   * Uses OFPFC_DELETE with matching criteria (MAC/IP/priority).
+   * Returns true if packet was dispatched to socket, false if disconnected.
+   */
+  public deleteFlow(rule: FlowRuleEntry): boolean {
+    if (!this.clientSocket || this.state !== 'ESTABLISHED') {
+      return false;
+    }
+
+    const xid = this.allocateXid();
+    const flowModPacket = buildOfpFlowMod({
+      command: FlowModCommand.OFPFC_DELETE,
+      priority: rule.priority,
+      outputPorts: [],
+      match: {
+        srcMac: rule.srcMac,
+        dstMac: rule.dstMac,
+        srcIp: rule.srcCidr && rule.srcCidr !== '0.0.0.0/0' ? rule.srcCidr.split('/')[0] : undefined,
+        dstIp: rule.dstCidr && rule.dstCidr !== '0.0.0.0/0' ? rule.dstCidr.split('/')[0] : undefined,
+      },
+    }, xid);
+
+    this.clientSocket.write(flowModPacket);
+    return true;
+  }
+
+  /**
    * Installs a low-priority mirror rule that copies frames arriving on inPort to outPort.
    * Used to wire the Zodiac Port 3 tap so the GPU sentinel can observe data-plane traffic.
    * Priority 1 ensures quarantine rules at 65535 always take precedence (fail-closed).
