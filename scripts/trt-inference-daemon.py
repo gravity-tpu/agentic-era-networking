@@ -247,7 +247,7 @@ def _quarantine_worker() -> None:
 threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker').start()
 
 
-def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
+def try_quarantine(src_ip: str, pps: int, quarantined: set[str]) -> None:
     """Enqueue an IP for quarantine; fire-and-forget via the single worker thread.
 
     quarantined.add() runs only on successful enqueue — if the queue is full the
@@ -465,7 +465,7 @@ def main() -> None:
                     status  = 'STANDBY'
 
                 if _quarantine_drops > 0:
-                    sys.stderr.write(f'[trt-daemon] Quarantine queue saturation: {_quarantine_drops} drops since last report\n')
+                    sys.stderr.write(f'[trt-daemon] Quarantine queue saturation: {_quarantine_drops} total drops\n')
 
                 atomic_write_telemetry(TELEMETRY_FILE, {
                     'detected':               True,
