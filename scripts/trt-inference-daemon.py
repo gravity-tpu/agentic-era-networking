@@ -208,6 +208,7 @@ _RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
 # Single bounded worker queue for all outbound quarantine POSTs — prevents
 # thread explosion under distributed IP-spoofing floods (Dean Invariant).
 _quarantine_queue: queue.Queue[tuple[str, int] | None] = queue.Queue(maxsize=256)
+_quarantine_drops: int = 0  # monotonic drop counter; logged at report interval, never in hot path
 
 
 def _quarantine_worker() -> None:
@@ -252,7 +253,9 @@ def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
     quarantined.add() runs only on successful enqueue — if the queue is full the
     IP is NOT suppressed so the next packet still triggers the alert path and
     retries until the worker drains the backlog (fail-closed, no silent gaps).
+    No I/O is performed here; the drop counter is reported at the telemetry interval.
     """
+    global _quarantine_drops
     try:
         _quarantine_queue.put_nowait((src_ip, pps))
         # Evict an arbitrary entry when the set is full so it stays bounded.
@@ -260,7 +263,7 @@ def try_quarantine(src_ip: str, pps: int, quarantined: set) -> None:
             quarantined.discard(next(iter(quarantined)))
         quarantined.add(src_ip)
     except queue.Full:
-        sys.stderr.write(f'[trt-daemon] Quarantine queue full; dropping {src_ip}\n')
+        _quarantine_drops += 1  # counted; flushed to telemetry report, not stderr
 
 
 def main() -> None:
@@ -461,17 +464,21 @@ def main() -> None:
                     inf_sec = 0
                     status  = 'STANDBY'
 
+                if _quarantine_drops > 0:
+                    sys.stderr.write(f'[trt-daemon] Quarantine queue saturation: {_quarantine_drops} drops since last report\n')
+
                 atomic_write_telemetry(TELEMETRY_FILE, {
-                    'detected':            True,
-                    'status':              status,
-                    'source':              'jetson_trt_gpu',
-                    'model':               'MobileNet V2 224x224 INT8 (TensorRT Ampere GPU) — Wire Tap DPI',
-                    'inferencesPerSecond': inf_sec,
-                    'totalInferences':     total_inferences,
-                    'latencyP50Ns':        p50_ns,
-                    'latencyP99Ns':        p99_ns,
-                    'windowSampleCount':   n,
-                    'timestampNs':         now_ns,
+                    'detected':               True,
+                    'status':                 status,
+                    'source':                 'jetson_trt_gpu',
+                    'model':                  'MobileNet V2 224x224 INT8 (TensorRT Ampere GPU) — Wire Tap DPI',
+                    'inferencesPerSecond':    inf_sec,
+                    'totalInferences':        total_inferences,
+                    'latencyP50Ns':           p50_ns,
+                    'latencyP99Ns':           p99_ns,
+                    'windowSampleCount':      n,
+                    'quarantineQueueDrops':   _quarantine_drops,
+                    'timestampNs':            now_ns,
                 })
 
                 window_latencies = []
