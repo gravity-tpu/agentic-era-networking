@@ -80,6 +80,63 @@ function getShutdownTimeoutMs(): number {
   return DEFAULT_SHUTDOWN_TIMEOUT_MS;
 }
 
+// Council Invariant 5 (Adaptive Control & System Scale - Quoc Le & Jeff Dean):
+// Configurable LLM copilot inference bounds with strict min/max clamping to eliminate
+// unbounded inference latency or memory exhaustion under distribution shifts or misconfiguration.
+const DEFAULT_COPILOT_TTL_SEC = 20;
+const MIN_COPILOT_TTL_SEC = 5;
+const MAX_COPILOT_TTL_SEC = 300;
+
+const DEFAULT_COPILOT_TIMEOUT_MS = 8000;
+const MIN_COPILOT_TIMEOUT_MS = 1000;
+const MAX_COPILOT_TIMEOUT_MS = 30000;
+
+const DEFAULT_COPILOT_MAX_TOKENS = 120;
+const MIN_COPILOT_MAX_TOKENS = 32;
+const MAX_COPILOT_MAX_TOKENS = 1024;
+
+const DEFAULT_COPILOT_TEMPERATURE = 0.2;
+const MIN_COPILOT_TEMPERATURE = 0.0;
+const MAX_COPILOT_TEMPERATURE = 1.0;
+
+function clampValue(val: number, min: number, max: number): number {
+  return Math.min(Math.max(val, min), max);
+}
+
+export interface CopilotRuntimeConfig {
+  readonly ttlSec: number;
+  readonly timeoutMs: number;
+  readonly maxTokens: number;
+  readonly temperature: number;
+}
+
+export function parseCopilotConfig(): CopilotRuntimeConfig {
+  const envTtl = process.env['ZODIAC_COPILOT_TTL_SEC'];
+  const envTimeout = process.env['ZODIAC_COPILOT_TIMEOUT_MS'];
+  const envTokens = process.env['ZODIAC_COPILOT_MAX_TOKENS'];
+  const envTemp = process.env['ZODIAC_COPILOT_TEMP'];
+
+  const ttlSec = envTtl ? Number.parseInt(envTtl, 10) : DEFAULT_COPILOT_TTL_SEC;
+  const timeoutMs = envTimeout ? Number.parseInt(envTimeout, 10) : DEFAULT_COPILOT_TIMEOUT_MS;
+  const maxTokens = envTokens ? Number.parseInt(envTokens, 10) : DEFAULT_COPILOT_MAX_TOKENS;
+  const temperature = envTemp ? Number.parseFloat(envTemp) : DEFAULT_COPILOT_TEMPERATURE;
+
+  return Object.freeze({
+    ttlSec: Number.isFinite(ttlSec) ? clampValue(ttlSec, MIN_COPILOT_TTL_SEC, MAX_COPILOT_TTL_SEC) : DEFAULT_COPILOT_TTL_SEC,
+    timeoutMs: Number.isFinite(timeoutMs) ? clampValue(timeoutMs, MIN_COPILOT_TIMEOUT_MS, MAX_COPILOT_TIMEOUT_MS) : DEFAULT_COPILOT_TIMEOUT_MS,
+    maxTokens: Number.isFinite(maxTokens) ? clampValue(maxTokens, MIN_COPILOT_MAX_TOKENS, MAX_COPILOT_MAX_TOKENS) : DEFAULT_COPILOT_MAX_TOKENS,
+    temperature: Number.isFinite(temperature) ? clampValue(temperature, MIN_COPILOT_TEMPERATURE, MAX_COPILOT_TEMPERATURE) : DEFAULT_COPILOT_TEMPERATURE,
+  });
+}
+
+// Sanjay Ghemawat - Flat-State Invariant: Parsed once at module initialization
+// to eliminate crossing V8 C++ process.env boundary on runtime requests.
+const MODULE_COPILOT_CONFIG: CopilotRuntimeConfig = parseCopilotConfig();
+
+export function getCopilotConfig(): CopilotRuntimeConfig {
+  return MODULE_COPILOT_CONFIG;
+}
+
 /**
  * Parses an IPv4 dotted-quad into an unsigned 32-bit integer.
  * Sanjay Ghemawat - Radical Simplicity: Flat, deterministic O(1) parsing without regex or type coercion.
@@ -415,6 +472,7 @@ function mergeHistoricalSeries<T extends { readonly timestampMs: number }>(
 
 export class ZodiacBridgeServer {
   public controlPlaneState: 'INITIALIZING' | 'ACTIVE' | 'DEGRADED_FAULT' = 'INITIALIZING';
+  public readonly copilotConfig: CopilotRuntimeConfig = MODULE_COPILOT_CONFIG;
   private readonly controller: ZodiacController;
   private readonly switchIp: string;
   private readonly controllerIp: string;
@@ -1631,10 +1689,11 @@ export class ZodiacBridgeServer {
 
   public async generateCopilotSummary(): Promise<CopilotSummaryResponse> {
     const nowPerf = performance.now();
-    const TTL_SECONDS = 20;
+    // Sanjay Ghemawat Invariant: Use readonly pre-parsed configuration to avoid V8 process.env overhead
+    const { ttlSec, timeoutMs, maxTokens, temperature } = this.copilotConfig;
 
     // Dean Latency Invariant: Check memory cache first
-    if (this.copilotSummaryCache && (nowPerf - this.copilotSummaryCache.cachedAtPerfMs) < TTL_SECONDS * 1000) {
+    if (this.copilotSummaryCache && (nowPerf - this.copilotSummaryCache.cachedAtPerfMs) < ttlSec * 1000) {
       return {
         ...this.copilotSummaryCache.data,
         cached: true,
@@ -1694,7 +1753,7 @@ Telemetry Signals:
 - Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
 - Wire-Tap Inference: ${wireTapInferencesPerSec > 0 ? `Active at ${wireTapInferencesPerSec} inf/s` : 'Standby / Idle'}
 
-Respond ONLY with valid JSON having the structure:
+Respond ONLY with valid JSON having the structure (keep each bullet under 15 words to prevent token truncation):
 {"status": "HEALTHY" | "DEGRADED" | "ALERT", "headline": string, "bullets": [string, string, string]}`;
 
       let resultData: CopilotSummaryResponse;
@@ -1708,9 +1767,9 @@ Respond ONLY with valid JSON having the structure:
             prompt,
             format: 'json',
             stream: false,
-            options: { temperature: 0.2, num_predict: 120 },
+            options: { temperature, num_predict: maxTokens },
           }),
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(timeoutMs),
         });
 
         if (!response.ok) {
@@ -1737,12 +1796,17 @@ Respond ONLY with valid JSON having the structure:
           model: `${qwenModel} (Jetson Orin Nano Super)`,
           timestampMs: Date.now(),
           cached: false,
-          ttlSeconds: TTL_SECONDS,
+          ttlSeconds: ttlSec,
           metrics,
         };
       } catch (err: unknown) {
         // Council Invariant 1 & 3: Fail-closed deterministic fallback
-        console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
+        const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+        if (isTimeout) {
+          console.warn('[!] [Copilot] Ollama inference timed out (thermal/budget limit), failing closed to deterministic fallback.');
+        } else {
+          console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
+        }
 
         const hasQuarantine = quarantinedCount > 0;
         const ofDisconnected = ofState !== 'ESTABLISHED';
@@ -1764,7 +1828,7 @@ Respond ONLY with valid JSON having the structure:
           model: 'deterministic_rules (fail-closed fallback)',
           timestampMs: Date.now(),
           cached: false,
-          ttlSeconds: TTL_SECONDS,
+          ttlSeconds: ttlSec,
           metrics,
         };
       }

@@ -221,16 +221,42 @@ _triage_shed_drops: int = 0  # monotonic load-shedding counter for epistemic tel
 _quarantined_ips: set[str] = set()
 
 
-OLLAMA_API_URL     = os.environ.get('OLLAMA_API_URL', 'http://localhost:11434/api/generate')
-QWEN_MODEL         = os.environ.get('QWEN_MODEL', 'qwen2.5:3b')
-QWEN_TRIAGE_ENABLE = os.environ.get('QWEN_TRIAGE_ENABLED', '1') == '1'
+OLLAMA_API_URL          = os.environ.get('OLLAMA_API_URL', 'http://localhost:11434/api/generate')
+QWEN_MODEL              = os.environ.get('QWEN_MODEL', 'qwen2.5:3b')
+QWEN_TRIAGE_ENABLE      = os.environ.get('QWEN_TRIAGE_ENABLED', '1') == '1'
+def _parse_env_int(name: str, default: int, min_val: int = 1, max_val: int = 10000) -> int:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    try:
+        parsed = int(val)
+        return min(max(parsed, min_val), max_val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _parse_env_float(name: str, default: float, min_val: float = 0.0, max_val: float = 1.0) -> float:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    try:
+        parsed = float(val)
+        return min(max(parsed, min_val), max_val)
+    except (ValueError, TypeError):
+        return default
+
+
+# Council Invariant 5 (Adaptive Control - Quoc Le): Configurable inference bounds with strict upper clamping
+QWEN_TRIAGE_TIMEOUT_SEC = _parse_env_int('QWEN_TRIAGE_TIMEOUT_SEC', 4, min_val=1, max_val=30)
+QWEN_TRIAGE_MAX_TOKENS  = _parse_env_int('QWEN_TRIAGE_MAX_TOKENS', 120, min_val=32, max_val=1024)
+QWEN_TRIAGE_TEMP        = _parse_env_float('QWEN_TRIAGE_TEMP', 0.1, min_val=0.0, max_val=1.0)
 
 
 def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
     """Evaluates an anomaly via Qwen 2.5 on local Ollama asynchronously out-of-band.
 
     Council Invariant 1 (Anti-Shortcut) & Invariant 3 (Fail-Closed):
-    If Ollama times out (4s budget) or returns an unparsable response, falls back
+    If Ollama times out (configurable budget) or returns an unparsable response, falls back
     to deterministic fail-closed quarantine.
     """
     if not QWEN_TRIAGE_ENABLE:
@@ -244,7 +270,7 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
     prompt = (
         f"System: You are the Zodiac SDN Security Sentinel running locally on Jetson Orin.\n"
         f"Evaluate this network rate-anomaly event. Output strictly valid JSON with keys: "
-        f"\"verdict\" (\"QUARANTINE\" or \"ALLOW\"), \"reason\" (concise string), \"priority\" (integer 100-65535).\n\n"
+        f"\"verdict\" (\"QUARANTINE\" or \"ALLOW\"), \"reason\" (concise string under 20 words), \"priority\" (integer 100-65535).\n\n"
         f"Event:\n"
         f"Source IPv4: {src_ip}\n"
         f"Observed Rate: {pps} pps\n"
@@ -256,7 +282,7 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         'model': QWEN_MODEL,
         'prompt': prompt,
         'format': 'json',
-        'options': {'temperature': 0.1, 'num_predict': 120},
+        'options': {'temperature': QWEN_TRIAGE_TEMP, 'num_predict': QWEN_TRIAGE_MAX_TOKENS},
         'stream': False,
     }).encode()
     req = urllib.request.Request(
@@ -266,7 +292,7 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         method='POST',
     )
     try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
+        with urllib.request.urlopen(req, timeout=QWEN_TRIAGE_TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             response_text = data.get('response', '{}')
             parsed = json.loads(response_text)

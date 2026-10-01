@@ -703,6 +703,25 @@
   }
 
   // ─── Executive AI Copilot (Workflow 3: Qwen 2.5 on Jetson Orin Nano) ───────
+  // Council Invariant 5 (Adaptive Control & System Scale - Quoc Le & Jeff Dean):
+  // Client fetch timeout MUST strictly exceed the backend server-side Ollama abort SLA (8s)
+  // by at least a 2000ms transmission delta, preventing race conditions and severed sockets.
+  // Enforce mathematical floor so client timeout can NEVER be configured lower than backend SLA + delta.
+  const BACKEND_COPILOT_TIMEOUT_SLA_MS = 8000;
+  const CLIENT_TRANSMISSION_DELTA_MS = 2000;
+  const MIN_CLIENT_TIMEOUT_FLOOR_MS = BACKEND_COPILOT_TIMEOUT_SLA_MS + CLIENT_TRANSMISSION_DELTA_MS; // 10000ms floor
+
+  const rawCopilotPoll = typeof window !== 'undefined' && window.ZODIAC_CONFIG?.copilotPollIntervalMs;
+  const rawCopilotTimeout = typeof window !== 'undefined' && window.ZODIAC_CONFIG?.copilotTimeoutMs;
+
+  const COPILOT_POLL_INTERVAL_MS = typeof rawCopilotPoll === 'number' && Number.isFinite(rawCopilotPoll) && rawCopilotPoll >= 5000
+    ? Math.min(rawCopilotPoll, 300000)
+    : 20000;
+
+  // Enforce invariant: client timeout can never be configured below the backend SLA + 2s delta
+  const COPILOT_CLIENT_TIMEOUT_MS = typeof rawCopilotTimeout === 'number' && Number.isFinite(rawCopilotTimeout)
+    ? Math.min(Math.max(rawCopilotTimeout, MIN_CLIENT_TIMEOUT_FLOOR_MS), 60000)
+    : MIN_CLIENT_TIMEOUT_FLOOR_MS;
   let isFetchingCopilot = false;
   let copilotPollIntervalId = null;
 
@@ -711,7 +730,7 @@
     if (copilotPollIntervalId) {
       clearInterval(copilotPollIntervalId);
     }
-    copilotPollIntervalId = setInterval(fetchCopilotSummary, 20000);
+    copilotPollIntervalId = setInterval(fetchCopilotSummary, COPILOT_POLL_INTERVAL_MS);
   }
 
   async function fetchCopilotSummary(force = false) {
@@ -722,7 +741,7 @@
       els.copilotRefreshBtn.innerText = '↻ Evaluating...';
     }
     const abortCtrl = new AbortController();
-    const timeoutId = setTimeout(() => abortCtrl.abort(), 10000);
+    const timeoutId = setTimeout(() => abortCtrl.abort(), COPILOT_CLIENT_TIMEOUT_MS);
     try {
       const resp = await fetch('/api/sdn/copilot/summary', {
         cache: force ? 'no-cache' : 'default',
