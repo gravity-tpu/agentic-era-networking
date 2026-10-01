@@ -1585,6 +1585,11 @@ async function fetchFromAgent(
  * fails closed to createDefaultWorkstationSnapshot(true) per Invariant 3.
  */
 let wsAgentProbeFailureCount = 0n;
+// Monotonic staleness tracking for workstation inference rate (Invariant 6 + Dean monotonic mandate).
+// Records the hrtime snapshot at which we last observed a new lastUpdatedMs from the telemetry file.
+// Comparison uses process.hrtime.bigint() only — never wall-clock deltas across machines.
+let _wsLastSeenInferenceUpdatedMs = 0;
+let _wsLastSeenInferenceMonotonicNs = 0n;
 
 async function probeRemoteWorkstationHardware(
   prevSnapshot?: WorkstationTelemetrySnapshot | undefined
@@ -1801,7 +1806,7 @@ export async function probeWorkstationHardware(
         if (typeof rawTs === 'number' && rawTs > 0) {
           lastInferenceTimestampMs = rawTs;
         } else if (typeof rawTs === 'string') {
-          const n = Number(rawTs);
+          const n = parseInt(rawTs, 10);
           if (Number.isFinite(n) && n > 0) lastInferenceTimestampMs = n;
         }
       }
@@ -1809,8 +1814,18 @@ export async function probeWorkstationHardware(
       process.stderr.write(`[workstation-probe] Error reading ${metricsPath}: ${err instanceof Error ? err.message : String(err)}\n`);
     }
 
-    // Invariant 6: Zero out stale rates — lastUpdatedMs older than threshold means no active generation.
-    if (lastInferenceTimestampMs > 0 && Date.now() - lastInferenceTimestampMs > INFERENCE_STALE_THRESHOLD_MS) {
+    // Invariant 6 + Dean monotonic mandate: track staleness via hrtime, not wall-clock deltas.
+    // When lastUpdatedMs changes (new inference completed), anchor a monotonic snapshot.
+    // This avoids cross-machine clock skew and NTP drift entirely.
+    if (lastInferenceTimestampMs > 0 && lastInferenceTimestampMs !== _wsLastSeenInferenceUpdatedMs) {
+      _wsLastSeenInferenceUpdatedMs = lastInferenceTimestampMs;
+      _wsLastSeenInferenceMonotonicNs = process.hrtime.bigint();
+    }
+    const INFERENCE_STALE_NS = BigInt(INFERENCE_STALE_THRESHOLD_MS) * 1_000_000n;
+    const inferenceAgeNs = _wsLastSeenInferenceMonotonicNs > 0n
+      ? process.hrtime.bigint() - _wsLastSeenInferenceMonotonicNs
+      : INFERENCE_STALE_NS + 1n; // never seen → treat as stale (fail-closed)
+    if (inferenceAgeNs > INFERENCE_STALE_NS) {
       tokensPerSecond = 0;
       promptTokensPerSecond = 0;
     }

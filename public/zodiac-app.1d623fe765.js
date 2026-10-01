@@ -1489,7 +1489,7 @@
       const totalTokens = safeBigInt(ws.totalTokens || (safeBigInt(ws.totalPromptTokens) + safeBigInt(ws.totalCompletionTokens)));
       if (els.wsKpiTokRate) {
         els.wsKpiTokRate.innerHTML = tokRate > 0
-          ? `${tokRate.toFixed(1)} <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`
+          ? `${String(tokRate)} <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`
           : `-- <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`;
       }
       if (els.wsKpiPeakTokRate) {
