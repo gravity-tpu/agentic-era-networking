@@ -1708,9 +1708,9 @@ Respond ONLY with valid JSON having the structure:
             prompt,
             format: 'json',
             stream: false,
-            options: { temperature: 0.2, num_predict: 250 },
+            options: { temperature: 0.2, num_predict: 120 },
           }),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(8000),
         });
 
         if (!response.ok) {

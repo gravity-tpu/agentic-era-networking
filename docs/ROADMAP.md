@@ -54,6 +54,7 @@ Governed by the **Technical Staff Council Invariants**:
         │                        |  * USB-C Port: L4T Device Mode (192.168.55.1 / CDC-ACM)  |
         │                        |  * Tailscale Mesh: tailscale0 (100.118.64.16/32)         |
         │                        |  * 67 TOPS Ampere GPU (Stage-2 Anomaly Autoencoder)      |
+        │                        |  * Local Ollama Engine: qwen2.5:3b Q4_K_M (:11434)       |
         │                        +──────────────┬───────────────────────────┬───────────────+
         │                                       │                           │
         │                                       │ Dual USB 3.0              │ DIRECT HIGH-SPEED USB-C CABLE
@@ -110,7 +111,7 @@ Governed by the **Technical Staff Council Invariants**:
 | Node | Role | Hardware / Logical Plane | Always On? |
 |---|---|---|---|
 | **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 | ✅ Yes |
-| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, 67 TOPS Ampere GPU Stage-2 Anomaly Autoencoder | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`), Tailscale (`100.118.64.16`) | ✅ Yes |
+| **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, 67 TOPS Ampere GPU Stage-2 Anomaly Autoencoder, local `qwen2.5:3b` LLM inference (Ollama, Q4_K_M) | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`), Tailscale (`100.118.64.16`) | ✅ Yes |
 | **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
 | **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |

@@ -722,7 +722,7 @@
       els.copilotRefreshBtn.innerText = '↻ Evaluating...';
     }
     const abortCtrl = new AbortController();
-    const timeoutId = setTimeout(() => abortCtrl.abort(), 7000);
+    const timeoutId = setTimeout(() => abortCtrl.abort(), 10000);
     try {
       const resp = await fetch('/api/sdn/copilot/summary', {
         cache: force ? 'no-cache' : 'default',
