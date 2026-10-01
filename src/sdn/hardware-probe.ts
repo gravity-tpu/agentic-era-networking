@@ -1819,7 +1819,11 @@ export async function probeWorkstationHardware(
     // This avoids cross-machine clock skew and NTP drift entirely.
     if (lastInferenceTimestampMs > 0 && lastInferenceTimestampMs !== _wsLastSeenInferenceUpdatedMs) {
       _wsLastSeenInferenceUpdatedMs = lastInferenceTimestampMs;
-      _wsLastSeenInferenceMonotonicNs = process.hrtime.bigint();
+      // Bootstrap the monotonic anchor adjusted for the wall-clock age of this value.
+      // Safe: lastUpdatedMs and Date.now() are both local Mac wall-clock — no cross-machine skew.
+      // Math.max(0, ...) clamps future timestamps to 0 age → stale in exactly one threshold window.
+      const wallAgeMs = Math.max(0, Date.now() - lastInferenceTimestampMs);
+      _wsLastSeenInferenceMonotonicNs = process.hrtime.bigint() - BigInt(wallAgeMs) * 1_000_000n;
     }
     const INFERENCE_STALE_NS = BigInt(INFERENCE_STALE_THRESHOLD_MS) * 1_000_000n;
     const inferenceAgeNs = _wsLastSeenInferenceMonotonicNs > 0n
