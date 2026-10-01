@@ -522,20 +522,22 @@ async function executeJetsonHardwareProbe(
     }
   }
 
+  // TOCTOU-free bounded read: open one fd, read ≤ 4 KiB through that same fd into a
+  // pre-allocated Buffer. A rogue write after open cannot expand our read beyond the buffer
+  // cap — no stat/readFile race window (Jeff Dean Systems Sanity / Sanjay Ghemawat).
   const jetsonOllamaMetricsPath = '/tmp/zodiac-jetson-ollama-telemetry.json';
-  // Bounded read: stat first and reject files > 4 KiB to prevent OOM from a rogue write.
   const JETSON_OLLAMA_MAX_BYTES = 4096;
   try {
-    const fileStat = await fs.promises.stat(jetsonOllamaMetricsPath);
-    if (fileStat.size > JETSON_OLLAMA_MAX_BYTES) {
-      process.stderr.write(`[jetson-probe] ${jetsonOllamaMetricsPath} oversized (${fileStat.size} bytes > ${JETSON_OLLAMA_MAX_BYTES}) — skipping (Invariant 3)\n`);
-    } else {
-      const content = await fs.promises.readFile(jetsonOllamaMetricsPath, 'utf8');
+    const fd = await fs.promises.open(jetsonOllamaMetricsPath, 'r');
+    try {
+      const buf = Buffer.alloc(JETSON_OLLAMA_MAX_BYTES);
+      const { bytesRead } = await fd.read(buf, 0, JETSON_OLLAMA_MAX_BYTES, 0);
+      const content = buf.subarray(0, bytesRead).toString('utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
       ollamaTotalInferences = parseBigIntClamped(parsed['totalInferences']);
       ollamaTotalTokens = parseBigIntClamped(parsed['totalTokens']);
-      // Council Invariant 2 (Determinism): Number.isFinite guards NaN propagation from
-      // non-numeric strings (e.g. "N/A") before integer coercion.
+      // Council Invariant 2 (Determinism): Number.isFinite blocks NaN propagation from
+      // non-numeric strings before integer coercion.
       const rawTps = Number(parsed['tokensPerSecond']);
       ollamaToksPerSecond = Number.isFinite(rawTps) ? Math.round(rawTps) : 0;
       const rawPeak = Number(parsed['peakTokensPerSecond']);
@@ -551,6 +553,8 @@ async function executeJetsonHardwareProbe(
         const n = parseInt(rawTs, 10);
         if (Number.isFinite(n) && n > 0) ollamaLastInferenceTimestampMs = n;
       }
+    } finally {
+      await fd.close();
     }
   } catch (err) {
     const code = getErrorCode(err);
