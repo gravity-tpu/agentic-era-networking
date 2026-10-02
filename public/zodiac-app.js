@@ -267,6 +267,26 @@
     copilotBullets: document.getElementById('copilot-bullets'),
     copilotTimestamp: document.getElementById('copilot-timestamp'),
     copilotRefreshBtn: document.getElementById('copilot-refresh-btn'),
+    copilotOpenDrawerBtn: document.getElementById('copilot-open-drawer-btn'),
+    copilotToggleBtn: document.getElementById('copilot-toggle-btn'),
+    copilotBannerIcon: document.getElementById('copilot-banner-icon'),
+    copilotTopbarBtn: document.getElementById('btn-copilot-topbar'),
+    copilotTopbarBadge: document.getElementById('copilot-topbar-badge'),
+    copilotTopbarDot: document.getElementById('copilot-topbar-dot'),
+    copilotDrawer: document.getElementById('cf-copilot-drawer'),
+    copilotDrawerBackdrop: document.getElementById('cf-copilot-drawer-backdrop'),
+    copilotDrawerClose: document.getElementById('cf-copilot-drawer-close'),
+    copilotDrawerHeadline: document.getElementById('copilot-drawer-headline'),
+    copilotDrawerStatusBadge: document.getElementById('copilot-drawer-status-badge'),
+    copilotDrawerModelBadge: document.getElementById('copilot-drawer-model-badge'),
+    copilotDrawerBullets: document.getElementById('copilot-drawer-bullets'),
+    copilotDrawerTimestamp: document.getElementById('copilot-drawer-timestamp'),
+    copilotDrawerRefreshBtn: document.getElementById('copilot-drawer-refresh-btn'),
+    copilotDrawerJumpOrin: document.getElementById('copilot-drawer-jump-orin'),
+    copilotDrawerSigOf: document.getElementById('copilot-drawer-sig-of'),
+    copilotDrawerSigQuarantine: document.getElementById('copilot-drawer-sig-quarantine'),
+    copilotDrawerSigTemp: document.getElementById('copilot-drawer-sig-temp'),
+    copilotDrawerSigTap: document.getElementById('copilot-drawer-sig-tap'),
 
     // Workstation (MacBook M5 / Gemma 4) Elements
     wsChipBadge: document.getElementById('ws-chip-badge'),
@@ -733,12 +753,18 @@
     copilotPollIntervalId = setInterval(fetchCopilotSummary, COPILOT_POLL_INTERVAL_MS);
   }
 
+  let userManuallyToggledCopilot = false;
+
   async function fetchCopilotSummary(force = false) {
     if (isFetchingCopilot) return;
     isFetchingCopilot = true;
     if (els.copilotRefreshBtn) {
       els.copilotRefreshBtn.disabled = true;
       els.copilotRefreshBtn.innerText = '↻ Evaluating...';
+    }
+    if (els.copilotDrawerRefreshBtn) {
+      els.copilotDrawerRefreshBtn.disabled = true;
+      els.copilotDrawerRefreshBtn.innerText = '↻ Evaluating...';
     }
     const abortCtrl = new AbortController();
     const timeoutId = setTimeout(() => abortCtrl.abort(), COPILOT_CLIENT_TIMEOUT_MS);
@@ -752,15 +778,34 @@
       renderCopilotSummary(data);
     } catch (err) {
       console.warn('[!] Copilot summary poll failed:', err instanceof Error ? err.message : String(err));
+      if (els.copilotCard) {
+        els.copilotCard.classList.remove('is-nominal', 'is-critical');
+        els.copilotCard.classList.add('is-anomalous');
+        if (els.copilotBannerIcon) els.copilotBannerIcon.innerText = '⚡';
+      }
       if (els.copilotStatusBadge) {
         els.copilotStatusBadge.className = 'cf-pill-badge gray';
         els.copilotStatusBadge.innerText = 'OFFLINE';
       }
+      if (els.copilotTopbarBadge) {
+        els.copilotTopbarBadge.className = 'cf-pill-badge gray';
+        els.copilotTopbarBadge.innerText = 'OFFLINE';
+      }
+      if (els.copilotDrawerStatusBadge) {
+        els.copilotDrawerStatusBadge.className = 'cf-pill-badge gray';
+        els.copilotDrawerStatusBadge.innerText = 'OFFLINE';
+      }
       if (els.copilotHeadline) {
         els.copilotHeadline.innerText = 'Executive AI Copilot Offline';
       }
+      if (els.copilotDrawerHeadline) {
+        els.copilotDrawerHeadline.innerText = 'Executive AI Copilot Offline';
+      }
       if (els.copilotBullets) {
         els.copilotBullets.innerHTML = '<li>Unable to connect to Jetson Orin executive copilot endpoint.</li>';
+      }
+      if (els.copilotDrawerBullets) {
+        els.copilotDrawerBullets.innerHTML = '<li>Unable to connect to Jetson Orin executive copilot endpoint.</li>';
       }
     } finally {
       clearTimeout(timeoutId);
@@ -768,6 +813,10 @@
       if (els.copilotRefreshBtn) {
         els.copilotRefreshBtn.disabled = false;
         els.copilotRefreshBtn.innerText = '↻ Refresh';
+      }
+      if (els.copilotDrawerRefreshBtn) {
+        els.copilotDrawerRefreshBtn.disabled = false;
+        els.copilotDrawerRefreshBtn.innerText = '↻ Re-evaluate Telemetry';
       }
     }
   }
@@ -777,20 +826,136 @@
     if (els.copilotHeadline && data.headline) {
       els.copilotHeadline.innerText = data.headline;
     }
-    if (els.copilotStatusBadge && data.status) {
+    if (els.copilotDrawerHeadline && data.headline) {
+      els.copilotDrawerHeadline.innerText = data.headline;
+    }
+    if (data.status) {
       const badgeCls = data.status === 'HEALTHY' ? 'green' : data.status === 'DEGRADED' ? 'amber' : data.status === 'ALERT' ? 'red' : 'gray';
-      els.copilotStatusBadge.className = `cf-pill-badge ${badgeCls}`;
-      els.copilotStatusBadge.innerText = data.status;
+      if (els.copilotStatusBadge) {
+        els.copilotStatusBadge.className = `cf-pill-badge ${badgeCls}`;
+        els.copilotStatusBadge.innerText = data.status;
+      }
+      if (els.copilotTopbarBadge) {
+        els.copilotTopbarBadge.className = `cf-pill-badge ${badgeCls}`;
+        els.copilotTopbarBadge.innerText = data.status;
+      }
+      if (els.copilotDrawerStatusBadge) {
+        els.copilotDrawerStatusBadge.className = `cf-pill-badge ${badgeCls}`;
+        els.copilotDrawerStatusBadge.innerText = data.status;
+      }
+
+      // Auto-collapse / auto-expand anomaly banner
+      const isAnomalous = data.status === 'DEGRADED' || data.status === 'ALERT' || data.status === 'WARNING';
+      const isCritical = data.status === 'ALERT';
+
+      if (els.copilotCard) {
+        els.copilotCard.classList.remove('is-nominal', 'is-anomalous', 'is-critical');
+        if (isCritical) {
+          els.copilotCard.classList.add('is-critical');
+          els.copilotCard.classList.remove('is-collapsed');
+          if (els.copilotToggleBtn) els.copilotToggleBtn.innerText = 'Details ▴';
+          if (els.copilotBannerIcon) els.copilotBannerIcon.innerText = '🚨';
+        } else if (isAnomalous) {
+          els.copilotCard.classList.add('is-anomalous');
+          els.copilotCard.classList.remove('is-collapsed');
+          if (els.copilotToggleBtn) els.copilotToggleBtn.innerText = 'Details ▴';
+          if (els.copilotBannerIcon) els.copilotBannerIcon.innerText = '⚠️';
+        } else {
+          els.copilotCard.classList.add('is-nominal');
+          if (!userManuallyToggledCopilot) {
+            els.copilotCard.classList.add('is-collapsed');
+            if (els.copilotToggleBtn) els.copilotToggleBtn.innerText = 'Details ▾';
+          }
+          if (els.copilotBannerIcon) els.copilotBannerIcon.innerText = '⚡';
+        }
+      }
     }
-    if (els.copilotModelBadge && data.model) {
-      els.copilotModelBadge.innerText = data.model;
+    if (data.model) {
+      if (els.copilotModelBadge) {
+        els.copilotModelBadge.innerText = data.model;
+      }
+      if (els.copilotDrawerModelBadge) {
+        els.copilotDrawerModelBadge.innerText = data.model;
+      }
     }
-    if (els.copilotBullets && Array.isArray(data.bullets)) {
-      els.copilotBullets.innerHTML = data.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('');
+    if (Array.isArray(data.bullets)) {
+      const html = data.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('');
+      if (els.copilotBullets) {
+        els.copilotBullets.innerHTML = html;
+      }
+      if (els.copilotDrawerBullets) {
+        els.copilotDrawerBullets.innerHTML = html;
+      }
     }
-    if (els.copilotTimestamp) {
+    if (data.timestampMs || Date.now()) {
       const timeStr = new Date(data.timestampMs || Date.now()).toLocaleTimeString();
-      els.copilotTimestamp.innerText = `Last evaluated: ${timeStr}${data.cached ? ' (cached)' : ''}`;
+      const text = `Last evaluated: ${timeStr}${data.cached ? ' (cached)' : ''}`;
+      if (els.copilotTimestamp) {
+        els.copilotTimestamp.innerText = text;
+      }
+      if (els.copilotDrawerTimestamp) {
+        els.copilotDrawerTimestamp.innerText = text;
+      }
+    }
+    updateCopilotDrawerSignals();
+  }
+
+  function updateCopilotDrawerSignals() {
+    if (!currentSnapshot) return;
+    if (els.copilotDrawerSigOf) {
+      const ofState = currentSnapshot.openflow?.status || 'Disconnected';
+      els.copilotDrawerSigOf.innerText = ofState;
+    }
+    if (els.copilotDrawerSigQuarantine) {
+      const rules = currentSnapshot.openflow?.flowRules || [];
+      const qCount = rules.filter(r => r.action === 'DROP' || (r.id && String(r.id).startsWith('quarantine-'))).length;
+      els.copilotDrawerSigQuarantine.innerText = `${qCount} active`;
+    }
+    if (els.copilotDrawerSigTemp) {
+      const jetsonTemp = currentSnapshot.jetson?.temperatures?.socC ?? currentSnapshot.jetson?.temperatures?.gpuC ?? null;
+      els.copilotDrawerSigTemp.innerText = jetsonTemp != null ? `${jetsonTemp}°C` : '--°C';
+    }
+    if (els.copilotDrawerSigTap) {
+      const tapRate = currentSnapshot.coral?.inferencesPerSecond;
+      els.copilotDrawerSigTap.innerText = tapRate != null ? `${tapRate} inf/s` : '-- inf/s';
+    }
+  }
+
+  function openCopilotDrawer() {
+    if (els.copilotDrawer) {
+      els.copilotDrawer.classList.add('open');
+      els.copilotDrawer.setAttribute('aria-hidden', 'false');
+    }
+    if (els.copilotDrawerBackdrop) {
+      els.copilotDrawerBackdrop.classList.add('active');
+      els.copilotDrawerBackdrop.style.display = 'block';
+    }
+    updateCopilotDrawerSignals();
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeCopilotDrawer() {
+    if (els.copilotDrawer) {
+      els.copilotDrawer.classList.remove('open');
+      els.copilotDrawer.setAttribute('aria-hidden', 'true');
+    }
+    if (els.copilotDrawerBackdrop) {
+      els.copilotDrawerBackdrop.classList.remove('active');
+      const handleBackdropTransitionEnd = () => {
+        if (!els.copilotDrawer?.classList.contains('open')) {
+          els.copilotDrawerBackdrop.style.display = 'none';
+        }
+      };
+      els.copilotDrawerBackdrop.addEventListener('transitionend', handleBackdropTransitionEnd, { once: true });
+    }
+    document.body.style.overflow = '';
+  }
+
+  function toggleCopilotDrawer() {
+    if (els.copilotDrawer?.classList.contains('open')) {
+      closeCopilotDrawer();
+    } else {
+      openCopilotDrawer();
     }
   }
 
@@ -4653,10 +4818,14 @@ Please connect the physical switch via USB to execute '${command}' on device har
       if (section === 'council') {
         if (secOverview) secOverview.style.display = 'none';
         if (secCouncil)  secCouncil.style.display  = 'block';
+        if (els.copilotCard) els.copilotCard.style.display = 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         if (secOverview) secOverview.style.display = 'block';
         if (secCouncil)  secCouncil.style.display  = 'none';
+        if (els.copilotCard) {
+          els.copilotCard.style.display = (activeDeviceId === 'zodiac' || activeDeviceId === 'orin') ? 'block' : 'none';
+        }
         if (scrollId) {
           const target = document.getElementById(scrollId);
           if (target) { target.scrollIntoView({ behavior: 'smooth' }); }
@@ -4748,6 +4917,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     if (els.viewDeviceCoral) els.viewDeviceCoral.style.display = device === 'coral-1' ? 'block' : 'none';
     if (els.ofDeviceSection) els.ofDeviceSection.style.display = device === 'openflow' ? 'block' : 'none';
     if (els.viewDeviceWorkstation) els.viewDeviceWorkstation.style.display = device === 'workstation' ? 'block' : 'none';
+    if (els.copilotCard) els.copilotCard.style.display = (device === 'zodiac' || device === 'orin') ? 'block' : 'none';
 
     if (els.breadcrumbName) {
       if (device === 'zodiac') {
@@ -4908,10 +5078,84 @@ Please connect the physical switch via USB to execute '${command}' on device har
     }
   }
 
-  // Hook up Copilot manual refresh button
+  // Hook up Copilot manual refresh and drawer controls
   if (els.copilotRefreshBtn) {
     els.copilotRefreshBtn.addEventListener('click', () => {
       fetchCopilotSummary(true);
+    });
+  }
+  if (els.copilotDrawerRefreshBtn) {
+    els.copilotDrawerRefreshBtn.addEventListener('click', () => {
+      fetchCopilotSummary(true);
+    });
+  }
+  if (els.copilotTopbarBtn) {
+    els.copilotTopbarBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openCopilotDrawer();
+    });
+  }
+  if (els.copilotOpenDrawerBtn) {
+    els.copilotOpenDrawerBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openCopilotDrawer();
+    });
+  }
+  if (els.copilotToggleBtn) {
+    els.copilotToggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!els.copilotCard) return;
+      const isCurrentlyCollapsed = els.copilotCard.classList.contains('is-collapsed');
+      if (isCurrentlyCollapsed) {
+        els.copilotCard.classList.remove('is-collapsed');
+        els.copilotToggleBtn.innerText = 'Details ▴';
+        userManuallyToggledCopilot = true;
+      } else {
+        els.copilotCard.classList.add('is-collapsed');
+        els.copilotToggleBtn.innerText = 'Details ▾';
+        userManuallyToggledCopilot = false;
+      }
+    });
+  }
+  if (els.copilotDrawerClose) {
+    els.copilotDrawerClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeCopilotDrawer();
+    });
+  }
+  if (els.copilotDrawerBackdrop) {
+    els.copilotDrawerBackdrop.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeCopilotDrawer();
+    });
+  }
+  window.addEventListener('keydown', (e) => {
+    // Global Cmd+K / Ctrl+K shortcut to toggle Executive AI Copilot drawer
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const activeEl = document.activeElement;
+      const isInputFocused = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.getAttribute?.('contenteditable') === 'true' ||
+        activeEl.classList?.contains('xterm-helper-textarea')
+      );
+      if (!isInputFocused) {
+        e.preventDefault();
+        toggleCopilotDrawer();
+        return;
+      }
+    }
+    if (e.key === 'Escape' && els.copilotDrawer?.classList.contains('open')) {
+      closeCopilotDrawer();
+    }
+  });
+  if (els.copilotDrawerJumpOrin) {
+    els.copilotDrawerJumpOrin.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeCopilotDrawer();
+      switchDevice('orin');
+      const orinEl = document.getElementById('view-device-orin');
+      if (orinEl) orinEl.scrollIntoView({ behavior: 'smooth' });
     });
   }
 
@@ -4928,6 +5172,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
     renderTelemetry,
     fetchCopilotSummary,
     startCopilotPolling,
+    openCopilotDrawer,
+    closeCopilotDrawer,
+    toggleCopilotDrawer,
     executeTerminalCommand,
     selectPort,
     switchDevice,

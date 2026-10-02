@@ -469,4 +469,147 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
       expect(() => app.updateCharts()).not.toThrow();
     }
   });
+
+  it('provides topbar status pill and opens/closes slide-over copilot drawer', () => {
+    const topbarBtn = document.getElementById('btn-copilot-topbar') as HTMLButtonElement | null;
+    const topbarBadge = document.getElementById('copilot-topbar-badge');
+    const drawer = document.getElementById('cf-copilot-drawer');
+    const backdrop = document.getElementById('cf-copilot-drawer-backdrop');
+    const closeBtn = document.getElementById('cf-copilot-drawer-close') as HTMLButtonElement | null;
+    const openCardBtn = document.getElementById('copilot-open-drawer-btn') as HTMLButtonElement | null;
+
+    expect(topbarBtn).not.toBeNull();
+    expect(topbarBadge).not.toBeNull();
+    expect(drawer).not.toBeNull();
+    expect(backdrop).not.toBeNull();
+    expect(closeBtn).not.toBeNull();
+    expect(openCardBtn).not.toBeNull();
+
+    // Initial state: closed
+    expect(drawer?.classList.contains('open')).toBe(false);
+
+    // Open via topbar button
+    topbarBtn?.click();
+    expect(drawer?.classList.contains('open')).toBe(true);
+    expect(backdrop?.classList.contains('active')).toBe(true);
+
+    // Close via close button
+    closeBtn?.click();
+    expect(drawer?.classList.contains('open')).toBe(false);
+
+    // Open via in-page card button
+    openCardBtn?.click();
+    expect(drawer?.classList.contains('open')).toBe(true);
+
+    // Close via backdrop click
+    backdrop?.click();
+    expect(drawer?.classList.contains('open')).toBe(false);
+
+    // Toggle via Cmd+K shortcut
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+    expect(drawer?.classList.contains('open')).toBe(true);
+
+    // Toggle again via Cmd+K shortcut to close
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+    expect(drawer?.classList.contains('open')).toBe(false);
+
+    // Open and close via Escape
+    (window as unknown as { ZodiacApp: { openCopilotDrawer: () => void } }).ZodiacApp.openCopilotDrawer();
+    expect(drawer?.classList.contains('open')).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(drawer?.classList.contains('open')).toBe(false);
+  });
+
+  it('manages auto-collapsing anomaly banner states and allows manual toggle', async () => {
+    const app = (window as unknown as {
+      ZodiacApp: {
+        fetchCopilotSummary: (force?: boolean) => Promise<void>;
+      };
+    }).ZodiacApp;
+
+    const copilotCard = document.getElementById('cf-copilot-card');
+    const toggleBtn = document.getElementById('copilot-toggle-btn') as HTMLButtonElement | null;
+    expect(copilotCard).not.toBeNull();
+    expect(toggleBtn).not.toBeNull();
+
+    // 1. Nominal fetch (HEALTHY) -> auto-collapses
+    await app.fetchCopilotSummary(true);
+    expect(copilotCard?.classList.contains('is-collapsed')).toBe(true);
+    expect(copilotCard?.classList.contains('is-nominal')).toBe(true);
+    expect(toggleBtn?.innerText).toBe('Details ▾');
+
+    // 2. Manual toggle expands details
+    toggleBtn?.click();
+    expect(copilotCard?.classList.contains('is-collapsed')).toBe(false);
+    expect(toggleBtn?.innerText).toBe('Details ▴');
+
+    // 3. Manual toggle collapses details again
+    toggleBtn?.click();
+    expect(copilotCard?.classList.contains('is-collapsed')).toBe(true);
+    expect(toggleBtn?.innerText).toBe('Details ▾');
+
+    // 4. Mock an anomalous payload (DEGRADED) -> auto-expands
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/api/sdn/copilot/summary')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: 'DEGRADED',
+            headline: 'Packet drop on Zodiac Port 2 correlates with Edge TPU rate spike',
+            bullets: ['Port 2 ingress drop rate 4.2%', 'Coral TPU #1 inference latency elevated'],
+            model: 'qwen2.5:3b (Jetson Orin Nano Super)',
+            timestampMs: Date.now(),
+            cached: false,
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    await app.fetchCopilotSummary(true);
+    expect(copilotCard?.classList.contains('is-anomalous')).toBe(true);
+    expect(copilotCard?.classList.contains('is-collapsed')).toBe(false);
+    expect(toggleBtn?.innerText).toBe('Details ▴');
+  });
+
+  it('strictly scopes the Executive AI Copilot in-page card to Zodiac FX and Jetson Orin', () => {
+    const app = (window as unknown as {
+      ZodiacApp: {
+        switchDevice: (d: string) => void;
+      };
+    }).ZodiacApp;
+
+    const copilotCard = document.getElementById('cf-copilot-card');
+    expect(copilotCard).not.toBeNull();
+
+    // 1. Visible on Zodiac FX (Overview)
+    app.switchDevice('zodiac');
+    expect(copilotCard?.style.display).not.toBe('none');
+
+    // 2. Visible on Jetson Orin Nano (Host GPU executing Qwen 2.5)
+    app.switchDevice('orin');
+    expect(copilotCard?.style.display).not.toBe('none');
+
+    // 3. Hidden on Coral Edge TPU #1 (Wire-Tap DPI)
+    app.switchDevice('coral-1');
+    expect(copilotCard?.style.display).toBe('none');
+
+    // 4. Hidden on Coral Edge TPU #2 (DNS Sentinel)
+    app.switchDevice('coral-2');
+    expect(copilotCard?.style.display).toBe('none');
+
+    // 5. Hidden on MacBook M5 Workstation (Local Gemma 4 Gateway)
+    app.switchDevice('workstation');
+    expect(copilotCard?.style.display).toBe('none');
+
+    // 6. Hidden on OpenFlow Controller
+    app.switchDevice('openflow');
+    expect(copilotCard?.style.display).toBe('none');
+
+    // 7. Restored when returning to Zodiac FX
+    app.switchDevice('zodiac');
+    expect(copilotCard?.style.display).toBe('block');
+  });
 });
+
