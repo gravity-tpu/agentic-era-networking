@@ -83,8 +83,20 @@ import type { ZodiacPortInfo } from '../dist/sdn/zodiac-serial.js';
 if (typeof process.loadEnvFile === 'function') {
   try {
     process.loadEnvFile();
-  } catch {
-    // .env is optional for this tool; all inputs also exist as flags.
+  } catch (err: unknown) {
+    // Council Invariant 1 (Anti-Shortcut Law): Never silently swallow non-ENOENT errors.
+    // If .env is missing (ENOENT), it is optional since all flags can be passed via CLI.
+    // Any syntax or permission issue in an existing .env file must be observable.
+    const isEnoent =
+      err !== null &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code: unknown }).code === 'ENOENT';
+    if (!isEnoent) {
+      console.warn(
+        `[!] [Bench] Warning: Failed to load .env file: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 }
 
@@ -282,7 +294,7 @@ async function readFlows(of: OpenFlowServer): Promise<FlowStatsEntry[]> {
         const reply = parseFlowStatsReply(packet);
         entries.push(...reply.entries);
         if (!reply.more) done(() => resolve(entries));
-      } catch (e) {
+      } catch (e: unknown) {
         done(() => reject(e instanceof Error ? e : new Error(String(e))));
       }
     };
@@ -295,7 +307,7 @@ async function readFlows(of: OpenFlowServer): Promise<FlowStatsEntry[]> {
     of.on('ofError', onError);
     try {
       of.sendRaw(buildFlowStatsRequest(xid));
-    } catch (e) {
+    } catch (e: unknown) {
       done(() => reject(e instanceof Error ? e : new Error(String(e))));
     }
   });
@@ -344,7 +356,7 @@ async function applyCondition(
         : v;
       if (verdict.verified) break;
       lastErr = verdict.mismatches.join('; ');
-    } catch (e) {
+    } catch (e: unknown) {
       lastErr = errMessage(e);
     }
   }
@@ -399,7 +411,7 @@ async function runIperf(
   let stdout: string;
   try {
     stdout = await ssh(rig, cmd, (durationS + 40) * 1000);
-  } catch (e) {
+  } catch (e: unknown) {
     const partial = stdoutOfFailedExec(e);
     if (partial === null) throw e;
     stdout = partial;
@@ -488,7 +500,7 @@ async function measure(
       tapNicRxPackets: endpoint.tapRxPackets, tapNicRxDropped: endpoint.tapRxDropped,
       rawPortsBefore: before.raw, rawPortsAfter: after.raw, iperfRawSha256: load.rawSha256,
     };
-  } catch (e) {
+  } catch (e: unknown) {
     return invalid(errMessage(e));
   }
 }
@@ -675,7 +687,7 @@ async function runTapSweep(
         `bisection to ${cfg.tapResolutionBps} bit/s resolution over ${bracket.probes.length} refinement rates; response is not assumed monotonic, every probe is in the table`),
       verified: applied.readbackSupported,
     };
-  } catch (e) {
+  } catch (e: unknown) {
     return { record: sweepRecord(id, floorPpm, 'aborted', null, null, errMessage(e)), verified: applied.readbackSupported };
   }
 }
@@ -744,7 +756,7 @@ async function connectRig(cli: Cli): Promise<{ rig: Rig; identity: BenchArtifact
   const host = cli.flags.get('controller-host') ?? process.env['SDN_CONTROLLER_IP'] ?? '0.0.0.0';
   try {
     await of.listen(6633, host);
-  } catch (e) {
+  } catch (e: unknown) {
     throw new Error(
       `cannot bind OpenFlow 6633 on ${host} (${errMessage(e)}). Stop zodiac-bridge.service first: ` +
         'this tool must be the switch\'s only controller.',
@@ -784,7 +796,7 @@ async function gitInfo(): Promise<{ commit: string | null; dirty: boolean | null
     const { stdout: head } = await execFileP('git', ['rev-parse', '--short', 'HEAD']);
     const { stdout: porcelain } = await execFileP('git', ['status', '--porcelain']);
     return { commit: head.trim(), dirty: porcelain.trim().length > 0 };
-  } catch (e) {
+  } catch (e: unknown) {
     log(`git metadata unavailable: ${errMessage(e)}`);
     return { commit: null, dirty: null };
   }
@@ -866,14 +878,14 @@ async function cmdRun(cli: Cli): Promise<void> {
       tapSweep = r.record;
       flowTableVerified = r.verified && flowTableVerified;
     }
-  } catch (e) {
+  } catch (e: unknown) {
     failure = e;
     log(`ABORTED: ${errMessage(e)}`);
   } finally {
     try {
       await deleteAllFlows(rig.of);
       log('flow table cleared; restart zodiac-bridge.service to restore production rules');
-    } catch (e) {
+    } catch (e: unknown) {
       log(`WARNING: could not clear flow table: ${errMessage(e)}`);
     }
     await rig.of.close();
