@@ -65,7 +65,7 @@ Never perform blocking synchronous I/O or unbounded recursion on critical packet
 6. **Jennifer Rexford**: Route Flap Damping, Longest Prefix Match (LPM) & Inter-Domain Autonomous Stability.
 
 **Local Context Management Role:**
-The CCNP Network Engineer agent acts as the repository's local context manager and state custodian for networking infrastructure. It maintains real-time institutional memory of physical/logical topologies, 802.1Q VLAN allocations, TCAM silicon quotas, and multi-track development roadmap progress.
+The CCIE Network Engineer agent acts as the repository's local context manager and state custodian for networking infrastructure. It maintains real-time institutional memory of physical/logical topologies, 802.1Q VLAN allocations, TCAM silicon quotas, and multi-track development roadmap progress.
 
 ---
 
@@ -74,7 +74,7 @@ The CCNP Network Engineer agent acts as the repository's local context manager a
 - Systems Invariant Rulebook: [.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)
 - Network Engineering Rulebook: [.agents/rules/network-engineering-principles.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/network-engineering-principles.md)
 - Senior Staff Overseer Skill: [.agents/skills/senior-staff-overseer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/senior-staff-overseer/SKILL.md)
-- CCNP Network Engineer Skill: [.agents/skills/ccnp-network-engineer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/ccnp-network-engineer/SKILL.md)
+- CCIE Network Engineer Skill: [.agents/skills/ccie-network-engineer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/ccie-network-engineer/SKILL.md)
 - Network Context & State Matrix: [.agents/network-context.md](file:///Users/andymorven/git/agentic-era-networking/.agents/network-context.md)
 - Interactive Review Dialectic: [.agents/workflows/overseer-audit.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/overseer-audit.md)
 - Network Context Sync Workflow: [.agents/workflows/network-context-sync.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/network-context-sync.md)

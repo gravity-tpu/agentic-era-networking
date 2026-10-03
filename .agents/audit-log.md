@@ -29,6 +29,8 @@
 | 2026-10-03 | NET-004 | Loop-Free Forwarding & Flap Prevention | Active | All flow updates formally verified as Directed Acyclic Graphs (DAGs). Exponential backoff hysteresis damping on dynamic ACL quarantine. |
 | 2026-10-03 | NET-005 | Buffer Dynamics & Anti-Bufferbloat Dropping | Active | Drops executed in netfilter PREROUTING before socket buffer allocation. Token-bucket rate meters used on sister-site burst traffic. |
 | 2026-10-03 | NET-006 | L2/L3 Boundary Discipline & MTU/MSS Integrity | Active | 802.1Q VLAN separation across untrusted, mirror tap, and controller domains. TCP MSS clamped to 1460 bytes across tunneling overlays. |
+| 2026-10-03 | NET-007 | Elevation to CCIE Network Architecture & Forensics Rigor | Active | Upgraded networking custodian from CCNP to CCIE level. Enforces ASIC match-action pipeline modeling, TCAM ternary bitmasking, sub-millisecond convergence bounds, microsecond wire-timing forensics, and byte-exact encapsulation budgeting. |
+| 2026-10-03 | NET-008 | CCIE Gap Remediation: Bidirectional Transit, CoPP Token Bucket & RFC 1035 Boundary Guards | Active | Remediated bridge server forwarding redirect to full bidirectional transit with tap mirror [2, 3]; enforced token-bucket Control Plane Policing on OFPT_PACKET_IN with drop telemetry; enforced RFC 1035 label length <= 63 and QNAME <= 255 byte limits. |
 
 ---
 

@@ -39,7 +39,8 @@
     "dev": "node --experimental-strip-types scripts/zodiac-cli.ts serve",
     "gpu:build": "mkdir -p build && /usr/local/cuda/bin/nvcc -O3 -arch=sm_87 -shared -Xcompiler -fPIC src/gpu/gpu_anomaly_kernel.cu -o build/libgpu_anomaly.so",
     "gpu:sentinel": "python3 scripts/gpu-sdn-anomaly-sentinel.py",
-    "workstation:agent": "node --experimental-strip-types scripts/workstation-agent.ts"
+    "workstation:agent": "node --experimental-strip-types scripts/workstation-agent.ts",
+    "bench:dataplane": "node --experimental-strip-types scripts/zodiac-dataplane-bench.ts"
   },
   "keywords": [
     "networking",

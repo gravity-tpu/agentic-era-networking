@@ -54,4 +54,39 @@ describe('Invariant: RFC 1035 DNS Binary Wire Protocol', () => {
     expect(parsed.rcode).toBe(0); // NOERROR
     expect(parsed.ancount).toBe(1); // 1 answer record
   });
+
+  it('fails closed when question contains label length exceeding 63 octets (RFC 1035)', () => {
+    // Construct packet with label length = 64 (0x40)
+    const header = Buffer.alloc(12);
+    header.writeUInt16BE(0x1234, 0);
+    header.writeUInt16BE(1, 4); // QDCOUNT = 1
+
+    const invalidLabel = Buffer.concat([
+      Buffer.from([64]), // 64 bytes label (> 63 max)
+      Buffer.alloc(64, 'a'.charCodeAt(0)),
+      Buffer.from([0]),  // root
+      Buffer.alloc(4),   // QTYPE + QCLASS
+    ]);
+
+    const packet = Buffer.concat([header, invalidLabel]);
+    expect(() => DnsWireProtocol.parseQuestion(packet, 12)).toThrow(/RFC 1035 max 63 octets/);
+  });
+
+  it('fails closed when total domain name length exceeds 255 octets (RFC 1035)', () => {
+    const header = Buffer.alloc(12);
+    header.writeUInt16BE(0x5678, 0);
+    header.writeUInt16BE(1, 4); // QDCOUNT = 1
+
+    // 5 labels of 52 bytes = 260 octets
+    const labels: Buffer[] = [];
+    for (let i = 0; i < 5; i++) {
+      labels.push(Buffer.from([52]));
+      labels.push(Buffer.alloc(52, 'b'.charCodeAt(0)));
+    }
+    labels.push(Buffer.from([0])); // root
+    labels.push(Buffer.alloc(4));  // QTYPE + QCLASS
+
+    const packet = Buffer.concat([header, ...labels]);
+    expect(() => DnsWireProtocol.parseQuestion(packet, 12)).toThrow(/maximum of 255 octets/);
+  });
 });

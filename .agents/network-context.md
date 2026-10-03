@@ -1,6 +1,6 @@
 # Network Engineering Context & Development State Matrix
 
-**Custodian:** CCNP Network Engineer Agent  
+**Custodian:** CCIE Network Engineer Agent  
 **Repository:** `gravity-tpu/agentic-era-networking`  
 **Governing Invariants:** `NET-001` through `NET-006` ([network-engineering-principles.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/network-engineering-principles.md))  
 **Companion Documents:** [audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md), [ROADMAP.md](file:///Users/andymorven/git/agentic-era-networking/docs/ROADMAP.md), [SENTINEL-ROADMAP.md](file:///Users/andymorven/git/agentic-era-networking/docs/SENTINEL-ROADMAP.md)

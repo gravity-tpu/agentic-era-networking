@@ -71,6 +71,8 @@ export interface ControllerMetrics {
   readonly messagesReceived: bigint;
   readonly bytesReceived: bigint;
   readonly lastEchoLatencyNs: bigint;
+  readonly totalPacketIns?: bigint | undefined;
+  readonly coppPacketInDrops?: bigint | undefined;
 }
 
 export class OpenFlowServer extends EventEmitter {
@@ -99,13 +101,26 @@ export class OpenFlowServer extends EventEmitter {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private handshakeTimer: NodeJS.Timeout | null = null;
 
+  // CCIE Invariant NET-001: Control Plane Policing (CoPP) on OFPT_PACKET_IN
+  private coppTokens: number;
+  private coppLastRefillNs: bigint = 0n;
+  private readonly coppRateLimit: number;
+  private readonly coppMaxBurst: number;
+  private _totalPacketIns: bigint = 0n;
+  private _coppPacketInDrops: bigint = 0n;
+
   constructor(
     echoDeadPeerTimeoutNs: bigint = ECHO_DEAD_PEER_TIMEOUT_NS,
     handshakeTimeoutMs: number = HANDSHAKE_TIMEOUT_MS,
+    coppRateLimit: number = 100, // packets per second
+    coppMaxBurst: number = 200,   // maximum burst tokens
   ) {
     super();
     this.echoDeadPeerTimeoutNs = echoDeadPeerTimeoutNs;
     this.handshakeTimeoutMs = handshakeTimeoutMs;
+    this.coppRateLimit = coppRateLimit;
+    this.coppMaxBurst = coppMaxBurst;
+    this.coppTokens = coppMaxBurst;
   }
 
   /**
@@ -153,6 +168,14 @@ export class OpenFlowServer extends EventEmitter {
     }
   }
 
+  public get totalPacketIns(): bigint {
+    return this._totalPacketIns;
+  }
+
+  public get coppPacketInDrops(): bigint {
+    return this._coppPacketInDrops;
+  }
+
   public get metrics(): ControllerMetrics {
     return {
       state: this.state,
@@ -161,6 +184,8 @@ export class OpenFlowServer extends EventEmitter {
       messagesReceived: this._messagesReceived,
       bytesReceived: this._bytesReceived,
       lastEchoLatencyNs: this._lastEchoLatencyNs,
+      totalPacketIns: this._totalPacketIns,
+      coppPacketInDrops: this._coppPacketInDrops,
     };
   }
 
@@ -260,25 +285,54 @@ export class OpenFlowServer extends EventEmitter {
   }
 
   /**
-   * Installs a low-priority mirror rule that copies frames arriving on inPort to outPort.
-   * Used to wire the Zodiac Port 3 tap so the GPU sentinel can observe data-plane traffic.
-   * Priority 1 ensures quarantine rules at 65535 always take precedence (fail-closed).
+   * Installs a mirror or forwarding rule that copies frames arriving on inPort to one or more outPorts.
+   * Used to wire the Zodiac Port 3 tap so the GPU sentinel can observe data-plane traffic,
+   * or to establish line-rate bidirectional transit forwarding between switch ports.
+   * Priority 1 (or 100) ensures quarantine rules at 65535 always take precedence (fail-closed).
    *
-   * Council Invariant 3 (Fail-Closed): quarantine DROP at 65535 overrides this mirror at 1.
+   * Council Invariant 3 (Fail-Closed): quarantine DROP at 65535 overrides this mirror at 1/100.
    * Council Invariant 6 (Anti-Simulation): mirror delivers real hardware frames to the sentinel.
    */
-  public sendMirrorRule(inPort: number, outPort: number, priority: number = 1): void {
+  public sendMirrorRule(inPort: number, outPort: number | number[], priority: number = 1): void {
     if (!this.clientSocket || this.state !== 'ESTABLISHED') {
       throw new Error(`Cannot send MirrorRule: switch not in ESTABLISHED state (current: ${this.state})`);
     }
 
     const xid = this.allocateXid();
+    const outputPorts = Array.isArray(outPort) ? outPort : [outPort];
     const packet = buildOfpFlowMod({
       command: FlowModCommand.OFPFC_ADD,
       priority,
-      outputPorts: [outPort],
+      outputPorts,
       match: { inPort },
     }, xid);
+    this.clientSocket.write(packet);
+  }
+
+  /**
+   * Installs a forwarding rule that directs frames arriving on inPort to one or more outputPorts.
+   * Alias for sendMirrorRule with a default forwarding priority of 100.
+   */
+  public sendForwardingRule(inPort: number, outputPorts: number | number[], priority: number = 100): void {
+    this.sendMirrorRule(inPort, outputPorts, priority);
+  }
+
+  /**
+   * Reserves a unique 32-bit transaction ID for externally built OpenFlow messages
+   * (e.g. multipart/barrier requests) so replies can be correlated deterministically.
+   */
+  public reserveXid(): number {
+    return this.allocateXid();
+  }
+
+  /**
+   * Writes a pre-built OpenFlow message to the established switch session.
+   * Council Invariant 3 (Fail-Closed): refuses to write unless the session is ESTABLISHED.
+   */
+  public sendRaw(packet: Buffer): void {
+    if (!this.clientSocket || this.state !== 'ESTABLISHED') {
+      throw new Error(`Cannot send raw OpenFlow message: switch not in ESTABLISHED state (current: ${this.state})`);
+    }
     this.clientSocket.write(packet);
   }
 
@@ -458,7 +512,43 @@ export class OpenFlowServer extends EventEmitter {
         break;
       }
 
+      case OpenFlowType.OFPT_MULTIPART_REPLY: {
+        this.emit('multipartReply', xid, packet);
+        break;
+      }
+
+      case OpenFlowType.OFPT_BARRIER_REPLY: {
+        this.emit('barrierReply', xid);
+        break;
+      }
+
+      case OpenFlowType.OFPT_ERROR: {
+        // Council Invariant 1: switch-side rejections (e.g. flow table full) must be observable.
+        this.emit('ofError', xid, packet);
+        break;
+      }
+
       case OpenFlowType.OFPT_PACKET_IN: {
+        this._totalPacketIns += 1n;
+        const nowNs = process.hrtime.bigint();
+        if (this.coppLastRefillNs === 0n) {
+          this.coppLastRefillNs = nowNs;
+        } else {
+          const elapsedNs = nowNs - this.coppLastRefillNs;
+          const tokensToAdd = Number((elapsedNs * BigInt(this.coppRateLimit)) / 1_000_000_000n);
+          if (tokensToAdd > 0) {
+            this.coppTokens = Math.min(this.coppMaxBurst, this.coppTokens + tokensToAdd);
+            this.coppLastRefillNs = nowNs;
+          }
+        }
+
+        if (this.coppTokens < 1) {
+          this._coppPacketInDrops += 1n;
+          this.emit('coppDrop', xid, this._coppPacketInDrops);
+          break;
+        }
+        this.coppTokens -= 1;
+
         try {
           const decoded = parseOfpPacketIn(packet);
           this.emit('packetIn', decoded);

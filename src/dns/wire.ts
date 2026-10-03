@@ -59,17 +59,26 @@ export class DnsWireProtocol {
     const labels: string[] = [];
     let current = offset;
 
+    let totalNameOctets = 0;
     while (current < buffer.length) {
       const len = buffer.readUInt8(current);
       if (len === 0) {
         current += 1;
         break;
       }
+      // CCIE Forensic Guard: RFC 1035 Section 2.3.4 (labels must be 63 octets or less)
+      if (len > 63) {
+        throw new Error(`DnsWireProtocol: invalid label length ${len} in QNAME (RFC 1035 max 63 octets)`);
+      }
       current += 1;
       if (current + len > buffer.length) {
         throw new Error('DnsWireProtocol: malformed label length in QNAME');
       }
       labels.push(buffer.subarray(current, current + len).toString('ascii'));
+      totalNameOctets += len + 1; // label bytes + length/delimiter octet
+      if (totalNameOctets > 255) {
+        throw new Error('DnsWireProtocol: domain name exceeds RFC 1035 maximum of 255 octets');
+      }
       current += len;
     }
 

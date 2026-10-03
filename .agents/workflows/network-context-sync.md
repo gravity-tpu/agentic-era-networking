@@ -1,6 +1,6 @@
-# Network Context Synchronization & CCNP Audit Workflow
+# Network Context Synchronization & CCIE Audit Workflow
 
-**Trigger:** `@ccnp`, `sync network context`, `audit network state`, `update topology`, or `ccnp review`
+**Trigger:** `@ccie`, `@ccnp`, `sync network context`, `audit network state`, `update topology`, or `ccie review`
 
 ## Objective
 
@@ -23,7 +23,7 @@ Synchronize the local network context manager ([network-context.md](file:///User
 ### Step 2: Audit Silicon Budgets & Forwarding Capacity
 
 1. Calculate active rule consumption:
-   - Zodiac FX hardware flow table: Count installed entries against the 128-rule ceiling (alert if > 102 rules).
+   - Zodiac FX hardware flow table: Count installed entries against the 128-rule ceiling (alert if > 102 rules / 80% watermark).
    - Linux netfilter `nftables`: Verify interval sets use CIDR aggregation (`/24` or `/16`) instead of fine-grained `/32` host bloat.
 2. Verify buffer and rate-shaping parameters:
    - Ensure trusted sister-site burst traffic uses token-bucket meters rather than abrupt tail-drop.
@@ -32,12 +32,12 @@ Synchronize the local network context manager ([network-context.md](file:///User
 
 Audit the proposed changes against the 6 Network Engineering Invariants:
 
-1. **NET-1 (Separation)**: Is the transit packet path completely decoupled from slow-path control daemons and synchronous RPCs?
-2. **NET-2 (TCAM Budget)**: Does the change respect hardware table ceilings?
+1. **NET-1 (Separation & CoPP)**: Is the transit packet path completely decoupled from slow-path control daemons and synchronous RPCs? Is CoPP enforced?
+2. **NET-2 (TCAM Budget)**: Does the change respect hardware table ceilings and avoid range-expansion TCAM explosion?
 3. **NET-3 (Fate-Sharing)**: Does origin traffic fail-open if the monitoring sidecar crashes?
-4. **NET-4 (Loop-Freedom)**: Has `SymbolicRouteVerifier` proven that packet trajectories form a Directed Acyclic Graph (DAG)?
-5. **NET-5 (Buffer Dynamics)**: Are malicious drops executed in `PREROUTING` before socket instantiation?
-6. **NET-6 (MTU/MSS)**: Is TCP MSS clamped to 1460 bytes across tunneling or encapsulation interfaces?
+4. **NET-4 (Loop-Freedom & Convergence)**: Has `SymbolicRouteVerifier` proven that packet trajectories form a Directed Acyclic Graph (DAG)?
+5. **NET-5 (Buffer Dynamics & AQM)**: Are malicious drops executed in `PREROUTING` before socket instantiation?
+6. **NET-6 (MTU/MSS & Framing)**: Is TCP MSS clamped to 1460 bytes (or overlay budget) across tunneling or encapsulation interfaces?
 
 ### Step 4: Synchronize High-Level Development State
 
@@ -48,4 +48,4 @@ Audit the proposed changes against the 6 Network Engineering Invariants:
 
 ### Step 5: Deliver Context Audit Summary
 
-Output the structured CCNP audit assessment to the operator and record any architectural changes in [.agents/audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md).
+Output the structured CCIE audit assessment to the operator and record any architectural changes in [.agents/audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md).

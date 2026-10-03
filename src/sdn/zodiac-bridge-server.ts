@@ -650,23 +650,32 @@ export class ZodiacBridgeServer {
 
     // Auto-install baseline flow rules on switch connection
     this.controller.openFlow.on('ready', () => {
-      // Table-miss → CONTROLLER: bounded header-only packet sampling for live telemetry accounting.
-      // Council Invariant 3 (Fail-Closed): if this fails the switch's default routing state is
-      // unverified — crash so systemd restarts and retries on the next switch connection.
-      this.controller.openFlow.sendTableMissRule(0, 'CONTROLLER', 128);
-      console.log('[+] [Bridge Server] Table-Miss flow rule installed (CONTROLLER packet sampling, 128B bounded header).');
-      // Mirror Port 1 (Pi data plane) → Port 3 (Jetson GPU sentinel tap) at priority 1.
-      // Priority 1 is below quarantine rules at 65535, so a quarantined Pi MAC/IP still
-      // hits the DROP rule first — fail-closed invariant is preserved (Ghemawat & Hassabis).
-      // Council Invariant 3 (Fail-Closed): if this rule cannot be installed the sentinel
-      // is completely blind. We must not continue in an unverified state — crash here so
-      // systemd restarts the bridge and retries on the next switch connection.
-      this.controller.openFlow.sendMirrorRule(1, 3, 1);
-      console.log('[+] [Bridge Server] Mirror rule installed: Port 1 → Port 3 (GPU sentinel tap, priority 1).');
+      // Council Invariant 3 (Fail-Closed) & CCIE Invariant NET-001 (CoPP):
+      // Table-miss → DROP: Unmatched packets drop in switch hardware by default.
+      // Punting unmatched traffic to CONTROLLER without rate limiting risks overwhelming
+      // the SAM4E8E MCU with packet-in interrupts under high-pps floods.
+      this.controller.openFlow.sendTableMissRule(0, 'DROP');
+      console.log('[+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).');
+
+      // Port 1 (Workload RPi) → Port 2 (Uplink/Gateway) + Port 3 (Jetson GPU sentinel tap).
+      // Priority 100 ensures transit packets flow at line rate to the gateway while simultaneously
+      // mirroring frames to the GPU tap. Quarantine DROP rules at priority 65535 take precedence.
+      this.controller.openFlow.sendForwardingRule(1, [2, 3], 100);
+      console.log('[+] [Bridge Server] Transit + Tap rule installed: Port 1 → [Port 2 Uplink, Port 3 Mirror Tap] (priority 100).');
+
+      // Port 2 (Uplink/Gateway) → Port 1 (Workload RPi) return transit path.
+      this.controller.openFlow.sendForwardingRule(2, [1], 100);
+      console.log('[+] [Bridge Server] Return transit rule installed: Port 2 Uplink → Port 1 Workload (priority 100).');
+
       // Return path: Port 3 (Jetson tap) → Port 1 (RPi) so ARP replies from the
       // tap interface reach the RPi and close the bidirectional data-plane loop.
-      this.controller.openFlow.sendMirrorRule(3, 1, 1);
-      console.log('[+] [Bridge Server] Mirror rule installed: Port 3 → Port 1 (tap return path, priority 1).');
+      this.controller.openFlow.sendForwardingRule(3, [1], 100);
+      console.log('[+] [Bridge Server] Tap return rule installed: Port 3 → Port 1 Workload (priority 100).');
+    });
+
+    // Observe CoPP drops when packet-in flooding occurs
+    this.controller.openFlow.on('coppDrop', (xid, drops) => {
+      console.warn(`[!] [Bridge Server] CoPP rate-limited OFPT_PACKET_IN (xid: ${xid}, total drops: ${drops.toString()})`);
     });
 
     // Accumulate hardware counters for each physical port when packets arrive

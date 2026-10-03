@@ -428,6 +428,161 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
 
     stalledSocket.destroy();
   });
+
+  it('installs multi-port forwarding and mirror rules via sendForwardingRule (CCIE Invariant NET-001)', async () => {
+    server = new OpenFlowServer();
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    const handshakeComplete = new Promise<void>((resolve) => {
+      server.on('ready', () => resolve());
+    });
+
+    let switchRx = Buffer.alloc(0);
+    let capturedFlowMod: Buffer | null = null;
+    const flowModReceived = new Promise<void>((resolve) => {
+      // Resolve when switch receives FLOW_MOD
+      const checkInterval = setInterval(() => {
+        if (capturedFlowMod) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    const switchSocket = net.connect({ port: testPort, host: '127.0.0.1' }, () => {
+      switchSocket.write(buildOfpHello(1));
+    });
+
+    switchSocket.on('data', (chunk) => {
+      switchRx = Buffer.concat([switchRx, chunk]);
+      while (switchRx.length >= 8) {
+        const header = decodeOfpHeader(switchRx);
+        if (switchRx.length < header.length) break;
+        const msg = switchRx.subarray(0, header.length);
+        switchRx = switchRx.subarray(header.length);
+
+        if (header.type === OpenFlowType.OFPT_FEATURES_REQUEST) {
+          const reply = Buffer.alloc(32);
+          reply.writeUInt8(OFP_VERSION_1_3, 0);
+          reply.writeUInt8(OpenFlowType.OFPT_FEATURES_REPLY, 1);
+          reply.writeUInt16BE(32, 2);
+          reply.writeUInt32BE(header.xid, 4);
+          reply.writeBigUInt64BE(0x11223344n, 8);
+          reply.writeUInt32BE(128, 16);
+          reply.writeUInt8(1, 20);
+          reply.writeUInt8(0, 21);
+          reply.writeUInt32BE(0x01, 24);
+          switchSocket.write(reply);
+        } else if (header.type === OpenFlowType.OFPT_FLOW_MOD) {
+          capturedFlowMod = msg;
+        }
+      }
+    });
+
+    await handshakeComplete;
+
+    // Send multi-port forwarding rule: Port 1 -> [Port 2, Port 3] at priority 100
+    server.sendForwardingRule(1, [2, 3], 100);
+
+    await flowModReceived;
+    expect(capturedFlowMod).not.toBeNull();
+    const fm = capturedFlowMod!;
+    expect(fm[0]).toBe(OFP_VERSION_1_3);
+    expect(fm[1]).toBe(OpenFlowType.OFPT_FLOW_MOD);
+    expect(fm.readUInt16BE(30)).toBe(100); // priority = 100
+
+    switchSocket.destroy();
+  });
+
+  it('enforces Control Plane Policing (CoPP) on OFPT_PACKET_IN floods and records drops (CCIE Invariant NET-001)', async () => {
+    // Config: burst of 2 tokens, rate limit of 1 per second
+    server = new OpenFlowServer(5_000_000_000n, 5000, 1, 2);
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    const handshakeComplete = new Promise<void>((resolve) => {
+      server.on('ready', () => resolve());
+    });
+
+    let switchRx = Buffer.alloc(0);
+    const switchSocket = net.connect({ port: testPort, host: '127.0.0.1' }, () => {
+      switchSocket.write(buildOfpHello(1));
+    });
+
+    switchSocket.on('data', (chunk) => {
+      switchRx = Buffer.concat([switchRx, chunk]);
+      while (switchRx.length >= 8) {
+        const header = decodeOfpHeader(switchRx);
+        if (switchRx.length < header.length) break;
+        switchRx = switchRx.subarray(header.length);
+
+        if (header.type === OpenFlowType.OFPT_FEATURES_REQUEST) {
+          const reply = Buffer.alloc(32);
+          reply.writeUInt8(OFP_VERSION_1_3, 0);
+          reply.writeUInt8(OpenFlowType.OFPT_FEATURES_REPLY, 1);
+          reply.writeUInt16BE(32, 2);
+          reply.writeUInt32BE(header.xid, 4);
+          reply.writeBigUInt64BE(0x11223344n, 8);
+          reply.writeUInt32BE(128, 16);
+          reply.writeUInt8(1, 20);
+          reply.writeUInt8(0, 21);
+          reply.writeUInt32BE(0x01, 24);
+          switchSocket.write(reply);
+        }
+      }
+    });
+
+    await handshakeComplete;
+
+    // Helper to build a valid packet-in message
+    const buildPktIn = (xid: number) => {
+      const match = Buffer.alloc(12);
+      match.writeUInt16BE(1, 0); // OFPMT_OXM
+      match.writeUInt16BE(8, 2); // length
+      match.writeUInt32BE(0x80000004, 4); // in_port
+      match.writeUInt32BE(1, 8); // port 1
+      const payload = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+
+      const header = Buffer.alloc(24);
+      header.writeUInt8(OFP_VERSION_1_3, 0);
+      header.writeUInt8(OpenFlowType.OFPT_PACKET_IN, 1);
+      const totalLen = 24 + match.length + 2 + payload.length;
+      header.writeUInt16BE(totalLen, 2);
+      header.writeUInt32BE(xid, 4);
+      header.writeUInt32BE(0xffffffff, 8);
+      header.writeUInt16BE(payload.length, 12);
+      header.writeUInt8(0, 14);
+      header.writeUInt8(0, 15);
+      const pad2 = Buffer.alloc(2);
+      return Buffer.concat([header, match, pad2, payload]);
+    };
+
+    let acceptedCount = 0;
+    let coppDropCount = 0;
+    server.on('packetIn', () => { acceptedCount++; });
+    server.on('coppDrop', () => { coppDropCount++; });
+
+    // Send 5 rapid PACKET_IN messages
+    for (let i = 1; i <= 5; i++) {
+      switchSocket.write(buildPktIn(i));
+    }
+
+    // Wait 50ms for event processing
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(server.totalPacketIns).toBe(5n);
+    expect(acceptedCount).toBe(2); // burst allows exactly 2
+    expect(coppDropCount).toBe(3); // 3 were dropped by CoPP
+    expect(server.coppPacketInDrops).toBe(3n);
+    expect(server.metrics.coppPacketInDrops).toBe(3n);
+
+    switchSocket.destroy();
+  });
 });
 
 describe('ZodiacController Invariant Protection Gate', () => {
