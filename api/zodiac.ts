@@ -17,7 +17,7 @@ import {
   type ZodiacFullTelemetrySnapshot,
   type WorkstationTimeSeriesPoint,
 } from '../src/sdn/zodiac-telemetry.js';
-import { requireOperatorAuth, isLocalDev } from '../src/auth/google-auth.js';
+import { requireOperatorAuth, isLocalDev, IS_PRODUCTION } from '../src/auth/google-auth.js';
 import { checkRateLimit, getClientIp, rejectRateLimited } from '../src/security/rate-limiter.js';
 import { verifyBridgeAttestation } from '../src/security/request-attestation.js';
 import {
@@ -237,8 +237,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           res.end(JSON.stringify({ error: `Attestation failed: ${attestation.reason}` }));
           return;
         }
+      } else if (IS_PRODUCTION) {
+        // Production with no secret — INV-002 fail-closed: misconfigured environment must not accept relay payloads.
+        console.error('[!] [Attestation] ZODIAC_BRIDGE_SECRET not configured in production — dropping relay (INV-002).');
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: 'Server misconfiguration: ZODIAC_BRIDGE_SECRET not configured' }));
+        return;
       } else {
-        console.warn('[!] [Attestation] ZODIAC_BRIDGE_SECRET not set — replay protection inactive. Configure the secret to enforce 0.6C attestation.');
+        console.warn('[!] [Attestation] ZODIAC_BRIDGE_SECRET not set — replay protection inactive (local dev only).');
       }
 
       const body = bodyBuf.toString('utf-8');
