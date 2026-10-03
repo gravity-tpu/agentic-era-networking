@@ -15,6 +15,9 @@
     "build:assets": "node --experimental-strip-types scripts/build-assets.ts",
     "check-types": "tsc --noEmit && tsc --project tsconfig.api.json --noEmit",
     "check:provenance": "node --experimental-strip-types scripts/check-provenance.ts",
+    "lint:md": "markdownlint -c .markdownlint.json \"**/*.md\" --ignore node_modules",
+    "lint:md:fix": "markdownlint -c .markdownlint.json --fix \"**/*.md\" --ignore node_modules",
+    "lint": "npm run check-types && npm run lint:md",
     "test": "vitest run",
     "test:watch": "vitest",
     "council:review": "node scripts/ai-reviewer.mjs",
@@ -53,6 +56,7 @@
     "@types/node": "^22.13.9",
     "@types/ws": "^8.18.1",
     "happy-dom": "^20.14.5",
+    "markdownlint-cli": "^0.49.1",
     "prisma": "^7.10.0",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"

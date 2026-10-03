@@ -9,6 +9,7 @@
 ## 1. Executive Summary
 
 The **Autonomous Master Appliance** operates 24/7 as the centralized edge orchestrator for the `gravity-tpu/agentic-era-networking` infrastructure. Housed within the machined aluminum **Roboco Panini Chassis**, it consolidates:
+
 - Real-time OpenFlow 1.3 control over the Northbound Networks Zodiac FX switch.
 - Transparent RFC 1035 DNS resolution and agent anomaly isolation.
 - Coral EdgeTPU line-rate neural inference acceleration.
@@ -24,7 +25,7 @@ This document details the physical wiring pinouts, button jumper configurations,
 
 The front bezel houses a 0.96" 128x64 monochrome OLED module based on the SSD1306 controller. Looking directly at the display header pins from left to right (with the cooling fan toward you and rear I/O ports facing away):
 
-```
+```text
                      0.96" I2C OLED Display Header
                       ┌─────┬─────┬─────┬─────┐
                       │ GND │ VCC │ SCL │ SDA │
@@ -55,7 +56,7 @@ The front bezel houses a 0.96" 128x64 monochrome OLED module based on the SSD130
 
 The Jetson Orin carrier board features a 12-pin button header (`J14`) adjacent to the M.2 Key-E slot.
 
-```
+```text
        Jetson 12-Pin Front Panel Header (J14)
                    Pin 2  4  6  8 10 12
                    ┌──┬──┬──┬──┬──┬──┐
@@ -68,7 +69,8 @@ The Jetson Orin carrier board features a 12-pin button header (`J14`) adjacent t
                              └──┴── 2-Pin Jumper Bridges Pin 5 & Pin 6
 ```
 
-#### Jumper Function & Behavioral Rule:
+#### Jumper Function & Behavioral Rule
+
 - **Pin 5 (`DIS`) & Pin 6 (`AUTO ON`)**: Bridging Pins 5 and 6 disables the factory hardware auto-power-on mode.
 - **Why this is mandatory**: In factory configuration, the Jetson powers on automatically the moment DC power is attached, bypassing the front panel power switch. Bridging Pins 5 and 6 transfers power-on signaling to the front-panel momentary switch (Pins 1 and 2), allowing safe power cycles and graceful hardware shutdowns.
 
@@ -107,7 +109,7 @@ The presence of `3c` confirms proper electrical continuity and clock arbitration
 
 The OLED daemon cycles across 6 purpose-built screens every 15 seconds (90-second full cycle). Each screen features an **inverted top banner** (128x12 px) indicating the operational subsystem and page index (`X/6`), followed by 3 monospace data rows.
 
-```
+```text
 +-------------------------------------------------------------------------------+
 | SCREEN 1/6: NET & HOST   | SCREEN 2/6: CPU & RAM    | SCREEN 3/6: GPU AMPERE  |
 | ┌──────────────────────┐ | ┌──────────────────────┐ | ┌─────────────────────┐ |
@@ -161,16 +163,16 @@ The OLED daemon cycles across 6 purpose-built screens every 15 seconds (90-secon
 ## 5. Architectural Invariants & Epistemic Provenance
 
 1. **Anti-Simulation Law (Council Invariant 6)**:
-   * Telemetry must always reflect physical truth. 
-   * If the Coral USB accelerator is disconnected, the display immediately shifts to `STANDBY` and rate drops to `0 inf/sec`.
-   * If the Zodiac FX switch serial link is disconnected, port status transitions to `NO PORTS UP`.
-   * No synthetic or simulated values may be rendered on the physical display.
+   - Telemetry must always reflect physical truth.
+   - If the Coral USB accelerator is disconnected, the display immediately shifts to `STANDBY` and rate drops to `0 inf/sec`.
+   - If the Zodiac FX switch serial link is disconnected, port status transitions to `NO PORTS UP`.
+   - No synthetic or simulated values may be rendered on the physical display.
 2. **Nanosecond Latency Budgets (Jeff Dean Invariant)**:
-   * The display daemon queries `http://localhost:3003/api/zodiac` with an aggressive `0.4s` timeout.
-   * If the local bridge is busy or restarting, the daemon drops immediately to local `/sys/` and `/proc/` filesystem nodes without blocking.
+   - The display daemon queries `http://localhost:3003/api/zodiac` with an aggressive `0.4s` timeout.
+   - If the local bridge is busy or restarting, the daemon drops immediately to local `/sys/` and `/proc/` filesystem nodes without blocking.
 3. **Fail-Closed Simplicity (Sanjay Ghemawat Invariant)**:
-   * Monolithic, single-process Python daemon with zero heavy third-party framework overhead.
-   * Runs natively under `systemd` with automatic 3-second restart backoff on fault.
+   - Monolithic, single-process Python daemon with zero heavy third-party framework overhead.
+   - Runs natively under `systemd` with automatic 3-second restart backoff on fault.
 
 ---
 
@@ -190,6 +192,7 @@ cd /home/zodiac/agentic-era-networking/docs/design/jetson-orin
 If deploying manually:
 
 1. Install system prerequisites:
+
    ```bash
    sudo apt update
    sudo apt install -y i2c-tools python3-smbus python3-pil python3-psutil fonts-dejavu-core
@@ -197,6 +200,7 @@ If deploying manually:
    ```
 
 2. Copy the Python daemon and service definition:
+
    ```bash
    cp oled_sysinfo.py /home/zodiac/oled_sysinfo.py
    chmod +x /home/zodiac/oled_sysinfo.py
@@ -204,6 +208,7 @@ If deploying manually:
    ```
 
 3. Enable and start the service:
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable oled.service
@@ -211,6 +216,7 @@ If deploying manually:
    ```
 
 4. Verify service operation:
+
    ```bash
    systemctl status oled.service
    journalctl -u oled.service -f

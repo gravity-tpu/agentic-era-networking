@@ -3,6 +3,7 @@
 Autonomous, verifiable networking infrastructure — the Zodiac control plane: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
 
 Governed by the **Technical Staff Council Invariants**:
+
 - **Jeff Dean**: Systems scale, nanosecond-to-WAN latency budgets, hardware co-design, and graceful degradation.
 - **Sanjay Ghemawat**: Radical simplicity, invariant rigor, cache-friendly flat layouts, and zero-bloat abstractions.
 - **Quoc Le**: Neural architecture search, adaptive self-tuning control loops, and robustness under distribution shift.
@@ -13,7 +14,7 @@ Governed by the **Technical Staff Council Invariants**:
 
 ## Physical Hardware Architecture
 
-```
+```text
                                             +───────────────────────────────────+
                                             |    Public Internet / Home LAN     |
                                             +-----------------+-----------------+
@@ -90,7 +91,7 @@ Governed by the **Technical Staff Council Invariants**:
 
 ### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
 
-```
+```text
 +─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
 |    NVIDIA Jetson Orin Nano Super Appliance  |                 |       Apple MacBook M5 Workstation          |
 |                                             |                 |                                             |
@@ -109,12 +110,12 @@ Governed by the **Technical Staff Council Invariants**:
 **Role separation:**
 
 | Node | Role | Hardware / Logical Plane | Always On? |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Zodiac FX Switch** | Data Plane — hardware OpenFlow 1.3 packet forwarding (KSZ8795 + SAM4E8E) | Ports 1-4 | ✅ Yes |
 | **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, 67 TOPS Ampere GPU Stage-2 Anomaly Autoencoder, local `qwen2.5:3b` LLM inference (Ollama, Q4_K_M) | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`), Tailscale (`100.118.64.16`) | ✅ Yes |
 | **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
-| **Raspberry Pi 3B+**| Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
+| **Raspberry Pi 3B+** | Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
 | **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger, Tailscale client | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU, Direct USB-C Tether (`en8`), Tailscale (`100.112.223.16`) | ❌ On-Demand / Dev Session |
 | **agentic-node-01** | Remote Compute Peer — Tailscale mesh node for distributed workload | Tailscale (`100.79.152.36`) | ❌ External |
 
@@ -140,8 +141,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 
 ## Phase Overview
 
-
-```
+```text
 +---------------------------------------------------------------------------------------------------+
 | Phase 0: Physical Hardware Telemetry & Web Dashboard (COMPLETE)                                   |
 | - Zodiac FX Switch co-design (Ports 1-4, SAM4E8E MCU, KSZ8795 switch IC)                          |
@@ -281,7 +281,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 ## Detailed Milestones
 
 ### Phase 0: Physical Hardware Telemetry & Web Dashboard
+
 *Status: Complete (Commits `349d5d7`, `5cad520`, `4c9e4de`, `9b54887`)*
+
 - [x] Physical co-design with Northbound Networks Zodiac FX OpenFlow 1.3 Switch.
 - [x] Interactive SVG board visualizer with dynamic chip tooltips and port LEDs.
 - [x] Live port analytics cards for Ports 1–4 with true box collapse and IP relocation.
@@ -292,7 +294,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 - [ ] **Wireshark-style Flow Rule Registry inspector**: Web UI detail view over the in-memory `flowRuleRegistry` (`zodiac-bridge-server.ts`) surfacing the full `QuarantineAuditEntry` already captured per quarantine — rule ID, action, priority, source/destination CIDR, source/destination MAC, protocol, install timestamp, and OpenFlow install status — in a sortable/filterable table with per-rule drill-down, beyond the current summary counts.
 
 ### Phase 0.5: Enterprise Security & Historical Telemetry Persistence
+
 *Status: Complete (Commits `b33eb1f`, `32e102f`, `eb1dc5b`, `935b76e`, `5d1c0ba`, `e80f6d0`, `85857c2`)*
+
 - [x] **Milestone 0.5A: Google SSO Authentication Guard**:
   - OpenID Connect / OAuth 2.0 serverless auth flow (`/api/auth/login`, `/api/auth/callback`, `/api/auth/me`, `/api/auth/logout`).
   - Strict operator allowlist: `sekyereandy@gmail.com`, `natborks@gmail.com` with `ALLOWED_GOOGLE_EMAILS` wildcard and domain support.
@@ -315,7 +319,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Immutable edge cache headers (`Cache-Control: public, max-age=31536000, immutable`) on Vercel and local bridge server.
 
 ### Phase 0.6: Zero-Trust Cloud Edge Security & External Attack Shield
+
 *Status: In Progress*
+
 - [x] **Milestone 0.6A: Edge Command Diode (Anti-Pivoting / Zero-Ambient Mutating Access)**:
   - Strict read-only boundary for cloud serverless execution: Vercel edge runtime is mathematically decoupled from the local hardware control plane.
   - Zero arbitrary command injection: Remote commands evaluate strictly against mock sandbox templates with explicit simulation watermarks unless attested with verified local socket provenance.
@@ -330,7 +336,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Strict transport security (`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`).
 
 ### Phase 0.7: Jetson Orin Headless Control-Plane Deployment
+
 *Status: Complete*
+
 - [x] **Milestone 0.7A: Cross-Platform Serial CDC-ACM Discovery**:
   - `zodiac-serial.ts` `detectDevice()` now resolves `/dev/ttyACM*` (preferred) or `/dev/ttyUSB*` on Linux/Jetson ARM64, and `/dev/cu.usbmodem*` on macOS. No external serial library dependencies (Ghemawat).
   - Platform-aware fallback: `/dev/ttyACM0` on Linux, `/dev/cu.usbmodem212201` on macOS. Anti-Shortcut: error surfaces clearly rather than silently using wrong path.
@@ -344,7 +352,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - SSH key-based authentication only; password auth disabled on Jetson.
 
 ### Phase 0.8: Real-Time Wire-Packet Ingestion & Epistemic Provenance for Coral Edge TPUs
+
 *Status: Complete*
+
 - [x] **Direct AF_PACKET Raw Socket Ingestion on Mirror Tap (`enx*`)**:
   - Promiscuous mirror tap listener sniffing real physical frames on Zodiac Port 3 / Port 1.
   - Fail-closed fallback to `STANDBY` listener mode if interface or permissions are unavailable.
@@ -360,7 +370,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - TOCTOU-free atomic telemetry reporting with 5-second fail-closed staleness guards.
 
 ### Phase 0.9: Local 30-Day Telemetry Persistence & Cloud Relay Resilience
+
 *Status: Complete (Commits `a050d4c`, `e716eba`, `9474f48`, `ee41d98`)*
+
 - [x] **Milestone 0.9A: Three-Tier Telemetry Storage Architecture**:
   - Architecture upgraded from two-tier (RAM + Neon) to three-tier: Tier 1 — in-memory ring buffer (live, 2.5 h); Tier 2 — local NVMe JSONL files (30-day, localhost history); Tier 3 — Neon Postgres (30-day, Vercel cloud).
   - Localhost is now fully self-sufficient for 30-day historical queries without internet connectivity or Neon access.
@@ -384,7 +396,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Recovery logged with outage failure count; `consecutiveRelayFailures` resets to 0 on `res.ok`.
 
 ### Phase 0.10: Local AI Workstation Tier & Deterministic Token Accounting Ledger
+
 *Status: Complete (Commit `e602654`)*
+
 - [x] **Milestone 0.10A: 6th Active Appliance Tier — MacBook M5 & Gemma 4 Engine**:
   - Elevated the local MacBook from a passive dev terminal into a first-class autonomous AI Workstation tier (`MacBook M5 · Gemma 4 Workstation`).
   - Added dedicated navigation tab, breadcrumbs, status badges, and responsive UI views to the operator console.
@@ -409,9 +423,10 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Platform-Isolated Telemetry (Ghemawat): `probeWorkstationHardware()` and `queryAppleGpuMetrics()` fail closed immediately on non-Darwin platforms (`os.platform() !== 'darwin'`).
   - Anti-Runaway Offload Controls (Quoc Le): 3-attempt circuit breaker, 10s strict timeout budget (`AbortSignal.timeout(10000)`), and 90% edge compute ratio SLA alert to prevent cloud-loop distribution runaway.
 
-
 ### Phase 0.11: Tailscale Global Mesh Overlay & Remote SDN Operator Access
+
 *Status: Complete*
+
 - [x] **Milestone 0.11A: Jetson as Tailscale Subnet Router & WAN Exit Node**:
   - Jetson advertises `10.0.0.0/24`, `10.0.1.0/24`, and `0.0.0.0/0` (WAN exit) into the Tailscale tailnet.
   - Any Tailscale peer can reach `10.0.1.99` (Zodiac FX switch web UI) and `10.0.0.15` (Jetson bridge) without any port-forwarding or static IP.
@@ -426,7 +441,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Documented in [.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md) with full mesh peer table.
 
 ### Phase 0.12: Jetson Ampere GPU — Stage-2 Anomaly Autoencoder & Live Wire Quarantine
+
 *Status: Complete (Tracked via [Jetson Orin GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*
+
 - [x] **Milestone 0.12A (`gpu-workload-1`): GPU Neural Stress & Verification Burst Worker**:
   - `jetson_gpu_worker` thread in `hardware-burst-daemon.py` driving CUDA matrix operations on 1024 Ampere CUDA cores.
   - GPU load verified via physical sysfs (`/sys/devices/platform/bus@0/17000000.gpu/load`); zero synthetic waveforms (Invariant 6).
@@ -438,7 +455,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Live wire verification on physical interface `enP8p1s0`: 24 anomalies detected → 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action `DROP`) installed on Zodiac FX hardware via `POST /api/sdn/quarantine`.
 
 ### Phase 0.13: `zodiac-coral.service` — Coral Inference Daemon & USB Resilience Stack
+
 *Status: Complete (Commits `6e2a6cf`, `f5fd0b4`, `3097ef4`)*
+
 - [x] **Milestone 0.13A: `coral-inference-daemon.py` — Primary/Standby Failover Daemon**:
   - MobileNet V2 INT8 wire-tap DPI daemon targeting primary Coral at USB path `2-1.3` first; falls back to standby at `2-1.2` if primary is absent.
   - `MAX_CONSECUTIVE_ERRORS=5` exit threshold: daemon exits non-zero after 5 consecutive USB inference errors so systemd restarts it and re-probes the primary before activating standby.
@@ -460,7 +479,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - `set -eu`, `shopt -s nullglob`, TOCTOU-safe sysfs reads (`cat ... 2>/dev/null || continue`).
 
 ### Phase 1: Zero-Config DNS Reverse Proxy Engine
+
 *Status: Planned (Next)*
+
 - [ ] Transparent RFC 1035 UDP DNS interception on Zodiac data ports without client proxy setup.
 - [ ] Dynamic domain registry with wildcard and exact match mappings to local upstreams.
 - [ ] Node HTTP reverse proxy with stream piping and Dean nanosecond latency headers (`X-Edge-Latency-Ns`).
@@ -468,7 +489,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 - [ ] Formal loop-free verification before flow rule hardware deployment.
 
 ### Phase 2: Real-Time Flow Anomaly Detection — Coral + Jetson Split-Inference & Web Wireshark
+
 *Status: Planned*
+
 - [ ] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection** *(Tracked via [Jetson Orin GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*:
   - **Google Coral Edge TPU** (4 TOPS INT8, USB 3.0 attached to Jetson): sub-millisecond shallow packet classification on Port 3 hardware mirror tap stream. Handles high-volume benign/rogue first-pass triage.
   - **NVIDIA Jetson TensorRT** (67 TOPS INT8 Ampere GPU): deep anomaly detection model on packets flagged by Coral, `<1.0ms` inference budget.
@@ -481,18 +504,24 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Display filter engine (BPF-like syntax, e.g., `ip.src == 192.0.2.2 && tcp.port == 80`) and one-click `.pcap` / `.pcapng` export.
 
 ### Phase 3: AlphaProof Symbolic Verification & Self-Tuning Control
+
 *Status: Planned*
+
 - [ ] Formal symbolic verifier gating probabilistic routing updates.
 - [ ] Quoc Le self-tuning control loops adapting to traffic distribution shifts.
 - [ ] **`gpu-workload-3`: Contextual Bandit Rate-Meter & Bufferbloat Optimizer** — GPU-accelerated contextual bandit trained on live Zodiac 64-bit hardware counters (`fx_port_counts`, CRC errors, drops, byte deltas). Dynamically configures the Zodiac FX's 8 hardware rate meters and flow table timeouts to eliminate packet drops and queue oscillation under bursty multi-agent workloads.
 
 ### Phase 4: Multi-Agent Routing Stability & Flap Prevention
+
 *Status: Planned*
+
 - [ ] Graph sequence representations for topology mapping.
 - [ ] Multi-agent coordination with hysteresis damping.
 - [ ] **`gpu-workload-4`: TCN/LSTM Micro-Burst & Congestion Forecaster** — Temporal Convolutional Network or LSTM running on the Jetson GPU predicting switch buffer saturation 50–200ms ahead of time, proposing preemptive flow reroutes through `SymbolicRouteVerifier.verifyLoopFree()`.
 
 ### Phase 5: Autonomous Agent Intent Firewall
+
 *Status: Planned*
+
 - [ ] Semantic tool-call payload inspection at network boundary.
 - [ ] Cryptographic audit trail of all automated policy modifications.

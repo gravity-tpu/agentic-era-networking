@@ -49,6 +49,6 @@ done
 
 echo ""
 echo -e "${GREEN}${BOLD}✓ All hooks installed successfully.${RESET}"
-echo -e "  Pre-push gate enforces: TypeScript | Test Suite | Determinism Scan | Council Review"
+echo -e "  Pre-push gate enforces: TypeScript | Markdown Lint | Test Suite | Determinism Scan | Council Review"
 echo -e "  Local audit log: ${BOLD}.agents/.local-push.log (gitignored)${RESET}"
 echo ""

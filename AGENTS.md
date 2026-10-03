@@ -4,8 +4,10 @@ This repository (`gravity-tpu/agentic-era-networking`) (Zodiac) designs autonomo
 
 ---
 
-# The Technical Staff Council: Determinism & Alignment Invariants
+## The Technical Staff Council: Determinism & Alignment Invariants
+
 **Governing Minds & Perspectives:**
+
 1. **Jeff Dean**: Systems Scale, Nanosecond-to-WAN Latency Budgets, Hardware Co-Design & Graceful Degradation.
 2. **Sanjay Ghemawat**: Radical Simplicity, Invariant Rigor, Cache-Friendly Flat Layouts & Zero-Bloat Abstractions.
 3. **Quoc Le**: Neural Architecture Search, Adaptive Self-Tuning Control Loops & Robustness Under Distribution Shift.
@@ -33,7 +35,7 @@ This repository (`gravity-tpu/agentic-era-networking`) (Zodiac) designs autonomo
 
 ## Latency Numbers Every Systems & Network Engineer Must Know (The Dean Invariant)
 
-```
+```text
 L1 cache reference:                    0.5 ns
 Branch mispredict:                     5   ns
 L2 cache reference:                    7   ns
@@ -52,6 +54,7 @@ Never perform blocking synchronous I/O or unbounded recursion on critical packet
 ---
 
 ## Reference Guides
+
 - Invariant Rulebook: [.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)
 - Senior Staff Overseer Skill: [.agents/skills/senior-staff-overseer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/senior-staff-overseer/SKILL.md)
 - Interactive Review Dialectic: [.agents/workflows/overseer-audit.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/overseer-audit.md)

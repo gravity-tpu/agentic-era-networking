@@ -15,6 +15,7 @@ Security and determinism are paramount to the Technical Staff Council invariants
 If you discover a security vulnerability, please do **not** open a public issue.
 
 Instead, report vulnerabilities via:
+
 1. **GitHub Private Vulnerability Reporting**: Submit an advisory directly via the [Security Advisories tab](https://github.com/gravity-tpu/agentic-era-networking/security/advisories/new).
 2. **Direct Contact**: Email `sekyereandy@gmail.com` with full reproduction steps, impacted components, and proof-of-concept payloads.
 

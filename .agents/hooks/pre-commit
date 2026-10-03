@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Agentic Era Networking — Pre-Commit Hook: Markdown & Syntax Sentinel
+# ==============================================================================
+set -euo pipefail
+
+RESET="\033[0m"
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+BOLD="\033[1m"
+
+# Check if any markdown files are staged for commit
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACMR "*.md" 2>/dev/null || true)
+
+if [ -n "$STAGED_MD" ]; then
+  echo -e "${BOLD}Checking staged markdown documentation...${RESET}"
+  if ! npm run lint:md; then
+    echo ""
+    echo -e "${RED}${BOLD}✗ Markdown linting failed on staged files!${RESET}"
+    echo -e "${YELLOW}  Run 'npm run lint:md:fix' or fix the errors listed above before committing.${RESET}"
+    exit 1
+  fi
+  echo -e "${GREEN}✓ Markdown lint check passed${RESET}"
+fi

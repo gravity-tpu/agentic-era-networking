@@ -11,7 +11,7 @@
 The Sentinel module is **not** a separate product — it is the missing enforcement layer that sits between the existing Zodiac SDN data plane and the application origin server. The integration points are native:
 
 | Zodiac Capability | Sentinel Usage |
-|---|---|
+| --- | --- |
 | OpenFlow 1.3 `FLOW_MOD` quarantine (Priority 65535 DROP) | **Enforcement**: Block crawler IPs at the switch hardware, not in software |
 | Coral Edge TPU primary (wire-tap DPI, live ✅) + Jetson GPU standalone autoencoder (live ✅, 24 quarantines verified) | **Detection**: Coral = MobileNet V2 INT8 mirror tap telemetry (independent); Jetson GPU = full-stack 1D-CNN anomaly detection + quarantine enforcement (independent). Staged pipeline planned for Phase 2. |
 | RFC 1035 DNS Sentinel (TPU 1) | **Intent**: DNS query pattern analysis for bot hostname fingerprinting |
@@ -33,6 +33,7 @@ The origin server(s) suffer from high-volume distributed scraping and crawler at
 4. **CrowdSec False Positive Tax**: Aggressive CrowdSec heuristics block real users (e.g., rapid clicks on a broken page), generating support burden and user-trust erosion.
 
 ### Root Cause (Vinyals Game-Theoretic Frame)
+
 The attacker operates a multi-agent rotating-IP strategy. Each individual agent behaves "legitimately" in isolation (low request rate per IP). The collective is the signal. Current tools evaluate agents individually — Sentinel must evaluate **agent collectives**.
 
 ---
@@ -40,6 +41,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 ## Scope & Non-Goals
 
 ### In Scope
+
 - A detection engine that identifies **bot collective behavior** by analyzing request patterns *across* IP ranges, not per-IP.
 - An enforcement API that triggers Zodiac OpenFlow `FLOW_MOD` quarantine rules at the data-plane switch.
 - A reputation ledger (Neon Postgres) tracking IP-range-level threat scores over time.
@@ -48,6 +50,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 - Dashboard integration into the existing Zodiac operator console.
 
 ### Non-Goals
+
 - Replacing CrowdSec or Cloudflare — Sentinel is a **complementary layer**, not a replacement.
 - Full L7 WAF functionality (SQL injection, XSS, etc.) — that is handled by existing tools.
 - Managing Cloudflare rules or DNS settings directly.
@@ -57,7 +60,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 ## Architectural Characteristics (from §2.5)
 
 | Characteristic | Sentinel Target | Council Invariant |
-|---|---|---|
+| --- | --- | --- |
 | **Scalability** | Absorb sudden crawler traffic bursts at line rate via SDN hardware DROP (not software firewall) | Jeff Dean: hardware enforcement < 100µs |
 | **Accuracy** | False-positive rate < 10 bps (10 per 10 000 requests) on legitimate users; evaluated against real traffic traces | Quoc Le: adaptive threshold, no magic constants |
 | **Fault Tolerance** | **Fail-Closed via local circuit breaker** on detection API timeout (local Bloom filter + in-memory subnet blocklist engage; known-good sister-site CIDRs exempt); **Fail-Closed at confirmed quarantine threshold** | Ghemawat + Hassabis: fail-closed isolation |
@@ -65,7 +68,9 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 | **Epistemic Provenance** | All threat scores sourced from real physical packet observations, never synthetic | Invariant 6: Anti-Simulation Law |
 
 ### Failure Mode Decision (from §2.4 open question)
+
 **Sentinel is Fail-Closed at both the detection layer and the enforcement layer:**
+
 - If the Sentinel detection API is unavailable (timeout/error) → the middleware engages a **local circuit breaker**: an in-memory Bloom filter of confirmed-bad subnets + LRU subnet blocklist. Known-good sister-site CIDRs in the allowlist always return score = 0 and are never blocked. Traffic from unknown IPs while the circuit is open receives score = MAX_THREAT — the adversarial load that caused the API outage must not be rewarded with a bypass.
 - If the Zodiac SDN enforcement quarantine is triggered → it is a confirmed, time-bounded OpenFlow rule (Priority 65535, with TTL) that expires deterministically. No permanent blocking without human review.
 
@@ -73,7 +78,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 
 ## System Architecture
 
-```
+```text
 +─────────────────────────────────────────────────────────────────────────────────+
 |                         Public Internet / Cloudflare Edge                        |
 +──────────────────────────────────────┬──────────────────────────────────────────+
@@ -122,7 +127,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 
 ## Phase Overview
 
-```
+```text
 +──────────────────────────────────────────────────────────────────────────────────+
 | Sentinel Phase 0: Telemetry Foundation & IP Reputation Ledger (NEXT)             |
 | - Neon Postgres schema: IP range threat scores, request volume counters (BigInt) |
@@ -177,6 +182,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 ## Detailed Milestones
 
 ### Sentinel Phase 0: Telemetry Foundation & IP Reputation Ledger
+
 *Status: Planned (Starting Point)*
 
 - [ ] **Milestone S0.A: Neon Postgres IP Reputation Schema**:
@@ -198,6 +204,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - Real-time feed of incoming `report` events from origin servers.
 
 ### Sentinel Phase 1: Collective Behavior Detection Engine
+
 *Status: Planned*
 
 - [ ] **Milestone S1.A: /24 Subnet Sliding-Window Collective Rate Meter**:
@@ -219,6 +226,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - Output: reconstruction error (FP16/FP32 GPU tensor) → **quantized to integer at the hardware boundary** before entering the `AdaptiveThresholdController`: `threatScore = BigInt(Math.trunc(reconstructionError * SCORE_SCALE_FACTOR))` where `SCORE_SCALE_FACTOR = 1_000_000`. No floating-point value may cross into the routing state machine (INV-002).
 
 ### Sentinel Phase 2: OpenFlow Hardware Enforcement Integration
+
 *Status: Planned*
 
 - [ ] **Milestone S2.A: Confirmed Quarantine → `POST /api/sdn/quarantine`**:
@@ -235,6 +243,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - Low-confidence (score < 60) only logged, no enforcement.
 
 ### Sentinel Phase 3: Edge Middleware SDK & Origin Server Integration
+
 *Status: Planned*
 
 - [ ] **Milestone S3.A: `sentinel-middleware` npm Package**:
@@ -251,6 +260,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - All SLO metrics tracked in Neon and surfaced on Sentinel dashboard.
 
 ### Sentinel Phase 4: Sister-Site Traffic Isolation & Trusted Origin Proxy
+
 *Status: Planned*
 
 - [ ] **Milestone S4.A: HMAC-Authenticated Origin Tokens**:
@@ -270,7 +280,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 ## Council Invariant Compliance Matrix
 
 | Sentinel Component | Invariant | How It Complies |
-|---|---|---|
+| --- | --- | --- |
 | IP reputation counters, request rates | **INV-002** (BigInt/Integer only) | All counters `BigInt`, timestamps `hrtime.bigint()` nanoseconds |
 | Detection API timeout handling | **INV-003** (Zero Error Suppression) | Explicit timeout → local circuit-breaker path (Bloom filter + subnet LRU); errors surface in telemetry, never silently swallowed; fail-closed by default |
 | Quarantine enforcement | **INV-003** (Fail-Closed Isolation) | Default-drop when quarantine confirmed; always TTL-bounded |
@@ -291,7 +301,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 
 ## Directory Layout (proposed)
 
-```
+```text
 sentinel/
 ├── README.md                   ← Sentinel module overview
 ├── middleware/
@@ -312,7 +322,8 @@ sentinel/
 ```
 
 API routes live under the existing `api/` directory:
-```
+
+```text
 api/
 └── sentinel/
     ├── check.ts     ← GET /api/sentinel/check?ip=x.x.x.x
@@ -331,7 +342,7 @@ Prisma schema additions go into the existing `prisma/schema.prisma` with a new m
 ### Summary Table
 
 | Rank | Bottleneck | Hard Limit | Impact on Sentinel |
-|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- |
 | 🔴 **#1** | **Zodiac FX port bandwidth** | **100 Mbps per port** | Physical ceiling for ALL traffic through the local SDN plane |
 | 🔴 **#2** | **OpenFlow flow table** | **128 rules max** | Caps the number of simultaneously quarantined subnets |
 | 🟠 **#3** | **Coral per-packet inference** | **~230 inf/s (single-active TPU)** | 2.2% packet sampling — supplementary telemetry only, not the Sentinel enforcement path |
@@ -346,7 +357,7 @@ Prisma schema additions go into the existing `prisma/schema.prisma` with a new m
 
 Every port on the Zodiac FX is **100BASE-TX = 100 Mbps full-duplex** (Microchip KSZ8795CLX switch IC, SAM4E8E MCU):
 
-```
+```text
 Gateway uplink (Port 2):  100 Mbps max  ← ISP physical ceiling
 Client port (Port 1):     100 Mbps max
 Mirror tap (Port 3):      100 Mbps max  ← mirrored copy of Port 1/2 traffic
@@ -355,7 +366,7 @@ Total switch fabric:      ~400 Mbps aggregate (non-blocking KSZ8795)
 
 In packet terms at typical HTTP request sizes (~600 bytes average):
 
-```
+```text
 100 Mbps ÷ (600 bytes × 8 bits/byte) ≈ 20,800 packets/second max through the switch
 ```
 
@@ -377,7 +388,7 @@ Validated inference rate on physical hardware: **~230 inferences/second** (singl
 
 At 100 Mbps line rate with 600-byte average packets:
 
-```
+```text
 20,800 packets/second on wire
 ÷   230 inferences/second (single-active Coral)
 = Coral currently inspects ~1.1% of packets at line rate
@@ -391,7 +402,7 @@ The 230 inf/s figure is also a **Python implementation ceiling, not a hardware c
 
 The GPU runs `gpu_anomaly_kernel.cu` (compiled `sm_87`, 1024 CUDA cores) as an **independent full-stack anomaly detector** via `hardware-burst-daemon.py`. Unlike the Coral, which classifies individual packet tensors, the GPU processes **time-windowed statistical feature vectors** — aggregated metrics over a sliding window of recent traffic (inter-arrival deltas, burst frequency, packet size distribution). This distinction is critical for understanding coverage:
 
-```
+```text
 GPU inference latency:          0.271ms/window  (verified: 174 live inferences)
 GPU max throughput:             1,000ms ÷ 0.271ms ≈ 3,690 windows/second
 
@@ -410,7 +421,7 @@ The GPU is also the **only component currently driving quarantine enforcement** 
 **Updated signal coverage with GPU in path:**
 
 | Signal | Coverage | Source | Status |
-|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- |
 | GPU window-based anomaly detection | **~100% statistical** | Jetson GPU 1D-CNN autoencoder (3,690 windows/s capacity, 369× headroom) | ✅ **Live** |
 | HTTP request metadata | **100%** | Apache/middleware `report` hook — Sentinel's primary detection signal | Planned (S0.B) |
 | Statistical packet sampling | **~1.1% sampled** | Coral primary mirror tap (supplementary telemetry, not enforcement path) | ✅ **Live** |
@@ -421,7 +432,7 @@ The GPU is also the **only component currently driving quarantine enforcement** 
 The `/api/sentinel/check` endpoint serves reputation lookups from the Apache/middleware hot path:
 
 | Query Type | Latency | Max Throughput |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | LRU cache hit (in-memory, hot IP) | **~1ms** | ~50,000 req/s on Vercel |
 | Neon Postgres live query (cold IP) | **~5ms P99** | ~200 req/s (limited by Neon connection pool) |
 
@@ -433,7 +444,7 @@ The cold-query path at 200 req/s is the constraint. Under a heavy crawler attack
 
 This is the most important architectural clarification for Sentinel:
 
-```
+```text
 +──────────────────────────────────────────────────────────────────────────────────+
 |  PRODUCTION TRAFFIC PATH (where the attack actually lands)                       |
 +──────────────────────────────────────────────────────────────────────────────────+
@@ -477,6 +488,7 @@ This is the most important architectural clarification for Sentinel:
 ```
 
 The Zodiac FX **never sees production internet crawler traffic** — it is a local lab device on a home LAN. Its role in Sentinel is:
+
 1. **Research substrate**: validates detection algorithms on controlled local traffic before production deployment.
 2. **Local development enforcement**: quarantines test adversarial agents (e.g., the Raspberry Pi workload) during development and integration testing.
 3. **DNS sentinel signal**: TPU 1 DNS Sentinel feeds into the reputation ledger for domain-level bot fingerprinting.
@@ -488,7 +500,7 @@ For the production attack scenario (crawlers hitting the real Apache origin serv
 ### Sentinel Throughput Budget
 
 | Component | Current Capacity | Status |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | `/api/sentinel/check` — LRU cache hit | **~50,000 req/s, ~1ms P99** | ✅ Fine |
 | `/api/sentinel/check` — Neon cold query | **~200 req/s, ~5ms P99** | 🔴 **Needs PgBouncer pooler** (S0.C) |
 | Collective /24 sliding-window detector | Memory-bounded, O(n subnets), BigInt | ✅ Fine |
@@ -505,9 +517,11 @@ For the production attack scenario (crawlers hitting the real Apache origin serv
 Two constraints must be reflected in Sentinel milestone specifications:
 
 #### Constraint 1 → Milestone S2.A (OpenFlow Enforcement)
+>
 > **Quarantine rules MUST target supernet prefixes (`/16` to `/20`), never individual `/32` IPs.**  
 > A rotating-IP collective operating across 200 /24 subnets almost always originates from a small number of /16 ASN blocks. One `/16` DROP rule neutralizes the entire pool and consumes one of 128 flow table entries. Installing per-IP rules will exhaust the 128-entry table in seconds under a serious rotating-IP attack, leaving no capacity for legitimate traffic steering rules.
 
 #### Constraint 2 → Milestone S0.C (Reputation Lookup)
+>
 > **Neon's built-in PgBouncer connection pooler must be explicitly enabled before Sentinel goes to production.**  
 > Without pooling, the cold-query path saturates at ~200 req/s under a fresh rotating-IP attack (every new IP is a cache miss → cold Neon query → new connection). Sentinel must not become a Neon connection-exhaustion amplifier. The LRU cache (bounded 10k entries) is the first line of defense; PgBouncer is the second. Both are required.

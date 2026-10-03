@@ -24,6 +24,7 @@ Use this skill whenever you or the user need to immediately generate real physic
 ## 1. Quick Invocation Commands
 
 ### Burst All Devices (Default)
+
 ```bash
 # 15-minute live-streamed burst across ALL hardware:
 npm run burst
@@ -38,6 +39,7 @@ npm run burst -- 15m --detach
 ```
 
 ### Target Specific Devices (`--target` or `-t`)
+
 By default, all devices are targeted (`all`). Use `--target` to direct traffic/stress to specific components:
 
 ```bash
@@ -71,6 +73,7 @@ npm run burst -- --target rpi,zodiac
 ```
 
 ### Volume / Size-Bounded Bursts (`--size` or `-s`)
+
 Cap total data transfer by size rather than waiting for duration. The burst terminates as soon as the size limit is reached:
 
 ```bash
@@ -90,6 +93,7 @@ npm run burst -- --target zodiac --size 500kb
 Supported size units: `kb`, `mb`, `gb` (e.g. `500kb`, `50mb`, `1gb`, `2.5gb`).
 
 ### Status & Abort Commands
+
 ```bash
 # Check if a burst is active, view PID, packet rates, and recent logs:
 npm run burst:status
@@ -99,6 +103,7 @@ npm run burst:stop
 ```
 
 Via the unified `zodiac` CLI:
+
 ```bash
 npm run zodiac -- burst --target zodiac --size 50mb
 npm run zodiac -- burst:status
@@ -137,6 +142,7 @@ When invoked, the burst daemon (`scripts/hardware-burst-daemon.py`) runs paralle
 ## 3. Real-Time Dashboard & Telemetry Verification
 
 During the burst, open the live web dashboard:
+
 - **URL**: `http://localhost:3003` (or `http://<jetson-host>:3003`)
 - Port 3 and Port 4 bandwidth graphs show immediate throughput spikes.
 - Coral Edge TPU meters register `INFERENCE_ACTIVE` at `~215+ inf/s` per device.

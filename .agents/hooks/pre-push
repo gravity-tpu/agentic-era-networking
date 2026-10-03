@@ -112,7 +112,7 @@ FAIL_COUNT=0
 FAILURES=()
 
 # ── Gate 1: TypeScript ─────────────────────────────────────
-echo -e "${BOLD}[Gate 1/5] TypeScript — Zero suppressions, zero errors${RESET}"
+echo -e "${BOLD}[Gate 1/6] TypeScript — Zero suppressions, zero errors${RESET}"
 if npm run check-types --silent 2>&1; then
   echo -e "  ${GREEN}✓ Type check passed across all packages${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -123,8 +123,21 @@ else
 fi
 echo ""
 
-# ── Gate 2: Invariant Test Suite ──────────────────────────
-echo -e "${BOLD}[Gate 2/5] Test Suite — All systems & invariants must hold${RESET}"
+# ── Gate 2: Markdown Linting ──────────────────────────────
+echo -e "${BOLD}[Gate 2/6] Markdown — Zero formatting defects across documentation${RESET}"
+if npm run lint:md --silent 2>&1; then
+  echo -e "  ${GREEN}✓ All markdown files conform to linting standards${RESET}"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo -e "  ${RED}✗ Markdown linting FAILED${RESET}"
+  echo -e "  ${YELLOW}  Run 'npm run lint:md:fix' or 'npm run lint:md' to resolve issues.${RESET}"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  FAILURES+=("Markdown lint:md failed")
+fi
+echo ""
+
+# ── Gate 3: Invariant Test Suite ──────────────────────────
+echo -e "${BOLD}[Gate 3/6] Test Suite — All systems & invariants must hold${RESET}"
 if npm run test --silent 2>&1; then
   echo -e "  ${GREEN}✓ All invariant and unit test suites passed${RESET}"
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -135,8 +148,8 @@ else
 fi
 echo ""
 
-# ── Gate 3: Determinism & Anti-Pattern Scan ───────────────
-echo -e "${BOLD}[Gate 3/5] Determinism — Scanning pushed files for banned patterns${RESET}"
+# ── Gate 4: Determinism & Anti-Pattern Scan ───────────────
+echo -e "${BOLD}[Gate 4/6] Determinism — Scanning pushed files for banned patterns${RESET}"
 
 SUSPICIOUS_FINDINGS=""
 UNIQUE_COUNT=${#UNIQUE_FILES[@]}
@@ -179,8 +192,8 @@ else
 fi
 echo ""
 
-# ── Gate 4: Epistemic Provenance & Anti-Simulation Scan ──────
-echo -e "${BOLD}[Gate 4/5] Epistemic Provenance — Programmatic audit & simulation scan${RESET}"
+# ── Gate 5: Epistemic Provenance & Anti-Simulation Scan ──────
+echo -e "${BOLD}[Gate 5/6] Epistemic Provenance — Programmatic audit & simulation scan${RESET}"
 
 PROVENANCE_FAILURES=""
 
@@ -287,7 +300,7 @@ echo ""
 #   1 = Critical Issues (❌ CHANGES REQUESTED)
 #   2 = Warnings only (🟠) in strict mode
 #   non-zero but no API key = skipped gracefully (exit 0 via reviewer)
-echo -e "${BOLD}[Gate 5/5] Council Review — AI code review (strict: no warnings, no criticals)${RESET}"
+echo -e "${BOLD}[Gate 6/6] Council Review — AI code review (strict: no warnings, no criticals)${RESET}"
 
 COUNCIL_PASS=false
 COUNCIL_ATTEMPT=0

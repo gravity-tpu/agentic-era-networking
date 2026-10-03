@@ -12,7 +12,7 @@ While the Master Appliance CPU (ARM Cortex-A78AE) and external USB Google Coral 
 
 The `gpu-workload` initiative establishes a structured progression to harness the Orin GPU for high-throughput, low-latency SDN control plane and data plane acceleration.
 
-```
+```text
 +───────────────────────────────────────────────────────────────────────────────+
 |               NVIDIA Jetson Orin Nano Super (Master Appliance)                |
 |                                                                               |
@@ -44,19 +44,21 @@ The `gpu-workload` initiative establishes a structured progression to harness th
 ## 2. Workload Items & Milestones
 
 ### Item 1: `gpu-workload-1` — GPU Neural Stress & Verification Burst Worker (Quick Win)
+
 * **Status**: `COMPLETED` (Verified on Silicon)
 * **Goal**: Enable operator and automated stress testing of the Jetson Ampere GPU via `npm run burst -- --target jetson` (or `--target gpu`).
 * **Implementation Details**:
-  - Implemented in [scripts/hardware-burst-daemon.py](file:///Users/andymorven/git/agentic-era-networking/scripts/hardware-burst-daemon.py) with dedicated `jetson_gpu_worker` thread.
-  - Successfully validated in a live 10-minute multi-accelerator burst on the Jetson Orin Nano Super.
-  - Generates continuous, controlled CUDA matrix operations with physical thermal and load tracking.
+  * Implemented in [scripts/hardware-burst-daemon.py](file:///Users/andymorven/git/agentic-era-networking/scripts/hardware-burst-daemon.py) with dedicated `jetson_gpu_worker` thread.
+  * Successfully validated in a live 10-minute multi-accelerator burst on the Jetson Orin Nano Super.
+  * Generates continuous, controlled CUDA matrix operations with physical thermal and load tracking.
 * **Telemetry & Provenance**:
-  - Live load verified via sysfs (`/sys/devices/platform/bus@0/17000000.gpu/load`).
-  - Monitored power consumption and thermals in [src/sdn/hardware-probe.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/hardware-probe.ts).
+  * Live load verified via sysfs (`/sys/devices/platform/bus@0/17000000.gpu/load`).
+  * Monitored power consumption and thermals in [src/sdn/hardware-probe.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/hardware-probe.ts).
 
 ---
 
 ### Item 2: `gpu-workload-2` — Standalone Full-Stack Deep Traffic Anomaly Autoencoder & Fail-Closed Quarantine
+
 * **Status**: `COMPLETED` (Verified on Live Wire & Silicon)
 * **Goal**: Deploy an independent, end-to-end GPU anomaly detection and quarantine pipeline on the Jetson. Originally described as "Stage 2 of the Split-Inference pipeline" (Coral Stage 1 → GPU Stage 2), the deployed implementation runs **standalone** — the GPU captures its own packet stream via `hardware-burst-daemon.py` and does not consume Coral output. The Coral (`zodiac-coral.service`) operates as a parallel independent inference path on the mirror tap. See [docs/design/physical-sdn-edge-tpu.md Role 1](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md#role-1-real-time-flow-anomaly-detection--fail-closed-quarantine) for the deployed topology and the Phase 2 staged-pipeline target.
 * **Architecture & Verification**:
@@ -68,6 +70,7 @@ The `gpu-workload` initiative establishes a structured progression to harness th
 ---
 
 ### Item 3: `gpu-workload-3` — Quoc Le Adaptive Rate-Meter & Bufferbloat Optimizer
+
 * **Status**: `PLANNED`
 * **Goal**: Eliminate heuristic static rate limits by training a GPU-accelerated contextual bandit on live Zodiac 64-bit hardware counters (`fx_port_counts`, CRC errors, drops, byte deltas).
 * **SDN Action**: Dynamically configures the Zodiac FX's 8 hardware rate meters and flow table timeouts to eliminate packet drops and queue oscillation under bursty multi-agent workloads.
@@ -75,6 +78,7 @@ The `gpu-workload` initiative establishes a structured progression to harness th
 ---
 
 ### Item 4: `gpu-workload-4` — Real-Time Micro-Burst & Jitter Forecaster (Oriol Vinyals Graph Net)
+
 * **Status**: `PLANNED`
 * **Goal**: Proactive SDN routing using a Temporal Convolutional Network (TCN) or LSTM running on the Jetson GPU.
 * **SDN Action**: Predicts switch buffer saturation 50 ms–200 ms ahead of time and proposes preemptive flow reroutes through the symbolic verifier (`SymbolicRouteVerifier.verifyLoopFree()`).

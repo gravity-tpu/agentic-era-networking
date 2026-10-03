@@ -13,9 +13,10 @@
 
 ## 1. Executive Summary & The Architectural Role Inversion
 
-In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts away critical physical artifacts: hardware buffer overruns, physical link state bounces, serialization jitter, and thermal throttle events. 
+In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts away critical physical artifacts: hardware buffer overruns, physical link state bounces, serialization jitter, and thermal throttle events.
 
 This architecture grounds the Zodiac control plane in **physical hardware**, elevating the appliances into a multi-tier, hardware-co-designed ecosystem:
+
 - **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
 - **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, line-rate TensorRT neural anomaly detection (67 TOPS INT8), and physical SSD1306 OLED telemetry daemon.
 - **Dual Google Coral Edge TPUs**: Dedicated 8 TOPS INT8 USB 3.0 coprocessors executing sub-millisecond shallow packet classification on mirrored data streams (TPU 0) and RFC 1035 DNS intent analysis (TPU 1) without taxing the Jetson GPU pipeline.
@@ -27,7 +28,7 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 
 ## 2. Desktop Interconnect & Physical Wiring Topology
 
-```
+```text
                                             +───────────────────────────────────+
                                             |    Public Internet / Home LAN     |
                                             +-----------------+-----------------+
@@ -93,7 +94,7 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 
 ### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
 
-```
+```text
 +─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
 |    NVIDIA Jetson Orin Nano Super Appliance  |                 |       Apple MacBook M5 Workstation          |
 |                                             |                 |                                             |
@@ -145,7 +146,6 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 
 ### 2.3 Dual-Homed Workload Architecture & Asymmetric Routing Invariant
 
-
 > [!IMPORTANT]
 > **Subnet Isolation Law (Ghemawat Invariant)**:  
 > The Raspberry Pi 3B+ data plane interface (`eth0`) is assigned an isolated subnet distinct from the management wireless LAN.  
@@ -163,7 +163,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 
 Cloud LLMs (e.g., GPT-4, Claude, Gemini) are architecturally incapable of direct packet-level or flow-level admission control due to Time-To-First-Token (TTFT) latency:
 
-```
+```text
 Operation                                 Latency (ns)             Human Time       Viability for Flow Control
 ---------------------------------------------------------------------------------------------------------------
 L1 cache reference                             0.5 ns                               Data plane lookup
@@ -186,69 +186,71 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
 > [!NOTE]
 > **Deployed topology (Phases 0.12–0.13)**: The Coral and Jetson GPU run as **two independent parallel inference paths on separate interfaces** — not as a Stage 1 → Stage 2 pipeline. No handoff occurs between them in the current codebase. The staged pipeline is the Phase 2 target once USB hub contention is resolved and dedicated per-TPU host controllers are available.
 
-* **Challenge**: Autonomous AI agents executing tool-use loops can trigger rogue network behaviors (DDoS against local services, aggressive subnet scanning, abnormal packet burst frequencies, exfiltration bursts).
+- **Challenge**: Autonomous AI agents executing tool-use loops can trigger rogue network behaviors (DDoS against local services, aggressive subnet scanning, abnormal packet burst frequencies, exfiltration bursts).
 
-* **Deployed Path A — Google Coral Edge TPU (Phase 0.13, live)**:
-  * `zodiac-coral.service` captures frames via AF_PACKET raw socket on `enx*` (the ASIX AX88179 USB GbE adapter in promiscuous mode on Zodiac Port 3 mirror tap).
-  * Runs MobileNet V2 INT8 as a standalone wire-tap DPI classifier: 1 wire frame ingested = 1 physical Coral inference (<500 µs per inference).
-  * Outputs telemetry to `/run/zodiac/coral-telemetry.json` — inference rate, USB path, `standbyMode` flag. **Does not feed output to the Jetson GPU.** Operates independently.
-  * Primary TPU at USB path `2-1.3`; standby failover to `2-1.2` after `MAX_CONSECUTIVE_ERRORS=5`.
+- **Deployed Path A — Google Coral Edge TPU (Phase 0.13, live)**:
+  - `zodiac-coral.service` captures frames via AF_PACKET raw socket on `enx*` (the ASIX AX88179 USB GbE adapter in promiscuous mode on Zodiac Port 3 mirror tap).
+  - Runs MobileNet V2 INT8 as a standalone wire-tap DPI classifier: 1 wire frame ingested = 1 physical Coral inference (<500 µs per inference).
+  - Outputs telemetry to `/run/zodiac/coral-telemetry.json` — inference rate, USB path, `standbyMode` flag. **Does not feed output to the Jetson GPU.** Operates independently.
+  - Primary TPU at USB path `2-1.3`; standby failover to `2-1.2` after `MAX_CONSECUTIVE_ERRORS=5`.
 
-* **Deployed Path B — Jetson Ampere GPU 1D-CNN Autoencoder (Phase 0.12, live)**:
-  * Native CUDA kernel (`src/gpu/gpu_anomaly_kernel.cu`, compiled for `sm_87`) runs a 1D-CNN autoencoder on live wire packet feature vectors.
-  * **Operates independently** — does not consume Coral output. Captures its own packet stream via `hardware-burst-daemon.py`.
-  * **0.271 ms** average inference latency (verified: 174 live inferences; Dean budget < 1.0 ms).
-  * `AdaptiveThresholdController` (EMA-based, no magic constants) gates quarantine decisions.
-  * Verified end-to-end: **24 anomalies detected → 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action DROP) installed on Zodiac FX hardware** via `POST /api/sdn/quarantine`.
+- **Deployed Path B — Jetson Ampere GPU 1D-CNN Autoencoder (Phase 0.12, live)**:
+  - Native CUDA kernel (`src/gpu/gpu_anomaly_kernel.cu`, compiled for `sm_87`) runs a 1D-CNN autoencoder on live wire packet feature vectors.
+  - **Operates independently** — does not consume Coral output. Captures its own packet stream via `hardware-burst-daemon.py`.
+  - **0.271 ms** average inference latency (verified: 174 live inferences; Dean budget < 1.0 ms).
+  - `AdaptiveThresholdController` (EMA-based, no magic constants) gates quarantine decisions.
+  - Verified end-to-end: **24 anomalies detected → 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action DROP) installed on Zodiac FX hardware** via `POST /api/sdn/quarantine`.
 
-* **Aspirational Phase 2 — Staged Split-Inference Pipeline**:
-  * Once USB hub contention is eliminated (dedicated USB host controller per TPU or PCIe Coral), the Coral will act as Stage 1 (shallow frame-level triage, <100 µs), feeding only anomalous packet windows to the Jetson GPU Stage 2 (deep 1D-CNN autoencoder, <1.0 ms). This eliminates redundant full-stream GPU processing and maximises CPU/memory headroom.
-* **Deployed Architecture — Primary/Standby Single-Active Mode (Phase 0.13)**:
-  * **`zodiac-coral.service`** (`deploy/jetson/zodiac-coral.service`) runs `scripts/coral-inference-daemon.py` as a `zodiac` service user (CAP_NET_RAW only) with `Restart=always` and `StartLimitBurst=10/600s` flap termination.
-  * **Single-Active Invariant (Ghemawat)**: Only one Coral TPU runs inference at any time. Attempting concurrent dual-TPU execution on the shared tegra-xusb hub (Realtek `0bda:0489`) causes hub autosuspend races during idle gaps between AF_PACKET GbE bursts and Coral bulk-in callbacks — producing `LIBUSB_ERROR_NOT_FOUND` and libedgetpu `abort()` (SIGABRT). One active TPU eliminates the contention window.
-  * **Primary → Standby Failover**: On startup the daemon targets `CORAL_PRIMARY_USB_PATH=2-1.3`. After `MAX_CONSECUTIVE_ERRORS=5` consecutive USB inference failures, the daemon exits non-zero; systemd restarts it and re-probes the primary before falling back to `CORAL_STANDBY_USB_PATH=2-1.2`. `standbyMode: true` is set in telemetry when the standby path is active.
-  * **Future Dedicated Parallel Roles (Phase 2)**: Once USB hub contention is eliminated (dedicated USB host controller per TPU or PCIe Coral), the two TPUs will be re-assigned dedicated static roles: Primary = wire-tap shallow DPI, Standby = RFC 1035 DNS Intent Sentinel. Each Edge TPU's 8 MB on-chip scratchpad SRAM pins a single quantized model permanently — eliminating the 5–15 ms USB model-eviction reload penalty of dynamic load balancing.
-* **USB Resilience Stack (Ghemawat & Hassabis)**:
-  * **Root Cause Identified**: Realtek USB 3.0 hub (`0bda:0489`) defaults to `autosuspend_delay_ms=0, control=auto`. With zero delay, the hub suspends during idle windows between concurrent AF_PACKET GbE transfers and Coral bulk-in DMA callbacks. The suspended hub causes libedgetpu's `HandleQueuedBulkIn` to receive `LIBUSB_ERROR_NOT_FOUND (-5)`, which unconditionally calls `abort()` → `SIGABRT`, wedging the Coral at PID `18d1:9302` and preventing delegate reload on restart.
-  * **Permanent Fix — udev Autosuspend Rules** (`deploy/jetson/99-coral-usb-power.rules`): `ACTION=="add"` rules write `power/control=on` for both Coral PIDs (`1a6e:089a`, `18d1:9302`, `18d1:9303`) **and** the Realtek parent hub (`0bda:0489`), preventing hub power-cycling across the entire tegra-xusb Bus 02 tree.
-  * **Fail-Closed ExecStartPre Reset** (`scripts/reset-coral-usb.sh`): Runs as root (`ExecStartPre=+`) before each daemon start. Scans sysfs for Coral devices: if `18d1:9302/9303` found, de-authorizes then re-authorizes each (1 s deauth delay, `udevadm settle --timeout=10`). If only `1a6e:089a` (fresh post-replug pre-firmware state) found, skips reset and exits 0. Exits 1 only if no Coral device exists at all — blocking daemon start against missing hardware (fail-closed invariant).
-* **Fail-Closed Invariant**: Conforms to Sanjay Ghemawat & Demis Hassabis rules: if the ML detector fails or is ambiguous, the system defaults to DROP/QUARANTINE.
+- **Aspirational Phase 2 — Staged Split-Inference Pipeline**:
+  - Once USB hub contention is eliminated (dedicated USB host controller per TPU or PCIe Coral), the Coral will act as Stage 1 (shallow frame-level triage, <100 µs), feeding only anomalous packet windows to the Jetson GPU Stage 2 (deep 1D-CNN autoencoder, <1.0 ms). This eliminates redundant full-stream GPU processing and maximises CPU/memory headroom.
+- **Deployed Architecture — Primary/Standby Single-Active Mode (Phase 0.13)**:
+  - **`zodiac-coral.service`** (`deploy/jetson/zodiac-coral.service`) runs `scripts/coral-inference-daemon.py` as a `zodiac` service user (CAP_NET_RAW only) with `Restart=always` and `StartLimitBurst=10/600s` flap termination.
+  - **Single-Active Invariant (Ghemawat)**: Only one Coral TPU runs inference at any time. Attempting concurrent dual-TPU execution on the shared tegra-xusb hub (Realtek `0bda:0489`) causes hub autosuspend races during idle gaps between AF_PACKET GbE bursts and Coral bulk-in callbacks — producing `LIBUSB_ERROR_NOT_FOUND` and libedgetpu `abort()` (SIGABRT). One active TPU eliminates the contention window.
+  - **Primary → Standby Failover**: On startup the daemon targets `CORAL_PRIMARY_USB_PATH=2-1.3`. After `MAX_CONSECUTIVE_ERRORS=5` consecutive USB inference failures, the daemon exits non-zero; systemd restarts it and re-probes the primary before falling back to `CORAL_STANDBY_USB_PATH=2-1.2`. `standbyMode: true` is set in telemetry when the standby path is active.
+  - **Future Dedicated Parallel Roles (Phase 2)**: Once USB hub contention is eliminated (dedicated USB host controller per TPU or PCIe Coral), the two TPUs will be re-assigned dedicated static roles: Primary = wire-tap shallow DPI, Standby = RFC 1035 DNS Intent Sentinel. Each Edge TPU's 8 MB on-chip scratchpad SRAM pins a single quantized model permanently — eliminating the 5–15 ms USB model-eviction reload penalty of dynamic load balancing.
+- **USB Resilience Stack (Ghemawat & Hassabis)**:
+  - **Root Cause Identified**: Realtek USB 3.0 hub (`0bda:0489`) defaults to `autosuspend_delay_ms=0, control=auto`. With zero delay, the hub suspends during idle windows between concurrent AF_PACKET GbE transfers and Coral bulk-in DMA callbacks. The suspended hub causes libedgetpu's `HandleQueuedBulkIn` to receive `LIBUSB_ERROR_NOT_FOUND (-5)`, which unconditionally calls `abort()` → `SIGABRT`, wedging the Coral at PID `18d1:9302` and preventing delegate reload on restart.
+  - **Permanent Fix — udev Autosuspend Rules** (`deploy/jetson/99-coral-usb-power.rules`): `ACTION=="add"` rules write `power/control=on` for both Coral PIDs (`1a6e:089a`, `18d1:9302`, `18d1:9303`) **and** the Realtek parent hub (`0bda:0489`), preventing hub power-cycling across the entire tegra-xusb Bus 02 tree.
+  - **Fail-Closed ExecStartPre Reset** (`scripts/reset-coral-usb.sh`): Runs as root (`ExecStartPre=+`) before each daemon start. Scans sysfs for Coral devices: if `18d1:9302/9303` found, de-authorizes then re-authorizes each (1 s deauth delay, `udevadm settle --timeout=10`). If only `1a6e:089a` (fresh post-replug pre-firmware state) found, skips reset and exits 0. Exits 1 only if no Coral device exists at all — blocking daemon start against missing hardware (fail-closed invariant).
+- **Fail-Closed Invariant**: Conforms to Sanjay Ghemawat & Demis Hassabis rules: if the ML detector fails or is ambiguous, the system defaults to DROP/QUARANTINE.
 
 ### Role 2: Verification Asymmetry & Symbolic Proof (AlphaProof Paradigm)
-* **Challenge**: Neural networks are probabilistic and non-deterministic; they can suggest degenerate or cyclical routing rules.
-* **Jetson Orin TensorRT Mechanism**:
-  * The Jetson Orin runs a Graph Neural Network (or Pointer Network) predicting optimal path transitions under varying link costs.
-  * **The Verification Invariant**: The neural model merely *proposes* a candidate topology update.
-  * Before the candidate FlowMod touches the Zodiac FX's 128-entry table, the deterministic `SymbolicRouteVerifier.verifyLoopFree()` formally proves the route is a Directed Acyclic Graph (DAG). Any cycle immediately throws `RoutingLoopDetectedError` and halts installation.
+
+- **Challenge**: Neural networks are probabilistic and non-deterministic; they can suggest degenerate or cyclical routing rules.
+- **Jetson Orin TensorRT Mechanism**:
+  - The Jetson Orin runs a Graph Neural Network (or Pointer Network) predicting optimal path transitions under varying link costs.
+  - **The Verification Invariant**: The neural model merely *proposes* a candidate topology update.
+  - Before the candidate FlowMod touches the Zodiac FX's 128-entry table, the deterministic `SymbolicRouteVerifier.verifyLoopFree()` formally proves the route is a Directed Acyclic Graph (DAG). Any cycle immediately throws `RoutingLoopDetectedError` and halts installation.
 
 ### Role 3: Physical Hardware Reinforcement Learning (Quoc Le Adaptive Control)
-* **Challenge**: Hardcoded rate limits and buffer sizes cause queue oscillation and bufferbloat under bursty agent workloads.
-* **Jetson Orin TensorRT Mechanism**:
-  * The Zodiac FX exposes 64-bit hardware counters: `fx_port_counts` (RX/TX packets, drops, CRC errors) and `fx_flow_counts` (matched packets and bytes).
-  * An INT8 contextual bandit model running on the Jetson Orin observes real-time packet loss and latency feedback.
-  * Dynamically reconfigures the Zodiac FX's 8 hardware rate meters and the software `AdaptiveFlowController` window using exact integer basis points (`BigInt`), completely eliminating magic constants.
+
+- **Challenge**: Hardcoded rate limits and buffer sizes cause queue oscillation and bufferbloat under bursty agent workloads.
+- **Jetson Orin TensorRT Mechanism**:
+  - The Zodiac FX exposes 64-bit hardware counters: `fx_port_counts` (RX/TX packets, drops, CRC errors) and `fx_flow_counts` (matched packets and bytes).
+  - An INT8 contextual bandit model running on the Jetson Orin observes real-time packet loss and latency feedback.
+  - Dynamically reconfigures the Zodiac FX's 8 hardware rate meters and the software `AdaptiveFlowController` window using exact integer basis points (`BigInt`), completely eliminating magic constants.
 
 ### Role 4: DNS Sentinel & Agent Intent Classification (Planned — Phase 2)
 
 > [!NOTE]
 > **Status: Planned, not yet deployed.** The standby Coral TPU (`2-1.2`) currently runs the same MobileNet V2 wire-tap DPI model as the primary, activated only on primary failover. The DNS Sentinel role requires USB hub contention to be resolved and a dedicated character-level INT8 FQDN model to be trained and compiled.
 
-* **Challenge**: Malicious or drifting agents can employ DNS exfiltration or algorithmic domain generation (DGA) to communicate outside approved environments.
-* **Target Architecture (Phase 2)**:
-  * All agent DNS requests are serviced by the internal [src/dns/server.ts](file:///Users/andymorven/git/agentic-era-networking/src/dns/server.ts) resolver.
-  * The standby Coral TPU will be reassigned a dedicated character-level quantized sequence model in its 8 MB on-chip SRAM, evaluating the semantic intent, entropy, and DGA likelihood of requested FQDNs in <300 µs — without consuming Jetson GPU/CPU cycles.
-  * Queries identified as suspicious are rejected with `NXDOMAIN`, and an OpenFlow rule is dynamically synthesized to isolate the querying agent's MAC address on the Zodiac FX data plane.
+- **Challenge**: Malicious or drifting agents can employ DNS exfiltration or algorithmic domain generation (DGA) to communicate outside approved environments.
+- **Target Architecture (Phase 2)**:
+  - All agent DNS requests are serviced by the internal [src/dns/server.ts](file:///Users/andymorven/git/agentic-era-networking/src/dns/server.ts) resolver.
+  - The standby Coral TPU will be reassigned a dedicated character-level quantized sequence model in its 8 MB on-chip SRAM, evaluating the semantic intent, entropy, and DGA likelihood of requested FQDNs in <300 µs — without consuming Jetson GPU/CPU cycles.
+  - Queries identified as suspicious are rejected with `NXDOMAIN`, and an OpenFlow rule is dynamically synthesized to isolate the querying agent's MAC address on the Zodiac FX data plane.
 
 ---
 
 ## 5. Zodiac FX Hardware Constraints & Design Patterns
 
 1. **Table Capacity Bound**: The switch supports a maximum of **128 flow entries** (`MAX_FLOWS = 128`).
-   * *Invariant Solution*: The controller must implement deterministic LRU eviction with explicit `idle_timeout` and `hard_timeout` allocations.
+   - *Invariant Solution*: The controller must implement deterministic LRU eviction with explicit `idle_timeout` and `hard_timeout` allocations.
 2. **Software Pipeline Throughput**: Packets forwarded via OpenFlow are processed by the 120 MHz SAM4E8E MCU in tail-tag mode, yielding ~3–10 Mbps throughput.
-   * *Invariant Solution*: Native traffic is delegated to KSZ8795 hardware VLAN switching; only agent-monitored, security-critical, and test traffic is routed through the OpenFlow pipeline.
+   - *Invariant Solution*: Native traffic is delegated to KSZ8795 hardware VLAN switching; only agent-monitored, security-critical, and test traffic is routed through the OpenFlow pipeline.
 3. **Fail-Closed State Enforcement**:
-   * CLI configuration `set failstate secure` ensures that if the OpenFlow controller or USB serial connection terminates, all transit traffic is immediately dropped rather than leaked.
+   - CLI configuration `set failstate secure` ensures that if the OpenFlow controller or USB serial connection terminates, all transit traffic is immediately dropped rather than leaked.
 
 ---
 
@@ -266,7 +268,7 @@ The system employs a deterministic **three-tier storage and query routing archit
 
 ### Architectural Overview & Data Paths
 
-```
+```text
   ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │ JETSON ORIN NANO SUPER (LOCAL LAN)                                                   │
   │                                                                                      │
@@ -313,6 +315,7 @@ The system employs a deterministic **three-tier storage and query routing archit
 Every 30 seconds `ZodiacBridgeServer` appends one averaged data point per device type to the current day's JSONL file using `fs.promises.appendFile` (never blocking the SDN event loop). Each flush uses `downsamplePoints(newPts, 1)` to average the ~12 raw 2.5 s points into a single representative point.
 
 **Storage budget per device type:**
+
 - 2 points/min × 60 min × 24 h = 2,880 points/day
 - ~150 bytes/point (compact JSON, BigInt serialized as strings)
 - ≈ 430 KB/day × 3 device types × 30 days ≈ **39 MB total** (well within 500 GB NVMe)
@@ -365,53 +368,61 @@ On recovery, `consecutiveRelayFailures` resets to 0 and the bridge logs the outa
 ---
 
 ## 5. The Local AI Workstation Tier: MacBook M5 & Local Gemma 4 Engine
- 
- ### 5.1 Architecture & Computational Role
- The MacBook Pro M5 is elevated from a passive management console into an active **Local AI Workstation Tier** within the Zodiac topology:
- - **Silicon Acceleration:** 20-core Apple Silicon Metal GPU coupled with Unified Memory Architecture (UMA) providing high-bandwidth memory access for local model weights.
- - **Local Inference Engine:** Hosts Google's `gemma4:26b` (26B parameter model) on Ollama (`http://localhost:11434`), executing local code reviews, patch audits, and agent policy verification with zero cloud latency and zero API cost.
--- **Dual-Stage Council Review Architecture (Demis Hassabis & Oriol Vinyals):**
--  - **Stage 1 (Local Edge Workstation Gate):** Executes the 5-Council pre-push code audit locally using local Metal GPU compute, providing instant feedback to the engineer before git push.
--  - **Stage 2 (Server-Side Symbolic Invariant Gate):** To enforce true **Verification Asymmetry** (*"Probabilistic generation proposes. Deterministic systems dispose"*), local pre-push evaluation is complemented by mandatory, immutable server-side CI/CD verification gates. Unverified agentic modifications are deterministically blocked from merging to `main` until passing formal symbolic verification, BigInt invariant suites, and cryptographic provenance checks.
-+
-+### 5.2 Physical IOKit Telemetry Engine & Fail-Closed Platform Boundary (`src/sdn/hardware-probe.ts`)
-+To satisfy Council Invariant 6 (Goodhart's Law & Epistemic Telemetry Provenance) and Sanjay Ghemawat's invariant rigor:
-+- **Strict Platform Boundary & Fail-Closed Isolation:** Darwin-specific tools (`ioreg`, `sysctl`) are strictly confined to macOS. `probeWorkstationHardware()` and `queryAppleGpuMetrics()` evaluate `os.platform() !== 'darwin'` at the entry boundary, immediately failing closed to safe offline defaults (`connected: false`, `gpuUtilizationPct: 0`, `0` counters) without spawning child processes. The Master Appliance (Jetson Orin) executes its own Linux sysfs/tegrastats probes independently, ensuring zero platform cross-contamination.
-+- **Metal GPU Statistics:** On Darwin, probed via `ioreg -r -c IOAccelerator -d 1 -a` to extract exact physical metrics: `gpuUtilizationPct` (Device Utilization %), `rendererUtilizationPct`, `tilerUtilizationPct`, `gpuMemoryUsedBytes` (In use system memory), and `gpuMemoryAllocatedBytes` (Alloc system memory).
-+- **Formal Property List XML Parser:** Implements `parseApplePlistXml`, a deterministic, zero-dependency character-by-character scanner and bounded AST parser supporting CDATA blocks, DOCTYPE declarations, entity unescaping, and depth bounds (`MAX_PLIST_DEPTH = 32`) to eliminate fragile regex heuristics and protect against stack exhaustion.
-+- **Fail-Closed Offline Reporting:** When Ollama or IOKit is disconnected, metrics evaluate to physical truth: `0` velocities, `0%` utilization, and explicit `OFFLINE` badges. Synthetic wave generation is strictly prohibited.
-+
-+### 5.3 Deterministic 64-Bit BigInt Token Accounting Ledger
-+Council Invariant 2 mandates absolute determinism in telemetry and metering. All token counters avoid IEEE-754 floating-point casting:
-+- **Counters:** `totalTokens`, `totalPromptTokens`, `totalCompletionTokens`, and `totalInferences` are computed using native `BigInt`.
-+- **Wire Serialization:** Transported over JSON boundaries as decimal strings (e.g. `"14820"` rather than raw floats or scientific notation), preventing precision drift past $2^{53}-1$ across heterogeneous consumers.
-+- **Real-Time Velocities & Latency Profiling:**
-+  - Token Generation Velocity (`tok/s` = `(completionTokens * 1e9) / evalDurationNs`)
-+  - Prompt Evaluation / Prefill Velocity (`tok/s` = `(promptTokens * 1e9) / promptEvalDurationNs`)
-+  - Peak velocities (`peakTokensPerSecond`, `peakPromptTokensPerSecond`)
-+  - Time-To-First-Token (TTFT) and Inter-Token Latency (ITL) jitter evaluated against Jeff Dean's Systems Latency standard (500ms–2000ms SLA).
-+  - Per-token generation latency (`ms/token`).
-+  - Context window saturation (`tokens / maxTokens · pct`) and edge compute ratio (`edgeComputeRatioPct: 100.0%`).
-+
-+### 5.4 Multi-Process Concurrency & Mutex (`scripts/ai-utils.mjs`)
-+To prevent Read-Modify-Write (RMW) race conditions when concurrent inference tasks or pre-push gates execute:
-+- **Intra-Process Serialization:** An asynchronous Promise queue (`enqueueTelemetryMutation`) guarantees serial execution of telemetry file mutations within the Node.js runtime.
-+- **Inter-Process Mutual Exclusion:** A file-level mutex (`withTelemetryFileLock`) uses `open(lockPath, 'wx')` for atomic lock acquisition.
-+- **Epistemic Process Liveness Detection:** Abandoned locks from crashed processes are recovered by probing kernel signal 0 (`process.kill(pid, 0)` -> `ESRCH`), eliminating brittle hardcoded timeouts while ensuring deterministic lock clearance.
-+
-+### 5.5 Hybrid Edge-to-Cloud Offload Plane & Anti-Runaway Controls (Quoc Le Invariant)
-+The workstation operates as the primary edge reasoning tier with an autonomous fallback chain:
-+1. `gemma4:26b` (Local Apple Silicon Metal GPU — primary)
-+2. `gemini-pro-latest` (Google Cloud fallback)
-+3. `claude-opus-4-8` (Anthropic Cloud fallback)
-+4. `gpt-4o` (OpenAI Cloud fallback)
-+5. `gemini-3.8-flash` → `claude-sonnet-4-6` → `gpt-4o-mini` (High-speed fallbacks)
-+
-+To prevent non-deterministic distribution shifts, latency runaway, and unbounded cloud recursion:
-+- **Circuit Breaker:** Hard cap of 3 consecutive cloud attempts before failing closed to local edge quarantine.
-+- **Strict Timeout Budget:** Every cloud API request enforces an immutable 10-second timeout (`AbortSignal.timeout(10000)`), preventing lagging WAN links from blocking agentic reasoning loops.
-+- **Edge Compute Ratio Invariant:** Continuous telemetry tracking of `edgeComputeRatioPct`. If edge compute falls below the 90.0% SLA threshold, the system flags an invariant warning (`WARN_CLOUD_DISTRIBUTION_SHIFT`) and throttles background tasks to preserve edge sovereignty and prevent runaway cloud billing.
-+- **Verifiable Ledger:** All cloud token consumption is recorded in `recordCloudInferenceMetrics` with cryptographic attribution and model metadata.
-+
 
+### 5.1 Architecture & Computational Role
 
+The MacBook Pro M5 is elevated from a passive management console into an active **Local AI Workstation Tier** within the Zodiac topology:
+
+- **Silicon Acceleration:** 20-core Apple Silicon Metal GPU coupled with Unified Memory Architecture (UMA) providing high-bandwidth memory access for local model weights.
+- **Local Inference Engine:** Hosts Google's `gemma4:26b` (26B parameter model) on Ollama (`http://localhost:11434`), executing local code reviews, patch audits, and agent policy verification with zero cloud latency and zero API cost.
+- **Dual-Stage Council Review Architecture (Demis Hassabis & Oriol Vinyals):**
+  - **Stage 1 (Local Edge Workstation Gate):** Executes the 5-Council pre-push code audit locally using local Metal GPU compute, providing instant feedback to the engineer before git push.
+  - **Stage 2 (Server-Side Symbolic Invariant Gate):** To enforce true **Verification Asymmetry** (*"Probabilistic generation proposes. Deterministic systems dispose"*), local pre-push evaluation is complemented by mandatory, immutable server-side CI/CD verification gates. Unverified agentic modifications are deterministically blocked from merging to `main` until passing formal symbolic verification, BigInt invariant suites, and cryptographic provenance checks.
+
+### 5.2 Physical IOKit Telemetry Engine & Fail-Closed Platform Boundary (`src/sdn/hardware-probe.ts`)
+
+To satisfy Council Invariant 6 (Goodhart's Law & Epistemic Telemetry Provenance) and Sanjay Ghemawat's invariant rigor:
+
+- **Strict Platform Boundary & Fail-Closed Isolation:** Darwin-specific tools (`ioreg`, `sysctl`) are strictly confined to macOS. `probeWorkstationHardware()` and `queryAppleGpuMetrics()` evaluate `os.platform() !== 'darwin'` at the entry boundary, immediately failing closed to safe offline defaults (`connected: false`, `gpuUtilizationPct: 0`, `0` counters) without spawning child processes. The Master Appliance (Jetson Orin) executes its own Linux sysfs/tegrastats probes independently, ensuring zero platform cross-contamination.
+- **Metal GPU Statistics:** On Darwin, probed via `ioreg -r -c IOAccelerator -d 1 -a` to extract exact physical metrics: `gpuUtilizationPct` (Device Utilization %), `rendererUtilizationPct`, `tilerUtilizationPct`, `gpuMemoryUsedBytes` (In use system memory), and `gpuMemoryAllocatedBytes` (Alloc system memory).
+- **Formal Property List XML Parser:** Implements `parseApplePlistXml`, a deterministic, zero-dependency character-by-character scanner and bounded AST parser supporting CDATA blocks, DOCTYPE declarations, entity unescaping, and depth bounds (`MAX_PLIST_DEPTH = 32`) to eliminate fragile regex heuristics and protect against stack exhaustion.
+- **Fail-Closed Offline Reporting:** When Ollama or IOKit is disconnected, metrics evaluate to physical truth: `0` velocities, `0%` utilization, and explicit `OFFLINE` badges. Synthetic wave generation is strictly prohibited.
+
+### 5.3 Deterministic 64-Bit BigInt Token Accounting Ledger
+
+Council Invariant 2 mandates absolute determinism in telemetry and metering. All token counters avoid IEEE-754 floating-point casting:
+
+- **Counters:** `totalTokens`, `totalPromptTokens`, `totalCompletionTokens`, and `totalInferences` are computed using native `BigInt`.
+- **Wire Serialization:** Transported over JSON boundaries as decimal strings (e.g. `"14820"` rather than raw floats or scientific notation), preventing precision drift past $2^{53}-1$ across heterogeneous consumers.
+- **Real-Time Velocities & Latency Profiling:**
+  - Token Generation Velocity (`tok/s` = `(completionTokens * 1e9) / evalDurationNs`)
+  - Prompt Evaluation / Prefill Velocity (`tok/s` = `(promptTokens * 1e9) / promptEvalDurationNs`)
+  - Peak velocities (`peakTokensPerSecond`, `peakPromptTokensPerSecond`)
+  - Time-To-First-Token (TTFT) and Inter-Token Latency (ITL) jitter evaluated against Jeff Dean's Systems Latency standard (500ms–2000ms SLA).
+  - Per-token generation latency (`ms/token`).
+  - Context window saturation (`tokens / maxTokens · pct`) and edge compute ratio (`edgeComputeRatioPct: 100.0%`).
+
+### 5.4 Multi-Process Concurrency & Mutex (`scripts/ai-utils.mjs`)
+
+To prevent Read-Modify-Write (RMW) race conditions when concurrent inference tasks or pre-push gates execute:
+
+- **Intra-Process Serialization:** An asynchronous Promise queue (`enqueueTelemetryMutation`) guarantees serial execution of telemetry file mutations within the Node.js runtime.
+- **Inter-Process Mutual Exclusion:** A file-level mutex (`withTelemetryFileLock`) uses `open(lockPath, 'wx')` for atomic lock acquisition.
+- **Epistemic Process Liveness Detection:** Abandoned locks from crashed processes are recovered by probing kernel signal 0 (`process.kill(pid, 0)` -> `ESRCH`), eliminating brittle hardcoded timeouts while ensuring deterministic lock clearance.
+
+### 5.5 Hybrid Edge-to-Cloud Offload Plane & Anti-Runaway Controls (Quoc Le Invariant)
+
+The workstation operates as the primary edge reasoning tier with an autonomous fallback chain:
+
+1. `gemma4:26b` (Local Apple Silicon Metal GPU — primary)
+2. `gemini-pro-latest` (Google Cloud fallback)
+3. `claude-opus-4-8` (Anthropic Cloud fallback)
+4. `gpt-4o` (OpenAI Cloud fallback)
+5. `gemini-3.8-flash` → `claude-sonnet-4-6` → `gpt-4o-mini` (High-speed fallbacks)
+
+To prevent non-deterministic distribution shifts, latency runaway, and unbounded cloud recursion:
+
+- **Circuit Breaker:** Hard cap of 3 consecutive cloud attempts before failing closed to local edge quarantine.
+- **Strict Timeout Budget:** Every cloud API request enforces an immutable 10-second timeout (`AbortSignal.timeout(10000)`), preventing lagging WAN links from blocking agentic reasoning loops.
+- **Edge Compute Ratio Invariant:** Continuous telemetry tracking of `edgeComputeRatioPct`. If edge compute falls below the 90.0% SLA threshold, the system flags an invariant warning (`WARN_CLOUD_DISTRIBUTION_SHIFT`) and throttles background tasks to preserve edge sovereignty and prevent runaway cloud billing.
+- **Verifiable Ledger:** All cloud token consumption is recorded in `recordCloudInferenceMetrics` with cryptographic attribution and model metadata.

@@ -8,7 +8,7 @@
 
 ## Hardware Wiring
 
-```
+```text
 [ISP Gateway / Mesh Node]
           │ 100BASE-TX Ethernet
           ▼
@@ -30,7 +30,7 @@
 **Port assignment:**
 
 | Zodiac Port | Connected Device | Interface Identity | Assigned Network / Role | Role & Invariant |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **Port 1** | Raspberry Pi 3 Model B+ | `eth0` | Isolated Workload Subnet | **Untrusted Agent Workload**: Monitored SDN data plane. |
 | **Port 2** | ISP Gateway / Mesh Node | RJ-45 Uplink Cable | Gateway Bridged (VLAN 100) | **Gateway Transit**: Public Internet access. |
 | **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
@@ -103,7 +103,7 @@ sudo nano /etc/zodiac/zodiac-bridge.env
 Required values to fill in:
 
 | Variable | Where to get it |
-|---|---|
+| --- | --- |
 | `ZODIAC_BRIDGE_SECRET` | Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `DATABASE_URL` | Neon Console → Project → Connection String (pooled) |
 | `GOOGLE_CLIENT_ID` | Google Cloud Console → OAuth 2.0 Client IDs |
@@ -130,7 +130,8 @@ journalctl -u zodiac-bridge -f
 ```
 
 Expected log output when healthy:
-```
+
+```text
 zodiac-bridge[1234]: [ZodiacBridgeServer] Listening on :3003
 zodiac-bridge[1234]: [OpenFlowServer] Controller listening on :6633
 zodiac-bridge[1234]: [Relay] Pushed live snapshot → Vercel (HTTP 200, 87ms)
@@ -187,7 +188,7 @@ stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phas
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `No Zodiac FX serial device found` | USB cable not connected / power off | Reconnect Micro-USB, `lsusb` to verify `Northbound Networks` VID |
 | `EACCES /dev/ttyACM0` | User not in `dialout` group | `sudo usermod -aG dialout zodiac && sudo systemctl restart zodiac-bridge` |
 | `Connection refused :6633` | OpenFlow controller not bound | Check `journalctl -u zodiac-bridge` for bind errors; verify port not in use |

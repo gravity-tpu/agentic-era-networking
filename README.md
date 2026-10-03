@@ -43,7 +43,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 
 ### System Architecture Diagram
 
-```
+```text
                                             +───────────────────────────────────+
                                             |    Public Internet / Home LAN     |
                                             +-----------------+-----------------+
@@ -109,7 +109,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 
 ### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
 
-```
+```text
 +─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
 |    NVIDIA Jetson Orin Nano Super Appliance  |                 |       Apple MacBook M5 Workstation          |
 |                                             |                 |                                             |
@@ -135,11 +135,10 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | **Link 4** | Zodiac FX Port 1 | RJ-45 Patch Cable | RPi 3B+ (`eth0`) | 100BASE-TX (VLAN 100) | **Untrusted Workload Port**: Monitored client agent data plane. |
 | **Link 5** | Zodiac FX Port 3 | RJ-45 Patch Cable | Jetson (`enx*` USB GbE) | 100BASE-TX (Port Mirror) | **Promiscuous Tap Ingress**: Line-rate packet capture for Coral Edge TPU. |
 | **Link 6** | Dual Coral Edge TPUs | Dual USB 3.0 | Jetson Orin (USB-A) | USB 3.0 (`18d1:9302`, `1a6e:089a`) | **Dedicated Edge Accelerators**: 8 TOPS INT8 total (TPU 0 Tap DPI, TPU 1 DNS Sentinel). |
-| **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Home Wi-Fi LAN | WiFi (<mgmt-subnet>) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
-| **Link 8** | Jetson Orin (`wlP1p1s0`)| Wireless 802.11ax | Home Wi-Fi LAN | WiFi (<mgmt-subnet>) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
+| **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Home Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
+| **Link 8** | Jetson Orin (`wlP1p1s0`) | Wireless 802.11ax | Home Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
 | **Link 9** | Jetson Orin (USB-C) | USB-C to USB-C Cable | MacBook M5 (USB-C) | USB CDC-NCM (`en8`) + CDC-ACM (`/dev/cu.usbmodem*`) | **Direct Hardware Management Tether**: Point-to-point IP plane (`192.168.55.1` <-> `en8`) & serial console immune to network failure. |
 | **Link 10** | MacBook M5 Workstation | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
-
 
 ### Management Plane Routing Hierarchy & Fail-Closed Invariants
 
@@ -152,13 +151,13 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
    - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Kernel IP forwarding between `192.168.55.0/24`, `<ctrl-subnet>` (`10.0.1.0/24`), and `<workload-subnet>` (`10.0.2.0/24`) is permanently disabled (`net.ipv4.conf.all.forwarding = 0`), preventing cross-plane packet leakage or routing bleed into SDN tenant flows.
 
-### The 5 Autonomous Appliance Invariant Roles:
+### The 5 Autonomous Appliance Invariant Roles
+
 1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
 2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
 3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
 4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
 5. *Local Edge Reasoning & Token Ledger* (Apple Silicon Metal GPU local inference, pre-push Council verification, and deterministic 64-bit BigInt token accounting).
-
 
 ---
 
@@ -178,6 +177,7 @@ The repository embeds stateful governance directly in the codebase:
 ## 4. Multi-Model AI Code Review Pipeline
 
 Automated AI review executes both locally and in GitHub Actions CI:
+
 - **Council System Prompt**: Evaluates code through the combined standards of Dean, Ghemawat, Quoc Le, Vinyals, and Hassabis.
 - **Fallback Chain**: `Google Gemini (3.8 Flash / Pro)` → `Anthropic Claude (Sonnet / Opus)` → `OpenAI (GPT-4o / mini)`.
 - **Zero Dependencies**: Pure Node built-ins (`process.loadEnvFile`, `fetch`) — runs in CI without needing prior compilation.
@@ -199,16 +199,19 @@ npm run review:head
 ## 5. Quick Start & Verification
 
 ### Prerequisites
+
 - Node.js >= 22.x (see `.nvmrc`)
 - Git
 
 ### 1. Install Dependencies & Git Hooks
+
 ```bash
 npm install
 npm run setup-hooks
 ```
 
 ### 2. Verify TypeScript & Invariant Test Suite
+
 ```bash
 # Zero-defect compile check
 npm run check-types
@@ -218,7 +221,9 @@ npm run test
 ```
 
 ### 3. Configure Local Environment
+
 Copy `.env.example` to `.env.local` and add your API keys:
+
 ```bash
 cp .env.example .env.local
 ```
