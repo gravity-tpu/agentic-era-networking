@@ -34,7 +34,7 @@ This ledger tracks the physical, data link, network, and transport architecture 
 ├─────────────────────────────────┤                       ├───────────────────────────────────┤
 │ • Management: 10.0.0.15 (WLAN)  │                       │ Port 2: Gateway Uplink (VLAN 100) │
 │ • Control Plane: 10.0.1.8 (ETH) ├─(VLAN 200 Native Port 4)┤ Port 4: Controller (VLAN 200)    │
-│ • Mirror Tap: Promiscuous (USB3)│◄─(Port 3 Mirror Tap)──┤ Port 3: Mirror Tap (VLAN 100)     │
+│ • Tap NIC: enx9c69d39dd0a6 (USB)│◄─(Port 3 Mirror Tap)──┤ Port 3: Mirror Tap (VLAN 100)     │
 │ • Coral TPU #1 & #2 (USB 3.0)   │                       │ Port 1: Workload Subnet (VLAN 100)│
 │ • Ollama qwen2.5:3b (Port 11434)│                       └─────────────────┬─────────────────┘
 │ • Zodiac Bridge (:3003, :6633)  │                                         │
@@ -55,20 +55,30 @@ This ledger tracks the physical, data link, network, and transport architecture 
 | **VLAN 100** | `OpenFlow` | OpenFlow Data Plane | Port 1, Port 2, Port 3 | Forwarding data plane. Subject to OpenFlow 1.3 `FLOW_MOD` match-action pipelines. Isolated from switch MCU management. |
 | **VLAN 200** | `Controller` | Native Switch Mgmt | Port 4 | Dedicated controller communication channel between Zodiac switch firmware and Jetson Orin Nano (`10.0.1.8:6633`). |
 
+### Physical Hardware Identity & Profile Ledger
+
+| Node / Silicon | Hardware / SoC | MAC / Serial / ID | Network Interfaces | Roles & Capabilities |
+| :--- | :--- | :--- | :--- | :--- |
+| **Zodiac FX Switch** | Atmel SAM4E8E + KSZ8795CLX | DPID `0x70b3d58740c9`<br>MAC `70:B3:D5:87:40:C9`<br>FW `0.86`<br>UID `1396191488-826951736-858797360-925970489` | Port 1 (Workload)<br>Port 2 (Transit)<br>Port 3 (Tap)<br>Port 4 (Mgmt) | 128-rule OpenFlow 1.3 switch fabric; hardware MIB counters via CDC-ACM `/dev/ttyACM0`. |
+| **Jetson Appliance** | NVIDIA Jetson Orin Nano Super | Serial `1791626120820` | `wlP1p1s0` (`10.0.0.15`)<br>`enP8p1s0` (`10.0.1.8`)<br>`enx9c69d39dd0a6` (Tap) | Master SDN controller, Sentinel ML daemon, dual Coral Edge TPU INT8 coprocessor host. |
+| **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`) | Untrusted agent workload node, iperf3 client traffic generator. |
+| **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, alias `10.0.2.119/24`) | Operator terminal, iperf3 benchmark listener endpoint behind Port 2 transit. |
+
 ### L3 Subnet & Addressing Schema
 
 | Subnet CIDR | Interface / Segment | Scope | Purpose |
 | :--- | :--- | :--- | :--- |
-| `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi) | Out-of-Band Mgmt | SSH management, Internet gateway egress, cloud telemetry sync. |
-| `10.0.1.0/24` | `enP8p1s0` (Jetson) -> Port 4 | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99`). |
-| `10.0.2.0/24` | `eth0` (RPi) -> Port 1 | Untrusted Data Plane | Workload packet plane governed by SDN flow tables. |
-| `100.64.0.0/10` | `tailscale0` (Jetson/MacBook) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
+| `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi), `en0` (Mac) | Out-of-Band Mgmt | SSH management, Internet gateway egress, cloud telemetry sync. |
+| `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
+| `10.0.2.0/24` | `eth0` (RPi `10.0.2.50`) -> Port 1 ⟷ Port 2 -> `en0` (Mac `10.0.2.119`) | Untrusted Data Plane | Workload packet plane and benchmark transit governed by SDN flow tables. |
+| `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
 
 ### L4 Transport & Protocol Bindings
 
 | Port / Protocol | Service | Direction | Security & Performance Invariant |
 | :--- | :--- | :--- | :--- |
 | `TCP 6633` | OpenFlow 1.3 Controller | Jetson Ingress (from Port 4) | Isolated to VLAN 200; BigInt wire serialization; fail-secure. |
+| `TCP 5201` | iperf3 TCP/UDP Benchmark | Mac Ingress (`10.0.2.119`) from Pi (`10.0.2.50`) | Port 1 ⟷ Port 2 data-plane transit testing; zero-suppression integer throughput metering. |
 | `UDP 53` | RFC 1035 DNS Wire Server | Jetson Ingress / Workload | Default-drop on unrecognized domains; fail-closed resolver. |
 | `TCP 3003` | Zodiac Bridge HTTP / SSE | Local / Tailscale | Read-only telemetry exposition; real-time hardware status. |
 | `TCP 9100/9105` | Prometheus Metrics Exporter | Local / Scraping | 64-bit integer counters; zero floating point precision drift. |

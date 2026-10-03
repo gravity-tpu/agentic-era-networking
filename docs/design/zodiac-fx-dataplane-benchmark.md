@@ -107,13 +107,41 @@ Preconditions are attested before the first measurement: Port 1 and 2 links UP, 
 
 ## 6. Runbook
 
-Run on the Jetson, with the Pi reachable over SSH key auth and `iperf3 -s` running on a host behind the extender.
+Run on the Jetson, with the Pi reachable over SSH key auth and `iperf3 -s` running on the Mac operator workstation behind the extender.
+
+### Workstation Setup (Behind Port 2 Transit)
+
+```bash
+# Add data-plane IP alias on Mac Wi-Fi interface (en0)
+sudo ifconfig en0 alias 10.0.2.119 netmask 255.255.255.0
+
+# Bind 10.0.2.0/24 subnet directly to physical link en0 (bypassing default gateway and overlay routes)
+sudo route add -net 10.0.2.0/24 -link -iface en0
+
+# Start iperf3 server daemon on the data-plane IP
+iperf3 -s -B 10.0.2.119
+```
+
+### Benchmark Execution on Jetson Appliance
 
 ```bash
 sudo systemctl stop zodiac-bridge.service
 npm run build:server
-npm run bench:dataplane -- preflight --server <iperf3-server-ip>
-npm run bench:dataplane -- run --server <iperf3-server-ip> --tap-iface <jetson-tap-nic>
+
+# Read-only preflight attestation
+npm run bench:dataplane -- preflight \
+  --server 10.0.2.119 \
+  --pi-ssh agent@10.0.0.45 \
+  --pi-ip 10.0.2.50 \
+  --tap-iface enx9c69d39dd0a6
+
+# Full benchmark execution across conditions (q0, q32, q128) and tap sweep
+npm run bench:dataplane -- run \
+  --server 10.0.2.119 \
+  --pi-ssh agent@10.0.0.45 \
+  --pi-ip 10.0.2.50 \
+  --tap-iface enx9c69d39dd0a6
+
 sudo systemctl start zodiac-bridge.service   # restores production rules
 ```
 
