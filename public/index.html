@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="zodiac.2c48a3fa10.css">
+  <link rel="stylesheet" href="zodiac.64dd656dc4.css">
   <!-- Favicon — three-tier network topology node (transparent SVG) -->
   <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon.svg">
@@ -309,13 +309,13 @@
         <div class="cf-topbar-actions">
           <!-- Executive AI Copilot Topbar Pill (Workflow 3: Qwen 2.5 on Jetson Orin Nano) -->
           <button class="cf-copilot-topbar-pill" id="btn-copilot-topbar" title="Open Executive AI Copilot Drawer (Workflow 3: Qwen 2.5 on Jetson Orin) [⌘K]" aria-label="Open Executive AI Copilot Drawer">
-            <span class="cf-copilot-dot" id="copilot-topbar-dot">⚡</span>
+            <span class="cf-copilot-dot" id="copilot-topbar-dot" style="display: none;"></span>
             <span class="cf-copilot-topbar-title">Copilot</span>
             <span class="cf-pill-badge gray" id="copilot-topbar-badge">STANDBY</span>
             <kbd class="cf-copilot-kbd">⌘K</kbd>
           </button>
-          <span class="cf-pill-badge gray" id="cf-poll-status" title="Telemetry Polling Rate: 2.5s (Switch Wire Latency: <1ms)">● Live · 2.5s Polling</span>
-          <button class="cf-btn" id="btn-toggle-photo">📷 Hardware Photos</button>
+          <span class="cf-pill-badge gray" id="cf-poll-status" title="Telemetry Polling Rate: 2.5s (Switch Wire Latency: <1ms)">Live (2.5s)</span>
+          <button class="cf-btn" id="btn-toggle-photo">Hardware Photos</button>
           <a class="cf-btn" href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
             GitHub
@@ -2440,7 +2440,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 <h3 class="cf-card-title">Live Invariant Verification Playground</h3>
                 <div class="cf-card-subtitle">Autonomous, formal neuro-symbolic verification and deterministic state bounds</div>
               </div>
-              <span class="cf-pill-badge green">✓ Invariants Active</span>
+              <span class="cf-pill-badge green">Invariants Active</span>
             </div>
             <div class="cf-card-body">
               <div class="cf-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom: 0;">
@@ -2622,10 +2622,10 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
       if (!box || !btn) return;
       if (box.classList.contains('active')) {
         box.classList.remove('active');
-        btn.innerText = '📷 Hardware Photos';
+        btn.innerText = 'Hardware Photos';
       } else {
         box.classList.add('active');
-        btn.innerText = '✕ Hide Photos';
+        btn.innerText = 'Hide Photos';
       }
     }
 
@@ -2742,7 +2742,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </aside>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.d5d5b291c2.js"></script>
+  <script defer src="zodiac-app.55e9505d7a.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

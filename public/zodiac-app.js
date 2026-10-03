@@ -696,11 +696,11 @@
       if (isAbort) {
         console.error('[!] [Jeff Dean Latency Invariant] Telemetry fetch aborted: 4000ms timeout budget exceeded.');
         if (els.pollStatus) {
-          els.pollStatus.innerText = '⏱️ Timeout (>4s)';
+          els.pollStatus.innerText = 'Timeout (>4s)';
           els.pollStatus.title = 'Telemetry fetch exceeded 4000ms latency budget. Hardware connection or bridge daemon stalled.';
         }
         if (els.sourceTag) {
-          els.sourceTag.innerText = '⏱️ Stalled / Timeout';
+          els.sourceTag.innerText = 'Stalled';
           els.sourceTag.className = 'cf-pill-badge amber';
         }
       } else {
@@ -710,7 +710,7 @@
       if (currentSnapshot) {
         renderTelemetry(currentSnapshot, true);
       } else if (els.sourceTag && !isAbort) {
-        els.sourceTag.innerText = '⚠️ Offline / Disconnected';
+        els.sourceTag.innerText = 'Disconnected';
         els.sourceTag.className = 'cf-pill-badge amber';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot down';
       }
@@ -1063,32 +1063,32 @@
 
     if (els.pollStatus) {
       if (snapshot.source === 'disconnected') {
-        els.pollStatus.innerText = '○ Offline';
+        els.pollStatus.innerText = 'Offline';
         els.pollStatus.className = 'cf-pill-badge gray';
       } else {
-        els.pollStatus.innerText = `● Live · ${TELEMETRY_POLL_INTERVAL_MS / 1000}s Polling`;
+        els.pollStatus.innerText = `Live (${(TELEMETRY_POLL_INTERVAL_MS / 1000).toFixed(1).replace('.0', '')}s)`;
         els.pollStatus.className = 'cf-pill-badge green';
       }
     }
 
     if (els.sourceTag) {
       if (isDegraded) {
-        els.sourceTag.innerText = '⚡ Cached / Degraded Link';
+        els.sourceTag.innerText = 'Degraded Link';
         els.sourceTag.className = 'cf-pill-badge amber';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot stale';
         if (els.sandboxBanner) els.sandboxBanner.style.display = 'none';
       } else if (snapshot.source === 'disconnected') {
-        els.sourceTag.innerText = '🔴 Hardware Disconnected';
+        els.sourceTag.innerText = 'Hardware Disconnected';
         els.sourceTag.className = 'cf-pill-badge red';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot down';
         if (els.sandboxBanner) els.sandboxBanner.style.display = 'none';
       } else if (snapshot.source === 'PHYSICAL_SWITCH' || snapshot.source === 'live_hardware') {
-        els.sourceTag.innerText = '✓ Active Link';
+        els.sourceTag.innerText = 'Active Link';
         els.sourceTag.className = 'cf-pill-badge green';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot';
         if (els.sandboxBanner) els.sandboxBanner.style.display = 'none';
       } else {
-        els.sourceTag.innerText = '☁ Cloud Sandbox (Simulated)';
+        els.sourceTag.innerText = 'Cloud Sandbox (Simulated)';
         els.sourceTag.className = 'cf-pill-badge blue';
         if (els.sidebarDot) els.sidebarDot.className = 'cf-status-dot';
         if (els.sandboxBanner) els.sandboxBanner.style.display = 'flex';
@@ -1226,7 +1226,7 @@
             </td>
             <td>
               <span class="cf-pill-badge ${isUp ? 'green' : 'gray'}">
-                ${isUp ? '✓ Active' : 'Inactive'}
+                ${isUp ? 'Active' : 'Inactive'}
               </span>
             </td>
             <td>
@@ -1473,7 +1473,7 @@
 
       if (l4tIf) {
         const l4tUp = l4tIf.status === 'UP';
-        if (els.orinNicBadge) els.orinNicBadge.innerText = 'Quad-Interface Stack (USB-C Tether Active)';
+        if (els.orinNicBadge) els.orinNicBadge.innerText = 'Quad-Interface Stack';
         if (els.orinIfL4tbr0Row) els.orinIfL4tbr0Row.style.display = '';
         if (els.orinIfL4tbr0Dot) els.orinIfL4tbr0Dot.className = `cf-status-dot ${l4tUp ? 'green' : 'gray'}`;
         if (els.orinIfL4tbr0Name) els.orinIfL4tbr0Name.innerText = l4tIf.name;

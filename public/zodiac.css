@@ -326,16 +326,30 @@ body {
 
 /* Top Navigation Bar */
 .cf-topbar {
-  height: 56px;
+  height: 54px;
+  min-height: 54px;
   background-color: #ffffff;
   border-bottom: 1px solid var(--cf-border);
-  padding: 0 1.75rem;
+  padding: 0 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   position: sticky;
   top: 0;
   z-index: 40;
+  flex-wrap: nowrap;
+  gap: 1rem;
+  white-space: nowrap;
+}
+
+.cf-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex-shrink: 1;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .cf-breadcrumbs {
@@ -344,57 +358,74 @@ body {
   gap: 0.5rem;
   font-size: 0.85rem;
   color: var(--cf-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cf-breadcrumb-current {
   font-weight: 600;
   color: var(--cf-text-primary);
+  white-space: nowrap;
 }
 
 .cf-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Crisp Flat Status Tags (Banish rounded bubbles & line breaks) */
+.cf-pill-badge,
+.cf-pill-badge * {
+  white-space: nowrap !important;
 }
 
 .cf-pill-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 20px;
-  font-size: 0.74rem;
-  font-weight: 600;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  text-transform: none;
 }
 
 .cf-pill-badge.green {
-  background: var(--cf-green-light);
-  color: var(--cf-green);
-  border: 1px solid rgba(5, 150, 105, 0.25);
+  background: rgba(5, 150, 105, 0.08);
+  color: #059669;
+  border: 1px solid rgba(5, 150, 105, 0.22);
 }
 
 .cf-pill-badge.blue {
-  background: var(--cf-blue-light);
-  color: var(--cf-blue);
-  border: 1px solid rgba(0, 81, 195, 0.25);
+  background: rgba(0, 81, 195, 0.06);
+  color: #0051c3;
+  border: 1px solid rgba(0, 81, 195, 0.2);
 }
 
 .cf-pill-badge.amber {
-  background: var(--cf-amber-light);
-  color: var(--cf-amber);
-  border: 1px solid rgba(217, 119, 6, 0.25);
+  background: rgba(217, 119, 6, 0.08);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.22);
 }
 
 .cf-pill-badge.gray {
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #475569;
   border: 1px solid var(--cf-border);
 }
 
 .cf-pill-badge.red {
-  background: #fef2f2;
-  color: var(--cf-red);
-  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.22);
 }
 
 .cf-pill-badge.orange {
@@ -403,48 +434,55 @@ body {
   border: 1px solid rgba(234, 88, 12, 0.22);
 }
 
-/* Inside KPI stat-card headers and chart card headers: strip the pill chrome
-   and replace with a small colored dot preceding the label text. The color
-   is inherited from the existing .green / .blue / .gray / etc. modifier. */
+.cf-pill-badge.purple {
+  background: rgba(126, 34, 206, 0.08);
+  color: #7e22ce;
+  border: 1px solid rgba(126, 34, 206, 0.22);
+}
+
+.cf-pill-badge.teal {
+  background: rgba(13, 148, 136, 0.08);
+  color: #0d9488;
+  border: 1px solid rgba(13, 148, 136, 0.22);
+}
+
+/* Inside KPI stat-card headers and chart card headers: clean flat chips without circle pseudo-elements */
 .cf-stat-header .cf-pill-badge,
 .cf-card-header .cf-pill-badge {
-  background: transparent;
-  border: none;
-  padding: 0;
-  font-size: 0.67rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  gap: 0.2rem;
+  padding: 0.12rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+  white-space: nowrap !important;
 }
 
 .cf-stat-header .cf-pill-badge::before,
 .cf-card-header .cf-pill-badge::before {
-  content: '●';
-  font-size: 0.4rem;
-  opacity: 0.8;
-  line-height: 1;
-  vertical-align: middle;
+  display: none !important;
+  content: none !important;
 }
 
 .cf-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.85rem;
+  gap: 0.4rem;
+  padding: 0.32rem 0.75rem;
   background: #ffffff;
   border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  font-size: 0.82rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
   font-weight: 500;
   color: var(--cf-text-secondary);
   cursor: pointer;
-  text-decoration: none;
+  white-space: nowrap !important;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
 .cf-btn:hover {
-  background: var(--cf-bg);
-  border-color: var(--cf-border-hover);
+  background: #f8fafc;
+  border-color: #cbd5e1;
   color: var(--cf-text-primary);
 }
 
@@ -538,7 +576,9 @@ body {
 .cf-stat-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
   margin-bottom: 0.4rem;
 }
 
@@ -548,6 +588,10 @@ body {
   color: var(--cf-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.035em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .cf-stat-value {
@@ -626,6 +670,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
   background: #ffffff;
 }
 
@@ -1219,13 +1265,15 @@ body {
 .cf-user-badge {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   background: #f8fafc;
   border: 1px solid var(--cf-border);
-  border-radius: 20px;
-  padding: 0.2rem 0.65rem 0.2rem 0.35rem;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem 0.2rem 0.35rem;
   font-size: 0.75rem;
   color: var(--cf-text-secondary);
+  white-space: nowrap !important;
+  flex-shrink: 0;
 }
 
 .cf-user-avatar {
@@ -1460,20 +1508,24 @@ body {
 
 #view-device-coral-1 .cf-page-header .cf-pill-badge,
 #view-device-coral-2 .cf-page-header .cf-pill-badge {
-  font-size: 0.60rem;
-  padding: 0.15rem 0.5rem;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap !important;
 }
 
 #view-device-coral-1 .cf-stat-label,
 #view-device-coral-2 .cf-stat-label {
-  font-size: 0.60rem;
-  letter-spacing: 0.04em;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
 }
 
 #view-device-coral-1 .cf-stat-header .cf-pill-badge,
 #view-device-coral-2 .cf-stat-header .cf-pill-badge {
-  font-size: 0.54rem !important;
-  padding: 0.12rem 0.45rem;
+  font-size: 0.65rem !important;
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap !important;
 }
 
 #view-device-coral-1 .cf-stat-value,
@@ -1483,28 +1535,30 @@ body {
 
 #view-device-coral-1 .cf-stat-footer,
 #view-device-coral-2 .cf-stat-footer {
-  font-size: 0.61rem;
+  font-size: 0.68rem;
 }
 
 #view-device-coral-1 .cf-card-title,
 #view-device-coral-2 .cf-card-title {
-  font-size: 0.84rem;
+  font-size: 0.88rem;
 }
 
 #view-device-coral-1 .cf-card-subtitle,
 #view-device-coral-2 .cf-card-subtitle {
-  font-size: 0.62rem;
+  font-size: 0.72rem;
 }
 
 #view-device-coral-1 .cf-card-header .cf-pill-badge,
 #view-device-coral-2 .cf-card-header .cf-pill-badge {
-  font-size: 0.58rem;
-  padding: 0.15rem 0.45rem;
+  font-size: 0.65rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap !important;
 }
 
 #view-device-coral-1 .cf-time-btn,
 #view-device-coral-2 .cf-time-btn {
-  font-size: 0.60rem;
+  font-size: 0.65rem;
   padding: 0.2rem 0.45rem;
 }
 
@@ -1527,51 +1581,50 @@ body {
 .cf-copilot-topbar-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.32rem 0.75rem;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(59, 130, 246, 0.08));
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  background: #ffffff;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--cf-text-primary);
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
   user-select: none;
 }
 
 .cf-copilot-topbar-pill:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.18));
-  border-color: rgba(59, 130, 246, 0.55);
-  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.18);
-  transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: #94a3b8;
 }
 
 .cf-copilot-topbar-pill:active {
-  transform: translateY(0);
+  background: #f1f5f9;
 }
 
 .cf-copilot-dot {
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   line-height: 1;
   display: inline-block;
-  transition: transform 0.2s ease;
 }
 
 .cf-copilot-topbar-pill:hover .cf-copilot-dot {
-  transform: scale(1.2);
+  transform: none;
 }
 
 .cf-copilot-kbd {
   display: inline-block;
   font-family: inherit;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 600;
   padding: 1px 4px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #94a3b8;
+  border-radius: 3px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
   line-height: 1.2;
 }
 
