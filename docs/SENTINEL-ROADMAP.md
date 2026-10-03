@@ -87,27 +87,30 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 +─────────────────────────────────────────────────────────────────────────────────+
 |                      Apache / Nginx / Node.js Origin Server                      |
 |                                                                                  |
-|  ┌────────────────────────────────────────────────────────┐                      |
-|  │  Sentinel Edge Middleware (sentinel/middleware/)        │                      |
-|  │  * Per-request: extract IP, User-Agent, path, timing   │                      |
-|  │  * Async reputation lookup: GET /api/sentinel/check    │                      |
-|  │  * If score > threshold: return 429 / redirect          │                      |
-|  │  * < 5ms overhead on hot path (Fail-Open on timeout)   │                      |
-|  └──────────────────────────────┬─────────────────────────┘                      |
-+─────────────────────────────────┼────────────────────────────────────────────────+
-                                  │ HTTPS (Vercel or localhost)
+|  [Kernel Data Plane: Sub-Microsecond Pre-Routing Dropper]                       |
+|  * Linux kernel nftables: 'inet filter zodiac_quarantine' interval set          |
+|  * PREROUTING hook: packet discard before socket allocation (< 1 µs)            |
+|  * Automatic 300s kernel TTL expiry (zero userspace garbage collection)          |
+|                                                                                  |
+|  [Asynchronous Out-of-Band Sidecar: zodiac-sentinel-agent]                      |
+|  * inotify non-blocking tail of /var/log/apache2/access.log (0.00 ms hot path)   |
+|  * Anti-OOM bounded /24 sliding window meter (Count-Min Sketch + 10k LRU)       |
+|  * Local Radix trie for instant sister-site & Cloudflare bypass (< 1 µs)         |
+|  * Netlink atomic set mutation & break-glass sentinel-cli management            |
++─────────────────────────────────┬───────────────────────────────────────────────+
+                                  │ HTTPS Async Telemetry Sync
                                   ▼
 +─────────────────────────────────────────────────────────────────────────────────+
 |                       Vercel Serverless Edge (api/sentinel/)                     |
 |                                                                                  |
 |  GET /api/sentinel/check?ip=x.x.x.x                                              |
-|  POST /api/sentinel/report   ← origin server reports 4xx/5xx bursts             |
+|  POST /api/sentinel/report   ← origin agent reports 4xx/5xx burst events         |
 |  GET /api/sentinel/dashboard ← operator reputation ledger view                  |
 |                                                                                  |
 |  * Neon Postgres: IP-range threat score ledger (BigInt counters, 30-day history) |
 |  * Sister-site allowlist: never penalize known trusted origins                   |
 +─────────────────────────────────────────────────────────────────────────────────+
-                                  │ Tailscale / Direct (Jetson)
+                                  │ Tailscale Mesh / Direct Bridge
                                   ▼
 +─────────────────────────────────────────────────────────────────────────────────+
 |                    Zodiac SDN Enforcement Plane (Jetson Orin)                    |
@@ -129,51 +132,50 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 
 ```text
 +──────────────────────────────────────────────────────────────────────────────────+
-| Sentinel Phase 0: Telemetry Foundation & IP Reputation Ledger (NEXT)             |
+| Sentinel Phase 0: Telemetry Foundation, IP Ledger & Security Posture (NEXT)       |
 | - Neon Postgres schema: IP range threat scores, request volume counters (BigInt) |
-| - /api/sentinel/report: origin server posts 429/5xx burst events                 |
-| - /api/sentinel/check: fast reputation lookup with < 5ms P99 (Neon + in-memory)  |
-| - Sister-site allowlist: hardcoded trusted CIDR ranges, never penalized           |
-| - Operator dashboard: reputation ledger view in Zodiac console                   |
+| - /api/sentinel/report & /api/sentinel/check with < 5ms P99 (Neon + in-memory)    |
+| - Sister-site allowlist: hardcoded trusted CIDR Radix trie, never penalized       |
+| - Daemon capability isolation: CAP_NET_ADMIN sandbox, non-root systemd service    |
+| - Zero-trust wire authentication: Ed25519/HMAC signed report tokens              |
+| - Operator dashboard: reputation ledger view in Zodiac web console               |
 +──────────────────────────────────────────────────────────────────────────────────+
                                        |
                                        v
 +──────────────────────────────────────────────────────────────────────────────────+
-| Sentinel Phase 1: Collective Behavior Detection Engine                            |
-| - Sliding-window collective request rate: group IPs by /24 subnet, not per-IP   |
-| - Quoc Le Adaptive Threshold: no hardcoded request-rate magic numbers            |
-| - Jetson GPU Stage-2 classifier: IP-range collective anomaly scoring             |
-| - Coral TPU 0 mirror tap: real-time packet volume correlation with API logs      |
-| - Formal verification: scoring function proven monotone (Hassabis invariant)     |
+| Sentinel Phase 1: Bounded Collective Detection Engine (Anti-OOM)                  |
+| - Fixed-capacity /24 subnet sliding window (Max 10k entries, Count-Min Sketch)   |
+| - Hard MemoryMax=64M quota with dynamic fallback to /16 supernet clustering      |
+| - Quoc Le Adaptive Threshold: integer-quantized BigInt EMA (no magic numbers)    |
+| - Jetson GPU Stage-2 autoencoder: IP-range collective anomaly scoring            |
+| - Coral TPU 0 mirror tap: packet volume correlation & direct-origin bypass check |
 +──────────────────────────────────────────────────────────────────────────────────+
                                        |
                                        v
 +──────────────────────────────────────────────────────────────────────────────────+
-| Sentinel Phase 2: OpenFlow Hardware Enforcement Integration                       |
-| - Confirmed bot collective → POST /api/sdn/quarantine → FLOW_MOD DROP on switch |
-| - Time-bounded quarantine: TTL-expiring rules, no permanent blocks without review|
-| - SymbolicRouteVerifier gate: loop-free proof before any hardware rule install   |
-| - Operator review queue: high-confidence quarantines auto-applied; edge cases    |
-|   held for 60s human review window before escalation                             |
+| Sentinel Phase 2: Dual Enforcement & Symbolic Gating (Kernel + Switch)           |
+| - Atomic nftables pre-routing interval set driver with 300s kernel TTL           |
+| - OpenFlow 1.3 FLOW_MOD Priority 65535 DROP synchronization on Zodiac FX switch  |
+| - SymbolicRouteVerifier gate: 4 formal proofs (allowlist, prefix, DAG, TTL)     |
+| - Damped state convergence & hysteresis loop: eliminate multi-agent route flap   |
 +──────────────────────────────────────────────────────────────────────────────────+
                                        |
                                        v
 +──────────────────────────────────────────────────────────────────────────────────+
-| Sentinel Phase 3: Edge Middleware SDK & Origin Server Integration                 |
-| - Lightweight npm package: sentinel-middleware (zero prod dependencies)           |
-| - Express/Koa/Apache module: pluggable async reputation check hook               |
-| - Apache mod_lua / mod_rewrite integration for non-Node origins                  |
-| - Graceful degradation: timeout → local circuit breaker (Bloom filter + subnet LRU); never stall|
-| - Documented SLO: < 5ms P99, 9990/10000 uptime (Vercel edge), < 10/10000 false positives       |
+| Sentinel Phase 3: Operational SRE Tooling, Observability & Break-Glass           |
+| - sentinel-cli: atomic unban, emergency panic-flush bypass, status inspection    |
+| - Prometheus / OpenTelemetry :9105/metrics exporter with explicit SRE SLIs/SLOs   |
+| - SIGHUP configuration hot-reloading (zero-downtime allowlist updates)           |
+| - Chaos & Degradation test suite (agent crash, cloud partition, TPU disconnect)   |
 +──────────────────────────────────────────────────────────────────────────────────+
                                        |
                                        v
 +──────────────────────────────────────────────────────────────────────────────────+
-| Sentinel Phase 4: Sister-Site Traffic Isolation & Trusted Origin Proxy           |
-| - Authenticated origin tokens: sister-site requests carry HMAC-signed headers   |
-| - Traffic shaping (not blocking): queue/deprioritize sister-site burst traffic   |
-|   via OpenFlow meter rules rather than DROP — preserving internal connectivity  |
-| - Separate telemetry stream for sister-site vs external crawler classification  |
+| Sentinel Phase 4: Canary Rollout Lifecycle & Sister-Site Shield                  |
+| - 3-Stage rollout engine: Audit/Dry-Run (7d) -> Soft Canary (48h) -> Dual Enforce|
+| - Authenticated origin tokens: sister-site requests carry HMAC-signed headers    |
+| - OpenFlow hardware rate metering: shape sister-site burst traffic without DROP  |
+| - Isolated telemetry stream: side-by-side operator visibility in dashboard       |
 +──────────────────────────────────────────────────────────────────────────────────+
 ```
 
@@ -181,7 +183,7 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
 
 ## Detailed Milestones
 
-### Sentinel Phase 0: Telemetry Foundation & IP Reputation Ledger
+### Sentinel Phase 0: Telemetry Foundation, IP Ledger & Security Posture
 
 *Status: Planned (Starting Point)*
 
@@ -192,133 +194,149 @@ The attacker operates a multi-agent rotating-IP strategy. Each individual agent 
   - Migration under `prisma/migrations/` before any schema deploy (INV-006).
 - [ ] **Milestone S0.B: `/api/sentinel/report` — Origin Burst Event Ingestor**:
   - Origin server POSTs burst metadata: `{ ip, path, status_code, timestamp_ns, request_count }`.
-  - Authenticated with `X-Sentinel-Secret` (same HMAC-SHA256 pattern as `X-Zodiac-Bridge-Secret`).
   - Non-blocking async write to Neon with exponential backoff (same pattern as cloud relay, INV-009).
-- [ ] **Milestone S0.C: `/api/sentinel/check` — Fast Reputation Lookup**:
+- [ ] **Milestone S0.C: `/api/sentinel/check` — Fast Reputation Lookup & LRU Cache**:
   - Checks Neon IP reputation table; on timeout/error engages local circuit breaker (Bloom filter + in-memory subnet LRU); unknown IPs while circuit is open return score = MAX_THREAT (fail-closed); sister-site allowlist CIDRs always return score = 0.
-  - In-memory LRU cache (bounded, 10k entries) for hot-path IPs: < 1ms local, < 5ms Neon P99.
-  - Sister-site CIDR allowlist checked first — allowlisted IPs always return score = 0 (never blocked).
+  - In-memory LRU cache (bounded, 10k entries) for hot-path IPs: < 1ms local, < 5ms Neon P99 with PgBouncer pooling.
+  - Sister-site CIDR allowlist checked first via in-memory Radix trie — allowlisted IPs always return score = 0 (never blocked).
 - [ ] **Milestone S0.D: Sentinel Dashboard in Zodiac Operator Console**:
   - New tab in the existing Zodiac web UI: Sentinel Reputation Ledger.
   - Live table: top-N threat IPs/subnets, scores, quarantine counts, last-seen timestamps.
   - Real-time feed of incoming `report` events from origin servers.
+- [ ] **Milestone S0.E: Daemon Privilege Separation (`CAP_NET_ADMIN` Sandbox)**:
+  - Systemd service `deploy/zodiac-sentinel.service` running as dedicated unprivileged system user `zodiac`.
+  - Restricted strictly to `AmbientCapabilities=CAP_NET_ADMIN` (for `nftables` netlink sockets) with `ProtectSystem=strict`, `NoNewPrivileges=yes`, and `PrivateTmp=yes`. Zero raw `root` execution.
+- [ ] **Milestone S0.F: Zero-Trust Telemetry Wire Authentication**:
+  - Telemetry reports signed with Ed25519 / HMAC-SHA256 (`X-Sentinel-Signature`) using monotonic sequence nonces to prevent log spoofing or replay attacks against the ledger.
 
-### Sentinel Phase 1: Collective Behavior Detection Engine
+### Sentinel Phase 1: Bounded Collective Detection Engine (Anti-OOM)
 
 *Status: Planned*
 
-- [ ] **Milestone S1.A: /24 Subnet Sliding-Window Collective Rate Meter**:
-  - Group request events by `/24` subnet prefix, not individual IP.
-  - Sliding 60-second window: aggregate request counts, 4xx/5xx rates, path diversity scores.
-  - All windowed counters implemented as `BigInt` ring buffers (Council Invariant 2).
+- [ ] **Milestone S1.A: Bounded /24 Subnet Sliding-Window Meter (Ghemawat Invariant)**:
+  - Group request events by `/24` subnet prefix with a sliding 60-second window.
+  - **Fixed-Capacity Anti-OOM State Bounding**: Maximum 10,000 active subnets ($\approx 1.28$ MB RAM ceiling) using a bounded LRU eviction policy.
+  - **Count-Min Sketch Fallback**: Under high-cardinality residential proxy floods (> 100,000 distinct `/24` subnets), switch frequency estimation to Count-Min Sketch with conservative update to prevent state exhaustion.
+  - **Hard Memory Quota**: Systemd `MemoryMax=64M`. If memory reaches 80% watermark, dynamically coarsen aggregation to `/16` supernets rather than triggering the Linux OOM-killer.
 - [ ] **Milestone S1.B: Quoc Le Adaptive Threshold (No Magic Constants)**:
   - Threshold for "bot collective" classification adapts to baseline traffic distributions.
-  - EMA (Exponential Moving Average) of historical subnet request rates as baseline.
-  - Classification only fires when subnet rate exceeds `baseline + k * σ` (k learned, not hardcoded).
-  - **Integer quantization boundary (INV-002)**: EMA and σ are computed entirely in fixed-point `BigInt` arithmetic using a compile-time scale factor (e.g., `SCALE = 1_000_000n`): `ema = (alpha_num * value + alpha_den_minus_num * ema) / alpha_den` where all operands are `BigInt`. No `Number` or `float` crosses the `AdaptiveThresholdController` boundary.
+  - Fixed-point `BigInt` EMA: `ema = (alpha_num * value + alpha_den_minus_num * ema) / alpha_den` with compile-time scale factor `SCALE = 1_000_000n`. Zero floating-point across the boundary (INV-002).
 - [ ] **Milestone S1.C: Coral TPU 0 Mirror Tap Correlation**:
   - Wire-level packet counts from the Coral mirror tap correlated with API-layer `report` events.
-  - Discrepancy detection: high packet counts but low API reports = possible origin-bypass attacker (direct IP access, not via Cloudflare).
-  - Addresses the open architectural question: *"Do crawlers have direct IP access to origin?"*
+  - Discrepancy detection: high packet counts but low API reports = direct-to-origin IP bypass (evading Cloudflare edge).
 - [ ] **Milestone S1.D: Jetson GPU Collective Anomaly Scorer**:
-  - Extend the existing `gpu_anomaly_kernel.cu` Stage-2 autoencoder to accept subnet-aggregated feature vectors.
-  - Input features: `[subnet_req_rate, 4xx_rate, path_entropy, ua_diversity, time_of_day_norm]`.
-  - Output: reconstruction error (FP16/FP32 GPU tensor) → **quantized to integer at the hardware boundary** before entering the `AdaptiveThresholdController`: `threatScore = BigInt(Math.trunc(reconstructionError * SCORE_SCALE_FACTOR))` where `SCORE_SCALE_FACTOR = 1_000_000`. No floating-point value may cross into the routing state machine (INV-002).
+  - Extend `gpu_anomaly_kernel.cu` Stage-2 autoencoder to accept subnet-aggregated feature vectors: `[subnet_req_rate, 4xx_rate, path_entropy, ua_diversity, time_of_day_norm]`.
+  - Output quantized to integer `BigInt` at the CUDA hardware boundary: `threatScore = BigInt(Math.trunc(reconstructionError * SCORE_SCALE_FACTOR))`.
 
-### Sentinel Phase 2: OpenFlow Hardware Enforcement Integration
-
-*Status: Planned*
-
-- [ ] **Milestone S2.A: Confirmed Quarantine → `POST /api/sdn/quarantine`**:
-  - When threat score crosses confirmation threshold, Sentinel fires the existing Zodiac quarantine API.
-  - All quarantine calls pass through `SymbolicRouteVerifier.verifyLoopFree()` before touching hardware (Hassabis Invariant 4).
-  - `QuarantineAuditEntry` written to `flowRuleRegistry` with Sentinel-specific metadata: `source: 'sentinel'`, `trigger: 'bot_collective'`, `subnet_cidr`.
-- [ ] **Milestone S2.B: TTL-Bounded Quarantine Rules (No Permanent Blocks)**:
-  - All Sentinel-triggered FLOW_MOD rules carry an explicit idle timeout (e.g., 300s default).
-  - Automatic expiry with Sentinel re-evaluation on next request — no permanent block without operator confirmation.
-  - Quarantine count increments in `SentinelIPRecord`; repeat offenders escalate TTL progressively.
-- [ ] **Milestone S2.C: Human Review Queue for Edge Cases**:
-  - High-confidence quarantines (score > 90) auto-apply immediately.
-  - Mid-confidence quarantines (score 60–90) hold for 60-second operator review window before escalation.
-  - Low-confidence (score < 60) only logged, no enforcement.
-
-### Sentinel Phase 3: Edge Middleware SDK & Origin Server Integration
+### Sentinel Phase 2: Dual Enforcement & Symbolic Gating (Kernel + Switch)
 
 *Status: Planned*
 
-- [ ] **Milestone S3.A: `sentinel-middleware` npm Package**:
-  - Zero production dependencies (Ghemawat: Radical Simplicity).
-  - Express/Koa/Fastify plugin: async reputation check with configurable `timeoutMs` (default 3000ms) and `failOpen: false`; on timeout the plugin consults the local circuit-breaker state (Bloom filter + subnet LRU) rather than passing traffic blindly.
-  - `X-Sentinel-Score` response header for audit logging.
-- [ ] **Milestone S3.B: Apache Integration**:
-  - `mod_lua` or `mod_rewrite` + `curl` hook calling `/api/sentinel/check` for non-Node origins.
-  - Pre-fork worker model compatible — no shared state in Apache workers.
-- [ ] **Milestone S3.C: SLO Definition & Measurement**:
-  - P99 check latency ≤ 5ms (cached) / ≤ 50ms (Neon live query).
-  - False-positive rate < 10 bps (10 per 10 000 requests), validated against test traffic from known-legitimate users; tracked as integer counters in Neon (no floating-point arithmetic in the accounting path).
-  - Uptime SLO: 9990/10000 (backed by Vercel edge serverless reliability); tracked as integer uptime-seconds / total-seconds in Neon.
-  - All SLO metrics tracked in Neon and surfaced on Sentinel dashboard.
+- [ ] **Milestone S2.A: Symbolic Verification Proof Suite (Hassabis Invariant)**:
+  - All candidate quarantine subnets must pass the deterministic `SymbolicRouteVerifier` (`src/core/routing-verifier.ts`) before any rule is emitted:
+    1. **Allowlist Non-Intersection**: Proves `Candidate ∩ (Cloudflare ∪ SisterSite ∪ Infra) = ∅`.
+    2. **Prefix Boundary Constraint**: Enforces maximum breadth of `/24` (IPv4) or `/48` (IPv6). Blocks wildcard bans (`/0`, `/8`, `/16`).
+    3. **Loop-Free Reachability**: Cycle-freedom DAG proof for SDN routing tables.
+    4. **Monotonic TTL Expiry**: Enforces 300s monotonic lifetime with hysteresis dampener.
+- [ ] **Milestone S2.B: Atomic `nftables` Pre-Routing Netlink Driver**:
+  - Host-level enforcement on origin web server via Linux kernel `nftables` interval set.
+  - Netlink atomic insertion: `nft add element inet filter zodiac_quarantine { <CIDR> timeout 300s }`.
+  - Executed at netfilter `PREROUTING` hook before socket allocation or Apache worker thread handoff (< 1 µs packet drop).
+- [ ] **Milestone S2.C: OpenFlow 1.3 Hardware Switch Synchronization**:
+  - Confirmed bot collective emits `POST /api/sdn/quarantine` to Zodiac FX switch at `/16` supernet granularity (satisfying the 128-rule switch table limit).
+  - Priority 65535 DROP rule with 300s hardware idle timeout.
+- [ ] **Milestone S2.D: Flap Prevention & Damped State Convergence (Vinyals Invariant)**:
+  - Hysteresis tracking in `src/core/adaptive-control.ts`: repeat offenders escalate TTL progressively ($300\text{s} \rightarrow 900\text{s} \rightarrow 3600\text{s}$).
+  - Dampening window prevents oscillating rule insertion/deletion cycles.
 
-### Sentinel Phase 4: Sister-Site Traffic Isolation & Trusted Origin Proxy
+### Sentinel Phase 3: Operational SRE Tooling, Observability & Break-Glass
 
 *Status: Planned*
 
-- [ ] **Milestone S4.A: HMAC-Authenticated Origin Tokens**:
+- [ ] **Milestone S3.A: `sentinel-cli` Operator & Break-Glass Tooling**:
+  - `sentinel-cli unban <IP>`: Atomic deletion from kernel `nftables` set + 24-hour temporary local allowlist override + cloud sync.
+  - `sentinel-cli panic-flush`: 1 ms emergency bypass switch unlinking the pre-routing drop rule without restarting Apache or severing clean connections.
+  - `sentinel-cli status`: Prints active quarantine rules, memory usage, hit counters, and model health.
+  - `SIGHUP` reload: Hot-reload allowlists and config from `/etc/zodiac/sentinel.yaml` without dropping active state.
+- [ ] **Milestone S3.B: Prometheus / OpenTelemetry Observability Exporter**:
+  - Native `:9105/metrics` endpoint exporting:
+    - `sentinel_quarantine_active_rules{table="nftables|openflow"}`
+    - `sentinel_evaluations_total{verdict="allow|quarantine"}`
+    - `sentinel_symbolic_rejections_total{reason="allowlist|prefix|dag|ttl"}`
+    - `sentinel_agent_memory_bytes`
+    - `sentinel_kernel_dropped_packets_total`
+  - Explicit SLI/SLO tracking: P95 detection-to-enforcement < 250 ms, False Positive Rate < 0.001%, Origin latency overhead $\Delta t = 0.00\text{ ms}$.
+- [ ] **Milestone S3.C: Chaos & Degradation Test Suite**:
+  - Automated integration tests verifying failure boundaries:
+    1. **Agent Crash**: Existing `nftables` rules persist until natural TTL expiry; clean traffic continues unhindered; systemd restarts daemon in < 500 ms.
+    2. **Cloud Relay Partition**: Agent falls back to Autonomous Local Mode with zero origin degradation.
+    3. **Hardware TPU/GPU Disconnect**: Inference falls back gracefully to CPU Shannon entropy heuristics.
+
+### Sentinel Phase 4: Canary Rollout Lifecycle & Sister-Site Shield
+
+*Status: Planned*
+
+- [ ] **Milestone S4.A: Three-Stage Canary Rollout Pipeline**:
+  - **Stage 1 (Audit Mode - 7 Days)**: Agent tails access logs, runs collective detection, passes candidates through `SymbolicRouteVerifier`, and logs `[AUDIT_WOULD_DROP] <CIDR>` to disk. Zero kernel drops. Verifies 0.00% false positive impact on sister site.
+  - **Stage 2 (Soft Canary - 48 Hours)**: Enforces short 30-second TTL only on extreme anomaly scores (> 0.95).
+  - **Stage 3 (Full Dual Enforcement)**: Production 300s TTL in `nftables` + OpenFlow switch hardware offload.
+- [ ] **Milestone S4.B: HMAC-Authenticated Sister-Site Bypass & Rate Metering**:
   - Sister-site requests carry `X-Sentinel-Origin-Token` HMAC-SHA256 signed with shared secret.
-  - Verified in < 1 µs (constant-time comparison, no Neon query on hot path).
-  - Authenticated sister-site traffic bypasses collective scoring, enters dedicated meter.
-- [ ] **Milestone S4.B: OpenFlow Traffic Shaping (Meter, Not DROP)**:
-  - Sister-site burst traffic shaped via Zodiac FX hardware **rate meters** (not DROP rules).
-  - Configures meter bands: `type=DROP, rate=N kbps` applied to sister-site VLAN flow — limits burst without severing connectivity.
-  - Preserves trusted internal traffic while preventing it from starving the origin server under burst.
-- [ ] **Milestone S4.C: Separate Telemetry Stream**:
+  - Verified in < 1 µs (constant-time comparison, no database query on hot path).
+  - Burst traffic shaped via Zodiac FX hardware **rate meters** (not DROP rules) to preserve trusted internal connectivity.
+- [ ] **Milestone S4.C: Dedicated Sister-Site Telemetry Stream**:
   - Sister-site metrics isolated into `SentinelSisterSiteRecord` table.
-  - Dashboard shows sister-site vs external crawler load side-by-side — operator visibility without conflation.
+  - Operator dashboard displays sister-site vs external crawler load side-by-side.
 
 ---
 
 ## Council Invariant Compliance Matrix
 
 | Sentinel Component | Invariant | How It Complies |
-| --- | --- | --- |
-| IP reputation counters, request rates | **INV-002** (BigInt/Integer only) | All counters `BigInt`, timestamps `hrtime.bigint()` nanoseconds |
-| Detection API timeout handling | **INV-003** (Zero Error Suppression) | Explicit timeout → local circuit-breaker path (Bloom filter + subnet LRU); errors surface in telemetry, never silently swallowed; fail-closed by default |
-| Quarantine enforcement | **INV-003** (Fail-Closed Isolation) | Default-drop when quarantine confirmed; always TTL-bounded |
-| GPU anomaly scorer + collective detector | **INV-004** (Verification Asymmetry) | Agent-proposed quarantine must pass `SymbolicRouteVerifier` before hardware install |
-| Adaptive collective threshold | **INV-005** (Adaptive Control) | EMA-based, no hardcoded magic numbers; eliminates false-positive oscillation |
-| Threat scores derived from physical wire tap | **INV-006** (Epistemic Provenance) | Coral mirror tap = physical ground truth; no synthetic score fabrication |
+| :--- | :--- | :--- |
+| **Error Handling & Failure Boundaries** | **INV-001** (Zero Suppression of Reality) | All errors handled explicitly. Missing assets raise `FileNotFoundError`. Subprocess execution bounded by timeouts. |
+| **Telemetry & Accounting** | **INV-002** (Determinism — Dean & Ghemawat) | All counters `BigInt`, timestamps `hrtime.bigint()` nanoseconds. Fixed-point integer arithmetic in EMA adaptive thresholds. |
+| **Kernel & Switch Enforcement** | **INV-003** (Fail-Closed Isolation) | Default-drop on confirmed bot collectives; fail-open for clean traffic; all rules strictly TTL-bounded. |
+| **State Memory Bounding** | **Ghemawat Razor** (Radical Simplicity & Anti-OOM) | Bounded LRU cache (10,000 subnets max) + Count-Min Sketch. `MemoryMax=64M` with `/16` clustering fallback. |
+| **AI Quarantine Proposals** | **INV-004** (Verification Asymmetry — Hassabis) | Probabilistic AI outputs gated by 4 formal symbolic proofs in `SymbolicRouteVerifier` before execution. |
+| **Adaptive Thresholds & Flap Damping** | **INV-005** (Adaptive Control & Stability — Quoc Le & Vinyals) | EMA dynamic thresholding; hysteresis damping eliminates multi-agent route flapping. |
+| **Physical Hardware Probing** | **INV-006** (Epistemic Provenance — Anti-Simulation) | Coral mirror tap & Jetson sysfs probes are physical truth. Zero synthetic waveforms masquerading as live silicon. |
 
 ---
 
-## Open Questions (from §2.4 / architectural discussion)
-
-1. **Origin Bypass?** Do crawlers have direct IP access to the origin servers (bypassing Cloudflare)? → Sentinel Phase 1 (S1.C Coral correlation) answers this definitively.
-2. **Fail-Open vs Fail-Closed** → Decided: Fail-Open at detection layer, Fail-Closed at confirmed enforcement (see Architectural Characteristics above).
-3. **SLO/SLA/SLI definition** → Defined at S3.C; tracked in Neon; surfaced on dashboard.
-4. **CrowdSec replacement or complement?** → Complement. Sentinel does not modify CrowdSec rules. It adds the collective-behavior detection layer CrowdSec lacks.
-
----
-
-## Directory Layout (proposed)
+## Directory Layout (Updated Architecture)
 
 ```text
 sentinel/
-├── README.md                   ← Sentinel module overview
-├── middleware/
-│   ├── index.ts                ← Express/Koa/Fastify plugin (sentinel-middleware)
-│   ├── apache-lua/             ← mod_lua hook for Apache integration
-│   └── types.ts                ← SentinelCheckResponse, SentinelConfig types
+├── README.md                     ← Sentinel architectural overview
+├── agent/
+│   ├── index.ts                  ← Out-of-band log observation sidecar daemon
+│   ├── bounded-lru.ts            ← Anti-OOM fixed-capacity subnet cache (Ghemawat Razor)
+│   ├── nftables-driver.ts        ← Atomic netlink kernel interval set manager
+│   ├── log-tailer.ts             ← Non-blocking Apache access.log tailer (inotify)
+│   └── metrics-exporter.ts       ← Prometheus :9105/metrics endpoint
+├── cli/
+│   └── sentinel-cli.ts           ← Operator break-glass CLI (unban, panic-flush, status)
 ├── detection/
-│   ├── collective-detector.ts  ← /24 subnet sliding-window rate meter
-│   ├── adaptive-threshold.ts   ← Quoc Le EMA adaptive threshold (no magic constants)
-│   └── feature-vector.ts       ← GPU feature vector builder from Neon + mirror tap
+│   ├── collective-detector.ts    ← /24 subnet sliding-window rate meter
+│   ├── adaptive-threshold.ts     ← Quoc Le fixed-point BigInt EMA controller
+│   └── feature-vector.ts         ← GPU feature vector builder
 ├── enforcement/
-│   └── quarantine-bridge.ts    ← Bridges Sentinel scores → POST /api/sdn/quarantine
+│   ├── symbolic-verifier.ts      ← Hassabis 4-proof route verification engine
+│   └── quarantine-bridge.ts      ← Bridges Sentinel scores -> POST /api/sdn/quarantine
+├── deploy/
+│   ├── zodiac-sentinel.service   ← systemd unit (CAP_NET_ADMIN, MemoryMax=64M, non-root)
+│   └── sentinel.yaml             ← Hot-reloading daemon configuration
 └── test/
-    └── invariants/
-        ├── collective-detector.test.ts
-        ├── adaptive-threshold.test.ts
-        └── sentinel-reputation.test.ts
+    ├── invariants/
+    │   ├── collective-detector.test.ts
+    │   ├── adaptive-threshold.test.ts
+    │   ├── symbolic-verifier.test.ts
+    │   └── bounded-lru.test.ts
+    └── chaos/
+        ├── agent-crash.test.ts
+        ├── cloud-partition.test.ts
+        └── hardware-disconnect.test.ts
 ```
 
 API routes live under the existing `api/` directory:
@@ -326,9 +344,9 @@ API routes live under the existing `api/` directory:
 ```text
 api/
 └── sentinel/
-    ├── check.ts     ← GET /api/sentinel/check?ip=x.x.x.x
-    ├── report.ts    ← POST /api/sentinel/report
-    └── dashboard.ts ← GET /api/sentinel/dashboard
+    ├── check.ts     ← GET /api/sentinel/check?ip=x.x.x.x (fast cache check)
+    ├── report.ts    ← POST /api/sentinel/report (authenticated burst ingestor)
+    └── dashboard.ts ← GET /api/sentinel/dashboard (operator console ledger)
 ```
 
 Prisma schema additions go into the existing `prisma/schema.prisma` with a new migration.

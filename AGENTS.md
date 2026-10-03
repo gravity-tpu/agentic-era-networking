@@ -53,9 +53,29 @@ Never perform blocking synchronous I/O or unbounded recursion on critical packet
 
 ---
 
+## The Network Engineering Council: Packet Forwarding & Infrastructure Invariants
+
+**Governing Minds & Perspectives:**
+
+1. **David D. Clark**: End-to-End Argument, Fate-Sharing & Stateless Core Forwarding.
+2. **Van Jacobson**: Packet Conservation Principle, ACK-Clocking, TCP Congestion Dynamics & BPF Wire Filtering.
+3. **Radia Perlman**: Loop-Free Topologies (STP), Distributed Partition Resilience & Zero-Configuration Convergence.
+4. **Nick McKeown**: Strict Data/Control Plane Separation, Match-Action Pipelines & TCAM/FIB Hardware Budgets.
+5. **Sally Floyd**: Active Queue Management (AQM), Explicit Congestion Notification (ECN) & Anti-Bufferbloat.
+6. **Jennifer Rexford**: Route Flap Damping, Longest Prefix Match (LPM) & Inter-Domain Autonomous Stability.
+
+**Local Context Management Role:**
+The CCNP Network Engineer agent acts as the repository's local context manager and state custodian for networking infrastructure. It maintains real-time institutional memory of physical/logical topologies, 802.1Q VLAN allocations, TCAM silicon quotas, and multi-track development roadmap progress.
+
+---
+
 ## Reference Guides
 
-- Invariant Rulebook: [.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)
+- Systems Invariant Rulebook: [.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)
+- Network Engineering Rulebook: [.agents/rules/network-engineering-principles.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/network-engineering-principles.md)
 - Senior Staff Overseer Skill: [.agents/skills/senior-staff-overseer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/senior-staff-overseer/SKILL.md)
+- CCNP Network Engineer Skill: [.agents/skills/ccnp-network-engineer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/ccnp-network-engineer/SKILL.md)
+- Network Context & State Matrix: [.agents/network-context.md](file:///Users/andymorven/git/agentic-era-networking/.agents/network-context.md)
 - Interactive Review Dialectic: [.agents/workflows/overseer-audit.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/overseer-audit.md)
+- Network Context Sync Workflow: [.agents/workflows/network-context-sync.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/network-context-sync.md)
 - Institutional Memory Audit Log: [.agents/audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md)
