@@ -18,6 +18,8 @@ import {
   type WorkstationTimeSeriesPoint,
 } from '../src/sdn/zodiac-telemetry.js';
 import { requireOperatorAuth, isLocalDev } from '../src/auth/google-auth.js';
+import { checkRateLimit, getClientIp, rejectRateLimited } from '../src/security/rate-limiter.js';
+import { verifyBridgeAttestation } from '../src/security/request-attestation.js';
 import {
   persistTelemetrySnapshot,
   getHistoricalMultiDeviceTelemetry,
@@ -166,7 +168,20 @@ function isValidTelemetryPayload(val: unknown): val is Partial<ZodiacFullTelemet
   return true;
 }
 
+// One-time deprecation notice flag: logged once per warm instance when a POST arrives
+
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // 0.6B — Per-IP rate limiting before any processing.
+  if (req.method === 'GET' || req.method === 'POST') {
+    const ip = getClientIp(req);
+    const limit = req.method === 'GET' ? 120 : 60;
+    const rl = checkRateLimit(ip, limit);
+    if (!rl.allowed) {
+      rejectRateLimited(res, rl.retryAfterSecs);
+      return;
+    }
+  }
+
   // CORS Headers for cloud / local bridging
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -205,7 +220,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     try {
-      const body = Buffer.concat(chunks).toString('utf-8');
+      const bodyBuf = Buffer.concat(chunks);
+
+      // 0.6C — HMAC replay protection: fail-closed when secret is configured.
+      // If ZODIAC_BRIDGE_SECRET is set, ALL relays must carry valid attestation headers.
+      // Missing or invalid headers → 401. If the secret is absent, attestation is disabled
+      // (bootstrap / unconfigured state) and a warning is emitted on every request.
+      const secret = process.env['ZODIAC_BRIDGE_SECRET'];
+      if (secret) {
+        const tsHeader = req.headers['x-timestamp-ns'];
+        const sigHeader = req.headers['x-zodiac-signature'];
+        const attestation = verifyBridgeAttestation(tsHeader, sigHeader, bodyBuf, secret);
+        if (!attestation.valid) {
+          console.warn(`[!] [Attestation] Bridge relay rejected: ${attestation.reason}`);
+          res.statusCode = 401;
+          res.end(JSON.stringify({ error: `Attestation failed: ${attestation.reason}` }));
+          return;
+        }
+      } else {
+        console.warn('[!] [Attestation] ZODIAC_BRIDGE_SECRET not set — replay protection inactive. Configure the secret to enforce 0.6C attestation.');
+      }
+
+      const body = bodyBuf.toString('utf-8');
       const parsed: unknown = JSON.parse(body);
 
       if (!isValidTelemetryPayload(parsed)) {

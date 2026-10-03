@@ -11,6 +11,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { requireOperatorAuth } from '../src/auth/google-auth.js';
+import { checkRateLimit, getClientIp, rejectRateLimited } from '../src/security/rate-limiter.js';
 
 const MAX_PAYLOAD_BYTES = 64 * 1024; // 64 KB
 
@@ -47,6 +48,11 @@ const MOCK_COMMAND_RESPONSES: Record<string, string> = {
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method === 'POST') {
+    const rl = checkRateLimit(getClientIp(req), 30);
+    if (!rl.allowed) { rejectRateLimited(res, rl.retryAfterSecs); return; }
+  }
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');

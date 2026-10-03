@@ -8,8 +8,14 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { buildGoogleOAuthUrl, generateOAuthState } from '../../src/auth/google-auth.js';
+import { checkRateLimit, getClientIp, rejectRateLimited } from '../../src/security/rate-limiter.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method === 'GET') {
+    const rl = checkRateLimit(getClientIp(req), 20);
+    if (!rl.allowed) { rejectRateLimited(res, rl.retryAfterSecs); return; }
+  }
+
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     res.statusCode = 405;

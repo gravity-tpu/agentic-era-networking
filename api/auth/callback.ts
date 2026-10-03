@@ -17,6 +17,7 @@ import {
   type GoogleUserClaims,
 } from '../../src/auth/google-auth.js';
 import { upsertUser } from '../../src/db/telemetry-db.js';
+import { checkRateLimit, getClientIp, rejectRateLimited } from '../../src/security/rate-limiter.js';
 
 interface GoogleTokenResponse {
   readonly id_token?: string;
@@ -35,6 +36,11 @@ interface GoogleIdTokenPayload {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method === 'GET') {
+    const rl = checkRateLimit(getClientIp(req), 10);
+    if (!rl.allowed) { rejectRateLimited(res, rl.retryAfterSecs); return; }
+  }
+
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     res.statusCode = 405;

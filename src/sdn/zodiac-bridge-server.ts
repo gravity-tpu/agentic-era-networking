@@ -67,6 +67,7 @@ import {
   pruneLocalHistory,
 } from '../db/local-telemetry-db.js';
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
+import { signBridgePayload } from '../security/request-attestation.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -2379,6 +2380,10 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
       };
       if (this.bridgeSecret) {
         headers['X-Zodiac-Bridge-Secret'] = this.bridgeSecret;
+        // 0.6C: HMAC-SHA256 replay protection — sign payload with wall-clock timestamp.
+        const { timestampNs, signature } = signBridgePayload(payload, this.bridgeSecret);
+        headers['X-Timestamp-Ns'] = timestampNs;
+        headers['X-Zodiac-Signature'] = signature;
       }
 
       const res = await fetch(endpoint, {
