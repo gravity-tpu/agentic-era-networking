@@ -1744,7 +1744,43 @@ async function probeRemoteWorkstationHardware(
   }
 }
 
+/**
+ * Sanjay Ghemawat - Radical Simplicity: Pure helper to parse and normalize an Ollama host/endpoint.
+ */
+export function resolveOllamaEndpoint(envVar?: string): string | null {
+  if (typeof envVar !== 'string' || envVar.trim().length === 0) return null;
+  try {
+    const rawUrl = envVar.startsWith('http://') || envVar.startsWith('https://')
+      ? envVar
+      : `http://${envVar}`;
+    const parsed = new URL(rawUrl);
+    const targetHost = parsed.hostname === '0.0.0.0' ? '127.0.0.1' : parsed.hostname;
+    const targetPort = parsed.port || '11434';
+    return `${parsed.protocol}//${targetHost}:${targetPort}`;
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[workstation-probe] Invalid OLLAMA_HOST ${JSON.stringify(envVar)}: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`
+    );
+    return null;
+  }
+}
 
+/**
+ * Quoc Le - Adaptive Bounds: Configurable probe timeout with deterministic fallback bounds.
+ */
+export const DEFAULT_OLLAMA_PROBE_TIMEOUT_MS = 500;
+export function getOllamaProbeTimeoutMs(): number {
+  const envVal = process.env['OLLAMA_PROBE_TIMEOUT_MS'];
+  if (typeof envVal === 'string' && envVal.length > 0) {
+    const parsed = parseInt(envVal, 10);
+    if (Number.isFinite(parsed) && parsed > 50 && parsed <= 5000) {
+      return parsed;
+    }
+  }
+  return DEFAULT_OLLAMA_PROBE_TIMEOUT_MS;
+}
 
 /**
  * Probes the local macOS Workstation appliance hosting Ollama / Gemma 4.
@@ -1804,18 +1840,62 @@ export async function probeWorkstationHardware(
     // Query Apple Silicon GPU via IOKit, Ollama status, and USB tether concurrently
     const [gpuInfo, ollamaInfo, usbTether] = await Promise.all([
       queryAppleGpuMetrics(200),
-      (async () => {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 300);
+      (async (): Promise<{ online: boolean; model: NonNullable<OllamaPsResponse['models']>[number] | null; endpoint: string }> => {
+        // Sanjay Ghemawat - Bounded Allocation Invariant:
+        // Restrict candidate endpoints strictly to loopback and designated mesh/tether interfaces (at most 4).
+        const candidateEndpoints: string[] = [
+          'http://127.0.0.1:11434',
+          'http://localhost:11434',
+        ];
+        const parsedEndpoint = resolveOllamaEndpoint(process.env['OLLAMA_HOST']);
+        if (parsedEndpoint && !candidateEndpoints.includes(parsedEndpoint)) {
+          candidateEndpoints.unshift(parsedEndpoint);
+        }
+
+        // Bounded interface check: Tailscale mesh (100.64.0.0/10) or USB tether (192.168.55.0/24) only
+        const ifaces = os.networkInterfaces();
+        for (const addrs of Object.values(ifaces)) {
+          for (const a of addrs ?? []) {
+            if (candidateEndpoints.length >= 4) break;
+            if (a.family === 'IPv4' && !a.internal) {
+              const ip = a.address;
+              // Check Tailscale CGNAT range or Jetson direct USB tether subnet
+              if (ip.startsWith('100.') || ip.startsWith('192.168.55.')) {
+                const ep = `http://${ip}:11434`;
+                if (!candidateEndpoints.includes(ep)) {
+                  candidateEndpoints.push(ep);
+                }
+              }
+            }
+          }
+          if (candidateEndpoints.length >= 4) break;
+        }
+
+        const raceController = new AbortController();
+        const probeTimeout = setTimeout(() => raceController.abort(), getOllamaProbeTimeoutMs());
         try {
-          const res = await fetch('http://localhost:11434/api/ps', { signal: controller.signal });
-          clearTimeout(timeout);
-          if (!res.ok) return { online: false, model: null };
-          const data = (await res.json()) as OllamaPsResponse;
-          return { online: true, model: data.models?.[0] ?? null };
-        } catch {
-          clearTimeout(timeout);
-          return { online: false, model: null };
+          const result = await Promise.any(
+            candidateEndpoints.map(async (endpoint) => {
+              const res = await fetch(`${endpoint}/api/ps`, { signal: raceController.signal });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = (await res.json()) as OllamaPsResponse;
+              return { online: true, model: data.models?.[0] ?? null, endpoint };
+            })
+          );
+          clearTimeout(probeTimeout);
+          raceController.abort();
+          return result;
+        } catch (err: unknown) {
+          clearTimeout(probeTimeout);
+          raceController.abort();
+          // Council Invariant 1: Zero Suppression of Reality (log error context)
+          const errDetail = err instanceof AggregateError
+            ? err.errors.map((e: unknown) => (e instanceof Error ? e.message : String(e))).join('; ')
+            : (err instanceof Error ? err.message : String(err));
+          process.stderr.write(
+            `[workstation-probe] Ollama probe failed across ${candidateEndpoints.length} candidates: ${errDetail}\n`
+          );
+          return { online: false, model: null, endpoint: candidateEndpoints[0] ?? 'http://localhost:11434' };
         }
       })(),
       (async (): Promise<WorkstationUsbTetherTelemetry> => {
@@ -2010,7 +2090,7 @@ export async function probeWorkstationHardware(
       lastTotalTokenCount,
       contextUtilizationPct,
       edgeComputeRatioPct,
-      endpoint: 'http://localhost:11434',
+      endpoint: ollamaInfo.endpoint || 'http://localhost:11434',
       agentSubnet: '',
     };
   } catch (err) {

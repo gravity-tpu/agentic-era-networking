@@ -522,6 +522,8 @@ interface RunConfig {
   readonly tapResolutionBps: bigint;
   readonly tapReturnPath: boolean;
   readonly allowUnverified: boolean;
+  /** Quiescent barrier after every trial so the iperf3 server can reset (0 = none). */
+  readonly gapMs: number;
 }
 
 async function postBlockQuarantineCheck(rig: Rig, plan: FlowPlan, readbackSupported: boolean): Promise<void> {
@@ -561,10 +563,12 @@ async function runDataPlane(rig: Rig, cfg: RunConfig, conditions: ConditionRecor
       ...udpCommon, test: 'tcp', offeredBps: null, udpPayloadBytes: null,
       load: () => runIperf(rig, 'tcp', D, null),
     }));
+    await sleep(cfg.gapMs);
     trials.push(await measure(rig, {
       ...udpCommon, test: 'udp_mtu', offeredBps: cfg.udpOfferedBps, udpPayloadBytes: BigInt(cfg.mtuPayload),
       load: () => runIperf(rig, 'udp', D, { bps: cfg.udpOfferedBps, payloadBytes: cfg.mtuPayload }),
     }));
+    await sleep(cfg.gapMs);
     trials.push(await measure(rig, {
       ...udpCommon, test: 'udp_small', offeredBps: lineRatePayloadBps(PORT_LINK_BPS, BigInt(cfg.smallPayload)),
       udpPayloadBytes: BigInt(cfg.smallPayload),
@@ -574,6 +578,7 @@ async function runDataPlane(rig: Rig, cfg: RunConfig, conditions: ConditionRecor
           payloadBytes: cfg.smallPayload,
         }),
     }));
+    await sleep(cfg.gapMs);
     trials.push(await measure(rig, {
       ...udpCommon, test: 'idle', offeredBps: null, udpPayloadBytes: null,
       load: async () => {
@@ -585,6 +590,7 @@ async function runDataPlane(rig: Rig, cfg: RunConfig, conditions: ConditionRecor
         return { iperf: null, rawSha256: null, wallNs: nowNs() - t0 };
       },
     }));
+    await sleep(cfg.gapMs);
   }
   if (current !== null) await postBlockQuarantineCheck(rig, current.applied.plan, current.applied.readbackSupported);
   return allVerified;
@@ -852,6 +858,7 @@ async function cmdRun(cli: Cli): Promise<void> {
     tapResolutionBps: mbpsFlag(cli, 'tap-resolution-mbps') ?? 1_000_000n,
     tapReturnPath: cli.switches.has('tap-return-path'),
     allowUnverified: cli.switches.has('unverified-flow-table'),
+    gapMs: intFlag(cli, 'gap-seconds', 0) * 1000,
   };
   if (cfg.durationS < 1 || cfg.trials < 1 || cfg.tapTrials < 1) throw new Error('duration/trials must be >= 1');
 
