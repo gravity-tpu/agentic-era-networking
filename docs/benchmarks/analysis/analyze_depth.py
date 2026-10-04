@@ -12,24 +12,36 @@ import json
 import os
 import statistics
 import sys
+from typing import Any, Dict, List, Optional, Tuple
+
+Json = Dict[str, Any]
 
 
-def u(x) -> int:
-    return int(x['$bigint']) if isinstance(x, dict) and '$bigint' in x else int(x)
+def u(x: Any) -> int:
+    """Decode the artifact's {"$bigint": "..."} integers; plain numbers pass through."""
+    if isinstance(x, dict):
+        return int(str(x['$bigint']))
+    return int(x)
 
 
-def load(dirs, pattern):
+def load(dirs: List[str], pattern: str) -> List[Tuple[str, Json]]:
     out = []
     for d in dirs:
         for f in sorted(glob.glob(os.path.join(d, pattern))):
-            j = json.load(open(f))
+            try:
+                with open(f, encoding='utf-8') as fh:
+                    j = json.load(fh)
+            except ValueError as e:
+                # A corrupt artifact must be visible to the operator, never silently dropped.
+                print(f'error: cannot parse {f}: {e}', file=sys.stderr)
+                raise SystemExit(2)
             if j.get('provenance', {}).get('origin') != 'physical_bench_run':
                 continue
             out.append((f, j))
     return out
 
 
-def fit(points):
+def fit(points: List[Tuple[int, int]]) -> Optional[Tuple[float, float]]:
     """least squares t = a + b*depth over (depth, pps) points; returns (a_us, b_us) or None."""
     pts = [(d, 1e6 / p) for d, p in points if p > 0]
     if len(pts) < 2:
@@ -44,7 +56,7 @@ def fit(points):
     return my - b * mx, b
 
 
-def ladders(dirs):
+def ladders(dirs: List[str]) -> Dict[Tuple[str, int], Json]:
     groups = collections.defaultdict(lambda: {'cap': {}, 'sat': {}, 'lost': {}, 'clean': {}, 'files': set()})
     for f, j in load(dirs, 'depth-ladder-*.json'):
         p = j['params']
@@ -68,7 +80,7 @@ def ladders(dirs):
     return groups
 
 
-def print_ladders(dirs):
+def print_ladders(dirs: List[str]) -> None:
     groups = ladders(dirs)
     print('## Rate ladder: maximum forwarded packets/s by rule depth\n')
     print('`cap` = highest forwarded rate in any step without a session loss; `*` = the switch was saturated there (a true capacity); `[x]` = lowest offered rate at which a session loss occurred.\n')
@@ -93,7 +105,7 @@ def print_ladders(dirs):
     print()
 
 
-def print_workday(dirs):
+def print_workday(dirs: List[str]) -> None:
     print('## Working-window runs\n')
     print('| profile | UDP load | TCP cap | windows done | session losses | outage s (reconnect+reinstall) | p1 RX pps by rule count (median) |')
     print('| --- | --- | --- | --- | --- | --- | --- |')
@@ -113,7 +125,7 @@ def print_workday(dirs):
     print()
 
 
-def print_blackout(dirs):
+def print_blackout(dirs: List[str]) -> None:
     print('## Flush / reinstall blackout (ping every 10 ms from the workload node)\n')
     for f, j in load(dirs, 'depth-blackout-*.json'):
         recs = j['records']
@@ -130,7 +142,7 @@ def print_blackout(dirs):
         print()
 
 
-def print_events(dirs):
+def print_events(dirs: List[str]) -> None:
     print('## OpenFlow session events per artifact\n')
     print('| artifact | disconnects | controller dead-peer timeouts | median echo RTT ms | p99 echo RTT ms |')
     print('| --- | --- | --- | --- | --- |')
@@ -147,7 +159,7 @@ def print_events(dirs):
     print()
 
 
-def print_window_detail(dirs):
+def print_window_detail(dirs: List[str]) -> None:
     print('## Working-window runs: per-window detail\n')
     for f, j in load(dirs, 'depth-workday-*.json'):
         p = j['params']
@@ -167,7 +179,7 @@ def print_window_detail(dirs):
         print()
 
 
-def print_ladder_steps(dirs):
+def print_ladder_steps(dirs: List[str]) -> None:
     print('## Rate ladder: every step\n')
     print('`fwd` = packets per second the switch forwarded (Port 2 TX); `lost` marks a step during or just after which the OpenFlow session was lost; `echo+` is the time to the first echo reply after the load ended.\n')
     for f, j in load(dirs, 'depth-ladder-*.json'):

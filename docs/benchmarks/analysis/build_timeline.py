@@ -13,19 +13,22 @@ import glob
 import json
 import os
 import sys
+from typing import Any, Dict, List, Optional, Tuple
+
+Json = Dict[str, Any]
 
 
-def u(x) -> int:
+def u(x: Any) -> int:
     if isinstance(x, dict):
         return int(str(x['$bigint']))
     return int(x)
 
 
-def parse(iso):
+def parse(iso: str) -> dt.datetime:
     return dt.datetime.strptime(iso, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=dt.timezone.utc)
 
 
-def describe(j):
+def describe(j: Json) -> Tuple[str, str]:
     p = j.get('params', {})
     cmd = j['provenance'].get('command', 'run')
     if cmd == 'workday':
@@ -40,20 +43,26 @@ def describe(j):
     return 'dataplane run (3 depths)', f"{len(j.get('trials', []))} trials"
 
 
-def fmt(sec):
+def fmt(sec: float) -> str:
     sec = int(round(sec))
     return f"{sec // 3600} h {sec % 3600 // 60:02d} min"
 
 
-def main(dirs, status_file=None):
-    status = json.load(open(status_file)) if status_file else None
+def main(dirs: List[str], status_file: Optional[str] = None) -> None:
+    status: Optional[Json] = None
+    if status_file:
+        with open(status_file, encoding='utf-8') as sf:
+            status = json.load(sf)
     runs = []
     for d in dirs:
         for f in glob.glob(os.path.join(d, '**', '*.json'), recursive=True):
             try:
-                j = json.load(open(f))
-            except ValueError:
-                continue
+                with open(f, encoding='utf-8') as fh:
+                    j = json.load(fh)
+            except ValueError as e:
+                # A corrupt artifact must be visible to the operator, never silently dropped.
+                print(f'error: cannot parse {f}: {e}', file=sys.stderr)
+                raise SystemExit(2)
             prov = j.get('provenance') if isinstance(j, dict) else None
             if not prov or prov.get('origin') != 'physical_bench_run' or 'startedAtIso' not in prov:
                 continue
@@ -87,8 +96,8 @@ def main(dirs, status_file=None):
         accounting(status, total, by_status)
 
 
-def accounting(status, artifact_total, by_status):
-    def t(x):
+def accounting(status: Json, artifact_total: float, by_status: Dict[str, float]) -> None:
+    def t(x: str) -> dt.datetime:
         return dt.datetime.strptime(x, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=dt.timezone.utc)
     cal = (t(status['spans']['calendar_end']) - t(status['spans']['calendar_start'])).total_seconds()
     extra = {}
