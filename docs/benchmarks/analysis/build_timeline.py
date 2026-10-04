@@ -4,140 +4,155 @@
 usage: build_timeline.py [--status FILE] RESULTS_DIR [RESULTS_DIR ...]
 
 Reads provenance.startedAtIso and the monotonic span (finishedMonotonicNs - startedMonotonicNs) of every artifact,
-orders runs by start time, and prints (a) a run table and (b) gaps between consecutive runs. Run durations are the
-harness's own monotonic span, not wall-clock estimates. Interpretation of gaps (engineering time, outages) is done
-in the run-breakdown document, not here.
+orders runs by start time, and prints (a) a run table and (b) gaps between consecutive runs. With --status it also
+classifies runs and incidents and prints the time accounting. Run durations are the harness's own monotonic span.
+Interpretation of gaps (engineering time, outages) is in the run-breakdown document, not here.
+
+All arithmetic is exact: durations are integer nanoseconds and decimal strings are produced by integer rounding
+(see artifact_types.py). No floating point is used.
 """
 import datetime as dt
 import glob
-import json
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from fractions import Fraction
+from typing import Dict, List, Optional, Tuple, cast
 
-Json = Dict[str, Any]
+from artifact_types import (
+    AnyArtifact, BlackoutArtifact, LadderArtifact, RunStatus, TrialsArtifact, WorkdayArtifact, fixed, kind, read_artifact,
+    read_run_status, u,
+)
 
-
-def u(x: Any) -> int:
-    if isinstance(x, dict):
-        return int(str(x['$bigint']))
-    return int(x)
+NS_PER_S = 10 ** 9
+Run = Tuple[dt.datetime, int, str, str, str]  # start, span in ns, what, size, artifact path
 
 
 def parse(iso: str) -> dt.datetime:
     return dt.datetime.strptime(iso, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=dt.timezone.utc)
 
 
-def describe(j: Json) -> Tuple[str, str]:
-    p = j.get('params', {})
-    cmd = j['provenance'].get('command', 'run')
+def parse_s(iso: str) -> dt.datetime:
+    return dt.datetime.strptime(iso, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=dt.timezone.utc)
+
+
+def span_delta(span_ns: int) -> dt.timedelta:
+    return dt.timedelta(microseconds=span_ns // 1000)
+
+
+def describe(art: AnyArtifact) -> Tuple[str, str]:
+    cmd = kind(art)
     if cmd == 'workday':
-        done = j.get('completedWindows', len(j.get('windows', [])))
+        w = cast(WorkdayArtifact, art)
+        p = w['params']
+        done = w.get('completedWindows', len(w['windows']))
         return f"workday {p['profile']} {p['udpLoadPercent']}% tcp={p.get('tcpMbps', 'unbounded')}", f"{done}/{p['windows']} windows"
     if cmd == 'ladder':
-        return f"ladder {p['layout']} {p['udpPayloadBytes']}B", f"{len(j['steps'])} steps"
+        lad = cast(LadderArtifact, art)
+        return f"ladder {lad['params']['layout']} {lad['params']['udpPayloadBytes']}B", f"{len(lad['steps'])} steps"
     if cmd == 'sweep':
-        return 'sweep', f"{len(j['trials'])} trials"
+        return 'sweep', f"{len(cast(TrialsArtifact, art)['trials'])} trials"
     if cmd == 'blackout':
-        return 'blackout', f"{len(j['records'])} records"
-    return 'dataplane run (3 depths)', f"{len(j.get('trials', []))} trials"
+        return 'blackout', f"{len(cast(BlackoutArtifact, art)['records'])} records"
+    return 'dataplane run (3 depths)', f"{len(cast(TrialsArtifact, art)['trials'])} trials"
 
 
-def fmt(sec: float) -> str:
-    sec = int(round(sec))
-    return f"{sec // 3600} h {sec % 3600 // 60:02d} min"
+def hm(seconds: int) -> str:
+    return f'{seconds // 3600} h {seconds % 3600 // 60:02d} min'
+
+
+def fmt_ns(ns: int) -> str:
+    """Hours and minutes of a nanosecond duration, rounded to the nearest whole second first."""
+    return hm(round(Fraction(ns, NS_PER_S)))
+
+
+def collect(dirs: List[str]) -> List[Run]:
+    runs: List[Run] = []
+    for d in dirs:
+        for f in glob.glob(os.path.join(d, '**', '*.json'), recursive=True):
+            art = read_artifact(f)
+            if art is None:
+                continue
+            prov = art['provenance']
+            span = u(prov['finishedMonotonicNs']) - u(prov['startedMonotonicNs'])
+            what, size = describe(art)
+            runs.append((parse(prov['startedAtIso']), span, what, size, f))
+    runs.sort(key=lambda r: r[0])
+    return runs
 
 
 def main(dirs: List[str], status_file: Optional[str] = None) -> None:
-    status: Optional[Json] = None
-    if status_file:
-        with open(status_file, encoding='utf-8') as sf:
-            status = json.load(sf)
-    runs = []
-    for d in dirs:
-        for f in glob.glob(os.path.join(d, '**', '*.json'), recursive=True):
-            try:
-                with open(f, encoding='utf-8') as fh:
-                    j = json.load(fh)
-            except ValueError as e:
-                # A corrupt artifact must be visible to the operator, never silently dropped.
-                print(f'error: cannot parse {f}: {e}', file=sys.stderr)
-                raise SystemExit(2)
-            prov = j.get('provenance') if isinstance(j, dict) else None
-            if not prov or prov.get('origin') != 'physical_bench_run' or 'startedAtIso' not in prov:
-                continue
-            start = parse(prov['startedAtIso'])
-            span = (u(prov['finishedMonotonicNs']) - u(prov['startedMonotonicNs'])) / 1e9
-            what, size = describe(j)
-            runs.append((start, span, what, size, os.path.relpath(f, os.path.dirname(dirs[0].rstrip('/')))))
-    runs.sort()
+    status: Optional[RunStatus] = read_run_status(status_file) if status_file else None
+    runs = collect(dirs)
     print('| # | start (UTC) | end (UTC) | duration | run | content | status | artifact |')
     print('| --- | --- | --- | --- | --- | --- | --- | --- |')
-    by_status = {}
-    total = 0.0
+    by_status: Dict[str, int] = {}
+    total_ns = 0
     for i, (s, span, what, size, f) in enumerate(runs, 1):
-        e = s + dt.timedelta(seconds=span)
-        total += span
+        e = s + span_delta(span)
+        total_ns += span
         st = status['runs'].get(os.path.basename(f), ['unclassified', ''])[0] if status else '-'
-        by_status[st] = by_status.get(st, 0.0) + span
-        print(f"| {i} | {s:%m-%d %H:%M:%S} | {e:%m-%d %H:%M:%S} | {int(span // 60)} min {int(span % 60):02d} s | {what} | {size} | {st} | `{os.path.basename(f)}` |")
-    print(f"\nTotal artifact-recorded run time: {total / 3600:.2f} h over {len(runs)} artifacts\n")
+        by_status[st] = by_status.get(st, 0) + span
+        secs = span // NS_PER_S
+        print(f"| {i} | {s:%m-%d %H:%M:%S} | {e:%m-%d %H:%M:%S} | {secs // 60} min {secs % 60:02d} s | {what} | {size} | {st} | `{os.path.basename(f)}` |")
+    print(f"\nTotal artifact-recorded run time: {fixed(Fraction(total_ns, 3600 * NS_PER_S), 2)} h over {len(runs)} artifacts\n")
     print('Gaps between consecutive artifacts longer than 2 minutes:\n')
     print('| after run | gap start (UTC) | gap end (UTC) | gap |')
     print('| --- | --- | --- | --- |')
     for a, b in zip(runs, runs[1:]):
-        a_end = a[0] + dt.timedelta(seconds=a[1])
-        gap = (b[0] - a_end).total_seconds()
+        a_end = a[0] + span_delta(a[1])
+        gap = (b[0] - a_end) // dt.timedelta(seconds=1)
         if gap > 120:
-            print(f"| {a[2]} | {a_end:%m-%d %H:%M:%S} | {b[0]:%m-%d %H:%M:%S} | {int(gap // 3600)} h {int(gap % 3600 // 60):02d} min |")
-
-
+            print(f"| {a[2]} | {a_end:%m-%d %H:%M:%S} | {b[0]:%m-%d %H:%M:%S} | {gap // 3600} h {gap % 3600 // 60:02d} min |")
     if status:
-        accounting(status, total, by_status)
+        accounting(status, total_ns, by_status)
 
 
-def accounting(status: Json, artifact_total: float, by_status: Dict[str, float]) -> None:
-    def t(x: str) -> dt.datetime:
-        return dt.datetime.strptime(x, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=dt.timezone.utc)
-    cal = (t(status['spans']['calendar_end']) - t(status['spans']['calendar_start'])).total_seconds()
-    extra = {}
+def seconds_between(start: str, end: str) -> int:
+    return (parse_s(end) - parse_s(start)) // dt.timedelta(seconds=1)
+
+
+def accounting(status: RunStatus, artifact_total_ns: int, by_status: Dict[str, int]) -> None:
+    spans = status['spans']
+    cal = seconds_between(spans['calendar_start'], spans['calendar_end'])
+    extra: Dict[str, int] = {}
     for r in status.get('extra_runs', []):
-        d = (t(r['end']) - t(r['start'])).total_seconds()
-        extra[r['status']] = extra.get(r['status'], 0.0) + d
-    inc = {}
+        extra[r['status']] = extra.get(r['status'], 0) + seconds_between(r['start'], r['end'])
+    inc: Dict[str, int] = {}
     for i in status['incidents']:
-        d = (t(i['end']) - t(i['start'])).total_seconds()
-        inc[i['category']] = inc.get(i['category'], 0.0) + d
+        inc[i['category']] = inc.get(i['category'], 0) + seconds_between(i['start'], i['end'])
+    artifact_total = round(Fraction(artifact_total_ns, NS_PER_S))
     measured = artifact_total + sum(extra.values())
     other = cal - measured - sum(inc.values())
     assert other >= 0, 'overlapping intervals in the status file'
-    stalls = inc.get('stall', 0.0)
+    stalls = inc.get('stall', 0)
+    dev = inc.get('development', 0)
+    idle = inc.get('idle', 0)
     print('\n### Time accounting\n')
     print('| component | duration |')
     print('| --- | --- |')
-    print(f"| Calendar span ({status['spans']['calendar_start']} to {status['spans']['calendar_end']}) | {fmt(cal)} |")
+    print(f"| Calendar span ({spans['calendar_start']} to {spans['calendar_end']}) | {hm(cal)} |")
     for k in sorted(by_status, key=lambda k: -by_status[k]):
-        print(f"| Measurement recorded in artifacts: {k} | {fmt(by_status[k])} |")
+        print(f'| Measurement recorded in artifacts: {k} | {fmt_ns(by_status[k])} |')
     for k in sorted(extra, key=lambda k: -extra[k]):
-        print(f"| Measurement without an artifact: {k} | {fmt(extra[k])} |")
-    print(f"| Idle: no benchmark requested (incident G) | {fmt(inc.get('idle', 0.0))} |")
-    print(f"| Harness development between runs (incident H) | {fmt(inc.get('development', 0.0))} |")
-    print(f"| **Stalls (incidents A, B, C, D)** | **{fmt(stalls)}** |")
-    print(f"| Driver overhead, inter-run gaps and short analysis pauses (remainder) | {fmt(other)} |")
-    print(f"| **Calendar span excluding stalls** | **{fmt(cal - stalls)}** |")
-    print(f"| Calendar span excluding stalls, idle time and harness development | {fmt(cal - stalls - inc.get('idle', 0.0) - inc.get('development', 0.0))} |")
-    print(f"| Total measurement time (artifacts + extra runs) | {fmt(measured)} |")
+        print(f'| Measurement without an artifact: {k} | {hm(extra[k])} |')
+    print(f'| Idle: no benchmark requested (incident G) | {hm(idle)} |')
+    print(f'| Harness development between runs (incident H) | {hm(dev)} |')
+    print(f'| **Stalls (incidents A, B, C, D)** | **{hm(stalls)}** |')
+    print(f'| Driver overhead, inter-run gaps and short analysis pauses (remainder) | {hm(other)} |')
+    print(f'| **Calendar span excluding stalls** | **{hm(cal - stalls)}** |')
+    print(f'| Calendar span excluding stalls, idle time and harness development | {hm(cal - stalls - idle - dev)} |')
+    print(f'| Total measurement time (artifacts + extra runs) | {hm(measured)} |')
     print('\n### Incidents\n')
     print('| id | category | start (UTC) | end (UTC) | duration | cause |')
     print('| --- | --- | --- | --- | --- | --- |')
     for i in status['incidents']:
-        d = (t(i['end']) - t(i['start'])).total_seconds()
-        print(f"| {i['id']} | {i['category']} | {i['start'][5:19].replace('T', ' ')} | {i['end'][5:19].replace('T', ' ')} | {fmt(d)} | {i['cause']} |")
+        d = seconds_between(i['start'], i['end'])
+        print(f"| {i['id']} | {i['category']} | {i['start'][5:19].replace('T', ' ')} | {i['end'][5:19].replace('T', ' ')} | {hm(d)} | {i['cause']} |")
 
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    status_file = None
+    status_file: Optional[str] = None
     if args and args[0] == '--status':
         status_file, args = args[1], args[2:]
     main(args or ['.'], status_file)
