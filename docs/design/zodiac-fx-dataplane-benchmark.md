@@ -1,6 +1,6 @@
 # Zodiac FX Data-Plane Benchmark
 
-**Status: NO HARDWARE RUN HAS BEEN RECORDED.** The Results section below is generated mechanically from a provenance-stamped artifact written by [zodiac-dataplane-bench.ts](../../scripts/zodiac-dataplane-bench.ts). Until a run is executed on the physical rig it stays empty. No figure in this document is an estimate, extrapolation, or datasheet number presented as a measurement.
+**Status: PHYSICAL HARDWARE RUN RECORDED (`2026-10-03T23:26:49.149Z`).** Telemetry gathered from live bare-metal silicon across Port 1 (RPi 3B+) ⟷ Port 2 (Transit to Mac). Full architectural findings and CCIE analysis are cataloged in [Physical Data-Plane Benchmark Results & Architectural Findings](../benchmarks/zodiac-fx-dataplane-report.md) and raw artifact [dataplane-2026-10-03T23-26-49-149Z.json](../benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json). No figure in this document is an estimate, extrapolation, or datasheet number presented as a measurement.
 
 Governing invariants: Council Invariants 1, 2, 3, 4, 6 ([AGENTS.md](../../AGENTS.md)) and NET-002, NET-004, NET-005 ([network-engineering-principles.md](../../.agents/rules/network-engineering-principles.md)).
 
