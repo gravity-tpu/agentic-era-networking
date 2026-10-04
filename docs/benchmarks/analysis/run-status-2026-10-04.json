@@ -1,0 +1,228 @@
+{
+  "note": "Status and incident classification for the 2026-10-04 benchmark programme. Times are UTC. Statuses: used = feeds a conclusion; partial = incomplete but used for a stated observation; superseded = replaced by a later run; validation = harness smoke/validation; failed = no usable data; inconclusive = ran but could not be interpreted.",
+  "runs": {
+    "dataplane-2026-10-04T00-59-15-248Z.json": [
+      "used",
+      "Reproduction of the original 0/32/126-rule benchmark (60 trials, 5 trials per cell, 2 s gap)"
+    ],
+    "depth-sweep-2026-10-04T02-42-43-597Z.json": [
+      "validation",
+      "Smoke sweep: depth 2 and depth 4 variants, 1 round"
+    ],
+    "depth-blackout-2026-10-04T02-54-44-473Z.json": [
+      "validation",
+      "Smoke blackout probe"
+    ],
+    "depth-workday-typical-2026-10-04T02-56-29-963Z.json": [
+      "failed",
+      "Smoke workday: probe ran before forwarding rules were installed"
+    ],
+    "depth-workday-typical-2026-10-04T02-57-29-054Z.json": [
+      "failed",
+      "Smoke workday: table emptied by a session loss, no recovery logic yet"
+    ],
+    "depth-workday-typical-2026-10-04T03-00-38-047Z.json": [
+      "failed",
+      "Smoke workday: switch dropped its own session at 52 s (dead-peer rule extended)"
+    ],
+    "depth-workday-typical-2026-10-04T03-08-32-003Z.json": [
+      "validation",
+      "Smoke workday: session-loss recovery validated, 2 x 60 s windows"
+    ],
+    "depth-ladder-base-2026-10-04T03-15-36-947Z.json": [
+      "validation",
+      "Ladder smoke 1"
+    ],
+    "depth-ladder-base-2026-10-04T03-17-14-009Z.json": [
+      "validation",
+      "Ladder smoke 2"
+    ],
+    "depth-ladder-base-2026-10-04T03-18-48-424Z.json": [
+      "validation",
+      "Ladder smoke 3 (post-step control-plane settle watch)"
+    ],
+    "depth-ladder-base-2026-10-04T03-25-38-028Z.json": [
+      "used",
+      "600 B ladder, base layout, round 1"
+    ],
+    "depth-ladder-fwdfirst-2026-10-04T03-53-17-385Z.json": [
+      "used",
+      "600 B ladder, forwarding-first layout, round 1"
+    ],
+    "depth-sweep-2026-10-04T10-29-48-348Z.json": [
+      "superseded",
+      "Saturating depth sweep: 23 of 55 trials flagged session-lost; replaced by ladders"
+    ],
+    "depth-blackout-2026-10-04T10-55-19-665Z.json": [
+      "used",
+      "Flush / reinstall blackout probe, 3 repetitions per cell"
+    ],
+    "depth-workday-typical-2026-10-04T11-07-52-309Z.json": [
+      "partial",
+      "Typical 25%, unbounded TCP, 2 windows; used only for the unbounded-TCP observation"
+    ],
+    "depth-workday-typical-2026-10-04T11-21-36-011Z.json": [
+      "failed",
+      "iperf3 receiver stuck busy"
+    ],
+    "depth-workday-worst-2026-10-04T11-22-14-208Z.json": [
+      "failed",
+      "iperf3 receiver stuck busy"
+    ],
+    "depth-workday-low-2026-10-04T11-22-51-979Z.json": [
+      "failed",
+      "iperf3 receiver refused connections"
+    ],
+    "depth-ladder-fwdfirst-2026-10-04T11-23-29-825Z.json": [
+      "used",
+      "600 B ladder, forwarding-first layout, round 2"
+    ],
+    "depth-ladder-base-2026-10-04T11-52-43-740Z.json": [
+      "used",
+      "600 B ladder, base layout, round 2"
+    ],
+    "depth-ladder-hitfirst-2026-10-04T13-25-06-530Z.json": [
+      "validation",
+      "Hit ladder validation (hit rule matched the wrong address; fixed)"
+    ],
+    "depth-ladder-base-p64-2026-10-04T13-26-04-161Z.json": [
+      "validation",
+      "64 B ladder validation"
+    ],
+    "depth-workday-typical-2026-10-04T13-27-01-156Z.json": [
+      "partial",
+      "Typical 25%, TCP 5 Mbit/s, 8 of 12 windows; superseded by the full run"
+    ],
+    "depth-workday-typical-2026-10-04T14-07-58-393Z.json": [
+      "partial",
+      "Typical 50%, 1 window: the only recorded overload window"
+    ],
+    "depth-ladder-base-p64-2026-10-04T14-13-36-543Z.json": [
+      "used",
+      "64 B ladder, base layout"
+    ],
+    "depth-ladder-base-p1470-2026-10-04T14-30-53-885Z.json": [
+      "used",
+      "1470 B ladder, base layout"
+    ],
+    "depth-ladder-hitfirst-2026-10-04T14-48-26-898Z.json": [
+      "inconclusive",
+      "Drop-hit ladder, hit first"
+    ],
+    "depth-ladder-hitmiddle-2026-10-04T14-50-14-580Z.json": [
+      "inconclusive",
+      "Drop-hit ladder, hit middle"
+    ],
+    "depth-ladder-hitlast-2026-10-04T14-52-02-298Z.json": [
+      "inconclusive",
+      "Drop-hit ladder, hit last"
+    ],
+    "depth-ladder-fwdabove-2026-10-04T14-54-17-077Z.json": [
+      "used",
+      "Layout: forwarding priority only"
+    ],
+    "depth-ladder-fwdinstall-2026-10-04T15-05-59-972Z.json": [
+      "used",
+      "Layout: forwarding installed first only"
+    ],
+    "depth-ladder-net16-2026-10-04T15-17-00-564Z.json": [
+      "used",
+      "Layout: /16 prefix rules"
+    ],
+    "depth-ladder-distinct-2026-10-04T15-28-07-299Z.json": [
+      "used",
+      "Layout: distinct priorities"
+    ],
+    "depth-workday-worst-2026-10-04T15-39-54-925Z.json": [
+      "used",
+      "Worst case: 126 rules, 5% UDP + 2 Mbit/s TCP, 12 of 12 windows"
+    ],
+    "depth-workday-low-2026-10-04T16-40-52-502Z.json": [
+      "partial",
+      "Low 50%, 2 of 12 windows; the switch wedged at its end; superseded by the full run"
+    ],
+    "depth-workday-typical-2026-10-04T17-11-09-111Z.json": [
+      "used",
+      "Typical 25% UDP + 5 Mbit/s TCP, 12 of 12 windows"
+    ],
+    "depth-workday-low-2026-10-04T18-41-46-383Z.json": [
+      "used",
+      "Low 50% UDP + 5 Mbit/s TCP, 12 of 12 windows"
+    ],
+    "depth-workday-typical-2026-10-04T19-43-12-013Z.json": [
+      "failed",
+      "Typical 50%: resync after a session loss timed out under overload (window 1)"
+    ]
+  },
+  "incidents": [
+    {
+      "id": "G",
+      "category": "idle",
+      "start": "2026-10-03T21:58:46Z",
+      "end": "2026-10-04T00:37:53Z",
+      "cause": "No benchmark activity between the first inference run and the request to re-run and validate the benchmarks (waiting for the next instruction)"
+    },
+    {
+      "id": "H",
+      "category": "development",
+      "start": "2026-10-04T01:21:08Z",
+      "end": "2026-10-04T02:42:43Z",
+      "cause": "Building the depth/ladder/workday harness (masked-match encoder, depth planner, 4 new commands, 78 unit tests)"
+    },
+    {
+      "id": "A",
+      "category": "stall",
+      "start": "2026-10-04T04:22:40Z",
+      "end": "2026-10-04T10:29:48Z",
+      "cause": "The production bridge was restarted by an unidentified actor at 04:22:45 UTC, which took port 6633; the overnight driver's remaining steps all failed within seconds, and no run could resume until a person was available and permissions were clarified"
+    },
+    {
+      "id": "B",
+      "category": "stall",
+      "start": "2026-10-04T12:20:12Z",
+      "end": "2026-10-04T13:25:06Z",
+      "cause": "Diagnosing the failed sweep and workday runs and reworking the harness (session-change retries, bounded readbacks, TCP cap, ladder options)"
+    },
+    {
+      "id": "C",
+      "category": "stall",
+      "start": "2026-10-04T16:53:10Z",
+      "end": "2026-10-04T17:11:09Z",
+      "cause": "The switch's network stack wedged after the first low-50% attempt; recovery needed a power cycle by the operator (includes three runs that failed within seconds at 16:54-17:05)"
+    },
+    {
+      "id": "D",
+      "category": "stall",
+      "start": "2026-10-04T18:28:57Z",
+      "end": "2026-10-04T18:41:24Z",
+      "cause": "Typical-50% run silent in the table-readback loop (switch stopped answering flow-table requests); interrupted after 12.5 min"
+    }
+  ],
+  "spans": {
+    "calendar_start": "2026-10-03T21:48:46Z",
+    "calendar_end": "2026-10-04T19:53:33Z"
+  },
+  "extra_runs": [
+    {
+      "name": "Ollama sustained inference run 1 (Qwen2.5 3B on Jetson + Gemma4 26B on Mac, concurrency 2)",
+      "start": "2026-10-03T21:48:46Z",
+      "end": "2026-10-03T21:58:46Z",
+      "status": "used",
+      "note": "start derived from the result file's modification time minus the 600 s run"
+    },
+    {
+      "name": "Ollama sustained inference run 2 (same configuration, raw data and tegrastats)",
+      "start": "2026-10-04T00:37:53Z",
+      "end": "2026-10-04T00:48:21Z",
+      "status": "used",
+      "note": "timestamps recorded by the run"
+    },
+    {
+      "name": "Typical-50% rerun that was later interrupted (no artifact written)",
+      "start": "2026-10-04T18:11:45Z",
+      "end": "2026-10-04T18:28:57Z",
+      "status": "failed",
+      "note": "productive part before the stall in incident D; the data was lost when the step was interrupted"
+    }
+  ]
+}

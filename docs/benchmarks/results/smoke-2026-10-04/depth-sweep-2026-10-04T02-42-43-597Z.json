@@ -1,0 +1,1620 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "sweep",
+    "startedAtIso": "2026-10-04T02:42:43.597Z",
+    "startedMonotonicNs": {
+      "$bigint": "37864181075712"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "38044422729611"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "b9b3a6c4b36a555bca55e91c3da43ebefe68b67b261ca706538e77f7695ced9f",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "durationSeconds": 10,
+    "trials": 1,
+    "gapSeconds": 2,
+    "udpP64Pps": {
+      "$bigint": "30000"
+    },
+    "udpP572Payload": 572,
+    "hitSrcIp": "10.0.2.51",
+    "naiveLineRatePps600": {
+      "$bigint": "20833"
+    },
+    "framedLineRatePps600": {
+      "$bigint": "19592"
+    }
+  },
+  "conditions": [
+    {
+      "id": "d2",
+      "group": "depth",
+      "condition": {
+        "id": "d2",
+        "depth": 2,
+        "match": "host32",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": false,
+        "hit": null
+      },
+      "flowCount": 4,
+      "hitPriority": null,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "4"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": null,
+        "matchContentChecked": false
+      }
+    },
+    {
+      "id": "d4-distinct",
+      "group": "variant",
+      "condition": {
+        "id": "d4-distinct",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": true,
+        "hit": null
+      },
+      "flowCount": 6,
+      "hitPriority": null,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": null,
+        "matchContentChecked": false
+      }
+    },
+    {
+      "id": "d4-fwdabove",
+      "group": "variant",
+      "condition": {
+        "id": "d4-fwdabove",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "forward_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": false,
+        "hit": null
+      },
+      "flowCount": 6,
+      "hitPriority": null,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": null,
+        "matchContentChecked": false
+      }
+    },
+    {
+      "id": "d4-fwdfirst",
+      "group": "variant",
+      "condition": {
+        "id": "d4-fwdfirst",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "forward_first",
+        "distinctPriorities": false,
+        "hit": null
+      },
+      "flowCount": 6,
+      "hitPriority": null,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": null,
+        "matchContentChecked": false
+      }
+    },
+    {
+      "id": "d4-fwdabove-fwdfirst",
+      "group": "variant",
+      "condition": {
+        "id": "d4-fwdabove-fwdfirst",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "forward_above",
+        "installOrder": "forward_first",
+        "distinctPriorities": false,
+        "hit": null
+      },
+      "flowCount": 6,
+      "hitPriority": null,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": null,
+        "matchContentChecked": false
+      }
+    },
+    {
+      "id": "d4-net16",
+      "group": "variant",
+      "condition": {
+        "id": "d4-net16",
+        "depth": 4,
+        "match": "net16",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": false,
+        "hit": null
+      },
+      "flowCount": 6,
+      "hitPriority": null,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": null,
+        "matchContentChecked": true
+      }
+    },
+    {
+      "id": "d4-hitfirst",
+      "group": "variant",
+      "condition": {
+        "id": "d4-hitfirst",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": true,
+        "hit": "first"
+      },
+      "flowCount": 6,
+      "hitPriority": 65535,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": {
+          "$bigint": "0"
+        },
+        "matchContentChecked": true
+      }
+    },
+    {
+      "id": "d4-hitmiddle",
+      "group": "variant",
+      "condition": {
+        "id": "d4-hitmiddle",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": true,
+        "hit": "middle"
+      },
+      "flowCount": 6,
+      "hitPriority": 65534,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": {
+          "$bigint": "0"
+        },
+        "matchContentChecked": true
+      }
+    },
+    {
+      "id": "d4-hitlast",
+      "group": "variant",
+      "condition": {
+        "id": "d4-hitlast",
+        "depth": 4,
+        "match": "host32",
+        "priorityOrder": "quarantine_above",
+        "installOrder": "quarantine_first",
+        "distinctPriorities": true,
+        "hit": "last"
+      },
+      "flowCount": 6,
+      "hitPriority": 65532,
+      "readback": {
+        "verified": true,
+        "totalEntries": {
+          "$bigint": "6"
+        },
+        "mismatches": [],
+        "benignQuarantineHits": {
+          "$bigint": "0"
+        },
+        "hitRulePackets": {
+          "$bigint": "0"
+        },
+        "matchContentChecked": true
+      }
+    }
+  ],
+  "failedConditions": [],
+  "trials": [
+    {
+      "ordinal": 1,
+      "conditionId": "d2",
+      "test": "udp_p64",
+      "payloadBytes": 64,
+      "offeredBps": {
+        "$bigint": "15360000"
+      },
+      "startNs": {
+        "$bigint": "37870989513985"
+      },
+      "endNs": {
+        "$bigint": "37882913270894"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10793585179"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "10876825"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "291946"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "21246"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "21246"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "30005"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "212463"
+          },
+          "txPackets": {
+            "$bigint": "70"
+          },
+          "rxBytes": {
+            "$bigint": "59394"
+          },
+          "txBytes": {
+            "$bigint": "7362"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "70"
+          },
+          "txPackets": {
+            "$bigint": "212463"
+          },
+          "rxBytes": {
+            "$bigint": "17771"
+          },
+          "txBytes": {
+            "$bigint": "104602"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "e8e65422257e003353ba2a390d590b977fe1c9142d085d18e659161449bbabd1",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50513241\r\n TX Bytes: 42761989\r\n RX Packets: 40174230\r\n TX Packets: 32815372\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504171534\r\n TX Bytes: 4691717\r\n RX Packets: 2834171\r\n TX Packets: 3270064\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250844517\r\n TX Bytes: 615787262\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50572635\r\n TX Bytes: 42769351\r\n RX Packets: 40386693\r\n TX Packets: 32815442\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504189305\r\n TX Bytes: 4796319\r\n RX Packets: 2834241\r\n TX Packets: 3482527\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250845411\r\n TX Bytes: 615787986\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 2,
+      "conditionId": "d2",
+      "test": "udp_p572",
+      "payloadBytes": 572,
+      "offeredBps": {
+        "$bigint": "89655172"
+      },
+      "startNs": {
+        "$bigint": "37884914460511"
+      },
+      "endNs": {
+        "$bigint": "37896236507541"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10142396175"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "62056508"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "307330"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "15149"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "15149"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19595"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "151491"
+          },
+          "txPackets": {
+            "$bigint": "64"
+          },
+          "rxBytes": {
+            "$bigint": "48511"
+          },
+          "txBytes": {
+            "$bigint": "7184"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "64"
+          },
+          "txPackets": {
+            "$bigint": "151491"
+          },
+          "rxBytes": {
+            "$bigint": "9410"
+          },
+          "txBytes": {
+            "$bigint": "2813"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "a80d284a30b6dfa3111587bf0b84808b95cd65aa195ffabcb06111a0889a4df6",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50572635\r\n TX Bytes: 42769351\r\n RX Packets: 40386694\r\n TX Packets: 32815449\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504189305\r\n TX Bytes: 4796319\r\n RX Packets: 2834248\r\n TX Packets: 3482528\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250845411\r\n TX Bytes: 615787986\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50621146\r\n TX Bytes: 42776535\r\n RX Packets: 40538185\r\n TX Packets: 32815513\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504198715\r\n TX Bytes: 4799132\r\n RX Packets: 2834312\r\n TX Packets: 3634019\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250846707\r\n TX Bytes: 615788778\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 3,
+      "conditionId": "d2",
+      "test": "udp_p1470",
+      "payloadBytes": 1470,
+      "offeredBps": {
+        "$bigint": "95703125"
+      },
+      "startNs": {
+        "$bigint": "37898238284595"
+      },
+      "endNs": {
+        "$bigint": "37909643805712"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10261285696"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "94433976"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "13186"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "8033"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "8033"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "8140"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "80335"
+          },
+          "txPackets": {
+            "$bigint": "79"
+          },
+          "rxBytes": {
+            "$bigint": "25568"
+          },
+          "txBytes": {
+            "$bigint": "7099"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "79"
+          },
+          "txPackets": {
+            "$bigint": "80335"
+          },
+          "rxBytes": {
+            "$bigint": "6607"
+          },
+          "txBytes": {
+            "$bigint": "38244"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "9a56e39d7063603657685fb41cca29dc75f6a83e933242eb734d481ed7f6485e",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50671772\r\n TX Bytes: 42785103\r\n RX Packets: 40538187\r\n TX Packets: 32815527\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504205405\r\n TX Bytes: 4821178\r\n RX Packets: 2834326\r\n TX Packets: 3634021\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250846707\r\n TX Bytes: 615788778\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50697340\r\n TX Bytes: 42792202\r\n RX Packets: 40618522\r\n TX Packets: 32815606\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504212012\r\n TX Bytes: 4859422\r\n RX Packets: 2834405\r\n TX Packets: 3714356\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250847291\r\n TX Bytes: 615789108\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 4,
+      "conditionId": "d2",
+      "test": "tcp",
+      "payloadBytes": null,
+      "offeredBps": null,
+      "startNs": {
+        "$bigint": "37911644757673"
+      },
+      "endNs": {
+        "$bigint": "37923039015494"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10268369021"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "62599987"
+        },
+        "retransmits": {
+          "$bigint": "66"
+        },
+        "iperfLossPpm": null,
+        "switchPort1RxPps": {
+          "$bigint": "5421"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "5421"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "5430"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "54211"
+          },
+          "txPackets": {
+            "$bigint": "3739"
+          },
+          "rxBytes": {
+            "$bigint": "73681"
+          },
+          "txBytes": {
+            "$bigint": "34034"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "3739"
+          },
+          "txPackets": {
+            "$bigint": "54211"
+          },
+          "rxBytes": {
+            "$bigint": "14372"
+          },
+          "txBytes": {
+            "$bigint": "75626"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "a324d7590fd9128a9fc691d4b678dfd5414edd49c6d5eb44a2545a5708bfdb0a",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50697340\r\n TX Bytes: 42792202\r\n RX Packets: 40618524\r\n TX Packets: 32815617\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504212012\r\n TX Bytes: 4859422\r\n RX Packets: 2834416\r\n TX Packets: 3714358\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250847811\r\n TX Bytes: 615789372\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50771021\r\n TX Bytes: 42826236\r\n RX Packets: 40672735\r\n TX Packets: 32819356\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504226384\r\n TX Bytes: 4935048\r\n RX Packets: 2838155\r\n TX Packets: 3768569\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250848331\r\n TX Bytes: 615789636\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 5,
+      "conditionId": "d4-distinct",
+      "test": "udp_p572",
+      "payloadBytes": 572,
+      "offeredBps": {
+        "$bigint": "89655172"
+      },
+      "startNs": {
+        "$bigint": "37926050187386"
+      },
+      "endNs": {
+        "$bigint": "37937879478946"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10676486062"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "52288121"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "416843"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "13404"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "13404"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19597"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "134048"
+          },
+          "txPackets": {
+            "$bigint": "58"
+          },
+          "rxBytes": {
+            "$bigint": "77195"
+          },
+          "txBytes": {
+            "$bigint": "63033"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "58"
+          },
+          "txPackets": {
+            "$bigint": "134048"
+          },
+          "rxBytes": {
+            "$bigint": "13245"
+          },
+          "txBytes": {
+            "$bigint": "31880"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "99813c53ee0001bb2efc488b4650c0b62d3e55368a7610fd4d9bc03ceeb7d532",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50771021\r\n TX Bytes: 42826236\r\n RX Packets: 40672739\r\n TX Packets: 32819376\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504226384\r\n TX Bytes: 4935048\r\n RX Packets: 2838176\r\n TX Packets: 3768573\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250848331\r\n TX Bytes: 615789636\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50848216\r\n TX Bytes: 42889269\r\n RX Packets: 40806787\r\n TX Packets: 32819434\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504239629\r\n TX Bytes: 4966928\r\n RX Packets: 2838234\r\n TX Packets: 3902621\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250850363\r\n TX Bytes: 615791224\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 6,
+      "conditionId": "d4-fwdabove",
+      "test": "udp_p572",
+      "payloadBytes": 572,
+      "offeredBps": {
+        "$bigint": "89655172"
+      },
+      "startNs": {
+        "$bigint": "37940887282415"
+      },
+      "endNs": {
+        "$bigint": "37951991686402"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10157346665"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "52268902"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "416882"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "13404"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "13404"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19597"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "134042"
+          },
+          "txPackets": {
+            "$bigint": "80"
+          },
+          "rxBytes": {
+            "$bigint": "53477"
+          },
+          "txBytes": {
+            "$bigint": "7875"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "80"
+          },
+          "txPackets": {
+            "$bigint": "134042"
+          },
+          "rxBytes": {
+            "$bigint": "5977"
+          },
+          "txBytes": {
+            "$bigint": "44847"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "efc37dd1ff1f428333269a478f9863b82aa1e4137aa75dcfc931309010346dca",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50848216\r\n TX Bytes: 42889269\r\n RX Packets: 40806790\r\n TX Packets: 32819450\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504246204\r\n TX Bytes: 4999830\r\n RX Packets: 2838250\r\n TX Packets: 3902624\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250850363\r\n TX Bytes: 615791224\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50901693\r\n TX Bytes: 42897144\r\n RX Packets: 40940832\r\n TX Packets: 32819530\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504252181\r\n TX Bytes: 5044677\r\n RX Packets: 2838330\r\n TX Packets: 4036666\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250852655\r\n TX Bytes: 615793088\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 7,
+      "conditionId": "d4-fwdfirst",
+      "test": "udp_p572",
+      "payloadBytes": 572,
+      "offeredBps": {
+        "$bigint": "89655172"
+      },
+      "startNs": {
+        "$bigint": "37954998705804"
+      },
+      "endNs": {
+        "$bigint": "37967173830404"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10977535144"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "50158451"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "440598"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "12948"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "12948"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19597"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "129485"
+          },
+          "txPackets": {
+            "$bigint": "58"
+          },
+          "rxBytes": {
+            "$bigint": "17441"
+          },
+          "txBytes": {
+            "$bigint": "7075"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "58"
+          },
+          "txPackets": {
+            "$bigint": "129485"
+          },
+          "rxBytes": {
+            "$bigint": "5350"
+          },
+          "txBytes": {
+            "$bigint": "14277"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "925ddc5bab500f527348818419800a39a5bb7c64dda6c133d0dabdd64054addc",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50960273\r\n TX Bytes: 42907467\r\n RX Packets: 40940834\r\n TX Packets: 32819544\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504262541\r\n TX Bytes: 5055007\r\n RX Packets: 2838344\r\n TX Packets: 4036668\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250852655\r\n TX Bytes: 615793088\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 50977714\r\n TX Bytes: 42914542\r\n RX Packets: 41070319\r\n TX Packets: 32819602\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504267891\r\n TX Bytes: 5069284\r\n RX Packets: 2838402\r\n TX Packets: 4166153\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250855009\r\n TX Bytes: 615795084\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 8,
+      "conditionId": "d4-fwdabove-fwdfirst",
+      "test": "udp_p572",
+      "payloadBytes": 572,
+      "offeredBps": {
+        "$bigint": "89655172"
+      },
+      "startNs": {
+        "$bigint": "37970180900246"
+      },
+      "endNs": {
+        "$bigint": "37982634715098"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "11206087573"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "36041948"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "597192"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "15816"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "15816"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19597"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "158160"
+          },
+          "txPackets": {
+            "$bigint": "80"
+          },
+          "rxBytes": {
+            "$bigint": "62677"
+          },
+          "txBytes": {
+            "$bigint": "8272"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "80"
+          },
+          "txPackets": {
+            "$bigint": "158160"
+          },
+          "rxBytes": {
+            "$bigint": "13986"
+          },
+          "txBytes": {
+            "$bigint": "74448"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "d709678f24b11cac829b8c99b32e2ad6bb39f5a71910abf6b3c7099dabd96297",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51013477\r\n TX Bytes: 42921951\r\n RX Packets: 41070322\r\n TX Packets: 32819625\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504267891\r\n TX Bytes: 5069284\r\n RX Packets: 2838425\r\n TX Packets: 4166156\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250855009\r\n TX Bytes: 615795084\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51076154\r\n TX Bytes: 42930223\r\n RX Packets: 41228482\r\n TX Packets: 32819705\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504281877\r\n TX Bytes: 5143732\r\n RX Packets: 2838505\r\n TX Packets: 4324316\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250856521\r\n TX Bytes: 615796552\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 9,
+      "conditionId": "d4-net16",
+      "test": "udp_p572",
+      "payloadBytes": 572,
+      "offeredBps": {
+        "$bigint": "89655172"
+      },
+      "startNs": {
+        "$bigint": "37985642678208"
+      },
+      "endNs": {
+        "$bigint": "37998346862219"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "11424434197"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": {
+          "$bigint": "34344710"
+        },
+        "retransmits": null,
+        "iperfLossPpm": {
+          "$bigint": "612156"
+        },
+        "switchPort1RxPps": {
+          "$bigint": "13269"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "13269"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19596"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "0"
+        },
+        "forwardLossPpm": {
+          "$bigint": "0"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": null,
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "132693"
+          },
+          "txPackets": {
+            "$bigint": "96"
+          },
+          "rxBytes": {
+            "$bigint": "52669"
+          },
+          "txBytes": {
+            "$bigint": "13039"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "96"
+          },
+          "txPackets": {
+            "$bigint": "132693"
+          },
+          "rxBytes": {
+            "$bigint": "20871"
+          },
+          "txBytes": {
+            "$bigint": "53538"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": "6d697b989b371ae01a04b8d0b257289de73eda4c6b6e0cc92e0d1dedc6832e10",
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51132005\r\n TX Bytes: 42938883\r\n RX Packets: 41228484\r\n TX Packets: 32819717\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504281877\r\n TX Bytes: 5143732\r\n RX Packets: 2838517\r\n TX Packets: 4324318\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250857237\r\n TX Bytes: 615796882\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51184674\r\n TX Bytes: 42951922\r\n RX Packets: 41361177\r\n TX Packets: 32819813\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504302748\r\n TX Bytes: 5197270\r\n RX Packets: 2838613\r\n TX Packets: 4457011\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250858749\r\n TX Bytes: 615798350\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 10,
+      "conditionId": "d4-hitfirst",
+      "test": "drop_hit",
+      "payloadBytes": 572,
+      "offeredBps": null,
+      "startNs": {
+        "$bigint": "38001354700437"
+      },
+      "endNs": {
+        "$bigint": "38013012364146"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10180479782"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": null,
+        "retransmits": null,
+        "iperfLossPpm": null,
+        "switchPort1RxPps": {
+          "$bigint": "19344"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "1"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19604"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "193427"
+        },
+        "forwardLossPpm": {
+          "$bigint": "999932"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": {
+        "$bigint": "62355"
+      },
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "193440"
+          },
+          "txPackets": {
+            "$bigint": "51"
+          },
+          "rxBytes": {
+            "$bigint": "42362"
+          },
+          "txBytes": {
+            "$bigint": "7003"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "51"
+          },
+          "txPackets": {
+            "$bigint": "13"
+          },
+          "rxBytes": {
+            "$bigint": "13158"
+          },
+          "txBytes": {
+            "$bigint": "68529"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": null,
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51245807\r\n TX Bytes: 42959758\r\n RX Packets: 41361179\r\n TX Packets: 32819827\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504302748\r\n TX Bytes: 5197270\r\n RX Packets: 2838627\r\n TX Packets: 4457013\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250859335\r\n TX Bytes: 615798614\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51288169\r\n TX Bytes: 42966761\r\n RX Packets: 41554619\r\n TX Packets: 32819878\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504315906\r\n TX Bytes: 5265799\r\n RX Packets: 2838678\r\n TX Packets: 4457026\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250861025\r\n TX Bytes: 615800620\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 11,
+      "conditionId": "d4-hitmiddle",
+      "test": "drop_hit",
+      "payloadBytes": 572,
+      "offeredBps": null,
+      "startNs": {
+        "$bigint": "38016017634670"
+      },
+      "endNs": {
+        "$bigint": "38027523680167"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10231488107"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": null,
+        "retransmits": null,
+        "iperfLossPpm": null,
+        "switchPort1RxPps": {
+          "$bigint": "19331"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "1"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19591"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "193299"
+        },
+        "forwardLossPpm": {
+          "$bigint": "999943"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": {
+        "$bigint": "62227"
+      },
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "193310"
+          },
+          "txPackets": {
+            "$bigint": "56"
+          },
+          "rxBytes": {
+            "$bigint": "90486"
+          },
+          "txBytes": {
+            "$bigint": "15568"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "56"
+          },
+          "txPackets": {
+            "$bigint": "11"
+          },
+          "rxBytes": {
+            "$bigint": "10389"
+          },
+          "txBytes": {
+            "$bigint": "4630"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": null,
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51288169\r\n TX Bytes: 42966761\r\n RX Packets: 41554621\r\n TX Packets: 32819892\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504315906\r\n TX Bytes: 5265799\r\n RX Packets: 2838692\r\n TX Packets: 4457028\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250861723\r\n TX Bytes: 615801422\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51378655\r\n TX Bytes: 42982329\r\n RX Packets: 41747931\r\n TX Packets: 32819948\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504326295\r\n TX Bytes: 5270429\r\n RX Packets: 2838748\r\n TX Packets: 4457039\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250863349\r\n TX Bytes: 615803428\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    },
+    {
+      "ordinal": 12,
+      "conditionId": "d4-hitlast",
+      "test": "drop_hit",
+      "payloadBytes": 572,
+      "offeredBps": null,
+      "startNs": {
+        "$bigint": "38030531449910"
+      },
+      "endNs": {
+        "$bigint": "38042145082424"
+      },
+      "nominalWindowNs": {
+        "$bigint": "10000000000"
+      },
+      "wallNs": {
+        "$bigint": "10218386345"
+      },
+      "valid": true,
+      "invalidReason": null,
+      "metrics": {
+        "goodputBps": null,
+        "retransmits": null,
+        "iperfLossPpm": null,
+        "switchPort1RxPps": {
+          "$bigint": "18633"
+        },
+        "switchPort2TxPps": {
+          "$bigint": "688"
+        },
+        "switchPort3TxPps": null,
+        "offeredPps": {
+          "$bigint": "19590"
+        },
+        "forwardDeficitPackets": {
+          "$bigint": "179452"
+        },
+        "forwardLossPpm": {
+          "$bigint": "963040"
+        },
+        "port1RxDropped": {
+          "$bigint": "0"
+        },
+        "port2TxDropped": {
+          "$bigint": "0"
+        },
+        "port3TxDropped": null,
+        "crcErrors": {
+          "$bigint": "0"
+        }
+      },
+      "hitRulePackets": {
+        "$bigint": "48380"
+      },
+      "portDeltas": {
+        "1": {
+          "rxPackets": {
+            "$bigint": "186339"
+          },
+          "txPackets": {
+            "$bigint": "44"
+          },
+          "rxBytes": {
+            "$bigint": "54458"
+          },
+          "txBytes": {
+            "$bigint": "13437"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "2": {
+          "rxPackets": {
+            "$bigint": "44"
+          },
+          "txPackets": {
+            "$bigint": "6887"
+          },
+          "rxBytes": {
+            "$bigint": "6242"
+          },
+          "txBytes": {
+            "$bigint": "17542"
+          },
+          "rxDropped": {
+            "$bigint": "0"
+          },
+          "txDropped": {
+            "$bigint": "0"
+          },
+          "rxCrcErrors": {
+            "$bigint": "0"
+          }
+        }
+      },
+      "iperfRawSha256": null,
+      "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51378655\r\n TX Bytes: 42982329\r\n RX Packets: 41747935\r\n TX Packets: 32819970\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504326295\r\n TX Bytes: 5270429\r\n RX Packets: 2838770\r\n TX Packets: 4457043\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250865089\r\n TX Bytes: 615805972\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+      "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 51433113\r\n TX Bytes: 42995766\r\n RX Packets: 41934274\r\n TX Packets: 32820014\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 504332537\r\n TX Bytes: 5287971\r\n RX Packets: 2838814\r\n TX Packets: 4463930\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 75\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 47248775\r\n RX Packets: 34392639\r\n TX Packets: 32892164\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 250865673\r\n TX Bytes: 615806236\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 45\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# "
+    }
+  ]
+}

@@ -1,0 +1,300 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "workday",
+    "startedAtIso": "2026-10-04T11:22:51.979Z",
+    "startedMonotonicNs": {
+      "$bigint": "69072563299084"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "69089879424061"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "f08fe11c2c9bab509a39975b1d62bd62b1a93e4ff44964b1d28d521ee0bca6b0",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "profile": "low",
+    "targetRulesPerWindow": 8,
+    "windowSeconds": 300,
+    "totalSeconds": 3600,
+    "windows": 12,
+    "sampleSeconds": 10,
+    "ofDeadPeerMs": "default(8000)",
+    "flushMode": "selective",
+    "udpLoadPercent": 50,
+    "udpPps": {
+      "$bigint": "9796"
+    },
+    "udpPayloadBytes": 572,
+    "udpPort": 5201,
+    "tcpPort": 5202,
+    "rampOffsetsMs": [
+      33333,
+      66666,
+      100000,
+      133333,
+      166666,
+      200000,
+      233333,
+      266666
+    ]
+  },
+  "windows": [],
+  "completedWindows": 0,
+  "sessionEvents": [
+    {
+      "tNs": {
+        "$bigint": "69077268696790"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1536918"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69078170039102"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1093529"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69078267686050"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1242584"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69079268474916"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000841506"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69079268493284"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1002713"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69080170414342"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "734811"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69080268799341"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1045274"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69081268986552"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000191627"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69081269025240"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1099737"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69082171158583"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "987033"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69082268682858"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1077625"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69083269765781"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001117067"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69083269777076"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "784924"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69084172975307"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "767675"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69084268960174"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "610908"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69085269952478"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000999408"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69085269960958"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "548476"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69086173650479"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "580828"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69086270902961"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "926490"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69087271146346"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000252089"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69087271157386"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1005017"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69088175189943"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "642844"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69088271449606"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "942907"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69089272400607"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000957081"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69089272411743"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "683164"
+      }
+    }
+  ]
+}

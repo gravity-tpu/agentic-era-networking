@@ -1,0 +1,55 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts ladder --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --layout fwdfirst
+
+[bench 2026-10-04T11:23:29.825Z] ladder: 5 depths x up to 9 rates x 45s, 1 round(s), layout fwdfirst
+[bench 2026-10-04T11:23:31.692Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T11:23:32.946Z] installing ladder-fwdfirst-d0: depth 0 host32 forward_above/forward_first
+[bench 2026-10-04T11:24:20.996Z] ladder d0 offered 500 pps: p1 RX 496 p2 TX 496 pps, receiver loss 10310 ppm echo back in 534 ms
+[bench 2026-10-04T11:25:10.083Z] ladder d0 offered 1000 pps: p1 RX 990 p2 TX 990 pps, receiver loss 11310 ppm echo back in 328 ms
+[bench 2026-10-04T11:25:59.089Z] ladder d0 offered 2000 pps: p1 RX 1976 p2 TX 1976 pps, receiver loss 12599 ppm echo back in 491 ms
+[bench 2026-10-04T11:26:48.169Z] ladder d0 offered 4000 pps: p1 RX 3951 p2 TX 3951 pps, receiver loss 12466 ppm echo back in 507 ms
+[bench 2026-10-04T11:27:37.125Z] ladder d0 offered 6000 pps: p1 RX 5922 p2 TX 5922 pps, receiver loss 13984 ppm echo back in 309 ms
+[bench 2026-10-04T11:28:26.162Z] ladder d0 offered 8000 pps: p1 RX 7899 p2 TX 7899 pps, receiver loss 12758 ppm echo back in 370 ms
+[bench 2026-10-04T11:29:15.090Z] ladder d0 offered 10000 pps: p1 RX 9873 p2 TX 9873 pps, receiver loss 12819 ppm echo back in 595 ms
+[bench 2026-10-04T11:30:04.281Z] ladder d0 offered 12000 pps: p1 RX 11847 p2 TX 11847 pps, receiver loss 13431 ppm echo back in 325 ms
+[bench 2026-10-04T11:30:53.307Z] ladder d0 offered 15000 pps: p1 RX 14798 p2 TX 14798 pps, receiver loss 13559 ppm echo back in 231 ms
+[bench 2026-10-04T11:30:55.310Z] installing ladder-fwdfirst-d16: depth 16 host32 forward_above/forward_first
+[bench 2026-10-04T11:31:43.175Z] ladder d16 offered 500 pps: p1 RX 496 p2 TX 496 pps, receiver loss 9910 ppm echo back in 384 ms
+[bench 2026-10-04T11:32:32.349Z] ladder d16 offered 1000 pps: p1 RX 989 p2 TX 989 pps, receiver loss 11821 ppm echo back in 764 ms
+[bench 2026-10-04T11:33:21.363Z] ladder d16 offered 2000 pps: p1 RX 1977 p2 TX 1977 pps, receiver loss 12066 ppm echo back in 453 ms
+[bench 2026-10-04T11:34:10.406Z] ladder d16 offered 4000 pps: p1 RX 3949 p2 TX 3949 pps, receiver loss 13049 ppm echo back in 378 ms
+[bench 2026-10-04T11:34:59.294Z] ladder d16 offered 6000 pps: p1 RX 5925 p2 TX 5925 pps, receiver loss 12744 ppm echo back in 174 ms
+[bench 2026-10-04T11:35:48.588Z] ladder d16 offered 8000 pps: p1 RX 7894 p2 TX 7894 pps, receiver loss 13422 ppm echo back in 667 ms
+[bench 2026-10-04T11:36:37.402Z] ladder d16 offered 10000 pps: p1 RX 9872 p2 TX 9872 pps, receiver loss 12937 ppm echo back in 315 ms
+[bench 2026-10-04T11:37:26.547Z] ladder d16 offered 12000 pps: p1 RX 11843 p2 TX 11843 pps, receiver loss 13035 ppm echo back in 573 ms
+[bench 2026-10-04T11:38:15.393Z] ladder d16 offered 15000 pps: p1 RX 12693 p2 TX 12693 pps, receiver loss 242843 ppm echo back in 171 ms
+[bench 2026-10-04T11:38:17.397Z] installing ladder-fwdfirst-d32: depth 32 host32 forward_above/forward_first
+[bench 2026-10-04T11:39:05.472Z] ladder d32 offered 500 pps: p1 RX 496 p2 TX 496 pps, receiver loss 9777 ppm echo back in 514 ms
+[bench 2026-10-04T11:39:54.807Z] ladder d32 offered 1000 pps: p1 RX 989 p2 TX 989 pps, receiver loss 11843 ppm echo back in 632 ms
+[bench 2026-10-04T11:40:37.429Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53245)
+[bench 2026-10-04T11:40:37.431Z] OpenFlow session DISCONNECTED (10.0.1.99:53245) - the switch will drop its flow table
+[bench 2026-10-04T11:40:39.420Z] OpenFlow session connected (10.0.1.99:53246)
+[bench 2026-10-04T11:41:07.886Z] installing ladder-fwdfirst-d32: depth 32 host32 forward_above/forward_first
+[bench 2026-10-04T11:41:14.894Z] ladder d32 offered 2000 pps: INVALID iperf3 reported an error: interrupt - the client has terminated SESSION LOST echo back in 0 ms -> stop (session_lost)
+[bench 2026-10-04T11:41:14.896Z] installing ladder-fwdfirst-d64: depth 64 host32 forward_above/forward_first
+[bench 2026-10-04T11:42:02.915Z] ladder d64 offered 500 pps: p1 RX 496 p2 TX 496 pps, receiver loss 10266 ppm echo back in 2 ms
+[bench 2026-10-04T11:42:51.915Z] ladder d64 offered 1000 pps: p1 RX 990 p2 TX 990 pps, receiver loss 11755 ppm echo back in 431 ms
+[bench 2026-10-04T11:43:40.880Z] ladder d64 offered 2000 pps: p1 RX 1977 p2 TX 1977 pps, receiver loss 12088 ppm echo back in 696 ms
+[bench 2026-10-04T11:44:29.851Z] ladder d64 offered 4000 pps: p1 RX 3949 p2 TX 3949 pps, receiver loss 13205 ppm echo back in 553 ms
+[bench 2026-10-04T11:45:18.918Z] ladder d64 offered 6000 pps: p1 RX 5925 p2 TX 5925 pps, receiver loss 12814 ppm echo back in 317 ms
+[bench 2026-10-04T11:46:08.020Z] ladder d64 offered 8000 pps: p1 RX 7078 p2 TX 7078 pps, receiver loss 166145 ppm echo back in 643 ms
+[bench 2026-10-04T11:46:57.927Z] ladder d64 offered 10000 pps: p1 RX 7023 p2 TX 7023 pps, receiver loss 387591 ppm echo back in 966 ms -> stop (saturated)
+[bench 2026-10-04T11:46:57.932Z] installing ladder-fwdfirst-d126: depth 126 host32 forward_above/forward_first
+[bench 2026-10-04T11:47:46.015Z] ladder d126 offered 500 pps: p1 RX 496 p2 TX 496 pps, receiver loss 10755 ppm echo back in 500 ms
+[bench 2026-10-04T11:48:35.035Z] ladder d126 offered 1000 pps: p1 RX 989 p2 TX 989 pps, receiver loss 11310 ppm echo back in 326 ms
+[bench 2026-10-04T11:49:23.975Z] ladder d126 offered 2000 pps: p1 RX 1976 p2 TX 1976 pps, receiver loss 12788 ppm echo back in 395 ms
+[bench 2026-10-04T11:50:13.053Z] ladder d126 offered 4000 pps: p1 RX 3950 p2 TX 3950 pps, receiver loss 12694 ppm echo back in 362 ms
+[bench 2026-10-04T11:51:02.219Z] ladder d126 offered 6000 pps: p1 RX 4495 p2 TX 4495 pps, receiver loss 330188 ppm echo back in 200 ms
+[bench 2026-10-04T11:51:24.028Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53246)
+[bench 2026-10-04T11:51:24.028Z] OpenFlow session DISCONNECTED (10.0.1.99:53246) - the switch will drop its flow table
+[bench 2026-10-04T11:51:25.664Z] OpenFlow session connected (10.0.1.99:53247)
+[bench 2026-10-04T11:52:16.138Z] installing ladder-fwdfirst-d126: depth 126 host32 forward_above/forward_first
+[bench 2026-10-04T11:52:23.155Z] ladder d126 offered 8000 pps: INVALID iperf3 reported an error: interrupt - the client has terminated SESSION LOST echo back in 602 ms -> stop (session_lost)
+[bench 2026-10-04T11:52:23.161Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T11:52:23.220Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-ladder-fwdfirst-2026-10-04T11-23-29-825Z.json

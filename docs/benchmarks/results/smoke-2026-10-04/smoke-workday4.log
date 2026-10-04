@@ -1,0 +1,22 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/smoke-2026-10-04 --profile typical --window-seconds 60 --total-seconds 120 --sample-seconds 10 --verify-seconds 30
+
+[bench 2026-10-04T03:08:33.768Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T03:08:36.025Z] workday profile=typical (24 rules/window) 2 windows x 60s, flush=selective, udp 9796 pps x 572 B + tcp
+[bench 2026-10-04T03:08:39.696Z] window 1/2: table reset; starting load
+[bench 2026-10-04T03:09:23.034Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53051)
+[bench 2026-10-04T03:09:23.036Z] OpenFlow session DISCONNECTED (10.0.1.99:53051) - the switch will drop its flow table
+[bench 2026-10-04T03:09:23.085Z] window 1 @43376ms: OpenFlow session lost with 17 rules; waiting for reconnect
+[bench 2026-10-04T03:09:24.807Z] OpenFlow session connected (10.0.1.99:53052)
+[bench 2026-10-04T03:09:25.100Z] window 1: reconnected in 1906 ms, table restored in 107 ms
+[bench 2026-10-04T03:09:40.596Z] window 1 done: 24 rules, 5 samples, last p1 RX 7206 pps; udp ok tcp ok
+[bench 2026-10-04T03:09:40.701Z] window 2/2: table reset in 104 ms; starting load
+[bench 2026-10-04T03:10:36.940Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53052)
+[bench 2026-10-04T03:10:36.941Z] OpenFlow session DISCONNECTED (10.0.1.99:53052) - the switch will drop its flow table
+[bench 2026-10-04T03:10:37.105Z] window 2 @56390ms: OpenFlow session lost with 23 rules; waiting for reconnect
+[bench 2026-10-04T03:10:38.953Z] OpenFlow session connected (10.0.1.99:53053)
+[bench 2026-10-04T03:10:40.050Z] window 2: reconnected in 2104 ms, table restored in 839 ms
+[bench 2026-10-04T03:10:41.497Z] window 2 done: 24 rules, 5 samples, last p1 RX 6898 pps; udp ok tcp ok
+[bench 2026-10-04T03:10:41.498Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T03:10:41.529Z] artifact written: docs/benchmarks/results/smoke-2026-10-04/depth-workday-typical-2026-10-04T03-08-32-003Z.json

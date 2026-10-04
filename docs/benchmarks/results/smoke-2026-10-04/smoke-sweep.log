@@ -1,0 +1,18 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts sweep --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --depths 2 --variant-depths 4 --trials 1 --out docs/benchmarks/results/smoke-2026-10-04
+
+[bench 2026-10-04T02:42:43.597Z] sweep: 9 conditions x 1 rounds, estimated 4 min
+[bench 2026-10-04T02:42:45.562Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T02:42:49.392Z] round 1/1
+[bench 2026-10-04T02:42:49.394Z] installing d2: depth 2 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T02:43:44.459Z] installing d4-distinct: depth 4 host32 quarantine_above/quarantine_first distinct
+[bench 2026-10-04T02:43:59.299Z] installing d4-fwdabove: depth 4 host32 forward_above/quarantine_first
+[bench 2026-10-04T02:44:13.410Z] installing d4-fwdfirst: depth 4 host32 quarantine_above/forward_first
+[bench 2026-10-04T02:44:28.592Z] installing d4-fwdabove-fwdfirst: depth 4 host32 forward_above/forward_first
+[bench 2026-10-04T02:44:44.052Z] installing d4-net16: depth 4 net16 quarantine_above/quarantine_first
+[bench 2026-10-04T02:44:59.766Z] installing d4-hitfirst: depth 4 host32 quarantine_above/quarantine_first hit:first distinct
+[bench 2026-10-04T02:45:14.430Z] installing d4-hitmiddle: depth 4 host32 quarantine_above/quarantine_first hit:middle distinct
+[bench 2026-10-04T02:45:28.942Z] installing d4-hitlast: depth 4 host32 quarantine_above/quarantine_first hit:last distinct
+[bench 2026-10-04T02:45:43.564Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T02:45:43.846Z] artifact written: docs/benchmarks/results/smoke-2026-10-04/depth-sweep-2026-10-04T02-42-43-597Z.json

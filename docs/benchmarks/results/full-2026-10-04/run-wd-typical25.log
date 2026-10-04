@@ -1,0 +1,37 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --profile typical --udp-load-percent 25
+
+[bench 2026-10-04T11:07:54.039Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T11:07:56.048Z] workday profile=typical (24 rules/window) 12 windows x 300s, flush=selective, udp 4898 pps x 572 B + tcp
+[bench 2026-10-04T11:07:59.823Z] window 1/12: table reset; starting load
+[bench 2026-10-04T11:11:55.116Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53192)
+[bench 2026-10-04T11:11:55.117Z] OpenFlow session DISCONNECTED (10.0.1.99:53192) - the switch will drop its flow table
+[bench 2026-10-04T11:11:55.266Z] window 1 @235428ms: OpenFlow session lost with 19 rules; waiting for reconnect
+[bench 2026-10-04T11:11:57.019Z] OpenFlow session connected (10.0.1.99:53193)
+[bench 2026-10-04T11:11:57.176Z] window 1: reconnected in 1805 ms, table restored in 104 ms
+[bench 2026-10-04T11:12:16.120Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53193)
+[bench 2026-10-04T11:12:16.122Z] OpenFlow session DISCONNECTED (10.0.1.99:53193) - the switch will drop its flow table
+[bench 2026-10-04T11:12:16.263Z] window 1 @256425ms: OpenFlow session lost with 21 rules; waiting for reconnect
+[bench 2026-10-04T11:12:18.086Z] OpenFlow session connected (10.0.1.99:53194)
+[bench 2026-10-04T11:12:18.587Z] window 1: reconnected in 2104 ms, table restored in 219 ms
+[bench 2026-10-04T11:13:00.172Z] window 1 done: 24 rules, 29 samples, last p1 RX 5043 pps; udp ok tcp ok
+[bench 2026-10-04T11:13:00.381Z] window 2/12: table reset in 208 ms; starting load
+[bench 2026-10-04T11:15:43.172Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53194)
+[bench 2026-10-04T11:15:43.173Z] OpenFlow session DISCONNECTED (10.0.1.99:53194) - the switch will drop its flow table
+[bench 2026-10-04T11:15:43.347Z] window 2 @162950ms: OpenFlow session lost with 13 rules; waiting for reconnect
+[bench 2026-10-04T11:15:44.969Z] OpenFlow session connected (10.0.1.99:53195)
+[bench 2026-10-04T11:15:45.244Z] window 2: reconnected in 1704 ms, table restored in 192 ms
+[bench 2026-10-04T11:18:00.761Z] window 2 done: 24 rules, 29 samples, last p1 RX 5038 pps; udp ok tcp ok
+[bench 2026-10-04T11:18:00.969Z] window 3/12: table reset in 207 ms; starting load
+[bench 2026-10-04T11:20:32.227Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53195)
+[bench 2026-10-04T11:20:32.227Z] OpenFlow session DISCONNECTED (10.0.1.99:53195) - the switch will drop its flow table
+[bench 2026-10-04T11:20:32.242Z] window 3 @151253ms: OpenFlow session lost with 12 rules; waiting for reconnect
+[bench 2026-10-04T11:20:34.032Z] OpenFlow session connected (10.0.1.99:53196)
+[bench 2026-10-04T11:20:42.059Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53196)
+[bench 2026-10-04T11:20:42.060Z] OpenFlow session DISCONNECTED (10.0.1.99:53196) - the switch will drop its flow table
+[bench 2026-10-04T11:20:44.052Z] OpenFlow session connected (10.0.1.99:53197)
+[bench 2026-10-04T11:21:15.448Z] ABORTED: condition workday-resync: switch flow table does not match plan after 300 polls: priority 65535: expected 12 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 14, switch reports 0
+[bench 2026-10-04T11:21:15.448Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T11:21:15.492Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-workday-typical-2026-10-04T11-07-52-309Z.json
+[bench] FATAL: condition workday-resync: switch flow table does not match plan after 300 polls: priority 65535: expected 12 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 14, switch reports 0

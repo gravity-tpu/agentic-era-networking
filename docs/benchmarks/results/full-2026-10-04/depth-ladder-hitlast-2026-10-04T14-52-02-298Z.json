@@ -1,0 +1,2081 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "ladder",
+    "startedAtIso": "2026-10-04T14:52:02.298Z",
+    "startedMonotonicNs": {
+      "$bigint": "81622882178434"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "81737122388901"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "2a4ff394690853b3df281cb29c138e8b65c108a3bfda329c6c67ee2a584f9161",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "depths": [
+      32,
+      126
+    ],
+    "ratesPps": [
+      500,
+      1000,
+      2000,
+      4000,
+      6000,
+      8000,
+      12000,
+      16000
+    ],
+    "stepSeconds": 30,
+    "rounds": 1,
+    "gapSeconds": 2,
+    "layout": "hitlast",
+    "udpPayloadBytes": 572,
+    "ofDeadPeerMs": "default(8000)",
+    "framedLineRatePps600": {
+      "$bigint": "19592"
+    }
+  },
+  "steps": [
+    {
+      "round": 1,
+      "depth": 32,
+      "layout": "hitlast",
+      "offeredPps": {
+        "$bigint": "500"
+      },
+      "trial": {
+        "ordinal": 1,
+        "conditionId": "ladder-hitlast-d32",
+        "test": "drop_hit",
+        "payloadBytes": 572,
+        "offeredBps": {
+          "$bigint": "2288000"
+        },
+        "startNs": {
+          "$bigint": "81630603823136"
+        },
+        "endNs": {
+          "$bigint": "81661919724763"
+        },
+        "nominalWindowNs": {
+          "$bigint": "30000000000"
+        },
+        "wallNs": {
+          "$bigint": "30259086136"
+        },
+        "valid": true,
+        "invalidReason": null,
+        "metrics": {
+          "goodputBps": null,
+          "retransmits": null,
+          "iperfLossPpm": null,
+          "switchPort1RxPps": {
+            "$bigint": "414"
+          },
+          "switchPort2TxPps": {
+            "$bigint": "11"
+          },
+          "switchPort3TxPps": null,
+          "offeredPps": {
+            "$bigint": "500"
+          },
+          "forwardDeficitPackets": {
+            "$bigint": "12096"
+          },
+          "forwardLossPpm": {
+            "$bigint": "972738"
+          },
+          "port1RxDropped": {
+            "$bigint": "0"
+          },
+          "port2TxDropped": {
+            "$bigint": "0"
+          },
+          "port3TxDropped": null,
+          "crcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "hitRulePackets": {
+          "$bigint": "0"
+        },
+        "portDeltas": {
+          "1": {
+            "rxPackets": {
+              "$bigint": "12435"
+            },
+            "txPackets": {
+              "$bigint": "19"
+            },
+            "rxBytes": {
+              "$bigint": "151137"
+            },
+            "txBytes": {
+              "$bigint": "4775"
+            },
+            "rxDropped": {
+              "$bigint": "0"
+            },
+            "txDropped": {
+              "$bigint": "0"
+            },
+            "rxCrcErrors": {
+              "$bigint": "0"
+            }
+          },
+          "2": {
+            "rxPackets": {
+              "$bigint": "90"
+            },
+            "txPackets": {
+              "$bigint": "339"
+            },
+            "rxBytes": {
+              "$bigint": "20154"
+            },
+            "txBytes": {
+              "$bigint": "77665"
+            },
+            "rxDropped": {
+              "$bigint": "0"
+            },
+            "txDropped": {
+              "$bigint": "0"
+            },
+            "rxCrcErrors": {
+              "$bigint": "0"
+            }
+          }
+        },
+        "iperfRawSha256": null,
+        "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 115286989\r\n TX Bytes: 79495857\r\n RX Packets: 103957375\r\n TX Packets: 33717602\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 543716888\r\n TX Bytes: 64603428\r\n RX Packets: 3753170\r\n TX Packets: 62347841\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 77\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 50253271\r\n RX Packets: 34392639\r\n TX Packets: 32912158\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 257758322\r\n TX Bytes: 620016600\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 48\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+        "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 115438126\r\n TX Bytes: 79500632\r\n RX Packets: 103969810\r\n TX Packets: 33717621\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 543737042\r\n TX Bytes: 64681093\r\n RX Packets: 3753260\r\n TX Packets: 62348180\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 77\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 50253271\r\n RX Packets: 34392639\r\n TX Packets: 32912158\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 257768362\r\n TX Bytes: 620027026\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 48\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+        "sessionLost": false
+      },
+      "sessionLost": false,
+      "stopped": null,
+      "recoveryNs": null,
+      "echoRecoveryNs": {
+        "$bigint": "382141218"
+      }
+    },
+    {
+      "round": 1,
+      "depth": 32,
+      "layout": "hitlast",
+      "offeredPps": {
+        "$bigint": "1000"
+      },
+      "trial": {
+        "ordinal": 2,
+        "conditionId": "ladder-hitlast-d32",
+        "test": "drop_hit",
+        "payloadBytes": 572,
+        "offeredBps": {
+          "$bigint": "4576000"
+        },
+        "startNs": {
+          "$bigint": "81664322145382"
+        },
+        "endNs": {
+          "$bigint": "81695479412815"
+        },
+        "nominalWindowNs": {
+          "$bigint": "30000000000"
+        },
+        "wallNs": {
+          "$bigint": "30189984928"
+        },
+        "valid": true,
+        "invalidReason": null,
+        "metrics": {
+          "goodputBps": null,
+          "retransmits": null,
+          "iperfLossPpm": null,
+          "switchPort1RxPps": {
+            "$bigint": "989"
+          },
+          "switchPort2TxPps": {
+            "$bigint": "0"
+          },
+          "switchPort3TxPps": null,
+          "offeredPps": {
+            "$bigint": "1000"
+          },
+          "forwardDeficitPackets": {
+            "$bigint": "29687"
+          },
+          "forwardLossPpm": {
+            "$bigint": "1000000"
+          },
+          "port1RxDropped": {
+            "$bigint": "0"
+          },
+          "port2TxDropped": {
+            "$bigint": "0"
+          },
+          "port3TxDropped": null,
+          "crcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "hitRulePackets": {
+          "$bigint": "0"
+        },
+        "portDeltas": {
+          "1": {
+            "rxPackets": {
+              "$bigint": "29687"
+            },
+            "txPackets": {
+              "$bigint": "0"
+            },
+            "rxBytes": {
+              "$bigint": "134840"
+            },
+            "txBytes": {
+              "$bigint": "0"
+            },
+            "rxDropped": {
+              "$bigint": "0"
+            },
+            "txDropped": {
+              "$bigint": "0"
+            },
+            "rxCrcErrors": {
+              "$bigint": "0"
+            }
+          },
+          "2": {
+            "rxPackets": {
+              "$bigint": "99"
+            },
+            "txPackets": {
+              "$bigint": "0"
+            },
+            "rxBytes": {
+              "$bigint": "23367"
+            },
+            "txBytes": {
+              "$bigint": "0"
+            },
+            "rxDropped": {
+              "$bigint": "0"
+            },
+            "txDropped": {
+              "$bigint": "0"
+            },
+            "rxCrcErrors": {
+              "$bigint": "0"
+            }
+          }
+        },
+        "iperfRawSha256": null,
+        "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 115453326\r\n TX Bytes: 79500632\r\n RX Packets: 103969810\r\n TX Packets: 33717621\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 543737042\r\n TX Bytes: 64681093\r\n RX Packets: 3753270\r\n TX Packets: 62348180\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 77\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 50253271\r\n RX Packets: 34392639\r\n TX Packets: 32912158\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 257768362\r\n TX Bytes: 620027026\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 48\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+        "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 115588166\r\n TX Bytes: 79500632\r\n RX Packets: 103999497\r\n TX Packets: 33717621\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 543760409\r\n TX Bytes: 64681093\r\n RX Packets: 3753369\r\n TX Packets: 62348180\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 77\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 50253271\r\n RX Packets: 34392639\r\n TX Packets: 32912158\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 257774958\r\n TX Bytes: 620030342\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 48\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+        "sessionLost": false
+      },
+      "sessionLost": false,
+      "stopped": "saturated",
+      "recoveryNs": null,
+      "echoRecoveryNs": {
+        "$bigint": "266359759"
+      }
+    },
+    {
+      "round": 1,
+      "depth": 126,
+      "layout": "hitlast",
+      "offeredPps": {
+        "$bigint": "500"
+      },
+      "trial": {
+        "ordinal": 3,
+        "conditionId": "ladder-hitlast-d126",
+        "test": "drop_hit",
+        "payloadBytes": 572,
+        "offeredBps": {
+          "$bigint": "2288000"
+        },
+        "startNs": {
+          "$bigint": "81696906386406"
+        },
+        "endNs": {
+          "$bigint": "81728422360896"
+        },
+        "nominalWindowNs": {
+          "$bigint": "30000000000"
+        },
+        "wallNs": {
+          "$bigint": "30257108511"
+        },
+        "valid": true,
+        "invalidReason": null,
+        "metrics": {
+          "goodputBps": null,
+          "retransmits": null,
+          "iperfLossPpm": null,
+          "switchPort1RxPps": {
+            "$bigint": "433"
+          },
+          "switchPort2TxPps": {
+            "$bigint": "6"
+          },
+          "switchPort3TxPps": null,
+          "offeredPps": {
+            "$bigint": "500"
+          },
+          "forwardDeficitPackets": {
+            "$bigint": "12824"
+          },
+          "forwardLossPpm": {
+            "$bigint": "985854"
+          },
+          "port1RxDropped": {
+            "$bigint": "0"
+          },
+          "port2TxDropped": {
+            "$bigint": "0"
+          },
+          "port3TxDropped": null,
+          "crcErrors": {
+            "$bigint": "0"
+          }
+        },
+        "hitRulePackets": {
+          "$bigint": "0"
+        },
+        "portDeltas": {
+          "1": {
+            "rxPackets": {
+              "$bigint": "13008"
+            },
+            "txPackets": {
+              "$bigint": "6"
+            },
+            "rxBytes": {
+              "$bigint": "176984"
+            },
+            "txBytes": {
+              "$bigint": "2690"
+            },
+            "rxDropped": {
+              "$bigint": "0"
+            },
+            "txDropped": {
+              "$bigint": "0"
+            },
+            "rxCrcErrors": {
+              "$bigint": "0"
+            }
+          },
+          "2": {
+            "rxPackets": {
+              "$bigint": "83"
+            },
+            "txPackets": {
+              "$bigint": "184"
+            },
+            "rxBytes": {
+              "$bigint": "13267"
+            },
+            "txBytes": {
+              "$bigint": "48176"
+            },
+            "rxDropped": {
+              "$bigint": "0"
+            },
+            "txDropped": {
+              "$bigint": "0"
+            },
+            "rxCrcErrors": {
+              "$bigint": "0"
+            }
+          }
+        },
+        "iperfRawSha256": null,
+        "rawPortsBefore": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 115588166\r\n TX Bytes: 79500632\r\n RX Packets: 103999499\r\n TX Packets: 33717628\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 543763568\r\n TX Bytes: 64681401\r\n RX Packets: 3753376\r\n TX Packets: 62348182\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 77\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 50253271\r\n RX Packets: 34392639\r\n TX Packets: 32912158\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 257774958\r\n TX Bytes: 620030342\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 48\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+        "rawPortsAfter": "show ports\r\n\r\n-------------------------------------------------------------------------\r\n\r\nPort 1\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 115765150\r\n TX Bytes: 79503322\r\n RX Packets: 104012507\r\n TX Packets: 33717634\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 2\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 543776835\r\n TX Bytes: 64729577\r\n RX Packets: 3753459\r\n TX Packets: 62348366\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 77\r\n\r\nPort 3\r\n Status: UP\r\n VLAN type: OpenFlow\r\n VLAN ID: 100\r\n RX Bytes: 61991147\r\n TX Bytes: 50253271\r\n RX Packets: 34392639\r\n TX Packets: 32912158\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 0\r\n\r\nPort 4\r\n Status: UP\r\n VLAN type: Native\r\n VLAN ID: 200\r\n RX Bytes: 257794142\r\n TX Bytes: 620057154\r\n RX Dropped Packets: 0\r\n TX Dropped Packets: 0\r\n RX CRC Errors: 48\r\n\r\n-------------------------------------------------------------------------\r\n\nZodiac_FX# ",
+        "sessionLost": false
+      },
+      "sessionLost": true,
+      "stopped": "session_lost",
+      "recoveryNs": {
+        "$bigint": "1018761647"
+      },
+      "echoRecoveryNs": {
+        "$bigint": "937684109"
+      }
+    }
+  ],
+  "sessionEvents": [
+    {
+      "tNs": {
+        "$bigint": "81627276603261"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1291637"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81628201030163"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1847295"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81628275912854"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1552121"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81629276456193"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000549516"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81629276475362"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1040114"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81630201646145"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1276437"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81630276974124"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "965712"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81631276512420"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "938992"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81632202078248"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "764396"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81632275868536"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "480136"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81633278632869"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1002764812"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81633278645765"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1286358"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81635708955343"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "2430341483"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81643711273510"
+      },
+      "event": "connected",
+      "detail": "10.0.1.99:53392"
+    },
+    {
+      "tNs": {
+        "$bigint": "81643732738956"
+      },
+      "event": "ready",
+      "detail": ""
+    },
+    {
+      "tNs": {
+        "$bigint": "81644286970797"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1237332"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81645287381828"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000416727"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81645287392165"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1157331"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81645733705532"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "594090"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81646288115648"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "606059"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81647289061149"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000950909"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81647289068093"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "729132"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81647735123984"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1149779"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81648289953049"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "820270"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81649291875013"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001925996"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81649291883717"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1097266"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81649734656064"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1019345"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81650292258806"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "779597"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81651292681478"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000426512"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81651292688902"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "543913"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81651735234172"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "819374"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81652293595134"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "553578"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81653295392803"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001801285"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81653295400323"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "573386"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81653735811988"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "543081"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81654296118101"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "551049"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81655297152011"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001037142"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81655297160331"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "830030"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81655736944145"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "846030"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81656297869051"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1105939"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81657297945727"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000082180"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81657297954239"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "829326"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81657738005928"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1148435"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81658298601227"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "785421"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81659299965315"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001368504"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81659299973091"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1098547"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81659737650244"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "717100"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81660300145573"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "696140"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81661301397976"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001232211"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81661301405752"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "789741"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81661738039495"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "952016"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81662301865981"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "675915"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81663303823066"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001961373"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81663303831802"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1078162"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81663739323989"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "817934"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81664303805173"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "677132"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81665304881056"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "929711"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81665739660622"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1120915"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81666305541380"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1085330"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81667306556557"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001019753"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81667306564429"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "783117"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81667740440011"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1004945"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81668307026411"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "780045"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81669308356471"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001335148"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81669308364439"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1094130"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81669741035840"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "979888"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81670308664273"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "826606"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81671310246846"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001587885"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81671310255487"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1127539"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81671741473710"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "547849"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81672311510502"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1060466"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81673313111762"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001604844"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81673313119474"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1145459"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81673741432304"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "594058"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81674312979488"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "750829"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81675313968191"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000992799"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81675313975903"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "734956"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81675741627826"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "779309"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81676315119264"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "686795"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81677316051325"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000935549"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81677316059389"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "664747"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81677741884976"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1150643"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81678316434735"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "730092"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81679317402698"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000971195"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81679317409514"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "750956"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81679741783460"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "747308"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81680318533223"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "762285"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81681319842981"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001312766"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81681319851237"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "853966"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81681742512034"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "709452"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81682320512440"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "988784"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81683321922262"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001412798"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81683321965239"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1141683"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81683742167658"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "536040"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81684322127423"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1128723"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81685322450345"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000327722"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81685322458953"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "866670"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81685742762493"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "616458"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81686323659169"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1089234"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81687325151292"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001496092"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81687325160380"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1216724"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81687743584751"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "732844"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81688325684550"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1094226"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81689326686519"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001006001"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81689326693175"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "763949"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81689744544096"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "998257"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81690327388482"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "678379"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81691328866521"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001480631"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81691328877081"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1214964"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81691744517148"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "721388"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81692329078233"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "751980"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81693330287626"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001193200"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81693330294986"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "735244"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81693744853946"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "720588"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81694331316086"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "679179"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81695331348913"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000035962"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81695331356177"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "813006"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81695745772574"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "688108"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81696331947284"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "511848"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81697339880336"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1517593"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81697746132340"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "600106"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81700320607249"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "2574479389"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81703829129712"
+      },
+      "event": "disconnected",
+      "detail": "10.0.1.99:53392"
+    },
+    {
+      "tNs": {
+        "$bigint": "81705330942422"
+      },
+      "event": "connected",
+      "detail": "10.0.1.99:53393"
+    },
+    {
+      "tNs": {
+        "$bigint": "81705355333804"
+      },
+      "event": "ready",
+      "detail": ""
+    },
+    {
+      "tNs": {
+        "$bigint": "81706342039422"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "502185"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81707342881210"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000846748"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81707342888122"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "683756"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81707356668415"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "580042"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81708344491553"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "682667"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81709344758802"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000271345"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81709344765810"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "688780"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81709357554598"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "591050"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81710345449640"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "640171"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81711346071100"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000624884"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81711346077116"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "472072"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81711356645516"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "375398"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81712347440284"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "648747"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81713348388755"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000952695"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81713348396756"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "755277"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81713357223590"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "603050"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81714349026085"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "651723"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81715349663765"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000641520"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81715349669365"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "485096"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81715357379542"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "410919"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81716351195188"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "658027"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81717352040550"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000848914"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81717352048358"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "686604"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81717356844342"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "597865"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81718352569329"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "488520"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81719354213487"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001648126"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81719354219055"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "486824"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81719356779673"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "374310"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81720355890187"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "856398"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81721356894588"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001010609"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81721357318339"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "915119"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81722358237649"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000923086"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81722358245074"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "740045"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81723358609558"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "918608"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81724359508386"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000902348"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81724359516770"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "715500"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81725359897444"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "904271"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81726361061939"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001167631"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81726361070995"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "894799"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81727360055676"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "753325"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81727360843849"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "625450"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81728361890644"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001049483"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81728361898036"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "632971"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81729360045005"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "725772"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81729361828619"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "593290"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81730363321915"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001495408"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81730363329307"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "655371"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81731361682102"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "548297"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81731363256272"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "376262"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81732364175797"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000923205"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81732364184213"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "734732"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81733362899252"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "514505"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81733363403324"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "374598"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81734364842984"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001441548"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81734364851176"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "722732"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81735364755545"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "473704"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81736366526248"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001773870"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "81736366534472"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "576458"
+      }
+    }
+  ]
+}

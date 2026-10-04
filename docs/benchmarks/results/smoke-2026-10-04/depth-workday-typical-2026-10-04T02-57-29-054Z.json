@@ -1,0 +1,403 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "workday",
+    "startedAtIso": "2026-10-04T02:57:29.054Z",
+    "startedMonotonicNs": {
+      "$bigint": "38749638096949"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "38841833517379"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "05945c47ea87313efcd55f5adb09514ea1c35af5abdd33433c92c7018378d5bd",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "profile": "typical",
+    "targetRulesPerWindow": 24,
+    "windowSeconds": 60,
+    "totalSeconds": 120,
+    "windows": 2,
+    "sampleSeconds": 10,
+    "flushMode": "selective",
+    "udpLoadPercent": 50,
+    "udpPps": {
+      "$bigint": "9796"
+    },
+    "udpPayloadBytes": 572,
+    "udpPort": 5201,
+    "tcpPort": 5202,
+    "rampOffsetsMs": [
+      2400,
+      4800,
+      7200,
+      9600,
+      12000,
+      14400,
+      16800,
+      19200,
+      21600,
+      24000,
+      26400,
+      28800,
+      31200,
+      33600,
+      36000,
+      38400,
+      40800,
+      43200,
+      45600,
+      48000,
+      50400,
+      52800,
+      55200,
+      57600
+    ]
+  },
+  "windows": [
+    {
+      "index": 0,
+      "flushMode": "selective",
+      "flushSendNs": null,
+      "flushToVerifiedNs": null,
+      "loadStartNs": {
+        "$bigint": "38756664357911"
+      },
+      "addedAtMs": [
+        2421,
+        4826,
+        7231,
+        9639,
+        12054,
+        14461,
+        16864,
+        19270,
+        21686,
+        24092,
+        26497,
+        28902,
+        31323,
+        33728,
+        36132,
+        38536,
+        40953,
+        43358,
+        45763,
+        48169,
+        50786,
+        52991,
+        55395,
+        57600
+      ],
+      "samples": [
+        {
+          "offsetMs": 10040,
+          "rules": 4,
+          "dtNs": {
+            "$bigint": "10036017534"
+          },
+          "p1RxPackets": {
+            "$bigint": "100345"
+          },
+          "p2TxPackets": {
+            "$bigint": "100345"
+          },
+          "p1RxBytes": {
+            "$bigint": "1176"
+          },
+          "p2TxBytes": {
+            "$bigint": "59479"
+          },
+          "p1RxDropped": {
+            "$bigint": "0"
+          },
+          "p2TxDropped": {
+            "$bigint": "0"
+          },
+          "p1RxPps": {
+            "$bigint": "9998"
+          },
+          "p2TxPps": {
+            "$bigint": "9998"
+          }
+        },
+        {
+          "offsetMs": 20071,
+          "rules": 8,
+          "dtNs": {
+            "$bigint": "10032473049"
+          },
+          "p1RxPackets": {
+            "$bigint": "97819"
+          },
+          "p2TxPackets": {
+            "$bigint": "97819"
+          },
+          "p1RxBytes": {
+            "$bigint": "41946"
+          },
+          "p2TxBytes": {
+            "$bigint": "10782"
+          },
+          "p1RxDropped": {
+            "$bigint": "0"
+          },
+          "p2TxDropped": {
+            "$bigint": "0"
+          },
+          "p1RxPps": {
+            "$bigint": "9750"
+          },
+          "p2TxPps": {
+            "$bigint": "9750"
+          }
+        },
+        {
+          "offsetMs": 30105,
+          "rules": 12,
+          "dtNs": {
+            "$bigint": "10034111047"
+          },
+          "p1RxPackets": {
+            "$bigint": "93073"
+          },
+          "p2TxPackets": {
+            "$bigint": "93073"
+          },
+          "p1RxBytes": {
+            "$bigint": "119548"
+          },
+          "p2TxBytes": {
+            "$bigint": "62730"
+          },
+          "p1RxDropped": {
+            "$bigint": "0"
+          },
+          "p2TxDropped": {
+            "$bigint": "0"
+          },
+          "p1RxPps": {
+            "$bigint": "9275"
+          },
+          "p2TxPps": {
+            "$bigint": "9275"
+          }
+        },
+        {
+          "offsetMs": 40140,
+          "rules": 16,
+          "dtNs": {
+            "$bigint": "10035321108"
+          },
+          "p1RxPackets": {
+            "$bigint": "80126"
+          },
+          "p2TxPackets": {
+            "$bigint": "80126"
+          },
+          "p1RxBytes": {
+            "$bigint": "42022"
+          },
+          "p2TxBytes": {
+            "$bigint": "50854"
+          },
+          "p1RxDropped": {
+            "$bigint": "0"
+          },
+          "p2TxDropped": {
+            "$bigint": "0"
+          },
+          "p1RxPps": {
+            "$bigint": "7984"
+          },
+          "p2TxPps": {
+            "$bigint": "7984"
+          }
+        },
+        {
+          "offsetMs": 50174,
+          "rules": 20,
+          "dtNs": {
+            "$bigint": "10033326710"
+          },
+          "p1RxPackets": {
+            "$bigint": "69699"
+          },
+          "p2TxPackets": {
+            "$bigint": "69699"
+          },
+          "p1RxBytes": {
+            "$bigint": "53652"
+          },
+          "p2TxBytes": {
+            "$bigint": "24020"
+          },
+          "p1RxDropped": {
+            "$bigint": "0"
+          },
+          "p2TxDropped": {
+            "$bigint": "0"
+          },
+          "p1RxPps": {
+            "$bigint": "6946"
+          },
+          "p2TxPps": {
+            "$bigint": "6946"
+          }
+        }
+      ],
+      "verifications": [
+        {
+          "offsetMs": 30105,
+          "rules": 12,
+          "verified": true,
+          "benignHits": {
+            "$bigint": "0"
+          },
+          "mismatches": []
+        },
+        {
+          "offsetMs": 60000,
+          "rules": 24,
+          "verified": false,
+          "benignHits": {
+            "$bigint": "0"
+          },
+          "mismatches": [
+            "priority 65535: expected 24 entries, switch reports 0",
+            "priority 100: expected 2 entries, switch reports 0",
+            "total entries: expected 26, switch reports 0"
+          ]
+        }
+      ],
+      "udp": {
+        "error": "iperf3 reported an error: interrupt - the client has terminated",
+        "intervals": [
+          {
+            "bytes": {
+              "$bigint": "56089176"
+            },
+            "packets": {
+              "$bigint": "98058"
+            }
+          },
+          {
+            "bytes": {
+              "$bigint": "56027972"
+            },
+            "packets": {
+              "$bigint": "97951"
+            }
+          },
+          {
+            "bytes": {
+              "$bigint": "56038268"
+            },
+            "packets": {
+              "$bigint": "97969"
+            }
+          },
+          {
+            "bytes": {
+              "$bigint": "56033120"
+            },
+            "packets": {
+              "$bigint": "97960"
+            }
+          },
+          {
+            "bytes": {
+              "$bigint": "56033120"
+            },
+            "packets": {
+              "$bigint": "97960"
+            }
+          },
+          {
+            "bytes": {
+              "$bigint": "0"
+            },
+            "packets": {
+              "$bigint": "0"
+            }
+          }
+        ],
+        "end": null,
+        "rawSha256": "5231682347cde2f82a608a2d7119a7e599320c305eb65993f299088a3a8b24a7"
+      },
+      "tcp": {
+        "error": "iperf3 reported an error: interrupt - the client has terminated",
+        "intervals": [
+          {
+            "bytes": {
+              "$bigint": "6815744"
+            },
+            "packets": null
+          },
+          {
+            "bytes": {
+              "$bigint": "5242880"
+            },
+            "packets": null
+          },
+          {
+            "bytes": {
+              "$bigint": "2228224"
+            },
+            "packets": null
+          },
+          {
+            "bytes": {
+              "$bigint": "262144"
+            },
+            "packets": null
+          },
+          {
+            "bytes": {
+              "$bigint": "0"
+            },
+            "packets": null
+          },
+          {
+            "bytes": {
+              "$bigint": "0"
+            },
+            "packets": null
+          }
+        ],
+        "end": null,
+        "rawSha256": "cbf6cc2213e7277fe6b8b65643b0a62011ca525305a62de32d3ae44cb23a8b16"
+      }
+    }
+  ],
+  "completedWindows": 1
+}

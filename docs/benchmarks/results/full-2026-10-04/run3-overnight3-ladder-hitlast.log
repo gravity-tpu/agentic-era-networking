@@ -1,0 +1,17 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts ladder --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --layout hitlast --depths 32,126 --step-seconds 30 --rates-pps 500,1000,2000,4000,6000,8000,12000,16000
+
+[bench 2026-10-04T14:52:02.298Z] ladder: 2 depths x up to 8 rates x 30s, 1 round(s), layout hitlast
+[bench 2026-10-04T14:52:03.934Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T14:52:08.999Z] installing ladder-hitlast-d32: depth 32 host32 quarantine_above/quarantine_first hit:last distinct
+[bench 2026-10-04T14:52:23.127Z] OpenFlow session connected (10.0.1.99:53392)
+[bench 2026-10-04T14:52:41.737Z] ladder d32 offered 500 pps: p1 RX 414 p2 TX 11 pps, receiver loss n/a ppm echo back in 382 ms
+[bench 2026-10-04T14:53:15.296Z] ladder d32 offered 1000 pps: p1 RX 989 p2 TX 0 pps, receiver loss n/a ppm echo back in 266 ms -> stop (saturated)
+[bench 2026-10-04T14:53:15.299Z] installing ladder-hitlast-d126: depth 126 host32 quarantine_above/quarantine_first hit:last distinct
+[bench 2026-10-04T14:53:23.245Z] OpenFlow session DISCONNECTED (10.0.1.99:53392) - the switch will drop its flow table
+[bench 2026-10-04T14:53:24.746Z] OpenFlow session connected (10.0.1.99:53393)
+[bench 2026-10-04T14:53:48.841Z] installing ladder-hitlast-d126: depth 126 host32 quarantine_above/quarantine_first hit:last distinct
+[bench 2026-10-04T14:53:55.859Z] ladder d126 offered 500 pps: p1 RX 433 p2 TX 6 pps, receiver loss n/a ppm SESSION LOST echo back in 937 ms -> stop (session_lost)
+[bench 2026-10-04T14:53:55.867Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T14:53:56.547Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-ladder-hitlast-2026-10-04T14-52-02-298Z.json

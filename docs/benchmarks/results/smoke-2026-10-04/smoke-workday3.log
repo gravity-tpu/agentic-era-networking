@@ -1,0 +1,12 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/smoke-2026-10-04 --profile typical --window-seconds 60 --total-seconds 120 --sample-seconds 10 --verify-seconds 30 --of-dead-peer-ms 60000
+
+[bench 2026-10-04T03:00:39.911Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T03:00:41.417Z] workday profile=typical (24 rules/window) 2 windows x 60s, flush=selective, udp 9796 pps x 572 B + tcp
+[bench 2026-10-04T03:00:45.492Z] window 1/2: table reset; starting load
+[bench 2026-10-04T03:01:37.360Z] OpenFlow session DISCONNECTED (10.0.1.99:52842) - the switch will drop its flow table
+[bench 2026-10-04T03:01:37.501Z] ABORTED: OpenFlow session lost (DISCONNECTED) at 51995 ms into window 1 with 21 rules
+[bench 2026-10-04T03:01:37.502Z] WARNING: could not clear flow table: Cannot send raw OpenFlow message: switch not in ESTABLISHED state (current: DISCONNECTED)
+[bench 2026-10-04T03:01:37.538Z] artifact written: docs/benchmarks/results/smoke-2026-10-04/depth-workday-typical-2026-10-04T03-00-38-047Z.json
+[bench] FATAL: OpenFlow session lost (DISCONNECTED) at 51995 ms into window 1 with 21 rules

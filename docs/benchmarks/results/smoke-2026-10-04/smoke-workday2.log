@@ -1,0 +1,12 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/smoke-2026-10-04 --profile typical --window-seconds 60 --total-seconds 120 --sample-seconds 10 --verify-seconds 30
+
+[bench 2026-10-04T02:57:30.611Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T02:57:32.119Z] workday profile=typical (24 rules/window) 2 windows x 60s, flush=selective, udp 9796 pps x 572 B + tcp
+[bench 2026-10-04T02:57:36.067Z] window 1/2: table reset; starting load
+[bench 2026-10-04T02:59:01.220Z] window 1 done: 24 rules, 5 samples, last p1 RX 6946 pps; udp iperf3 reported an error: interrupt - the client has terminated tcp iperf3 reported an error: interrupt - the client has terminated TABLE MISMATCH
+[bench 2026-10-04T02:59:01.221Z] ABORTED: window 1: end-of-window table mismatch: priority 65535: expected 24 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 26, switch reports 0
+[bench 2026-10-04T02:59:01.221Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T02:59:01.255Z] artifact written: docs/benchmarks/results/smoke-2026-10-04/depth-workday-typical-2026-10-04T02-57-29-054Z.json
+[bench] FATAL: window 1: end-of-window table mismatch: priority 65535: expected 24 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 26, switch reports 0

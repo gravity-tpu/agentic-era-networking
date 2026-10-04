@@ -1,0 +1,52 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts ladder --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --payload 64 --step-seconds 30 --rates-pps 1000,2000,4000,8000,12000,16000,20000,24000,28000
+
+[bench 2026-10-04T14:13:36.544Z] ladder: 5 depths x up to 9 rates x 30s, 1 round(s), layout base
+[bench 2026-10-04T14:13:38.205Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T14:13:40.462Z] installing ladder-base-d0: depth 0 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:14:13.534Z] ladder d0 offered 1000 pps: p1 RX 999 p2 TX 999 pps, receiver loss 1566 ppm echo back in 550 ms
+[bench 2026-10-04T14:14:47.536Z] ladder d0 offered 2000 pps: p1 RX 1986 p2 TX 1986 pps, receiver loss 7349 ppm echo back in 575 ms
+[bench 2026-10-04T14:15:21.616Z] ladder d0 offered 4000 pps: p1 RX 3960 p2 TX 3960 pps, receiver loss 10249 ppm echo back in 521 ms
+[bench 2026-10-04T14:15:55.715Z] ladder d0 offered 8000 pps: p1 RX 7907 p2 TX 7907 pps, receiver loss 11749 ppm echo back in 644 ms
+[bench 2026-10-04T14:16:29.584Z] ladder d0 offered 12000 pps: p1 RX 11854 p2 TX 11854 pps, receiver loss 12294 ppm echo back in 596 ms
+[bench 2026-10-04T14:17:03.787Z] ladder d0 offered 16000 pps: p1 RX 15800 p2 TX 15800 pps, receiver loss 12597 ppm echo back in 617 ms
+[bench 2026-10-04T14:17:37.821Z] ladder d0 offered 20000 pps: p1 RX 19745 p2 TX 19745 pps, receiver loss 15509 ppm echo back in 209 ms
+[bench 2026-10-04T14:18:11.677Z] ladder d0 offered 24000 pps: p1 RX 23688 p2 TX 23688 pps, receiver loss 16894 ppm echo back in 174 ms
+[bench 2026-10-04T14:18:45.797Z] ladder d0 offered 28000 pps: p1 RX 25995 p2 TX 25995 pps, receiver loss 76034 ppm echo back in 477 ms
+[bench 2026-10-04T14:18:47.800Z] installing ladder-base-d16: depth 16 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:19:20.633Z] ladder d16 offered 1000 pps: p1 RX 999 p2 TX 999 pps, receiver loss 1566 ppm echo back in 202 ms
+[bench 2026-10-04T14:19:54.524Z] ladder d16 offered 2000 pps: p1 RX 1986 p2 TX 1986 pps, receiver loss 7349 ppm echo back in 327 ms
+[bench 2026-10-04T14:20:28.499Z] ladder d16 offered 4000 pps: p1 RX 3960 p2 TX 3960 pps, receiver loss 10266 ppm echo back in 571 ms
+[bench 2026-10-04T14:21:02.544Z] ladder d16 offered 8000 pps: p1 RX 7907 p2 TX 7907 pps, receiver loss 11757 ppm echo back in 341 ms
+[bench 2026-10-04T14:21:17.440Z] OpenFlow session DISCONNECTED (10.0.1.99:53332) - the switch will drop its flow table
+[bench 2026-10-04T14:21:18.942Z] OpenFlow session connected (10.0.1.99:53333)
+[bench 2026-10-04T14:22:00.875Z] installing ladder-base-d16: depth 16 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:22:07.880Z] ladder d16 offered 12000 pps: INVALID iperf3 reported an error: interrupt - the client has terminated SESSION LOST echo back in 554 ms -> stop (session_lost)
+[bench 2026-10-04T14:22:07.882Z] installing ladder-base-d32: depth 32 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:22:40.921Z] ladder d32 offered 1000 pps: p1 RX 999 p2 TX 999 pps, receiver loss 2166 ppm echo back in 340 ms
+[bench 2026-10-04T14:23:15.022Z] ladder d32 offered 2000 pps: p1 RX 1987 p2 TX 1987 pps, receiver loss 7316 ppm echo back in 670 ms
+[bench 2026-10-04T14:23:49.032Z] ladder d32 offered 4000 pps: p1 RX 3960 p2 TX 3960 pps, receiver loss 10249 ppm echo back in 292 ms
+[bench 2026-10-04T14:24:23.006Z] ladder d32 offered 8000 pps: p1 RX 5700 p2 TX 5700 pps, receiver loss 287508 ppm echo back in 548 ms
+[bench 2026-10-04T14:24:39.838Z] OpenFlow session DISCONNECTED (10.0.1.99:53333) - the switch will drop its flow table
+[bench 2026-10-04T14:24:41.341Z] OpenFlow session connected (10.0.1.99:53334)
+[bench 2026-10-04T14:25:21.077Z] installing ladder-base-d32: depth 32 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:25:28.084Z] ladder d32 offered 12000 pps: INVALID iperf3 reported an error: interrupt - the client has terminated SESSION LOST echo back in 123 ms -> stop (session_lost)
+[bench 2026-10-04T14:25:28.087Z] installing ladder-base-d64: depth 64 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:26:01.212Z] ladder d64 offered 1000 pps: p1 RX 1000 p2 TX 1000 pps, receiver loss 1499 ppm echo back in 224 ms
+[bench 2026-10-04T14:26:35.127Z] ladder d64 offered 2000 pps: p1 RX 1986 p2 TX 1986 pps, receiver loss 7466 ppm echo back in 366 ms
+[bench 2026-10-04T14:27:09.220Z] ladder d64 offered 4000 pps: p1 RX 3201 p2 TX 3201 pps, receiver loss 199781 ppm echo back in 279 ms
+[bench 2026-10-04T14:27:22.159Z] OpenFlow session DISCONNECTED (10.0.1.99:53334) - the switch will drop its flow table
+[bench 2026-10-04T14:27:23.662Z] OpenFlow session connected (10.0.1.99:53335)
+[bench 2026-10-04T14:28:07.973Z] installing ladder-base-d64: depth 64 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:28:14.983Z] ladder d64 offered 8000 pps: INVALID iperf3 reported an error: interrupt - the client has terminated SESSION LOST echo back in 764 ms -> stop (session_lost)
+[bench 2026-10-04T14:28:14.989Z] installing ladder-base-d126: depth 126 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:28:16.826Z] ladder d126 @1000 pps: iperf3 server busy, retrying once
+[bench 2026-10-04T14:28:54.291Z] ladder d126 offered 1000 pps: p1 RX 999 p2 TX 999 pps, receiver loss 2066 ppm echo back in 86 ms
+[bench 2026-10-04T14:29:27.974Z] ladder d126 offered 2000 pps: p1 RX 1731 p2 TX 1731 pps, receiver loss 134828 ppm echo back in 391 ms
+[bench 2026-10-04T14:29:41.459Z] OpenFlow session DISCONNECTED (10.0.1.99:53335) - the switch will drop its flow table
+[bench 2026-10-04T14:29:42.936Z] OpenFlow session connected (10.0.1.99:53336)
+[bench 2026-10-04T14:30:26.297Z] installing ladder-base-d126: depth 126 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T14:30:33.312Z] ladder d126 offered 4000 pps: INVALID iperf3 reported an error: interrupt - the client has terminated SESSION LOST echo back in 547 ms -> stop (session_lost)
+[bench 2026-10-04T14:30:33.317Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T14:30:33.362Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-ladder-base-p64-2026-10-04T14-13-36-543Z.json

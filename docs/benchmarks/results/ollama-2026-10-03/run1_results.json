@@ -1,0 +1,24 @@
+{
+ "qwen2.5:3b": {
+  "conc": 2,
+  "ok": 35,
+  "errors": 0,
+  "agg_tok_s": 15.3,
+  "per_req_tok_s": 15.4,
+  "lat_p50": 39.1,
+  "lat_p95": 39.2,
+  "tokens": 9712,
+  "first_error": null
+ },
+ "gemma4:26b": {
+  "conc": 2,
+  "ok": 133,
+  "errors": 0,
+  "agg_tok_s": 63.0,
+  "per_req_tok_s": 68.4,
+  "lat_p50": 9.2,
+  "lat_p95": 10.0,
+  "tokens": 39900,
+  "first_error": null
+ }
+}

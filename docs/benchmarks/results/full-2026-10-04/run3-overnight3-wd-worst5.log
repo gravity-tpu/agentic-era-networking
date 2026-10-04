@@ -1,0 +1,61 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --profile worst --udp-load-percent 5 --tcp-mbps 2
+
+[bench 2026-10-04T15:39:56.787Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T15:39:58.542Z] workday profile=worst (126 rules/window) 12 windows x 300s, flush=selective, udp 979 pps x 572 B + tcp
+[bench 2026-10-04T15:40:02.336Z] window 1/12: table reset; starting load
+[bench 2026-10-04T15:41:33.575Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53461)
+[bench 2026-10-04T15:41:33.577Z] OpenFlow session DISCONNECTED (10.0.1.99:53461) - the switch will drop its flow table
+[bench 2026-10-04T15:41:33.724Z] window 1 @91374ms: OpenFlow session lost with 38 rules; waiting for reconnect
+[bench 2026-10-04T15:41:35.468Z] OpenFlow session connected (10.0.1.99:53462)
+[bench 2026-10-04T15:41:35.641Z] window 1: reconnected in 1807 ms, table restored in 108 ms
+[bench 2026-10-04T15:45:02.683Z] window 1 done: 126 rules, 29 samples, last p1 RX 968 pps; udp ok tcp iperf3 reported an error: unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+[bench 2026-10-04T15:45:02.903Z] window 2/12: table reset in 218 ms; starting load
+[bench 2026-10-04T15:49:34.677Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53462)
+[bench 2026-10-04T15:49:34.677Z] OpenFlow session DISCONNECTED (10.0.1.99:53462) - the switch will drop its flow table
+[bench 2026-10-04T15:49:34.755Z] window 2 @271838ms: OpenFlow session lost with 114 rules; waiting for reconnect
+[bench 2026-10-04T15:49:36.418Z] OpenFlow session connected (10.0.1.99:53463)
+[bench 2026-10-04T15:49:36.697Z] window 2: reconnected in 1704 ms, table restored in 237 ms
+[bench 2026-10-04T15:50:03.316Z] window 2 done: 126 rules, 29 samples, last p1 RX 1106 pps; udp ok tcp ok
+[bench 2026-10-04T15:50:03.498Z] window 3/12: table reset in 181 ms; starting load
+[bench 2026-10-04T15:55:03.755Z] window 3 done: 126 rules, 29 samples, last p1 RX 1096 pps; udp ok tcp ok
+[bench 2026-10-04T15:55:03.863Z] window 4/12: table reset in 107 ms; starting load
+[bench 2026-10-04T16:00:04.438Z] window 4 done: 126 rules, 29 samples, last p1 RX 1100 pps; udp ok tcp ok
+[bench 2026-10-04T16:00:12.510Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53463)
+[bench 2026-10-04T16:00:12.510Z] OpenFlow session DISCONNECTED (10.0.1.99:53463) - the switch will drop its flow table
+[bench 2026-10-04T16:00:14.194Z] OpenFlow session connected (10.0.1.99:53464)
+[bench 2026-10-04T16:00:14.652Z] flush before window 5: session changed mid-operation (attempt 1/6); retrying
+[bench 2026-10-04T16:00:15.944Z] window 5/12: table reset in 11505 ms; starting load
+[bench 2026-10-04T16:05:16.657Z] window 5 done: 126 rules, 29 samples, last p1 RX 1103 pps; udp ok tcp ok
+[bench 2026-10-04T16:05:16.789Z] window 6/12: table reset in 131 ms; starting load
+[bench 2026-10-04T16:10:17.230Z] window 6 done: 126 rules, 29 samples, last p1 RX 1105 pps; udp ok tcp ok
+[bench 2026-10-04T16:10:17.381Z] window 7/12: table reset in 151 ms; starting load
+[bench 2026-10-04T16:15:17.735Z] window 7 done: 126 rules, 29 samples, last p1 RX 1098 pps; udp ok tcp ok
+[bench 2026-10-04T16:15:17.973Z] window 8/12: table reset in 237 ms; starting load
+[bench 2026-10-04T16:20:18.455Z] window 8 done: 126 rules, 29 samples, last p1 RX 1096 pps; udp ok tcp ok
+[bench 2026-10-04T16:20:26.560Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53464)
+[bench 2026-10-04T16:20:26.560Z] OpenFlow session DISCONNECTED (10.0.1.99:53464) - the switch will drop its flow table
+[bench 2026-10-04T16:20:28.586Z] OpenFlow session connected (10.0.1.99:53465)
+[bench 2026-10-04T16:20:28.660Z] flush before window 9: session changed mid-operation (attempt 1/6); retrying
+[bench 2026-10-04T16:20:30.086Z] window 9/12: table reset in 11630 ms; starting load
+[bench 2026-10-04T16:22:26.076Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53465)
+[bench 2026-10-04T16:22:26.076Z] OpenFlow session DISCONNECTED (10.0.1.99:53465) - the switch will drop its flow table
+[bench 2026-10-04T16:22:26.208Z] window 9 @116111ms: OpenFlow session lost with 49 rules; waiting for reconnect
+[bench 2026-10-04T16:22:27.795Z] OpenFlow session connected (10.0.1.99:53466)
+[bench 2026-10-04T16:22:28.070Z] window 9: reconnected in 1703 ms, table restored in 157 ms
+[bench 2026-10-04T16:25:30.455Z] window 9 done: 126 rules, 29 samples, last p1 RX 1103 pps; udp ok tcp ok
+[bench 2026-10-04T16:25:30.680Z] window 10/12: table reset in 224 ms; starting load
+[bench 2026-10-04T16:30:30.960Z] window 10 done: 126 rules, 29 samples, last p1 RX 1089 pps; udp ok tcp ok
+[bench 2026-10-04T16:30:31.065Z] window 11/12: table reset in 105 ms; starting load
+[bench 2026-10-04T16:34:31.896Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53466)
+[bench 2026-10-04T16:34:31.896Z] OpenFlow session DISCONNECTED (10.0.1.99:53466) - the switch will drop its flow table
+[bench 2026-10-04T16:34:33.730Z] OpenFlow session connected (10.0.1.99:53467)
+[bench 2026-10-04T16:34:33.731Z] window 11 @240104ms: table mismatch: priority 65535: expected 101 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 103, switch reports 0
+[bench 2026-10-04T16:34:33.931Z] window 11 @242854ms: OpenFlow session lost with 101 rules; waiting for reconnect
+[bench 2026-10-04T16:34:34.165Z] window 11: reconnected in 0 ms, table restored in 234 ms
+[bench 2026-10-04T16:35:31.376Z] window 11 done: 126 rules, 29 samples, last p1 RX 1087 pps; udp ok tcp ok
+[bench 2026-10-04T16:35:31.609Z] window 12/12: table reset in 232 ms; starting load
+[bench 2026-10-04T16:40:31.899Z] window 12 done: 126 rules, 29 samples, last p1 RX 1104 pps; udp ok tcp ok
+[bench 2026-10-04T16:40:31.900Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T16:40:31.977Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-workday-worst-2026-10-04T15-39-54-925Z.json

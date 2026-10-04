@@ -1,0 +1,77 @@
+## Rate ladder: maximum forwarded packets/s by rule depth
+
+`cap` = highest forwarded rate in any step without a session loss; `*` = the switch was saturated there (a true capacity); `[x]` = lowest offered rate at which a session loss occurred.
+
+| layout | payload B | 0 | 16 | 32 | 64 | 126 | fit: fixed us + per-rule us |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| base | 64 | 25995 | 7907 [12000] | 5700* [12000] | 3201* [8000] | 1731* [4000] | 38.5 + 4.28 x rules (n=3) |
+| base | 572 | 14807 | 8055* [12000] | 5272* [8000] | 3091* [4000] | 1711* [4000] | 56.2 + 4.19 x rules (n=4) |
+| base | 1470 | 7896 | 6387 [8000] | 4444* | 2758 [4000] | 988 [2000] | n/a |
+| distinct | 572 | - | 8076* | 5224* [8000] | - | 1708* [4000] | 56.9 + 4.20 x rules (n=3) |
+| fwdabove | 572 | - | 8075* | 5225* [8000] | - | 1712* [4000] | 57.2 + 4.18 x rules (n=3) |
+| fwdfirst | 572 | 14798 [4000] | 12693* | 10000* [2000] | 7078* [8000] | 4497* [8000] | 58.0 + 1.30 x rules (n=4) |
+| fwdinstall | 572 | - | 7439* [12000] | 4724* [8000] | - | 989 [2000] | 57.2 + 4.83 x rules (n=2) |
+| net16 | 572 | - | 7882* | 5118* | - | 1643* [4000] | 55.9 + 4.39 x rules (n=3) |
+
+## Working-window runs
+
+| profile | UDP load | TCP cap | windows done | session losses | outage s (reconnect+reinstall) | p1 RX pps by rule count (median) |
+| --- | --- | --- | --- | --- | --- | --- |
+| low (8 rules) | 50% = 9796 pps | 5 Mbit/s | 2/12 | 0 | 0.0 | 0-3: 9793, 4-7: 9702, 8-11: 9667 |
+| low (8 rules) | 50% = 9796 pps | 5 Mbit/s | 12/12 | 3 | 4.3 | 0-3: 9997, 4-7: 9812, 8-11: 9689 |
+| typical (24 rules) | 25% = 4898 pps | unbounded Mbit/s | 2/12 | 3 | 6.1 | 0-3: 7576, 4-7: 6132, 8-11: 5546, 12-15: 5275, 16-19: 5195, 20-23: 5106, 24-27: 5040 |
+| typical (24 rules) | 25% = 4898 pps | 5 Mbit/s | 8/12 | 3 | 17.5 | 0-3: 5261, 4-7: 5242, 8-11: 5217, 12-15: 5190, 16-19: 5141, 20-23: 5053, 24-27: 5018 |
+| typical (24 rules) | 50% = 9796 pps | 5 Mbit/s | 1/12 | 1 | 0.9 | 0-3: 9997, 4-7: 9816, 8-11: 9603, 12-15: 8242, 16-19: 7583, 20-23: 6811, 24-27: 6325 |
+| typical (24 rules) | 25% = 4898 pps | 5 Mbit/s | 12/12 | 1 | 1.7 | 0-3: 5261, 4-7: 5246, 8-11: 5219, 12-15: 5199, 16-19: 5144, 20-23: 5053, 24-27: 5022 |
+| worst (126 rules) | 5% = 979 pps | 2 Mbit/s | 12/12 | 4 | 6.0 | 4-7: 1142, 8-11: 1140, 12-15: 1138, 16-19: 1134, 20-23: 1129, 24-27: 1125, 28-31: 1124, 32-35: 1124, 36-39: 1122, 40-43: 1118, 44-47: 1116, 48-51: 1120, 52-55: 1119, 56-59: 1112, 60-63: 1112, 64-67: 1113, 68-71: 1109, 72-75: 1114, 76-79: 1111, 80-83: 1108, 84-87: 1108, 88-91: 1104, 92-95: 1104, 96-99: 1100, 100-103: 1099, 104-107: 1103, 108-111: 1102, 112-115: 1099, 116-119: 1099, 120-123: 1099 |
+
+## Flush / reinstall blackout (ping every 10 ms from the workload node)
+
+Artifact `depth-blackout-2026-10-04T10-55-19-665Z.json`: load 1000 pps when loaded; 30 records, 3 with errors.
+
+| depth | flush mode | load | n | median max ping gap ms | median flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- |
+| 0 | none | idle | 3 | 130 | nan |
+| 0 | none | udp | 3 | 128 | nan |
+| 0 | wipe | idle | 3 | 150 | 253 |
+| 0 | wipe | udp | 3 | 222 | 199 |
+| 126 | none | idle | 3 | 131 | nan |
+| 126 | none | udp | 3 | 130 | nan |
+| 126 | selective | idle | 3 | 132 | 110 |
+| 126 | selective | udp | 3 | 131 | 1498 |
+| 126 | wipe | idle | 3 | 135 | 107 |
+| 126 | wipe | udp | 3 | 263 | 515 |
+
+## OpenFlow session events per artifact
+
+| artifact | disconnects | controller dead-peer timeouts | median echo RTT ms | p99 echo RTT ms |
+| --- | --- | --- | --- | --- |
+| depth-ladder-base-2026-10-04T03-25-38-028Z.json | 4 | 2 | 0.74 | 207.5 |
+| depth-ladder-fwdfirst-2026-10-04T03-53-17-385Z.json | 3 | 3 | 0.79 | 207.8 |
+| depth-blackout-2026-10-04T10-55-19-665Z.json | 3 | 3 | 0.67 | 84.5 |
+| depth-ladder-base-2026-10-04T11-52-43-740Z.json | 3 | 2 | 0.72 | 208.2 |
+| depth-ladder-base-p1470-2026-10-04T14-30-53-885Z.json | 3 | 3 | 0.83 | 208.7 |
+| depth-ladder-base-p64-2026-10-04T13-26-04-161Z.json | 0 | 0 | 0.73 | 1.2 |
+| depth-ladder-base-p64-2026-10-04T14-13-36-543Z.json | 4 | 0 | 0.73 | 228.6 |
+| depth-ladder-distinct-2026-10-04T15-28-07-299Z.json | 2 | 0 | 0.76 | 209.9 |
+| depth-ladder-fwdabove-2026-10-04T14-54-17-077Z.json | 2 | 1 | 0.91 | 208.8 |
+| depth-ladder-fwdfirst-2026-10-04T11-23-29-825Z.json | 2 | 2 | 0.71 | 207.8 |
+| depth-ladder-fwdinstall-2026-10-04T15-05-59-972Z.json | 3 | 3 | 0.79 | 621.5 |
+| depth-ladder-hitfirst-2026-10-04T13-25-06-530Z.json | 0 | 0 | 1.02 | 269.5 |
+| depth-ladder-hitfirst-2026-10-04T14-48-26-898Z.json | 2 | 1 | 0.70 | 215.7 |
+| depth-ladder-hitlast-2026-10-04T14-52-02-298Z.json | 1 | 0 | 0.75 | 1.5 |
+| depth-ladder-hitmiddle-2026-10-04T14-50-14-580Z.json | 2 | 0 | 0.68 | 660.4 |
+| depth-ladder-net16-2026-10-04T15-17-00-564Z.json | 1 | 1 | 0.83 | 210.0 |
+| depth-sweep-2026-10-04T10-29-48-348Z.json | 23 | 7 | 0.74 | 627.5 |
+| depth-workday-low-2026-10-04T11-22-51-979Z.json | 0 | 0 | 0.94 | 1.2 |
+| depth-workday-low-2026-10-04T16-40-52-502Z.json | 1 | 1 | 0.70 | 55.6 |
+| depth-workday-low-2026-10-04T18-41-46-383Z.json | 3 | 3 | 0.68 | 207.6 |
+| depth-workday-typical-2026-10-04T11-07-52-309Z.json | 5 | 5 | 0.80 | 207.8 |
+| depth-workday-typical-2026-10-04T11-21-36-011Z.json | 0 | 0 | 0.75 | 1.5 |
+| depth-workday-typical-2026-10-04T13-27-01-156Z.json | 7 | 7 | 0.69 | 205.4 |
+| depth-workday-typical-2026-10-04T14-07-58-393Z.json | 2 | 2 | 1.02 | 223.1 |
+| depth-workday-typical-2026-10-04T17-11-09-111Z.json | 1 | 1 | 0.69 | 206.6 |
+| depth-workday-typical-2026-10-04T19-43-12-013Z.json | 4 | 4 | 0.98 | 357.7 |
+| depth-workday-worst-2026-10-04T11-22-14-208Z.json | 0 | 0 | 0.98 | 1.5 |
+| depth-workday-worst-2026-10-04T15-39-54-925Z.json | 6 | 6 | 0.72 | 242.2 |
+

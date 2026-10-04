@@ -1,0 +1,20 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --profile typical --udp-load-percent 50 --tcp-mbps 5
+
+[bench 2026-10-04T14:07:59.971Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T14:08:02.228Z] workday profile=typical (24 rules/window) 12 windows x 300s, flush=selective, udp 9796 pps x 572 B + tcp
+[bench 2026-10-04T14:08:06.268Z] window 1/12: table reset; starting load
+[bench 2026-10-04T14:11:28.130Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53318)
+[bench 2026-10-04T14:11:28.131Z] OpenFlow session DISCONNECTED (10.0.1.99:53318) - the switch will drop its flow table
+[bench 2026-10-04T14:11:28.152Z] window 1 @201863ms: OpenFlow session lost with 16 rules; waiting for reconnect
+[bench 2026-10-04T14:11:28.775Z] OpenFlow session connected (10.0.1.99:53319)
+[bench 2026-10-04T14:11:29.049Z] window 1: reconnected in 703 ms, table restored in 193 ms
+[bench 2026-10-04T14:13:14.293Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53319)
+[bench 2026-10-04T14:13:14.294Z] OpenFlow session DISCONNECTED (10.0.1.99:53319) - the switch will drop its flow table
+[bench 2026-10-04T14:13:15.987Z] OpenFlow session connected (10.0.1.99:53320)
+[bench 2026-10-04T14:13:15.988Z] window 1 done: 24 rules, 29 samples, last p1 RX 6325 pps; udp ok tcp ok TABLE MISMATCH
+[bench 2026-10-04T14:13:15.989Z] ABORTED: window 1: end-of-window table mismatch: priority 65535: expected 24 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 26, switch reports 0
+[bench 2026-10-04T14:13:15.989Z] WARNING: could not clear flow table: Cannot send raw OpenFlow message: switch not in ESTABLISHED state (current: HANDSHAKE)
+[bench 2026-10-04T14:13:16.025Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-workday-typical-2026-10-04T14-07-58-393Z.json
+[bench] FATAL: window 1: end-of-window table mismatch: priority 65535: expected 24 entries, switch reports 0; priority 100: expected 2 entries, switch reports 0; total entries: expected 26, switch reports 0
