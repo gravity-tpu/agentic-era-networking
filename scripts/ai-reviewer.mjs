@@ -217,7 +217,7 @@ export const COUNCIL_CONFIGS = {
   },
 };
 
-const activeCouncil = args.includes('--ccie') ? COUNCIL_CONFIGS.ccie : COUNCIL_CONFIGS.technical;
+const activeCouncil = isCCIE ? COUNCIL_CONFIGS.ccie : COUNCIL_CONFIGS.technical;
 export const SYSTEM_PROMPT = activeCouncil.systemPrompt;
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
