@@ -26,6 +26,7 @@
 
 import type { FlowModOptions } from './openflow-types.js';
 import { FlowModCommand } from './openflow-types.js';
+import type { FlowStatsEntry } from './dataplane-benchmark.js';
 
 export const ETH_TYPE_IPV4 = 0x0800;
 export const ETH_TYPE_ARP = 0x0806;
@@ -170,4 +171,76 @@ export function verifyPort1Isolation(
   }
 
   return violations;
+}
+
+function prefixLenToMask(len: number | undefined): string | undefined {
+  if (len === undefined || len === 32) return undefined; // exact match: switch reports no mask
+  if (!Number.isInteger(len) || len < 0 || len > 32) throw new Error(`prefix length out of range: ${len}`);
+  if (len === 0) return '0.0.0.0'; // JS masks shift counts to 5 bits: `<< 32` would be `<< 0`
+  const m = (0xffffffff << (32 - len)) >>> 0;
+  return `${m >>> 24}.${(m >>> 16) & 0xff}.${(m >>> 8) & 0xff}.${m & 0xff}`;
+}
+
+export interface IsolationReadbackVerdict {
+  readonly verified: boolean;
+  /** Policy rule ids confirmed present on the switch with an exact field-for-field match. */
+  readonly confirmed: readonly string[];
+  readonly mismatches: readonly string[];
+}
+
+/**
+ * Compares the switch's own OFPMP_FLOW readback against the intended isolation policy.
+ * Each policy rule must appear exactly once with identical priority, in_port, eth_type and
+ * masked IPv4 src/dst. A table-miss entry at priority 0 must also be present.
+ *
+ * Scope note: output actions are not parsed from flow-stats, so this proves the switch holds the
+ * intended MATCH set; forwarding behaviour is covered by the on-wire leak test in the runbook.
+ */
+export function verifyIsolationReadback(
+  rules: readonly IsolationRule[],
+  entries: readonly FlowStatsEntry[],
+): IsolationReadbackVerdict {
+  const confirmed: string[] = [];
+  const mismatches: string[] = [];
+
+  for (const { id, flowMod } of rules) {
+    const m = flowMod.match;
+    const want = {
+      priority: flowMod.priority,
+      inPort: m?.inPort,
+      ethType: m?.etherType,
+      srcIp: m?.srcIp,
+      srcMask: prefixLenToMask(m?.srcIpPrefixLen),
+      dstIp: m?.dstIp,
+      dstMask: prefixLenToMask(m?.dstIpPrefixLen),
+    };
+    const hits = entries.filter(
+      (e) =>
+        e.priority === want.priority &&
+        e.inPort === want.inPort &&
+        e.ethType === want.ethType &&
+        e.srcIp === want.srcIp &&
+        e.srcMask === want.srcMask &&
+        e.dstIp === want.dstIp &&
+        e.dstMask === want.dstMask,
+    );
+    if (hits.length === 1) {
+      confirmed.push(id);
+    } else if (hits.length === 0) {
+      const samePrio = entries.filter((e) => e.priority === want.priority && e.inPort === want.inPort);
+      mismatches.push(
+        samePrio.length > 0
+          ? `${id}: switch holds priority ${want.priority} in_port ${String(want.inPort)} but with different match fields ${JSON.stringify(samePrio.map(({ ethType, srcIp, srcMask, dstIp, dstMask }) => ({ ethType, srcIp, srcMask, dstIp, dstMask })))}`
+          : `${id}: not present on switch (priority ${want.priority}, in_port ${String(want.inPort)})`,
+      );
+    } else {
+      mismatches.push(`${id}: ${hits.length} duplicate entries on switch`);
+    }
+  }
+
+  if (!entries.some((e) => e.priority === 0 && e.inPort === undefined && e.ethType === undefined)) {
+    mismatches.push('table-miss: no priority-0 wildcard entry on switch');
+  }
+
+  return { verified: mismatches.length === 0, confirmed, mismatches };
 }

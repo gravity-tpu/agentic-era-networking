@@ -16,8 +16,10 @@ import {
   ZODIAC_PORT_UPLINK,
   ZODIAC_PORT_TAP,
   ZODIAC_PORT_WORKLOAD,
+  verifyIsolationReadback,
 } from '../../src/sdn/port1-isolation.js';
 import type { IsolationRule } from '../../src/sdn/port1-isolation.js';
+import { parseFlowStatsReply } from '../../src/sdn/dataplane-benchmark.js';
 
 /** Collects OXM TLV type headers (uint32) from an encoded FlowMod. */
 function oxmHeaders(buf: Buffer): number[] {
@@ -116,5 +118,72 @@ describe('Port 1 isolation policy', () => {
     expect(() =>
       buildOfpFlowMod({ command: FlowModCommand.OFPFC_ADD, priority: 1, match: { dstIp: '10.0.2.0', dstIpPrefixLen: 0 } }, 1),
     ).toThrow(/dstIpPrefixLen/);
+  });
+});
+
+/**
+ * Builds a wire-format OFPMP_FLOW reply whose entries carry exactly the OXM match bytes of the
+ * given FlowMods (fixture for parser + verifier; not a switch measurement).
+ */
+function flowStatsReplyFrom(flowMods: readonly Buffer[]): Buffer {
+  const entries = flowMods.map((fm) => {
+    const priority = fm.readUInt16BE(30);
+    const matchPadded = Math.max(8, Math.ceil(fm.readUInt16BE(50) / 8) * 8);
+    const match = fm.subarray(48, 48 + matchPadded);
+    const e = Buffer.alloc(48 + match.length);
+    e.writeUInt16BE(e.length, 0);
+    e.writeUInt16BE(priority, 12);
+    match.copy(e, 48);
+    return e;
+  });
+  const body = Buffer.concat(entries);
+  const hdr = Buffer.alloc(16);
+  hdr.writeUInt8(4, 0);
+  hdr.writeUInt8(19, 1); // OFPT_MULTIPART_REPLY
+  hdr.writeUInt16BE(16 + body.length, 2);
+  hdr.writeUInt16BE(1, 8); // OFPMP_FLOW
+  return Buffer.concat([hdr, body]);
+}
+
+describe('Port 1 isolation switch readback', () => {
+  const policy = buildPort1IsolationPolicy();
+  const tableMiss = buildOfpFlowMod({ command: FlowModCommand.OFPFC_ADD, priority: 0 }, 99);
+  const policyBufs = policy.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
+
+  it('confirms every rule when the switch reports the exact match set', () => {
+    const { entries } = parseFlowStatsReply(flowStatsReplyFrom([tableMiss, ...policyBufs]));
+    const ipv4 = entries.find((e) => e.priority === 200 && e.inPort === 1 && e.ethType === ETH_TYPE_IPV4);
+    expect(ipv4).toMatchObject({ srcIp: '10.0.2.0', srcMask: '255.255.255.0', dstIp: '10.0.2.0', dstMask: '255.255.255.0' });
+    const v = verifyIsolationReadback(policy, entries);
+    expect(v.mismatches).toEqual([]);
+    expect(v.verified).toBe(true);
+    expect(v.confirmed).toHaveLength(policy.length);
+  });
+
+  it('flags a switch that silently dropped the IPv4 masks (widened match)', () => {
+    const widened = policy.map((r) =>
+      r.id === 'p1-ipv4-intra-segment'
+        ? { ...r, flowMod: { ...r.flowMod, match: { inPort: 1, etherType: ETH_TYPE_IPV4 } } }
+        : r,
+    );
+    const bufs = widened.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
+    const { entries } = parseFlowStatsReply(flowStatsReplyFrom([tableMiss, ...bufs]));
+    const v = verifyIsolationReadback(policy, entries);
+    expect(v.verified).toBe(false);
+    expect(v.mismatches.some((m) => m.startsWith('p1-ipv4-intra-segment') && m.includes('different match fields'))).toBe(true);
+  });
+
+  it('flags missing rules and a missing table-miss entry', () => {
+    const { entries } = parseFlowStatsReply(flowStatsReplyFrom(policyBufs.slice(1)));
+    const v = verifyIsolationReadback(policy, entries);
+    expect(v.verified).toBe(false);
+    expect(v.mismatches.some((m) => m.startsWith('p1-ipv4-intra-segment'))).toBe(true);
+    expect(v.mismatches).toContain('table-miss: no priority-0 wildcard entry on switch');
+  });
+
+  it('flags duplicate entries', () => {
+    const { entries } = parseFlowStatsReply(flowStatsReplyFrom([tableMiss, ...policyBufs, policyBufs[0] as Buffer]));
+    const v = verifyIsolationReadback(policy, entries);
+    expect(v.mismatches.some((m) => m.includes('duplicate'))).toBe(true);
   });
 });

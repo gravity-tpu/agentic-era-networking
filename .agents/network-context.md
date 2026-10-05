@@ -183,3 +183,8 @@ This section tracks the active developmental state across the primary SDN archit
      1. Enable IEEE 802.3x Flow Control on all Netgear ports to push backpressure into the RPi socket queue.
      2. Configure host egress rate pacing on RPi: `sudo tc qdisc replace dev eth0 root fq maxrate 95mbit`.
      3. Telemetry Reconciliation: Benchmark and monitoring scripts must reconcile host sysfs `tx_packets` against Zodiac Port 1 `rx_packets` to detect any intervening packet loss before entering the OpenFlow domain.
+5. **Port 2 Home-LAN L2 Leak (Workload Isolation)**:
+   - *Symptom*: Zodiac Port 2 is wired to the ISP Wi-Fi extender. The legacy port-only rule (`in_port=1 → [2,3]`) bridged every workload frame (DHCP, mDNS, spoofed `10.0.0.x` sources) onto the household L2 domain; `never-default` on the Pi was the only guard, and the untrusted workload controls it.
+   - *Fix*: Verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts), PR #25). Only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, crosses P1⟷P2; everything else from P1 goes to the P3 tap only.
+   - *Hardware verification (2026-10-05, FW 0.86)*: Pi `10.0.2.50` → Mac `10.0.2.119` via eth0: 3/3 replies (masked OXM rules accepted). Pi `10.0.2.50` → Mac `10.0.0.119` forced out eth0 with a static neighbor entry: 100% loss (blocked). The Mac answers ICMP and has an on-link return path, so a leak would have produced replies.
+   - *Residual*: ARP still crosses P1⟷P2 (address disclosure only). The bridge does not yet subscribe to `ofError`, so a switch-side FlowMod rejection would be silent; re-run the leak test after firmware or policy changes.

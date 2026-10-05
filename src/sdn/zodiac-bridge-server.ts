@@ -68,7 +68,19 @@ import {
 } from '../db/local-telemetry-db.js';
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
-import { buildPort1IsolationPolicy, verifyPort1Isolation } from './port1-isolation.js';
+import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback } from './port1-isolation.js';
+import { readFlowStats } from './flow-readback.js';
+import { parseOfpError } from './dataplane-benchmark.js';
+
+// Council Invariant 5: switch flow-table readback deadline is configurable, not a buried constant.
+const FLOW_READBACK_TIMEOUT_MS = (() => {
+  const raw = process.env['ZODIAC_FLOW_READBACK_TIMEOUT_MS'];
+  if (raw === undefined) return 10_000;
+  if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
+    throw new Error(`ZODIAC_FLOW_READBACK_TIMEOUT_MS must be a positive integer, got ${JSON.stringify(raw)}`);
+  }
+  return Number(raw);
+})();
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -519,6 +531,16 @@ export class ZodiacBridgeServer {
   } | null = null;
   private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
+  /** xid → isolation rule id for the current OpenFlow session; reset on every 'ready'. */
+  private readonly flowModXidLabels: Map<number, string> = new Map();
+  /** Switch-reported (not controller-intended) state of the Port 1 isolation policy. */
+  private isolationStatus: {
+    state: 'not_installed' | 'verifier_rejected' | 'pending_readback' | 'verified' | 'mismatch' | 'readback_failed';
+    confirmed: readonly string[];
+    mismatches: readonly string[];
+    switchErrors: string[];
+    checkedAtMs: number | null;
+  } = { state: 'not_installed', confirmed: [], mismatches: [], switchErrors: [], checkedAtMs: null };
 
   /**
    * Registers a flow rule entry in the bridge server's local registry.
@@ -666,16 +688,59 @@ export class ZodiacBridgeServer {
       // Council Invariant 4: the rule set must pass the symbolic verifier before touching the
       // data plane. On failure nothing is installed and table-miss DROP keeps Port 1 dark.
       const isolationPolicy = buildPort1IsolationPolicy();
+      this.flowModXidLabels.clear();
       const violations = verifyPort1Isolation(isolationPolicy);
       if (violations.length > 0) {
+        this.isolationStatus = { state: 'verifier_rejected', confirmed: [], mismatches: violations, switchErrors: [], checkedAtMs: Date.now() };
         console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);
         return;
       }
+      this.isolationStatus = { state: 'pending_readback', confirmed: [], mismatches: [], switchErrors: [], checkedAtMs: null };
       for (const rule of isolationPolicy) {
-        this.controller.openFlow.sendFlowModOptions(rule.flowMod);
+        const xid = this.controller.openFlow.sendFlowModOptions(rule.flowMod);
+        this.flowModXidLabels.set(xid, rule.id);
         const out = (rule.flowMod.outputPorts ?? []).map((p) => `P${p}`).join(', ');
-        console.log(`[+] [Bridge Server] Isolation rule ${rule.id} installed (priority ${rule.flowMod.priority}) → [${out}].`);
+        console.log(`[+] [Bridge Server] Isolation rule ${rule.id} sent (xid ${xid}, priority ${rule.flowMod.priority}) → [${out}].`);
       }
+
+      // Council Invariant 6: "sent" is not "installed". Read the flow table back from the switch
+      // and verify every isolation rule field-by-field against what the hardware reports.
+      readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS)
+        .then((entries) => {
+          const verdict = verifyIsolationReadback(isolationPolicy, entries);
+          this.isolationStatus = {
+            ...this.isolationStatus,
+            state: verdict.verified && this.isolationStatus.switchErrors.length === 0 ? 'verified' : 'mismatch',
+            confirmed: verdict.confirmed,
+            mismatches: verdict.mismatches,
+            checkedAtMs: Date.now(),
+          };
+          if (this.isolationStatus.state === 'verified') {
+            console.log(`[+] [Bridge Server] Isolation readback VERIFIED: ${verdict.confirmed.length}/${isolationPolicy.length} rules confirmed on switch (${entries.length} total entries).`);
+          } else {
+            console.error(`[!] [Bridge Server] Isolation readback MISMATCH (${entries.length} switch entries):\n  ${[...verdict.mismatches, ...this.isolationStatus.switchErrors].join('\n  ')}`);
+          }
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.isolationStatus = { ...this.isolationStatus, state: 'readback_failed', mismatches: [msg], checkedAtMs: Date.now() };
+          console.error(`[!] [Bridge Server] Isolation readback FAILED: ${msg}`);
+        });
+    });
+
+    // Council Invariant 1: switch-side FlowMod rejections must never be silent.
+    this.controller.openFlow.on('ofError', (xid: number, packet: Buffer) => {
+      let detail: string;
+      try {
+        const info = parseOfpError(packet);
+        detail = `type ${info.errorType}, code ${info.errorCode}`;
+      } catch (err: unknown) {
+        detail = `unparseable OFPT_ERROR (${err instanceof Error ? err.message : String(err)})`;
+      }
+      const label = this.flowModXidLabels.get(xid);
+      const line = `OFPT_ERROR xid ${xid}${label ? ` (isolation rule ${label})` : ''}: ${detail}`;
+      if (label) this.isolationStatus.switchErrors.push(line);
+      console.error(`[!] [Bridge Server] Switch rejected message — ${line}`);
     });
 
     // Observe CoPP drops when packet-in flooding occurs
@@ -1609,6 +1674,7 @@ export class ZodiacBridgeServer {
         note: 'Per-flow hardware stats (OFPT_MULTIPART_REQUEST) not yet implemented; showing controller-pushed rules only.',
         rules: Array.from(this.flowRuleRegistry.values()),
         totalRules: this.flowRuleRegistry.size,
+        port1Isolation: this.isolationStatus,
         timestamp: Date.now(),
       }));
       return;

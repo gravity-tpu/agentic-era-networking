@@ -322,13 +322,16 @@ export class OpenFlowServer extends EventEmitter {
    * Pushes a fully specified FlowMod (typed OXM match incl. eth_type and masked IPv4 src/dst).
    * buildOfpFlowMod throws on any unparseable match field, so a malformed policy rule can never
    * degrade into a wildcard (Council Invariant 3).
+   * Returns the xid so a later OFPT_ERROR can be attributed to this exact FlowMod.
    */
-  public sendFlowModOptions(options: FlowModOptions): void {
+  public sendFlowModOptions(options: FlowModOptions): number {
     if (!this.clientSocket || this.state !== 'ESTABLISHED') {
       throw new Error(`Cannot send FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
     }
-    const packet = buildOfpFlowMod(options, this.allocateXid());
+    const xid = this.allocateXid();
+    const packet = buildOfpFlowMod(options, xid);
     this.clientSocket.write(packet);
+    return xid;
   }
 
   /**
