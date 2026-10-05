@@ -68,6 +68,7 @@ import {
 } from '../db/local-telemetry-db.js';
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
+import { buildPort1IsolationPolicy, verifyPort1Isolation } from './port1-isolation.js';
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -657,20 +658,24 @@ export class ZodiacBridgeServer {
       this.controller.openFlow.sendTableMissRule(0, 'DROP');
       console.log('[+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).');
 
-      // Port 1 (Workload RPi) → Port 2 (Uplink/Gateway) + Port 3 (Jetson GPU sentinel tap).
-      // Priority 100 ensures transit packets flow at line rate to the gateway while simultaneously
-      // mirroring frames to the GPU tap. Quarantine DROP rules at priority 65535 take precedence.
-      this.controller.openFlow.sendForwardingRule(1, [2, 3], 100);
-      console.log('[+] [Bridge Server] Transit + Tap rule installed: Port 1 → [Port 2 Uplink, Port 3 Mirror Tap] (priority 100).');
-
-      // Port 2 (Uplink/Gateway) → Port 1 (Workload RPi) return transit path.
-      this.controller.openFlow.sendForwardingRule(2, [1], 100);
-      console.log('[+] [Bridge Server] Return transit rule installed: Port 2 Uplink → Port 1 Workload (priority 100).');
-
-      // Return path: Port 3 (Jetson tap) → Port 1 (RPi) so ARP replies from the
-      // tap interface reach the RPi and close the bidirectional data-plane loop.
-      this.controller.openFlow.sendForwardingRule(3, [1], 100);
-      console.log('[+] [Bridge Server] Tap return rule installed: Port 3 → Port 1 Workload (priority 100).');
+      // Port 1 Isolation Policy (see src/sdn/port1-isolation.ts):
+      // Port 2 is physically wired to the ISP Wi-Fi extender (home LAN 10.0.0.0/24 → Internet).
+      // Port-only forwarding (in_port=1 → [2,3]) bridged every workload frame onto the household
+      // L2 domain. Only IPv4 confined to 10.0.2.0/24 (src AND dst) plus ARP may cross P1⟷P2;
+      // all other workload traffic is mirrored to the Port 3 sentinel tap only.
+      // Council Invariant 4: the rule set must pass the symbolic verifier before touching the
+      // data plane. On failure nothing is installed and table-miss DROP keeps Port 1 dark.
+      const isolationPolicy = buildPort1IsolationPolicy();
+      const violations = verifyPort1Isolation(isolationPolicy);
+      if (violations.length > 0) {
+        console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);
+        return;
+      }
+      for (const rule of isolationPolicy) {
+        this.controller.openFlow.sendFlowModOptions(rule.flowMod);
+        const out = (rule.flowMod.outputPorts ?? []).map((p) => `P${p}`).join(', ');
+        console.log(`[+] [Bridge Server] Isolation rule ${rule.id} installed (priority ${rule.flowMod.priority}) → [${out}].`);
+      }
     });
 
     // Observe CoPP drops when packet-in flooding occurs
