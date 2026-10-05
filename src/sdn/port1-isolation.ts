@@ -175,6 +175,8 @@ export function verifyPort1Isolation(
 
 function prefixLenToMask(len: number | undefined): string | undefined {
   if (len === undefined || len === 32) return undefined; // exact match: switch reports no mask
+  if (!Number.isInteger(len) || len < 0 || len > 32) throw new Error(`prefix length out of range: ${len}`);
+  if (len === 0) return '0.0.0.0'; // JS masks shift counts to 5 bits: `<< 32` would be `<< 0`
   const m = (0xffffffff << (32 - len)) >>> 0;
   return `${m >>> 24}.${(m >>> 16) & 0xff}.${(m >>> 8) & 0xff}.${m & 0xff}`;
 }
