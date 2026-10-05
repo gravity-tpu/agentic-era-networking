@@ -572,11 +572,19 @@ export interface FlowStatsEntry {
   readonly srcMask?: string;
   /** IN_PORT value the switch reports for this entry, if any. */
   readonly inPort?: number;
+  /** ETH_TYPE value the switch reports for this entry, if any. */
+  readonly ethType?: number;
+  /** IPV4_DST value the switch reports for this entry; absent if no such match field was reported. */
+  readonly dstIp?: string;
+  /** IPV4_DST mask as dotted quad; absent for an exact (unmasked) match. */
+  readonly dstMask?: string;
 }
 
 const OXM_CLASS_BASIC = 0x8000;
 const OXM_FIELD_IN_PORT = 0;
+const OXM_FIELD_ETH_TYPE = 5;
 const OXM_FIELD_IPV4_SRC = 11;
+const OXM_FIELD_IPV4_DST = 12;
 
 const dotted = (b: Buffer, off: number): string => `${b[off]}.${b[off + 1]}.${b[off + 2]}.${b[off + 3]}`;
 
@@ -589,8 +597,8 @@ function parseEntryMatch(
   packet: Buffer,
   matchOff: number,
   entryEnd: number,
-): { srcIp?: string; srcMask?: string; inPort?: number } {
-  const out: { srcIp?: string; srcMask?: string; inPort?: number } = {};
+): Omit<FlowStatsEntry, 'tableId' | 'priority' | 'packetCount' | 'byteCount'> {
+  const out: { srcIp?: string; srcMask?: string; inPort?: number; ethType?: number; dstIp?: string; dstMask?: string } = {};
   if (matchOff + 4 > entryEnd || packet.readUInt16BE(matchOff) !== 1) return out;
   const matchLen = packet.readUInt16BE(matchOff + 2);
   const end = Math.min(matchOff + matchLen, entryEnd);
@@ -610,6 +618,14 @@ function parseEntryMatch(
       }
     } else if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_IN_PORT && !hasMask && len === 4) {
       out.inPort = packet.readUInt32BE(p + 4);
+    } else if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_ETH_TYPE && !hasMask && len === 2) {
+      out.ethType = packet.readUInt16BE(p + 4);
+    } else if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_IPV4_DST) {
+      if (!hasMask && len === 4) out.dstIp = dotted(packet, p + 4);
+      else if (hasMask && len === 8) {
+        out.dstIp = dotted(packet, p + 4);
+        out.dstMask = dotted(packet, p + 8);
+      }
     }
     p += 4 + len;
   }
