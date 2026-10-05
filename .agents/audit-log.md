@@ -32,6 +32,7 @@
 | 2026-10-03 | NET-007 | Elevation to CCIE Network Architecture & Forensics Rigor | Active | Upgraded networking custodian from CCNP to CCIE level. Enforces ASIC match-action pipeline modeling, TCAM ternary bitmasking, sub-millisecond convergence bounds, microsecond wire-timing forensics, and byte-exact encapsulation budgeting. |
 | 2026-10-03 | NET-008 | CCIE Gap Remediation: Bidirectional Transit, CoPP Token Bucket & RFC 1035 Boundary Guards | Active | Remediated bridge server forwarding redirect to full bidirectional transit with tap mirror [2, 3]; enforced token-bucket Control Plane Policing on OFPT_PACKET_IN with drop telemetry; enforced RFC 1035 label length <= 63 and QNAME <= 255 byte limits. |
 | 2026-10-03 | NET-009 | Physical Data-Plane Forwarding Validation & Mac Benchmark Endpoint Attestation | Active | Validated end-to-end L2/L3 data-plane transit (RPi 10.0.2.50 -> Zodiac Port 1 <-> Port 2 -> Extender -> Mac 10.0.2.119) with 0 switch drops, 94.9 Mbit/s UDP MTU wire saturation, and 0 packet forwarding deficit. Configured direct link-scoped routing on en0 to bypass overlay gateways. |
+| 2026-10-04 | NET-010 | Multi-Tenant Workload Aggregation & Rate Mismatch Bounds via NETGEAR GS105Ev2 | Active | Integrated 5-port Gigabit smart managed switch between Zodiac Port 1 and RPi 3B+ (Port 4); enforced IEEE 802.3x Flow Control backpressure across 1000M->100M transition; bounded 128KB packet buffer with host-level fq pacing (`95mbit`); and closed telemetry blind spot via host-to-Zodiac packet reconciliation. |
 
 ---
 
