@@ -101,6 +101,8 @@ export interface FlowModMatchOptions {
   /** CIDR prefix length for `srcIp` (1..32). Omitted or 32 = exact host match. */
   readonly srcIpPrefixLen?: number | undefined;
   readonly dstIp?: string | undefined;
+  /** CIDR prefix length for `dstIp` (1..32). Omitted or 32 = exact host match. */
+  readonly dstIpPrefixLen?: number | undefined;
   readonly etherType?: number | undefined;
   readonly inPort?: number | undefined;
 }
@@ -314,11 +316,28 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
 
     if (match.dstIp) {
       const ipBuf = parseIpv4ToBuffer(match.dstIp);
-      // OFPXMT_OFB_IPV4_DST: class 0x8000, field 12 (<< 9), length 4 -> 0x80001804
-      const tlv = Buffer.alloc(8);
-      tlv.writeUInt32BE(0x80001804, 0);
-      ipBuf.copy(tlv, 4);
-      oxmTlvs.push(tlv);
+      const prefixLen = match.dstIpPrefixLen;
+      if (prefixLen === undefined || prefixLen === 32) {
+        // OFPXMT_OFB_IPV4_DST: class 0x8000, field 12 (<< 9), length 4 -> 0x80001804
+        const tlv = Buffer.alloc(8);
+        tlv.writeUInt32BE(0x80001804, 0);
+        ipBuf.copy(tlv, 4);
+        oxmTlvs.push(tlv);
+      } else {
+        if (!Number.isInteger(prefixLen) || prefixLen < 1 || prefixLen > 31) {
+          throw new Error(`dstIpPrefixLen must be an integer in 1..32, got ${prefixLen}`);
+        }
+        const mask = (0xffffffff << (32 - prefixLen)) >>> 0;
+        if ((ipBuf.readUInt32BE(0) & ~mask) >>> 0 !== 0) {
+          throw new Error(`dstIp ${match.dstIp} has host bits set outside /${prefixLen}`);
+        }
+        // OFPXMT_OFB_IPV4_DST with HASMASK: field 12 -> (12 << 1) | 1 = 0x19, length 8 -> 0x80001908
+        const tlv = Buffer.alloc(12);
+        tlv.writeUInt32BE(0x80001908, 0);
+        ipBuf.copy(tlv, 4);
+        tlv.writeUInt32BE(mask, 8);
+        oxmTlvs.push(tlv);
+      }
     }
 
     if (match.inPort !== undefined) {

@@ -25,6 +25,7 @@ import {
   buildOfpTableMissFlowMod,
   parseOfpPacketIn,
   DecodedPacketIn,
+  FlowModOptions,
 } from './openflow-types.js';
 import { FlowRuleEntry } from './flow-table.js';
 
@@ -315,6 +316,19 @@ export class OpenFlowServer extends EventEmitter {
    */
   public sendForwardingRule(inPort: number, outputPorts: number | number[], priority: number = 100): void {
     this.sendMirrorRule(inPort, outputPorts, priority);
+  }
+
+  /**
+   * Pushes a fully specified FlowMod (typed OXM match incl. eth_type and masked IPv4 src/dst).
+   * buildOfpFlowMod throws on any unparseable match field, so a malformed policy rule can never
+   * degrade into a wildcard (Council Invariant 3).
+   */
+  public sendFlowModOptions(options: FlowModOptions): void {
+    if (!this.clientSocket || this.state !== 'ESTABLISHED') {
+      throw new Error(`Cannot send FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
+    }
+    const packet = buildOfpFlowMod(options, this.allocateXid());
+    this.clientSocket.write(packet);
   }
 
   /**

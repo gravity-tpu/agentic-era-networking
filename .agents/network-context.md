@@ -14,49 +14,63 @@ This ledger tracks the physical, data link, network, and transport architecture 
 ### Physical & Logical Topology Map
 
 ```text
-               ┌────────────────────────────────────────────────────────┐
-               │              WAN / Internet / Cloud Services           │
-               └───────────────────────────┬────────────────────────────┘
-                                           │ (Home LAN 10.0.0.1/24)
-                                           ▼
-               ┌────────────────────────────────────────────────────────┐
-               │              Tailscale Mesh Overlay (WireGuard)        │
-               │   100.118.64.16 (Jetson) · 100.112.223.16 (MacBook)    │
-               │   Subnet Router (10.0.0.0/24, 10.0.1.0/24) & Exit Node │
-               └───────────────────────────┬────────────────────────────┘
-                                           │
-         ┌─────────────────────────────────┴─────────────────────────────────┐
-         │                                                                   │
-         ▼ (Wi-Fi 10.0.0.15)                                                 ▼ (Port 2 Uplink)
-┌─────────────────────────────────┐                       ┌───────────────────────────────────┐
-│     Jetson Orin Nano Super      │                       │         Zodiac FX Switch          │
-│   (Master Appliance & Bridge)   │                       │       (SAM4E8E / KSZ8795CLX)      │
-├─────────────────────────────────┤                       ├───────────────────────────────────┤
-│ • Management: 10.0.0.15 (WLAN)  │                       │ Port 2: Gateway Uplink (VLAN 100) │
-│ • Control Plane: 10.0.1.8 (ETH) ├─(VLAN 200 Native Port 4)┤ Port 4: Controller (VLAN 200)    │
-│ • Tap NIC: enx9c69d39dd0a6 (USB)│◄─(Port 3 Mirror Tap)──┤ Port 3: Mirror Tap (VLAN 100)     │
-│ • Coral TPU #1 & #2 (USB 3.0)   │                       │ Port 1: Workload Subnet (VLAN 100)│
-│ • Ollama qwen2.5:3b (Port 11434)│                       └─────────────────┬─────────────────┘
-│ • Zodiac Bridge (:3003, :6633)  │                                         │
-└─────────────────────────────────┘                                         ▼ (Port 1 RJ45 100M)
-                                                          ┌───────────────────────────────────┐
-                                                          │     NETGEAR GS105Ev2 Switch       │
-                                                          │   (5-Port Easy Smart Managed)     │
-                                                          ├───────────────────────────────────┤
-                                                          │ • Port 5: Uplink to Zodiac Port 1 │
-                                                          │ • Port 4: RPi 3B+ (10.0.2.50)     │
-                                                          │ • Port 1–3: Reserved (RPi 5 +     │
-                                                          │   Hailo-8 / Expansion)            │
-                                                          └─────────────────┬─────────────────┘
-                                                                            │ (Port 4 RJ45 GbE)
-                                                                            ▼
-                                                          ┌───────────────────────────────────┐
-                                                          │        Raspberry Pi 3B+           │
-                                                          │   (Untrusted Agent Workload)      │
-                                                          ├───────────────────────────────────┤
-                                                          │ • Data Plane: 10.0.2.50 (eth0)    │
-                                                          │ • Mgmt Tether: 10.0.0.45 (wlan0)  │
-                                                          └───────────────────────────────────┘
+                                         ┌─────────────────────────────────────────────┐
+                                         │           WAN / Internet (ISP NAT)          │
+                                         └──────────────────────┬──────────────────────┘
+                                                                │
+                                         ┌──────────────────────┴──────────────────────┐
+                                         │  ISP Wi-Fi Router & Extender (gw 10.0.0.1)  │
+                                         │ Home LAN 10.0.0.0/24 — trusted household L2 │
+                                         └───┬──────────────────┬──────────────────────┘
+                                             │                  │ Home Wi-Fi (802.11)
+                   ┌─────────────────────────┘                  ├────────────────────────────────────┐
+                   │ Extender RJ45 (wired)                      │ 10.0.0.15                          │ 10.0.0.119
+                   ▼                                            ▼                                    ▼
+┌─────────────────────────────────────┐     ┌───────────────────────────────────────┐   ┌────────────────────────┐
+│           Zodiac FX Switch          │     │         Jetson Orin Nano Super        │   │    Mac Workstation     │
+│   (SAM4E8E / KSZ8795CLX, FW 0.86)   │     │    (SDN Controller & Sentinel Host)   │   │  (Operator Terminal)   │
+├─────────────────────────────────────┤     ├───────────────────────────────────────┤   ├────────────────────────┤
+│ P2: ISP Extender Uplink  (VLAN 100) │     │ • Mgmt:    10.0.0.15  (wlP1p1s0)      │   │ Wi-Fi en0: 10.0.0.119  │
+│ P4: Controller 10.0.1.99 (VLAN 200) │◄───►│ • Control: 10.0.1.8   (enP8p1s0)      │   │ Tailscale:             │
+│ P3: Mirror Tap → Jetson  (VLAN 100) │────►│ • Tap NIC: enx9c69d39dd0a6 (USB)      │   │   100.112.223.16       │
+│ P1: Workload Ingress     (VLAN 100) │     │ • Coral Edge TPU ×2   (USB 3.0)       │   │ No Ethernet to Zodiac  │
+└──────────────────┬──────────────────┘     │ • Bridge :3003 HTTP, :6633 OpenFlow   │   └────────────────────────┘
+                   │                        │ • Ollama qwen2.5:3b  :11434 (local)   │
+                   │                        │ • Tailscale 100.118.64.16             │
+                   │                        └───────────────────────────────────────┘
+                   │ P1 RJ45 100M — Port 1 Isolation Policy (see below)
+                   ▼
+┌─────────────────────────────────────┐
+│           NETGEAR GS105Ev2          │
+│     (5-Port Easy Smart Managed)     │
+├─────────────────────────────────────┤
+│ P5: Uplink → Zodiac P1 (100M)       │
+│ P4: RPi 3B+ (GbE)                   │
+│ P1–3: Reserved (RPi 5 + Hailo-8)    │
+└──────────────────┬──────────────────┘
+                   │ P4 RJ45 GbE
+                   ▼
+┌─────────────────────────────────────┐
+│           Raspberry Pi 3B+          │
+│      (Untrusted Agent Workload)     │
+├─────────────────────────────────────┤
+│ Data Plane: 10.0.2.50 (eth0)        │
+│ Mgmt: 10.0.0.45 (wlan0, Wi-Fi)      │
+│ never-default on eth0               │
+└─────────────────────────────────────┘
+
+Port 1 Isolation Policy (installed by zodiac-bridge-server on OpenFlow ready):
+  prio 65535  quarantine DROP (sentinel)                       — always wins
+  prio 200    P1 IPv4 10.0.2.0/24 → 10.0.2.0/24    → [P2, P3]  — intra-segment only
+  prio 200    P1 ARP                               → [P2, P3]
+  prio 150    P1 anything else                     → [P3]      — tap only, never P2
+  prio 200    P2 IPv4 → 10.0.2.0/24, P2 ARP        → [P1]
+  prio 100    P3 (Jetson tap) → [P1]
+  prio 0      table-miss DROP                                  — fail-closed
+
+Tailscale overlay (100.64.0.0/10): Jetson 100.118.64.16 ⟷ Mac 100.112.223.16;
+Jetson advertises 10.0.0.0/24 + 10.0.1.0/24 as subnet router and acts as exit node.
+The 10.0.2.0/24 workload subnet is NOT advertised.
 ```
 
 ### 802.1Q VLAN Matrix
@@ -71,19 +85,20 @@ This ledger tracks the physical, data link, network, and transport architecture 
 
 | Node / Silicon | Hardware / SoC | MAC / Serial / ID | Network Interfaces | Roles & Capabilities |
 | :--- | :--- | :--- | :--- | :--- |
-| **Zodiac FX Switch** | Atmel SAM4E8E + KSZ8795CLX | DPID `0x70b3d58740c9`<br>MAC `70:B3:D5:87:40:C9`<br>FW `0.86`<br>UID `1396191488-826951736-858797360-925970489` | Port 1 (Workload)<br>Port 2 (Transit)<br>Port 3 (Tap)<br>Port 4 (Mgmt) | 128-rule OpenFlow 1.3 switch fabric; hardware MIB counters via CDC-ACM `/dev/ttyACM0`. |
+| **Zodiac FX Switch** | Atmel SAM4E8E + KSZ8795CLX | DPID `0x70b3d58740c9`<br>MAC `70:B3:D5:87:40:C9`<br>FW `0.86`<br>UID `1396191488-826951736-858797360-925970489` | Port 1 (Workload)<br>Port 2 (ISP Wi-Fi Extender Uplink)<br>Port 3 (Tap)<br>Port 4 (Mgmt) | 128-rule OpenFlow 1.3 switch fabric; hardware MIB counters via CDC-ACM `/dev/ttyACM0`. |
 | **NETGEAR GS105Ev2** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2 | Port 1–3 (Reserved/Exp)<br>Port 4 (RPi 3B+ GbE)<br>Port 5 (Zodiac Port 1 Uplink 100M) | Intermediate Gigabit aggregation layer for Workload subnet. 128 KB shared packet buffer; IEEE 802.3x Flow Control ENABLED to propagate backpressure across 1Gbps -> 100Mbps speed transition; store-and-forward latency (~12 µs GbE ingress + ~120 µs 100M egress per 1518B MTU); loop detection enabled, IGMP snooping disabled; 802.1Q tagging readiness (fail-closed drop on untagged frames for trunking). |
 | **Jetson Appliance** | NVIDIA Jetson Orin Nano Super | Serial `1791626120820` | `wlP1p1s0` (`10.0.0.15`)<br>`enP8p1s0` (`10.0.1.8`)<br>`enx9c69d39dd0a6` (Tap) | Master SDN controller, Sentinel ML daemon, dual Coral Edge TPU INT8 coprocessor host. |
 | **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`) | Untrusted agent workload node, iperf3 client traffic generator. |
-| **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, alias `10.0.2.119/24`) | Operator terminal, iperf3 benchmark listener endpoint behind Port 2 transit. |
+| **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, Wi-Fi)<br>`tailscale0` (`100.112.223.16`) | Operator terminal. Connected strictly via Wi-Fi and Tailscale mesh (no direct physical Ethernet link to Zodiac). |
+| **ISP Wi-Fi Extender** | Home LAN / WAN Bridge | Gateway `10.0.0.1` | RJ45 Ethernet Port | Uplink bridge connected to Zodiac Port 2; provides L2 physical attachment to home LAN / WAN gateway. |
 
 ### L3 Subnet & Addressing Schema
 
 | Subnet CIDR | Interface / Segment | Scope | Purpose |
 | :--- | :--- | :--- | :--- |
-| `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi), `en0` (Mac) | Out-of-Band Mgmt | SSH management, Internet gateway egress, cloud telemetry sync. |
+| `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi), `en0` (Mac), Zodiac Port 2 | Out-of-Band Mgmt & Gateway Uplink | SSH management, Internet gateway egress (`10.0.0.1`), physical uplink from Zodiac Port 2 to ISP extender. |
 | `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
-| `10.0.2.0/24` | `eth0` (RPi `10.0.2.50`) -> Netgear P4 -> P5 -> Zodiac P1 ⟷ P2 -> `en0` (Mac `10.0.2.119`) | Untrusted Data Plane | Workload packet plane and benchmark transit governed by SDN flow tables. |
+| `10.0.2.0/24` | `eth0` (RPi `10.0.2.50`) -> Netgear P4 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` home LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
 | `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
 
 ### L4 Transport & Protocol Bindings
@@ -91,7 +106,7 @@ This ledger tracks the physical, data link, network, and transport architecture 
 | Port / Protocol | Service | Direction | Security & Performance Invariant |
 | :--- | :--- | :--- | :--- |
 | `TCP 6633` | OpenFlow 1.3 Controller | Jetson Ingress (from Port 4) | Isolated to VLAN 200; BigInt wire serialization; fail-secure. |
-| `TCP 5201` | iperf3 TCP/UDP Benchmark | Mac Ingress (`10.0.2.119`) from Pi (`10.0.2.50`) | Port 1 ⟷ Port 2 data-plane transit testing; zero-suppression integer throughput metering. |
+| `TCP 5201` | iperf3 TCP/UDP Benchmark | Home LAN Ingress (`10.0.0.x` / `10.0.2.x`) from Pi (`10.0.2.50`) | Port 1 ⟷ Port 2 data-plane transit testing across ISP extender uplink; zero-suppression integer throughput metering. |
 | `UDP 53` | RFC 1035 DNS Wire Server | Jetson Ingress / Workload | Default-drop on unrecognized domains; fail-closed resolver. |
 | `TCP 3003` | Zodiac Bridge HTTP / SSE | Local / Tailscale | Read-only telemetry exposition; real-time hardware status. |
 | `TCP 9100/9105` | Prometheus Metrics Exporter | Local / Scraping | 64-bit integer counters; zero floating point precision drift. |
