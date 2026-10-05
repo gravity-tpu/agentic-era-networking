@@ -7,7 +7,7 @@
 # (definitive rejection / critical issues / model exhaustion).
 # ==============================================================================
 
-set -uo pipefail
+set -euo pipefail
 
 REVIEW_SCRIPT="${1:-council:review:last}"
 LABEL="${2:-Council Review}"
