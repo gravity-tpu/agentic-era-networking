@@ -22,7 +22,7 @@ on:
 
 jobs:
   review:
-    name: Typecheck, Invariant Tests & AI Review
+    name: Technical Staff Council Review
     runs-on: ubuntu-latest
 
     steps:
@@ -49,35 +49,38 @@ jobs:
       - name: Run Invariant & Unit Test Suite
         run: npm run test
 
-      - name: Council Review — AI Code Review
+      - name: Technical Staff Council Review
         timeout-minutes: 12
-        run: |
-          set -uo pipefail
-          # Exit codes from ai-reviewer.mjs:
-          #   0 = approved (no criticals, no warnings)
-          #   1 = definitive rejection: Critical Issues found, all models unavailable, or crash
-          #   2 = strict-mode warning block only (no criticals; LLM may flip on re-evaluation)
-          # Verification Asymmetry (Hassabis): only exit-2 is retryable — definitive rejections
-          # must fail immediately so the gate is not probabilistically bypassed.
-          MAX_ATTEMPTS=3
-          attempt=1
-          while [ $attempt -le $MAX_ATTEMPTS ]; do
-            echo "::group::Council Review attempt $attempt / $MAX_ATTEMPTS"
-            npm run council:review:last -- --strict || review_exit=$?
-            review_exit=${review_exit:-0}
-            echo "::endgroup::"
-            if [ "$review_exit" -eq 0 ]; then exit 0; fi
-            if [ "$review_exit" -ne 2 ]; then
-              echo "::error::Council review: definitive rejection (exit $review_exit) — no retry."
-              exit "$review_exit"
-            fi
-            attempt=$((attempt + 1))
-            if [ $attempt -le $MAX_ATTEMPTS ]; then
-              echo "::notice::Council review: warning-only block — re-evaluating (attempt $attempt / $MAX_ATTEMPTS)..."
-            fi
-          done
-          echo "::error::Council review: warning-only block persisted after $MAX_ATTEMPTS attempts."
-          exit 2
+        run: npm run council:review:last -- --strict
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_BEFORE: ${{ github.event.before }}
+
+  ccie-review:
+    name: CCIE Network Engineering Council Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: CCIE Network Engineering Council Review
+        timeout-minutes: 12
+        run: npm run ccie:review:last -- --strict
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}
@@ -87,7 +90,7 @@ jobs:
 
   deploy:
     name: Deploy to Vercel
-    needs: review
+    needs: [review, ccie-review]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 

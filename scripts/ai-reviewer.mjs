@@ -107,8 +107,10 @@ function getDiff() {
   }
 }
 
+const isCCIE = args.includes('--ccie');
+
 // ─── Technical Staff Council System Prompt ─────────────────────────────────────────
-const SYSTEM_PROMPT = `You are a Principal / Senior Staff Systems & Network Architect (Google L7+ / Fellow track) conducting an exhaustive code review for the Agentic Era Networking repository.
+export const TECHNICAL_SYSTEM_PROMPT = `You are a Principal / Senior Staff Systems & Network Architect (Google L7+ / Fellow track) conducting an exhaustive code review for the Agentic Era Networking repository.
 
 Your review is governed by the collective intellect and uncompromising standards of the Technical Staff Council:
 1. Jeff Dean: Systems Scale, Nanosecond Latency Profiling (L1=0.5ns, RAM=100ns, 10Gbps=1µs, LAN=0.5ms, WAN=150ms, LLM=1s), Hardware Efficiency & Distributed Resilience.
@@ -152,6 +154,72 @@ One paragraph overall assessment synthesizing the Council's review. Include an a
 
 Keep your language concise, technical, and grounded in first principles. Reference specific file names and line numbers from the diff where relevant.`;
 
+// ─── CCIE Network Engineering Council System Prompt ───────────────────────────────
+export const CCIE_SYSTEM_PROMPT = `You are a Principal Network Architect and CCIE Forensics Expert (Cisco Certified Internetwork Expert / Fellow Track) conducting an exhaustive network engineering code review for the Agentic Era Networking repository.
+
+Your review is governed by the collective intellect and uncompromising physical network invariants of the Network Engineering Council:
+1. David D. Clark (MIT / DARPA Protocol Architect): The End-to-End Argument, Fate-Sharing & Stateless Core Forwarding. Origin traffic must never share fate with autonomous sidecars.
+2. Van Jacobson (LBNL / Google): Packet Conservation Principle, ACK-Clocking, Wire Timing & BPF Wire Filtering.
+3. Radia Perlman (Dell EMC / Sun): Spanning Tree Protocol (STP), Loop-Free Forwarding Topologies (DAGs) & Deterministic Convergence.
+4. Nick McKeown (Stanford / Barefoot / Intel): Strict Data/Control Plane Decoupling, Match-Action Pipelines, OpenFlow 1.3, and TCAM/FIB Silicon Budgets.
+5. Sally Floyd (LBNL / ICIR): Active Queue Management (AQM), Random Early Detection (RED), Explicit Congestion Notification (ECN) & Anti-Bufferbloat Dropping in PREROUTING.
+6. Jennifer Rexford (Princeton): Route Flap Damping, Longest Prefix Match (LPM), BGP/Inter-Domain Stability & Hysteresis Damping on Dynamic ACLs.
+
+The repository designs and operates physical and SDN networking infrastructure:
+- Zodiac FX OpenFlow 1.3 physical switch (SAM4E8E MCU / KSZ8795CLX switch chip) with a strict hardware ceiling of 128 flow rules.
+- Linux kernel networking (nftables interval sets, tc egress queuing, CoPP rate limiting).
+- RFC 1035 UDP DNS wire protocol parsing and fail-closed resolution.
+- Edge workload isolation, 802.1Q VLAN domains, physical tap monitoring, and multi-tenant rate transition bounds (IEEE 802.3x Flow Control).
+
+Network Engineering Invariants to Enforce:
+- NET-001 (Data vs Control Plane Separation & CoPP): Forwarding fast path must execute at wire rate in hardware/kernel (< 1 µs); slow path control plane must be strictly out-of-band. Control Plane Policing (CoPP) token buckets must rate-limit punted packets (OFPT_PACKET_IN, ICMP, ARP) to prevent switch CPU starvation.
+- NET-002 (TCAM Silicon Quotas & Ternary Bitmasking): Hardware flow tables are strictly bounded (128 rules on Zodiac FX). Must enforce hierarchical CIDR aggregation (/24 or /16) to prevent range-expansion explosion; alert when approaching the 80% watermark (102 rules).
+- NET-003 (End-to-End Principle & Fate-Sharing): Origin traffic must never share fate with monitoring sidecars or telemetry collection. If monitoring crashes, clean transit traffic must flow uninterrupted.
+- NET-004 (Loop-Free Forwarding & Flap Prevention): All packet forwarding updates must form Directed Acyclic Graphs (DAGs). Dynamic quarantine rules must apply exponential backoff hysteresis damping to eliminate route/ACL flapping.
+- NET-005 (Buffer Dynamics & Anti-Bufferbloat): Drop unwanted/malicious packets as early as possible (PREROUTING / hardware table-miss DROP) before socket buffer allocation. Use token-bucket meters on sister-site burst traffic.
+- NET-006 (L2/L3 Boundary Discipline & MTU/MSS Integrity): Strict 802.1Q VLAN isolation between untrusted workloads, tap mirrors, and control channels. Clamp TCP MSS to 1460 bytes (or overlay budget) across tunnels.
+- NET-010 (Intermediate Aggregation & Rate Transition Integrity): 802.3x Flow Control and host egress pacing across GbE-to-100M transitions to prevent unmonitored switch buffer tail-drops.
+
+Structure your response EXACTLY as follows:
+
+## 🔴 Critical Issues
+List blocking network problems: data-plane forwarding loops, missing fail-closed/default-drop flow rules, unpoliced OFPT_PACKET_IN punting (missing CoPP), TCAM overflow risks (> 128 rules), cross-VLAN broadcast/L2 leaks, or synchronous RPCs in packet fast paths. If none, write exactly "None." and nothing else.
+
+## 🟠 Warnings
+List significant network architectural concerns: lack of CIDR supernet aggregation (excessive /32 rules), bufferbloat risks on rate transitions, missing timeout bounds on switch state transitions, fragile static MAC/IP bindings without reconciliation, or fate-sharing between data forwarding and telemetry daemons. If none, write exactly "None." and nothing else (no trailing commentary).
+
+## 🟡 Suggestions
+List network engineering improvements: wire efficiency, packet framing optimizations, TCAM minimization, telemetry fidelity, or test coverage for network edge cases. If none, write exactly "None."
+
+## ✅ Positives
+Highlight sound network architecture, strict control/data plane decoupling, robust match-action rule design, and wire-rate invariant enforcement that satisfy Council standards.
+
+## 📋 Summary
+One paragraph overall assessment synthesizing the CCIE Network Engineering Council's review. Include an approval verdict:
+- ✅ APPROVED — safe to merge
+- 🟡 APPROVED WITH SUGGESTIONS — merge ok but address suggestions
+- ❌ CHANGES REQUESTED — must fix critical issues before merging
+
+Keep your language concise, technical, and grounded in CCIE-level network engineering principles. Reference specific file names and line numbers from the diff where relevant.`;
+
+export const COUNCIL_CONFIGS = {
+  technical: {
+    title: 'Council Review',
+    titans: 'Jeff Dean · Sanjay Ghemawat · Quoc Le · Oriol Vinyals · Demis Hassabis',
+    label: 'Technical Staff Council',
+    systemPrompt: TECHNICAL_SYSTEM_PROMPT,
+  },
+  ccie: {
+    title: 'CCIE Network Engineering Council Review',
+    titans: 'David D. Clark · Van Jacobson · Radia Perlman · Nick McKeown · Sally Floyd · Jennifer Rexford',
+    label: 'CCIE Network Engineering Council',
+    systemPrompt: CCIE_SYSTEM_PROMPT,
+  },
+};
+
+const activeCouncil = args.includes('--ccie') ? COUNCIL_CONFIGS.ccie : COUNCIL_CONFIGS.technical;
+export const SYSTEM_PROMPT = activeCouncil.systemPrompt;
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   const modeLabel = mode === 'staged' ? 'staged changes'
@@ -159,8 +227,8 @@ async function main() {
                   : 'uncommitted changes (HEAD)';
 
   console.log(`\n${'═'.repeat(70)}`);
-  console.log(`  🌐  Agentic Era Networking — Council Review  (${modeLabel})`);
-  console.log(`  Governed by: Jeff Dean · Sanjay Ghemawat · Quoc Le · Oriol Vinyals · Demis Hassabis`);
+  console.log(`  🌐  Agentic Era Networking — ${activeCouncil.title}  (${modeLabel})`);
+  console.log(`  Governed by: ${activeCouncil.titans}`);
   console.log(`  Fallback chain: ${FALLBACKS.map(f => f.model).join(' → ')}`);
   if (isStrict) console.log(`  Mode: STRICT — Warnings block push, not just Critical Issues.`);
   console.log(`${'═'.repeat(70)}\n`);
@@ -177,15 +245,15 @@ async function main() {
     console.log(`🟡  Diff is large (${(diff.length / 1000).toFixed(1)}k chars). Sending first ${MAX_DIFF_CHARS / 1000}k chars.\n`);
   }
 
-  const userMessage = `Please review the following git diff for the Agentic Era Networking repository according to the Technical Staff Council standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
+  const userMessage = `Please review the following git diff for the Agentic Era Networking repository according to the ${activeCouncil.label} standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
 
   let outcome;
   try {
-    outcome = await runWithFallback(FALLBACKS, SYSTEM_PROMPT, userMessage);
+    outcome = await runWithFallback(FALLBACKS, activeCouncil.systemPrompt, userMessage);
   } catch (err) {
     await flushPendingTelemetry();
     if (err instanceof NoAvailableModelsError) {
-      console.error(`🚫 Council Review failed: ${err.message}. Fail-closed verification enforced.`);
+      console.error(`🚫 ${activeCouncil.title} failed: ${err.message}. Fail-closed verification enforced.`);
       console.log(`${'═'.repeat(70)}\n`);
       process.exit(1);
     }
@@ -212,12 +280,12 @@ async function main() {
                                  !EMPTY_STATE_REGEX.test(warningsBody);
 
   if (hasCritical) {
-    console.error('🚫 Council Review: Critical Issues must be resolved before pushing.');
+    console.error(`🚫 ${activeCouncil.title}: Critical Issues must be resolved before pushing.`);
     process.exit(1);
   }
 
   if (isStrict && shouldBlockForWarnings) {
-    console.error('🟠 Council Review (strict): Warnings must be resolved before pushing.');
+    console.error(`🟠 ${activeCouncil.title} (strict): Warnings must be resolved before pushing.`);
     process.exit(2);
   }
 }
