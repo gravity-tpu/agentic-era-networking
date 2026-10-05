@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { EventEmitter } from 'node:events';
 import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js';
 import {
   buildPort1IsolationPolicy,
@@ -20,6 +21,8 @@ import {
 } from '../../src/sdn/port1-isolation.js';
 import type { IsolationRule } from '../../src/sdn/port1-isolation.js';
 import { parseFlowStatsReply } from '../../src/sdn/dataplane-benchmark.js';
+import { readFlowStats, MAX_READBACK_FLOW_ENTRIES } from '../../src/sdn/flow-readback.js';
+import type { OpenFlowServer } from '../../src/sdn/openflow-server.js';
 
 /** Collects OXM TLV type headers (uint32) from an encoded FlowMod. */
 function oxmHeaders(buf: Buffer): number[] {
@@ -185,5 +188,22 @@ describe('Port 1 isolation switch readback', () => {
     const { entries } = parseFlowStatsReply(flowStatsReplyFrom([tableMiss, ...policyBufs, policyBufs[0] as Buffer]));
     const v = verifyIsolationReadback(policy, entries);
     expect(v.mismatches.some((m) => m.includes('duplicate'))).toBe(true);
+  });
+
+  it('enforces bounded memory allocation and aborts when flow entries exceed maxEntries (Ghemawat Invariant)', async () => {
+    class MockOpenFlowServer extends EventEmitter {
+      public reserveXid(): number {
+        return 42;
+      }
+      public sendRaw(_packet: Buffer): void {}
+    }
+
+    const mockServer = new MockOpenFlowServer();
+    const readPromise = readFlowStats(mockServer, 1000, 2);
+    // Reply contains 7 entries (table-miss + 6 isolation rules), which exceeds maxEntries = 2
+    const replyBuf = flowStatsReplyFrom([tableMiss, ...policyBufs]);
+    mockServer.emit('multipartReply', 42, replyBuf);
+
+    await expect(readPromise).rejects.toThrow(/exceeded max flow entries limit/);
   });
 });

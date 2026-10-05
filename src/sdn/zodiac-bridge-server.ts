@@ -540,7 +540,8 @@ export class ZodiacBridgeServer {
     mismatches: readonly string[];
     switchErrors: string[];
     checkedAtMs: number | null;
-  } = { state: 'not_installed', confirmed: [], mismatches: [], switchErrors: [], checkedAtMs: null };
+    checkedAtMonoNs: bigint | null;
+  } = { state: 'not_installed', confirmed: [], mismatches: [], switchErrors: [], checkedAtMs: null, checkedAtMonoNs: null };
 
   /**
    * Registers a flow rule entry in the bridge server's local registry.
@@ -691,11 +692,25 @@ export class ZodiacBridgeServer {
       this.flowModXidLabels.clear();
       const violations = verifyPort1Isolation(isolationPolicy);
       if (violations.length > 0) {
-        this.isolationStatus = { state: 'verifier_rejected', confirmed: [], mismatches: violations, switchErrors: [], checkedAtMs: Date.now() };
+        this.isolationStatus = {
+          state: 'verifier_rejected',
+          confirmed: [],
+          mismatches: violations,
+          switchErrors: [],
+          checkedAtMs: Date.now(),
+          checkedAtMonoNs: process.hrtime.bigint(),
+        };
         console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);
         return;
       }
-      this.isolationStatus = { state: 'pending_readback', confirmed: [], mismatches: [], switchErrors: [], checkedAtMs: null };
+      this.isolationStatus = {
+        state: 'pending_readback',
+        confirmed: [],
+        mismatches: [],
+        switchErrors: [],
+        checkedAtMs: null,
+        checkedAtMonoNs: null,
+      };
       for (const rule of isolationPolicy) {
         const xid = this.controller.openFlow.sendFlowModOptions(rule.flowMod);
         this.flowModXidLabels.set(xid, rule.id);
@@ -714,6 +729,7 @@ export class ZodiacBridgeServer {
             confirmed: verdict.confirmed,
             mismatches: verdict.mismatches,
             checkedAtMs: Date.now(),
+            checkedAtMonoNs: process.hrtime.bigint(),
           };
           if (this.isolationStatus.state === 'verified') {
             console.log(`[+] [Bridge Server] Isolation readback VERIFIED: ${verdict.confirmed.length}/${isolationPolicy.length} rules confirmed on switch (${entries.length} total entries).`);
@@ -723,7 +739,13 @@ export class ZodiacBridgeServer {
         })
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
-          this.isolationStatus = { ...this.isolationStatus, state: 'readback_failed', mismatches: [msg], checkedAtMs: Date.now() };
+          this.isolationStatus = {
+            ...this.isolationStatus,
+            state: 'readback_failed',
+            mismatches: [msg],
+            checkedAtMs: Date.now(),
+            checkedAtMonoNs: process.hrtime.bigint(),
+          };
           console.error(`[!] [Bridge Server] Isolation readback FAILED: ${msg}`);
         });
     });
@@ -1674,7 +1696,10 @@ export class ZodiacBridgeServer {
         note: 'Per-flow hardware stats (OFPT_MULTIPART_REQUEST) not yet implemented; showing controller-pushed rules only.',
         rules: Array.from(this.flowRuleRegistry.values()),
         totalRules: this.flowRuleRegistry.size,
-        port1Isolation: this.isolationStatus,
+        port1Isolation: {
+          ...this.isolationStatus,
+          checkedAtMonoNs: this.isolationStatus.checkedAtMonoNs !== null ? this.isolationStatus.checkedAtMonoNs.toString() : null,
+        },
         timestamp: Date.now(),
       }));
       return;

@@ -12,13 +12,26 @@ import { buildFlowStatsRequest, parseFlowStatsReply, parseOfpError } from './dat
 import type { FlowStatsEntry } from './dataplane-benchmark.js';
 
 /**
+ * Maximum flow entries allowed during readback to prevent unbounded memory allocation (DoS/OOM protection).
+ * The Zodiac FX hardware capacity is 128 rules; 512 provides safe headroom while strictly bounding heap growth.
+ */
+export const MAX_READBACK_FLOW_ENTRIES = 512;
+
+export type FlowStatsSource = Pick<OpenFlowServer, 'reserveXid' | 'sendRaw' | 'on' | 'off'>;
+
+/**
  * Requests every flow entry from the switch and resolves once the final multipart segment
- * (OFPMPF_REPLY_MORE clear) arrives. Rejects on OFPT_ERROR for this xid, parse failure, or timeout.
+ * (OFPMPF_REPLY_MORE clear) arrives. Rejects on OFPT_ERROR for this xid, parse failure, timeout,
+ * or if accumulated entries exceed maxEntries (unbounded memory allocation defense).
  *
  * Ordering: the request is written on the same TCP stream after any preceding FlowMods. The Zodiac FX
  * MCU processes controller messages sequentially, so FlowMod errors arrive before this reply.
  */
-export function readFlowStats(of: OpenFlowServer, timeoutMs: number): Promise<FlowStatsEntry[]> {
+export function readFlowStats(
+  of: FlowStatsSource,
+  timeoutMs: number,
+  maxEntries: number = MAX_READBACK_FLOW_ENTRIES,
+): Promise<FlowStatsEntry[]> {
   const xid = of.reserveXid();
   const entries: FlowStatsEntry[] = [];
   return new Promise<FlowStatsEntry[]>((resolve, reject) => {
@@ -36,6 +49,16 @@ export function readFlowStats(of: OpenFlowServer, timeoutMs: number): Promise<Fl
       if (rxXid !== xid) return;
       try {
         const reply = parseFlowStatsReply(packet);
+        if (entries.length + reply.entries.length > maxEntries) {
+          done(() =>
+            reject(
+              new Error(
+                `OFPMP_FLOW readback exceeded max flow entries limit (${entries.length + reply.entries.length} > ${maxEntries}); aborted to prevent unbounded memory allocation`,
+              ),
+            ),
+          );
+          return;
+        }
         entries.push(...reply.entries);
         if (!reply.more) done(() => resolve(entries));
       } catch (e: unknown) {
