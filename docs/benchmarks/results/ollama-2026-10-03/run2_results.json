@@ -1,0 +1,1036 @@
+{
+ "qwen2.5:3b": {
+  "conc": 2,
+  "ok": 37,
+  "errors": 0,
+  "agg_tok_s": 15.2,
+  "per_req_tok_s": 15.4,
+  "lat_p50": 39.1,
+  "lat_p95": 39.2,
+  "raw": [
+   {
+    "latency_s": 13.48,
+    "eval_count": 137,
+    "eval_s": 8.906,
+    "error": null
+   },
+   {
+    "latency_s": 24.182,
+    "eval_count": 166,
+    "eval_s": 10.725,
+    "error": null
+   },
+   {
+    "latency_s": 30.285,
+    "eval_count": 300,
+    "eval_s": 19.485,
+    "error": null
+   },
+   {
+    "latency_s": 39.186,
+    "eval_count": 300,
+    "eval_s": 19.503,
+    "error": null
+   },
+   {
+    "latency_s": 39.238,
+    "eval_count": 300,
+    "eval_s": 19.503,
+    "error": null
+   },
+   {
+    "latency_s": 23.364,
+    "eval_count": 57,
+    "eval_s": 3.651,
+    "error": null
+   },
+   {
+    "latency_s": 15.129,
+    "eval_count": 174,
+    "eval_s": 11.274,
+    "error": null
+   },
+   {
+    "latency_s": 31.051,
+    "eval_count": 300,
+    "eval_s": 19.492,
+    "error": null
+   },
+   {
+    "latency_s": 39.194,
+    "eval_count": 300,
+    "eval_s": 19.475,
+    "error": null
+   },
+   {
+    "latency_s": 39.111,
+    "eval_count": 300,
+    "eval_s": 19.47,
+    "error": null
+   },
+   {
+    "latency_s": 39.143,
+    "eval_count": 300,
+    "eval_s": 19.468,
+    "error": null
+   },
+   {
+    "latency_s": 39.262,
+    "eval_count": 300,
+    "eval_s": 19.472,
+    "error": null
+   },
+   {
+    "latency_s": 39.245,
+    "eval_count": 300,
+    "eval_s": 19.487,
+    "error": null
+   },
+   {
+    "latency_s": 29.538,
+    "eval_count": 152,
+    "eval_s": 9.818,
+    "error": null
+   },
+   {
+    "latency_s": 29.502,
+    "eval_count": 300,
+    "eval_s": 19.464,
+    "error": null
+   },
+   {
+    "latency_s": 39.12,
+    "eval_count": 300,
+    "eval_s": 19.475,
+    "error": null
+   },
+   {
+    "latency_s": 39.21,
+    "eval_count": 300,
+    "eval_s": 19.492,
+    "error": null
+   },
+   {
+    "latency_s": 39.141,
+    "eval_count": 300,
+    "eval_s": 19.479,
+    "error": null
+   },
+   {
+    "latency_s": 39.19,
+    "eval_count": 300,
+    "eval_s": 19.472,
+    "error": null
+   },
+   {
+    "latency_s": 30.617,
+    "eval_count": 168,
+    "eval_s": 10.871,
+    "error": null
+   },
+   {
+    "latency_s": 30.465,
+    "eval_count": 300,
+    "eval_s": 19.47,
+    "error": null
+   },
+   {
+    "latency_s": 39.087,
+    "eval_count": 300,
+    "eval_s": 19.475,
+    "error": null
+   },
+   {
+    "latency_s": 39.147,
+    "eval_count": 300,
+    "eval_s": 19.464,
+    "error": null
+   },
+   {
+    "latency_s": 39.105,
+    "eval_count": 300,
+    "eval_s": 19.446,
+    "error": null
+   },
+   {
+    "latency_s": 39.108,
+    "eval_count": 300,
+    "eval_s": 19.455,
+    "error": null
+   },
+   {
+    "latency_s": 39.162,
+    "eval_count": 300,
+    "eval_s": 19.473,
+    "error": null
+   },
+   {
+    "latency_s": 25.617,
+    "eval_count": 92,
+    "eval_s": 5.927,
+    "error": null
+   },
+   {
+    "latency_s": 16.638,
+    "eval_count": 162,
+    "eval_s": 10.493,
+    "error": null
+   },
+   {
+    "latency_s": 30.173,
+    "eval_count": 300,
+    "eval_s": 19.46,
+    "error": null
+   },
+   {
+    "latency_s": 39.119,
+    "eval_count": 300,
+    "eval_s": 19.457,
+    "error": null
+   },
+   {
+    "latency_s": 39.133,
+    "eval_count": 300,
+    "eval_s": 19.474,
+    "error": null
+   },
+   {
+    "latency_s": 39.169,
+    "eval_count": 300,
+    "eval_s": 19.451,
+    "error": null
+   },
+   {
+    "latency_s": 32.359,
+    "eval_count": 195,
+    "eval_s": 12.607,
+    "error": null
+   },
+   {
+    "latency_s": 32.309,
+    "eval_count": 300,
+    "eval_s": 19.485,
+    "error": null
+   },
+   {
+    "latency_s": 39.101,
+    "eval_count": 300,
+    "eval_s": 19.441,
+    "error": null
+   },
+   {
+    "latency_s": 35.172,
+    "eval_count": 238,
+    "eval_s": 15.424,
+    "error": null
+   },
+   {
+    "latency_s": 30.053,
+    "eval_count": 221,
+    "eval_s": 14.328,
+    "error": null
+   }
+  ],
+  "tokens": 9562,
+  "first_error": null
+ },
+ "gemma4:26b": {
+  "conc": 2,
+  "ok": 131,
+  "errors": 0,
+  "agg_tok_s": 62.5,
+  "per_req_tok_s": 67.8,
+  "lat_p50": 9.5,
+  "lat_p95": 10.5,
+  "raw": [
+   {
+    "latency_s": 7.579,
+    "eval_count": 300,
+    "eval_s": 3.828,
+    "error": null
+   },
+   {
+    "latency_s": 11.582,
+    "eval_count": 300,
+    "eval_s": 3.879,
+    "error": null
+   },
+   {
+    "latency_s": 7.781,
+    "eval_count": 300,
+    "eval_s": 3.653,
+    "error": null
+   },
+   {
+    "latency_s": 7.44,
+    "eval_count": 300,
+    "eval_s": 3.531,
+    "error": null
+   },
+   {
+    "latency_s": 7.634,
+    "eval_count": 300,
+    "eval_s": 3.843,
+    "error": null
+   },
+   {
+    "latency_s": 7.742,
+    "eval_count": 300,
+    "eval_s": 3.647,
+    "error": null
+   },
+   {
+    "latency_s": 7.984,
+    "eval_count": 300,
+    "eval_s": 4.07,
+    "error": null
+   },
+   {
+    "latency_s": 8.089,
+    "eval_count": 300,
+    "eval_s": 3.745,
+    "error": null
+   },
+   {
+    "latency_s": 7.497,
+    "eval_count": 300,
+    "eval_s": 3.496,
+    "error": null
+   },
+   {
+    "latency_s": 7.31,
+    "eval_count": 300,
+    "eval_s": 3.634,
+    "error": null
+   },
+   {
+    "latency_s": 7.245,
+    "eval_count": 300,
+    "eval_s": 3.499,
+    "error": null
+   },
+   {
+    "latency_s": 7.858,
+    "eval_count": 300,
+    "eval_s": 4.171,
+    "error": null
+   },
+   {
+    "latency_s": 8.629,
+    "eval_count": 300,
+    "eval_s": 4.19,
+    "error": null
+   },
+   {
+    "latency_s": 8.713,
+    "eval_count": 300,
+    "eval_s": 4.329,
+    "error": null
+   },
+   {
+    "latency_s": 8.102,
+    "eval_count": 300,
+    "eval_s": 3.569,
+    "error": null
+   },
+   {
+    "latency_s": 7.823,
+    "eval_count": 300,
+    "eval_s": 3.973,
+    "error": null
+   },
+   {
+    "latency_s": 8.547,
+    "eval_count": 300,
+    "eval_s": 4.298,
+    "error": null
+   },
+   {
+    "latency_s": 8.638,
+    "eval_count": 300,
+    "eval_s": 4.068,
+    "error": null
+   },
+   {
+    "latency_s": 8.34,
+    "eval_count": 300,
+    "eval_s": 4.0,
+    "error": null
+   },
+   {
+    "latency_s": 8.159,
+    "eval_count": 300,
+    "eval_s": 3.872,
+    "error": null
+   },
+   {
+    "latency_s": 8.135,
+    "eval_count": 300,
+    "eval_s": 3.969,
+    "error": null
+   },
+   {
+    "latency_s": 7.882,
+    "eval_count": 300,
+    "eval_s": 3.629,
+    "error": null
+   },
+   {
+    "latency_s": 8.144,
+    "eval_count": 300,
+    "eval_s": 4.239,
+    "error": null
+   },
+   {
+    "latency_s": 8.24,
+    "eval_count": 300,
+    "eval_s": 3.731,
+    "error": null
+   },
+   {
+    "latency_s": 8.084,
+    "eval_count": 300,
+    "eval_s": 4.079,
+    "error": null
+   },
+   {
+    "latency_s": 8.241,
+    "eval_count": 300,
+    "eval_s": 3.866,
+    "error": null
+   },
+   {
+    "latency_s": 7.963,
+    "eval_count": 300,
+    "eval_s": 3.793,
+    "error": null
+   },
+   {
+    "latency_s": 8.175,
+    "eval_count": 300,
+    "eval_s": 4.092,
+    "error": null
+   },
+   {
+    "latency_s": 8.282,
+    "eval_count": 300,
+    "eval_s": 3.896,
+    "error": null
+   },
+   {
+    "latency_s": 8.507,
+    "eval_count": 300,
+    "eval_s": 4.312,
+    "error": null
+   },
+   {
+    "latency_s": 8.758,
+    "eval_count": 300,
+    "eval_s": 4.158,
+    "error": null
+   },
+   {
+    "latency_s": 8.138,
+    "eval_count": 300,
+    "eval_s": 3.777,
+    "error": null
+   },
+   {
+    "latency_s": 8.117,
+    "eval_count": 300,
+    "eval_s": 4.119,
+    "error": null
+   },
+   {
+    "latency_s": 8.237,
+    "eval_count": 300,
+    "eval_s": 3.8,
+    "error": null
+   },
+   {
+    "latency_s": 8.261,
+    "eval_count": 300,
+    "eval_s": 4.135,
+    "error": null
+   },
+   {
+    "latency_s": 8.696,
+    "eval_count": 300,
+    "eval_s": 4.236,
+    "error": null
+   },
+   {
+    "latency_s": 8.555,
+    "eval_count": 300,
+    "eval_s": 4.001,
+    "error": null
+   },
+   {
+    "latency_s": 8.359,
+    "eval_count": 300,
+    "eval_s": 4.133,
+    "error": null
+   },
+   {
+    "latency_s": 8.465,
+    "eval_count": 300,
+    "eval_s": 4.105,
+    "error": null
+   },
+   {
+    "latency_s": 8.527,
+    "eval_count": 300,
+    "eval_s": 4.087,
+    "error": null
+   },
+   {
+    "latency_s": 9.004,
+    "eval_count": 300,
+    "eval_s": 4.586,
+    "error": null
+   },
+   {
+    "latency_s": 9.491,
+    "eval_count": 300,
+    "eval_s": 4.685,
+    "error": null
+   },
+   {
+    "latency_s": 10.026,
+    "eval_count": 300,
+    "eval_s": 5.12,
+    "error": null
+   },
+   {
+    "latency_s": 9.916,
+    "eval_count": 300,
+    "eval_s": 4.574,
+    "error": null
+   },
+   {
+    "latency_s": 9.39,
+    "eval_count": 300,
+    "eval_s": 4.594,
+    "error": null
+   },
+   {
+    "latency_s": 9.754,
+    "eval_count": 300,
+    "eval_s": 4.826,
+    "error": null
+   },
+   {
+    "latency_s": 9.895,
+    "eval_count": 300,
+    "eval_s": 4.724,
+    "error": null
+   },
+   {
+    "latency_s": 9.676,
+    "eval_count": 300,
+    "eval_s": 4.598,
+    "error": null
+   },
+   {
+    "latency_s": 9.473,
+    "eval_count": 300,
+    "eval_s": 4.519,
+    "error": null
+   },
+   {
+    "latency_s": 9.133,
+    "eval_count": 300,
+    "eval_s": 4.271,
+    "error": null
+   },
+   {
+    "latency_s": 8.992,
+    "eval_count": 300,
+    "eval_s": 4.377,
+    "error": null
+   },
+   {
+    "latency_s": 9.686,
+    "eval_count": 300,
+    "eval_s": 4.964,
+    "error": null
+   },
+   {
+    "latency_s": 9.903,
+    "eval_count": 300,
+    "eval_s": 4.593,
+    "error": null
+   },
+   {
+    "latency_s": 9.916,
+    "eval_count": 300,
+    "eval_s": 4.964,
+    "error": null
+   },
+   {
+    "latency_s": 9.69,
+    "eval_count": 300,
+    "eval_s": 4.377,
+    "error": null
+   },
+   {
+    "latency_s": 9.468,
+    "eval_count": 300,
+    "eval_s": 4.743,
+    "error": null
+   },
+   {
+    "latency_s": 9.624,
+    "eval_count": 300,
+    "eval_s": 4.533,
+    "error": null
+   },
+   {
+    "latency_s": 9.173,
+    "eval_count": 300,
+    "eval_s": 4.412,
+    "error": null
+   },
+   {
+    "latency_s": 9.448,
+    "eval_count": 300,
+    "eval_s": 4.791,
+    "error": null
+   },
+   {
+    "latency_s": 9.426,
+    "eval_count": 300,
+    "eval_s": 4.278,
+    "error": null
+   },
+   {
+    "latency_s": 8.998,
+    "eval_count": 300,
+    "eval_s": 4.354,
+    "error": null
+   },
+   {
+    "latency_s": 9.873,
+    "eval_count": 300,
+    "eval_s": 5.158,
+    "error": null
+   },
+   {
+    "latency_s": 9.89,
+    "eval_count": 300,
+    "eval_s": 4.383,
+    "error": null
+   },
+   {
+    "latency_s": 9.072,
+    "eval_count": 300,
+    "eval_s": 4.352,
+    "error": null
+   },
+   {
+    "latency_s": 8.981,
+    "eval_count": 300,
+    "eval_s": 4.289,
+    "error": null
+   },
+   {
+    "latency_s": 9.116,
+    "eval_count": 300,
+    "eval_s": 4.461,
+    "error": null
+   },
+   {
+    "latency_s": 9.638,
+    "eval_count": 300,
+    "eval_s": 4.818,
+    "error": null
+   },
+   {
+    "latency_s": 9.448,
+    "eval_count": 300,
+    "eval_s": 4.283,
+    "error": null
+   },
+   {
+    "latency_s": 8.832,
+    "eval_count": 300,
+    "eval_s": 4.205,
+    "error": null
+   },
+   {
+    "latency_s": 9.319,
+    "eval_count": 300,
+    "eval_s": 4.771,
+    "error": null
+   },
+   {
+    "latency_s": 9.537,
+    "eval_count": 300,
+    "eval_s": 4.394,
+    "error": null
+   },
+   {
+    "latency_s": 9.195,
+    "eval_count": 300,
+    "eval_s": 4.413,
+    "error": null
+   },
+   {
+    "latency_s": 9.357,
+    "eval_count": 300,
+    "eval_s": 4.558,
+    "error": null
+   },
+   {
+    "latency_s": 10.154,
+    "eval_count": 300,
+    "eval_s": 5.202,
+    "error": null
+   },
+   {
+    "latency_s": 10.757,
+    "eval_count": 300,
+    "eval_s": 5.184,
+    "error": null
+   },
+   {
+    "latency_s": 10.485,
+    "eval_count": 300,
+    "eval_s": 5.063,
+    "error": null
+   },
+   {
+    "latency_s": 10.502,
+    "eval_count": 300,
+    "eval_s": 5.176,
+    "error": null
+   },
+   {
+    "latency_s": 10.164,
+    "eval_count": 300,
+    "eval_s": 4.621,
+    "error": null
+   },
+   {
+    "latency_s": 9.797,
+    "eval_count": 300,
+    "eval_s": 4.834,
+    "error": null
+   },
+   {
+    "latency_s": 9.584,
+    "eval_count": 300,
+    "eval_s": 4.382,
+    "error": null
+   },
+   {
+    "latency_s": 9.384,
+    "eval_count": 300,
+    "eval_s": 4.643,
+    "error": null
+   },
+   {
+    "latency_s": 9.563,
+    "eval_count": 300,
+    "eval_s": 4.689,
+    "error": null
+   },
+   {
+    "latency_s": 9.658,
+    "eval_count": 300,
+    "eval_s": 4.726,
+    "error": null
+   },
+   {
+    "latency_s": 9.873,
+    "eval_count": 300,
+    "eval_s": 4.79,
+    "error": null
+   },
+   {
+    "latency_s": 9.987,
+    "eval_count": 300,
+    "eval_s": 4.835,
+    "error": null
+   },
+   {
+    "latency_s": 9.841,
+    "eval_count": 300,
+    "eval_s": 4.652,
+    "error": null
+   },
+   {
+    "latency_s": 9.282,
+    "eval_count": 300,
+    "eval_s": 4.271,
+    "error": null
+   },
+   {
+    "latency_s": 9.027,
+    "eval_count": 300,
+    "eval_s": 4.394,
+    "error": null
+   },
+   {
+    "latency_s": 9.627,
+    "eval_count": 300,
+    "eval_s": 4.896,
+    "error": null
+   },
+   {
+    "latency_s": 9.872,
+    "eval_count": 300,
+    "eval_s": 4.633,
+    "error": null
+   },
+   {
+    "latency_s": 9.372,
+    "eval_count": 300,
+    "eval_s": 4.361,
+    "error": null
+   },
+   {
+    "latency_s": 9.073,
+    "eval_count": 300,
+    "eval_s": 4.447,
+    "error": null
+   },
+   {
+    "latency_s": 9.665,
+    "eval_count": 300,
+    "eval_s": 4.966,
+    "error": null
+   },
+   {
+    "latency_s": 10.259,
+    "eval_count": 300,
+    "eval_s": 5.044,
+    "error": null
+   },
+   {
+    "latency_s": 10.51,
+    "eval_count": 300,
+    "eval_s": 5.19,
+    "error": null
+   },
+   {
+    "latency_s": 9.923,
+    "eval_count": 300,
+    "eval_s": 4.346,
+    "error": null
+   },
+   {
+    "latency_s": 9.383,
+    "eval_count": 300,
+    "eval_s": 4.642,
+    "error": null
+   },
+   {
+    "latency_s": 9.526,
+    "eval_count": 300,
+    "eval_s": 4.473,
+    "error": null
+   },
+   {
+    "latency_s": 9.285,
+    "eval_count": 300,
+    "eval_s": 4.45,
+    "error": null
+   },
+   {
+    "latency_s": 9.86,
+    "eval_count": 300,
+    "eval_s": 5.062,
+    "error": null
+   },
+   {
+    "latency_s": 10.322,
+    "eval_count": 300,
+    "eval_s": 5.009,
+    "error": null
+   },
+   {
+    "latency_s": 9.979,
+    "eval_count": 300,
+    "eval_s": 4.726,
+    "error": null
+   },
+   {
+    "latency_s": 9.875,
+    "eval_count": 300,
+    "eval_s": 4.8,
+    "error": null
+   },
+   {
+    "latency_s": 9.825,
+    "eval_count": 300,
+    "eval_s": 4.678,
+    "error": null
+   },
+   {
+    "latency_s": 9.453,
+    "eval_count": 300,
+    "eval_s": 4.426,
+    "error": null
+   },
+   {
+    "latency_s": 9.492,
+    "eval_count": 300,
+    "eval_s": 4.704,
+    "error": null
+   },
+   {
+    "latency_s": 10.002,
+    "eval_count": 300,
+    "eval_s": 5.043,
+    "error": null
+   },
+   {
+    "latency_s": 10.013,
+    "eval_count": 300,
+    "eval_s": 4.817,
+    "error": null
+   },
+   {
+    "latency_s": 9.821,
+    "eval_count": 300,
+    "eval_s": 4.747,
+    "error": null
+   },
+   {
+    "latency_s": 9.736,
+    "eval_count": 300,
+    "eval_s": 4.637,
+    "error": null
+   },
+   {
+    "latency_s": 9.594,
+    "eval_count": 300,
+    "eval_s": 4.599,
+    "error": null
+   },
+   {
+    "latency_s": 10.5,
+    "eval_count": 300,
+    "eval_s": 5.536,
+    "error": null
+   },
+   {
+    "latency_s": 10.434,
+    "eval_count": 300,
+    "eval_s": 4.526,
+    "error": null
+   },
+   {
+    "latency_s": 9.819,
+    "eval_count": 300,
+    "eval_s": 4.917,
+    "error": null
+   },
+   {
+    "latency_s": 9.934,
+    "eval_count": 300,
+    "eval_s": 4.656,
+    "error": null
+   },
+   {
+    "latency_s": 9.96,
+    "eval_count": 300,
+    "eval_s": 4.945,
+    "error": null
+   },
+   {
+    "latency_s": 10.243,
+    "eval_count": 300,
+    "eval_s": 4.944,
+    "error": null
+   },
+   {
+    "latency_s": 10.02,
+    "eval_count": 300,
+    "eval_s": 4.834,
+    "error": null
+   },
+   {
+    "latency_s": 10.135,
+    "eval_count": 300,
+    "eval_s": 5.057,
+    "error": null
+   },
+   {
+    "latency_s": 10.296,
+    "eval_count": 300,
+    "eval_s": 4.896,
+    "error": null
+   },
+   {
+    "latency_s": 9.899,
+    "eval_count": 300,
+    "eval_s": 4.665,
+    "error": null
+   },
+   {
+    "latency_s": 10.379,
+    "eval_count": 300,
+    "eval_s": 5.361,
+    "error": null
+   },
+   {
+    "latency_s": 10.797,
+    "eval_count": 300,
+    "eval_s": 5.063,
+    "error": null
+   },
+   {
+    "latency_s": 9.932,
+    "eval_count": 300,
+    "eval_s": 4.466,
+    "error": null
+   },
+   {
+    "latency_s": 9.316,
+    "eval_count": 300,
+    "eval_s": 4.466,
+    "error": null
+   },
+   {
+    "latency_s": 9.448,
+    "eval_count": 300,
+    "eval_s": 4.634,
+    "error": null
+   },
+   {
+    "latency_s": 9.484,
+    "eval_count": 300,
+    "eval_s": 4.479,
+    "error": null
+   },
+   {
+    "latency_s": 9.295,
+    "eval_count": 300,
+    "eval_s": 4.454,
+    "error": null
+   },
+   {
+    "latency_s": 9.815,
+    "eval_count": 300,
+    "eval_s": 5.007,
+    "error": null
+   },
+   {
+    "latency_s": 11.18,
+    "eval_count": 300,
+    "eval_s": 5.812,
+    "error": null
+   },
+   {
+    "latency_s": 10.966,
+    "eval_count": 300,
+    "eval_s": 4.798,
+    "error": null
+   }
+  ],
+  "tokens": 39300,
+  "first_error": null
+ }
+}

@@ -1,0 +1,167 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "blackout",
+    "startedAtIso": "2026-10-04T02:54:44.473Z",
+    "startedMonotonicNs": {
+      "$bigint": "38585057053311"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "38690085967583"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "b9b3a6c4b36a555bca55e91c3da43ebefe68b67b261ca706538e77f7695ced9f",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "reps": 1,
+    "depths": [
+      0,
+      126
+    ],
+    "modes": [
+      "none",
+      "wipe",
+      "selective"
+    ],
+    "loads": [
+      "idle"
+    ],
+    "runSeconds": 16,
+    "preSeconds": 5,
+    "pingIntervalMs": 10,
+    "gapThresholdUs": {
+      "$bigint": "100000"
+    }
+  },
+  "records": [
+    {
+      "depth": 0,
+      "mode": "none",
+      "loaded": false,
+      "rep": 0,
+      "flushToVerifiedNs": null,
+      "flushSendNs": {
+        "$bigint": "38593373637338"
+      },
+      "pingSent": 1600,
+      "pingReceived": 1600,
+      "maxGapUs": {
+        "$bigint": "77244"
+      },
+      "gaps": [],
+      "error": null
+    },
+    {
+      "depth": 0,
+      "mode": "wipe",
+      "loaded": false,
+      "rep": 0,
+      "flushToVerifiedNs": {
+        "$bigint": "109923643"
+      },
+      "flushSendNs": {
+        "$bigint": "38613349729177"
+      },
+      "pingSent": 1600,
+      "pingReceived": 1593,
+      "maxGapUs": {
+        "$bigint": "118023"
+      },
+      "gaps": [
+        {
+          "startUs": {
+            "$bigint": "1791082512731723"
+          },
+          "durationUs": {
+            "$bigint": "118023"
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "depth": 126,
+      "mode": "none",
+      "loaded": false,
+      "rep": 0,
+      "flushToVerifiedNs": null,
+      "flushSendNs": {
+        "$bigint": "38634312501636"
+      },
+      "pingSent": 1600,
+      "pingReceived": 1600,
+      "maxGapUs": {
+        "$bigint": "92869"
+      },
+      "gaps": [],
+      "error": null
+    },
+    {
+      "depth": 126,
+      "mode": "wipe",
+      "loaded": false,
+      "rep": 0,
+      "flushToVerifiedNs": {
+        "$bigint": "101401312"
+      },
+      "flushSendNs": {
+        "$bigint": "38655208277470"
+      },
+      "pingSent": 1600,
+      "pingReceived": 1600,
+      "maxGapUs": {
+        "$bigint": "88446"
+      },
+      "gaps": [],
+      "error": null
+    },
+    {
+      "depth": 126,
+      "mode": "selective",
+      "loaded": false,
+      "rep": 0,
+      "flushToVerifiedNs": {
+        "$bigint": "152181771"
+      },
+      "flushSendNs": {
+        "$bigint": "38675932928870"
+      },
+      "pingSent": 1600,
+      "pingReceived": 1600,
+      "maxGapUs": {
+        "$bigint": "78906"
+      },
+      "gaps": [],
+      "error": null
+    }
+  ]
+}

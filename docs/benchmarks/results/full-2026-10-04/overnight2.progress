@@ -1,0 +1,18 @@
+2026-10-04T10:29:47Z START sweep (attempt 1)
+2026-10-04T10:54:59Z END sweep rc=1
+2026-10-04T10:55:19Z START blackout (attempt 1)
+2026-10-04T11:07:31Z END blackout rc=0
+2026-10-04T11:07:51Z START wd-typical25 (attempt 1)
+2026-10-04T11:21:15Z END wd-typical25 rc=1
+2026-10-04T11:21:35Z START wd-typical50 (attempt 1)
+2026-10-04T11:21:53Z END wd-typical50 rc=1
+2026-10-04T11:22:13Z START wd-worst25 (attempt 1)
+2026-10-04T11:22:31Z END wd-worst25 rc=1
+2026-10-04T11:22:51Z START wd-low50 (attempt 1)
+2026-10-04T11:23:09Z END wd-low50 rc=1
+2026-10-04T11:23:29Z START ladder-fwdfirst-r2 (attempt 1)
+2026-10-04T11:52:23Z END ladder-fwdfirst-r2 rc=0
+2026-10-04T11:52:43Z START ladder-base-r2 (attempt 1)
+2026-10-04T12:20:12Z END ladder-base-r2 rc=0
+2026-10-04T12:20:32Z ALL DONE
+2026-10-04T12:20:33Z bridge restored: active

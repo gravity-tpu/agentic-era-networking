@@ -98,6 +98,8 @@ export interface FlowModMatchOptions {
   readonly srcMac?: string | undefined;
   readonly dstMac?: string | undefined;
   readonly srcIp?: string | undefined;
+  /** CIDR prefix length for `srcIp` (1..32). Omitted or 32 = exact host match. */
+  readonly srcIpPrefixLen?: number | undefined;
   readonly dstIp?: string | undefined;
   readonly etherType?: number | undefined;
   readonly inPort?: number | undefined;
@@ -284,11 +286,30 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
 
     if (match.srcIp) {
       const ipBuf = parseIpv4ToBuffer(match.srcIp);
-      // OFPXMT_OFB_IPV4_SRC: class 0x8000, field 11 (<< 9), length 4 -> 0x80001604
-      const tlv = Buffer.alloc(8);
-      tlv.writeUInt32BE(0x80001604, 0);
-      ipBuf.copy(tlv, 4);
-      oxmTlvs.push(tlv);
+      const prefixLen = match.srcIpPrefixLen;
+      if (prefixLen === undefined || prefixLen === 32) {
+        // OFPXMT_OFB_IPV4_SRC: class 0x8000, field 11 (<< 9), length 4 -> 0x80001604
+        const tlv = Buffer.alloc(8);
+        tlv.writeUInt32BE(0x80001604, 0);
+        ipBuf.copy(tlv, 4);
+        oxmTlvs.push(tlv);
+      } else {
+        if (!Number.isInteger(prefixLen) || prefixLen < 1 || prefixLen > 31) {
+          throw new Error(`srcIpPrefixLen must be an integer in 1..32, got ${prefixLen}`);
+        }
+        const mask = (0xffffffff << (32 - prefixLen)) >>> 0;
+        // OpenFlow 1.3 requires value bits outside the mask to be zero; a silently
+        // widened/narrowed match would change which traffic a DROP rule hits.
+        if ((ipBuf.readUInt32BE(0) & ~mask) >>> 0 !== 0) {
+          throw new Error(`srcIp ${match.srcIp} has host bits set outside /${prefixLen}`);
+        }
+        // OFPXMT_OFB_IPV4_SRC with HASMASK: field 11 -> (11 << 1) | 1 = 0x17, length 8 -> 0x80001708
+        const tlv = Buffer.alloc(12);
+        tlv.writeUInt32BE(0x80001708, 0);
+        ipBuf.copy(tlv, 4);
+        tlv.writeUInt32BE(mask, 8);
+        oxmTlvs.push(tlv);
+      }
     }
 
     if (match.dstIp) {

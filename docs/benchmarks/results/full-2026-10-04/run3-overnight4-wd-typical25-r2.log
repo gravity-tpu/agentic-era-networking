@@ -1,0 +1,6 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --profile typical --udp-load-percent 25 --tcp-mbps 5
+
+[bench 2026-10-04T16:54:00.563Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench] FATAL: switch did not complete the OpenFlow handshake within 180 s

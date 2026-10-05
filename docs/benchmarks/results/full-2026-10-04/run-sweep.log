@@ -1,0 +1,133 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts sweep --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --of-dead-peer-ms 30000
+
+[bench 2026-10-04T10:29:48.349Z] sweep: 28 conditions x 4 rounds, estimated 79 min
+[bench 2026-10-04T10:29:49.935Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T10:29:55.009Z] round 1/4
+[bench 2026-10-04T10:29:55.011Z] installing d0: depth 0 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:30:37.718Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53141)
+[bench 2026-10-04T10:30:37.719Z] OpenFlow session DISCONNECTED (10.0.1.99:53141) - the switch will drop its flow table
+[bench 2026-10-04T10:30:39.609Z] OpenFlow session connected (10.0.1.99:53142)
+[bench 2026-10-04T10:31:05.890Z] session lost around d0; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:31:05.892Z] installing d0: depth 0 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:31:32.882Z] installing d1: depth 1 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:32:29.816Z] installing d2: depth 2 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:33:21.840Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53142)
+[bench 2026-10-04T10:33:21.840Z] OpenFlow session DISCONNECTED (10.0.1.99:53142) - the switch will drop its flow table
+[bench 2026-10-04T10:33:23.458Z] OpenFlow session connected (10.0.1.99:53143)
+[bench 2026-10-04T10:33:54.963Z] session lost around d2; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:33:54.964Z] installing d2: depth 2 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:34:18.070Z] installing d4: depth 4 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:35:01.921Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53143)
+[bench 2026-10-04T10:35:01.922Z] OpenFlow session DISCONNECTED (10.0.1.99:53143) - the switch will drop its flow table
+[bench 2026-10-04T10:35:04.129Z] OpenFlow session connected (10.0.1.99:53144)
+[bench 2026-10-04T10:35:28.968Z] session lost around d4; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:35:28.969Z] installing d4: depth 4 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:35:55.140Z] installing d8: depth 8 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:36:52.005Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53144)
+[bench 2026-10-04T10:36:52.006Z] OpenFlow session DISCONNECTED (10.0.1.99:53144) - the switch will drop its flow table
+[bench 2026-10-04T10:36:53.873Z] OpenFlow session connected (10.0.1.99:53145)
+[bench 2026-10-04T10:37:20.173Z] session lost around d8; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:37:20.174Z] installing d8: depth 8 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:37:43.148Z] installing d16: depth 16 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:37:54.464Z] OpenFlow session DISCONNECTED (10.0.1.99:53145) - the switch will drop its flow table
+[bench 2026-10-04T10:37:55.993Z] OpenFlow session connected (10.0.1.99:53146)
+[bench 2026-10-04T10:38:20.186Z] session lost around d16; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:38:20.186Z] installing d16: depth 16 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:39:13.285Z] installing d24: depth 24 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:39:25.643Z] OpenFlow session DISCONNECTED (10.0.1.99:53146) - the switch will drop its flow table
+[bench 2026-10-04T10:39:26.140Z] session lost around d24; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:39:27.147Z] OpenFlow session connected (10.0.1.99:53147)
+[bench 2026-10-04T10:39:27.245Z] installing d24: depth 24 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:39:42.203Z] OpenFlow session DISCONNECTED (10.0.1.99:53147) - the switch will drop its flow table
+[bench 2026-10-04T10:39:43.682Z] OpenFlow session connected (10.0.1.99:53148)
+[bench 2026-10-04T10:40:12.202Z] session lost around d24; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:40:12.202Z] installing d24: depth 24 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:41:04.222Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53148)
+[bench 2026-10-04T10:41:04.223Z] OpenFlow session DISCONNECTED (10.0.1.99:53148) - the switch will drop its flow table
+[bench 2026-10-04T10:41:05.841Z] OpenFlow session connected (10.0.1.99:53149)
+[bench 2026-10-04T10:41:31.332Z] session lost around d24; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:41:31.333Z] installing d24: depth 24 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:41:40.340Z] installing d32: depth 32 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:41:48.452Z] OpenFlow session DISCONNECTED (10.0.1.99:53149) - the switch will drop its flow table
+[bench 2026-10-04T10:41:49.928Z] OpenFlow session connected (10.0.1.99:53150)
+[bench 2026-10-04T10:42:18.342Z] session lost around d32; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:42:18.342Z] installing d32: depth 32 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:42:52.050Z] OpenFlow session DISCONNECTED (10.0.1.99:53150) - the switch will drop its flow table
+[bench 2026-10-04T10:42:53.553Z] OpenFlow session connected (10.0.1.99:53151)
+[bench 2026-10-04T10:43:19.372Z] session lost around d32; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:43:19.373Z] installing d32: depth 32 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:43:32.383Z] installing d48: depth 48 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:43:40.674Z] OpenFlow session DISCONNECTED (10.0.1.99:53151) - the switch will drop its flow table
+[bench 2026-10-04T10:43:42.151Z] OpenFlow session connected (10.0.1.99:53152)
+[bench 2026-10-04T10:44:09.565Z] session lost around d48; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:44:09.566Z] installing d48: depth 48 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:44:28.243Z] OpenFlow session DISCONNECTED (10.0.1.99:53152) - the switch will drop its flow table
+[bench 2026-10-04T10:44:29.746Z] OpenFlow session connected (10.0.1.99:53153)
+[bench 2026-10-04T10:44:54.595Z] session lost around d48; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:44:54.596Z] installing d48: depth 48 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:45:44.469Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53153)
+[bench 2026-10-04T10:45:44.469Z] OpenFlow session DISCONNECTED (10.0.1.99:53153) - the switch will drop its flow table
+[bench 2026-10-04T10:45:46.400Z] OpenFlow session connected (10.0.1.99:53154)
+[bench 2026-10-04T10:46:13.611Z] session lost around d48; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:46:13.611Z] installing d48: depth 48 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:46:22.624Z] installing d64: depth 64 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:46:39.032Z] OpenFlow session DISCONNECTED (10.0.1.99:53154) - the switch will drop its flow table
+[bench 2026-10-04T10:46:40.509Z] OpenFlow session connected (10.0.1.99:53155)
+[bench 2026-10-04T10:47:04.663Z] session lost around d64; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:47:04.664Z] installing d64: depth 64 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:47:19.740Z] installing d96: depth 96 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:47:27.603Z] OpenFlow session DISCONNECTED (10.0.1.99:53155) - the switch will drop its flow table
+[bench 2026-10-04T10:47:29.133Z] OpenFlow session connected (10.0.1.99:53156)
+[bench 2026-10-04T10:47:56.782Z] session lost around d96; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:47:56.783Z] installing d96: depth 96 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:48:13.220Z] OpenFlow session DISCONNECTED (10.0.1.99:53156) - the switch will drop its flow table
+[bench 2026-10-04T10:48:14.700Z] OpenFlow session connected (10.0.1.99:53157)
+[bench 2026-10-04T10:48:42.666Z] session lost around d96; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:48:42.667Z] installing d96: depth 96 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:49:06.801Z] OpenFlow session connected (10.0.1.99:53158)
+[bench 2026-10-04T10:49:06.907Z] session lost around d96; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:49:07.007Z] installing d96: depth 96 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:49:29.697Z] installing d126: depth 126 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:49:36.861Z] OpenFlow session DISCONNECTED (10.0.1.99:53158) - the switch will drop its flow table
+[bench 2026-10-04T10:49:38.364Z] OpenFlow session connected (10.0.1.99:53159)
+[bench 2026-10-04T10:50:06.726Z] session lost around d126; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:50:06.727Z] installing d126: depth 126 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:50:22.452Z] OpenFlow session DISCONNECTED (10.0.1.99:53159) - the switch will drop its flow table
+[bench 2026-10-04T10:50:23.957Z] OpenFlow session connected (10.0.1.99:53160)
+[bench 2026-10-04T10:50:51.765Z] session lost around d126; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:50:51.765Z] installing d126: depth 126 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T10:51:17.792Z] installing d32-distinct: depth 32 host32 quarantine_above/quarantine_first distinct
+[bench 2026-10-04T10:51:29.654Z] openflow client error: read ECONNRESET
+[bench 2026-10-04T10:51:29.655Z] openflow error: read ECONNRESET
+[bench 2026-10-04T10:51:29.655Z] OpenFlow session DISCONNECTED (10.0.1.99:53160) - the switch will drop its flow table
+[bench 2026-10-04T10:51:31.088Z] OpenFlow session connected (10.0.1.99:53161)
+[bench 2026-10-04T10:51:54.890Z] session lost around d32-distinct; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:51:54.890Z] installing d32-distinct: depth 32 host32 quarantine_above/quarantine_first distinct
+[bench 2026-10-04T10:52:03.897Z] installing d32-fwdabove: depth 32 host32 forward_above/quarantine_first
+[bench 2026-10-04T10:52:12.170Z] OpenFlow session DISCONNECTED (10.0.1.99:53161) - the switch will drop its flow table
+[bench 2026-10-04T10:52:13.702Z] OpenFlow session connected (10.0.1.99:53162)
+[bench 2026-10-04T10:52:41.030Z] session lost around d32-fwdabove; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:52:41.030Z] installing d32-fwdabove: depth 32 host32 forward_above/quarantine_first
+[bench 2026-10-04T10:52:50.038Z] installing d32-fwdfirst: depth 32 host32 quarantine_above/forward_first
+[bench 2026-10-04T10:53:05.275Z] OpenFlow session DISCONNECTED (10.0.1.99:53162) - the switch will drop its flow table
+[bench 2026-10-04T10:53:05.298Z] session lost around d32-fwdfirst; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:53:06.778Z] OpenFlow session connected (10.0.1.99:53163)
+[bench 2026-10-04T10:53:07.102Z] installing d32-fwdfirst: depth 32 host32 quarantine_above/forward_first
+[bench 2026-10-04T10:53:16.111Z] installing d32-fwdabove-fwdfirst: depth 32 host32 forward_above/forward_first
+[bench 2026-10-04T10:53:31.699Z] installing d32-net16: depth 32 net16 quarantine_above/quarantine_first
+[bench 2026-10-04T10:53:45.354Z] OpenFlow session DISCONNECTED (10.0.1.99:53163) - the switch will drop its flow table
+[bench 2026-10-04T10:53:45.442Z] session lost around d32-net16; waiting for reconnect and restoring the table
+[bench 2026-10-04T10:53:46.858Z] OpenFlow session connected (10.0.1.99:53164)
+[bench 2026-10-04T10:53:47.045Z] installing d32-net16: depth 32 net16 quarantine_above/quarantine_first
+[bench 2026-10-04T10:53:56.052Z] installing d32-hitfirst: depth 32 host32 quarantine_above/quarantine_first hit:first distinct
+[bench 2026-10-04T10:54:11.603Z] installing d32-hitmiddle: depth 32 host32 quarantine_above/quarantine_first hit:middle distinct
+[bench 2026-10-04T10:54:56.947Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53164)
+[bench 2026-10-04T10:54:56.948Z] OpenFlow session DISCONNECTED (10.0.1.99:53164) - the switch will drop its flow table
+[bench 2026-10-04T10:54:58.500Z] OpenFlow session connected (10.0.1.99:53165)
+[bench 2026-10-04T10:54:58.502Z] installing d32-hitlast: depth 32 host32 quarantine_above/quarantine_first hit:last distinct
+[bench 2026-10-04T10:54:58.502Z] ABORTED: Cannot send raw OpenFlow message: switch not in ESTABLISHED state (current: HANDSHAKE)
+[bench 2026-10-04T10:54:58.502Z] WARNING: could not clear flow table: Cannot send raw OpenFlow message: switch not in ESTABLISHED state (current: HANDSHAKE)
+[bench 2026-10-04T10:54:59.127Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-sweep-2026-10-04T10-29-48-348Z.json
+[bench] FATAL: Cannot send raw OpenFlow message: switch not in ESTABLISHED state (current: HANDSHAKE)

@@ -1,0 +1,179 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "workday",
+    "startedAtIso": "2026-10-04T03:00:38.047Z",
+    "startedMonotonicNs": {
+      "$bigint": "38938631510374"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "38998115474974"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "be9067e011d94259ee083dcd2890f3284856703b1c474053fb8e733c515bc471",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "profile": "typical",
+    "targetRulesPerWindow": 24,
+    "windowSeconds": 60,
+    "totalSeconds": 120,
+    "windows": 2,
+    "sampleSeconds": 10,
+    "ofDeadPeerMs": "60000",
+    "flushMode": "selective",
+    "udpLoadPercent": 50,
+    "udpPps": {
+      "$bigint": "9796"
+    },
+    "udpPayloadBytes": 572,
+    "udpPort": 5201,
+    "tcpPort": 5202,
+    "rampOffsetsMs": [
+      2400,
+      4800,
+      7200,
+      9600,
+      12000,
+      14400,
+      16800,
+      19200,
+      21600,
+      24000,
+      26400,
+      28800,
+      31200,
+      33600,
+      36000,
+      38400,
+      40800,
+      43200,
+      45600,
+      48000,
+      50400,
+      52800,
+      55200,
+      57600
+    ]
+  },
+  "windows": [],
+  "completedWindows": 0,
+  "sessionEvents": [
+    {
+      "tNs": {
+        "$bigint": "38945841150536"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "2829694493"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38956857476485"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "11016604128"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38956857617510"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1599760"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38971857214367"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "14999740602"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38971857242271"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1200588"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38976619618390"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "4762403959"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38986856684253"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "10237064679"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38986856706014"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1438254"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38994462911292"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "7606223647"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "38997944714875"
+      },
+      "event": "disconnected",
+      "detail": "10.0.1.99:52842"
+    }
+  ]
+}

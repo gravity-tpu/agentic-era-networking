@@ -1,0 +1,88 @@
+| # | start (UTC) | end (UTC) | duration | run | content | status | artifact |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 10-04 00:59:15 | 10-04 01:21:08 | 21 min 53 s | dataplane run (3 depths) | 60 trials | used | `dataplane-2026-10-04T00-59-15-248Z.json` |
+| 2 | 10-04 02:42:43 | 10-04 02:45:43 | 3 min 00 s | sweep | 12 trials | validation | `depth-sweep-2026-10-04T02-42-43-597Z.json` |
+| 3 | 10-04 02:54:44 | 10-04 02:56:29 | 1 min 45 s | blackout | 5 records | validation | `depth-blackout-2026-10-04T02-54-44-473Z.json` |
+| 4 | 10-04 02:56:29 | 10-04 02:56:59 | 0 min 29 s | workday typical 50% tcp=unbounded | 0/2 windows | failed | `depth-workday-typical-2026-10-04T02-56-29-963Z.json` |
+| 5 | 10-04 02:57:29 | 10-04 02:59:01 | 1 min 32 s | workday typical 50% tcp=unbounded | 1/2 windows | failed | `depth-workday-typical-2026-10-04T02-57-29-054Z.json` |
+| 6 | 10-04 03:00:38 | 10-04 03:01:37 | 0 min 59 s | workday typical 50% tcp=unbounded | 0/2 windows | failed | `depth-workday-typical-2026-10-04T03-00-38-047Z.json` |
+| 7 | 10-04 03:08:32 | 10-04 03:10:41 | 2 min 09 s | workday typical 50% tcp=unbounded | 2/2 windows | validation | `depth-workday-typical-2026-10-04T03-08-32-003Z.json` |
+| 8 | 10-04 03:15:36 | 10-04 03:16:43 | 1 min 06 s | ladder base 572B | 4 steps | validation | `depth-ladder-base-2026-10-04T03-15-36-947Z.json` |
+| 9 | 10-04 03:17:14 | 10-04 03:18:33 | 1 min 19 s | ladder base 572B | 4 steps | validation | `depth-ladder-base-2026-10-04T03-17-14-009Z.json` |
+| 10 | 10-04 03:18:48 | 10-04 03:20:11 | 1 min 23 s | ladder base 572B | 4 steps | validation | `depth-ladder-base-2026-10-04T03-18-48-424Z.json` |
+| 11 | 10-04 03:25:38 | 10-04 03:53:16 | 27 min 38 s | ladder base 572B | 31 steps | used | `depth-ladder-base-2026-10-04T03-25-38-028Z.json` |
+| 12 | 10-04 03:53:17 | 10-04 04:22:40 | 29 min 22 s | ladder fwdfirst 572B | 34 steps | used | `depth-ladder-fwdfirst-2026-10-04T03-53-17-385Z.json` |
+| 13 | 10-04 10:29:48 | 10-04 10:54:59 | 25 min 10 s | sweep | 55 trials | superseded | `depth-sweep-2026-10-04T10-29-48-348Z.json` |
+| 14 | 10-04 10:55:19 | 10-04 11:07:31 | 12 min 12 s | blackout | 30 records | used | `depth-blackout-2026-10-04T10-55-19-665Z.json` |
+| 15 | 10-04 11:07:52 | 10-04 11:21:15 | 13 min 23 s | workday typical 25% tcp=unbounded | 2/12 windows | partial | `depth-workday-typical-2026-10-04T11-07-52-309Z.json` |
+| 16 | 10-04 11:21:36 | 10-04 11:21:53 | 0 min 17 s | workday typical 50% tcp=unbounded | 0/12 windows | failed | `depth-workday-typical-2026-10-04T11-21-36-011Z.json` |
+| 17 | 10-04 11:22:14 | 10-04 11:22:31 | 0 min 17 s | workday worst 25% tcp=unbounded | 0/12 windows | failed | `depth-workday-worst-2026-10-04T11-22-14-208Z.json` |
+| 18 | 10-04 11:22:51 | 10-04 11:23:09 | 0 min 17 s | workday low 50% tcp=unbounded | 0/12 windows | failed | `depth-workday-low-2026-10-04T11-22-51-979Z.json` |
+| 19 | 10-04 11:23:29 | 10-04 11:52:23 | 28 min 53 s | ladder fwdfirst 572B | 34 steps | used | `depth-ladder-fwdfirst-2026-10-04T11-23-29-825Z.json` |
+| 20 | 10-04 11:52:43 | 10-04 12:20:12 | 27 min 28 s | ladder base 572B | 32 steps | used | `depth-ladder-base-2026-10-04T11-52-43-740Z.json` |
+| 21 | 10-04 13:25:06 | 10-04 13:25:43 | 0 min 37 s | ladder hitfirst 572B | 2 steps | validation | `depth-ladder-hitfirst-2026-10-04T13-25-06-530Z.json` |
+| 22 | 10-04 13:26:04 | 10-04 13:26:40 | 0 min 36 s | ladder base 64B | 2 steps | validation | `depth-ladder-base-p64-2026-10-04T13-26-04-161Z.json` |
+| 23 | 10-04 13:27:01 | 10-04 14:07:37 | 40 min 36 s | workday typical 25% tcp=5 | 8/12 windows | partial | `depth-workday-typical-2026-10-04T13-27-01-156Z.json` |
+| 24 | 10-04 14:07:58 | 10-04 14:13:16 | 5 min 17 s | workday typical 50% tcp=5 | 1/12 windows | partial | `depth-workday-typical-2026-10-04T14-07-58-393Z.json` |
+| 25 | 10-04 14:13:36 | 10-04 14:30:33 | 16 min 56 s | ladder base 64B | 26 steps | used | `depth-ladder-base-p64-2026-10-04T14-13-36-543Z.json` |
+| 26 | 10-04 14:30:53 | 10-04 14:48:06 | 17 min 12 s | ladder base 1470B | 28 steps | used | `depth-ladder-base-p1470-2026-10-04T14-30-53-885Z.json` |
+| 27 | 10-04 14:48:26 | 10-04 14:49:54 | 1 min 27 s | ladder hitfirst 572B | 2 steps | inconclusive | `depth-ladder-hitfirst-2026-10-04T14-48-26-898Z.json` |
+| 28 | 10-04 14:50:14 | 10-04 14:51:41 | 1 min 27 s | ladder hitmiddle 572B | 2 steps | inconclusive | `depth-ladder-hitmiddle-2026-10-04T14-50-14-580Z.json` |
+| 29 | 10-04 14:52:02 | 10-04 14:53:56 | 1 min 54 s | ladder hitlast 572B | 3 steps | inconclusive | `depth-ladder-hitlast-2026-10-04T14-52-02-298Z.json` |
+| 30 | 10-04 14:54:17 | 10-04 15:05:39 | 11 min 22 s | ladder fwdabove 572B | 18 steps | used | `depth-ladder-fwdabove-2026-10-04T14-54-17-077Z.json` |
+| 31 | 10-04 15:05:59 | 10-04 15:16:40 | 10 min 40 s | ladder fwdinstall 572B | 17 steps | used | `depth-ladder-fwdinstall-2026-10-04T15-05-59-972Z.json` |
+| 32 | 10-04 15:17:00 | 10-04 15:27:46 | 10 min 46 s | ladder net16 572B | 18 steps | used | `depth-ladder-net16-2026-10-04T15-17-00-564Z.json` |
+| 33 | 10-04 15:28:07 | 10-04 15:39:34 | 11 min 27 s | ladder distinct 572B | 18 steps | used | `depth-ladder-distinct-2026-10-04T15-28-07-299Z.json` |
+| 34 | 10-04 15:39:54 | 10-04 16:40:31 | 60 min 36 s | workday worst 5% tcp=2 | 12/12 windows | used | `depth-workday-worst-2026-10-04T15-39-54-925Z.json` |
+| 35 | 10-04 16:40:52 | 10-04 16:53:10 | 12 min 18 s | workday low 50% tcp=5 | 2/12 windows | partial | `depth-workday-low-2026-10-04T16-40-52-502Z.json` |
+| 36 | 10-04 17:11:09 | 10-04 18:11:24 | 60 min 15 s | workday typical 25% tcp=5 | 12/12 windows | used | `depth-workday-typical-2026-10-04T17-11-09-111Z.json` |
+| 37 | 10-04 18:41:46 | 10-04 19:42:17 | 60 min 31 s | workday low 50% tcp=5 | 12/12 windows | used | `depth-workday-low-2026-10-04T18-41-46-383Z.json` |
+| 38 | 10-04 19:43:12 | 10-04 19:53:33 | 10 min 21 s | workday typical 50% tcp=5 | 0/12 windows | failed | `depth-workday-typical-2026-10-04T19-43-12-013Z.json` |
+
+Total artifact-recorded run time: 8.92 h over 38 artifacts
+
+Gaps between consecutive artifacts longer than 2 minutes:
+
+| after run | gap start (UTC) | gap end (UTC) | gap |
+| --- | --- | --- | --- |
+| dataplane run (3 depths) | 10-04 01:21:08 | 10-04 02:42:43 | 1 h 21 min |
+| sweep | 10-04 02:45:43 | 10-04 02:54:44 | 0 h 09 min |
+| workday typical 50% tcp=unbounded | 10-04 03:01:37 | 10-04 03:08:32 | 0 h 06 min |
+| workday typical 50% tcp=unbounded | 10-04 03:10:41 | 10-04 03:15:36 | 0 h 04 min |
+| ladder base 572B | 10-04 03:20:11 | 10-04 03:25:38 | 0 h 05 min |
+| ladder fwdfirst 572B | 10-04 04:22:40 | 10-04 10:29:48 | 6 h 07 min |
+| ladder base 572B | 10-04 12:20:12 | 10-04 13:25:06 | 1 h 04 min |
+| workday low 50% tcp=5 | 10-04 16:53:10 | 10-04 17:11:09 | 0 h 17 min |
+| workday typical 25% tcp=5 | 10-04 18:11:24 | 10-04 18:41:46 | 0 h 30 min |
+
+### Time accounting
+
+| component | duration |
+| --- | --- |
+| Calendar span (2026-10-03T21:48:46Z to 2026-10-04T19:53:33Z) | 22 h 04 min |
+| Measurement recorded in artifacts: used | 6 h 47 min |
+| Measurement recorded in artifacts: partial | 1 h 11 min |
+| Measurement recorded in artifacts: superseded | 0 h 25 min |
+| Measurement recorded in artifacts: failed | 0 h 14 min |
+| Measurement recorded in artifacts: validation | 0 h 11 min |
+| Measurement recorded in artifacts: inconclusive | 0 h 04 min |
+| Measurement without an artifact: used | 0 h 20 min |
+| Measurement without an artifact: failed | 0 h 17 min |
+| Idle: no benchmark requested (incident G) | 2 h 39 min |
+| Harness development between runs (incident H) | 1 h 21 min |
+| **Stalls (incidents A, B, C, D)** | **7 h 42 min** |
+| Driver overhead, inter-run gaps and short analysis pauses (remainder) | 0 h 48 min |
+| **Calendar span excluding stalls** | **14 h 22 min** |
+| Calendar span excluding stalls, idle time and harness development | 10 h 21 min |
+| Total measurement time (artifacts + extra runs) | 9 h 32 min |
+
+### Incidents
+
+| id | category | start (UTC) | end (UTC) | duration | cause |
+| --- | --- | --- | --- | --- | --- |
+| G | idle | 10-03 21:58:46 | 10-04 00:37:53 | 2 h 39 min | No benchmark activity between the first inference run and the request to re-run and validate the benchmarks (waiting for the next instruction) |
+| H | development | 10-04 01:21:08 | 10-04 02:42:43 | 1 h 21 min | Building the depth/ladder/workday harness (masked-match encoder, depth planner, 4 new commands, 78 unit tests) |
+| A | stall | 10-04 04:22:40 | 10-04 10:29:48 | 6 h 07 min | The production bridge was restarted by an unidentified actor at 04:22:45 UTC, which took port 6633; the overnight driver's remaining steps all failed within seconds, and no run could resume until a person was available and permissions were clarified |
+| B | stall | 10-04 12:20:12 | 10-04 13:25:06 | 1 h 04 min | Diagnosing the failed sweep and workday runs and reworking the harness (session-change retries, bounded readbacks, TCP cap, ladder options) |
+| C | stall | 10-04 16:53:10 | 10-04 17:11:09 | 0 h 17 min | The switch's network stack wedged after the first low-50% attempt; recovery needed a power cycle by the operator (includes three runs that failed within seconds at 16:54-17:05) |
+| D | stall | 10-04 18:28:57 | 10-04 18:41:24 | 0 h 12 min | Typical-50% run silent in the table-readback loop (switch stopped answering flow-table requests); interrupted after 12.5 min |

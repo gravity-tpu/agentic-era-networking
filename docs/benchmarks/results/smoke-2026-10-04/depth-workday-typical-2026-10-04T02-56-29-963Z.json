@@ -1,0 +1,88 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "workday",
+    "startedAtIso": "2026-10-04T02:56:29.963Z",
+    "startedMonotonicNs": {
+      "$bigint": "38690547270327"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "38720482927423"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "b9b3a6c4b36a555bca55e91c3da43ebefe68b67b261ca706538e77f7695ced9f",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "profile": "typical",
+    "targetRulesPerWindow": 24,
+    "windowSeconds": 60,
+    "totalSeconds": 120,
+    "windows": 2,
+    "sampleSeconds": 10,
+    "flushMode": "selective",
+    "udpLoadPercent": 50,
+    "udpPps": {
+      "$bigint": "9796"
+    },
+    "udpPayloadBytes": 572,
+    "udpPort": 5201,
+    "tcpPort": 5202,
+    "rampOffsetsMs": [
+      2400,
+      4800,
+      7200,
+      9600,
+      12000,
+      14400,
+      16800,
+      19200,
+      21600,
+      24000,
+      26400,
+      28800,
+      31200,
+      33600,
+      36000,
+      38400,
+      40800,
+      43200,
+      45600,
+      48000,
+      50400,
+      52800,
+      55200,
+      57600
+    ]
+  },
+  "windows": [],
+  "completedWindows": 0
+}

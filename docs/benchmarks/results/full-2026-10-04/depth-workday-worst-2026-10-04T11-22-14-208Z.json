@@ -1,0 +1,409 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "workday",
+    "startedAtIso": "2026-10-04T11:22:14.208Z",
+    "startedMonotonicNs": {
+      "$bigint": "69034792555815"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "69052046544774"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "f08fe11c2c9bab509a39975b1d62bd62b1a93e4ff44964b1d28d521ee0bca6b0",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "profile": "worst",
+    "targetRulesPerWindow": 126,
+    "windowSeconds": 300,
+    "totalSeconds": 3600,
+    "windows": 12,
+    "sampleSeconds": 10,
+    "ofDeadPeerMs": "default(8000)",
+    "flushMode": "selective",
+    "udpLoadPercent": 25,
+    "udpPps": {
+      "$bigint": "4898"
+    },
+    "udpPayloadBytes": 572,
+    "udpPort": 5201,
+    "tcpPort": 5202,
+    "rampOffsetsMs": [
+      2362,
+      4724,
+      7086,
+      9448,
+      11811,
+      14173,
+      16535,
+      18897,
+      21259,
+      23622,
+      25984,
+      28346,
+      30708,
+      33070,
+      35433,
+      37795,
+      40157,
+      42519,
+      44881,
+      47244,
+      49606,
+      51968,
+      54330,
+      56692,
+      59055,
+      61417,
+      63779,
+      66141,
+      68503,
+      70866,
+      73228,
+      75590,
+      77952,
+      80314,
+      82677,
+      85039,
+      87401,
+      89763,
+      92125,
+      94488,
+      96850,
+      99212,
+      101574,
+      103937,
+      106299,
+      108661,
+      111023,
+      113385,
+      115748,
+      118110,
+      120472,
+      122834,
+      125196,
+      127559,
+      129921,
+      132283,
+      134645,
+      137007,
+      139370,
+      141732,
+      144094,
+      146456,
+      148818,
+      151181,
+      153543,
+      155905,
+      158267,
+      160629,
+      162992,
+      165354,
+      167716,
+      170078,
+      172440,
+      174803,
+      177165,
+      179527,
+      181889,
+      184251,
+      186614,
+      188976,
+      191338,
+      193700,
+      196062,
+      198425,
+      200787,
+      203149,
+      205511,
+      207874,
+      210236,
+      212598,
+      214960,
+      217322,
+      219685,
+      222047,
+      224409,
+      226771,
+      229133,
+      231496,
+      233858,
+      236220,
+      238582,
+      240944,
+      243307,
+      245669,
+      248031,
+      250393,
+      252755,
+      255118,
+      257480,
+      259842,
+      262204,
+      264566,
+      266929,
+      269291,
+      271653,
+      274015,
+      276377,
+      278740,
+      281102,
+      283464,
+      285826,
+      288188,
+      290551,
+      292913,
+      295275,
+      297637
+    ]
+  },
+  "windows": [],
+  "completedWindows": 0,
+  "sessionEvents": [
+    {
+      "tNs": {
+        "$bigint": "69039155411193"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1462964"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69040096076627"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1438165"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69040154374824"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1013848"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69041155273837"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000926789"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69041155293261"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "926969"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69042096646120"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1125144"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69042156080504"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1134360"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69043155986735"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1032408"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69044098083722"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1512116"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69044155782316"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1083064"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69045156977635"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001202679"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69045156989475"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "814010"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69046098060300"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "697530"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69046157309190"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "975576"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69047158465192"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001162594"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69047158476648"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "748346"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69048099438680"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "701819"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69048158257433"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "502652"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69049159125415"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000872814"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69049159134695"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "621851"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69050099996669"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "609212"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69050159180128"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "626587"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69051160460116"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001285268"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69051160470996"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1021848"
+      }
+    }
+  ]
+}

@@ -566,6 +566,54 @@ export interface FlowStatsEntry {
   readonly priority: number;
   readonly packetCount: bigint;
   readonly byteCount: bigint;
+  /** IPV4_SRC value the switch reports for this entry; absent if no such match field was reported. */
+  readonly srcIp?: string;
+  /** IPV4_SRC mask as dotted quad; absent for an exact (unmasked) match. */
+  readonly srcMask?: string;
+  /** IN_PORT value the switch reports for this entry, if any. */
+  readonly inPort?: number;
+}
+
+const OXM_CLASS_BASIC = 0x8000;
+const OXM_FIELD_IN_PORT = 0;
+const OXM_FIELD_IPV4_SRC = 11;
+
+const dotted = (b: Buffer, off: number): string => `${b[off]}.${b[off + 1]}.${b[off + 2]}.${b[off + 3]}`;
+
+/**
+ * Best-effort parse of the ofp_match carried in an ofp_flow_stats entry. Never throws: firmware
+ * that reports a non-standard match yields an entry without match fields, and callers that
+ * need the match (masked-rule verification) treat the absence as a mismatch (fail-closed).
+ */
+function parseEntryMatch(
+  packet: Buffer,
+  matchOff: number,
+  entryEnd: number,
+): { srcIp?: string; srcMask?: string; inPort?: number } {
+  const out: { srcIp?: string; srcMask?: string; inPort?: number } = {};
+  if (matchOff + 4 > entryEnd || packet.readUInt16BE(matchOff) !== 1) return out;
+  const matchLen = packet.readUInt16BE(matchOff + 2);
+  const end = Math.min(matchOff + matchLen, entryEnd);
+  let p = matchOff + 4;
+  while (p + 4 <= end) {
+    const cls = packet.readUInt16BE(p);
+    const fieldByte = packet.readUInt8(p + 2);
+    const len = packet.readUInt8(p + 3);
+    if (p + 4 + len > end) break;
+    const field = fieldByte >> 1;
+    const hasMask = (fieldByte & 1) === 1;
+    if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_IPV4_SRC) {
+      if (!hasMask && len === 4) out.srcIp = dotted(packet, p + 4);
+      else if (hasMask && len === 8) {
+        out.srcIp = dotted(packet, p + 4);
+        out.srcMask = dotted(packet, p + 8);
+      }
+    } else if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_IN_PORT && !hasMask && len === 4) {
+      out.inPort = packet.readUInt32BE(p + 4);
+    }
+    p += 4 + len;
+  }
+  return out;
 }
 
 export interface FlowStatsReply {
@@ -595,6 +643,7 @@ export function parseFlowStatsReply(packet: Buffer): FlowStatsReply {
       priority: packet.readUInt16BE(off + 12),
       packetCount: packet.readBigUInt64BE(off + 32),
       byteCount: packet.readBigUInt64BE(off + 40),
+      ...parseEntryMatch(packet, off + 48, off + len),
     });
     off += len;
   }

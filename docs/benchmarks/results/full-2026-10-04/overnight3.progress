@@ -1,0 +1,32 @@
+2026-10-04T13:25:06Z START val-hit (attempt 1)
+2026-10-04T13:25:43Z END val-hit rc=0
+2026-10-04T13:26:03Z START val-p64 (attempt 1)
+2026-10-04T13:26:40Z END val-p64 rc=0
+2026-10-04T13:27:00Z START wd-typical25 (attempt 1)
+2026-10-04T14:07:37Z END wd-typical25 rc=1
+2026-10-04T14:07:57Z START wd-typical50 (attempt 1)
+2026-10-04T14:13:16Z END wd-typical50 rc=1
+2026-10-04T14:13:36Z START ladder-p64 (attempt 1)
+2026-10-04T14:30:33Z END ladder-p64 rc=0
+2026-10-04T14:30:53Z START ladder-p1470 (attempt 1)
+2026-10-04T14:48:06Z END ladder-p1470 rc=0
+2026-10-04T14:48:26Z START ladder-hitfirst (attempt 1)
+2026-10-04T14:49:54Z END ladder-hitfirst rc=0
+2026-10-04T14:50:14Z START ladder-hitmiddle (attempt 1)
+2026-10-04T14:51:41Z END ladder-hitmiddle rc=0
+2026-10-04T14:52:01Z START ladder-hitlast (attempt 1)
+2026-10-04T14:53:56Z END ladder-hitlast rc=0
+2026-10-04T14:54:16Z START ladder-fwdabove (attempt 1)
+2026-10-04T15:05:39Z END ladder-fwdabove rc=0
+2026-10-04T15:05:59Z START ladder-fwdinstall (attempt 1)
+2026-10-04T15:16:40Z END ladder-fwdinstall rc=0
+2026-10-04T15:17:00Z START ladder-net16 (attempt 1)
+2026-10-04T15:27:46Z END ladder-net16 rc=0
+2026-10-04T15:28:06Z START ladder-distinct (attempt 1)
+2026-10-04T15:39:34Z END ladder-distinct rc=0
+2026-10-04T15:39:54Z START wd-worst5 (attempt 1)
+2026-10-04T16:40:32Z END wd-worst5 rc=0
+2026-10-04T16:40:52Z START wd-low50 (attempt 1)
+2026-10-04T16:53:10Z END wd-low50 rc=1
+2026-10-04T16:53:30Z ALL DONE
+2026-10-04T16:53:31Z bridge restored: active

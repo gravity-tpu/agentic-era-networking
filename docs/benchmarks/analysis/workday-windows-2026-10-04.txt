@@ -1,0 +1,80 @@
+## Working-window runs: per-window detail
+
+### depth-workday-low-2026-10-04T16-40-52-502Z.json: low profile, UDP 50% (9796 pps), TCP cap 5 Mbit/s, 2/12 windows
+
+| window | rules at end | median p1 RX pps | min p1 RX pps | session losses | outage s | flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8 | 9664 | 9637 | 0 | 0.0 | nan |
+| 2 | 8 | 9882 | 9669 | 0 | 0.0 | 104 |
+
+### depth-workday-low-2026-10-04T18-41-46-383Z.json: low profile, UDP 50% (9796 pps), TCP cap 5 Mbit/s, 12/12 windows
+
+| window | rules at end | median p1 RX pps | min p1 RX pps | session losses | outage s | flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8 | 9878 | 9680 | 0 | 0.0 | nan |
+| 2 | 8 | 9870 | 9670 | 0 | 0.0 | 104 |
+| 3 | 8 | 9884 | 9662 | 0 | 0.0 | 103 |
+| 4 | 8 | 9869 | 9672 | 1 | 1.9 | 104 |
+| 5 | 8 | 9888 | 9717 | 1 | 0.1 | 106 |
+| 6 | 8 | 9879 | 5038 | 0 | 0.0 | 102 |
+| 7 | 8 | 9867 | 9674 | 0 | 0.0 | 103 |
+| 8 | 8 | 9867 | 9668 | 0 | 0.0 | 102 |
+| 9 | 8 | 9895 | 9703 | 1 | 2.3 | 101 |
+| 10 | 8 | 9868 | 9667 | 0 | 0.0 | 118 |
+| 11 | 8 | 9859 | 7913 | 0 | 0.0 | 103 |
+| 12 | 8 | 9870 | 9679 | 0 | 0.0 | 102 |
+
+### depth-workday-typical-2026-10-04T11-07-52-309Z.json: typical profile, UDP 25% (4898 pps), TCP cap unbounded Mbit/s, 2/12 windows
+
+| window | rules at end | median p1 RX pps | min p1 RX pps | session losses | outage s | flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 24 | 5280 | 4967 | 2 | 4.2 | nan |
+| 2 | 24 | 5336 | 5038 | 1 | 1.9 | 209 |
+
+### depth-workday-typical-2026-10-04T13-27-01-156Z.json: typical profile, UDP 25% (4898 pps), TCP cap 5 Mbit/s, 8/12 windows
+
+| window | rules at end | median p1 RX pps | min p1 RX pps | session losses | outage s | flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 24 | 4833 | 4827 | 0 | 0.0 | nan |
+| 2 | 24 | 5207 | 5015 | 0 | 0.0 | 104 |
+| 3 | 24 | 5206 | 5025 | 0 | 0.0 | 11439 |
+| 4 | 24 | 5200 | 5029 | 0 | 0.0 | 11409 |
+| 5 | 24 | 5210 | 4998 | 1 | 2.5 | 103 |
+| 6 | 24 | 5207 | 5010 | 0 | 0.0 | 225 |
+| 7 | 24 | 5216 | 4865 | 2 | 15.0 | 102 |
+| 8 | 24 | 5206 | 4986 | 0 | 0.0 | 175 |
+
+### depth-workday-typical-2026-10-04T17-11-09-111Z.json: typical profile, UDP 25% (4898 pps), TCP cap 5 Mbit/s, 12/12 windows
+
+| window | rules at end | median p1 RX pps | min p1 RX pps | session losses | outage s | flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 24 | 5205 | 5023 | 0 | 0.0 | nan |
+| 2 | 24 | 5209 | 4994 | 0 | 0.0 | 104 |
+| 3 | 24 | 5204 | 4227 | 0 | 0.0 | 103 |
+| 4 | 24 | 5208 | 4999 | 0 | 0.0 | 113 |
+| 5 | 24 | 5208 | 5022 | 0 | 0.0 | 181 |
+| 6 | 24 | 5208 | 5034 | 0 | 0.0 | 206 |
+| 7 | 24 | 5211 | 5024 | 0 | 0.0 | 101 |
+| 8 | 24 | 5213 | 5046 | 0 | 0.0 | 139 |
+| 9 | 24 | 5208 | 5023 | 0 | 0.0 | 103 |
+| 10 | 24 | 5209 | 4766 | 1 | 1.7 | 187 |
+| 11 | 24 | 5208 | 4999 | 0 | 0.0 | 103 |
+| 12 | 24 | 5208 | 4992 | 0 | 0.0 | 206 |
+
+### depth-workday-worst-2026-10-04T15-39-54-925Z.json: worst profile, UDP 5% (979 pps), TCP cap 2 Mbit/s, 12/12 windows
+
+| window | rules at end | median p1 RX pps | min p1 RX pps | session losses | outage s | flush-to-verified ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 122 | 968 | 966 | 1 | 1.9 | nan |
+| 2 | 122 | 1116 | 1103 | 1 | 1.9 | 218 |
+| 3 | 122 | 1113 | 1095 | 0 | 0.0 | 182 |
+| 4 | 122 | 1112 | 1092 | 0 | 0.0 | 108 |
+| 5 | 122 | 1114 | 1097 | 0 | 0.0 | 11505 |
+| 6 | 122 | 1114 | 1101 | 0 | 0.0 | 132 |
+| 7 | 122 | 1116 | 656 | 0 | 0.0 | 151 |
+| 8 | 122 | 1116 | 1093 | 0 | 0.0 | 238 |
+| 9 | 122 | 1114 | 1101 | 1 | 1.9 | 11630 |
+| 10 | 122 | 1118 | 1089 | 0 | 0.0 | 224 |
+| 11 | 122 | 1113 | 1087 | 1 | 0.2 | 105 |
+| 12 | 122 | 1115 | 1098 | 0 | 0.0 | 233 |
+

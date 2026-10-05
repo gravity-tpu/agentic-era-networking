@@ -1,0 +1,18 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --profile low --udp-load-percent 50 --tcp-mbps 5
+
+[bench 2026-10-04T16:40:54.130Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T16:40:55.635Z] workday profile=low (8 rules/window) 12 windows x 300s, flush=selective, udp 9796 pps x 572 B + tcp
+[bench 2026-10-04T16:40:59.283Z] window 1/12: table reset; starting load
+[bench 2026-10-04T16:45:59.633Z] window 1 done: 8 rules, 29 samples, last p1 RX 9660 pps; udp ok tcp iperf3 reported an error: unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+[bench 2026-10-04T16:45:59.738Z] window 2/12: table reset in 104 ms; starting load
+[bench 2026-10-04T16:50:59.971Z] window 2 done: 8 rules, 29 samples, last p1 RX 9674 pps; udp ok tcp ok
+[bench 2026-10-04T16:51:00.073Z] window 3/12: table reset in 102 ms; starting load
+[bench 2026-10-04T16:53:05.779Z] controller dead-peer timeout: no message from the switch (10.0.1.99:53479)
+[bench 2026-10-04T16:53:05.781Z] OpenFlow session DISCONNECTED (10.0.1.99:53479) - the switch will drop its flow table
+[bench 2026-10-04T16:53:07.429Z] OpenFlow session connected (10.0.1.99:53480)
+[bench 2026-10-04T16:53:10.628Z] ABORTED: OFPMP_FLOW readback timed out
+[bench 2026-10-04T16:53:10.628Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T16:53:10.669Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-workday-low-2026-10-04T16-40-52-502Z.json
+[bench] FATAL: OFPMP_FLOW readback timed out

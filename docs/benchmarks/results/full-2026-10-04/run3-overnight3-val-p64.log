@@ -1,0 +1,11 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts ladder --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --payload 64 --depths 0 --rates-pps 2000,20000 --step-seconds 12
+
+[bench 2026-10-04T13:26:04.161Z] ladder: 1 depths x up to 2 rates x 12s, 1 round(s), layout base
+[bench 2026-10-04T13:26:05.736Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T13:26:07.491Z] installing ladder-base-d0: depth 0 host32 quarantine_above/quarantine_first
+[bench 2026-10-04T13:26:22.651Z] ladder d0 offered 2000 pps: p1 RX 1987 p2 TX 1987 pps, receiver loss 7291 ppm echo back in 449 ms
+[bench 2026-10-04T13:26:38.603Z] ladder d0 offered 20000 pps: p1 RX 19747 p2 TX 19747 pps, receiver loss 14344 ppm echo back in 505 ms
+[bench 2026-10-04T13:26:40.606Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T13:26:40.641Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-ladder-base-p64-2026-10-04T13-26-04-161Z.json

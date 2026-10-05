@@ -1,0 +1,8 @@
+2026-10-04T17:11:08Z START wd-typical25-r3 (attempt 1)
+2026-10-04T18:11:24Z END wd-typical25-r3 rc=0
+2026-10-04T18:11:45Z START wd-typical50-r3 (attempt 1)
+2026-10-04T18:41:24Z END wd-typical50-r3 rc=130
+2026-10-04T18:41:45Z START wd-low50-r3 (attempt 1)
+2026-10-04T19:42:17Z END wd-low50-r3 rc=0
+2026-10-04T19:42:37Z ALL DONE
+2026-10-04T19:42:38Z bridge restored: active

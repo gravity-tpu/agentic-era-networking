@@ -1,0 +1,334 @@
+{
+  "provenance": {
+    "schema": "zodiac-depth-bench/v1",
+    "origin": "physical_bench_run",
+    "command": "workday",
+    "startedAtIso": "2026-10-04T11:21:36.011Z",
+    "startedMonotonicNs": {
+      "$bigint": "68996595236630"
+    },
+    "finishedMonotonicNs": {
+      "$bigint": "69014265703158"
+    },
+    "controllerHost": {
+      "hostname": "jetson-orin",
+      "platform": "linux",
+      "arch": "arm64",
+      "nodeVersion": "v22.23.3"
+    },
+    "switchIdentity": {
+      "datapathId": {
+        "$bigint": "123917683867849"
+      },
+      "openflowPeer": "10.0.1.99",
+      "serialPath": "/dev/ttyACM0",
+      "firmwareVersion": "0.86",
+      "cpuUid": "1396191488-826951736-858797360-925970489"
+    },
+    "workload": {
+      "sshTarget": "agent@10.0.0.45",
+      "iface": "eth0",
+      "ipv4": "10.0.2.50",
+      "kernel": "Linux 6.18.50+rpt-rpi-v8",
+      "iperf3Client": "iperf 3.18 (cJSON 1.7.15)"
+    },
+    "iperfServer": "10.0.2.119",
+    "tool": {
+      "scriptSha256": "f08fe11c2c9bab509a39975b1d62bd62b1a93e4ff44964b1d28d521ee0bca6b0",
+      "gitCommit": "27cb86f",
+      "gitDirty": true
+    },
+    "flowTableVerified": true,
+    "counterSource": "Zodiac FX serial CLI `show ports` (Port RX/TX packets, bytes, dropped, CRC). Whether firmware sources these from KSZ8795 MIB registers is firmware-defined and is cross-checked here against workload-NIC and tap-NIC sysfs counters."
+  },
+  "params": {
+    "profile": "typical",
+    "targetRulesPerWindow": 24,
+    "windowSeconds": 300,
+    "totalSeconds": 3600,
+    "windows": 12,
+    "sampleSeconds": 10,
+    "ofDeadPeerMs": "default(8000)",
+    "flushMode": "selective",
+    "udpLoadPercent": 50,
+    "udpPps": {
+      "$bigint": "9796"
+    },
+    "udpPayloadBytes": 572,
+    "udpPort": 5201,
+    "tcpPort": 5202,
+    "rampOffsetsMs": [
+      12000,
+      24000,
+      36000,
+      48000,
+      60000,
+      72000,
+      84000,
+      96000,
+      108000,
+      120000,
+      132000,
+      144000,
+      156000,
+      168000,
+      180000,
+      192000,
+      204000,
+      216000,
+      228000,
+      240000,
+      252000,
+      264000,
+      276000,
+      288000
+    ]
+  },
+  "windows": [],
+  "completedWindows": 0,
+  "sessionEvents": [
+    {
+      "tNs": {
+        "$bigint": "69001215914087"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1617489"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69002021698565"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1473586"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69002214847509"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "673274"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69003216404244"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001589598"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69003216423827"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "805849"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69004022775277"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1253557"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69004217315616"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1087478"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69005218001783"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000687159"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69005218040727"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1383507"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69006023340122"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1085430"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69006217733887"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "888760"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69007219100799"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001383744"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69007219115807"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "1042198"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69008023639658"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "748025"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69008218669144"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "661338"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69009219464014"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000799222"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69009219474830"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "586779"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69010024223415"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "686618"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69010219117686"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "481020"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69011220217784"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1001103938"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69011220228792"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "869720"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69012024902177"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "747385"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69012219882511"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "574843"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69013220744610"
+      },
+      "event": "silence",
+      "detail": {
+        "$bigint": "1000867987"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69013220754562"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "610170"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69014025875239"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "685817"
+      }
+    },
+    {
+      "tNs": {
+        "$bigint": "69014220773765"
+      },
+      "event": "echoLatency",
+      "detail": {
+        "$bigint": "491772"
+      }
+    }
+  ]
+}

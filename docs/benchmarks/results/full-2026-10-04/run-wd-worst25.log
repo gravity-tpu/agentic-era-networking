@@ -1,0 +1,10 @@
+
+> agentic-era-networking@0.1.0 bench:dataplane
+> node --experimental-strip-types scripts/zodiac-dataplane-bench.ts workday --server 10.0.2.119 --pi-ssh agent@10.0.0.45 --pi-ip 10.0.2.50 --out docs/benchmarks/results/full-2026-10-04 --profile worst --udp-load-percent 25
+
+[bench 2026-10-04T11:22:15.811Z] waiting for the physical switch to connect to 0.0.0.0:6633 ...
+[bench 2026-10-04T11:22:17.568Z] workday profile=worst (126 rules/window) 12 windows x 300s, flush=selective, udp 4898 pps x 572 B + tcp
+[bench 2026-10-04T11:22:31.436Z] ABORTED: iperf3 server not reachable on port 5201 (start: iperf3 -s -B 10.0.2.119 -p 5201): iperf3 reported an error: the server is busy running a test. try again later
+[bench 2026-10-04T11:22:31.437Z] flow table cleared; restart zodiac-bridge.service to restore production rules
+[bench 2026-10-04T11:22:31.468Z] artifact written: docs/benchmarks/results/full-2026-10-04/depth-workday-worst-2026-10-04T11-22-14-208Z.json
+[bench] FATAL: iperf3 server not reachable on port 5201 (start: iperf3 -s -B 10.0.2.119 -p 5201): iperf3 reported an error: the server is busy running a test. try again later
