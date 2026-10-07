@@ -34,10 +34,13 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 
 - **Detailed Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
 - **Data Plane Switch**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
+- **Intermediate Aggregation Switch**: NETGEAR GS105Ev2 5-Port Gigabit Smart Managed Switch (intermediate aggregation layer for Workload subnet; IEEE 802.3x Flow Control backpressure, 128KB packet buffer, 802.1Q multi-tenant readiness).
 - **Autonomous Master Appliance**: NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, Tri-Interface stack, 500GB NVMe SSD @ 1.8 GB/s, 7W–15W 24/7 low-power operation, TensorRT INT8 neural engine, SSD1306 OLED telemetry).
 - **Edge Inference Accelerators**: Dual Google Coral Edge TPUs (8 TOPS INT8 total compute; TPU 0 for line-rate tap DPI, TPU 1 for RFC 1035 DNS sentinel).
 - **Dedicated Tap Ingress**: ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous mode attached to Zodiac Port 3).
-- **Untrusted Client Workload**: Raspberry Pi 3 Model B+ (isolated workload data plane on `eth0` attached to Zodiac Port 1, out-of-band management via `wlan0`).
+- **Untrusted Agent Workload Tier**:
+  - **Raspberry Pi 5 + Hailo-8** (`agentic-node-02`): Autonomous adversarial agent & Red Team workload generator on `eth0` (`10.0.2.51`) via NETGEAR Port 2; 26 TOPS INT8 PCIe Gen 3.0 x1 NPU (`/dev/hailo0`, HailoRT 4.20); out-of-band management via `wlan0` (`10.0.0.179`).
+  - **Raspberry Pi 3 Model B+** (`agentic-node-01`): Untrusted client agent workload on `eth0` (`10.0.2.50`) via NETGEAR Port 3; out-of-band management via `wlan0` (`10.0.0.45`).
 - **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX to Zodiac Port 2.
 - **Local AI Workstation**: MacBook Pro M5 (20-core Apple Silicon Metal GPU, Unified Memory Architecture, 26B Gemma 4 local inference, zero-dependency Property List XML parser, 64-bit BigInt token accounting ledger).
 
@@ -94,15 +97,15 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
         │                           +───────────────────────────────────+   │
         ▼                                                                   ▼
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
-| Raspberry Pi 3 Model B+ (Workload)|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |                                   |               |                                                   |
-| * eth0: <workload-subnet> (Static)| (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-|   Untrusted SDN Agent Data Plane  |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
-|   (Zodiac Port 1 VLAN 100)        |  BETWEEN RPi  |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
-|                                   |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Wireless Management |               | * Dual-Stage Council Review Gate                  |
-|   (Home WiFi LAN Only)            |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+| * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
+| * Port 2: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+|   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
+| * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * Port 1, 4: Reserved / Expansion |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+| * 802.3x Flow Control Enabled     |               | * Dual-Stage Council Review Gate                  |
+| * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Operator Console: http://localhost:3000 & Cloud |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
 ```

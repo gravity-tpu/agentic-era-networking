@@ -68,15 +68,15 @@ Governed by the **Technical Staff Council Invariants**:
         │                           +───────────────────────────────────+   │
         ▼                                                                   ▼
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
-| Raspberry Pi 3 Model B+ (Workload)|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |                                   |               |                                                   |
-| * eth0: <workload-subnet> (Static)| (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-|   Untrusted SDN Agent Data Plane  |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
-|   (Zodiac Port 1 VLAN 100)        |  BETWEEN RPi  |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
-|                                   |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Wireless Management |               | * Dual-Stage Council Review Gate                  |
-|   (Home WiFi LAN Only)            |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+| * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
+| * Port 2: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+|   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
+| * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * Port 1, 4: Reserved / Expansion |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+| * 802.3x Flow Control Enabled     |               | * Dual-Stage Council Review Gate                  |
+| * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Tailscale Client (100.112.223.16/32)            |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
                                                                 |
@@ -115,7 +115,9 @@ Governed by the **Technical Staff Council Invariants**:
 | **Jetson Orin Nano Super** | Control Plane — OpenFlow controller, DNS, telemetry bridge, 67 TOPS Ampere GPU Stage-2 Anomaly Autoencoder, local `qwen2.5:3b` LLM inference (Ollama, Q4_K_M) | Tri-IF (`<mgmt-subnet>`, `<ctrl-subnet>`), USB-C Device Mode (`192.168.55.1`), Tailscale (`100.118.64.16`) | ✅ Yes |
 | **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
-| **Raspberry Pi 3B+** | Untrusted Client Workload — target for agent SDN enforcement | `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
+| **NETGEAR GS105Ev2** | Intermediate Aggregation Switch — GbE aggregation layer, IEEE 802.3x flow control backpressure, 128KB buffer rate-transition bridging | Ports 1-5 (Port 5 Uplink to Zodiac P1) | ✅ Yes |
+| **Raspberry Pi 5 + Hailo-8** | Autonomous Adversarial Agent (`agentic-node-02`) — 26 TOPS INT8 PCIe Gen 3.0 NPU, adversarial tool-call generator, rate-limiting stress engine | Netgear P2, `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
+| **Raspberry Pi 3B+** | Untrusted Workload 1 (`agentic-node-01`) — target for agent SDN enforcement, iperf3 traffic generator | Netgear P3, `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
 | **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger, Tailscale client | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU, Direct USB-C Tether (`en8`), Tailscale (`100.112.223.16`) | ❌ On-Demand / Dev Session |
 | **agentic-node-01** | Remote Compute Peer — Tailscale mesh node for distributed workload | Tailscale (`100.79.152.36`) | ❌ External |
 
@@ -527,8 +529,9 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 > **Hardware note (added 2026-10)**: RPi 5 + Hailo-8 26 TOPS instantiates the second agentic node required for this phase. Multi-agent observation experiments (flap detection, EMA oscillation under two live inference-capable nodes) can begin immediately via managed VLAN switch on Zodiac Port 1 without waiting for Phases 1–3 to complete. Full stabilisation enforcement (Milestones 4C–4D) requires Phase 3's symbolic verifier to be in place first.
 
 - [ ] **Milestone 4A: Multi-Tenant Hardware Topology**:
-  - RPi 5 + Hailo-8 connected to Zodiac Port 1 via managed VLAN switch (VLAN 2, isolated from RPi 3B+ on VLAN 1).
-  - OpenFlow flow rules differentiating tenants by VLAN tag; per-tenant BigInt byte/packet accounting.
+  - **Hardware Provisioning (Completed 2026-10)**: RPi 5 + Hailo-8 (`agentic-node-02`, IP `10.0.2.51/24`, MAC `98:fe:54:52:9d:85`) provisioned on NETGEAR GS105Ev2 Port 2 at line-rate 1000 Mb/s; RPi 3B+ (`agentic-node-01`, IP `10.0.2.50/24`) on Port 3; HailoRT 4.20 + kernel driver verified on PCIe Gen 3.0 x1 (`/dev/hailo0`); dual-homed with OOB management (`10.0.0.179` / `10.0.0.45` on `wlan0`).
+  - **Host Egress Pacing & Oversubscription Bounds**: Both nodes enforce host-side Fair Queue pacing (`sudo tc qdisc replace dev eth0 root fq maxrate 95mbit` for single-generator benchmarks; 45mbit during concurrent tests) to prevent 2:1 aggregate oversubscription (190 Mbps -> 100M uplink) and eliminate Netgear 128KB buffer overflow tail-drops.
+  - **TCAM Quota Protection**: OpenFlow flow rules differentiate tenants by broad VLAN ID matching (VLAN 101/102) rather than granular `/32` host routes, preserving the Zodiac 128-rule hardware ceiling (McKeown invariant); per-tenant BigInt byte/packet accounting.
   - Baseline verification: zero cross-VLAN leakage between tenant flows confirmed via Port 3 mirror tap capture (epistemic ground truth, Invariant 6).
 - [ ] **Milestone 4B: Pointer Network Graph Routing Representations (Vinyals)**:
   - Graph sequence representation of the SDN topology for routing decisions.

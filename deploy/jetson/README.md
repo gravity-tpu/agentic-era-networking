@@ -13,7 +13,9 @@
           │ 100BASE-TX Ethernet
           ▼
 [Zodiac FX Port 2] ◄── Gateway Uplink
-[Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [Raspberry Pi 3B+ eth0: <workload-subnet>]
+[Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [NETGEAR GS105Ev2 Port 5 Uplink]
+                                                    ├── Port 2 ──► [Raspberry Pi 5 eth0: <workload-subnet>] (Hailo-8 26T)
+                                                    └── Port 3 ──► [Raspberry Pi 3B+ eth0: <workload-subnet>]
 [Zodiac FX Port 3] ─── Ethernet RJ-45 ───► [Jetson ASIX USB GbE: enx* (Promiscuous Tap)]
 [Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
 [Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC Telemetry)]
@@ -31,7 +33,7 @@
 
 | Zodiac Port | Connected Device | Interface Identity | Assigned Network / Role | Role & Invariant |
 | --- | --- | --- | --- | --- |
-| **Port 1** | Raspberry Pi 3 Model B+ | `eth0` | Isolated Workload Subnet | **Untrusted Agent Workload**: Monitored SDN data plane. |
+| **Port 1** | NETGEAR GS105Ev2 | Port 5 Uplink | Isolated Workload Subnet | **Workload Aggregation Layer**: Intermediate GbE switch aggregating RPi 5 + Hailo-8 (Port 2) and RPi 3B+ (Port 3). |
 | **Port 2** | ISP Gateway / Mesh Node | RJ-45 Uplink Cable | Gateway Bridged (VLAN 100) | **Gateway Transit**: Public Internet access. |
 | **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
 | **Port 4** | Jetson Orin Nano Super | `enP8p1s0` | Dedicated Control Subnet | **OpenFlow Control Channel**: Controller target `:6633`. |

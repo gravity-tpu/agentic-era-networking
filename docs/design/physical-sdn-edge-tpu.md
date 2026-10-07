@@ -1,11 +1,12 @@
 # Physical SDN & Autonomous Master Appliance Architecture
 
 > **Zodiac Hardware Specification & Integration Blueprint**  
-> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Dual Google Coral Edge TPUs + Raspberry Pi 3B+ (Client Workload) + MacBook M5 Pro (Local AI Workstation & Review Plane)  
+> **Physical Substrates:** Northbound Networks Zodiac FX OpenFlow Switch + NETGEAR GS105Ev2 5-Port GbE Switch + NVIDIA Jetson Orin Nano Super (Master Appliance) + Dual Google Coral Edge TPUs + Raspberry Pi 5 (Hailo-8 26 TOPS NPU) + Raspberry Pi 3B+ (Client Workload) + MacBook M5 Pro (Local AI Workstation & Review Plane)  
 > **Autonomous Master Appliance:** NVIDIA Jetson Orin Nano Super (24/7 dedicated controller host, 67 TOPS Ampere GPU, TensorRT INT8 engine, Tri-Interface Stack)  
 > **Inference Accelerators:** Dual Google Coral Edge TPUs (8 TOPS INT8 total compute, USB 3.0 line-rate packet classifier & DNS intent sentinel)  
 > **Local AI Workstation & Review Plane:** MacBook M5 Pro (20-core Apple Silicon Metal GPU, 26B Gemma 4 local inference, zero-dependency Property List XML parser, 64-bit BigInt token accounting ledger)  
-> **Untrusted Client Workload:** Raspberry Pi 3 Model B+ (isolated workload data plane on `eth0`, out-of-band management via `wlan0`)  
+> **Untrusted Agent Workload Tier:** Raspberry Pi 3 Model B+ (`agentic-node-01`, `eth0` `10.0.2.50`) + Raspberry Pi 5 (`agentic-node-02`, `eth0` `10.0.2.51`, Hailo-8 26 TOPS INT8 NPU via PCIe Gen 3.0 x1)  
+> **Intermediate Aggregation Switch:** NETGEAR GS105Ev2 5-Port Gigabit Smart Managed Switch (IEEE 802.3x flow control, 128KB packet buffer, 802.1Q multi-tenant readiness)  
 > **Dedicated Tap Interface:** ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous capture mode)  
 > **Governing Paradigms:** Jeff Dean (Latency Budgets), Sanjay Ghemawat (Fail-Closed Simplicity), Quoc Le (Self-Tuning Control), Oriol Vinyals (Graph Routing), Demis Hassabis (Symbolic Proof Asymmetry).
 
@@ -18,10 +19,13 @@ In autonomous agent networks, software emulation (e.g., Mininet, OVS) abstracts 
 This architecture grounds the Zodiac control plane in **physical hardware**, elevating the appliances into a multi-tier, hardware-co-designed ecosystem:
 
 - **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
+- **Intermediate Aggregation Switch (NETGEAR GS105Ev2)**: 5-Port Gigabit Smart Managed Switch bridging the high-speed GbE workload tier to Zodiac Port 1 (100BASE-TX) with IEEE 802.3x Flow Control backpressure and 802.1Q VLAN isolation capability.
 - **Autonomous Master Appliance (NVIDIA Jetson Orin Nano Super)**: Dedicated, 24/7 low-power (7W–15W) master controller running the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 transparent DNS resolver (`:53`), symbolic DAG route verification, line-rate TensorRT neural anomaly detection (67 TOPS INT8), and physical SSD1306 OLED telemetry daemon.
 - **Dual Google Coral Edge TPUs**: Dedicated 8 TOPS INT8 USB 3.0 coprocessors executing sub-millisecond shallow packet classification on mirrored data streams (TPU 0) and RFC 1035 DNS intent analysis (TPU 1) without taxing the Jetson GPU pipeline.
 - **Dedicated Mirror Tap Interface (ASIX AX88179 USB GbE)**: Dedicated secondary physical NIC (`enx*`) on the Jetson Orin operating in promiscuous mode, directly cabled to Zodiac Port 3 for zero-loss packet inspection.
-- **Untrusted Client Workload (Raspberry Pi 3 Model B+)**: Physical client agent running on an isolated test subnet via `eth0` attached to Zodiac Port 1, protected by an out-of-band management backdoor via `wlan0`.
+- **Untrusted Agent Workload Tier**:
+  - **Raspberry Pi 5 + Hailo-8** (`agentic-node-02`): Autonomous adversarial agent on `eth0` (`10.0.2.51`) via Netgear Port 2; 26 TOPS INT8 Hailo-8 NPU over PCIe Gen 3.0 x1 (`/dev/hailo0`, HailoRT 4.20) for local tool-call synthesis and high-throughput traffic generation; out-of-band management via `wlan0` (`10.0.0.179`).
+  - **Raspberry Pi 3 Model B+** (`agentic-node-01`): Physical client agent workload on `eth0` (`10.0.2.50`) via Netgear Port 3; out-of-band management backdoor via `wlan0` (`10.0.0.45`).
 - **Local AI Workstation (MacBook M5 · Gemma 4)**: High-performance Apple Silicon Metal GPU workstation executing autonomous code synthesis, the 5-Council pre-push code verification gate, real-time physical IOKit hardware profiling, and high-precision BigInt token accounting ledger. Decoupled from physical data plane dependencies while providing 100% local, air-gapped code reasoning.
 
 ---
@@ -79,15 +83,15 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
         │                           +───────────────────────────────────+   │
         ▼                                                                   ▼
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
-| Raspberry Pi 3 Model B+ (Workload)|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |                                   |               |                                                   |
-| * eth0: <workload-subnet> (Static)| (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-|   Untrusted SDN Agent Data Plane  |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
-|   (Zodiac Port 1 VLAN 100)        |  BETWEEN RPi  |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
-|                                   |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * wlan0: <mgmt-subnet> (Wi-Fi)    |               | * Local Ollama Engine: gemma4:26b (:11434)        |
-|   Out-of-Band Wireless Management |               | * Dual-Stage Council Review Gate                  |
-|   (Home WiFi LAN Only)            |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+| * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
+| * Port 2: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+|   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
+| * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * Port 1, 4: Reserved / Expansion |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+| * 802.3x Flow Control Enabled     |               | * Dual-Stage Council Review Gate                  |
+| * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Operator Console: http://localhost:3000 & Cloud |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
 ```
@@ -114,18 +118,22 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 
 | Node | Interface / Medium | Hardware Identity | Logical Network | Target / Destination | Role & Invariant |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Zodiac FX Switch** | Port 1 (100BASE-TX) | KSZ8795 Port 1 | Workload Data Plane (VLAN 100) | RPi 3B+ `eth0` | **Untrusted Workload Port**: Monitored agent data plane transit. |
+| **Zodiac FX Switch** | Port 1 (100BASE-TX) | KSZ8795 Port 1 | Workload Data Plane (VLAN 100) | NETGEAR Port 5 | **Untrusted Workload Transit**: Monitored agent data plane aggregation uplink. |
 | **Zodiac FX Switch** | Port 2 (100BASE-TX) | KSZ8795 Port 2 | Gateway Bridged (VLAN 100) | ISP Gateway / Mesh Node | **WAN / Gateway Uplink**: Egress to public internet. |
 | **Zodiac FX Switch** | Port 3 (100BASE-TX) | KSZ8795 Port 3 | Port Mirror (VLAN 100) | Jetson `enx*` USB GbE | **Hardware Mirror Tap**: Zero-overhead port mirror for Coral/Jetson DPI. |
 | **Zodiac FX Switch** | Port 4 (100BASE-TX) | KSZ8795 Port 4 | Switch Management (VLAN 200) | Jetson `enP8p1s0` | **OpenFlow 1.3 Control Channel**: Isolated switch management. |
 | **Zodiac FX Switch** | Micro-USB (CDC-ACM) | Atmel VID 03eb PID 2404 | `/dev/ttyACM0` @ 115200 8N1 | Jetson USB Host | **Telemetry Stream**: 1–2 Hz hardware register stream. |
+| **NETGEAR GS105Ev2** | Ports 1–5 (1000BASE-T) | GS105E v2 | Workload Subnet Aggregation | P5: Zodiac P1, P2: RPi 5, P3: RPi 3, P1/4: Res | **Intermediate Aggregation Switch**: GbE aggregation layer, 128KB packet buffer, IEEE 802.3x flow control, rate transition bridging. |
 | **Jetson Orin Nano** | `enP8p1s0` (Onboard GbE) | Onboard Realtek GbE | Dedicated Control Subnet | Zodiac Port 4 | **OpenFlow Controller**: Listens on `:6633` (<1ms latency). |
 | **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress**: Line-rate packet capture for Coral TPU. |
 | **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Home Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |
 | **Google Coral TPU Primary** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` (uncompiled) / `9303` (delegate loaded) | USB path `2-1.3` | Jetson USB-A (Realtek hub port 3) | **Active Inference — Line-Rate Wire-Tap DPI**: `zodiac-coral.service` targets this TPU first (`CORAL_PRIMARY_USB_PATH=2-1.3`). MobileNet V2 INT8 shallow packet classifier on Port 3 mirror tap. `standbyMode: false` in telemetry. |
 | **Google Coral TPU Standby** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` / `9303` | USB path `2-1.2` | Jetson USB-A (Realtek hub port 2) | **Standby — Failover Tap DPI**: `zodiac-coral.service` activates this TPU if primary is absent or exceeds `MAX_CONSECUTIVE_ERRORS=5`. Runs identical MobileNet V2 INT8 model. `standbyMode: true` in telemetry. DNS Sentinel role planned for Phase 2. |
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
-| **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | Zodiac Port 1 | **Untrusted Agent Workload**: Target for SDN policy enforcement. |
+| **Raspberry Pi 5** | `eth0` (Onboard GbE) | Broadcom BCM54213PE | Isolated Workload Subnet | NETGEAR Port 2 | **Autonomous Adversarial Agent**: Red Team workload generator, rate-limiting stress testing. |
+| **Raspberry Pi 5** | `wlan0` (Wi-Fi) | Synaptics BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
+| **Hailo-8 M.2 NPU** | PCIe Gen 3.0 x1 | Hailo-8 AI Accelerator | `/dev/hailo0` (HailoRT 4.20) | RPi 5 PCIe M.2 HAT+ | **Edge NPU Coprocessor**: 26 TOPS INT8 neural coprocessor for local tool-call synthesis & high-throughput packet generation. |
+| **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | NETGEAR Port 3 | **Untrusted Agent Workload 1**: Target for SDN policy enforcement. |
 | **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
 | **MacBook M5 Workstation** | USB-C to USB-C (High-Speed) | Apple T8142 USBXHCI | Direct Tether (`192.168.55.1/24` ↔ `en8`, metric 50) | Jetson USB-C Device Port (L4T Gadget: `l4tbr0` CDC-NCM + `g_serial` CDC-ACM) | **Direct Hardware Management Tether**: Point-to-point subnet `192.168.55.0/24` (metric 50, highest priority). CDC-ACM serial console at `115200 8N1` (`/dev/cu.usbmodem*`). MTU 1500 on `en8`. IP forwarding between `192.168.55.0/24` and SDN subnets permanently disabled (`net.ipv4.conf.l4tbr0.forwarding=0`) — strictly bound to OOB management, zero data-plane transit. L4T USB Gadget modules (`g_ether`, `g_serial`) must be loaded in initramfs before network stack init to guarantee enumeration before the management plane comes up. |
 | **MacBook M5 Workstation** | Wi-Fi 6/6E (802.11ax) | Apple M5 Pro Metal GPU | Management Plane Subnet | Home Wireless LAN / Cloud | **Local AI Workstation & Review Plane**: 20-Core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
