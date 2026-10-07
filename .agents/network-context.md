@@ -114,6 +114,7 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | `TCP 3003` | Zodiac Bridge HTTP / SSE | Local / Tailscale | Read-only telemetry exposition; real-time hardware status. |
 | `TCP 9100/9105` | Prometheus Metrics Exporter | Local / Scraping | 64-bit integer counters; zero floating point precision drift. |
 | `TCP 11434` | Ollama LLM Service (`qwen2.5`) | Localhost only | Out-of-band telemetry analysis; non-blocking to packet flow. |
+| `TCP 8000` | Hailo-8 Neural Inference Service (FastAPI) | RPi 5 Ingress (`10.0.0.179` / `10.0.2.51`) | Exposes 26 TOPS NPU; sub-11ms DMA inference; monotonic nanosecond latency accounting (INV-2); epistemic silicon telemetry (INV-6); daemonized via `hailo-inference.service`. |
 
 ---
 

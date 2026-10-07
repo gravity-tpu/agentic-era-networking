@@ -1,0 +1,24 @@
+[Unit]
+Description=Zodiac Hailo-8 Neural Inference Microservice (FastAPI)
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agent
+Group=agent
+WorkingDirectory=/opt/hailo-service
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --log-level info
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# Resource limits & cgroup memory bounds (defense-in-depth against C-layer leaks)
+LimitNOFILE=65535
+MemoryMax=1G
+MemoryHigh=800M
+
+[Install]
+WantedBy=multi-user.target
