@@ -71,10 +71,10 @@ Governed by the **Technical Staff Council Invariants**:
 | NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |                                   |               |                                                   |
 | * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-| * Port 2: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+| * Port 4: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
 |   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
 | * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * Port 1, 4: Reserved / Expansion |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+| * Port 2: RPi 5 USB-GbE (capture) |               | * Local Ollama Engine: gemma4:26b (:11434)        |
 | * 802.3x Flow Control Enabled     |               | * Dual-Stage Council Review Gate                  |
 | * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Tailscale Client (100.112.223.16/32)            |
@@ -116,7 +116,7 @@ Governed by the **Technical Staff Council Invariants**:
 | **Dual Coral Edge TPUs** | Inference Accelerators — 8 TOPS INT8 dedicated model parallelism | Dual USB 3.0 (Attached to Jetson) | ✅ Yes |
 | **ASIX AX88179 USB GbE** | Dedicated Tap Ingress — zero-overhead packet mirror capture from Port 3 | `enx*` Promiscuous Tap | ✅ Yes |
 | **NETGEAR GS105Ev2** | Intermediate Aggregation Switch — GbE aggregation layer, IEEE 802.3x flow control backpressure, 128KB buffer rate-transition bridging | Ports 1-5 (Port 5 Uplink to Zodiac P1) | ✅ Yes |
-| **Raspberry Pi 5 + Hailo-8** | Autonomous Adversarial Agent (`agentic-node-02`) — 26 TOPS INT8 PCIe Gen 3.0 NPU, adversarial tool-call generator, rate-limiting stress engine | Netgear P2, `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
+| **Raspberry Pi 5 + Hailo-8** | Autonomous Adversarial Agent (`agentic-node-02`) — 26 TOPS INT8 PCIe Gen 3.0 NPU, adversarial tool-call generator (host CPU), rate-limiting stress engine; Hailo-8 runs CNN classifier validation and surrogate evasion testing (Milestone 2C) | Netgear P4, `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
 | **Raspberry Pi 3B+** | Untrusted Workload 1 (`agentic-node-01`) — target for agent SDN enforcement, iperf3 traffic generator | Netgear P3, `eth0` (`<workload-subnet>`), `wlan0` (`<mgmt-subnet>`) | ✅ Yes |
 | **MacBook M5 Workstation** | Local AI Workstation & Review Plane — 20-Core Metal GPU, local `gemma4:26b` Council pre-push verification gate, IOKit telemetry, BigInt token ledger, Tailscale client | WiFi 6/6E (`<mgmt-subnet>`), Apple Silicon Metal GPU, Direct USB-C Tether (`en8`), Tailscale (`100.112.223.16`) | ❌ On-Demand / Dev Session |
 | **agentic-node-01** | Remote Compute Peer — Tailscale mesh node for distributed workload | Tailscale (`100.79.152.36`) | ❌ External |
@@ -251,6 +251,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 | - [COMPLETE] Coral Edge TPU + Jetson Ampere GPU split-inference & FlowMod quarantine (Ph 0.12)  |
 | - [REMAINING] TensorRT INT8 engine compilation & formal Coral→Jetson handoff protocol           |
 | - [REMAINING] In-Browser Wireshark: packet dissector (L2-L7), hex dump & PCAP export           |
+| - [PLANNED] 2C: Trained packet CNN classifier (Pi 5 labeled capture, Hailo-8 validation)       |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                                   v
@@ -494,7 +495,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 *Status: Milestone 2A substantially complete via Phase 0.12 — Milestone 2B remaining*
 
 - [x] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection** *(Substantially complete — see Phase 0.12 & [GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*:
-  - [x] Google Coral Edge TPU: sub-ms shallow packet classification on Port 3 mirror tap — operational (Phase 0.8/0.13, ~450 inf/s peak across dual TPUs).
+  - [x] Google Coral Edge TPU: live Port 3 tap frames ingested and executed on-silicon at ~450 inf/s peak across dual TPUs (Phase 0.8/0.13). **Caveat**: the loaded model is the stock MobileNet V2 and `coral-inference-daemon.py` does not read the output tensor, so this verifies accelerator throughput/latency only; no trained packet classifier exists yet (see Milestone 2C).
   - [x] NVIDIA Jetson Ampere GPU: 1D-CNN deep anomaly autoencoder at **0.271 ms** avg inference on `sm_87` — operational (Phase 0.12).
   - [x] Fail-closed FlowMod quarantine (Priority 65535 DROP) — 24 live anomalies detected and quarantined (Phase 0.12).
   - [ ] **Remaining**: formalise Coral→Jetson packet handoff protocol; convert autoencoder to TensorRT INT8 compiled engine for certified `<1 ms` budget at full wire rate; publish split-inference pipeline documentation.
@@ -503,6 +504,17 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Multi-layer protocol decoders: Layer 2 (Ethernet, 802.1Q VLAN), Layer 3 (IPv4, IPv6, ARP, ICMP), Layer 4 (TCP, UDP), Layer 7 (DNS, HTTP/1.1, OpenFlow 1.3).
   - Interactive Web UI Packet Inspector: Real-time packet table with colorized protocol streams, expandable protocol tree, and synchronous Hex/ASCII dump inspector.
   - Display filter engine (BPF-like syntax, e.g., `ip.src == 192.0.2.2 && tcp.port == 80`) and one-click `.pcap` / `.pcapng` export.
+
+- [ ] **Milestone 2C: Trained Packet CNN Classifier (Labeled Capture on RPi 5, Hailo-8 Validation)**:
+  - **Why**: today no component classifies packets. The Coral daemon feeds raw frames to the stock MobileNet V2 and discards the output tensor; the Jetson autoencoder is unsupervised. A supervised classifier needs ground-truth labels, and the RPi 5 generates the traffic, so it knows the true class of every flow.
+  - **Labeled capture harness (RPi 5)**: generate classes (benign iperf/HTTP, DNS tunnelling, scans, exfil-style tool-call traffic) and record per-flow ground-truth labels alongside a pcap taken from a mirror vantage point.
+  - **Capture vantage point**: a second USB Ethernet adapter on the RPi 5 connected to NETGEAR Port 2, to be configured as the port-mirror destination for the Port 5 uplink (pre-Zodiac view of all workload traffic). *Cabling confirmed 2026-10-07 (RPi 5 `eth0` on P4, RPi 3B+ on P3, Zodiac on P5, USB-GbE on P2); adapter `eth1` (RTL8153, MAC `a0:ce:c8:0e:73:f7`) is recorded; the NETGEAR mirror configuration, and capture verification are still to be recorded.* Persistent capture-NIC config (promiscuous, GRO/LRO off, address-less, MAC-matched via udev + systemd): `deploy/rpi5/deploy-capture-nic.sh`. *Installed and verified on hardware 2026-10-07 (`eth1`: PROMISC, no addresses, `addrgenmode none`); survival across reboot, the NETGEAR P5→P2 mirror, and frame capture remain unverified.* Mirror capture also enables reconciliation of NETGEAR tail-drops against Zodiac Port 1 counters (`network-context.md` caveat #4).
+  - **Model**: small INT8-friendly 1D-CNN over the first 64–256 header/payload bytes (or a short per-flow packet-size/direction/inter-arrival matrix), not an image-style 224×224×3 MobileNet. Integer-only preprocessing (Invariant 2). Train on the Jetson GPU or MacBook.
+  - **Multi-accelerator export**: Hailo HEF (Dataflow Compiler on x86 Linux), Coral Edge TPU (INT8 TFLite → `edgetpu_compiler`, subject to op constraints), Jetson TensorRT INT8. Report per-accelerator agreement on identical frames; disagreement is a drift/robustness signal (Invariant 5).
+  - **Thresholds**: confidence cutoffs calibrated from validation distributions, not hardcoded. Low-confidence or unknown class → quarantine/mirror-only (Invariant 3).
+  - **Trust boundary**: the Hailo runs on the untrusted tier; its output is advisory and tagged `source: 'hailo_surrogate'` (Invariant 6). Enforcement uses only the Jetson/Coral path, and any resulting rule passes `SymbolicRouteVerifier` before installation (Invariant 4).
+  - **Evasion testing**: use the Hailo replica as a surrogate to search for evasive traffic off-wire, then validate the best candidates against the real tap classifier.
+  - **Isolation prerequisite**: for adversarial runs, the RPi 5 `wlan0` (lab LAN) bypasses the Port 1 isolation policy entirely. Bring `wlan0` down or firewall it outside the node before running adversarial traffic.
 
 ### Phase 3: AlphaProof Symbolic Verification & Self-Tuning Control
 
@@ -529,7 +541,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 > **Hardware note (added 2026-10)**: RPi 5 + Hailo-8 26 TOPS instantiates the second agentic node required for this phase. Multi-agent observation experiments (flap detection, EMA oscillation under two live inference-capable nodes) can begin immediately via managed VLAN switch on Zodiac Port 1 without waiting for Phases 1–3 to complete. Full stabilisation enforcement (Milestones 4C–4D) requires Phase 3's symbolic verifier to be in place first.
 
 - [ ] **Milestone 4A: Multi-Tenant Hardware Topology**:
-  - **Hardware Provisioning (Completed 2026-10)**: RPi 5 + Hailo-8 (`agentic-node-02`, IP `10.0.2.51/24`, MAC `98:fe:54:52:9d:85`) provisioned on NETGEAR GS105Ev2 Port 2 at line-rate 1000 Mb/s; RPi 3B+ (`agentic-node-01`, IP `10.0.2.50/24`) on Port 3; HailoRT 4.20 + kernel driver verified on PCIe Gen 3.0 x1 (`/dev/hailo0`); dual-homed with OOB management (`10.0.0.179` / `10.0.0.45` on `wlan0`).
+  - **Hardware Provisioning (Completed 2026-10)**: RPi 5 + Hailo-8 (`agentic-node-02`, IP `10.0.2.51/24`, MAC `98:fe:54:52:9d:85`) provisioned on NETGEAR GS105Ev2 Port 4 at line-rate 1000 Mb/s; RPi 3B+ (`agentic-node-01`, IP `10.0.2.50/24`) on Port 3; HailoRT 4.20 + kernel driver verified on PCIe Gen 3.0 x1 (`/dev/hailo0`); dual-homed with OOB management (`10.0.0.179` / `10.0.0.45` on `wlan0`).
   - **Host Egress Pacing & Oversubscription Bounds**: Both nodes enforce host-side Fair Queue pacing (`sudo tc qdisc replace dev eth0 root fq maxrate 95mbit` for single-generator benchmarks; 45mbit during concurrent tests) to prevent 2:1 aggregate oversubscription (190 Mbps -> 100M uplink) and eliminate Netgear 128KB buffer overflow tail-drops.
   - **TCAM Quota Protection**: OpenFlow flow rules differentiate tenants by broad VLAN ID matching (VLAN 101/102) rather than granular `/32` host routes, preserving the Zodiac 128-rule hardware ceiling (McKeown invariant); per-tenant BigInt byte/packet accounting.
   - Baseline verification: zero cross-VLAN leakage between tenant flows confirmed via Port 3 mirror tap capture (epistemic ground truth, Invariant 6).

@@ -39,7 +39,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 - **Edge Inference Accelerators**: Dual Google Coral Edge TPUs (8 TOPS INT8 total compute; TPU 0 for line-rate tap DPI, TPU 1 for RFC 1035 DNS sentinel).
 - **Dedicated Tap Ingress**: ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous mode attached to Zodiac Port 3).
 - **Untrusted Agent Workload Tier**:
-  - **Raspberry Pi 5 + Hailo-8** (`agentic-node-02`): Autonomous adversarial agent & Red Team workload generator on `eth0` (`10.0.2.51`) via NETGEAR Port 2; 26 TOPS INT8 PCIe Gen 3.0 x1 NPU (`/dev/hailo0`, HailoRT 4.20); out-of-band management via `wlan0` (`10.0.0.179`).
+  - **Raspberry Pi 5 + Hailo-8** (`agentic-node-02`): Autonomous adversarial agent & Red Team workload generator on `eth0` (`10.0.2.51`) via NETGEAR Port 4; 26 TOPS INT8 PCIe Gen 3.0 x1 NPU (`/dev/hailo0`, HailoRT 4.20); out-of-band management via `wlan0` (`10.0.0.179`).
   - **Raspberry Pi 3 Model B+** (`agentic-node-01`): Untrusted client agent workload on `eth0` (`10.0.2.50`) via NETGEAR Port 3; out-of-band management via `wlan0` (`10.0.0.45`).
 - **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX to Zodiac Port 2.
 - **Local AI Workstation**: MacBook Pro M5 (20-core Apple Silicon Metal GPU, Unified Memory Architecture, 26B Gemma 4 local inference, zero-dependency Property List XML parser, 64-bit BigInt token accounting ledger).
@@ -100,10 +100,10 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |                                   |               |                                                   |
 | * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-| * Port 2: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+| * Port 4: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
 |   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
 | * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * Port 1, 4: Reserved / Expansion |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+| * Port 2: RPi 5 USB-GbE (capture) |               | * Local Ollama Engine: gemma4:26b (:11434)        |
 | * 802.3x Flow Control Enabled     |               | * Dual-Stage Council Review Gate                  |
 | * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Operator Console: http://localhost:3000 & Cloud |

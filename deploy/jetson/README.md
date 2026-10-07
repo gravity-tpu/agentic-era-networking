@@ -14,8 +14,9 @@
           ▼
 [Zodiac FX Port 2] ◄── Gateway Uplink
 [Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [NETGEAR GS105Ev2 Port 5 Uplink]
-                                                    ├── Port 2 ──► [Raspberry Pi 5 eth0: <workload-subnet>] (Hailo-8 26T)
-                                                    └── Port 3 ──► [Raspberry Pi 3B+ eth0: <workload-subnet>]
+                                                    ├── Port 4 ──► [Raspberry Pi 5 eth0: <workload-subnet>] (Hailo-8 26T)
+                                                    ├── Port 3 ──► [Raspberry Pi 3B+ eth0: <workload-subnet>]
+                                                    └── Port 2 ──► [Raspberry Pi 5 USB GbE: capture NIC (P5 mirror not yet verified)]
 [Zodiac FX Port 3] ─── Ethernet RJ-45 ───► [Jetson ASIX USB GbE: enx* (Promiscuous Tap)]
 [Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
 [Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC Telemetry)]
@@ -33,7 +34,7 @@
 
 | Zodiac Port | Connected Device | Interface Identity | Assigned Network / Role | Role & Invariant |
 | --- | --- | --- | --- | --- |
-| **Port 1** | NETGEAR GS105Ev2 | Port 5 Uplink | Isolated Workload Subnet | **Workload Aggregation Layer**: Intermediate GbE switch aggregating RPi 5 + Hailo-8 (Port 2) and RPi 3B+ (Port 3). |
+| **Port 1** | NETGEAR GS105Ev2 | Port 5 Uplink | Isolated Workload Subnet | **Workload Aggregation Layer**: Intermediate GbE switch aggregating RPi 5 + Hailo-8 (Port 4), RPi 3B+ (Port 3), and the RPi 5 USB-GbE capture NIC (Port 2). |
 | **Port 2** | ISP Gateway / Mesh Node | RJ-45 Uplink Cable | Gateway Bridged (VLAN 100) | **Gateway Transit**: Public Internet access. |
 | **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
 | **Port 4** | Jetson Orin Nano Super | `enP8p1s0` | Dedicated Control Subnet | **OpenFlow Control Channel**: Controller target `:6633`. |
@@ -181,7 +182,7 @@ stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phas
 1. Install PyCoral / libedgetpu runtime on the Jetson.
 2. Populate `CORAL_DEVICE_PATH` and `CORAL_CONFIDENCE_THRESHOLD` in `/etc/zodiac/zodiac-bridge.env`.
 3. Dedicated Model Parallelism:
-   - **TPU #1 (`usb:0`)**: Zodiac Port 3 mirror tap stream feeds the Coral for sub-millisecond shallow packet classification (<100 µs).
+   - **TPU #1 (`usb:0`)**: Zodiac Port 3 mirror tap stream feeds the Coral for on-silicon inference (<100 µs); the output tensor is not yet consumed, so this is a throughput/latency path until a trained classifier lands (ROADMAP Milestone 2C).
    - **TPU #2 (`usb:1`)**: RFC 1035 transparent DNS Sentinel evaluates FQDN semantic intent and DGA likelihood (<300 µs).
    - The Jetson Ampere TensorRT engine (67 TOPS) handles deep 1D-CNN autoencoder scoring concurrently.
 

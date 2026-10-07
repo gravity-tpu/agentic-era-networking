@@ -45,11 +45,12 @@ This ledger tracks the physical, data link, network, and transport architecture 
 │     (5-Port Easy Smart Managed)     │
 ├─────────────────────────────────────┤
 │ P5: Uplink → Zodiac P1 (100M)       │
-│ P2: RPi 5 + Hailo-8 (GbE, 10.0.2.51)│
+│ P4: RPi 5 + Hailo-8 (GbE, 10.0.2.51)│
 │ P3: RPi 3B+ (GbE, 10.0.2.50)        │
-│ P1, P4: Reserved / Expansion        │
+│ P2: RPi 5 USB-GbE (capture NIC)     │
+│ P1: Reserved / Expansion            │
 └───────────┬─────────────────────┬───┘
-            │ P2 RJ45             │ P3 RJ45
+            │ P4 RJ45             │ P3 RJ45
             ▼                     ▼
 ┌──────────────────────────────────────┐ ┌────────────────────────┐
 │     Raspberry Pi 5 + Hailo-8 (26T)   │ │    Raspberry Pi 3B+    │
@@ -78,18 +79,18 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 
 | VLAN ID | Name | Type | Member Ports | Purpose & Forwarding Domain |
 | :--- | :--- | :--- | :--- | :--- |
-| **VLAN 100** | `OpenFlow` | OpenFlow Data Plane | Zodiac Ports 1, 2, 3<br>Netgear Ports 2, 3, 5 (Untagged PVID 1/100) | Forwarding data plane. Subject to OpenFlow 1.3 `FLOW_MOD` match-action pipelines. Isolated from switch MCU management. |
+| **VLAN 100** | `OpenFlow` | OpenFlow Data Plane | Zodiac Ports 1, 2, 3<br>Netgear Ports 3, 4, 5 (Untagged PVID 1/100); Port 2 = RPi 5 capture NIC (mirror destination, VLAN membership TBD) | Forwarding data plane. Subject to OpenFlow 1.3 `FLOW_MOD` match-action pipelines. Isolated from switch MCU management. |
 | **VLAN 200** | `Controller` | Native Switch Mgmt | Zodiac Port 4 | Dedicated controller communication channel between Zodiac switch firmware and Jetson Orin Nano (`10.0.1.8:6633`). |
-| *VLAN 101/102* | *Multi-Tenant (Planned)* | *802.1Q Tagged* | *Netgear P3 (VLAN 101: RPi 3), P2 (VLAN 102: RPi 5), P5 (Trunk)* | *Roadmap Milestone 4A multi-tenant workload separation before Zodiac Port 1 ingress.* |
+| *VLAN 101/102* | *Multi-Tenant (Planned)* | *802.1Q Tagged* | *Netgear P3 (VLAN 101: RPi 3), P4 (VLAN 102: RPi 5), P5 (Trunk)* | *Roadmap Milestone 4A multi-tenant workload separation before Zodiac Port 1 ingress.* |
 
 ### Physical Hardware Identity & Profile Ledger
 
 | Node / Silicon | Hardware / SoC | MAC / Serial / ID | Network Interfaces | Roles & Capabilities |
 | :--- | :--- | :--- | :--- | :--- |
 | **Zodiac FX Switch** | Atmel SAM4E8E + KSZ8795CLX | DPID `0x70b3d58740c9`<br>MAC `70:B3:D5:87:40:C9`<br>FW `0.86`<br>UID `1396191488-826951736-858797360-925970489` | Port 1 (Workload)<br>Port 2 (ISP Wi-Fi Extender Uplink)<br>Port 3 (Tap)<br>Port 4 (Mgmt) | 128-rule OpenFlow 1.3 switch fabric; hardware MIB counters via CDC-ACM `/dev/ttyACM0`. |
-| **NETGEAR GS105Ev2** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2 | Port 2 (RPi 5 GbE)<br>Port 3 (RPi 3B+ GbE)<br>Port 1, 4 (Reserved/Exp)<br>Port 5 (Zodiac Port 1 Uplink 100M) | Intermediate Gigabit aggregation layer for Workload subnet. 128 KB shared packet buffer; IEEE 802.3x Flow Control ENABLED to propagate backpressure across 1Gbps -> 100Mbps speed transition; store-and-forward latency (~12 µs GbE ingress + ~120 µs 100M egress per 1518B MTU); loop detection enabled, IGMP snooping disabled; 802.1Q tagging readiness (fail-closed drop on untagged frames for trunking). |
+| **NETGEAR GS105Ev2** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2 | Port 4 (RPi 5 GbE)<br>Port 3 (RPi 3B+ GbE)<br>Port 2 (RPi 5 USB-GbE capture NIC; P5 mirror to P2 not yet configured/verified)<br>Port 1 (Reserved/Exp)<br>Port 5 (Zodiac Port 1 Uplink 100M) | Intermediate Gigabit aggregation layer for Workload subnet. 128 KB shared packet buffer; IEEE 802.3x Flow Control ENABLED to propagate backpressure across 1Gbps -> 100Mbps speed transition; store-and-forward latency (~12 µs GbE ingress + ~120 µs 100M egress per 1518B MTU); loop detection enabled, IGMP snooping disabled; 802.1Q tagging readiness (fail-closed drop on untagged frames for trunking). |
 | **Jetson Appliance** | NVIDIA Jetson Orin Nano Super | Serial `1791626120820` | `wlP1p1s0` (`10.0.0.15`)<br>`enP8p1s0` (`10.0.1.8`)<br>`enx9c69d39dd0a6` (Tap) | Master SDN controller, Sentinel ML daemon, dual Coral Edge TPU INT8 coprocessor host. |
-| **Raspberry Pi 5** | Broadcom BCM2712 + Hailo-8 (26 TOPS) | Hostname `agentic-node-02`<br>MAC `98:fe:54:52:9d:85` | `wlan0` (`10.0.0.179`)<br>`eth0` (`10.0.2.51`) | Autonomous adversarial edge agent, Red Team workload generator, 26 TOPS INT8 PCIe Gen 3.0 coprocessor host, line-rate GbE traffic engine. |
+| **Raspberry Pi 5** | Broadcom BCM2712 + Hailo-8 (26 TOPS) | Hostname `agentic-node-02`<br>MAC `98:fe:54:52:9d:85` | `wlan0` (`10.0.0.179`)<br>`eth0` (`10.0.2.51`)<br>Realtek RTL8153 USB 3.0 GbE (`0bda:8153`) capture NIC `eth1` (MAC `a0:ce:c8:0e:73:f7`, NETGEAR Port 2) | Autonomous adversarial edge agent, Red Team workload generator, 26 TOPS INT8 PCIe Gen 3.0 coprocessor host, line-rate GbE traffic engine. |
 | **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`) | Untrusted agent workload node, iperf3 client traffic generator. |
 | **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, Wi-Fi)<br>`tailscale0` (`100.112.223.16`) | Operator terminal. Connected strictly via Wi-Fi and Tailscale mesh (no direct physical Ethernet link to Zodiac). |
 | **ISP Wi-Fi Extender** | Lab LAN / WAN Bridge | Gateway `10.0.0.1` | RJ45 Ethernet Port | Uplink bridge connected to Zodiac Port 2; provides L2 physical attachment to lab LAN / WAN gateway. |
@@ -100,7 +101,7 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | :--- | :--- | :--- | :--- |
 | `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi 3 & Pi 5), `en0` (Mac), Zodiac Port 2 | Out-of-Band Mgmt & Gateway Uplink | SSH management, Internet gateway egress (`10.0.0.1`), physical uplink from Zodiac Port 2 to ISP extender. |
 | `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
-| `10.0.2.0/24` | `eth0` (RPi 3: `10.0.2.50`, RPi 5: `10.0.2.51`) -> Netgear P3/P2 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` lab LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
+| `10.0.2.0/24` | `eth0` (RPi 3: `10.0.2.50`, RPi 5: `10.0.2.51`) -> Netgear P3/P4 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` lab LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
 | `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
 
 ### L4 Transport & Protocol Bindings
@@ -126,7 +127,7 @@ Tracks physical hardware limits to prevent table exhaustion, bufferbloat, and ou
 | **Kernel Interval Sets** | Linux netfilter (`nftables`) | System RAM bounded | **10,000 subnets** | Subnet LRU eviction (`bounded-lru.ts`) + automatic coarse `/16` aggregation. |
 | **Sentinel Daemon State** | systemd cgroup | `MemoryMax=64M` | **51.2 MB** | Count-Min Sketch fixed table; zero unbounded array allocation. |
 | **Edge TPU DPI Queue** | Google Coral USB (4 TOPS) | Sub-4ms batch inference | **80% Duty Cycle** | Shed non-SYN packet evaluation; prioritize handshake triage. |
-| **Edge NPU Coprocessor** | Hailo-8 M.2 (RPi 5 PCIe Gen 3) | **26 TOPS INT8** | **80% Duty Cycle** | Sub-microsecond direct PCIe DMA; high-throughput neural tool-call synthesis & adversarial traffic injection. |
+| **Edge NPU Coprocessor** | Hailo-8 M.2 (RPi 5 PCIe Gen 3) | **26 TOPS INT8** | **80% Duty Cycle** | CNN inference only (HEF via Hailo Dataflow Compiler); advisory on the untrusted tier, never an enforcement input. Not an LLM runtime; traffic generation is host CPU/NIC-bound. |
 | **Aggregation Buffer** | NETGEAR GS105Ev2 | **128 KB SRAM** (~85 MTU frames) | **102.4 KB (80%)** | Enforce IEEE 802.3x PAUSE backpressure + host-side egress pacing on RPi (`tc qdisc replace dev eth0 root fq maxrate 95mbit`) to prevent 10:1 rate mismatch tail-drops. |
 
 ---
@@ -181,7 +182,7 @@ This section tracks the active developmental state across the primary SDN archit
    - *Symptom*: Workload node changes IP address across DHCP renewal.
    - *Fix*: Set `wifi.cloned-mac-address permanent` on the NetworkManager connection.
 4. **NETGEAR GS105Ev2 GbE-to-100M Buffer Overrun & Telemetry Blind Spot**:
-   - *Symptom*: RPi 5 (Port 2) or RPi 3B+ (Port 3) transmits bursts at GbE rate into Netgear switch, overflowing the 128KB buffer on egress to Zodiac Port 1 (100BASE-TX). Because the Netgear switch sits outside the OpenFlow control plane, buffer tail-drops do not increment Zodiac MIB drop counters, creating a telemetry blind spot (violating Invariant 6). Furthermore, concurrent transmission at 95 Mbps from both nodes creates 190 Mbps aggregate demand onto the 100M uplink (2:1 oversubscription).
+   - *Symptom*: RPi 5 (Port 4) or RPi 3B+ (Port 3) transmits bursts at GbE rate into Netgear switch, overflowing the 128KB buffer on egress to Zodiac Port 1 (100BASE-TX). Because the Netgear switch sits outside the OpenFlow control plane, buffer tail-drops do not increment Zodiac MIB drop counters, creating a telemetry blind spot (violating Invariant 6). Furthermore, concurrent transmission at 95 Mbps from both nodes creates 190 Mbps aggregate demand onto the 100M uplink (2:1 oversubscription).
    - *Fix*:
      1. Enable IEEE 802.3x Flow Control on all Netgear ports to push backpressure into the RPi socket queue.
      2. Configure host egress rate pacing: `sudo tc qdisc replace dev eth0 root fq maxrate 95mbit` for single-generator runs, or `maxrate 45mbit` for concurrent multi-agent tests (physically enforced on both RPi 5 `agentic-node-02` and RPi 3B+ `agentic-node-01`).

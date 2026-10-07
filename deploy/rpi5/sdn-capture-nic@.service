@@ -1,0 +1,24 @@
+[Unit]
+Description=Zodiac capture NIC %I (promiscuous, GRO/LRO off, address-less)
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=sys-subsystem-net-devices-%i.device
+BindsTo=sys-subsystem-net-devices-%i.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/default/sdn-capture-nic
+ExecStart=/usr/local/sbin/sdn-capture-nic.sh %i apply
+ExecStart=/usr/local/sbin/sdn-capture-nic.sh %i verify
+
+# Hardening: only needs to reconfigure one network device
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK
+
+# Started by udev (99-sdn-capture-nic.rules) at boot and on hotplug; no [Install].

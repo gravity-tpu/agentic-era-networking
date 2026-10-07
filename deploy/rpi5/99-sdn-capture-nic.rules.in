@@ -1,0 +1,4 @@
+# Starts sdn-capture-nic@<ifname>.service for the capture NIC, matched by MAC so the
+# kernel interface name (eth1, enx*, ...) does not matter. Rendered by
+# deploy-capture-nic.sh, which substitutes @CAPTURE_MAC@ (lowercase, colon-separated).
+ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="@CAPTURE_MAC@", TAG+="systemd", ENV{SYSTEMD_WANTS}="sdn-capture-nic@%k.service"
