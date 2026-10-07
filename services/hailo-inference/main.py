@@ -17,9 +17,9 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 from schemas import (
     InferRequest,
@@ -34,6 +34,7 @@ from schemas import (
 from telemetry import TelemetryProvider
 from inference_engine import InferenceEngine, DEFAULT_MODELS_DIR
 from benchmark import run_hardware_benchmark
+from playground_html import INTERACTIVE_PLAYGROUND_HTML
 
 DEFAULT_MODEL = "yolov8s_h8.hef"
 MAX_PAYLOAD_BYTES = 10 * 1024 * 1024       # 10 MB fail-closed upper bound
@@ -84,15 +85,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Whitelisted CORS origins (INV-3 Fail-Closed Isolation):
-# Default to operator workstation, local dashboard, and internal management subnet
+# Whitelisted CORS origins (INV-3 Fail-Closed Isolation & Quoc Le anti-heuristics rule):
+# Default strictly to local loopback; subnet/operator origins configured via HAILO_CORS_ORIGINS env.
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://10.0.0.1",
-    "http://10.0.0.179:3000",
 ]
 cors_origins_env = os.environ.get("HAILO_CORS_ORIGINS")
 allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] if cors_origins_env else DEFAULT_CORS_ORIGINS
@@ -124,6 +123,9 @@ def get_root():
         "status": "ONLINE",
         "active_model": active_m,
         "total_inferences": tot_inf,
+        "interactive_playground": "/infer",
+        "swagger_docs": "/docs",
+        "redoc": "/redoc",
     }
 
 
@@ -193,6 +195,38 @@ def load_model(req: LoadModelRequest):
     except Exception as e:
         sys.stderr.write(f"[HailoService] Failed loading model {req.model_name}: {e}\n")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed loading model: {e}")
+
+
+@app.get("/infer", include_in_schema=False)
+def infer_get(request: Request):
+    """
+    Handle GET requests to /infer.
+    If requested from a web browser (Accept includes text/html), serve the interactive Neural Playground.
+    Otherwise, return an informative HTTP 405 response explaining how to POST.
+    """
+    accept_header = request.headers.get("accept", "").lower()
+    if "text/html" in accept_header:
+        return HTMLResponse(content=INTERACTIVE_PLAYGROUND_HTML)
+    return JSONResponse(
+        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        content={
+            "detail": "Method Not Allowed. /infer requires an HTTP POST request with an image payload.",
+            "interactive_playground": "Open /infer in a web browser for the graphical playground or /docs for Swagger UI.",
+            "endpoints": {
+                "upload_file": "POST /infer/upload (multipart/form-data)",
+                "json_payload": "POST /infer (application/json with image_b64)",
+                "swagger_docs": "/docs",
+                "telemetry": "/telemetry",
+            },
+            "example_curl": "curl -X POST http://<host>:8000/infer/upload -F 'file=@image.jpg'",
+        },
+    )
+
+
+@app.get("/playground", response_class=HTMLResponse, tags=["Inference"])
+def get_playground():
+    """Interactive Neural Inference Playground web UI."""
+    return HTMLResponse(content=INTERACTIVE_PLAYGROUND_HTML)
 
 
 @app.post("/infer", response_model=InferResponse, tags=["Inference"])
