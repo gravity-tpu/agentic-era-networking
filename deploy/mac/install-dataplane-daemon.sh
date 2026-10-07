@@ -60,15 +60,21 @@ echo "    Triggering initial network configuration..."
 "${TARGET_SCRIPT}"
 
 # 6. Verification
-EGRESS_IFACE="$(route -n get 10.0.0.1 2>/dev/null | awk '/interface:/{print $2}' || true)"
+ALIAS_IP="10.0.2.119"
+if [[ -r "${CONF_FILE}" ]]; then
+  parsed_ip="$(grep -E '^ALIAS_IP=' "${CONF_FILE}" | head -n1 | cut -d'"' -f2 || true)"
+  if [[ -n "${parsed_ip}" ]]; then ALIAS_IP="${parsed_ip}"; fi
+fi
+
+EGRESS_IFACE="$(route -n get 10.0.0.1 2>/dev/null | awk '/interface:/{print $2}' || route -n get default 2>/dev/null | awk '/interface:/{print $2}' || true)"
 WIFI_IFACE="$(networksetup -listallhardwareports 2>/dev/null | awk '/Hardware Port: Wi-Fi/{getline; print $2}' || true)"
 IFACE="${EGRESS_IFACE:-${WIFI_IFACE:-en0}}"
 
 echo "==> Verifying configuration on ${IFACE}..."
-if ifconfig "${IFACE}" | grep -E -q "inet 10\.0\.2\.119 "; then
-  echo "    [+] SUCCESS: Alias 10.0.2.119 active on ${IFACE}."
+if ifconfig "${IFACE}" | grep -F -q "inet ${ALIAS_IP} "; then
+  echo "    [+] SUCCESS: Alias ${ALIAS_IP} active on ${IFACE}."
 else
-  echo "    [!] Note: 10.0.2.119 not yet bound (ensure you are connected to Lab Wi-Fi 10.0.0.0/24)."
+  echo "    [!] Note: ${ALIAS_IP} not yet bound (ensure you are connected to Lab Wi-Fi 10.0.0.0/24)."
 fi
 
 echo "==> Status of launchd service:"

@@ -6,15 +6,17 @@
 
 set -euo pipefail
 
+ALIAS_IP="10.0.2.119"
+NETMASK="255.255.255.0"
+LAB_GW="10.0.0.1"
+
 CONF_FILE="/etc/zodiac/dataplane.conf"
 if [[ -r "${CONF_FILE}" ]]; then
-  # shellcheck source=/dev/null
-  source "${CONF_FILE}"
+  parsed_ip="$(grep -E '^ALIAS_IP=' "${CONF_FILE}" | head -n1 | cut -d'"' -f2 || true)"
+  if [[ -n "${parsed_ip}" ]]; then ALIAS_IP="${parsed_ip}"; fi
+  parsed_mask="$(grep -E '^NETMASK=' "${CONF_FILE}" | head -n1 | cut -d'"' -f2 || true)"
+  if [[ -n "${parsed_mask}" ]]; then NETMASK="${parsed_mask}"; fi
 fi
-
-ALIAS_IP="${ALIAS_IP:-10.0.2.119}"
-NETMASK="${NETMASK:-255.255.255.0}"
-LAB_GW="10.0.0.1"
 
 log() {
   local msg="zodiac-dataplane: $*"
@@ -47,7 +49,7 @@ ROUTES_CONFIG="$(netstat -rn -f inet)"
 # Matches exact boundary 'inet 10.0.0.<1-3 digits> netmask 0xffffff00'
 if ! grep -E -q 'inet 10\.0\.0\.[0-9]+ netmask 0xffffff00' <<<"${IFACE_CONFIG}"; then
   # If an alias remains while disconnected from Lab LAN, strip it to prevent leakage
-  if grep -E -q "inet ${ALIAS_IP} " <<<"${IFACE_CONFIG}"; then
+  if grep -F -q "inet ${ALIAS_IP} " <<<"${IFACE_CONFIG}"; then
     ifconfig "${IFACE}" -alias "${ALIAS_IP}"
     log "Removed ${ALIAS_IP} from ${IFACE} (disconnected from Lab LAN)"
   fi
@@ -63,7 +65,7 @@ if grep -E -q '10\.0\.2/24[[:space:]]+10\.0\.0\.1' <<<"${ROUTES_CONFIG}"; then
 fi
 
 # 6. Apply alias if missing
-if ! grep -E -q "inet ${ALIAS_IP} " <<<"${IFACE_CONFIG}"; then
+if ! grep -F -q "inet ${ALIAS_IP} " <<<"${IFACE_CONFIG}"; then
   ifconfig "${IFACE}" alias "${ALIAS_IP}" "${NETMASK}"
   log "Configured alias ${ALIAS_IP} on ${IFACE}"
   ROUTES_CONFIG="$(netstat -rn -f inet)"
