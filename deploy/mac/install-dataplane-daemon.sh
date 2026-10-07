@@ -21,14 +21,15 @@ CONF_FILE="${CONF_DIR}/dataplane.conf"
 
 echo "==> Installing Zodiac Data Plane persistence daemon..."
 
-# 1. Stage configuration directory and default config file
-mkdir -p "${CONF_DIR}"
+# 1. Stage configuration directory and default config file (strict root permissions)
+install -d -o root -g wheel -m 0755 "${CONF_DIR}"
 if [[ ! -f "${CONF_FILE}" ]]; then
   cat <<'EOF' > "${CONF_FILE}"
 # Zodiac macOS Data-Plane Configuration
 ALIAS_IP="10.0.2.119"
 NETMASK="255.255.255.0"
 EOF
+  chown root:wheel "${CONF_FILE}"
   chmod 0644 "${CONF_FILE}"
   echo "    Created default configuration at ${CONF_FILE}"
 fi

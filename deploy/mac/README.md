@@ -51,10 +51,10 @@ Check that the alias is active:
 ifconfig en0 | grep 10.0.2.119
 ```
 
-Tail the daemon log:
+View daemon log stream via macOS Unified Logging:
 
 ```bash
-tail -f /var/log/zodiac-dataplane.log
+log stream --predicate 'eventMessage CONTAINS "zodiac-dataplane"' --info
 ```
 
 ---

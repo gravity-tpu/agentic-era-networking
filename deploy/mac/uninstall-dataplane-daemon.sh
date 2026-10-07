@@ -25,18 +25,25 @@ if launchctl print system/com.zodiac.dataplane >/dev/null 2>&1; then
   launchctl bootout system/"com.zodiac.dataplane" 2>/dev/null || launchctl unload "${TARGET_PLIST}" 2>/dev/null || true
 fi
 
-# 2. Remove files
+# 2. Resolve custom ALIAS_IP from config before removing files
+ALIAS_IP="10.0.2.119"
+if [[ -r "${CONF_FILE}" ]]; then
+  # shellcheck source=/dev/null
+  source "${CONF_FILE}"
+fi
+
+# 3. Remove files
 rm -f "${TARGET_PLIST}" "${TARGET_SCRIPT}" "${CONF_FILE}"
 echo "    Removed ${TARGET_PLIST}, ${TARGET_SCRIPT}, and ${CONF_FILE}"
 
-# 3. Clean up alias from active egress / Wi-Fi interface if present
+# 4. Clean up alias from active egress / Wi-Fi interface if present
 EGRESS_IFACE="$(route -n get 10.0.0.1 2>/dev/null | awk '/interface:/{print $2}' || true)"
 WIFI_IFACE="$(networksetup -listallhardwareports 2>/dev/null | awk '/Hardware Port: Wi-Fi/{getline; print $2}' || true)"
 IFACE="${EGRESS_IFACE:-${WIFI_IFACE:-en0}}"
 
-if ifconfig "${IFACE}" | grep -E -q "inet 10\.0\.2\.119 "; then
-  ifconfig "${IFACE}" -alias 10.0.2.119
-  echo "    Removed 10.0.2.119 alias from ${IFACE}"
+if ifconfig "${IFACE}" | grep -E -q "inet ${ALIAS_IP} "; then
+  ifconfig "${IFACE}" -alias "${ALIAS_IP}"
+  echo "    Removed ${ALIAS_IP} alias from ${IFACE}"
 fi
 
 echo "==> Daemon successfully uninstalled."
