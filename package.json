@@ -77,7 +77,9 @@
   "overrides": {
     "deepmerge-ts": "^8.0.2",
     "js-yaml": "^5.4.1",
-    "mysql2": "^3.24.4"
+    "katex": "^0.18.2",
+    "mysql2": "^3.24.4",
+    "smol-toml": "^1.9.0"
   },
   "allowScripts": {
     "@prisma/engines": true,
