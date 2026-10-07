@@ -682,7 +682,7 @@ export class ZodiacBridgeServer {
       console.log('[+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).');
 
       // Port 1 Isolation Policy (see src/sdn/port1-isolation.ts):
-      // Port 2 is physically wired to the ISP Wi-Fi extender (home LAN 10.0.0.0/24 → Internet).
+      // Port 2 is physically wired to the ISP Wi-Fi extender (lab LAN 10.0.0.0/24 → Internet).
       // Port-only forwarding (in_port=1 → [2,3]) bridged every workload frame onto the household
       // L2 domain. Only IPv4 confined to 10.0.2.0/24 (src AND dst) plus ARP may cross P1⟷P2;
       // all other workload traffic is mirrored to the Port 3 sentinel tap only.

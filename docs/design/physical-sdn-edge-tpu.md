@@ -34,7 +34,7 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 
 ```text
                                             +───────────────────────────────────+
-                                            |    Public Internet / Home LAN     |
+                                            |    Public Internet / Lab LAN     |
                                             +-----------------+-----------------+
                                                               │ (Mesh WiFi)
                                                               ▼
@@ -126,17 +126,17 @@ This architecture grounds the Zodiac control plane in **physical hardware**, ele
 | **NETGEAR GS105Ev2** | Ports 1–5 (1000BASE-T) | GS105E v2 | Workload Subnet Aggregation | P5: Zodiac P1, P2: RPi 5, P3: RPi 3, P1/4: Res | **Intermediate Aggregation Switch**: GbE aggregation layer, 128KB packet buffer, IEEE 802.3x flow control, rate transition bridging. |
 | **Jetson Orin Nano** | `enP8p1s0` (Onboard GbE) | Onboard Realtek GbE | Dedicated Control Subnet | Zodiac Port 4 | **OpenFlow Controller**: Listens on `:6633` (<1ms latency). |
 | **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress**: Line-rate packet capture for Coral TPU. |
-| **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Home Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |
+| **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Lab Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |
 | **Google Coral TPU Primary** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` (uncompiled) / `9303` (delegate loaded) | USB path `2-1.3` | Jetson USB-A (Realtek hub port 3) | **Active Inference — Line-Rate Wire-Tap DPI**: `zodiac-coral.service` targets this TPU first (`CORAL_PRIMARY_USB_PATH=2-1.3`). MobileNet V2 INT8 shallow packet classifier on Port 3 mirror tap. `standbyMode: false` in telemetry. |
 | **Google Coral TPU Standby** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` / `9303` | USB path `2-1.2` | Jetson USB-A (Realtek hub port 2) | **Standby — Failover Tap DPI**: `zodiac-coral.service` activates this TPU if primary is absent or exceeds `MAX_CONSECUTIVE_ERRORS=5`. Runs identical MobileNet V2 INT8 model. `standbyMode: true` in telemetry. DNS Sentinel role planned for Phase 2. |
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
 | **Raspberry Pi 5** | `eth0` (Onboard GbE) | Broadcom BCM54213PE | Isolated Workload Subnet | NETGEAR Port 2 | **Autonomous Adversarial Agent**: Red Team workload generator, rate-limiting stress testing. |
-| **Raspberry Pi 5** | `wlan0` (Wi-Fi) | Synaptics BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
+| **Raspberry Pi 5** | `wlan0` (Wi-Fi) | Synaptics BCM43455 | Management Plane Subnet | Lab Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
 | **Hailo-8 M.2 NPU** | PCIe Gen 3.0 x1 | Hailo-8 AI Accelerator | `/dev/hailo0` (HailoRT 4.20) | RPi 5 PCIe M.2 HAT+ | **Edge NPU Coprocessor**: 26 TOPS INT8 neural coprocessor for local tool-call synthesis & high-throughput packet generation. |
 | **Raspberry Pi 3B+** | `eth0` (Onboard GbE) | Microchip LAN7800 | Isolated Workload Subnet | NETGEAR Port 3 | **Untrusted Agent Workload 1**: Target for SDN policy enforcement. |
-| **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Home Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
+| **Raspberry Pi 3B+** | `wlan0` (Wi-Fi) | Broadcom BCM43455 | Management Plane Subnet | Lab Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
 | **MacBook M5 Workstation** | USB-C to USB-C (High-Speed) | Apple T8142 USBXHCI | Direct Tether (`192.168.55.1/24` ↔ `en8`, metric 50) | Jetson USB-C Device Port (L4T Gadget: `l4tbr0` CDC-NCM + `g_serial` CDC-ACM) | **Direct Hardware Management Tether**: Point-to-point subnet `192.168.55.0/24` (metric 50, highest priority). CDC-ACM serial console at `115200 8N1` (`/dev/cu.usbmodem*`). MTU 1500 on `en8`. IP forwarding between `192.168.55.0/24` and SDN subnets permanently disabled (`net.ipv4.conf.l4tbr0.forwarding=0`) — strictly bound to OOB management, zero data-plane transit. L4T USB Gadget modules (`g_ether`, `g_serial`) must be loaded in initramfs before network stack init to guarantee enumeration before the management plane comes up. |
-| **MacBook M5 Workstation** | Wi-Fi 6/6E (802.11ax) | Apple M5 Pro Metal GPU | Management Plane Subnet | Home Wireless LAN / Cloud | **Local AI Workstation & Review Plane**: 20-Core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
+| **MacBook M5 Workstation** | Wi-Fi 6/6E (802.11ax) | Apple M5 Pro Metal GPU | Management Plane Subnet | Lab Wireless LAN / Cloud | **Local AI Workstation & Review Plane**: 20-Core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
 
 ### 2.2 Management Plane Routing Hierarchy & Fail-Closed Invariants
 

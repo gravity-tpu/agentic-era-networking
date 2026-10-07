@@ -48,7 +48,7 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 
 ```text
                                             +───────────────────────────────────+
-                                            |    Public Internet / Home LAN     |
+                                            |    Public Internet / Lab LAN     |
                                             +-----------------+-----------------+
                                                               │ (Mesh WiFi)
                                                               ▼
@@ -138,10 +138,10 @@ This repository grounds autonomous SDN invariants in physical hardware, elevatin
 | **Link 4** | Zodiac FX Port 1 | RJ-45 Patch Cable | RPi 3B+ (`eth0`) | 100BASE-TX (VLAN 100) | **Untrusted Workload Port**: Monitored client agent data plane. |
 | **Link 5** | Zodiac FX Port 3 | RJ-45 Patch Cable | Jetson (`enx*` USB GbE) | 100BASE-TX (Port Mirror) | **Promiscuous Tap Ingress**: Line-rate packet capture for Coral Edge TPU. |
 | **Link 6** | Dual Coral Edge TPUs | Dual USB 3.0 | Jetson Orin (USB-A) | USB 3.0 (`18d1:9302`, `1a6e:089a`) | **Dedicated Edge Accelerators**: 8 TOPS INT8 total (TPU 0 Tap DPI, TPU 1 DNS Sentinel). |
-| **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Home Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
-| **Link 8** | Jetson Orin (`wlP1p1s0`) | Wireless 802.11ax | Home Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
+| **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Lab Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
+| **Link 8** | Jetson Orin (`wlP1p1s0`) | Wireless 802.11ax | Lab Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
 | **Link 9** | Jetson Orin (USB-C) | USB-C to USB-C Cable | MacBook M5 (USB-C) | USB CDC-NCM (`en8`) + CDC-ACM (`/dev/cu.usbmodem*`) | **Direct Hardware Management Tether**: Point-to-point IP plane (`192.168.55.1` <-> `en8`) & serial console immune to network failure. |
-| **Link 10** | MacBook M5 Workstation | Wireless 802.11ax | Home Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
+| **Link 10** | MacBook M5 Workstation | Wireless 802.11ax | Lab Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
 
 ### Management Plane Routing Hierarchy & Fail-Closed Invariants
 

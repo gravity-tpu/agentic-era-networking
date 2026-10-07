@@ -505,7 +505,7 @@ This is the most important architectural clarification for Sentinel:
 +──────────────────────────────────────────────────────────────────────────────────+
 ```
 
-The Zodiac FX **never sees production internet crawler traffic** — it is a local lab device on a home LAN. Its role in Sentinel is:
+The Zodiac FX **never sees production internet crawler traffic** — it is a local lab device on a lab LAN. Its role in Sentinel is:
 
 1. **Research substrate**: validates detection algorithms on controlled local traffic before production deployment.
 2. **Local development enforcement**: quarantines test adversarial agents (e.g., the Raspberry Pi workload) during development and integration testing.

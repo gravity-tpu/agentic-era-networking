@@ -1,9 +1,9 @@
 /**
  * port1-isolation.ts
  * Baseline Zodiac FX data-plane policy that isolates the untrusted workload segment
- * (Zodiac Port 1 → NETGEAR → RPi, 10.0.2.0/24) from the home LAN / WAN reachable via Port 2.
+ * (Zodiac Port 1 → NETGEAR → RPi, 10.0.2.0/24) from the lab LAN / WAN reachable via Port 2.
  *
- * Physical reality: Port 2 is wired to the ISP Wi-Fi extender (home LAN 10.0.0.0/24,
+ * Physical reality: Port 2 is wired to the ISP Wi-Fi extender (lab LAN 10.0.0.0/24,
  * gateway 10.0.0.1 → Internet). A port-only `in_port=1 → [2,3]` rule bridges every workload
  * frame (DHCP, mDNS, spoofed 10.0.0.x sources, default-gateway traffic) onto the household
  * L2 domain, leaving `never-default` on the workload host as the only guard — a guard the

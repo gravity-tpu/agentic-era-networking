@@ -16,7 +16,7 @@ Governed by the **Technical Staff Council Invariants**:
 
 ```text
                                             +───────────────────────────────────+
-                                            |    Public Internet / Home LAN     |
+                                            |    Public Internet / Lab LAN     |
                                             +-----------------+-----------------+
                                                               │ (Mesh WiFi)
                                                               ▼
@@ -125,7 +125,7 @@ Governed by the **Technical Staff Council Invariants**:
 
 The Jetson Orin operates as a **Tailscale subnet router and WAN exit node**, enabling zero-configuration remote access to the full SDN stack from anywhere in the world:
 
-- **Advertised Subnets**: `10.0.0.0/24` (Home LAN), `10.0.1.0/24` (Zodiac OpenFlow plane), full WAN exit (`0.0.0.0/0`)
+- **Advertised Subnets**: `10.0.0.0/24` (Lab LAN), `10.0.1.0/24` (Zodiac OpenFlow plane), full WAN exit (`0.0.0.0/0`)
 - **Remote Access**: `ssh zodiac@jetson-orin` from any Tailscale client — no VPN, port-forwarding, or static IP required
 - **Mesh Peers**: MacBook M5 (`100.112.223.16`) ↔ Jetson (`100.118.64.16`) ↔ agentic-node-01 (`100.79.152.36`)
 
@@ -135,7 +135,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 
 1. **Deterministic Recovery Hierarchy**:
    - **Tier 1 — Direct Hardware Tether (Highest Priority, Metric 50)**: USB-C CDC-NCM point-to-point network (`en8` <-> `l4tbr0`, invariant subnet `192.168.55.0/24`). Lowest administrative distance for deterministic, ultra-low-latency operator access and telemetry bridging.
-   - **Tier 2 — Tailscale Mesh Overlay**: WireGuard-encrypted mesh (`tailscale0`). Globally routable remote access immune to dynamic home ISP IP changes; routes `10.0.0.0/24` and `10.0.1.0/24`.
+   - **Tier 2 — Tailscale Mesh Overlay**: WireGuard-encrypted mesh (`tailscale0`). Globally routable remote access immune to dynamic lab ISP IP changes; routes `10.0.0.0/24` and `10.0.1.0/24`.
    - **Tier 3 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
    - **Tier 4 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
 2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
@@ -435,10 +435,10 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Config file: `/etc/sysctl.d/99-tailscale.conf` (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`) — required for Tailscale exit-node routing. SDN interface leakage is blocked per-interface: `net.ipv4.conf.enP8p1s0.forwarding = 0`, `net.ipv4.conf.l4tbr0.forwarding = 0` in `/etc/sysctl.d/99-zodiac-sdn.conf`, plus nftables forward-chain DROP on SDN bridge interfaces.
 - [x] **Milestone 0.11B: Tailscale SSH ACL (Hardened Remote Access)**:
   - Strict Tailscale ACL enforces `zodiac` user for all SSH sessions to Jetson (rejects username `andymorven`).
-  - Remote command: `ssh zodiac@jetson-orin` — globally routable, WireGuard-encrypted, zero knowledge of home ISP IP required.
+  - Remote command: `ssh zodiac@jetson-orin` — globally routable, WireGuard-encrypted, zero knowledge of lab ISP IP required.
 - [x] **Milestone 0.11C: 4-Tier Management Hierarchy Formalized**:
   - Tier 1 (USB-C Tether, Metric 50) → Tier 2 (Tailscale WireGuard mesh) → Tier 3 (Wi-Fi, Metric 200) → Tier 4 (Hardware Serial CDC-ACM).
-  - Tailscale mesh makes Tier 2 globally routable; eliminates dependency on home DHCP/IP for remote work sessions and CI/CD deployments.
+  - Tailscale mesh makes Tier 2 globally routable; eliminates dependency on lab DHCP/IP for remote work sessions and CI/CD deployments.
   - Documented in [.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md) with full mesh peer table.
 
 ### Phase 0.12: Jetson Ampere GPU — Stage-2 Anomaly Autoencoder & Live Wire Quarantine

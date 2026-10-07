@@ -20,9 +20,9 @@ This ledger tracks the physical, data link, network, and transport architecture 
                                                                 │
                                          ┌──────────────────────┴──────────────────────┐
                                          │  ISP Wi-Fi Router & Extender (gw 10.0.0.1)  │
-                                         │ Home LAN 10.0.0.0/24 — trusted household L2 │
+                                         │ Lab LAN 10.0.0.0/24 — trusted household L2 │
                                          └───┬──────────────────┬──────────────────────┘
-                                             │                  │ Home Wi-Fi (802.11)
+                                             │                  │ Lab Wi-Fi (802.11)
                    ┌─────────────────────────┘                  ├────────────────────────────────────┐
                    │ Extender RJ45 (wired)                      │ 10.0.0.15                          │ 10.0.0.119
                    ▼                                            ▼                                    ▼
@@ -92,7 +92,7 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | **Raspberry Pi 5** | Broadcom BCM2712 + Hailo-8 (26 TOPS) | Hostname `agentic-node-02`<br>MAC `98:fe:54:52:9d:85` | `wlan0` (`10.0.0.179`)<br>`eth0` (`10.0.2.51`) | Autonomous adversarial edge agent, Red Team workload generator, 26 TOPS INT8 PCIe Gen 3.0 coprocessor host, line-rate GbE traffic engine. |
 | **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`) | Untrusted agent workload node, iperf3 client traffic generator. |
 | **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, Wi-Fi)<br>`tailscale0` (`100.112.223.16`) | Operator terminal. Connected strictly via Wi-Fi and Tailscale mesh (no direct physical Ethernet link to Zodiac). |
-| **ISP Wi-Fi Extender** | Home LAN / WAN Bridge | Gateway `10.0.0.1` | RJ45 Ethernet Port | Uplink bridge connected to Zodiac Port 2; provides L2 physical attachment to home LAN / WAN gateway. |
+| **ISP Wi-Fi Extender** | Lab LAN / WAN Bridge | Gateway `10.0.0.1` | RJ45 Ethernet Port | Uplink bridge connected to Zodiac Port 2; provides L2 physical attachment to lab LAN / WAN gateway. |
 
 ### L3 Subnet & Addressing Schema
 
@@ -100,7 +100,7 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | :--- | :--- | :--- | :--- |
 | `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi 3 & Pi 5), `en0` (Mac), Zodiac Port 2 | Out-of-Band Mgmt & Gateway Uplink | SSH management, Internet gateway egress (`10.0.0.1`), physical uplink from Zodiac Port 2 to ISP extender. |
 | `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
-| `10.0.2.0/24` | `eth0` (RPi 3: `10.0.2.50`, RPi 5: `10.0.2.51`) -> Netgear P3/P2 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` home LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
+| `10.0.2.0/24` | `eth0` (RPi 3: `10.0.2.50`, RPi 5: `10.0.2.51`) -> Netgear P3/P2 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` lab LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
 | `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
 
 ### L4 Transport & Protocol Bindings
@@ -108,7 +108,7 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | Port / Protocol | Service | Direction | Security & Performance Invariant |
 | :--- | :--- | :--- | :--- |
 | `TCP 6633` | OpenFlow 1.3 Controller | Jetson Ingress (from Port 4) | Isolated to VLAN 200; BigInt wire serialization; fail-secure. |
-| `TCP 5201` | iperf3 TCP/UDP Benchmark | Home LAN Ingress (`10.0.0.x` / `10.0.2.x`) from Pi (`10.0.2.50`) | Port 1 ⟷ Port 2 data-plane transit testing across ISP extender uplink; zero-suppression integer throughput metering. |
+| `TCP 5201` | iperf3 TCP/UDP Benchmark | Lab LAN Ingress (`10.0.0.x` / `10.0.2.x`) from Pi (`10.0.2.50`) | Port 1 ⟷ Port 2 data-plane transit testing across ISP extender uplink; zero-suppression integer throughput metering. |
 | `UDP 53` | RFC 1035 DNS Wire Server | Jetson Ingress / Workload | Default-drop on unrecognized domains; fail-closed resolver. |
 | `TCP 3003` | Zodiac Bridge HTTP / SSE | Local / Tailscale | Read-only telemetry exposition; real-time hardware status. |
 | `TCP 9100/9105` | Prometheus Metrics Exporter | Local / Scraping | 64-bit integer counters; zero floating point precision drift. |
@@ -186,7 +186,7 @@ This section tracks the active developmental state across the primary SDN archit
      1. Enable IEEE 802.3x Flow Control on all Netgear ports to push backpressure into the RPi socket queue.
      2. Configure host egress rate pacing: `sudo tc qdisc replace dev eth0 root fq maxrate 95mbit` for single-generator runs, or `maxrate 45mbit` for concurrent multi-agent tests (physically enforced on both RPi 5 `agentic-node-02` and RPi 3B+ `agentic-node-01`).
      3. Telemetry Reconciliation: Benchmark and monitoring scripts must reconcile host sysfs `tx_packets` against Zodiac Port 1 `rx_packets` to detect any intervening packet loss before entering the OpenFlow domain.
-5. **Port 2 Home-LAN L2 Leak (Workload Isolation)**:
+5. **Port 2 Lab-LAN L2 Leak (Workload Isolation)**:
    - *Symptom*: Zodiac Port 2 is wired to the ISP Wi-Fi extender. The legacy port-only rule (`in_port=1 → [2,3]`) bridged every workload frame (DHCP, mDNS, spoofed `10.0.0.x` sources) onto the household L2 domain; `never-default` on the Pi was the only guard, and the untrusted workload controls it.
    - *Fix*: Verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts), PR #25). Only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, crosses P1⟷P2; everything else from P1 goes to the P3 tap only.
    - *Hardware verification (2026-10-05, FW 0.86)*: Pi `10.0.2.50` → Mac `10.0.2.119` via eth0: 3/3 replies (masked OXM rules accepted). Pi `10.0.2.50` → Mac `10.0.0.119` forced out eth0 with a static neighbor entry: 100% loss (blocked). The Mac answers ICMP and has an on-link return path, so a leak would have produced replies.
