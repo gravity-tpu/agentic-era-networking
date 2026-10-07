@@ -16,17 +16,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_SCRIPT="/usr/local/libexec/zodiac-dataplane.sh"
 PLIST_NAME="com.zodiac.dataplane.plist"
 TARGET_PLIST="/Library/LaunchDaemons/${PLIST_NAME}"
+CONF_DIR="/etc/zodiac"
+CONF_FILE="${CONF_DIR}/dataplane.conf"
 
 echo "==> Installing Zodiac Data Plane persistence daemon..."
 
-# 1. Stage helper script
+# 1. Stage configuration directory and default config file
+mkdir -p "${CONF_DIR}"
+if [[ ! -f "${CONF_FILE}" ]]; then
+  cat <<'EOF' > "${CONF_FILE}"
+# Zodiac macOS Data-Plane Configuration
+ALIAS_IP="10.0.2.119"
+NETMASK="255.255.255.0"
+EOF
+  chmod 0644 "${CONF_FILE}"
+  echo "    Created default configuration at ${CONF_FILE}"
+fi
+
+# 2. Stage helper script
 mkdir -p /usr/local/libexec
 install -o root -g wheel -m 0755 "${SCRIPT_DIR}/zodiac-dataplane.sh" "${TARGET_SCRIPT}"
 echo "    Installed helper script to ${TARGET_SCRIPT}"
 
-# 2. Stage launchd plist
-# Unload previous service if currently running
-if launchctl list | grep -q "com.zodiac.dataplane"; then
+# 3. Stage launchd plist
+if launchctl print system/com.zodiac.dataplane >/dev/null 2>&1; then
   echo "    Unloading existing launchd service..."
   launchctl bootout system/"com.zodiac.dataplane" 2>/dev/null || launchctl unload "${TARGET_PLIST}" 2>/dev/null || true
 fi
@@ -34,23 +47,24 @@ fi
 install -o root -g wheel -m 0644 "${SCRIPT_DIR}/${PLIST_NAME}" "${TARGET_PLIST}"
 echo "    Installed launchd plist to ${TARGET_PLIST}"
 
-# 3. Load service into launchd
+# 4. Load service into launchd
 echo "    Loading service into launchd..."
 if ! launchctl bootstrap system "${TARGET_PLIST}" 2>/dev/null; then
   # Fallback for older macOS versions
   launchctl load -w "${TARGET_PLIST}"
 fi
 
-# 4. Trigger initial execution
+# 5. Trigger initial execution
 echo "    Triggering initial network configuration..."
 "${TARGET_SCRIPT}"
 
-# 5. Verification
-WIFI_IFACE="$(networksetup -listallhardwareports 2>/dev/null | awk '/Hardware Port: Wi-Fi/{getline; print $2}')"
-IFACE="${WIFI_IFACE:-en0}"
+# 6. Verification
+EGRESS_IFACE="$(route -n get 10.0.0.1 2>/dev/null | awk '/interface:/{print $2}' || true)"
+WIFI_IFACE="$(networksetup -listallhardwareports 2>/dev/null | awk '/Hardware Port: Wi-Fi/{getline; print $2}' || true)"
+IFACE="${EGRESS_IFACE:-${WIFI_IFACE:-en0}}"
 
 echo "==> Verifying configuration on ${IFACE}..."
-if ifconfig "${IFACE}" | grep -q "inet 10.0.2.119 "; then
+if ifconfig "${IFACE}" | grep -E -q "inet 10\.0\.2\.119 "; then
   echo "    [+] SUCCESS: Alias 10.0.2.119 active on ${IFACE}."
 else
   echo "    [!] Note: 10.0.2.119 not yet bound (ensure you are connected to Lab Wi-Fi 10.0.0.0/24)."
