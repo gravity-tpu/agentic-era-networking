@@ -102,7 +102,26 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi 3 & Pi 5), `en0` (Mac), Zodiac Port 2 | Out-of-Band Mgmt & Gateway Uplink | SSH management, Internet gateway egress (`10.0.0.1`), physical uplink from Zodiac Port 2 to ISP extender. |
 | `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
 | `10.0.2.0/24` | `eth0` (RPi 3: `10.0.2.50`, RPi 5: `10.0.2.51`) -> Netgear P3/P4 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` lab LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
+| `192.168.0.0/24` | NETGEAR GS105Ev2 management (`192.168.0.239`, factory-default static IP, MAC `28:94:01:8b:70:d9`) | Switch Management (Out-of-Band, Operator-Only) | Smart-switch web UI (HTTP :80). Not routed anywhere; reached only by a temporary `192.168.0.50/24` alias on an `eth0` of a host on the NETGEAR. See *NETGEAR Management Access*. |
 | `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
+
+### NETGEAR Management Access
+
+The GS105Ev2 web UI is at `http://192.168.0.239/`. It sits outside the OpenFlow control plane and is not reachable from the lab LAN. Operator access is an SSH port-forward through a workload node (RPi 3B+ shown; `10.0.0.45` is its `wlan0`):
+
+```bash
+# 1. On the RPi 3B+: temporary alias on the NETGEAR-facing NIC (non-persistent; lost on reboot)
+sudo ip addr add 192.168.0.50/24 dev eth0
+# 2. On the Mac: forward localhost:8888 to the switch UI
+ssh -f -N -o ExitOnForwardFailure=yes -L 8888:192.168.0.239:80 agent@10.0.0.45   # then http://localhost:8888
+# 3. When done: stop the tunnel (Mac) and remove the alias (RPi 3B+)
+pkill -f "8888:192.168.0.239"
+sudo ip addr del 192.168.0.50/24 dev eth0
+```
+
+The alias is deliberately not persisted: the RPi 3B+ is the untrusted workload node, so a standing route to the switch management plane would violate fail-closed isolation (Invariant 3). Verified 2026-10-07: `192.168.0.239` answers ping and HTTP 200 once the alias exists.
+
+**Port mirroring (operator-confirmed in the UI 2026-10-07):** source Port 5, destination Port 2. The RPi 5 was rebooted but the NETGEAR was not power-cycled, so persistence of this config across a switch power cycle remains unverified.
 
 ### L4 Transport & Protocol Bindings
 
