@@ -38,7 +38,7 @@ apply() {
   # Absolute Wire Fidelity (Jacobson Packet Conservation):
   # Disable hardware offloads and scatter-gather so captured frames strictly match physical wire
   ethtool -K "${IFACE}" gro off lro off rx off tx off sg off
-  ip link set dev "${IFACE}" promisc on
+  ip link set dev "${IFACE}" promisc on up
 
   # Mirror Port Ingress Injection Prevention (NET-006):
   # Enforce fail-closed kernel egress drop via clsact qdisc. Any raw AF_PACKET transmission

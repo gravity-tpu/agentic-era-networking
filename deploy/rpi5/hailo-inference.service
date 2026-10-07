@@ -1,8 +1,8 @@
 [Unit]
 Description=Zodiac Hailo-8 Neural Inference Microservice (FastAPI)
 Documentation=https://github.com/gravity-tpu/agentic-era-networking
-After=network.target
-Wants=network-online.target
+After=network.target network-online.target hailort.service
+Wants=network-online.target hailort.service
 
 [Service]
 Type=simple
