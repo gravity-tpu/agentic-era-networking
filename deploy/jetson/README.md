@@ -16,7 +16,7 @@
 [Zodiac FX Port 1] ─── Ethernet RJ-45 ───► [NETGEAR GS105Ev2 Port 5 Uplink]
                                                     ├── Port 4 ──► [Raspberry Pi 5 eth0: <workload-subnet>] (Hailo-8 26T)
                                                     ├── Port 3 ──► [Raspberry Pi 3B+ eth0: <workload-subnet>]
-                                                    └── Port 2 ──► [Raspberry Pi 5 USB GbE: capture NIC (P5 mirror not yet verified)]
+                                                    └── Port 2 ──► [Raspberry Pi 5 USB GbE: capture NIC, mirror of P5 verified 2026-10-07]
 [Zodiac FX Port 3] ─── Ethernet RJ-45 ───► [Jetson ASIX USB GbE: enx* (Promiscuous Tap)]
 [Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
 [Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC Telemetry)]

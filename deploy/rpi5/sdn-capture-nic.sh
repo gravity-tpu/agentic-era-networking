@@ -6,13 +6,20 @@
 #   apply  : GRO/LRO off (captured frames match the wire), promiscuous on
 #   verify : MAC matches CAPTURE_MAC, GRO/LRO off, promiscuous on, no IP address
 #
-# Usage: sdn-capture-nic.sh <iface> [apply|verify]    (CAPTURE_MAC must be set)
+# Usage: sdn-capture-nic.sh <iface> [apply|verify]    (CAPTURE_MAC from env or /etc/default/sdn-capture-nic)
 
 set -euo pipefail
 
 IFACE="${1:?usage: sdn-capture-nic.sh <iface> [apply|verify]}"
 MODE="${2:-apply}"
-: "${CAPTURE_MAC:?CAPTURE_MAC not set (see /etc/default/sdn-capture-nic)}"
+CAPTURE_ENV="/etc/default/sdn-capture-nic"
+# systemd injects CAPTURE_MAC via EnvironmentFile=; load the same root-owned file
+# when run by hand so manual `verify` checks the identical configuration.
+if [[ -z "${CAPTURE_MAC:-}" && -r "${CAPTURE_ENV}" ]]; then
+  # shellcheck source=/dev/null
+  source "${CAPTURE_ENV}"
+fi
+: "${CAPTURE_MAC:?CAPTURE_MAC not set (see ${CAPTURE_ENV})}"
 
 SYS="/sys/class/net/${IFACE}"
 want_mac="${CAPTURE_MAC,,}"
