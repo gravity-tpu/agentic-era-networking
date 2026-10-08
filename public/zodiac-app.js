@@ -88,7 +88,8 @@
       return slot.data;
     }
     const ext = liveBuf.filter((p) => p.timestampMs > lastHistTs);
-    slot.data = ext.length > 0 ? [...histBuf, ...ext] : histBuf;
+    const combined = ext.length > 0 ? [...histBuf, ...ext] : histBuf;
+    slot.data = combined.length > MAX_FRONTEND_BUFFER_POINTS ? combined.slice(-MAX_FRONTEND_BUFFER_POINTS) : combined;
     slot.histLen   = histBuf.length;
     slot.lastHistTs = lastHistTs;
     slot.liveLen   = liveBuf.length;
@@ -2217,10 +2218,12 @@
           : `-- <span style="font-size: 0.9rem; font-weight: 500;">inf/s</span>`;
       }
       if (els.rpi5BarHailo) {
-        // Council Invariant 2 (Determinism): Pure BigInt percentage mapping against nominal scale (300n inf/s)
-        const NOMINAL_SCALE_INF_PER_SEC = 300n;
-        const hailoBarPct = hailoRateBigInt > 0n
-          ? Math.min(100, Math.max(5, Number((hailoRateBigInt * 100n) / NOMINAL_SCALE_INF_PER_SEC)))
+        // Council Invariants 2 & 5 (Quoc Le): Dynamically scale based on observed peak velocity or model capacity, avoiding fragile magic constants
+        const dynamicScale = rpi5SessionPeakHailoRate > 0n
+          ? (rpi5SessionPeakHailoRate * 125n) / 100n
+          : (safeBigInt(hailo?.peakInferencesPerSecond) || 100n);
+        const hailoBarPct = hailoRateBigInt > 0n && dynamicScale > 0n
+          ? Math.min(100, Math.max(5, Number((hailoRateBigInt * 100n) / dynamicScale)))
           : 0;
         els.rpi5BarHailo.style.width = `${hailoBarPct}%`;
       }

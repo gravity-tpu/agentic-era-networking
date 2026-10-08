@@ -146,6 +146,27 @@ function isValidWorkstationPayload(val: unknown): boolean {
   return true;
 }
 
+function isValidSafeCounter(val: unknown): boolean {
+  return typeof val === 'string' || typeof val === 'bigint' || (typeof val === 'number' && Number.isSafeInteger(val));
+}
+
+function isValidRpi5InterfacePayload(iface: unknown): boolean {
+  if (!isJsonObject(iface)) return false;
+  if ('name' in iface && typeof iface['name'] !== 'string') return false;
+  if ('status' in iface && typeof iface['status'] !== 'string') return false;
+  const counterKeys = [
+    'rxBytes', 'txBytes', 'rxPackets', 'txPackets',
+    'rxRateBps', 'txRateBps', 'rxRatePps', 'txRatePps',
+    'rxDropped', 'txDropped', 'rxErrors', 'txErrors'
+  ];
+  for (const k of counterKeys) {
+    if (k in iface && !isValidSafeCounter(iface[k])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function isValidRpi5Payload(val: unknown): boolean {
   if (!isJsonObject(val)) {
     return false;
@@ -153,27 +174,33 @@ function isValidRpi5Payload(val: unknown): boolean {
   if ('status' in val && typeof val['status'] !== 'string') {
     return false;
   }
-  if ('interfaces' in val && !Array.isArray(val['interfaces'])) {
-    return false;
+  // Council Invariants 2 & 3: Fail-closed deep validation of nested interface telemetry
+  if ('interfaces' in val) {
+    if (!Array.isArray(val['interfaces'])) return false;
+    for (const iface of val['interfaces']) {
+      if (!isValidRpi5InterfacePayload(iface)) return false;
+    }
   }
   if ('timeSeries' in val && !Array.isArray(val['timeSeries'])) {
     return false;
   }
+  if ('hailo' in val && isJsonObject(val['hailo'])) {
+    const h = val['hailo'];
+    if ('avgInferenceLatencyMs' in h && (typeof h['avgInferenceLatencyMs'] !== 'number' || !Number.isFinite(h['avgInferenceLatencyMs']))) {
+      return false;
+    }
+    if ('totalInferences' in h && !isValidSafeCounter(h['totalInferences'])) {
+      return false;
+    }
+    if ('inferencesPerSecond' in h && !isValidSafeCounter(h['inferencesPerSecond'])) {
+      return false;
+    }
+  }
   // Council Invariant 2 (Determinism): Allow decimal string, BigInt, or safe integer number to prevent float precision loss
-  if (
-    'ramUsedBytes' in val &&
-    typeof val['ramUsedBytes'] !== 'string' &&
-    typeof val['ramUsedBytes'] !== 'bigint' &&
-    !(typeof val['ramUsedBytes'] === 'number' && Number.isSafeInteger(val['ramUsedBytes']))
-  ) {
+  if ('ramUsedBytes' in val && !isValidSafeCounter(val['ramUsedBytes'])) {
     return false;
   }
-  if (
-    'ramTotalBytes' in val &&
-    typeof val['ramTotalBytes'] !== 'string' &&
-    typeof val['ramTotalBytes'] !== 'bigint' &&
-    !(typeof val['ramTotalBytes'] === 'number' && Number.isSafeInteger(val['ramTotalBytes']))
-  ) {
+  if ('ramTotalBytes' in val && !isValidSafeCounter(val['ramTotalBytes'])) {
     return false;
   }
   return true;
