@@ -146,6 +146,39 @@ function isValidWorkstationPayload(val: unknown): boolean {
   return true;
 }
 
+function isValidRpi5Payload(val: unknown): boolean {
+  if (!isJsonObject(val)) {
+    return false;
+  }
+  if ('status' in val && typeof val['status'] !== 'string') {
+    return false;
+  }
+  if ('interfaces' in val && !Array.isArray(val['interfaces'])) {
+    return false;
+  }
+  if ('timeSeries' in val && !Array.isArray(val['timeSeries'])) {
+    return false;
+  }
+  // Council Invariant 2 (Determinism): Allow decimal string, BigInt, or safe integer number to prevent float precision loss
+  if (
+    'ramUsedBytes' in val &&
+    typeof val['ramUsedBytes'] !== 'string' &&
+    typeof val['ramUsedBytes'] !== 'bigint' &&
+    !(typeof val['ramUsedBytes'] === 'number' && Number.isSafeInteger(val['ramUsedBytes']))
+  ) {
+    return false;
+  }
+  if (
+    'ramTotalBytes' in val &&
+    typeof val['ramTotalBytes'] !== 'string' &&
+    typeof val['ramTotalBytes'] !== 'bigint' &&
+    !(typeof val['ramTotalBytes'] === 'number' && Number.isSafeInteger(val['ramTotalBytes']))
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function isValidTelemetryPayload(val: unknown): val is Partial<ZodiacFullTelemetrySnapshot> {
   if (!isJsonObject(val)) {
     return false;
@@ -163,6 +196,9 @@ function isValidTelemetryPayload(val: unknown): val is Partial<ZodiacFullTelemet
     return false;
   }
   if ('workstation' in val && !isValidWorkstationPayload(val['workstation'])) {
+    return false;
+  }
+  if ('rpi5' in val && !isValidRpi5Payload(val['rpi5'])) {
     return false;
   }
   return true;
@@ -277,6 +313,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const existingJetsonSeries = isFirstLivePush ? undefined : latestSnapshot.jetson?.timeSeries;
       const existingCoralSeries = isFirstLivePush ? undefined : latestSnapshot.coral?.timeSeries;
       const existingWorkstationSeries = isFirstLivePush ? undefined : latestSnapshot.workstation?.timeSeries;
+      const existingRpi5Series = isFirstLivePush ? undefined : latestSnapshot.rpi5?.timeSeries;
 
       const mergedZodiacSeries = mergeRollingSeries(
         existingZodiacSeries,
@@ -299,6 +336,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const mergedWorkstationSeries = mergeRollingSeries(
         existingWorkstationSeries,
         parsed.workstation?.timeSeries,
+        MAX_SERVERLESS_BUFFER_POINTS
+      );
+
+      const mergedRpi5Series = mergeRollingSeries(
+        existingRpi5Series,
+        parsed.rpi5?.timeSeries,
         MAX_SERVERLESS_BUFFER_POINTS
       );
 
@@ -335,6 +378,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             ...(mergedWorkstationSeries ? { timeSeries: mergedWorkstationSeries } : {}),
           }
         } : (latestSnapshot.workstation ? { workstation: latestSnapshot.workstation } : {})),
+        ...(parsed.rpi5 ? {
+          rpi5: {
+            ...latestSnapshot.rpi5,
+            ...parsed.rpi5,
+            ...(mergedRpi5Series ? { timeSeries: mergedRpi5Series } : {}),
+          }
+        } : (latestSnapshot.rpi5 ? { rpi5: latestSnapshot.rpi5 } : {})),
       };
 
       // Persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
@@ -462,6 +512,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               timeSeries: workstationPoints,
             },
           } : {}),
+          ...(latestSnapshot.rpi5 ? {
+            rpi5: {
+              ...latestSnapshot.rpi5,
+              timeSeries: latestSnapshot.rpi5.timeSeries ? latestSnapshot.rpi5.timeSeries.slice(findCutoffIndex(latestSnapshot.rpi5.timeSeries, cutoffMs)) : [],
+            },
+          } : {}),
         }));
         return;
       }
@@ -504,6 +560,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         } : {}),
         ...(latestSnapshot.workstation ? {
           workstation: { ...latestSnapshot.workstation, timeSeries: trimSince(latestSnapshot.workstation.timeSeries) },
+        } : {}),
+        ...(latestSnapshot.rpi5 ? {
+          rpi5: { ...latestSnapshot.rpi5, timeSeries: trimSince(latestSnapshot.rpi5.timeSeries) },
         } : {}),
       }));
       return;

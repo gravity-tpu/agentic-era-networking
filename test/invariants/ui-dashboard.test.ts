@@ -178,6 +178,8 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     // Device views
     expect(document.getElementById('view-device-zodiac')).not.toBeNull();
     expect(document.getElementById('view-device-orin')).not.toBeNull();
+    expect(document.getElementById('view-device-rpi5')).not.toBeNull();
+    expect(document.getElementById('btn-device-rpi5')).not.toBeNull();
     expect(document.getElementById('view-device-coral-1')).not.toBeNull();
     expect(document.getElementById('view-device-coral-2')).not.toBeNull();
     expect(document.getElementById('view-device-workstation')).not.toBeNull();
@@ -193,6 +195,15 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('orin-ollama-panel')).not.toBeNull();
     expect(document.getElementById('chart-orin-power')).not.toBeNull();
     expect(document.getElementById('chart-orin-nvme')).not.toBeNull();
+    expect(document.getElementById('chart-rpi5-compute')).not.toBeNull();
+    expect(document.getElementById('chart-rpi5-network')).not.toBeNull();
+    expect(document.getElementById('chart-rpi5-thermal')).not.toBeNull();
+    expect(document.getElementById('rpi5-hailo-panel')).not.toBeNull();
+    expect(document.getElementById('rpi5-kpi-compute')).not.toBeNull();
+    expect(document.getElementById('rpi5-kpi-hailo-rate')).not.toBeNull();
+    expect(document.getElementById('rpi5-kpi-eth0-rate')).not.toBeNull();
+    expect(document.getElementById('rpi5-kpi-cpu-temp')).not.toBeNull();
+    expect(document.getElementById('rpi5-kpi-ram')).not.toBeNull();
     expect(document.getElementById('chart-coral1-rate')).not.toBeNull();
     expect(document.getElementById('chart-coral1-latency')).not.toBeNull();
     expect(document.getElementById('chart-coral2-rate')).not.toBeNull();
@@ -260,7 +271,7 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
   it('switches between all appliance views cleanly and updates active tab state', () => {
     const app = (window as unknown as { ZodiacApp: { switchDevice: (d: string) => void } }).ZodiacApp;
 
-    const devices = ['zodiac', 'orin', 'coral-1', 'coral-2', 'openflow', 'workstation'] as const;
+    const devices = ['zodiac', 'orin', 'rpi5', 'coral-1', 'coral-2', 'openflow', 'workstation'] as const;
 
     for (const dev of devices) {
       app.switchDevice(dev);
@@ -269,15 +280,24 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
       if (dev === 'zodiac') {
         expect(document.getElementById('view-device-zodiac')?.style.display).toBe('block');
         expect(document.getElementById('view-device-orin')?.style.display).toBe('none');
+        expect(document.getElementById('view-device-rpi5')?.style.display).toBe('none');
         expect(document.getElementById('view-device-workstation')?.style.display).toBe('none');
       } else if (dev === 'orin') {
         expect(document.getElementById('view-device-orin')?.style.display).toBe('block');
         expect(document.getElementById('view-device-zodiac')?.style.display).toBe('none');
+        expect(document.getElementById('view-device-rpi5')?.style.display).toBe('none');
         expect(document.getElementById('view-device-workstation')?.style.display).toBe('none');
+      } else if (dev === 'rpi5') {
+        expect(document.getElementById('view-device-rpi5')?.style.display).toBe('block');
+        expect(document.getElementById('view-device-zodiac')?.style.display).toBe('none');
+        expect(document.getElementById('view-device-orin')?.style.display).toBe('none');
+        expect(document.getElementById('view-device-workstation')?.style.display).toBe('none');
+        expect(document.getElementById('cf-breadcrumb-name')?.textContent).toBe('Raspberry Pi 5 · Hailo-8 (Node 02)');
       } else if (dev === 'workstation') {
         expect(document.getElementById('view-device-workstation')?.style.display).toBe('block');
         expect(document.getElementById('view-device-zodiac')?.style.display).toBe('none');
         expect(document.getElementById('view-device-orin')?.style.display).toBe('none');
+        expect(document.getElementById('view-device-rpi5')?.style.display).toBe('none');
       }
     }
   });
@@ -462,7 +482,7 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     const snap = createDefaultZodiacSnapshot();
     app.renderTelemetry(snap, false);
 
-    const devices = ['zodiac', 'orin', 'coral-1', 'coral-2', 'workstation'] as const;
+    const devices = ['zodiac', 'orin', 'rpi5', 'coral-1', 'coral-2', 'workstation'] as const;
 
     for (const dev of devices) {
       app.switchDevice(dev);
@@ -603,13 +623,59 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     app.switchDevice('workstation');
     expect(copilotCard?.style.display).toBe('none');
 
-    // 6. Hidden on OpenFlow Controller
+    // 6. Hidden on Raspberry Pi 5 (Node 02)
+    app.switchDevice('rpi5');
+    expect(copilotCard?.style.display).toBe('none');
+
+    // 7. Hidden on OpenFlow Controller
     app.switchDevice('openflow');
     expect(copilotCard?.style.display).toBe('none');
 
-    // 7. Restored when returning to Zodiac FX
+    // 8. Restored when returning to Zodiac FX
     app.switchDevice('zodiac');
     expect(copilotCard?.style.display).toBe('block');
+  });
+
+  it('renders Raspberry Pi 5 Hailo-8 and tri-interface telemetry in accordance with Council Invariants', () => {
+    const app = (window as unknown as {
+      ZodiacApp: {
+        renderTelemetry: (s: unknown, d: boolean) => void;
+        switchDevice: (d: string) => void;
+        updateCharts: () => void;
+      };
+    }).ZodiacApp;
+
+    // 1. Render default snapshot (online simulated twin)
+    const snap = createDefaultZodiacSnapshot();
+    app.renderTelemetry(snap, false);
+    app.switchDevice('rpi5');
+
+    const kpiCompute = document.getElementById('rpi5-kpi-compute');
+    const kpiHailoRate = document.getElementById('rpi5-kpi-hailo-rate');
+    const kpiEth0Rate = document.getElementById('rpi5-kpi-eth0-rate');
+    const kpiCpuTemp = document.getElementById('rpi5-kpi-cpu-temp');
+    const kpiHailoTemp = document.getElementById('rpi5-kpi-hailo-temp');
+    const hailoStatusBadge = document.getElementById('rpi5-hailo-status-badge');
+
+    expect(kpiCompute?.textContent).toContain('14%');
+    expect(kpiHailoRate?.textContent).toContain('120');
+    expect(kpiEth0Rate?.textContent).toContain('/s');
+    expect(kpiCpuTemp?.textContent).toBe('46.5°C');
+    expect(kpiHailoTemp?.textContent).toBe('43.8°C');
+    expect(hailoStatusBadge?.textContent).toContain('ACTIVE');
+
+    // Verify all 3 canvases draw without error
+    expect(() => app.updateCharts()).not.toThrow();
+
+    // 2. Render disconnected snapshot (Council Invariant 6: physical truth)
+    const disconnectedSnap = createDisconnectedZodiacSnapshot();
+    app.renderTelemetry(disconnectedSnap, false);
+
+    expect(kpiCpuTemp?.textContent).toBe('--°C');
+    expect(kpiHailoTemp?.textContent).toBe('--°C');
+    expect(document.getElementById('rpi5-kpi-hailo-badge')?.textContent).toBe('OFFLINE');
+    expect(document.getElementById('rpi5-kpi-hailo-rate')?.textContent).toContain('--');
+    expect(document.getElementById('rpi5-kpi-eth0-status')?.textContent).toBe('DOWN');
   });
 });
 

@@ -54,6 +54,11 @@
             <span class="cf-device-btn-name">Jetson Orin</span>
             <span class="cf-pill-badge blue">Host</span>
           </button>
+          <button class="cf-device-btn" id="btn-device-rpi5" role="tab" aria-selected="false" data-device="rpi5">
+            <span class="cf-status-dot green" id="dot-device-rpi5"></span>
+            <span class="cf-device-btn-name">Raspberry Pi 5</span>
+            <span class="cf-pill-badge purple" id="btn-device-rpi5-badge">Hailo-8</span>
+          </button>
           <button class="cf-device-btn" id="btn-device-coral-1" role="tab" aria-selected="false" data-device="coral-1">
             <span class="cf-status-dot green" id="dot-device-coral-1"></span>
             <span class="cf-device-btn-name">Coral TPU</span>
@@ -150,6 +155,46 @@
             SDN Interface
           </a>
           <a class="cf-nav-item" data-section="overview" data-scroll="orin-inventory-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>
+            </svg>
+            Hardware Inventory
+          </a>
+          <a class="cf-nav-item" data-section="council" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Council Invariants
+          </a>
+        </nav>
+
+        <!-- ── Raspberry Pi 5 · Hailo-8 ── (hidden until device switch) -->
+        <nav class="cf-nav-group" id="cf-nav-rpi5" style="display:none">
+          <a class="cf-nav-item active" data-section="overview" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            System Overview
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi5-compute-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>
+            </svg>
+            Compute &amp; Hailo-8
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi5-thermal-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+            </svg>
+            Silicon Thermals
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi5-network-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Network &amp; Capture NIC
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi5-inventory-card">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>
             </svg>
@@ -1448,6 +1493,510 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
           </div><!-- /view-device-orin -->
 
+          <!-- RASPBERRY PI 5 VIEW -->
+          <div id="view-device-rpi5" style="display: none;">
+            <div class="cf-page-header">
+              <div>
+                <h1 class="cf-page-title">Raspberry Pi 5 — Edge AI &amp; Capture Appliance (Node 02)</h1>
+                <p class="cf-page-desc">Physical edge telemetry, Broadcom BCM2712 Quad-Core Cortex-A76 @ 2.4 GHz, Hailo-8 M.2 AI coprocessor (26 TOPS INT8), RTL8153 Promiscuous Tap, and GbE network stack.</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <span class="cf-pill-badge purple" id="rpi5-hailort-badge">HailoRT 4.20 · 26 TOPS</span>
+                <span class="cf-pill-badge blue" id="rpi5-os-badge">Debian 12 · Linux 6.6</span>
+                <span class="cf-pill-badge gray">Uptime: <span id="rpi5-uptime" style="margin-left: 4px;">--:--:--</span></span>
+              </div>
+            </div>
+
+            <!-- RPi 5 Top 5 KPI Cards -->
+            <div class="cf-stats-grid">
+              
+              <!-- KPI 1: Compute Engine Load -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Compute Engine Load</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi5-kpi-compute" style="font-size: 1.45rem; white-space: nowrap;">--% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span></div>
+                
+                <div class="cf-mini-bar" style="margin-top: 0.65rem;">
+                  <div class="cf-mini-bar-fill" id="rpi5-bar-cpu" style="width: 0%;" title="CPU Load"></div>
+                </div>
+
+                <div class="cf-stat-footer" style="margin-top: 0.65rem;">
+                  <span>Load Avg: <strong class="cf-mono" id="rpi5-kpi-load">--</strong></span>
+                  <span>Freq: <strong class="cf-mono" id="rpi5-kpi-freq">2.4 GHz</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 2: Hailo-8 NPU Inference -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Hailo-8 NPU Velocity</span>
+                  <span class="cf-pill-badge purple" style="font-size: 0.68rem;" id="rpi5-kpi-hailo-badge">OFFLINE</span>
+                </div>
+                <div class="cf-stat-value purple" id="rpi5-kpi-hailo-rate">-- <span style="font-size: 0.9rem; font-weight: 500;">inf/s</span></div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill purple" id="rpi5-bar-hailo" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Latency: <strong class="cf-mono" id="rpi5-kpi-hailo-lat">-- ms</strong></span>
+                  <span>Model: <strong class="cf-mono" id="rpi5-kpi-hailo-model">--</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 3: Workload Link (eth0) -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Workload Link (eth0)</span>
+                  <span class="cf-pill-badge green" style="font-size: 0.68rem;" id="rpi5-kpi-eth0-status">1000M Full</span>
+                </div>
+                <div class="cf-stat-value green" id="rpi5-kpi-eth0-rate">--/s</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="rpi5-bar-eth0" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Ingress: <strong class="cf-mono" id="rpi5-kpi-eth0-rx">--</strong></span>
+                  <span>Wi-Fi: <strong class="cf-mono" id="rpi5-kpi-wlan0-rate">--/s</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 4: Silicon Thermals -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Silicon Thermals</span>
+                  <span class="cf-pill-badge orange" style="font-size: 0.68rem;">85°C Limit</span>
+                </div>
+                <div class="cf-stat-value orange" id="rpi5-kpi-cpu-temp">--°C</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill orange" id="rpi5-bar-cpu-temp" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Hailo-8: <strong class="cf-mono" id="rpi5-kpi-hailo-temp">--°C</strong></span>
+                  <span>Power: <strong class="cf-mono" id="rpi5-kpi-hailo-power">-- W</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 5: LPDDR4X Memory & Storage -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">LPDDR4X Memory</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">8 GB Total</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi5-kpi-ram">-- / 8.0 GB</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill blue" id="rpi5-bar-ram" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Root Disk: <strong class="cf-mono" id="rpi5-kpi-disk">--</strong></span>
+                  <span>PCIe: <strong class="cf-mono" id="rpi5-kpi-pcie">Gen 3.0 x1</strong></span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Primary Horizontal Network Interface Throughput Chart -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi5-network-card">
+              <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <h3 class="cf-card-title">Network Interface Wire Throughput</h3>
+                  <div class="cf-card-subtitle">GbE Workload (eth0) vs Promiscuous Mirror Tap (eth1) vs Wi-Fi Management (wlan0) Wire Accounting</div>
+                </div>
+                
+                <!-- Filter Controls: Time Range -->
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                  <div class="cf-time-range-group" id="cf-rpi5-time-selectors">
+                    <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                    <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                    <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                    <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                    <button class="cf-time-btn" data-range="7d">7 Days</button>
+                    <button class="cf-time-btn" data-range="30d">30 Days</button>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span class="cf-pill-badge blue">eth0 Workload</span>
+                    <span class="cf-pill-badge purple">eth1 Mirror Tap</span>
+                    <span class="cf-pill-badge green">wlan0 Wi-Fi</span>
+                  </div>
+                </div>
+              </div>
+              <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                <div class="cf-chart-legend-row" style="margin-bottom: 0.75rem;">
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot blue"></span>
+                    <span>Workload Link (eth0): <strong id="rpi5-eth0-rate-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot purple"></span>
+                    <span>SDN Mirror Tap (eth1): <strong id="rpi5-eth1-rate-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot green"></span>
+                    <span>Management Wi-Fi (wlan0): <strong id="rpi5-wlan0-rate-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                </div>
+                <div class="cf-canvas-container" id="canvas-wrapper-rpi5-network" style="position: relative; height: 240px;">
+                  <canvas id="chart-rpi5-network"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Compute & Hailo-8 NPU Panel (Side by Side) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+              
+              <!-- Chart 1: Compute Utilization -->
+              <div class="cf-card" id="rpi5-compute-card">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">Compute Utilization Engine</h3>
+                    <div class="cf-card-subtitle">Broadcom BCM2712 Quad Cortex-A76 (%) &amp; Memory (%)</div>
+                  </div>
+                  <span class="cf-pill-badge blue">CPU &amp; Memory Dynamics</span>
+                </div>
+                <div class="cf-card-body">
+                  <div class="cf-canvas-container" id="canvas-wrapper-rpi5-compute" style="position: relative; height: 220px;">
+                    <canvas id="chart-rpi5-compute"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Panel 2: Hailo-8 Neural Coprocessor -->
+              <div class="cf-card" id="rpi5-hailo-panel">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">Hailo-8 Neural Coprocessor</h3>
+                    <div class="cf-card-subtitle" id="rpi5-hailo-subtitle">FastAPI Microservice (:8000) · PCIe Gen 3.0 x1 · HailoRT 4.20</div>
+                  </div>
+                  <span class="cf-pill-badge purple" id="rpi5-hailo-status-badge">OFFLINE</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1rem 1.5rem;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1.5rem; align-items: start;">
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Inference Velocity</div>
+                      <div style="font-size: 2rem; font-weight: 800; color: #7e22ce; font-family: var(--cf-font-mono);" id="rpi5-hailo-inf-rate">--</div>
+                      <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 0.15rem;">inf/s &nbsp;·&nbsp; Peak: <span id="rpi5-hailo-peak-rate" class="cf-mono">--</span></div>
+                    </div>
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Inference Latency</div>
+                      <div style="font-size: 2rem; font-weight: 800; color: var(--cf-blue); font-family: var(--cf-font-mono);" id="rpi5-hailo-latency">--</div>
+                      <div style="font-size: 0.75rem; color: var(--cf-text-secondary); margin-top: 0.15rem;">ms/batch</div>
+                    </div>
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Total Inferences</div>
+                      <div style="font-size: 1.4rem; font-weight: 700; color: var(--cf-text-primary); font-family: var(--cf-font-mono);" id="rpi5-hailo-total-inf">--</div>
+                    </div>
+                    <div>
+                      <div style="font-size: 0.72rem; font-weight: 700; color: var(--cf-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">NPU Power Draw</div>
+                      <div style="font-size: 1.4rem; font-weight: 700; color: #0d9488; font-family: var(--cf-font-mono);" id="rpi5-hailo-power-draw">-- W</div>
+                    </div>
+                  </div>
+                  <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--cf-border); display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Model: <strong class="cf-mono" id="rpi5-hailo-model-detail">yolov8s</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Arch: <strong class="cf-mono" id="rpi5-hailo-arch">Hailo-8</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">TOPS: <strong class="cf-mono" id="rpi5-hailo-tops">26 TOPS</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Endpoint: <strong class="cf-mono" id="rpi5-hailo-endpoint">:8000</strong></span>
+                    <a href="/playground/hailo" class="cf-btn cf-btn-sm" style="font-size: 0.72rem; padding: 2px 8px; margin-left: auto; text-decoration: none;">Hailo Playground &rarr;</a>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Silicon Thermals & Power Chart -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi5-thermal-card">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Silicon Thermals &amp; Coprocessor Power</h3>
+                  <div class="cf-card-subtitle">BCM2712 SoC Thermal Zone (°C) vs Hailo-8 Junction Temp (°C) vs NPU Power Draw (W)</div>
+                </div>
+                <span class="cf-pill-badge orange">Thermal Telemetry</span>
+              </div>
+              <div class="cf-card-body">
+                <div class="cf-canvas-container" id="canvas-wrapper-rpi5-thermal" style="position: relative; height: 180px;">
+                  <canvas id="chart-rpi5-thermal"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- RPi 5 Physical Network Interfaces Table Card -->
+            <div class="cf-card" style="margin-top: 1.5rem;">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Appliance Physical Network Interfaces</h3>
+                  <div class="cf-card-subtitle">Linux sysfs &amp; /proc/net/dev socket wire accounting for GbE workload, RTL8153 mirror tap, and Wi-Fi management</div>
+                </div>
+                <span class="cf-pill-badge teal" id="rpi5-nic-badge">Tri-Interface Stack</span>
+              </div>
+              <div class="cf-card-body" style="padding: 0;">
+                <div class="cf-table-container">
+                  <table class="cf-table">
+                    <thead>
+                      <tr>
+                        <th>Interface</th>
+                        <th>Topology Role</th>
+                        <th>Physical Link &amp; MAC</th>
+                        <th>Status</th>
+                        <th>Cumulative Wire Traffic</th>
+                        <th>Packet Accounting</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rpi5-interfaces-tbody">
+                      <tr>
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot green" id="rpi5-dot-eth0" style="width: 8px; height: 8px;"></span>
+                            <strong>eth0</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">Workload Data Plane → NETGEAR Port 4</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Direct GbE patch · 10.0.2.51/24</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" style="font-size: 0.75rem;">1000BASE-T (Full Duplex)</div>
+                          <div class="cf-mono" id="rpi5-if-eth0-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">d8:3a:dd:XX:XX:XX</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="rpi5-if-eth0-status">UP · 1000M</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="rpi5-if-eth0-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="rpi5-if-eth0-pkts" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot green" id="rpi5-dot-eth1" style="width: 8px; height: 8px;"></span>
+                            <strong>eth1</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">Promiscuous SDN Port Mirror Tap → NETGEAR Port 2</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">RTL8153 USB 3.0 NIC · Mirror target for Port 5</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" style="font-size: 0.75rem;">1000BASE-T (Full Duplex)</div>
+                          <div class="cf-mono" id="rpi5-if-eth1-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">a0:ce:c8:0e:73:f7</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="rpi5-if-eth1-status">UP · 1000M</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="rpi5-if-eth1-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="rpi5-if-eth1-pkts" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cf-status-dot green" id="rpi5-dot-wlan0" style="width: 8px; height: 8px;"></span>
+                            <strong>wlan0</strong>
+                          </div>
+                        </td>
+                        <td>
+                          <div style="font-weight: 600; color: var(--cf-text-primary);">Out-of-Band Management &amp; Cloud Relay</div>
+                          <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Wi-Fi 5 wireless uplink · 10.0.0.179/24</div>
+                        </td>
+                        <td>
+                          <div class="cf-mono" style="font-size: 0.75rem;">802.11ac Wi-Fi</div>
+                          <div class="cf-mono" id="rpi5-if-wlan0-mac" style="font-size: 0.72rem; color: var(--cf-text-secondary);">d8:3a:dd:YY:YY:YY</div>
+                        </td>
+                        <td>
+                          <span class="cf-pill-badge green" id="rpi5-if-wlan0-status">UP · Wi-Fi</span>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="rpi5-if-wlan0-bytes" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+                        </td>
+                        <td class="cf-mono">
+                          <div id="rpi5-if-wlan0-pkts" style="font-weight: 600;">-- / --</div>
+                          <div style="font-size: 0.7rem; color: #10b981;">0 drops · 0 err</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- RPi 5 Hardware & Subsystems Inventory Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;" id="rpi5-inventory-card">
+              
+              <!-- Subsystem 1: Broadcom BCM2712 -->
+              <div class="cf-card" style="margin-top: 0;">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(0, 81, 195, 0.1); color: #0051c3; width: 32px; height: 32px;">CPU</div>
+                    <div>
+                      <h3 class="cf-card-title" style="font-size: 0.95rem;">Broadcom BCM2712 SoC</h3>
+                      <div class="cf-card-subtitle" style="font-size: 0.72rem;">Quad Cortex-A76 @ 2.4 GHz · 16nm Process</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge blue">ARMv8-A</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">LPDDR4X Memory Allocation</span>
+                    <span class="cf-mono" id="rpi5-mem-stat" style="font-size: 0.82rem; font-weight: 600; color: var(--cf-text-primary);">-- / 8.0 GB</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div class="cf-mini-bar-fill blue" id="rpi5-mem-bar" style="width: 0%; height: 100%; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Cores</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">4× Cortex-A76</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Frequency</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">2.40 GHz Max</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">GPU</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">VideoCore VII</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Architecture</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">aarch64</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Subsystem 2: Hailo-8 M.2 Module -->
+              <div class="cf-card" style="margin-top: 0;">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(126, 34, 206, 0.1); color: #7e22ce; width: 32px; height: 32px;">NPU</div>
+                    <div>
+                      <h3 class="cf-card-title" style="font-size: 0.95rem;">Hailo-8 M.2 AI Module</h3>
+                      <div class="cf-card-subtitle" style="font-size: 0.72rem;">PCIe Gen 3.0 x1 · HailoRT 4.20</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge purple">26 TOPS INT8</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Silicon Endpoint</span>
+                    <span class="cf-mono" style="font-size: 0.82rem; font-weight: 600; color: #7e22ce;">0001:01:00.0 (/dev/hailo0)</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div class="cf-mini-bar-fill purple" style="width: 100%; height: 100%; border-radius: 3px; background: #7e22ce;"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Interface</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">M.2 Key M 2280</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Link Speed</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">8.0 GT/s (Gen 3)</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Precision</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">INT8 Quantized</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Thermal Tj</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">105°C Limit</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Subsystem 3: RTL8153 USB 3.0 Promiscuous Capture NIC -->
+              <div class="cf-card" style="margin-top: 0;">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(13, 148, 136, 0.1); color: #0d9488; width: 32px; height: 32px;">NIC</div>
+                    <div>
+                      <h3 class="cf-card-title" style="font-size: 0.95rem;">RTL8153 Capture NIC</h3>
+                      <div class="cf-card-subtitle" style="font-size: 0.72rem;">USB 3.0 SuperSpeed · Dedicated Mirror Tap</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge teal">Port Mirror</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Wire Mirror Target</span>
+                    <span class="cf-mono" style="font-size: 0.82rem; font-weight: 600; color: #0d9488;">GS105Ev2 Port 2 (eth1)</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div class="cf-mini-bar-fill teal" style="width: 100%; height: 100%; border-radius: 3px; background: #0d9488;"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">MAC Address</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">a0:ce:c8:0e:73:f7</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Bus Speed</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">5 Gbps USB 3.0</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Promiscuous</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">PROMISC Enabled</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Ring Buffer</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">Zero Drop Wire</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Subsystem 4: FastAPI Hailo Daemon & Zodiac Bridge Service -->
+              <div class="cf-card" style="margin-top: 0;">
+                <div class="cf-card-header">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="cf-card-icon-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981; width: 32px; height: 32px;">SYS</div>
+                    <div>
+                      <h3 class="cf-card-title" style="font-size: 0.95rem;">Hailo Inference Microservice</h3>
+                      <div class="cf-card-subtitle" style="font-size: 0.72rem;">services/hailo-inference/main.py · :8000</div>
+                    </div>
+                  </div>
+                  <span class="cf-pill-badge green" id="rpi5-svc-badge">active (running)</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1.15rem 1.25rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem;">
+                    <span style="font-size: 0.8rem; color: var(--cf-text-secondary);">Daemon Memory RSS</span>
+                    <span class="cf-mono" id="rpi5-svc-rss-stat" style="font-size: 0.82rem; font-weight: 600; color: var(--cf-text-primary);">-- MB / 256.0 MB</span>
+                  </div>
+                  <div class="cf-mini-bar" style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 1.15rem;">
+                    <div class="cf-mini-bar-fill green" id="rpi5-svc-rss-bar" style="width: 0%; height: 100%; border-radius: 3px;"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.75rem; border-top: 1px solid var(--cf-border); padding-top: 0.85rem;">
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">PID Lifecycle</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">PID <span id="rpi5-svc-pid">--</span> (Uvicorn)</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Port Binding</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">TCP :8000</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">API Protocol</span>
+                      <strong class="cf-mono" style="color: var(--cf-text-primary);">REST / SSE</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Fail-Closed SLA</span>
+                      <span class="cf-pill-badge blue" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Council Invariant 3</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div><!-- /view-device-rpi5 -->
+
           <!-- GOOGLE CORAL EDGE TPU #1 VIEW (Port 3 Mirror Tap DPI) -->
           <div id="view-device-coral-1" style="display: none;">
             <div class="cf-page-header">
@@ -2742,7 +3291,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </aside>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.55e9505d7a.js"></script>
+  <script defer src="zodiac-app.28a71b285c.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

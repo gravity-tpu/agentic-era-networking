@@ -31,6 +31,7 @@ import {
   CoralTimeSeriesPoint,
   WorkstationTelemetrySnapshot,
   WorkstationTimeSeriesPoint,
+  Rpi5TimeSeriesPoint,
   generateHistoricalTelemetry,
   createDisconnectedZodiacSnapshot,
   CLOUD_RELAY_BOUNDS,
@@ -42,6 +43,7 @@ import {
   readCoralDaemonTelemetry,
   readCoralBurstTelemetry,
   probeWorkstationHardware,
+  probeRpi5Hardware,
 } from './hardware-probe.js';
 import {
   downsamplePoints,
@@ -496,6 +498,7 @@ export class ZodiacBridgeServer {
   private jetsonTimeSeries: JetsonTimeSeriesPoint[] = [];
   private coralTimeSeries: CoralTimeSeriesPoint[] = [];
   private workstationTimeSeries: WorkstationTimeSeriesPoint[] = [];
+  private rpi5TimeSeries: Rpi5TimeSeriesPoint[] = [];
   private lastProbeNs: bigint = process.hrtime.bigint();
   private lastSwitchPollNs: bigint = process.hrtime.bigint();
   private readonly portRxCounters = new Map<number, bigint>();
@@ -632,6 +635,7 @@ export class ZodiacBridgeServer {
     this.jetsonTimeSeries = this.cachedSnapshot.jetson?.timeSeries ? [...this.cachedSnapshot.jetson.timeSeries] : [];
     this.coralTimeSeries = this.cachedSnapshot.coral?.timeSeries ? [...this.cachedSnapshot.coral.timeSeries] : [];
     this.workstationTimeSeries = this.cachedSnapshot.workstation?.timeSeries ? [...this.cachedSnapshot.workstation.timeSeries] : [];
+    this.rpi5TimeSeries = this.cachedSnapshot.rpi5?.timeSeries ? [...this.cachedSnapshot.rpi5.timeSeries] : [];
 
     // Sanjay Ghemawat & Jeff Dean Invariant: Restore state checkpoint from local disk on startup
     const loadedState = loadTelemetryState(this.stateFilePath);
@@ -664,6 +668,10 @@ export class ZodiacBridgeServer {
       workstation: this.cachedSnapshot.workstation ? {
         ...this.cachedSnapshot.workstation,
         timeSeries: this.workstationTimeSeries,
+      } : undefined,
+      rpi5: this.cachedSnapshot.rpi5 ? {
+        ...this.cachedSnapshot.rpi5,
+        timeSeries: this.rpi5TimeSeries,
       } : undefined,
     };
 
@@ -2269,11 +2277,12 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
       const deltaNs = nowNs - this.lastProbeNs;
       this.lastProbeNs = nowNs;
 
-      const [liveJetson, daemonData, burstData, liveWorkstation] = await Promise.all([
+      const [liveJetson, daemonData, burstData, liveWorkstation, liveRpi5] = await Promise.all([
         probeJetsonHardware(this.cachedSnapshot.jetson, deltaNs),
         readCoralDaemonTelemetry(),
         readCoralBurstTelemetry(),
         probeWorkstationHardware(this.cachedSnapshot.workstation, deltaNs),
+        probeRpi5Hardware(this.cachedSnapshot.rpi5, deltaNs),
       ]);
       const liveCoral = await probeCoralHardware(daemonData, burstData);
 
@@ -2339,6 +2348,24 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
         this.workstationTimeSeries.shift();
       }
 
+      this.rpi5TimeSeries.push({
+        timestampMs: nowMs,
+        cpuUtilizationPct: liveRpi5.cpuUtilizationPct,
+        cpuTempC: liveRpi5.temperatures.cpuC,
+        hailoTs0TempC: liveRpi5.temperatures.hailoTs0C,
+        hailoTs1TempC: liveRpi5.temperatures.hailoTs1C,
+        inferencesPerSecond: liveRpi5.hailo.inferencesPerSecond,
+        inferenceLatencyMs: liveRpi5.hailo.avgInferenceLatencyMs,
+        ramUsedBytes: liveRpi5.ramUsedBytes,
+        eth0RateBps: liveRpi5.interfaces.find((i) => i.name === 'eth0')?.rxRateBps ?? 0n,
+        eth1CaptureRateBps: liveRpi5.interfaces.find((i) => i.name === 'eth1')?.rxRateBps ?? 0n,
+        wlan0RateBps: liveRpi5.interfaces.find((i) => i.name === 'wlan0')?.rxRateBps ?? 0n,
+      });
+
+      if (this.rpi5TimeSeries.length > MAX_TIME_SERIES_POINTS) {
+        this.rpi5TimeSeries.shift();
+      }
+
       this.cachedSnapshot = {
         ...this.cachedSnapshot,
         timeSeries: this.timeSeries,
@@ -2360,6 +2387,10 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
         workstation: {
           ...liveWorkstation,
           timeSeries: this.workstationTimeSeries,
+        },
+        rpi5: {
+          ...liveRpi5,
+          timeSeries: this.rpi5TimeSeries,
         },
       };
 
@@ -2456,6 +2487,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
       const boundedJetsonSeries      = boundSeriesWithHistory(snapshot.jetson?.timeSeries ?? this.jetsonTimeSeries, downsampleJetsonPoints, maxRelayPoints);
       const boundedCoralSeries       = boundSeriesWithHistory(snapshot.coral?.timeSeries ?? this.coralTimeSeries, downsampleCoralPoints, maxRelayPoints);
       const boundedWorkstationSeries = boundSeriesWithHistory(snapshot.workstation?.timeSeries ?? this.workstationTimeSeries, downsampleWorkstationPoints, maxRelayPoints);
+      const boundedRpi5Series        = boundSeriesWithHistory(snapshot.rpi5?.timeSeries ?? this.rpi5TimeSeries, (pts, max) => pts.slice(-max), maxRelayPoints);
 
       const boundedSnapshot: ZodiacFullTelemetrySnapshot = {
         ...snapshot,
@@ -2467,6 +2499,12 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
           workstation: {
             ...snapshot.workstation,
             timeSeries: boundedWorkstationSeries,
+          },
+        } : {}),
+        ...(snapshot.rpi5 ? {
+          rpi5: {
+            ...snapshot.rpi5,
+            timeSeries: boundedRpi5Series,
           },
         } : {}),
       };

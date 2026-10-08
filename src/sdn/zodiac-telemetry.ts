@@ -333,6 +333,87 @@ export interface WorkstationTelemetrySnapshot {
   readonly timeSeries?: readonly WorkstationTimeSeriesPoint[];
 }
 
+export interface Rpi5NetworkInterfaceTelemetry {
+  readonly name: string;
+  readonly role: string;
+  readonly macAddress: string;
+  readonly ipAddress: string | null;
+  readonly status: 'UP' | 'DOWN';
+  readonly speedMbps: number;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxDropped: bigint;
+  readonly txDropped: bigint;
+  readonly rxErrors: bigint;
+  readonly txErrors: bigint;
+  readonly rxRateBps: bigint;
+  readonly txRateBps: bigint;
+  readonly rxRatePps: bigint;
+  readonly txRatePps: bigint;
+}
+
+export interface Rpi5TimeSeriesPoint {
+  readonly timestampMs: number;
+  readonly cpuUtilizationPct: number;
+  readonly cpuTempC: number | null;
+  readonly hailoTs0TempC: number | null;
+  readonly hailoTs1TempC: number | null;
+  readonly inferencesPerSecond: bigint;
+  readonly inferenceLatencyMs: number;
+  readonly ramUsedBytes: bigint;
+  readonly eth0RateBps: bigint;
+  readonly eth1CaptureRateBps: bigint;
+  readonly wlan0RateBps: bigint;
+}
+
+export interface Rpi5TelemetrySnapshot {
+  readonly status: 'online' | 'offline';
+  readonly deviceName: string;
+  readonly architecture: string;
+  readonly cpuModel: string;
+  readonly cpuCoreCount: number;
+  readonly cpuUtilizationPct: number;
+  readonly cpuFreqMhz: number;
+  readonly ramUsedBytes: bigint;
+  readonly ramTotalBytes: bigint;
+  readonly temperatures: {
+    readonly cpuC: number | null;
+    readonly hailoTs0C: number | null;
+    readonly hailoTs1C: number | null;
+  };
+  readonly systemLoad: readonly [number, number, number];
+  readonly osVersion: string;
+  readonly kernelVersion: string;
+  readonly uptime: string;
+  readonly hailo: {
+    readonly status: 'ONLINE' | 'OFFLINE' | 'DEGRADED';
+    readonly deviceId: string;
+    readonly boardName: string;
+    readonly architecture: string;
+    readonly firmwareVersion: string;
+    readonly coreClockMhz: number;
+    readonly activeModel: string;
+    readonly inferencesPerSecond: bigint;
+    readonly totalInferences: bigint;
+    readonly avgInferenceLatencyMs: number;
+    readonly pcieLinkSpeed: string;
+    readonly pcieLinkWidth: string;
+  };
+  readonly captureNic: {
+    readonly interface: string;
+    readonly model: string;
+    readonly macAddress: string;
+    readonly mirrorVantage: string;
+    readonly promiscuous: boolean;
+    readonly groLroDisabled: boolean;
+    readonly serviceStatus: string;
+  };
+  readonly interfaces: readonly Rpi5NetworkInterfaceTelemetry[];
+  readonly timeSeries?: readonly Rpi5TimeSeriesPoint[];
+}
+
 export interface ZodiacFullTelemetrySnapshot {
   readonly system: ZodiacSystemTelemetry;
   readonly ports: ZodiacPortTelemetry[];
@@ -342,6 +423,7 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly jetson?: JetsonTelemetrySnapshot | undefined;
   readonly coral?: CoralTelemetrySnapshot | undefined;
   readonly workstation?: WorkstationTelemetrySnapshot | undefined;
+  readonly rpi5?: Rpi5TelemetrySnapshot | undefined;
   /** Live OS process ID of the bridge daemon — Council Invariant 6: physical truth. */
   readonly bridgePid?: number | undefined;
   /** Live RSS memory bytes from process.memoryUsage() as bigint — structurally enforces integer-only invariant (Council Invariant 2). */
@@ -586,6 +668,7 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
   const jetson = createDefaultJetsonSnapshot(false);
   const coral = createDefaultCoralSnapshot(false);
   const workstation = createDefaultWorkstationSnapshot(false);
+  const rpi5 = createDefaultRpi5Snapshot(false);
 
   return {
     ...base,
@@ -601,6 +684,10 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
     workstation: {
       ...workstation,
       timeSeries: generateWorkstationHistoricalTelemetry(workstation, 1, 60),
+    },
+    rpi5: {
+      ...rpi5,
+      timeSeries: generateRpi5HistoricalTelemetry(rpi5, 1, 60),
     },
   };
 }
@@ -856,6 +943,121 @@ export function createDefaultWorkstationSnapshot(isDisconnected: boolean = true)
 }
 
 /**
+ * Creates a default telemetry snapshot for the Raspberry Pi 5 + Hailo-8 appliance (Node 02).
+ * Council Invariant 6 (Anti-Simulation Law):
+ * When disconnected, thermals and NPU rates evaluate to physical truth (null / 0n), status is 'offline'.
+ */
+export function createDefaultRpi5Snapshot(isDisconnected: boolean = true): Rpi5TelemetrySnapshot {
+  const interfaces: Rpi5NetworkInterfaceTelemetry[] = [
+    {
+      name: 'eth0',
+      role: 'Workload Data Plane -> NETGEAR Port 4',
+      macAddress: isDisconnected ? 'None' : '98:fe:54:52:9d:85',
+      ipAddress: isDisconnected ? null : '10.0.2.51',
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 1000,
+      rxBytes: isDisconnected ? 0n : 142850000n,
+      txBytes: isDisconnected ? 0n : 89320000n,
+      rxPackets: isDisconnected ? 0n : 112000n,
+      txPackets: isDisconnected ? 0n : 78500n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 18500n,
+      txRateBps: isDisconnected ? 0n : 12400n,
+      rxRatePps: isDisconnected ? 0n : 45n,
+      txRatePps: isDisconnected ? 0n : 30n,
+    },
+    {
+      name: 'wlan0',
+      role: 'Management Plane & Out-of-Band Control',
+      macAddress: isDisconnected ? 'None' : '98:fe:54:52:9d:86',
+      ipAddress: isDisconnected ? null : '10.0.0.179',
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 433,
+      rxBytes: isDisconnected ? 0n : 24100000n,
+      txBytes: isDisconnected ? 0n : 18500000n,
+      rxPackets: isDisconnected ? 0n : 34000n,
+      txPackets: isDisconnected ? 0n : 29000n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 3200n,
+      txRateBps: isDisconnected ? 0n : 2100n,
+      rxRatePps: isDisconnected ? 0n : 12n,
+      txRatePps: isDisconnected ? 0n : 8n,
+    },
+    {
+      name: 'eth1',
+      role: 'SDN Port Mirror Capture NIC (NETGEAR Port 2)',
+      macAddress: isDisconnected ? 'None' : 'a0:ce:c8:0e:73:f7',
+      ipAddress: null,
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 1000,
+      rxBytes: isDisconnected ? 0n : 194500000n,
+      txBytes: 0n,
+      rxPackets: isDisconnected ? 0n : 158200n,
+      txPackets: 0n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 31200n,
+      txRateBps: 0n,
+      rxRatePps: isDisconnected ? 0n : 72n,
+      txRatePps: 0n,
+    },
+  ];
+
+  return {
+    status: isDisconnected ? 'offline' : 'online',
+    deviceName: 'agentic-node-02',
+    architecture: 'aarch64 (ARMv8-A Cortex-A76)',
+    cpuModel: 'Broadcom BCM2712 (4 Cores @ 2.4 GHz)',
+    cpuCoreCount: 4,
+    cpuUtilizationPct: isDisconnected ? 0 : 14,
+    cpuFreqMhz: isDisconnected ? 0 : 2400,
+    ramUsedBytes: isDisconnected ? 0n : 2548039680n,
+    ramTotalBytes: 8261902336n,
+    temperatures: {
+      cpuC: isDisconnected ? null : 46.5,
+      hailoTs0C: isDisconnected ? null : 43.8,
+      hailoTs1C: isDisconnected ? null : 43.2,
+    },
+    systemLoad: isDisconnected ? [0, 0, 0] : [0.38, 0.42, 0.35],
+    osVersion: 'Debian GNU/Linux 12 (bookworm)',
+    kernelVersion: '6.6.31+rpt-rpi-2712',
+    uptime: isDisconnected ? 'Offline' : '02:41:18',
+    hailo: {
+      status: isDisconnected ? 'OFFLINE' : 'ONLINE',
+      deviceId: '0001:01:00.0',
+      boardName: 'Hailo-8',
+      architecture: 'HAILO8',
+      firmwareVersion: '4.20.0',
+      coreClockMhz: 400,
+      activeModel: isDisconnected ? 'None' : 'yolov8s_h8.hef',
+      inferencesPerSecond: isDisconnected ? 0n : 120n,
+      totalInferences: isDisconnected ? 0n : 45280n,
+      avgInferenceLatencyMs: isDisconnected ? 0 : 8.33,
+      pcieLinkSpeed: isDisconnected ? 'unknown' : '8.0 GT/s PCIe',
+      pcieLinkWidth: isDisconnected ? 'unknown' : 'x1',
+    },
+    captureNic: {
+      interface: 'eth1',
+      model: 'Realtek RTL8153 USB 3.0 GbE',
+      macAddress: isDisconnected ? 'None' : 'a0:ce:c8:0e:73:f7',
+      mirrorVantage: 'NETGEAR GS105Ev2 Port 2 (Mirror of Port 5 Uplink)',
+      promiscuous: !isDisconnected,
+      groLroDisabled: !isDisconnected,
+      serviceStatus: isDisconnected ? 'inactive (dead)' : 'active (running) · sdn-capture-nic@eth1.service',
+    },
+    interfaces,
+  };
+}
+
+/**
  * Generates deterministic historical time-series points for Jetson Orin Nano.
  */
 export function generateJetsonHistoricalTelemetry(
@@ -1041,6 +1243,81 @@ export function generateWorkstationHistoricalTelemetry(
 }
 
 /**
+ * Generates deterministic historical time-series points for Raspberry Pi 5 + Hailo-8.
+ * Council Invariant 6 (Anti-Simulation Law):
+ * When disconnected, all rates are 0n and thermals are null.
+ */
+export function generateRpi5HistoricalTelemetry(
+  snapshot: Rpi5TelemetrySnapshot,
+  durationHours: number = 1,
+  pointCount: number = 60
+): Rpi5TimeSeriesPoint[] {
+  const points: Rpi5TimeSeriesPoint[] = [];
+  const nowMs = Date.now();
+  const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  const isDisconnected = snapshot.status === 'offline' || snapshot.temperatures.cpuC === null;
+  if (isDisconnected) {
+    for (let i = pointCount - 1; i >= 0; i--) {
+      points.push({
+        timestampMs: nowMs - i * stepMs,
+        cpuUtilizationPct: 0,
+        cpuTempC: null,
+        hailoTs0TempC: null,
+        hailoTs1TempC: null,
+        inferencesPerSecond: 0n,
+        inferenceLatencyMs: 0,
+        ramUsedBytes: 0n,
+        eth0RateBps: 0n,
+        eth1CaptureRateBps: 0n,
+        wlan0RateBps: 0n,
+      });
+    }
+    return points;
+  }
+
+  const baseCpu = snapshot.cpuUtilizationPct || 14;
+  const baseCpuTemp = snapshot.temperatures.cpuC ?? 46.5;
+  const baseTs0 = snapshot.temperatures.hailoTs0C ?? 43.8;
+  const baseTs1 = snapshot.temperatures.hailoTs1C ?? 43.2;
+  const baseInf = snapshot.hailo.inferencesPerSecond || 120n;
+  const baseLat = snapshot.hailo.avgInferenceLatencyMs || 8.33;
+  const baseRam = snapshot.ramUsedBytes || 2548039680n;
+
+  for (let i = pointCount - 1; i >= 0; i--) {
+    const timestampMs = nowMs - i * stepMs;
+    const cycle = Math.floor(timestampMs / 60000) % 60;
+    const jitter = (cycle % 7) - 3;
+
+    const cpuUtil = Math.max(2, Math.min(100, baseCpu + jitter * 2));
+    const cpuTemp = Math.max(30, Math.min(85, baseCpuTemp + (jitter > 0 ? 0.8 : -0.5)));
+    const ts0 = Math.max(30, Math.min(85, baseTs0 + (jitter > 0 ? 0.6 : -0.4)));
+    const ts1 = Math.max(30, Math.min(85, baseTs1 + (jitter > 0 ? 0.5 : -0.3)));
+    const infPerSec = BigInt(Math.max(0, Number(baseInf) + jitter * 8));
+    const latency = parseFloat((baseLat + (jitter * 0.1)).toFixed(2));
+    const eth0Rate = BigInt(Math.max(1000, 18500 + jitter * 2200));
+    const eth1Rate = BigInt(Math.max(2000, 31200 + jitter * 3800));
+    const wlan0Rate = BigInt(Math.max(500, 3200 + jitter * 400));
+
+    points.push({
+      timestampMs,
+      cpuUtilizationPct: cpuUtil,
+      cpuTempC: parseFloat(cpuTemp.toFixed(1)),
+      hailoTs0TempC: parseFloat(ts0.toFixed(1)),
+      hailoTs1TempC: parseFloat(ts1.toFixed(1)),
+      inferencesPerSecond: infPerSec,
+      inferenceLatencyMs: latency,
+      ramUsedBytes: baseRam + BigInt(jitter * 10_000_000),
+      eth0RateBps: eth0Rate,
+      eth1CaptureRateBps: eth1Rate,
+      wlan0RateBps: wlan0Rate,
+    });
+  }
+
+  return points;
+}
+
+/**
  * Creates a disconnected telemetry snapshot representing an unlinked or unplugged Zodiac FX switch.
  * Invariant: Anti-Shortcut Law & Zero Suppression of Reality. Never fake live hardware metrics.
  */
@@ -1143,6 +1420,7 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
   const jetson = createDefaultJetsonSnapshot(true);
   const coral = createDefaultCoralSnapshot(true);
   const workstation = createDefaultWorkstationSnapshot(true);
+  const rpi5 = createDefaultRpi5Snapshot(true);
 
   return {
     ...base,
@@ -1158,6 +1436,10 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
     workstation: {
       ...workstation,
       timeSeries: generateWorkstationHistoricalTelemetry(workstation, 1, 60),
+    },
+    rpi5: {
+      ...rpi5,
+      timeSeries: generateRpi5HistoricalTelemetry(rpi5, 1, 60),
     },
   };
 }

@@ -17,14 +17,22 @@ import socket
 import sys
 import threading
 import time
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from hailo_platform import Device
-from schemas import SiliconTelemetry, HostTelemetry, ServiceCounters, FullTelemetryResponse
+from schemas import SiliconTelemetry, HostTelemetry, ServiceCounters, FullTelemetryResponse, NetworkInterfaceTelemetry
 
 PCIE_SYSFS_PATH = "/sys/bus/pci/devices/0001:01:00.0"
 CPU_THERMAL_PATH = "/sys/class/thermal/thermal_zone0/temp"
 MEMINFO_PATH = "/proc/meminfo"
+NET_DEV_PATH = "/proc/net/dev"
+SYS_NET_PATH = "/sys/class/net"
 TEMP_CACHE_TTL_NS = int(os.environ.get("HAILO_TEMP_CACHE_TTL_NS", "500000000"))  # Default 500ms monotonic ns
+
+INTERFACE_ROLES = {
+    "eth0": "Workload Data Plane -> NETGEAR Port 4",
+    "wlan0": "Management Plane & Out-of-Band Control",
+    "eth1": "SDN Port Mirror Capture NIC (NETGEAR Port 2)",
+}
 
 
 class TelemetryProvider:
@@ -180,6 +188,116 @@ class TelemetryProvider:
             sys.stderr.write(f"[TelemetryProvider] Failed parsing meminfo: {e}\n")
         return total, avail
 
+    def get_interface_ip(self, ifname: str) -> Optional[str]:
+        """Query interface IPv4 address via socket SIOCGIFADDR ioctl."""
+        try:
+            import fcntl
+            import struct
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            return socket.inet_ntoa(
+                fcntl.ioctl(
+                    s.fileno(),
+                    0x8915,  # SIOCGIFADDR
+                    struct.pack("256s", ifname[:15].encode("utf-8")),
+                )[20:24]
+            )
+        except Exception:
+            return None
+
+    def get_network_interfaces(self) -> List[NetworkInterfaceTelemetry]:
+        """Query physical network interface stats from Linux /proc/net/dev and sysfs."""
+        results: List[NetworkInterfaceTelemetry] = []
+        target_ifaces = ["eth0", "wlan0", "eth1"]
+        net_dev_data = {}
+
+        if os.path.exists(NET_DEV_PATH):
+            try:
+                with open(NET_DEV_PATH, "r") as f:
+                    for line in f:
+                        if ":" in line:
+                            parts = line.split(":", 1)
+                            iface_name = parts[0].strip()
+                            fields = parts[1].split()
+                            if len(fields) >= 16:
+                                net_dev_data[iface_name] = {
+                                    "rx_bytes": int(fields[0]),
+                                    "rx_packets": int(fields[1]),
+                                    "rx_errors": int(fields[2]),
+                                    "rx_dropped": int(fields[3]),
+                                    "tx_bytes": int(fields[8]),
+                                    "tx_packets": int(fields[9]),
+                                    "tx_errors": int(fields[10]),
+                                    "tx_dropped": int(fields[11]),
+                                }
+            except Exception as e:
+                sys.stderr.write(f"[TelemetryProvider] Error reading /proc/net/dev: {e}\n")
+
+        for iface in target_ifaces:
+            stats = net_dev_data.get(iface, {})
+            rx_bytes = stats.get("rx_bytes", 0)
+            tx_bytes = stats.get("tx_bytes", 0)
+            rx_packets = stats.get("rx_packets", 0)
+            tx_packets = stats.get("tx_packets", 0)
+            rx_dropped = stats.get("rx_dropped", 0)
+            tx_dropped = stats.get("tx_dropped", 0)
+            rx_errors = stats.get("rx_errors", 0)
+            tx_errors = stats.get("tx_errors", 0)
+
+            mac_path = f"{SYS_NET_PATH}/{iface}/address"
+            mac = "None"
+            if os.path.exists(mac_path):
+                try:
+                    with open(mac_path, "r") as f:
+                        mac = f.read().strip() or "None"
+                except Exception:
+                    pass
+
+            operstate_path = f"{SYS_NET_PATH}/{iface}/operstate"
+            status = "DOWN"
+            if os.path.exists(operstate_path):
+                try:
+                    with open(operstate_path, "r") as f:
+                        op = f.read().strip().lower()
+                        status = "UP" if op == "up" or rx_bytes > 0 else "DOWN"
+                except Exception:
+                    pass
+            elif rx_bytes > 0:
+                status = "UP"
+
+            speed_path = f"{SYS_NET_PATH}/{iface}/speed"
+            speed_mbps = 1000 if iface in ("eth0", "eth1") else 433
+            if os.path.exists(speed_path):
+                try:
+                    with open(speed_path, "r") as f:
+                        val = int(f.read().strip())
+                        if val > 0:
+                            speed_mbps = val
+                except Exception:
+                    pass
+
+            ip_addr = self.get_interface_ip(iface)
+
+            results.append(
+                NetworkInterfaceTelemetry(
+                    name=iface,
+                    role=INTERFACE_ROLES.get(iface, "Network Interface"),
+                    mac_address=mac,
+                    ip_address=ip_addr,
+                    status=status,
+                    speed_mbps=speed_mbps,
+                    rx_bytes=rx_bytes,
+                    tx_bytes=tx_bytes,
+                    rx_packets=rx_packets,
+                    tx_packets=tx_packets,
+                    rx_dropped=rx_dropped,
+                    tx_dropped=tx_dropped,
+                    rx_errors=rx_errors,
+                    tx_errors=tx_errors,
+                )
+            )
+
+        return results
+
     def get_full_telemetry(self) -> FullTelemetryResponse:
         """Assemble complete epistemic telemetry response."""
         now_ns = time.monotonic_ns()
@@ -188,6 +306,7 @@ class TelemetryProvider:
         cur_speed, cur_width, max_speed, max_width = self.get_pcie_link_info()
         mem_total, mem_avail = self.get_mem_info()
         load1, load5, load15 = os.getloadavg()
+        interfaces = self.get_network_interfaces()
 
         with self._lock:
             uptime_ns = now_ns - self.start_time_ns
@@ -236,4 +355,5 @@ class TelemetryProvider:
             silicon=silicon,
             host=host,
             counters=counters,
+            interfaces=interfaces,
         )

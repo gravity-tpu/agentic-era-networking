@@ -29,6 +29,8 @@
   // Active Appliance Tier State ('zodiac' | 'orin' | 'coral')
   let activeDeviceId = 'zodiac';
   let jetsonTimeSeriesBuffer = [];
+  let rpi5TimeSeriesBuffer = [];
+  let rpi5SessionPeakHailoRate = 0n;
   let coralTimeSeriesBuffer = [];
   let workstationTimeSeriesBuffer = [];
   let coralBufferSeq = 0; // Monotonic sequence counter for coral buffer mutations (Council Invariant: Zero cache collision risk)
@@ -60,6 +62,7 @@
   // Dedicated Historical Range Buffers (Dean & Ghemawat Invariant: Strict decoupling of live streaming vs range query memory)
   let historicalTimeSeriesBuffer = [];
   let historicalJetsonTimeSeriesBuffer = [];
+  let historicalRpi5TimeSeriesBuffer = [];
   let historicalCoralTimeSeriesBuffer = [];
   let historicalWorkstationTimeSeriesBuffer = [];
 
@@ -70,6 +73,7 @@
   const _stitchCache = {
     zodiac: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
     jetson: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
+    rpi5:   { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
     coral:  { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
     workstation: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
   };
@@ -96,6 +100,8 @@
   // Standardized chart layout padding constants (Dean & Ghemawat: eliminate magic numbers)
   const ORIN_NETWORK_PAD_LEFT = 65;
   const ORIN_NETWORK_PAD_RIGHT = 20;
+  const RPI5_NETWORK_PAD_LEFT = 65;
+  const RPI5_NETWORK_PAD_RIGHT = 20;
 
   // DOM Elements Cache
   const els = {
@@ -240,6 +246,8 @@
     // Active Device Tier Selector & Views
     btnDeviceZodiac: document.getElementById('btn-device-zodiac'),
     btnDeviceOrin: document.getElementById('btn-device-orin'),
+    btnDeviceRpi5: document.getElementById('btn-device-rpi5'),
+    btnDeviceRpi5Badge: document.getElementById('btn-device-rpi5-badge'),
     btnDeviceCoral1: document.getElementById('btn-device-coral-1'),
     btnDeviceCoral2: document.getElementById('btn-device-coral-2'),
     btnDeviceCoral: document.getElementById('btn-device-coral'),
@@ -248,12 +256,14 @@
     btnDeviceOpenflow: document.getElementById('btn-device-openflow'),
     dotDeviceZodiac: document.getElementById('dot-device-zodiac'),
     dotDeviceOrin: document.getElementById('dot-device-orin'),
+    dotDeviceRpi5: document.getElementById('dot-device-rpi5'),
     dotDeviceCoral1: document.getElementById('dot-device-coral-1'),
     dotDeviceCoral2: document.getElementById('dot-device-coral-2'),
     dotDeviceCoral: document.getElementById('dot-device-coral'),
     dotDeviceWorkstation: document.getElementById('dot-device-workstation'),
     viewDeviceZodiac: document.getElementById('view-device-zodiac'),
     viewDeviceOrin: document.getElementById('view-device-orin'),
+    viewDeviceRpi5: document.getElementById('view-device-rpi5'),
     viewDeviceCoral1: document.getElementById('view-device-coral-1'),
     viewDeviceCoral2: document.getElementById('view-device-coral-2'),
     viewDeviceCoral: document.getElementById('view-device-coral'),
@@ -451,6 +461,70 @@
     chartOrinThermalsCanvas: document.getElementById('chart-orin-thermals'),
     chartOrinPowerCanvas: document.getElementById('chart-orin-power'),
     chartOrinNvmeCanvas: document.getElementById('chart-orin-nvme'),
+
+    // Raspberry Pi 5 Elements (Node 02)
+    rpi5HailortBadge: document.getElementById('rpi5-hailort-badge'),
+    rpi5OsBadge: document.getElementById('rpi5-os-badge'),
+    rpi5Uptime: document.getElementById('rpi5-uptime'),
+    rpi5KpiCompute: document.getElementById('rpi5-kpi-compute'),
+    rpi5BarCpu: document.getElementById('rpi5-bar-cpu'),
+    rpi5KpiLoad: document.getElementById('rpi5-kpi-load'),
+    rpi5KpiFreq: document.getElementById('rpi5-kpi-freq'),
+    rpi5KpiHailoBadge: document.getElementById('rpi5-kpi-hailo-badge'),
+    rpi5KpiHailoRate: document.getElementById('rpi5-kpi-hailo-rate'),
+    rpi5BarHailo: document.getElementById('rpi5-bar-hailo'),
+    rpi5KpiHailoLat: document.getElementById('rpi5-kpi-hailo-lat'),
+    rpi5KpiHailoModel: document.getElementById('rpi5-kpi-hailo-model'),
+    rpi5KpiEth0Status: document.getElementById('rpi5-kpi-eth0-status'),
+    rpi5KpiEth0Rate: document.getElementById('rpi5-kpi-eth0-rate'),
+    rpi5BarEth0: document.getElementById('rpi5-bar-eth0'),
+    rpi5KpiEth0Rx: document.getElementById('rpi5-kpi-eth0-rx'),
+    rpi5KpiWlan0Rate: document.getElementById('rpi5-kpi-wlan0-rate'),
+    rpi5KpiCpuTemp: document.getElementById('rpi5-kpi-cpu-temp'),
+    rpi5BarCpuTemp: document.getElementById('rpi5-bar-cpu-temp'),
+    rpi5KpiHailoTemp: document.getElementById('rpi5-kpi-hailo-temp'),
+    rpi5KpiHailoPower: document.getElementById('rpi5-kpi-hailo-power'),
+    rpi5KpiRam: document.getElementById('rpi5-kpi-ram'),
+    rpi5BarRam: document.getElementById('rpi5-bar-ram'),
+    rpi5KpiDisk: document.getElementById('rpi5-kpi-disk'),
+    rpi5KpiPcie: document.getElementById('rpi5-kpi-pcie'),
+    rpi5HailoStatusBadge: document.getElementById('rpi5-hailo-status-badge'),
+    rpi5HailoInfRate: document.getElementById('rpi5-hailo-inf-rate'),
+    rpi5HailoPeakRate: document.getElementById('rpi5-hailo-peak-rate'),
+    rpi5HailoLatency: document.getElementById('rpi5-hailo-latency'),
+    rpi5HailoTotalInf: document.getElementById('rpi5-hailo-total-inf'),
+    rpi5HailoPowerDraw: document.getElementById('rpi5-hailo-power-draw'),
+    rpi5HailoModelDetail: document.getElementById('rpi5-hailo-model-detail'),
+    rpi5HailoArch: document.getElementById('rpi5-hailo-arch'),
+    rpi5HailoTops: document.getElementById('rpi5-hailo-tops'),
+    rpi5HailoEndpoint: document.getElementById('rpi5-hailo-endpoint'),
+    rpi5DotEth0: document.getElementById('rpi5-dot-eth0'),
+    rpi5IfEth0Mac: document.getElementById('rpi5-if-eth0-mac'),
+    rpi5IfEth0Status: document.getElementById('rpi5-if-eth0-status'),
+    rpi5IfEth0Bytes: document.getElementById('rpi5-if-eth0-bytes'),
+    rpi5IfEth0Pkts: document.getElementById('rpi5-if-eth0-pkts'),
+    rpi5DotEth1: document.getElementById('rpi5-dot-eth1'),
+    rpi5IfEth1Mac: document.getElementById('rpi5-if-eth1-mac'),
+    rpi5IfEth1Status: document.getElementById('rpi5-if-eth1-status'),
+    rpi5IfEth1Bytes: document.getElementById('rpi5-if-eth1-bytes'),
+    rpi5IfEth1Pkts: document.getElementById('rpi5-if-eth1-pkts'),
+    rpi5DotWlan0: document.getElementById('rpi5-dot-wlan0'),
+    rpi5IfWlan0Mac: document.getElementById('rpi5-if-wlan0-mac'),
+    rpi5IfWlan0Status: document.getElementById('rpi5-if-wlan0-status'),
+    rpi5IfWlan0Bytes: document.getElementById('rpi5-if-wlan0-bytes'),
+    rpi5IfWlan0Pkts: document.getElementById('rpi5-if-wlan0-pkts'),
+    rpi5MemStat: document.getElementById('rpi5-mem-stat'),
+    rpi5MemBar: document.getElementById('rpi5-mem-bar'),
+    rpi5SvcBadge: document.getElementById('rpi5-svc-badge'),
+    rpi5SvcPid: document.getElementById('rpi5-svc-pid'),
+    rpi5SvcRssStat: document.getElementById('rpi5-svc-rss-stat'),
+    rpi5SvcRssBar: document.getElementById('rpi5-svc-rss-bar'),
+    chartRpi5ComputeCanvas: document.getElementById('chart-rpi5-compute'),
+    chartRpi5NetworkCanvas: document.getElementById('chart-rpi5-network'),
+    chartRpi5ThermalCanvas: document.getElementById('chart-rpi5-thermal'),
+    rpi5Eth0RateLegend: document.getElementById('rpi5-eth0-rate-legend'),
+    rpi5Eth1RateLegend: document.getElementById('rpi5-eth1-rate-legend'),
+    rpi5Wlan0RateLegend: document.getElementById('rpi5-wlan0-rate-legend'),
 
     // Google Coral TPU #1 Elements (Tap DPI)
     coral1KpiStatus: document.getElementById('coral1-kpi-status'),
@@ -2083,6 +2157,294 @@
       if (els.wsChartPromptLegend) els.wsChartPromptLegend.innerText = `Prefill: ${(ws.promptTokensPerSecond || 0).toFixed(1)} tok/s`;
     }
 
+    // 10. Raspberry Pi 5 Appliance Telemetry (Node 02)
+    if (snapshot.rpi5) {
+      const r = snapshot.rpi5;
+      const isOnline = Boolean(r.status === 'online');
+      if (els.dotDeviceRpi5) {
+        els.dotDeviceRpi5.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
+      }
+      if (els.rpi5HailortBadge) {
+        const fw = r.hailo?.firmwareVersion || r.hailortVersion || '4.20.0';
+        els.rpi5HailortBadge.innerText = `HailoRT ${fw} · 26 TOPS`;
+      }
+      if (els.rpi5OsBadge) {
+        els.rpi5OsBadge.innerText = r.osVersion ? r.osVersion.split(' ')[0] + ' · Linux 6.6' : 'Debian 12 · Linux 6.6';
+      }
+      if (els.rpi5Uptime) {
+        els.rpi5Uptime.innerText = r.uptime || '--:--:--';
+      }
+
+      // KPI 1: Compute Engine Load
+      const cpuPct = typeof r.cpuUtilizationPct === 'number' ? r.cpuUtilizationPct : (r.cpu?.utilizationPct ?? 0);
+      if (els.rpi5KpiCompute) {
+        els.rpi5KpiCompute.innerHTML = `${cpuPct}% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span>`;
+      }
+      if (els.rpi5BarCpu) {
+        els.rpi5BarCpu.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
+      }
+      const rpi5LoadArr = Array.isArray(r.systemLoad) ? r.systemLoad : (r.cpu?.loadAverage || []);
+      if (els.rpi5KpiLoad) {
+        els.rpi5KpiLoad.innerText = Array.isArray(rpi5LoadArr) && rpi5LoadArr.length > 0
+          ? rpi5LoadArr.map((v) => (typeof v === 'number' ? v.toFixed(2) : String(v))).join(', ')
+          : '--';
+      }
+      if (els.rpi5KpiFreq) {
+        const freqMhz = r.cpuFreqMhz || r.cpu?.frequencyMhz || 2400;
+        els.rpi5KpiFreq.innerText = `${(freqMhz / 1000).toFixed(2)} GHz`;
+      }
+
+      // KPI 2: Hailo-8 NPU Velocity & Panel
+      const hailo = r.hailo;
+      const hailoDetected = Boolean(hailo && hailo.status !== 'OFFLINE' && hailo.status !== 'offline');
+      const hailoRateBigInt = safeBigInt(hailo?.inferencesPerSecond);
+      if (hailoRateBigInt > rpi5SessionPeakHailoRate) {
+        rpi5SessionPeakHailoRate = hailoRateBigInt;
+      }
+      const hailoLat = typeof hailo?.avgInferenceLatencyMs === 'number'
+        ? hailo.avgInferenceLatencyMs
+        : (typeof hailo?.latencyMs === 'number' ? hailo.latencyMs : null);
+      const hailoTotal = safeBigInt(hailo?.totalInferences ?? 0n);
+      const hailoPowerWatts = typeof hailo?.powerWatts === 'number' ? hailo.powerWatts : null;
+
+      if (els.rpi5KpiHailoBadge) {
+        els.rpi5KpiHailoBadge.innerText = hailoDetected ? (hailoRateBigInt > 0n ? 'ACTIVE' : 'READY') : 'OFFLINE';
+        els.rpi5KpiHailoBadge.className = `cf-pill-badge ${hailoDetected ? 'purple' : 'gray'}`;
+      }
+      if (els.rpi5KpiHailoRate) {
+        els.rpi5KpiHailoRate.innerHTML = hailoDetected && isOnline
+          ? `${formatNumber(hailoRateBigInt)} <span style="font-size: 0.9rem; font-weight: 500;">inf/s</span>`
+          : `-- <span style="font-size: 0.9rem; font-weight: 500;">inf/s</span>`;
+      }
+      if (els.rpi5BarHailo) {
+        // Council Invariant 2 (Determinism): Pure BigInt percentage mapping against nominal scale (300n inf/s)
+        const NOMINAL_SCALE_INF_PER_SEC = 300n;
+        const hailoBarPct = hailoRateBigInt > 0n
+          ? Math.min(100, Math.max(5, Number((hailoRateBigInt * 100n) / NOMINAL_SCALE_INF_PER_SEC)))
+          : 0;
+        els.rpi5BarHailo.style.width = `${hailoBarPct}%`;
+      }
+      if (els.rpi5KpiHailoLat) {
+        els.rpi5KpiHailoLat.innerText = hailoDetected && isOnline && hailoLat !== null && hailoLat > 0
+          ? `${hailoLat.toFixed(2)} ms`
+          : '-- ms';
+      }
+      if (els.rpi5KpiHailoModel) {
+        els.rpi5KpiHailoModel.innerText = (hailoDetected && isOnline) ? (hailo?.activeModel || '--') : '--';
+      }
+
+      // Hailo-8 Panel
+      if (els.rpi5HailoStatusBadge) {
+        els.rpi5HailoStatusBadge.innerText = hailoDetected
+          ? (hailoRateBigInt > 0n ? 'ACTIVE (INFERENCE)' : 'ONLINE (READY)')
+          : 'OFFLINE';
+        els.rpi5HailoStatusBadge.className = `cf-pill-badge ${hailoDetected ? 'purple' : 'gray'}`;
+      }
+      if (els.rpi5HailoInfRate) {
+        els.rpi5HailoInfRate.innerText = hailoDetected && isOnline ? formatNumber(hailoRateBigInt) : '--';
+      }
+      if (els.rpi5HailoPeakRate) {
+        const peakRate = safeBigInt(hailo?.peakInferencesPerSecond) || rpi5SessionPeakHailoRate;
+        els.rpi5HailoPeakRate.innerText = hailoDetected && isOnline && peakRate > 0n
+          ? `${formatNumber(peakRate)} inf/s`
+          : '--';
+      }
+      if (els.rpi5HailoLatency) {
+        els.rpi5HailoLatency.innerText = hailoDetected && isOnline && hailoLat !== null && hailoLat > 0
+          ? hailoLat.toFixed(2)
+          : '--';
+      }
+      if (els.rpi5HailoTotalInf) {
+        els.rpi5HailoTotalInf.innerText = hailoDetected && isOnline ? formatNumber(hailoTotal) : '--';
+      }
+      if (els.rpi5HailoPowerDraw) {
+        els.rpi5HailoPowerDraw.innerText = hailoDetected && isOnline && hailoPowerWatts !== null
+          ? `${hailoPowerWatts.toFixed(2)} W`
+          : '-- W';
+      }
+      if (els.rpi5HailoModelDetail) {
+        els.rpi5HailoModelDetail.innerText = (hailoDetected && isOnline) ? (hailo?.activeModel || '--') : '--';
+      }
+      if (els.rpi5HailoArch) {
+        els.rpi5HailoArch.innerText = hailo?.architecture || '--';
+      }
+      if (els.rpi5HailoTops) {
+        els.rpi5HailoTops.innerText = hailo?.topsInt8 ? `${hailo.topsInt8} TOPS` : '26 TOPS';
+      }
+
+      // KPI 3: Workload Link (eth0) & Network Interfaces
+      const ifaces = Array.isArray(r.interfaces) ? r.interfaces : [];
+      const eth0 = ifaces.find((i) => i.name === 'eth0') || r.network?.eth0;
+      const eth1 = ifaces.find((i) => i.name === 'eth1') || r.network?.eth1;
+      const wlan0 = ifaces.find((i) => i.name === 'wlan0') || r.network?.wlan0;
+
+      if (eth0) {
+        const eth0Up = eth0.status === 'UP';
+        if (els.rpi5KpiEth0Status) {
+          els.rpi5KpiEth0Status.innerText = eth0Up ? (eth0.speedMbps ? `${eth0.speedMbps}M Full` : '1000M Full') : 'DOWN';
+          els.rpi5KpiEth0Status.className = `cf-pill-badge ${eth0Up ? 'green' : 'gray'}`;
+        }
+        const eth0Rate = safeBigInt(eth0.rxRateBps) + safeBigInt(eth0.txRateBps);
+        if (els.rpi5KpiEth0Rate) els.rpi5KpiEth0Rate.innerText = `${formatBytes(eth0Rate)}/s`;
+        if (els.rpi5BarEth0) {
+          const maxSpeedMbps = eth0.speedMbps ? safeBigInt(eth0.speedMbps) : 1000n;
+          const maxSpeedBps = maxSpeedMbps * 125000n;
+          const eth0Pct = eth0Rate > 0n && maxSpeedBps > 0n ? Math.min(100, Number((eth0Rate * 100n) / maxSpeedBps)) : (eth0Up ? 10 : 0);
+          els.rpi5BarEth0.style.width = `${Math.max(eth0Up ? 5 : 0, eth0Pct)}%`;
+        }
+        if (els.rpi5KpiEth0Rx) els.rpi5KpiEth0Rx.innerText = `${formatNumber(safeBigInt(eth0.rxPackets))} pkts`;
+
+        // Table details for eth0
+        if (els.rpi5DotEth0) els.rpi5DotEth0.className = `cf-status-dot ${eth0Up ? 'green' : 'down'}`;
+        if (els.rpi5IfEth0Mac) els.rpi5IfEth0Mac.innerText = eth0.macAddress || '--';
+        if (els.rpi5IfEth0Status) {
+          els.rpi5IfEth0Status.className = `cf-pill-badge ${eth0Up ? 'green' : 'gray'}`;
+          els.rpi5IfEth0Status.innerText = eth0Up ? `UP · ${eth0.speedMbps || 1000}M` : 'DOWN';
+        }
+        if (els.rpi5IfEth0Bytes) {
+          els.rpi5IfEth0Bytes.innerText = `${formatBytes(safeBigInt(eth0.rxBytes))} / ${formatBytes(safeBigInt(eth0.txBytes))}`;
+        }
+        if (els.rpi5IfEth0Pkts) {
+          els.rpi5IfEth0Pkts.innerText = `${formatNumber(safeBigInt(eth0.rxPackets))} / ${formatNumber(safeBigInt(eth0.txPackets))}`;
+        }
+      }
+
+      if (wlan0) {
+        const wlan0Up = wlan0.status === 'UP';
+        const wlan0Rate = safeBigInt(wlan0.rxRateBps) + safeBigInt(wlan0.txRateBps);
+        if (els.rpi5KpiWlan0Rate) els.rpi5KpiWlan0Rate.innerText = `${formatBytes(wlan0Rate)}/s`;
+
+        // Table details for wlan0
+        if (els.rpi5DotWlan0) els.rpi5DotWlan0.className = `cf-status-dot ${wlan0Up ? 'green' : 'down'}`;
+        if (els.rpi5IfWlan0Mac) els.rpi5IfWlan0Mac.innerText = wlan0.macAddress || '--';
+        if (els.rpi5IfWlan0Status) {
+          els.rpi5IfWlan0Status.className = `cf-pill-badge ${wlan0Up ? 'green' : 'gray'}`;
+          els.rpi5IfWlan0Status.innerText = wlan0Up ? 'UP · Wi-Fi' : 'DOWN';
+        }
+        if (els.rpi5IfWlan0Bytes) {
+          els.rpi5IfWlan0Bytes.innerText = `${formatBytes(safeBigInt(wlan0.rxBytes))} / ${formatBytes(safeBigInt(wlan0.txBytes))}`;
+        }
+        if (els.rpi5IfWlan0Pkts) {
+          els.rpi5IfWlan0Pkts.innerText = `${formatNumber(safeBigInt(wlan0.rxPackets))} / ${formatNumber(safeBigInt(wlan0.txPackets))}`;
+        }
+      }
+
+      if (eth1) {
+        const eth1Up = eth1.status === 'UP';
+        if (els.rpi5DotEth1) els.rpi5DotEth1.className = `cf-status-dot ${eth1Up ? 'green' : 'down'}`;
+        if (els.rpi5IfEth1Mac) els.rpi5IfEth1Mac.innerText = eth1.macAddress || '--';
+        if (els.rpi5IfEth1Status) {
+          els.rpi5IfEth1Status.className = `cf-pill-badge ${eth1Up ? 'green' : 'gray'}`;
+          els.rpi5IfEth1Status.innerText = eth1Up ? `UP · ${eth1.speedMbps || 1000}M` : 'DOWN';
+        }
+        if (els.rpi5IfEth1Bytes) {
+          els.rpi5IfEth1Bytes.innerText = `${formatBytes(safeBigInt(eth1.rxBytes))} / ${formatBytes(safeBigInt(eth1.txBytes))}`;
+        }
+        if (els.rpi5IfEth1Pkts) {
+          els.rpi5IfEth1Pkts.innerText = `${formatNumber(safeBigInt(eth1.rxPackets))} / ${formatNumber(safeBigInt(eth1.txPackets))}`;
+        }
+      }
+
+      // KPI 4: Silicon Thermals
+      const cpuTemp = typeof r.temperatures?.cpuC === 'number'
+        ? r.temperatures.cpuC
+        : (typeof r.cpu?.temperatureC === 'number' ? r.cpu.temperatureC : null);
+      const hailoTemp = typeof r.temperatures?.hailoTs0C === 'number'
+        ? r.temperatures.hailoTs0C
+        : (typeof hailo?.temperatureC === 'number' ? hailo.temperatureC : null);
+
+      if (els.rpi5KpiCpuTemp) {
+        els.rpi5KpiCpuTemp.innerText = cpuTemp !== null ? `${cpuTemp.toFixed(1)}°C` : '--°C';
+      }
+      if (els.rpi5BarCpuTemp) {
+        const tempPct = cpuTemp !== null ? Math.min(100, Math.max(0, ((cpuTemp - 20) / 65) * 100)) : 0;
+        els.rpi5BarCpuTemp.style.width = `${tempPct}%`;
+      }
+      if (els.rpi5KpiHailoTemp) {
+        els.rpi5KpiHailoTemp.innerText = hailoTemp !== null ? `${hailoTemp.toFixed(1)}°C` : '--°C';
+      }
+      if (els.rpi5KpiHailoPower) {
+        els.rpi5KpiHailoPower.innerText = hailoDetected && isOnline && hailoPowerWatts !== null
+          ? `${hailoPowerWatts.toFixed(2)} W`
+          : '-- W';
+      }
+
+      // KPI 5: LPDDR4X Memory & Storage
+      const memUsed = safeBigInt(r.ramUsedBytes ?? r.memory?.usedBytes);
+      const memTotal = safeBigInt(r.ramTotalBytes ?? r.memory?.totalBytes);
+      const memPct = memTotal > 0n ? Number((memUsed * 100n) / memTotal) : 0;
+      if (els.rpi5KpiRam) {
+        els.rpi5KpiRam.innerText = memTotal > 0n
+          ? `${formatBytes(memUsed)} / ${formatBytes(memTotal)}`
+          : (memUsed > 0n ? `${formatBytes(memUsed)} / --` : '--');
+      }
+      if (els.rpi5BarRam) {
+        els.rpi5BarRam.style.width = `${Math.min(100, Math.max(0, memPct))}%`;
+      }
+      if (els.rpi5MemStat) {
+        els.rpi5MemStat.innerText = memTotal > 0n
+          ? `${formatBytes(memUsed)} / ${formatBytes(memTotal)} (${memPct.toFixed(1)}%)`
+          : (memUsed > 0n ? `${formatBytes(memUsed)} / --` : '--');
+      }
+      if (els.rpi5MemBar) {
+        els.rpi5MemBar.style.width = `${Math.min(100, Math.max(0, memPct))}%`;
+      }
+      if (els.rpi5KpiDisk) {
+        const diskUsed = safeBigInt(r.storage?.usedBytes ?? r.disk?.usedBytes);
+        const diskTotal = safeBigInt(r.storage?.totalBytes ?? r.disk?.totalBytes);
+        els.rpi5KpiDisk.innerText = diskTotal > 0n
+          ? `${formatBytes(diskUsed)} / ${formatBytes(diskTotal)}`
+          : '--';
+      }
+      if (els.rpi5KpiPcie) {
+        els.rpi5KpiPcie.innerText = hailo?.pcieLinkSpeed ? `${hailo.pcieLinkSpeed} ${hailo.pcieLinkWidth || 'x1'}` : 'Gen 3.0 x1';
+      }
+
+      // Service Subsystem
+      const capNic = r.captureNic;
+      if (capNic && els.rpi5SvcBadge) {
+        const isCapActive = Boolean(capNic.serviceStatus?.includes('active'));
+        els.rpi5SvcBadge.innerText = isCapActive ? 'active (running)' : 'inactive';
+        els.rpi5SvcBadge.className = `cf-pill-badge ${isCapActive ? 'green' : 'gray'}`;
+      }
+      if (els.rpi5SvcPid) {
+        const pidVal = r.service?.pid ?? capNic?.pid;
+        els.rpi5SvcPid.innerText = isOnline && pidVal !== undefined ? String(pidVal) : '--';
+      }
+      if (els.rpi5SvcRssStat) {
+        const rssBytes = safeBigInt(r.service?.rssBytes);
+        const maxRssBytes = safeBigInt(r.service?.maxRssBytes);
+        els.rpi5SvcRssStat.innerText = isOnline && rssBytes > 0n
+          ? (maxRssBytes > 0n ? `${formatBytes(rssBytes)} / ${formatBytes(maxRssBytes)}` : `${formatBytes(rssBytes)}`)
+          : '-- MB / -- MB';
+      }
+      if (els.rpi5SvcRssBar) {
+        const rssBytes = safeBigInt(r.service?.rssBytes);
+        const maxRssBytes = safeBigInt(r.service?.maxRssBytes);
+        const rssPct = rssBytes > 0n && maxRssBytes > 0n
+          ? Math.min(100, Number((rssBytes * 100n) / maxRssBytes))
+          : 0;
+        els.rpi5SvcRssBar.style.width = `${rssPct}%`;
+      }
+
+      // Time series buffer update for RPi 5
+      if (Array.isArray(r.timeSeries) && r.timeSeries.length > 0) {
+        const lastServerTs = r.timeSeries[r.timeSeries.length - 1].timestampMs;
+        if (rpi5TimeSeriesBuffer.length === 0 || (rpi5TimeSeriesBuffer[0] && lastServerTs < rpi5TimeSeriesBuffer[0].timestampMs)) {
+          rpi5TimeSeriesBuffer = r.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        } else {
+          const lastLocalTs = rpi5TimeSeriesBuffer[rpi5TimeSeriesBuffer.length - 1].timestampMs;
+          const newPts = r.timeSeries.filter((p) => p.timestampMs > lastLocalTs);
+          if (newPts.length > 0) {
+            rpi5TimeSeriesBuffer.push(...newPts);
+            if (rpi5TimeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
+              rpi5TimeSeriesBuffer = rpi5TimeSeriesBuffer.slice(-MAX_FRONTEND_BUFFER_POINTS);
+            }
+          }
+        }
+      }
+    }
+
     updateCharts();
   }
 
@@ -2960,6 +3322,27 @@
     return [];
   }
 
+  function getRpi5PointsForDisplay() {
+    if (currentRange !== 'live') {
+      if (historicalRpi5TimeSeriesBuffer.length > 0) {
+        return stitchWithLive(historicalRpi5TimeSeriesBuffer, rpi5TimeSeriesBuffer, _stitchCache.rpi5);
+      }
+      return [];
+    }
+
+    const durationMs = getRangeDurationMs('live');
+    const cutoffMs = Date.now() - durationMs;
+    if (rpi5TimeSeriesBuffer.length > 0) {
+      const windowPoints = rpi5TimeSeriesBuffer.filter((p) => p.timestampMs >= cutoffMs);
+      if (windowPoints.length > 0) return windowPoints;
+      return rpi5TimeSeriesBuffer;
+    }
+    if (currentSnapshot?.rpi5?.timeSeries && currentSnapshot.rpi5.timeSeries.length > 0) {
+      return currentSnapshot.rpi5.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
+    }
+    return [];
+  }
+
   // Council Invariant (Sanjay Ghemawat): Zero GC pressure. Map keyed by deviceId prevents cache thrashing between dual TPUs.
   const cachedCoralPointsMap = new Map();
 
@@ -3585,6 +3968,298 @@
     drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, padTop + plotH + 4, currentRange);
   }
 
+  // --- RPi 5 Chart 1: Compute (CPU vs Memory Utilization %) ---
+  function drawRpi5ComputeChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    // Grid lines: 0%, 25%, 50%, 75%, 100%
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${i * 25}%`, padLeft - 6, y);
+    }
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis timestamps
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
+
+    const getCoord = (pt, pctVal) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const y = padTop + plotH - (Math.max(0, Math.min(100, Number(pctVal || 0))) / 100) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    const getMemPct = (pt) => {
+      if (typeof pt.memoryUtilizationPct === 'number') return pt.memoryUtilizationPct;
+      if (pt.ramUsedBytes !== undefined) {
+        const u = safeBigInt(pt.ramUsedBytes);
+        const total = safeBigInt(pt.ramTotalBytes ?? currentSnapshot?.rpi5?.ramTotalBytes ?? 0n);
+        if (total > 0n) return Number((u * 100n) / total);
+      }
+      return 0;
+    };
+
+    // CPU Line & Area Fill (Blue #0051c3)
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => (pt.cpuUtilizationPct ?? pt.cpu?.utilizationPct ?? 0));
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, (pt.cpuUtilizationPct ?? pt.cpu?.utilizationPct ?? 0)), '#0051c3', 'rgba(0, 81, 195, 0.16)', 1.8, padTop + plotH);
+
+    // Memory Line (Purple #7e22ce)
+    const memSegments = partitionContiguousSegments(points, currentRange, (pt) => getMemPct(pt));
+    drawSegmentedPath(ctx, memSegments, (pt) => getCoord(pt, getMemPct(pt)), '#7e22ce', null, 1.8, padTop + plotH);
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● BCM2712 CPU Load (%)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillText('● LPDDR4X Memory (%)', padLeft + 155, padTop - 6);
+  }
+
+  // --- RPi 5 Chart 2: Network Wire Throughput (eth0 vs eth1 vs wlan0) ---
+  function drawRpi5NetworkChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 240;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = RPI5_NETWORK_PAD_LEFT;
+    const padRight = RPI5_NETWORK_PAD_RIGHT;
+    const padTop = 24;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const getEth0Rate = (pt) => safeBigInt(pt.eth0RateBps ?? (safeBigInt(pt.eth0RxRateBps) + safeBigInt(pt.eth0TxRateBps)));
+    const getEth1Rate = (pt) => safeBigInt(pt.eth1CaptureRateBps ?? (safeBigInt(pt.eth1RxRateBps) + safeBigInt(pt.eth1TxRateBps)));
+    const getWlan0Rate = (pt) => safeBigInt(pt.wlan0RateBps ?? (safeBigInt(pt.wlan0RxRateBps) + safeBigInt(pt.wlan0TxRateBps)));
+
+    let maxY = 10000n; // 10 KB/s baseline
+    for (const pt of points) {
+      const eth0Rate = getEth0Rate(pt);
+      const eth1Rate = getEth1Rate(pt);
+      const wlan0Rate = getWlan0Rate(pt);
+      if (eth0Rate > maxY) maxY = eth0Rate;
+      if (eth1Rate > maxY) maxY = eth1Rate;
+      if (wlan0Rate > maxY) maxY = wlan0Rate;
+    }
+    maxY = (maxY * 125n) / 100n;
+    const maxYNum = Number(maxY);
+
+    // Grid lines
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+
+      const gridVal = (maxY * BigInt(i)) / BigInt(steps);
+      ctx.fillText(`${formatBytes(gridVal)}/s`, padLeft - 8, y);
+    }
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 6);
+
+    const getCoord = (pt, rateBigInt) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const valNum = Number(safeBigInt(rateBigInt));
+      const y = padTop + plotH - (valNum / maxYNum) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // eth0 Workload Line (Blue #0051c3)
+    const eth0Segments = partitionContiguousSegments(points, currentRange, (pt) => Number(getEth0Rate(pt)));
+    drawSegmentedPath(ctx, eth0Segments, (pt) => getCoord(pt, getEth0Rate(pt)), '#0051c3', 'rgba(0, 81, 195, 0.12)', 2, padTop + plotH);
+
+    // eth1 SDN Mirror Tap Line (Purple #7e22ce)
+    const eth1Segments = partitionContiguousSegments(points, currentRange, (pt) => Number(getEth1Rate(pt)));
+    drawSegmentedPath(ctx, eth1Segments, (pt) => getCoord(pt, getEth1Rate(pt)), '#7e22ce', 'rgba(126, 34, 206, 0.08)', 2, padTop + plotH);
+
+    // wlan0 Wi-Fi Line (Green #10b981)
+    const wlan0Segments = partitionContiguousSegments(points, currentRange, (pt) => Number(getWlan0Rate(pt)));
+    drawSegmentedPath(ctx, wlan0Segments, (pt) => getCoord(pt, getWlan0Rate(pt)), '#10b981', null, 1.8, padTop + plotH);
+
+    // Update legend values if elements exist
+    const latest = points[points.length - 1];
+    if (latest) {
+      if (els.rpi5Eth0RateLegend) els.rpi5Eth0RateLegend.innerText = `${formatBytes(getEth0Rate(latest))}/s`;
+      if (els.rpi5Eth1RateLegend) els.rpi5Eth1RateLegend.innerText = `${formatBytes(getEth1Rate(latest))}/s`;
+      if (els.rpi5Wlan0RateLegend) els.rpi5Wlan0RateLegend.innerText = `${formatBytes(getWlan0Rate(latest))}/s`;
+    }
+
+    // Canvas Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● eth0 Workload Link', padLeft + 10, padTop - 8);
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillText('● eth1 Mirror Tap (RTL8153)', padLeft + 150, padTop - 8);
+    ctx.fillStyle = '#10b981';
+    ctx.fillText('● wlan0 Management Wi-Fi', padLeft + 310, padTop - 8);
+  }
+
+  // --- RPi 5 Chart 3: Thermal Zones & Coprocessor Power ---
+  function drawRpi5ThermalChart(canvas, points) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 180;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const minTemp = 20;
+    const maxTemp = 95;
+    const rangeTemp = maxTemp - minTemp;
+
+    // Grid lines: 25, 45, 65, 85
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const tempLevels = [25, 45, 65, 85];
+    for (const lvl of tempLevels) {
+      const y = padTop + plotH - ((lvl - minTemp) / rangeTemp) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${lvl}°C`, padLeft - 6, y);
+    }
+
+    // 85°C TJ Max Threshold Line
+    const threshY = padTop + plotH - ((85 - minTemp) / rangeTemp) * plotH;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(padLeft, threshY);
+    ctx.lineTo(width - padRight, threshY);
+    ctx.stroke();
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('85°C Limit', width - padRight - 5, threshY - 6);
+    ctx.restore();
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
+
+    const getCpuTemp = (pt) => (typeof pt.cpuTempC === 'number' ? pt.cpuTempC : (typeof pt.cpuTemperatureC === 'number' ? pt.cpuTemperatureC : null));
+    const getHailoTemp = (pt) => (typeof pt.hailoTs0TempC === 'number' ? pt.hailoTs0TempC : (typeof pt.hailoTemperatureC === 'number' ? pt.hailoTemperatureC : null));
+
+    const getCoord = (pt, tempVal) => {
+      const v = typeof tempVal === 'number' ? tempVal : null;
+      if (v === null || isNaN(v)) return null;
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const y = padTop + plotH - ((Math.max(minTemp, Math.min(maxTemp, v)) - minTemp) / rangeTemp) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // CPU Temp Curve (Orange #f97316)
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => getCpuTemp(pt));
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, getCpuTemp(pt)), '#f97316', null, 1.8, padTop + plotH);
+
+    // Hailo Temp Curve (Purple #7e22ce)
+    const hailoSegments = partitionContiguousSegments(points, currentRange, (pt) => getHailoTemp(pt));
+    drawSegmentedPath(ctx, hailoSegments, (pt) => getCoord(pt, getHailoTemp(pt)), '#7e22ce', null, 1.8, padTop + plotH);
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f97316';
+    ctx.fillText('● BCM2712 CPU (°C)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillText('● Hailo-8 NPU (°C)', padLeft + 130, padTop - 6);
+  }
+
   // --- Coral Chart 1: Inference & Tap Ingestion Rate ---
   function drawCoralRateChart(canvas, points, options = {}) {
     if (!canvas || !points || points.length === 0) return;
@@ -3915,6 +4590,13 @@
         drawOrinThermalsChart(els.chartOrinThermalsCanvas, orinPoints);
         drawOrinPowerChart(els.chartOrinPowerCanvas, orinPoints);
         drawOrinNvmeChart(els.chartOrinNvmeCanvas, orinPoints);
+      }
+    } else if (activeDeviceId === 'rpi5') {
+      const rpi5Points = getRpi5PointsForDisplay();
+      if (rpi5Points.length > 0) {
+        drawRpi5ComputeChart(els.chartRpi5ComputeCanvas, rpi5Points);
+        drawRpi5NetworkChart(els.chartRpi5NetworkCanvas, rpi5Points);
+        drawRpi5ThermalChart(els.chartRpi5ThermalCanvas, rpi5Points);
       }
     } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
       const coralPoints = getCoralPointsForDisplay('coral-1');
@@ -4449,6 +5131,56 @@ Please connect the physical switch via USB to execute '${command}' on device har
     `;
   });
 
+  // 8b. Raspberry Pi 5 Compute Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi5-compute', getRpi5PointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const cpu = closestPt.cpuUtilizationPct !== undefined ? Number(closestPt.cpuUtilizationPct).toFixed(1) + '%' : '--';
+    const rpi5RamTotal = safeBigInt(closestPt.ramTotalBytes ?? currentSnapshot?.rpi5?.ramTotalBytes ?? 0n);
+    const memPct = typeof closestPt.memoryUtilizationPct === 'number'
+      ? closestPt.memoryUtilizationPct.toFixed(1) + '%'
+      : (closestPt.ramUsedBytes !== undefined && rpi5RamTotal > 0n
+          ? (Number((safeBigInt(closestPt.ramUsedBytes) * 100n) / rpi5RamTotal)).toFixed(1) + '%'
+          : '--');
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 5 Compute Load</div>
+      <div style="color: #38bdf8;">● Broadcom BCM2712 CPU: ${cpu}</div>
+      <div style="color: #a855f7;">● LPDDR4X Memory: ${memPct}</div>
+    `;
+  });
+
+  // 8c. Raspberry Pi 5 Network Interfaces Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi5-network', getRpi5PointsForDisplay, RPI5_NETWORK_PAD_LEFT, RPI5_NETWORK_PAD_RIGHT, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const eth0Rate = safeBigInt(closestPt.eth0RateBps ?? (safeBigInt(closestPt.eth0RxRateBps) + safeBigInt(closestPt.eth0TxRateBps)));
+    const eth1Rate = safeBigInt(closestPt.eth1CaptureRateBps ?? (safeBigInt(closestPt.eth1RxRateBps) + safeBigInt(closestPt.eth1TxRateBps)));
+    const wlan0Rate = safeBigInt(closestPt.wlan0RateBps ?? (safeBigInt(closestPt.wlan0RxRateBps) + safeBigInt(closestPt.wlan0TxRateBps)));
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 5 Wire Throughput</div>
+      <div style="color: #38bdf8;">● eth0 Workload: ${formatBytes(eth0Rate)}/s</div>
+      <div style="color: #a855f7;">● eth1 Mirror Tap: ${formatBytes(eth1Rate)}/s</div>
+      <div style="color: #10b981;">● wlan0 Wi-Fi: ${formatBytes(wlan0Rate)}/s</div>
+    `;
+  });
+
+  // 8d. Raspberry Pi 5 Thermals Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi5-thermal', getRpi5PointsForDisplay, 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const cpuTVal = closestPt.cpuTempC ?? closestPt.cpuTemperatureC;
+    const cpuT = cpuTVal !== undefined && cpuTVal !== null ? Number(cpuTVal).toFixed(1) + '°C' : '--';
+    const hailoTVal = closestPt.hailoTs0TempC ?? closestPt.hailoTemperatureC;
+    const hailoT = hailoTVal !== undefined && hailoTVal !== null ? Number(hailoTVal).toFixed(1) + '°C' : '--';
+    const pwr = closestPt.hailoPowerWatts !== undefined && closestPt.hailoPowerWatts !== null ? Number(closestPt.hailoPowerWatts).toFixed(2) + ' W' : '--';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 5 Silicon Thermals</div>
+      <div style="color: #f97316;">● BCM2712 CPU: ${cpuT}</div>
+      <div style="color: #a855f7;">● Hailo-8 NPU: ${hailoT}</div>
+      <div style="color: #0d9488;">● Hailo-8 Power: ${pwr}</div>
+    `;
+  });
+
 
   // 9a. Coral 1 Edge TPU Inference Rate Chart (Tap Classifier)
   bindChartHoverTooltip('canvas-wrapper-coral1-rate', () => getCoralPointsForDisplay('coral-1'), 55, 15, (closestPt) => {
@@ -4598,6 +5330,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
         historicalDataUnavailable = true;
         historicalTimeSeriesBuffer = [];
         historicalJetsonTimeSeriesBuffer = [];
+        historicalRpi5TimeSeriesBuffer = [];
         historicalCoralTimeSeriesBuffer = [];
         historicalWorkstationTimeSeriesBuffer = [];
         return;
@@ -4616,6 +5349,12 @@ Please connect the physical switch via USB to execute '${command}' on device har
         historicalJetsonTimeSeriesBuffer = data.jetson.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
       } else {
         historicalJetsonTimeSeriesBuffer = [];
+      }
+      if (data?.rpi5 && Array.isArray(data.rpi5.timeSeries) && data.rpi5.timeSeries.length > 0) {
+        // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
+        historicalRpi5TimeSeriesBuffer = data.rpi5.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        historicalRpi5TimeSeriesBuffer = [];
       }
       if (data?.coral && Array.isArray(data.coral.timeSeries) && data.coral.timeSeries.length > 0) {
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
@@ -4636,6 +5375,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
       historicalDataUnavailable = true;
       historicalTimeSeriesBuffer = [];
       historicalJetsonTimeSeriesBuffer = [];
+      historicalRpi5TimeSeriesBuffer = [];
       historicalCoralTimeSeriesBuffer = [];
       historicalWorkstationTimeSeriesBuffer = [];
       coralBufferSeq++;
@@ -4782,6 +5522,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   const DEVICE_META = {
     zodiac:      { hwName: 'Zodiac FX Hardware \u00b7 Rev B',           firmware: 'Firmware v0.86',                  navId: 'cf-nav-zodiac' },
     orin:        { hwName: 'NVIDIA Jetson Orin Nano \u00b7 Dev Kit',    firmware: 'JetPack 6.x \u00b7 Ubuntu 22.04', navId: 'cf-nav-orin'   },
+    rpi5:        { hwName: 'Raspberry Pi 5 \u00b7 Broadcom BCM2712',    firmware: 'HailoRT 4.20 \u00b7 Hailo-8 (26 TOPS)', navId: 'cf-nav-rpi5' },
     'coral-1':   { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
     'coral-2':   { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
     coral:       { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
@@ -4878,7 +5619,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Active Appliance Tier Switching Logic
   function switchDevice(device) {
     if (device === 'coral') device = 'coral-1';
-    if (!['zodiac', 'orin', 'coral-1', 'coral-2', 'openflow', 'workstation'].includes(device)) return;
+    if (!['zodiac', 'orin', 'rpi5', 'coral-1', 'coral-2', 'openflow', 'workstation'].includes(device)) return;
     activeDeviceId = device;
 
     if (els.btnDeviceZodiac) {
@@ -4888,6 +5629,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
     if (els.btnDeviceOrin) {
       els.btnDeviceOrin.classList.toggle('active', device === 'orin');
       els.btnDeviceOrin.setAttribute('aria-selected', String(device === 'orin'));
+    }
+    if (els.btnDeviceRpi5) {
+      els.btnDeviceRpi5.classList.toggle('active', device === 'rpi5');
+      els.btnDeviceRpi5.setAttribute('aria-selected', String(device === 'rpi5'));
     }
     if (els.btnDeviceCoral1) {
       els.btnDeviceCoral1.classList.toggle('active', device === 'coral-1');
@@ -4912,6 +5657,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
     if (els.viewDeviceZodiac) els.viewDeviceZodiac.style.display = device === 'zodiac' ? 'block' : 'none';
     if (els.viewDeviceOrin) els.viewDeviceOrin.style.display = device === 'orin' ? 'block' : 'none';
+    if (els.viewDeviceRpi5) els.viewDeviceRpi5.style.display = device === 'rpi5' ? 'block' : 'none';
     if (els.viewDeviceCoral1) els.viewDeviceCoral1.style.display = device === 'coral-1' ? 'block' : 'none';
     if (els.viewDeviceCoral2) els.viewDeviceCoral2.style.display = device === 'coral-2' ? 'block' : 'none';
     if (els.viewDeviceCoral) els.viewDeviceCoral.style.display = device === 'coral-1' ? 'block' : 'none';
@@ -4924,6 +5670,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
         els.breadcrumbName.innerText = currentSnapshot?.system?.deviceName || 'Zodiac_FX';
       } else if (device === 'orin') {
         els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
+      } else if (device === 'rpi5') {
+        els.breadcrumbName.innerText = 'Raspberry Pi 5 · Hailo-8 (Node 02)';
       } else if (device === 'coral-1') {
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (device === 'coral-2') {
@@ -4956,6 +5704,9 @@ Please connect the physical switch via USB to execute '${command}' on device har
   if (els.btnDeviceOrin) {
     els.btnDeviceOrin.addEventListener('click', () => switchDevice('orin'));
   }
+  if (els.btnDeviceRpi5) {
+    els.btnDeviceRpi5.addEventListener('click', () => switchDevice('rpi5'));
+  }
   if (els.btnDeviceCoral1) {
     els.btnDeviceCoral1.addEventListener('click', () => switchDevice('coral-1'));
   }
@@ -4977,6 +5728,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     const hash = (window.location.hash || '').toLowerCase();
     if (hash === '#sec-orin' || hash === '#orin') {
       switchDevice('orin');
+    } else if (hash === '#sec-rpi5' || hash === '#rpi5') {
+      switchDevice('rpi5');
     } else if (hash === '#sec-coral-1' || hash === '#coral-1' || hash === '#sec-coral' || hash === '#coral') {
       switchDevice('coral-1');
     } else if (hash === '#sec-coral-2' || hash === '#coral-2') {

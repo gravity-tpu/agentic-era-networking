@@ -145,6 +145,24 @@ class ServiceCounters(BaseModel):
     active_model: Optional[str]
 
 
+class NetworkInterfaceTelemetry(BaseModel):
+    """Physical network interface telemetry from Linux kernel."""
+    name: str
+    role: str
+    mac_address: str
+    ip_address: Optional[str] = None
+    status: str
+    speed_mbps: int = 0
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+    rx_packets: int = 0
+    tx_packets: int = 0
+    rx_dropped: int = 0
+    tx_dropped: int = 0
+    rx_errors: int = 0
+    tx_errors: int = 0
+
+
 class FullTelemetryResponse(BaseModel):
     """Unified telemetry schema satisfying Epistemic Provenance (INV-6)."""
     source: str = "rpi5_hailo8_npu"
@@ -152,6 +170,7 @@ class FullTelemetryResponse(BaseModel):
     silicon: SiliconTelemetry
     host: HostTelemetry
     counters: ServiceCounters
+    interfaces: List[NetworkInterfaceTelemetry] = Field(default_factory=list)
 
 
 class BenchmarkRequest(BaseModel):
