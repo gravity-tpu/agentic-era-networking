@@ -397,6 +397,7 @@ export interface Rpi5TelemetrySnapshot {
     readonly activeModel: string;
     readonly inferencesPerSecond: bigint;
     readonly totalInferences: bigint;
+    readonly avgInferenceLatencyNs: bigint;
     readonly avgInferenceLatencyMs: number;
     readonly pcieLinkSpeed: string;
     readonly pcieLinkWidth: string;
@@ -1040,7 +1041,8 @@ export function createDefaultRpi5Snapshot(isDisconnected: boolean = true): Rpi5T
       activeModel: isDisconnected ? 'None' : 'yolov8s_h8.hef',
       inferencesPerSecond: isDisconnected ? 0n : 120n,
       totalInferences: isDisconnected ? 0n : 45280n,
-      avgInferenceLatencyMs: isDisconnected ? 0 : 8.33,
+      avgInferenceLatencyNs: isDisconnected ? 0n : 8_330_000n,
+      avgInferenceLatencyMs: isDisconnected ? 0 : 8,
       pcieLinkSpeed: isDisconnected ? 'unknown' : '8.0 GT/s PCIe',
       pcieLinkWidth: isDisconnected ? 'unknown' : 'x1',
     },
@@ -1281,7 +1283,9 @@ export function generateRpi5HistoricalTelemetry(
   const baseTs0 = snapshot.temperatures.hailoTs0C ?? 43.8;
   const baseTs1 = snapshot.temperatures.hailoTs1C ?? 43.2;
   const baseInf = snapshot.hailo.inferencesPerSecond || 120n;
-  const baseLat = snapshot.hailo.avgInferenceLatencyMs || 8.33;
+  const baseLat = snapshot.hailo.avgInferenceLatencyNs
+    ? Number((snapshot.hailo.avgInferenceLatencyNs + 500_000n) / 1_000_000n)
+    : (snapshot.hailo.avgInferenceLatencyMs || 8);
   const baseRam = snapshot.ramUsedBytes || 2548039680n;
 
   for (let i = pointCount - 1; i >= 0; i--) {

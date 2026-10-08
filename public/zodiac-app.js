@@ -66,30 +66,89 @@
   let historicalCoralTimeSeriesBuffer = [];
   let historicalWorkstationTimeSeriesBuffer = [];
 
+  // Sanjay Ghemawat Invariant: Pre-allocated circular ring buffer for zero-allocation telemetry
+  class TelemetryRingBuffer {
+    constructor(capacity = MAX_FRONTEND_BUFFER_POINTS) {
+      this.capacity = capacity;
+      this.buffer = new Array(capacity);
+      this.linear = []; // Pre-allocated reusable flat array view (zero GC allocation)
+      this.head = 0;
+      this.tail = 0;
+      this.count = 0;
+    }
+
+    push(item) {
+      this.buffer[this.head] = item;
+      this.head = (this.head + 1) % this.capacity;
+      if (this.count < this.capacity) {
+        this.count++;
+      } else {
+        this.tail = (this.tail + 1) % this.capacity;
+      }
+    }
+
+    reset() {
+      this.head = 0;
+      this.tail = 0;
+      this.count = 0;
+    }
+
+    // Zero-allocation flat linear view: reuses pre-allocated linear array without allocating new Array instances
+    toLinearView() {
+      if (this.count === 0) {
+        this.linear.length = 0;
+        return this.linear;
+      }
+      this.linear.length = this.count;
+      for (let i = 0; i < this.count; i++) {
+        this.linear[i] = this.buffer[(this.tail + i) % this.capacity];
+      }
+      return this.linear;
+    }
+
+    // Zero-copy iterator interface (Ghemawat invariant)
+    *[Symbol.iterator]() {
+      for (let i = 0; i < this.count; i++) {
+        yield this.buffer[(this.tail + i) % this.capacity];
+      }
+    }
+  }
+
   // ── History + live stitch cache ───────────────────────────────────────────
   // Merging historical (JSONL) and live buffer tails is called every 2s from the
-  // live poll. Cache by last-timestamp key so the spread allocation only fires
-  // when one of the buffers actually receives new data (Ghemawat GC invariant).
+  // live poll. Cache by last-timestamp key and use a pre-allocated circular ring buffer
+  // to eliminate garbage collection pressure on high-frequency packet loops (Sanjay Ghemawat).
   const _stitchCache = {
-    zodiac: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
-    jetson: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
-    rpi5:   { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
-    coral:  { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
-    workstation: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, data: [] },
+    zodiac: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
+    jetson: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
+    rpi5:   { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
+    coral:  { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
+    workstation: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
   };
 
   function stitchWithLive(histBuf, liveBuf, slot) {
-    if (histBuf.length === 0) return histBuf;
+    if (histBuf.length === 0) return liveBuf;
     const lastHistTs = histBuf[histBuf.length - 1]?.timestampMs ?? 0;
     const lastLiveTs = liveBuf.length > 0 ? liveBuf[liveBuf.length - 1].timestampMs : 0;
-    // Four integer comparisons — zero string allocation on the polling hot path
+    // Four integer comparisons — zero string or array allocation on the polling hot path
     if (slot.histLen === histBuf.length && slot.lastHistTs === lastHistTs &&
         slot.liveLen === liveBuf.length && slot.lastLiveTs === lastLiveTs) {
       return slot.data;
     }
-    const ext = liveBuf.filter((p) => p.timestampMs > lastHistTs);
-    const combined = ext.length > 0 ? [...histBuf, ...ext] : histBuf;
-    slot.data = combined.length > MAX_FRONTEND_BUFFER_POINTS ? combined.slice(-MAX_FRONTEND_BUFFER_POINTS) : combined;
+    if (!slot.ring) {
+      slot.ring = new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS);
+    }
+    slot.ring.reset();
+    const histStart = histBuf.length > MAX_FRONTEND_BUFFER_POINTS ? histBuf.length - MAX_FRONTEND_BUFFER_POINTS : 0;
+    for (let i = histStart; i < histBuf.length; i++) {
+      slot.ring.push(histBuf[i]);
+    }
+    for (let i = 0; i < liveBuf.length; i++) {
+      if (liveBuf[i].timestampMs > lastHistTs) {
+        slot.ring.push(liveBuf[i]);
+      }
+    }
+    slot.data = slot.ring.toLinearView();
     slot.histLen   = histBuf.length;
     slot.lastHistTs = lastHistTs;
     slot.liveLen   = liveBuf.length;
@@ -2202,9 +2261,22 @@
       if (hailoRateBigInt > rpi5SessionPeakHailoRate) {
         rpi5SessionPeakHailoRate = hailoRateBigInt;
       }
-      const hailoLat = typeof hailo?.avgInferenceLatencyMs === 'number'
-        ? hailo.avgInferenceLatencyMs
-        : (typeof hailo?.latencyMs === 'number' ? hailo.latencyMs : null);
+      const hailoLatStr = (() => {
+        if (typeof hailo?.avgInferenceLatencyNs !== 'undefined') {
+          const ns = safeBigInt(hailo.avgInferenceLatencyNs);
+          if (ns <= 0n) return null;
+          const msInt = ns / 1_000_000n;
+          const fracMicro = (ns % 1_000_000n) / 10_000n;
+          return `${msInt}.${String(fracMicro).padStart(2, '0')}`;
+        }
+        if (typeof hailo?.avgInferenceLatencyMs === 'number' && hailo.avgInferenceLatencyMs > 0) {
+          return hailo.avgInferenceLatencyMs.toFixed(2);
+        }
+        if (typeof hailo?.latencyMs === 'number' && hailo.latencyMs > 0) {
+          return hailo.latencyMs.toFixed(2);
+        }
+        return null;
+      })();
       const hailoTotal = safeBigInt(hailo?.totalInferences ?? 0n);
       const hailoPowerWatts = typeof hailo?.powerWatts === 'number' ? hailo.powerWatts : null;
 
@@ -2228,8 +2300,8 @@
         els.rpi5BarHailo.style.width = `${hailoBarPct}%`;
       }
       if (els.rpi5KpiHailoLat) {
-        els.rpi5KpiHailoLat.innerText = hailoDetected && isOnline && hailoLat !== null && hailoLat > 0
-          ? `${hailoLat.toFixed(2)} ms`
+        els.rpi5KpiHailoLat.innerText = hailoDetected && isOnline && hailoLatStr !== null
+          ? `${hailoLatStr} ms`
           : '-- ms';
       }
       if (els.rpi5KpiHailoModel) {
@@ -2253,8 +2325,8 @@
           : '--';
       }
       if (els.rpi5HailoLatency) {
-        els.rpi5HailoLatency.innerText = hailoDetected && isOnline && hailoLat !== null && hailoLat > 0
-          ? hailoLat.toFixed(2)
+        els.rpi5HailoLatency.innerText = hailoDetected && isOnline && hailoLatStr !== null
+          ? hailoLatStr
           : '--';
       }
       if (els.rpi5HailoTotalInf) {

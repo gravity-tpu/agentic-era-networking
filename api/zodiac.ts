@@ -186,7 +186,13 @@ function isValidRpi5Payload(val: unknown): boolean {
   }
   if ('hailo' in val && isJsonObject(val['hailo'])) {
     const h = val['hailo'];
-    if ('avgInferenceLatencyMs' in h && (typeof h['avgInferenceLatencyMs'] !== 'number' || !Number.isFinite(h['avgInferenceLatencyMs']))) {
+    // Council Invariant 2 (Determinism & Monotonic Clocks - Jeff Dean):
+    // Latency must be measured and transmitted in monotonic integer nanoseconds (BigInt/safe integer).
+    // Floating-point representations for latency telemetry are strictly forbidden.
+    if ('avgInferenceLatencyNs' in h && !isValidSafeCounter(h['avgInferenceLatencyNs'])) {
+      return false;
+    }
+    if ('avgInferenceLatencyMs' in h && !isValidSafeCounter(h['avgInferenceLatencyMs'])) {
       return false;
     }
     if ('totalInferences' in h && !isValidSafeCounter(h['totalInferences'])) {

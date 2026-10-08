@@ -2156,7 +2156,8 @@ export async function probeRpi5Hardware(
     const ss = String(uptimeSec % 60).padStart(2, '0');
 
     const totInfNs = BigInt(String(counters['total_inference_ns'] ?? 0));
-    const avgLatencyMs = totalInf > 0n ? Number(totInfNs / totalInf) / 1e6 : 0;
+    const avgLatencyNs = totalInf > 0n ? totInfNs / totalInf : 0n;
+    const avgLatencyMs = totalInf > 0n ? Number(((totInfNs / totalInf) + 500_000n) / 1_000_000n) : 0;
 
     return {
       status: 'online',
@@ -2191,7 +2192,8 @@ export async function probeRpi5Hardware(
         activeModel: String(counters['active_model'] || 'yolov8s_h8.hef'),
         inferencesPerSecond: infPerSec,
         totalInferences: totalInf,
-        avgInferenceLatencyMs: parseFloat(avgLatencyMs.toFixed(2)),
+        avgInferenceLatencyNs: avgLatencyNs,
+        avgInferenceLatencyMs: avgLatencyMs,
         pcieLinkSpeed: String(host['pcie_current_link_speed'] || '8.0 GT/s PCIe'),
         pcieLinkWidth: String(host['pcie_current_link_width'] || 'x1'),
       },
