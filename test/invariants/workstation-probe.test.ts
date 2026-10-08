@@ -3,6 +3,7 @@ import os from 'node:os';
 import {
   parseAppleSiliconGpuXml,
   probeWorkstationHardware,
+  parseCandidateUrls,
 } from '../../src/sdn/hardware-probe.js';
 import {
   createDefaultWorkstationSnapshot,
@@ -208,6 +209,16 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
         fs.unlinkSync(`${testFile}.lock`);
       }
     }
+  });
+
+  it('parses comma-separated candidate URLs cleanly with zero empty strings', () => {
+    expect(parseCandidateUrls('http://10.0.0.1:11435, http://100.64.0.1:11435 ')).toEqual([
+      'http://10.0.0.1:11435',
+      'http://100.64.0.1:11435',
+    ]);
+    expect(parseCandidateUrls(undefined)).toEqual([]);
+    expect(parseCandidateUrls('')).toEqual([]);
+    expect(parseCandidateUrls('  ,  , ')).toEqual([]);
   });
 
   it('probes live workstation hardware on darwin without crashing', async () => {

@@ -1708,16 +1708,27 @@ let wsAgentProbeFailureCount = 0n;
 let _wsLastSeenInferenceUpdatedMs = 0;
 let _wsLastSeenInferenceMonotonicNs = 0n;
 
+export function parseCandidateUrls(envVal?: string): string[] {
+  if (typeof envVal !== 'string' || envVal.trim().length === 0) return [];
+  return envVal
+    .split(',')
+    .map((u) => u.trim())
+    .filter((u) => u.length > 0);
+}
+
 async function probeRemoteWorkstationHardware(
   prevSnapshot?: WorkstationTelemetrySnapshot | undefined
 ): Promise<WorkstationTelemetrySnapshot> {
-  const envUrl = process.env['WORKSTATION_AGENT_URL'];
-  const lanUrl = process.env['WORKSTATION_AGENT_LAN_URL'] ?? process.env['WORKSTATION_LAN_URL'];
-  const candidateUrls: string[] = [
-    ...(typeof envUrl === 'string' && envUrl.length > 0 ? [envUrl] : []),
-    'http://192.168.55.100:11435',
-    ...(typeof lanUrl === 'string' && lanUrl.length > 0 ? [lanUrl] : []),
-  ];
+  const envUrls = parseCandidateUrls(process.env['WORKSTATION_AGENT_URL']);
+  const lanUrls = parseCandidateUrls(
+    process.env['WORKSTATION_AGENT_LAN_URL'] ?? process.env['WORKSTATION_LAN_URL']
+  );
+  const tetherUrl = process.env['WORKSTATION_TETHER_URL'] ?? 'http://192.168.55.100:11435';
+  const candidateUrls: string[] = Array.from(new Set([
+    ...envUrls,
+    tetherUrl,
+    ...lanUrls,
+  ]));
 
   const raceController = new AbortController();
 

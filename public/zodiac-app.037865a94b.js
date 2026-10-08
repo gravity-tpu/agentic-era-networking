@@ -1397,7 +1397,18 @@
 
     // 6. Time-Series Buffer & Rolling Live Analytics Updates (Strict 3600-point Client Memory Bound)
     if (snapshot.timeSeries && snapshot.timeSeries.length > 0) {
-      const serverPoints = snapshot.timeSeries;
+      const serverPoints = snapshot.timeSeries.map((p) => ({
+        ...p,
+        rxBytes: safeBigInt(p.rxBytes),
+        txBytes: safeBigInt(p.txBytes),
+        rxPackets: safeBigInt(p.rxPackets),
+        txPackets: safeBigInt(p.txPackets),
+        rxRatePps: safeBigInt(p.rxRatePps),
+        txRatePps: safeBigInt(p.txRatePps),
+        rxRateBps: safeBigInt(p.rxRateBps),
+        txRateBps: safeBigInt(p.txRateBps),
+        latencyNs: safeBigInt(p.latencyNs),
+      }));
       const lastServerTimestamp = serverPoints[serverPoints.length - 1].timestampMs;
 
       // Initialize on first load or re-sync if server clock jumped backward
@@ -1442,10 +1453,15 @@
 
       if (lastPoint) {
         const deltaMs = BigInt(Math.max(1, nowMs - lastPoint.timestampMs));
-        const deltaRxP = totals.rxPackets >= lastPoint.rxPackets ? totals.rxPackets - lastPoint.rxPackets : 0n;
-        const deltaTxP = totals.txPackets >= lastPoint.txPackets ? totals.txPackets - lastPoint.txPackets : 0n;
-        const deltaRxB = totals.rxBytes >= lastPoint.rxBytes ? totals.rxBytes - lastPoint.rxBytes : 0n;
-        const deltaTxB = totals.txBytes >= lastPoint.txBytes ? totals.txBytes - lastPoint.txBytes : 0n;
+        const lastRxPackets = safeBigInt(lastPoint.rxPackets);
+        const lastTxPackets = safeBigInt(lastPoint.txPackets);
+        const lastRxBytes = safeBigInt(lastPoint.rxBytes);
+        const lastTxBytes = safeBigInt(lastPoint.txBytes);
+
+        const deltaRxP = totals.rxPackets >= lastRxPackets ? totals.rxPackets - lastRxPackets : 0n;
+        const deltaTxP = totals.txPackets >= lastTxPackets ? totals.txPackets - lastTxPackets : 0n;
+        const deltaRxB = totals.rxBytes >= lastRxBytes ? totals.rxBytes - lastRxBytes : 0n;
+        const deltaTxB = totals.txBytes >= lastTxBytes ? totals.txBytes - lastTxBytes : 0n;
 
         rxRatePps = (deltaRxP * 1000n) / deltaMs;
         txRatePps = (deltaTxP * 1000n) / deltaMs;
@@ -1464,7 +1480,7 @@
         rxRateBps,
         txRateBps,
         cpuTemperatureC: tempValid ? Number(tempBigInt) : null,
-        latencyNs: snapshot.openflow?.lastHeartbeatLatencyNs || 0n,
+        latencyNs: safeBigInt(snapshot.openflow?.lastHeartbeatLatencyNs),
       });
 
       if (timeSeriesBuffer.length > MAX_FRONTEND_BUFFER_POINTS) {
