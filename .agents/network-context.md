@@ -70,8 +70,10 @@ Port 1 Isolation Policy (installed by zodiac-bridge-server on OpenFlow ready):
   prio 100    P3 (Jetson tap) → [P1]
   prio 0      table-miss DROP                                  — fail-closed
 
-Tailscale overlay (100.64.0.0/10): Jetson 100.118.64.16 ⟷ Mac 100.112.223.16;
+Tailscale overlay (100.64.0.0/10): Jetson 100.118.64.16 ⟷ Mac 100.112.223.16 ⟷ RPi 5 100.114.195.7;
 Jetson advertises 10.0.0.0/24 + 10.0.1.0/24 as subnet router and acts as exit node.
+RPi 5 MUST configure '--accept-routes=false' (RouteAll: false) to prevent Jetson's advertised
+10.0.0.0/24 route from hijacking local wlan0 return traffic in Linux policy table 52.
 The 10.0.2.0/24 workload subnet is NOT advertised.
 ```
 
