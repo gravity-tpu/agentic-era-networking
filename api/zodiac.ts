@@ -23,6 +23,7 @@ import { verifyBridgeAttestation } from '../src/security/request-attestation.js'
 import {
   persistTelemetrySnapshot,
   getHistoricalMultiDeviceTelemetry,
+  getLatestTelemetrySnapshotFromDb,
   isValidRange,
   isPersistingTelemetry,
   findCutoffIndex,
@@ -256,6 +257,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
   res.setHeader('X-Telemetry-Provenance', latestSnapshot.source);
 
   if (req.method === 'OPTIONS') {
@@ -468,6 +471,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const user = requireOperatorAuth(req, res);
     if (!user) {
       return; // 401 response already handled by requireOperatorAuth
+    }
+
+    // Council Invariant 5 (Oriol Vinyals & Quoc Le - Adaptive Control & Hysteresis):
+    // Hydrate latestSnapshot from Neon Postgres if local container memory has no live hardware
+    // or if the local in-memory snapshot is older than the mathematically derived threshold.
+    // Invariance under distribution shift: bounds are derived from CLOUD_RELAY_BOUNDS push cadence.
+    const STALE_LOCAL_CACHE_THRESHOLD_MS = CLOUD_RELAY_BOUNDS.BRIDGE_PUSH_CADENCE_MS * CLOUD_RELAY_BOUNDS.MAX_MISSED_PUSH_CYCLES;
+    const DB_HYDRATION_MAX_AGE_MS = CLOUD_RELAY_BOUNDS.DB_HYDRATION_SLA_MS;
+
+    const latestPointTs = latestSnapshot.timeSeries?.at(-1)?.timestampMs ?? 0;
+    const isLocalStale = latestSnapshot.source !== 'live_hardware' || (
+      latestPointTs > 0 && Date.now() - latestPointTs > STALE_LOCAL_CACHE_THRESHOLD_MS
+    );
+
+    if (isLocalStale) {
+      const dbSnapshot = await getLatestTelemetrySnapshotFromDb(DB_HYDRATION_MAX_AGE_MS);
+      if (dbSnapshot && dbSnapshot.source === 'live_hardware') {
+        latestSnapshot = dbSnapshot;
+      }
     }
 
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);

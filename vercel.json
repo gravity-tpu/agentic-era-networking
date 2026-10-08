@@ -3,6 +3,7 @@
   "outputDirectory": "public",
   "buildCommand": "npm run build",
   "cleanUrls": true,
+  "regions": ["iad1"],
   "crons": [
     {
       "path": "/api/cron/prune-telemetry",

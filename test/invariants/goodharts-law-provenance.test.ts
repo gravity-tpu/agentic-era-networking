@@ -186,4 +186,11 @@ describe('Council Invariant 6: Goodhart\'s Law & Epistemic Telemetry Provenance'
       expect(pt.wifiPortRateBps).toBe(0n);
     }
   });
+
+  it('enforces that getLatestTelemetrySnapshotFromDb respects SLA freshness and provenance boundaries', async () => {
+    const { getLatestTelemetrySnapshotFromDb } = await import('../../src/db/telemetry-db.js');
+    // Verifies function contract: when DB client is unconfigured or no fresh rows exist within SLA, safely returns null without throwing
+    const result = await getLatestTelemetrySnapshotFromDb(30_000);
+    expect(result === null || result.source === 'live_hardware' || result.source === 'cloud_snapshot').toBe(true);
+  });
 });

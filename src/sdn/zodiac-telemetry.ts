@@ -446,6 +446,12 @@ export const CLOUD_RELAY_BOUNDS = {
   MAX_PAYLOAD_BYTES: 1024 * 1024, // 1 MB
   /** Safe WAN payload transmission ceiling (512 KB) providing 2x headroom below serverless edge limit. */
   MAX_SAFE_WAN_PAYLOAD_BYTES: 512 * 1024,
+  /** Nominal push interval of the hardware bridge daemon (5 seconds). */
+  BRIDGE_PUSH_CADENCE_MS: 5_000,
+  /** Maximum consecutive missed pushes permitted before local serverless cache is considered stale (5 missed cycles = 25s). */
+  MAX_MISSED_PUSH_CYCLES: 5,
+  /** Upstream database hydration freshness SLA window (6 push cycles = 30s). */
+  DB_HYDRATION_SLA_MS: 30_000,
 } as const;
 
 /**

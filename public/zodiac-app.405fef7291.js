@@ -26,6 +26,17 @@
   let pollTimeoutId = null;
   let histRefreshTimeoutId = null;
 
+  // Council Invariant 5 (Oriol Vinyals & Jennifer Rexford - Flap Prevention & Hysteresis):
+  // Suppress multi-agent route/telemetry flapping caused by serverless container rotation.
+  // Hold onto fresh verified live hardware across missed/unverified polls before marking hardware offline.
+  // Quoc Le Adaptive Control: Bounds are mathematically derived from TELEMETRY_POLL_INTERVAL_MS
+  // to remain invariant under distribution shift and dynamic polling interval reconfiguration.
+  // Use monotonic performance.now() to prevent OS NTP synchronization jumps from triggering false flaps.
+  let lastLiveHardwarePerfMs = 0;
+  let consecutiveUnverifiedPolls = 0;
+  const MAX_UNVERIFIED_POLLS_BEFORE_FLAP = 3;
+  const LIVE_HARDWARE_RETENTION_MS = (MAX_UNVERIFIED_POLLS_BEFORE_FLAP + 1) * TELEMETRY_POLL_INTERVAL_MS;
+
   // Active Appliance Tier State ('zodiac' | 'orin' | 'coral')
   let activeDeviceId = 'zodiac';
   let jetsonTimeSeriesBuffer = [];
@@ -819,8 +830,34 @@
 
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-      currentSnapshot = data;
-      renderTelemetry(data, false);
+
+      const isLiveHardware = Boolean(data && (data.source === 'live_hardware' || data.source === 'PHYSICAL_SWITCH'));
+
+      if (isLiveHardware) {
+        lastLiveHardwarePerfMs = performance.now();
+        consecutiveUnverifiedPolls = 0;
+        currentSnapshot = data;
+        renderTelemetry(data, /* isDegraded = */ false);
+      } else {
+        consecutiveUnverifiedPolls++;
+        const nowPerf = performance.now();
+        const withinRetention = Boolean(
+          currentSnapshot &&
+          (currentSnapshot.source === 'live_hardware' || currentSnapshot.source === 'PHYSICAL_SWITCH') &&
+          (lastLiveHardwarePerfMs > 0 && nowPerf - lastLiveHardwarePerfMs < LIVE_HARDWARE_RETENTION_MS) &&
+          (consecutiveUnverifiedPolls < MAX_UNVERIFIED_POLLS_BEFORE_FLAP)
+        );
+
+        if (withinRetention) {
+          // Flap damping: keep the live hardware snapshot active, but signal degraded link if appropriate
+          console.warn(`[!] [Flap Damping] Suppressed unverified poll (${consecutiveUnverifiedPolls}/${MAX_UNVERIFIED_POLLS_BEFORE_FLAP}), retaining live hardware snapshot.`);
+          renderTelemetry(currentSnapshot, /* isDegraded = */ true);
+        } else {
+          // Sustained disconnect or no prior live hardware: reflect physical truth
+          currentSnapshot = data;
+          renderTelemetry(data, /* isDegraded = */ false);
+        }
+      }
     } catch (err) {
       // Council Invariant 1 (Zero Suppression of Reality) & Jeff Dean Latency Budget (<4000ms)
       const isErrObj = Boolean(err && typeof err === 'object');
