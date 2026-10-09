@@ -29,7 +29,8 @@ import {
   refineTapThreshold,
   summarize,
   verifyFlowReadback,
-  verifyPlanLoopFree,
+  verifyPlanAdmissible,
+  PlanInadmissibleError,
   type FlowStatsEntry,
 } from '../../src/sdn/dataplane-benchmark.js';
 import {
@@ -241,10 +242,38 @@ describe('flow plan (NET-2 silicon budget, Invariant 4 loop-freedom)', () => {
     expect(p.flows.some((f) => f.inPort === 3)).toBe(false);
   });
 
-  it('every produced plan passes the symbolic loop-free verifier', () => {
+  it('every produced plan is admissible', () => {
     for (const mirror of [false, true]) {
-      expect(() => verifyPlanLoopFree(planFlowState({ quarantineRequested: 32, mirror, tapReturnPath: mirror }))).not.toThrow();
+      expect(() => verifyPlanAdmissible(planFlowState({ quarantineRequested: 32, mirror, tapReturnPath: mirror }))).not.toThrow();
     }
+  });
+
+  it('rejects a plan with a hairpin output', () => {
+    const p = planFlowState({ quarantineRequested: 0, mirror: false, tapReturnPath: false });
+    const bad = { ...p, flows: [{ ...p.flows[0]!, outputPorts: [p.flows[0]!.inPort ?? 1] }] };
+    expect(() => verifyPlanAdmissible(bad)).toThrow(PlanInadmissibleError);
+    expect(() => verifyPlanAdmissible(bad)).toThrow(/hairpin/);
+  });
+
+  it('rejects a plan larger than the hardware table', () => {
+    const p = planFlowState({ quarantineRequested: 0, mirror: false, tapReturnPath: false });
+    const flow = p.flows[0]!;
+    const bad = { ...p, flows: Array.from({ length: 129 }, () => flow) };
+    expect(() => verifyPlanAdmissible(bad)).toThrow(/129 flows exceed/);
+  });
+
+  it('rejects quarantine rules that forward and forwarding rules that drop', () => {
+    const p = planFlowState({ quarantineRequested: 1, mirror: false, tapReturnPath: false });
+    const q = p.flows.find((f) => f.kind === 'quarantine')!;
+    const f = p.flows.find((x) => x.kind === 'forward')!;
+    expect(() => verifyPlanAdmissible({ ...p, flows: [{ ...q, outputPorts: [2] }] })).toThrow(/must DROP/);
+    expect(() => verifyPlanAdmissible({ ...p, flows: [{ ...f, outputPorts: [] }] })).toThrow(/no output ports/);
+  });
+
+  it('rejects out-of-range priorities and reports every violation', () => {
+    const p = planFlowState({ quarantineRequested: 0, mirror: false, tapReturnPath: false });
+    const bad = { ...p, flows: [{ ...p.flows[0]!, priority: 70000, outputPorts: [] }] };
+    expect(() => verifyPlanAdmissible(bad)).toThrow(/priority 70000.*no output ports/);
   });
 });
 

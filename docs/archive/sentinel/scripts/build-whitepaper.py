@@ -31,12 +31,12 @@ def get_b64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("ascii")
 
-fig_deployment = get_b64("docs/design/figures/sentinel_deployment_options.png")
-fig_alternatives = get_b64("docs/design/figures/sentinel_alternatives_compared.png")
-fig_dataplane = get_b64("docs/design/figures/sentinel_data_plane.png")
-fig_controlplane = get_b64("docs/design/figures/sentinel_control_plane.png")
-fig_pipeline = get_b64("docs/design/figures/sentinel_detection_pipeline.png")
-fig_storage = get_b64("docs/design/figures/sentinel_data_model.png")
+fig_deployment = get_b64("docs/archive/sentinel/figures/sentinel_deployment_options.png")
+fig_alternatives = get_b64("docs/archive/sentinel/figures/sentinel_alternatives_compared.png")
+fig_dataplane = get_b64("docs/archive/sentinel/figures/sentinel_data_plane.png")
+fig_controlplane = get_b64("docs/archive/sentinel/figures/sentinel_control_plane.png")
+fig_pipeline = get_b64("docs/archive/sentinel/figures/sentinel_detection_pipeline.png")
+fig_storage = get_b64("docs/archive/sentinel/figures/sentinel_data_model.png")
 
 # Load PlusJakartaSans (Google Sans geometric twin) for complete unicode glyph coverage
 font_path = "docs/design/fonts/PlusJakartaSans.ttf"
@@ -1227,7 +1227,7 @@ with tempfile.TemporaryDirectory(prefix="sentinel_whitepaper_") as tmpdir:
     print(f"Generated intermediate HTML ({len(html)} bytes)")
 
     # Compile to PDF via headless Chrome with Google Sans fonts
-    pdf_path = "docs/design/sentinel-whitepaper-v1.pdf"
+    pdf_path = "docs/archive/sentinel/sentinel-whitepaper-v1.pdf"
     chrome_bin = get_chrome_binary()
     cmd = [
         chrome_bin,

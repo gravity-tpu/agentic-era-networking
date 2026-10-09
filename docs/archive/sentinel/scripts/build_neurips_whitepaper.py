@@ -15,11 +15,12 @@ import fitz
 import shutil
 import tempfile
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DOCS_DIR = os.path.join(BASE_DIR, "docs", "design")
-FONTS_DIR = os.path.join(DOCS_DIR, "fonts")
-FIGURES_DIR = os.path.join(DOCS_DIR, "figures")
-OUTPUT_PDF = os.path.join(DOCS_DIR, "sentinel-whitepaper-preview.pdf")
+ARCHIVE_DIR = os.path.join(BASE_DIR, "docs", "archive", "sentinel")
+FONTS_DIR = os.path.join(DOCS_DIR, "fonts")  # shared fonts stay in docs/design
+FIGURES_DIR = os.path.join(ARCHIVE_DIR, "figures")
+OUTPUT_PDF = os.path.join(ARCHIVE_DIR, "sentinel-whitepaper-preview.pdf")
 
 def get_chrome_binary():
     env_bin = os.environ.get("CHROME_BIN") or os.environ.get("CHROME_PATH")

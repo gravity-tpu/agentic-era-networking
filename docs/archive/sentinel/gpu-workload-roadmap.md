@@ -1,5 +1,7 @@
 # Jetson Orin GPU Workload Mini-Roadmap (`gpu-workload`)
 
+> **Archived 2026-10-09.** The GPU workload series is deferred; no current data path needs it. See [ROADMAP](../../ROADMAP.md).
+
 > **Autonomous Master Appliance Ampere GPU Pipeline**  
 > **Silicon Target**: NVIDIA Jetson Orin Nano Super (1024 CUDA Cores, 32 Tensor Cores, 67 TOPS Ampere Architecture, JetPack 6.1 / L4T 36.4.7)  
 > **Governing Council Invariants**: Jeff Dean (Latency Budgets & Zero-Bloat), Sanjay Ghemawat (Fail-Closed Default), Quoc Le (Self-Tuning Control Loops), Oriol Vinyals (Graph/Temporal Dynamics), Demis Hassabis (Symbolic Proof Asymmetry).

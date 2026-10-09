@@ -2,13 +2,13 @@
 
 > **Hardware Specification, Assembly Guide & 5-Screen OLED Telemetry Daemon**  
 > **Substrates:** NVIDIA Jetson Orin Nano Super Developer Kit (67 TOPS Ampere Architecture) + Roboco Panini Case + 0.96" I2C OLED (SSD1306)  
-> **Governing Council Invariants:** Jeff Dean (Latency Budgets), Sanjay Ghemawat (Fail-Closed Simplicity), Anti-Simulation Law (Verifiable Epistemic Telemetry).
+> **Governing invariants:** latency budgets, fail-closed simplicity and provenance (Invariant 6); see [AGENTS.md](../../../AGENTS.md).
 
 ---
 
 ## 1. Executive Summary
 
-The **Autonomous Master Appliance** operates 24/7 as the centralized edge orchestrator for the `gravity-tpu/agentic-era-networking` infrastructure. Housed within the machined aluminum **Roboco Panini Chassis**, it consolidates:
+The **controller host** operates 24/7 as the centralized edge orchestrator for the `gravity-tpu/agentic-era-networking` infrastructure. Housed within the machined aluminum **Roboco Panini Chassis**, it consolidates:
 
 - Real-time OpenFlow 1.3 control over the Northbound Networks Zodiac FX switch.
 - Transparent RFC 1035 DNS resolution and agent anomaly isolation.
@@ -162,7 +162,7 @@ The OLED daemon cycles across 6 purpose-built screens every 15 seconds (90-secon
 
 ## 5. Architectural Invariants & Epistemic Provenance
 
-1. **Anti-Simulation Law (Council Invariant 6)**:
+1. **Anti-Simulation Law (Invariant 6)**:
    - Telemetry must always reflect physical truth.
    - If the Coral USB accelerator is disconnected, the display immediately shifts to `STANDBY` and rate drops to `0 inf/sec`.
    - If the Zodiac FX switch serial link is disconnected, port status transitions to `NO PORTS UP`.

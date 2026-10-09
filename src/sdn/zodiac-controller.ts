@@ -11,7 +11,6 @@
 import { ZodiacSerialClient, ZodiacPortInfo, ZodiacDeviceStatus, ZodiacConfig } from './zodiac-serial.js';
 import { OpenFlowServer, ControllerMetrics } from './openflow-server.js';
 import { FlowRuleEntry } from './flow-table.js';
-import { SymbolicRouteVerifier, NetworkHop } from '../core/routing-verifier.js';
 
 export interface ZodiacHealthReport {
   readonly serialDetected: boolean;
@@ -57,12 +56,12 @@ export class ZodiacController {
   }
 
   /**
-   * Dispatches a verified SDN flow rule to the physical switch hardware.
-   * Hassabis Invariant: Route must be verified loop-free before pushing to physical switch.
+   * Dispatches an SDN flow rule to the physical switch hardware.
+   * No admission check happens here: a single rule has no ingress port or table context to check.
+   * Rule-set properties (isolation, hairpin, table budget) are checked on whole sets, e.g.
+   * verifyPort1Isolation and verifyPlanAdmissible, before sets are installed.
    */
-  public pushVerifiedRule(rule: FlowRuleEntry, routeTopology: ReadonlyArray<NetworkHop>, outPort?: number): void {
-    // Throws RoutingLoopDetectedError if invalid
-    SymbolicRouteVerifier.verifyLoopFree(routeTopology);
+  public pushRule(rule: FlowRuleEntry, outPort?: number): void {
     this.ofServer.sendFlowMod(rule, outPort);
   }
 
@@ -105,8 +104,7 @@ export class ZodiacController {
     let openFlowInstalled = false;
     try {
       if (this.ofServer.metrics.state === 'ESTABLISHED') {
-        const fromHop = options.targetIp ?? options.targetMac ?? 'QUARANTINE_SRC';
-        this.pushVerifiedRule(rule, [{ fromNode: fromHop, toNode: 'DROP', cost: 0 }]);
+        this.pushRule(rule);
         openFlowInstalled = true;
       }
     } catch (err) {

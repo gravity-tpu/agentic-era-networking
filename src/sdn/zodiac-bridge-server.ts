@@ -1654,9 +1654,7 @@ export class ZodiacBridgeServer {
           let openFlowInstalled = false;
           try {
             if (this.controller.openFlow.metrics.state === 'ESTABLISHED') {
-              const fromHop = cleanSrcMac ?? cleanDstMac ?? 'ANY_SRC';
-              const toHop = `PORT_${outPort}`;
-              this.controller.pushVerifiedRule(rule, [{ fromNode: fromHop, toNode: toHop, cost: outPort }], outPort);
+              this.controller.pushRule(rule, outPort);
               openFlowInstalled = true;
             }
           } catch (ofErr) {

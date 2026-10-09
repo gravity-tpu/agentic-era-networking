@@ -290,16 +290,6 @@
     termForm: document.getElementById('z-terminal-form'),
 
     // Live Invariant Verification Elements
-    valPackets: document.getElementById('val-packets'),
-    valBytes: document.getElementById('val-bytes'),
-    valClock: document.getElementById('val-clock'),
-    btnBurst: document.getElementById('btn-burst'),
-    btnInjectLoop: document.getElementById('btn-inject-loop'),
-    dagStatus: document.getElementById('dag-status'),
-    dagLog: document.getElementById('dag-log'),
-    dnsLog: document.getElementById('dns-log'),
-    btnResolveValid: document.getElementById('btn-resolve-valid'),
-    btnResolveInvalid: document.getElementById('btn-resolve-invalid'),
 
     // Time-Series & Flow Charts
     chartFlowCanvas: document.getElementById('chart-traffic-flow'),
@@ -670,11 +660,11 @@
     const s = String(val).trim();
     if (s === '') return fallback;
     if (s.includes('.')) {
-      console.error('[!] [Council Invariant Breach] Floating-point value detected in BigInt pipeline:', s);
+      console.error('[!] [Invariant Breach] Floating-point value detected in BigInt pipeline:', s);
       return fallback;
     }
     if (!DIGIT_REGEX.test(s)) {
-      console.error('[!] [Council Invariant Breach] Non-integer value in BigInt pipeline:', s);
+      console.error('[!] [Invariant Breach] Non-integer value in BigInt pipeline:', s);
       return fallback;
     }
     try {
@@ -865,7 +855,7 @@
       const errMsg = isErrObj && 'message' in err ? String(err.message) : String(err);
       const isAbort = errName === 'AbortError' || errMsg.includes('aborted');
       if (isAbort) {
-        console.error('[!] [Jeff Dean Latency Invariant] Telemetry fetch aborted: 4000ms timeout budget exceeded.');
+        console.error('[!] [Latency budget] Telemetry fetch aborted: 4000ms timeout budget exceeded.');
         if (els.pollStatus) {
           els.pollStatus.innerText = 'Timeout (>4s)';
           els.pollStatus.title = 'Telemetry fetch exceeded 4000ms latency budget. Hardware connection or bridge daemon stalled.';
@@ -2149,7 +2139,7 @@
       if (els.wsTblTtft) {
         const ttftValMs = (Number(ttftNs) / 1e6).toFixed(1);
         const isSlaOk = Number(ttftValMs) < 2000;
-        els.wsTblTtft.innerHTML = `${ttftValMs} ms <span class="cf-pill-badge ${isSlaOk ? 'green' : 'amber'}" style="margin-left:0.5rem; font-size:0.7rem;">${isSlaOk ? 'Dean SLA Passed (<2s)' : 'SLA Exceeded'}</span>`;
+        els.wsTblTtft.innerHTML = `${ttftValMs} ms <span class="cf-pill-badge ${isSlaOk ? 'green' : 'amber'}" style="margin-left:0.5rem; font-size:0.7rem;">${isSlaOk ? 'SLA passed (<2s)' : 'SLA Exceeded'}</span>`;
       }
       if (els.wsTblPerTokLat) {
         const perTokNs = safeBigInt(ws.perTokenLatencyNs);
@@ -4510,7 +4500,7 @@
     const getLatVal = (pt) => (pt.latencyP50Us !== undefined && pt.latencyP50Us !== null ? safeNumericValue(pt.latencyP50Us) : safeNumericValue(pt.latencyMicros));
 
     const targetUs = options.targetUs || 500;
-    const targetLabel = options.targetLabel || '500 µs Dean Target';
+    const targetLabel = options.targetLabel || '500 µs latency target';
     const targetColor = options.targetColor || 'rgba(239, 68, 68, 0.4)';
     const targetTextColor = options.targetTextColor || '#ef4444';
 
@@ -4737,7 +4727,7 @@
         });
         drawCoralLatencyChart(els.chartCoral1LatencyCanvas || els.chartCoralLatencyCanvas, coralPoints, {
           targetUs: 500,
-          targetLabel: '500 µs Dean Target',
+          targetLabel: '500 µs latency target',
           targetColor: 'rgba(239, 68, 68, 0.4)',
           targetTextColor: '#ef4444',
           latencyLabel: '● Port 3 Classification Latency (<500 µs)',
@@ -4932,63 +4922,6 @@ Please connect the physical switch via USB to execute '${command}' on device har
         executeTerminalCommand(val);
       }
     });
-  }
-
-  // ============================================================
-  // Live Invariant Verification Playground (Council Invariant 4 & 1)
-  // ============================================================
-  let burstPackets = 10482920n;
-  let burstBytes = 15871140880n;
-  let loopInjected = false;
-
-  function triggerPacketBurst() {
-    burstPackets += 100000n;
-    burstBytes += 151400000n;
-    if (els.valPackets) els.valPackets.innerText = formatNumber(burstPackets);
-    if (els.valBytes) els.valBytes.innerText = `${formatNumber(burstBytes)} B`;
-    // Pure integer monotonic clock (preserves microsecond precision from performance.now() per Dean Latency Invariant)
-    const monotonicNs = BigInt(Math.trunc(performance.now() * 1000000));
-    if (els.valClock) els.valClock.innerText = `${formatNumber(monotonicNs)} ns`;
-  }
-
-  function triggerLoopInjection() {
-    if (!loopInjected) {
-      loopInjected = true;
-      if (els.dagStatus) {
-        els.dagStatus.innerText = 'CYCLE REJECTED';
-        els.dagStatus.className = 'cf-pill-badge red';
-      }
-      if (els.btnInjectLoop) els.btnInjectLoop.innerText = 'Reset Loop';
-      if (els.dagLog) {
-        els.dagLog.innerHTML = '<span style="color: var(--cf-red); font-weight: 600;">✗ RoutingLoopDetectedError: Symbolic Verifier Rejected cycle: [edge-1 → spine-a → core-1 → edge-1]. Route quarantined.</span>';
-      }
-    } else {
-      loopInjected = false;
-      if (els.dagStatus) {
-        els.dagStatus.innerText = 'DAG LOOP-FREE';
-        els.dagStatus.className = 'cf-pill-badge green';
-      }
-      if (els.btnInjectLoop) els.btnInjectLoop.innerText = 'Inject Autonomous Agent Loop (core-1 → edge-1)';
-      if (els.dagLog) {
-        els.dagLog.innerHTML = '<span style="color: var(--cf-green); font-weight: 600;">✓ Symbolic Verifier: Verified 3 hops as strictly loop-free DAG.</span>';
-      }
-    }
-  }
-
-  function resolveDns(isValid) {
-    if (!els.dnsLog) return;
-    if (isValid) {
-      els.dnsLog.innerHTML = '<span style="color: var(--cf-green); font-weight: 600;">✓ [A] dns.cluster.internal → 192.168.1.53 (TTL: 300s, Valid)</span>';
-    } else {
-      els.dnsLog.innerHTML = '<span style="color: var(--cf-red); font-weight: 600;">✗ DnsResolutionError: NXDOMAIN (Name does not exist in authoritative zone). Default Drop Triggered.</span>';
-    }
-  }
-
-  function initPlayground() {
-    if (els.btnBurst) els.btnBurst.addEventListener('click', triggerPacketBurst);
-    if (els.btnInjectLoop) els.btnInjectLoop.addEventListener('click', triggerLoopInjection);
-    if (els.btnResolveValid) els.btnResolveValid.addEventListener('click', () => resolveDns(true));
-    if (els.btnResolveInvalid) els.btnResolveInvalid.addEventListener('click', () => resolveDns(false));
   }
 
   // Bind physical port boxes deterministically using cached references
@@ -5340,7 +5273,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
       <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · Tap Classifier Latency</div>
       <div style="color: #a78bfa; font-weight: 600;">● Inference Latency (P50): ${formatLatencyNs(latNs)}</div>
       ${latP99Ns > 0n ? `<div style="color: #c084fc;">● Tail Latency (P99): ${formatLatencyNs(latP99Ns)}</div>` : ''}
-      <div style="color: #94a3b8; font-size: 0.68rem;">Strict Dean Budget: &lt; 500,000 ns (500 µs) Target</div>
+      <div style="color: #94a3b8; font-size: 0.68rem;">Latency target: &lt; 500,000 ns (500 µs)</div>
     `;
   });
 
@@ -5883,9 +5816,6 @@ Please connect the physical switch via USB to execute '${command}' on device har
 
   // Global Helpers for external callers
   window.switchDevice = switchDevice;
-  window.triggerPacketBurst = triggerPacketBurst;
-  window.triggerLoopInjection = triggerLoopInjection;
-  window.resolveDns = resolveDns;
 
   window.sendQuickCmd = function (cmd) {
     executeTerminalCommand(cmd);
@@ -5895,8 +5825,6 @@ Please connect the physical switch via USB to execute '${command}' on device har
     selectPort(portNum);
   };
 
-  // Initialize interactive verification playground
-  initPlayground();
 
   // Initialize Google SSO Authentication Gate (Council Invariant 3: Fail-Closed Isolation)
   async function initAuth() {
@@ -6061,9 +5989,6 @@ Please connect the physical switch via USB to execute '${command}' on device har
     switchDevice,
     formatBytes,
     formatLatencyNs,
-    triggerPacketBurst,
-    triggerLoopInjection,
-    resolveDns,
     updateCharts,
   };
 })();

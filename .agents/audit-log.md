@@ -1,11 +1,8 @@
-# Institutional Memory — Senior Staff Audit Log
+# Institutional Memory — Decision & Audit Log
 
 **Repository:** gravity-tpu/agentic-era-networking  
-**Overseer Level:** Principal / Senior Staff Systems Architect (L7+ Fellow Track)  
-**Governing Bodies:**
-- **Technical Staff Council:** Jeff Dean (Scale), Sanjay Ghemawat (Simplicity), Quoc Le (Adaptation), Oriol Vinyals (Graph Equilibrium), Demis Hassabis (Verification)
-- **Network Engineering Council:** David D. Clark (End-to-End), Van Jacobson (ACK-Clocking), Radia Perlman (Loop-Freedom), Nick McKeown (SDN/TCAM), Sally Floyd (Buffer Dynamics), Jennifer Rexford (Flap Damping)
-**Local Network Context Manager:** [network-context.md](file:///Users/andymorven/git/agentic-era-networking/.agents/network-context.md)
+**Scope (from 2026-10-09):** real-hardware testbed and verifier for agent-proposed SDN policy; see [ROADMAP.md](../docs/ROADMAP.md). Earlier entries refer to the superseded "Council" persona framing and are kept as history.
+**Local Network Context Manager:** [network-context.md](network-context.md)
 
 ---
 
@@ -38,6 +35,10 @@
 | 2026-10-07 | NET-013 | FastAPI Neural Inference Microservice Daemonization on RPi 5 + Hailo-8 | Active | Implemented, deployed, and daemonized high-throughput FastAPI microservice (`/opt/hailo-service`, `hailo-inference.service`) on RPi 5 (`10.0.0.179:8000` / `10.0.2.51:8000`); verified sub-11ms single-frame PCIe DMA latency, 306.7 FPS hardware streaming benchmark, pure monotonic nanosecond accounting (INV-2), epistemic silicon thermals (INV-6), and fail-closed Pydantic request validation (INV-3). |
 | 2026-10-07 | NET-014 | Raspberry Pi 5 + Hailo-8 Appliance Observability Tier in Zodiac Dashboard UI | Active | Integrated dedicated RPi 5 (`agentic-node-02`) appliance monitoring tier in dashboard (`index.html`, `zodiac-app.js`) matching Jetson/Workstation depth: 5 KPI cards (BCM2712 compute, Hailo-8 26 TOPS inference velocity, eth0 GbE wire rate, silicon thermals, LPDDR4X RAM), primary network throughput canvas (eth0 vs RTL8153 mirror tap vs wlan0), compute canvas, Hailo-8 coprocessor status panel, thermals canvas, physical interfaces table, and hardware inventory grid. Enforced fail-closed physical truth (INV-6) and BigInt accounting (INV-2). |
 | 2026-10-07 | NET-015 | Epistemic Physical Kernel Network Telemetry & Hailo-8 Ingress Bottleneck Remediation | Active | Resolved RPi 5 interfaces showing offline DOWN by eliminating stale control plane snapshot reuse and extracting live `/proc/net/dev`, `/sys/class/net`, and `SIOCGIFADDR` ioctl telemetry from `agent@10.0.0.179` with BigInt wire rates (`rxRateBps`/`txRateBps`). Profiled Hailo-8 41 inf/s HTTP bottleneck against 306.7 FPS raw NPU line rate, demonstrating CPU base64 decode and Wi-Fi RTT dominance over 10.63ms silicon execution. |
+| 2026-10-09 | ARCH-001 | Refocus: real-hardware testbed and verifier for agent-proposed SDN policy | Active | Measured limits of the Zodiac FX (software lookup, ~58 µs + 4.24 µs per rule; session loss at 1.3 to 2.3x capacity) make autonomy at scale unreachable. Scope reduced to tracks A to D in `docs/ROADMAP.md`; autonomous framing dropped (agents propose, deterministic checks decide, a person approves). Sentinel frozen; old roadmap and design material archived under `docs/archive/`. |
+| 2026-10-09 | ARCH-002 | Remove `SymbolicRouteVerifier` and `AdaptiveFlowController`; rename `pushVerifiedRule` to `pushRule` | Active | The route verifier's call sites passed one-hop or fixed hop lists that cannot fail, so nothing was verified; a static flow table has no routing loops to prove. Replaced with `verifyPlanAdmissible` (table budget, hairpin, DROP semantics) and the existing `verifyPort1Isolation`. The adaptive controller was exported but on no data path. |
+| 2026-10-09 | ARCH-003 | Remove the dashboard "Live Invariant Verification Playground" | Active | It displayed hardcoded counters under a "LIVE MONITOR" badge and toggled a hardcoded hop list as a "verifier", contradicting Invariant 6. Invariants page now lists the six invariants. |
+| 2026-10-09 | ARCH-004 | Reframe review tooling and governance docs; persona attribution removed | Active | AI review prompts, skills, rulebooks and AGENTS.md describe invariants and checklists, not expert personas; reviews are explicitly a second reader. npm script names (`council:review*`, `ccie:review*`) are kept for compatibility. |
 
 ---
 
@@ -53,6 +54,8 @@
 - [x] SDN Flow Table with CIDR matching and default-drop enforcement.
 - [x] Zodiac FX Physical Hardware Interface & OpenFlow 1.3 Controller Daemon.
 - [ ] Connect live Neon PostgreSQL connection string and run initial migration.
+- [ ] Independent network-engineer review of the isolation policy and the verifier property list (roadmap, before publishing results).
+- [ ] Test the suspected ARP spoofing surface across P1 to P2 (roadmap C1); resolve the A4 (quarantine precedence) versus A9 (forwarding-first layout) tension.
 
 ---
 

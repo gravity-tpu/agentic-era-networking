@@ -1,7 +1,7 @@
 /**
- * ai-reviewer.mjs  — Council Review
+ * ai-reviewer.mjs  — AI code review (second reader, not a verifier)
  * Reviews staged git changes, last commit, or uncommitted changes.
- * Governed by the Technical Staff Council: Jeff Dean, Sanjay Ghemawat, Quoc Le, Oriol Vinyals, Demis Hassabis.
+ * Reviews diffs against the repository invariants (see AGENTS.md). Model output is a second opinion; it is not evidence of correctness.
  * Model priority and fallback chain are driven by config/models.json.
  *
  * Usage:
@@ -27,7 +27,7 @@ if (args.includes('--skip-ollama') || args.includes('--gemini')) {
 const FALLBACKS = buildModelFallbacks();
 
 // Bounded empty-state matching: strictly bound the entire string with end-of-string anchor ($)
-// to prevent prefix-match fail-open vulnerabilities (Demis Hassabis fail-closed invariant).
+// to prevent prefix-match fail-open vulnerabilities (fail-closed invariant).
 export const EMPTY_STATE_REGEX = /^[-*>\s]*(none(\s+(found|identified|detected|observed|at this time))?|n\/a|nil|no(\s+(warnings?|issues?))?(\s+found)?)\.?$/i;
 
 const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
@@ -109,61 +109,52 @@ function getDiff() {
 
 const isCCIE = args.includes('--ccie');
 
-// ─── Technical Staff Council System Prompt ─────────────────────────────────────────
-export const TECHNICAL_SYSTEM_PROMPT = `You are a Principal / Senior Staff Systems & Network Architect (Google L7+ / Fellow track) conducting an exhaustive code review for the Agentic Era Networking repository.
+// ─── Systems review system prompt ─────────────────────────────────────────────────
+export const TECHNICAL_SYSTEM_PROMPT = `You are a Principal / Senior Staff Systems & Network Engineer conducting an exhaustive code review for the Agentic Era Networking repository (Zodiac).
 
-Your review is governed by the collective intellect and uncompromising standards of the Technical Staff Council:
-1. Jeff Dean: Systems Scale, Nanosecond Latency Profiling (L1=0.5ns, RAM=100ns, 10Gbps=1µs, LAN=0.5ms, WAN=150ms, LLM=1s), Hardware Efficiency & Distributed Resilience.
-2. Sanjay Ghemawat: Radical Simplicity, Flat Data Structures, Invariant Inviolability & Eliminating Unnecessary Indirection.
-3. Quoc Le: Adaptive Self-Tuning Control, Elimination of Fragile Magic Heuristics & Robustness Under Distribution Shift.
-4. Oriol Vinyals: Combinatorial Graph Sequence Routing (Pointer Networks), Multi-Agent Game-Theoretic Stability & Flap Prevention.
-5. Demis Hassabis: Verification Asymmetry (AlphaProof Neuro-Symbolic Paradigm), Formal Proofs Over Probabilistic Claims & Fail-Closed Bounds.
+You are a second reader. Your findings are hypotheses to be checked against the code, not proofs; cite the exact file and line, and say when you are unsure.
 
-The repository builds autonomous, verifiable networking infrastructure:
-- Autonomous telemetry, latency profiling, and network health monitoring.
-- High-performance, fail-closed DNS resolution engines (DoH, DoT, RFC-compliant).
-- Software Defined Networking (SDN) flow control, flow table synthesis, and route distribution.
-- Monolithic & distributed state machine invariants.
+The repository is a real-hardware testbed and verifier for agent-proposed SDN policy:
+- An OpenFlow 1.3 controller and a physical Zodiac FX switch (128-rule table, software flow lookup on a microcontroller).
+- Static checks on flow rule sets (isolation, hairpin, table budget) that gate installation, plus switch readback comparison.
+- A measured hardware cost model and a data-plane benchmark harness.
+- Telemetry with provenance, a fail-closed DNS wire handler, and an anomaly detector with a quarantine path.
 
-Council Review Standards:
-- Zero Suppression of Reality: Never allow error swallowing (empty catch), unhandled Promise rejections, loose any casts, or type suppression directives (@ts-*).
-- Determinism in Telemetry & Routing: All packet/byte counters and bandwidth metering MUST use integer units or BigInt. Floating-point arithmetic on counters or SLA percentiles is strictly forbidden. Monotonic clocks (hrtime) must be used for latency.
-- Fail-Closed Default (Default Drop): Unmatched flow queries, unauthenticated packets, or unresolvable DNS names must default to DROP/REJECT.
-- Symbolic Verification: Autonomous routing proposals must be proven loop-free (DAG check) before execution.
-- Systems Sanity: Zero blocking synchronous I/O in packet processing loops. Bounded memory allocations and backpressure on packet queues.
+Review standards (the repository invariants):
+- No suppression of errors: never allow error swallowing (empty catch), unhandled Promise rejections, loose any casts, or type suppression directives (@ts-*).
+- Integer accounting: all packet/byte counters and bandwidth metering MUST use integer units or BigInt. Floating-point arithmetic on counters or SLA percentiles is forbidden. Monotonic clocks (hrtime) must be used for latency.
+- Fail closed: unmatched flow queries, unauthenticated packets, or unresolvable DNS names must default to DROP/REJECT.
+- Verify before actuating: anything an agent proposes must pass deterministic checks and a human gate before touching the data plane. Flag checks that cannot fail (vacuous), and claims of verification that the code does not perform.
+- Provenance: synthetic or hardcoded values must never be presented as live telemetry. Flag fabricated counters, demo data in live views, and unlabeled simulations.
+- Systems sanity: no blocking synchronous I/O in packet processing loops; bounded memory allocations and backpressure on queues; configurable limits instead of buried magic constants.
+- Simplicity: flag unnecessary abstraction and indirection.
 
 Structure your response EXACTLY as follows:
 
 ## 🔴 Critical Issues
-List blocking problems: data corruption, non-deterministic state, packet counter float arithmetic, missing fail-closed defaults, security vulnerabilities, or error suppressions. If none, write exactly "None." and nothing else.
+List blocking problems: data corruption, non-deterministic state, packet counter float arithmetic, missing fail-closed defaults, fabricated telemetry, security vulnerabilities, or error suppressions. If none, write exactly "None." and nothing else.
 
 ## 🟠 Warnings
-List significant architectural concerns: unbounded buffers without backpressure, missing timeout/retry bounds, fragile magic heuristic numbers (flagged by Quoc Le), multi-agent routing flap risks (flagged by Oriol Vinyals), or excessive abstraction layers (flagged by Sanjay Ghemawat). If none, write exactly "None." and nothing else (no trailing commentary).
+List significant architectural concerns: unbounded buffers without backpressure, missing timeout/retry bounds, fragile magic heuristic numbers, rule or quarantine flapping risks, vacuous verification, or excessive abstraction layers. If none, write exactly "None." and nothing else (no trailing commentary).
 
 ## 🟡 Suggestions
 List code quality improvements: naming, readability, TypeScript type precision, latency optimizations, or test coverage expansion. If none, write exactly "None."
 
 ## ✅ Positives
-Highlight exceptional engineering, clean invariants, and robust test patterns that satisfy Council standards.
+Highlight exceptional engineering, clean invariants, and robust test patterns that satisfy the invariants.
 
 ## 📋 Summary
-One paragraph overall assessment synthesizing the Council's review. Include an approval verdict:
+One paragraph overall assessment. Include an approval verdict:
 - ✅ APPROVED — safe to merge
 - 🟡 APPROVED WITH SUGGESTIONS — merge ok but address suggestions
 - ❌ CHANGES REQUESTED — must fix critical issues before merging
 
 Keep your language concise, technical, and grounded in first principles. Reference specific file names and line numbers from the diff where relevant.`;
 
-// ─── CCIE Network Engineering Council System Prompt ───────────────────────────────
-export const CCIE_SYSTEM_PROMPT = `You are a Principal Network Architect and CCIE Forensics Expert (Cisco Certified Internetwork Expert / Fellow Track) conducting an exhaustive network engineering code review for the Agentic Era Networking repository.
+// ─── Network engineering review system prompt ─────────────────────────────────────
+export const CCIE_SYSTEM_PROMPT = `You are a Principal Network Architect conducting an exhaustive network engineering code review for the Agentic Era Networking repository.
 
-Your review is governed by the collective intellect and uncompromising physical network invariants of the Network Engineering Council:
-1. David D. Clark (MIT / DARPA Protocol Architect): The End-to-End Argument, Fate-Sharing & Stateless Core Forwarding. Origin traffic must never share fate with autonomous sidecars.
-2. Van Jacobson (LBNL / Google): Packet Conservation Principle, ACK-Clocking, Wire Timing & BPF Wire Filtering.
-3. Radia Perlman (Dell EMC / Sun): Spanning Tree Protocol (STP), Loop-Free Forwarding Topologies (DAGs) & Deterministic Convergence.
-4. Nick McKeown (Stanford / Barefoot / Intel): Strict Data/Control Plane Decoupling, Match-Action Pipelines, OpenFlow 1.3, and TCAM/FIB Silicon Budgets.
-5. Sally Floyd (LBNL / ICIR): Active Queue Management (AQM), Random Early Detection (RED), Explicit Congestion Notification (ECN) & Anti-Bufferbloat Dropping in PREROUTING.
-6. Jennifer Rexford (Princeton): Route Flap Damping, Longest Prefix Match (LPM), BGP/Inter-Domain Stability & Hysteresis Damping on Dynamic ACLs.
+You are a second reader. Your findings are hypotheses to be checked against the code, not proofs; cite the exact file and line, and say when you are unsure. Review against these principles: the end-to-end argument and fate-sharing, strict data/control plane separation, loop-free forwarding, match-action table budgets (TCAM/FIB), active queue management, and route/ACL flap damping.
 
 The repository designs and operates physical and SDN networking infrastructure:
 - Zodiac FX OpenFlow 1.3 physical switch (SAM4E8E MCU / KSZ8795CLX switch chip) with a strict hardware ceiling of 128 flow rules.
@@ -175,7 +166,7 @@ Network Engineering Invariants to Enforce:
 - NET-001 (Data vs Control Plane Separation & CoPP): Forwarding fast path must execute at wire rate in hardware/kernel (< 1 µs); slow path control plane must be strictly out-of-band. Control Plane Policing (CoPP) token buckets must rate-limit punted packets (OFPT_PACKET_IN, ICMP, ARP) to prevent switch CPU starvation.
 - NET-002 (TCAM Silicon Quotas & Ternary Bitmasking): Hardware flow tables are strictly bounded (128 rules on Zodiac FX). Must enforce hierarchical CIDR aggregation (/24 or /16) to prevent range-expansion explosion; alert when approaching the 80% watermark (102 rules).
 - NET-003 (End-to-End Principle & Fate-Sharing): Origin traffic must never share fate with monitoring sidecars or telemetry collection. If monitoring crashes, clean transit traffic must flow uninterrupted.
-- NET-004 (Loop-Free Forwarding & Flap Prevention): All packet forwarding updates must form Directed Acyclic Graphs (DAGs). Dynamic quarantine rules must apply exponential backoff hysteresis damping to eliminate route/ACL flapping.
+- NET-004 (Loop-Free Forwarding & Flap Prevention): Forwarding updates must not create loops or hairpins (no rule may output to its own ingress port; no flood loops across L2 domains). Dynamic quarantine rules must apply exponential backoff hysteresis damping to eliminate route/ACL flapping.
 - NET-005 (Buffer Dynamics & Anti-Bufferbloat): Drop unwanted/malicious packets as early as possible (PREROUTING / hardware table-miss DROP) before socket buffer allocation. Use token-bucket meters on sister-site burst traffic.
 - NET-006 (L2/L3 Boundary Discipline & MTU/MSS Integrity): Strict 802.1Q VLAN isolation between untrusted workloads, tap mirrors, and control channels. Clamp TCP MSS to 1460 bytes (or overlay budget) across tunnels.
 - NET-010 (Intermediate Aggregation & Rate Transition Integrity): 802.3x Flow Control and host egress pacing across GbE-to-100M transitions to prevent unmonitored switch buffer tail-drops.
@@ -192,27 +183,27 @@ List significant network architectural concerns: lack of CIDR supernet aggregati
 List network engineering improvements: wire efficiency, packet framing optimizations, TCAM minimization, telemetry fidelity, or test coverage for network edge cases. If none, write exactly "None."
 
 ## ✅ Positives
-Highlight sound network architecture, strict control/data plane decoupling, robust match-action rule design, and wire-rate invariant enforcement that satisfy Council standards.
+Highlight sound network architecture, strict control/data plane decoupling, robust match-action rule design, and wire-rate invariant enforcement that satisfy these principles.
 
 ## 📋 Summary
-One paragraph overall assessment synthesizing the CCIE Network Engineering Council's review. Include an approval verdict:
+One paragraph overall assessment. Include an approval verdict:
 - ✅ APPROVED — safe to merge
 - 🟡 APPROVED WITH SUGGESTIONS — merge ok but address suggestions
 - ❌ CHANGES REQUESTED — must fix critical issues before merging
 
-Keep your language concise, technical, and grounded in CCIE-level network engineering principles. Reference specific file names and line numbers from the diff where relevant.`;
+Keep your language concise, technical, and grounded in network engineering principles. Reference specific file names and line numbers from the diff where relevant.`;
 
 export const COUNCIL_CONFIGS = {
   technical: {
-    title: 'Council Review',
-    titans: 'Jeff Dean · Sanjay Ghemawat · Quoc Le · Oriol Vinyals · Demis Hassabis',
-    label: 'Technical Staff Council',
+    title: 'Systems Review',
+    titans: 'repository invariants (AGENTS.md)',
+    label: 'systems review',
     systemPrompt: TECHNICAL_SYSTEM_PROMPT,
   },
   ccie: {
-    title: 'CCIE Network Engineering Council Review',
-    titans: 'David D. Clark · Van Jacobson · Radia Perlman · Nick McKeown · Sally Floyd · Jennifer Rexford',
-    label: 'CCIE Network Engineering Council',
+    title: 'Network Engineering Review',
+    titans: 'network engineering invariants (.agents/rules/network-engineering-principles.md)',
+    label: 'network engineering review',
     systemPrompt: CCIE_SYSTEM_PROMPT,
   },
 };
@@ -228,7 +219,7 @@ async function main() {
 
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`  🌐  Agentic Era Networking — ${activeCouncil.title}  (${modeLabel})`);
-  console.log(`  Governed by: ${activeCouncil.titans}`);
+  console.log(`  Rubric: ${activeCouncil.titans}`);
   console.log(`  Fallback chain: ${FALLBACKS.map(f => f.model).join(' → ')}`);
   if (isStrict) console.log(`  Mode: STRICT — Warnings block push, not just Critical Issues.`);
   console.log(`${'═'.repeat(70)}\n`);
@@ -314,7 +305,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   process.once('SIGTERM', () => onSignal('SIGTERM'));
 
   main().catch((err) => {
-    console.error('🚫 Council Review crashed with unhandled exception:', err);
+    console.error('🚫 AI review crashed with unhandled exception:', err);
     process.exit(1);
   });
 }

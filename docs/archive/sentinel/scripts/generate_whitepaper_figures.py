@@ -817,7 +817,7 @@ def generate_figure_4():
     return svg
 
 def main():
-    os.makedirs("docs/design/figures", exist_ok=True)
+    os.makedirs("docs/archive/sentinel/figures", exist_ok=True)
     figures = [
         ("sentinel_deployment_options", generate_figure_1(), 1200, 560),
         ("sentinel_alternatives_compared", generate_figure_1b(), 1240, 550),
@@ -832,10 +832,10 @@ def main():
     
     with tempfile.TemporaryDirectory(prefix="sentinel_figures_") as tmpdir:
         for name, svg_content, width, height in figures:
-            svg_path = f"docs/design/figures/{name}.svg"
+            svg_path = f"docs/archive/sentinel/figures/{name}.svg"
             html_path = os.path.join(tmpdir, f"{name}.html")
-            png_path = f"docs/design/figures/{name}.png"
-            jpg_path = f"docs/design/figures/{name}.jpg"
+            png_path = f"docs/archive/sentinel/figures/{name}.png"
+            jpg_path = f"docs/archive/sentinel/figures/{name}.jpg"
             
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg_content)

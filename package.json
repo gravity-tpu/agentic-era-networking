@@ -1,7 +1,7 @@
 {
   "name": "agentic-era-networking",
   "version": "0.1.0",
-  "description": "Zodiac: Autonomous SDN control plane with hardware telemetry, DNS, and agentic network enforcement",
+  "description": "Zodiac: a real-hardware testbed and verifier for agent-proposed SDN policy",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",

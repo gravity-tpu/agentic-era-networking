@@ -1,5 +1,7 @@
 # Sentinel — Bot & Crawler Mitigation Roadmap
 
+> **Status: frozen (2026-10-09).** Sentinel is outside the current project scope, which is a verifier and testbed for agent-proposed SDN policy; see [ROADMAP.md](ROADMAP.md). This document is kept as design history. Its Council language and throughput claims predate the measured switch limits in the [whitepaper](benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md).
+
 > **Sentinel** — Network-layer autonomous bot detection and traffic enforcement.  
 > Lives at: `sentinel/` within `gravity-tpu/agentic-era-networking`  
 > Governed by the same **Technical Staff Council Invariants** as Zodiac.

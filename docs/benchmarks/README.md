@@ -1,6 +1,6 @@
 # Zodiac Network Infrastructure — Benchmark Archive
 
-This directory houses bare-metal benchmark reports, architectural findings, and raw telemetry artifacts generated from physical hardware runs across the Zodiac autonomous SDN fabric.
+This directory houses bare-metal benchmark reports, architectural findings, and raw telemetry artifacts generated from physical hardware runs on the Zodiac testbed. The measurements are the hardware model that the policy verifier checks against (see the [roadmap](../ROADMAP.md)).
 
 ---
 
@@ -18,16 +18,16 @@ This directory houses bare-metal benchmark reports, architectural findings, and 
 ```text
 docs/benchmarks/
 ├── README.md                                  # This catalog and archive index
-├── zodiac-fx-dataplane-report.md             # Comprehensive CCIE architectural report (2026-10-03)
+├── zodiac-fx-dataplane-report.md             # Comprehensive architectural report (2026-10-03)
 └── results/
     └── dataplane-2026-10-03T23-26-49-149Z.json # Cryptographic physical telemetry artifact (BigInt schema)
 ```
 
 ---
 
-## 3. Epistemic Provenance Standard (Council Invariant 6)
+## 3. Epistemic Provenance Standard (Invariant 6)
 
-Every benchmark artifact stored in this archive must satisfy **Council Invariant 6 (Goodhart's Law & Epistemic Telemetry Provenance)**:
+Every benchmark artifact stored in this archive must satisfy **Invariant 6 (Goodhart's Law & Epistemic Telemetry Provenance)**:
 
 1. **Origin Verification**: Artifacts must be stamped with `origin: "physical_bench_run"`. Synthetic digital twins are strictly forbidden from masquerading as physical hardware.
 2. **Deterministic Metering**: All packet, byte, and bit rates use 64-bit BigInt serialization (`{"$bigint": "..."}`). Floating-point representations for network accounting are rejected.

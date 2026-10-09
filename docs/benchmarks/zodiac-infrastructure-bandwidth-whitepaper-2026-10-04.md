@@ -5,14 +5,14 @@
 | | |
 | --- | --- |
 | **Document** | Technical whitepaper, Zodiac Network Infrastructure benchmark archive |
-| **Version** | 1.0, 2026-10-04 |
+| **Version** | 1.1, 2026-10-09 (measurements unchanged from 1.0, 2026-10-04) |
 | **Status** | Final for the measurements listed in section 7; open items in section 6 |
-| **Companion** | [Run breakdown and timeline](zodiac-benchmark-run-breakdown-2026-10-04.md) |
+| **Companion** | [Run breakdown and timeline](zodiac-benchmark-run-breakdown-2026-10-04.md); project goals in the [roadmap](../ROADMAP.md) |
 | **Data** | `docs/benchmarks/results/` (physical-run artifacts), `docs/benchmarks/analysis/` (scripts and outputs) |
 
 ## Abstract
 
-We measure how fast a Northbound Networks Zodiac FX OpenFlow 1.3 switch (firmware 0.86) forwards traffic as the number of quarantine rules in its flow table grows, and where the rest of the lab infrastructure sits relative to it. Forwarding cost is `38.5 µs + 34.8 ns per payload byte above 64 + 4.24 µs per rule` per packet: a packet-rate limit set by the switch's microcontroller, not by its 100 Mbit/s ports. The model predicts an independent test within about 1% at three rule depths. A 600-byte stream that a 100 Mbit/s port could carry at 19,600 packets/s is limited to about 17,800 with an empty table, 8,055 with 16 rules and 1,711 with 126. Installing the forwarding rules first and at the highest priority cuts the per-rule cost to 1.3 µs. Overload beyond about 1.3 to 2.3 times capacity makes the switch drop its OpenFlow session and its whole flow table. Over three full-hour working-window runs the switch was unavailable 0.05% to 0.17% of the time.
+We measure how fast a Northbound Networks Zodiac FX OpenFlow 1.3 switch (firmware 0.86) forwards traffic as the number of quarantine rules in its flow table grows, and where the rest of the lab infrastructure sits relative to it. Forwarding cost is `38.5 µs + 34.8 ns per payload byte above 64 + 4.24 µs per rule` per packet: a packet-rate limit set by the switch's microcontroller, not by its 100 Mbit/s ports. The model predicts an independent test within about 1% at three rule depths. A 600-byte stream that a 100 Mbit/s port could carry at 19,600 packets/s is limited to about 17,800 with an empty table, 8,055 with 16 rules and 1,711 with 126. Installing the forwarding rules first and at the highest priority cuts the per-rule cost to 1.3 µs. Overload beyond about 1.3 to 2.3 times capacity makes the switch drop its OpenFlow session and its whole flow table. Over three full-hour working-window runs the switch was unavailable 0.05% to 0.17% of the time. The model is intended as the hardware half of a policy verifier: a rule set can be logically correct and still exceed what the switch can forward, so capacity is a property to check before installation (section 8).
 
 ## Executive summary
 
@@ -25,7 +25,7 @@ We measure how fast a Northbound Networks Zodiac FX OpenFlow 1.3 switch (firmwar
 
 ## 1. Scope and system under test
 
-The programme asks one question: *what traffic can this infrastructure carry, and what limits it?* The device under test (DUT) is a Zodiac FX switch whose four 100BASE-TX ports are wired as shown. All traffic of interest enters Port 1 and leaves Port 2.
+This work is the measurement foundation of Zodiac, a real-hardware testbed and verifier for agent-proposed SDN policy (see the [roadmap](../ROADMAP.md)). Verifying a proposed rule set against a switch requires knowing what the switch does, so the programme asks one question: *what traffic can this infrastructure carry, and what limits it?* The device under test (DUT) is a Zodiac FX switch whose four 100BASE-TX ports are wired as shown. All traffic of interest enters Port 1 and leaves Port 2.
 
 ```text
   Raspberry Pi 3B+                                          Mac workstation (Apple M5 Pro)
@@ -42,7 +42,7 @@ The programme asks one question: *what traffic can this infrastructure carry, an
                                                   enP8p1s0 100 Mbit/s 10.0.1.8
 ```
 
-Traffic was generated on the Raspberry Pi (`iperf3` and a small paced UDP sender), received on the Mac, and observed by the switch's own port counters read over its serial console. The controller on the Jetson installs and verifies flow rules (OpenFlow multipart readback) and records session events. Every artifact is stamped `origin: physical_bench_run` and uses 64-bit integer counters; there is no simulated data (Council Invariants 2 and 6, see [1]).
+Traffic was generated on the Raspberry Pi (`iperf3` and a small paced UDP sender), received on the Mac, and observed by the switch's own port counters read over its serial console. The controller on the Jetson installs and verifies flow rules (OpenFlow multipart readback) and records session events. Every artifact is stamped `origin: physical_bench_run` and uses 64-bit integer counters; there is no simulated data (the repository's integer-accounting and provenance invariants, see [1]).
 
 ## 2. Method in brief
 
@@ -114,7 +114,7 @@ The Coral TPU and Jetson GPU anomaly detector figures in the SENTINEL roadmap [3
 | 64 | 3,091 pps / 14.8 Mbit/s | 7,078 pps / 34.0 Mbit/s | 2.3x |
 | 126 | 1,711 pps / 8.2 Mbit/s | 4,497 pps / 21.6 Mbit/s | 2.6x |
 
-Mbit/s are IP-layer (600 bytes x 8 x pps). The roadmap's 20,800 pps (100 Mbit/s at 600 bytes) ignores both framing (19,592 pps on the wire) and the switch CPU (17,800).
+Mbit/s are IP-layer (600 bytes x 8 x pps). The original plan's 20,800 pps (100 Mbit/s at 600 bytes) ignores both framing (19,592 pps on the wire) and the switch CPU (17,800).
 
 ### 5.2 One working window (rules ramp from 0 to N over 5 minutes, then flush)
 
@@ -150,11 +150,25 @@ Each run carried its offered load throughout. The 50% load on the typical profil
 3. **Spontaneous session losses are unexplained** (8 in the 3 working-window hours, one at a quarter of capacity in a ladder). The switch's network stack wedged once and needed a power cycle.
 4. **Replication.** Layout ladders other than `base` and `fwdfirst` are single rounds; fits use 2 to 4 saturated points. One switch, one workload node, one receiver path.
 5. **Overload behaviour is only partially characterised.** The 50% typical profile produced one usable window.
-6. **Not tested:** Ethernet pause frames (no `ethtool` on the Pi), `/16` rules matching real traffic, and the Jetson nftables offload recommendation.
+6. **One switch, one firmware.** The cost model is fitted to a single Zodiac FX on firmware 0.86; it should not be assumed to hold for other units or firmware versions.
+7. **Not tested:** Ethernet pause frames (no `ethtool` on the Pi), `/16` rules matching real traffic, and the Jetson nftables offload recommendation.
 
 ## 7. Reproducibility
 
 All claims trace to artifacts in `docs/benchmarks/results/` and are regenerated by the scripts in `docs/benchmarks/analysis/`. The harness is `scripts/zodiac-dataplane-bench.ts` with pure logic in `src/sdn/dataplane-depth.ts` (unit tests in `test/invariants/dataplane-depth.test.ts`). Commands, parameters and the run catalogue are in [4]. The benchmark must run on the isolated bench: it wipes the flow table, saturates Port 2 and requires the production bridge to be stopped.
+
+## 8. Use as a verifier input
+
+The cost model and layout result are written to be consumed by code, not only read. For a candidate rule set the verifier can compute, before anything is installed:
+
+1. **Rule budget.** Rule count against the 128-rule table, leaving room for quarantine rules added at runtime.
+2. **Modeled capacity.** `capacity = 1,000,000 / t_packet` for the declared packet size and rule count, compared with a stated target rate.
+3. **Layout.** Whether forwarding rules sit first at the highest priority (1.3 µs per rule) or behind quarantine rules (4.24 µs per rule). The same rules can differ by up to 2.6x in capacity.
+4. **Control-plane margin.** Offered load above about 1.3 times modeled capacity risks losing the session and the table, so a policy whose expected load approaches capacity should be rejected even if it is logically correct.
+
+Layout caveat: the forwarding-first layout ranks forwarding rules above quarantine rules, so a quarantined source that also matches a forwarding rule would still be forwarded. The benchmark's quarantine rules match addresses that never appear on the wire, so the measurements are unaffected, but a verifier cannot accept that layout for real quarantine without resolving the conflict (roadmap A4 versus A9).
+
+Status: these checks are specified in the roadmap (track A, properties A7 to A9; track B) and are not yet implemented. The model has been validated within about 1% on the measurements in section 5, on one switch; it has not been validated as a verifier input, and its prediction should be checked against the conformance probe (track B) before the verifier relies on it. Model-versus-wire disagreement is expected to occur, and each instance is a finding about the model or the firmware.
 
 ## References
 
@@ -185,3 +199,4 @@ Zodiac Network Infrastructure benchmark archive, *Packet-Rate Limits of an OpenF
 | Version | Date | Change |
 | --- | --- | --- |
 | 1.0 | 2026-10-04 | First release. Measurement and analysis drafted with Claude Sonnet 5.5. |
+| 1.1 | 2026-10-09 | Repositioned as the measurement foundation of a policy verifier and testbed: scope paragraph, abstract sentence, section 8 (verifier input), limitation 6. No measurements, figures or conclusions changed. |

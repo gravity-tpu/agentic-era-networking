@@ -1,6 +1,6 @@
 # Jetson Orin Nano Super — Headless Deployment Guide
 
-> **Autonomous Master Appliance Setup**: This guide provisions the NVIDIA Jetson Orin Nano Super
+> **Controller Host Setup**: This guide provisions the NVIDIA Jetson Orin Nano Super
 > as the permanent, headless SDN control-plane host. Once deployed, the Jetson runs 24/7 without
 > any Mac attached. You plug in the MacBook only to push code changes or SSH debug.
 

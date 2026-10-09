@@ -1,39 +1,31 @@
 # Zodiac — Repository Invariants & Guidelines
 
-This repository (`gravity-tpu/agentic-era-networking`) (Zodiac) designs autonomous, verifiable networking infrastructure for the agentic era: telemetry/monitoring, DNS resolution, and Software Defined Networking (SDN).
+This repository (`gravity-tpu/agentic-era-networking`) is **Zodiac: a real-hardware testbed and verifier for agent-proposed SDN policy.** It measures what a cheap OpenFlow switch can actually do, checks proposed rules against that model, and tests them against a live adversary. Goals, tracks and exit criteria are in [docs/ROADMAP.md](docs/ROADMAP.md); what the project does not claim is stated there too.
+
+Agents working in this repo propose; deterministic code decides admissibility; a person approves. Nothing here is autonomous.
 
 ---
 
-## The Technical Staff Council: Determinism & Alignment Invariants
+## The 6 Invariants
 
-**Governing Minds & Perspectives:**
+These are enforced by tests, CI and the pre-push gate. Code comments refer to them by number ("Invariant 3").
 
-1. **Jeff Dean**: Systems Scale, Nanosecond-to-WAN Latency Budgets, Hardware Co-Design & Graceful Degradation.
-2. **Sanjay Ghemawat**: Radical Simplicity, Invariant Rigor, Cache-Friendly Flat Layouts & Zero-Bloat Abstractions.
-3. **Quoc Le**: Neural Architecture Search, Adaptive Self-Tuning Control Loops & Robustness Under Distribution Shift.
-4. **Oriol Vinyals**: Graph Representation Routing (Pointer Networks), Multi-Agent Game-Theoretic Convergence & Flap Prevention.
-5. **Demis Hassabis**: Verification Asymmetry, Hybrid Neuro-Symbolic Verification (AlphaProof Paradigm) & Formal State Bounds.
-
----
-
-## The 6 Inviolable Council Invariants
-
-1. **Zero Suppression of Reality (Anti-Shortcut Law)**:
-   Never bypass TypeScript errors (`// @ts-ignore`, loose `any` casts) or runtime exceptions with empty `catch (e) {}`. All errors must be handled deterministically at the protocol and state boundary.
-2. **Determinism in Telemetry, Metering & Routing (Dean & Ghemawat)**:
-   Banish floating-point arithmetic from packet accounting, byte rate calculations, QoS budgets, and SLA tracking. All counters must use 64-bit integer units (`BigInt`). Timestamps must use monotonic nanosecond precision (`process.hrtime.bigint()`).
-3. **Fail-Closed Isolation & Default-Drop (Ghemawat & Hassabis)**:
-   Routing, DNS filtering, and SDN flow rule evaluation must be fail-closed by construction. If a packet, rule, or tenant context is ambiguous or unrecognized, it must be dropped or quarantined, never forwarded.
-4. **Verification Asymmetry & Symbolic Proof (Hassabis & Vinyals)**:
-   In the agentic era, probabilistic synthesis of routing tables or telemetry queries by agents is cheap; verification must be programmatic, formal, and deterministic. Every agent-proposed route must pass a symbolic loop-free verifier before touching the data plane.
-5. **Adaptive Control & Multi-Agent Stability (Quoc Le & Oriol Vinyals)**:
-   Eliminate brittle hardcoded heuristic magic numbers. Dynamic buffer and rate limits must adapt to traffic distributions without causing multi-agent route flapping or oscillation.
-6. **Goodhart's Law & Epistemic Telemetry Provenance (Anti-Simulation Law)**:
-   *"When a measure becomes a target, it ceases to be a good measure."* In the agentic era, agents pressured to satisfy UI targets or test suites will fabricate plausible BigInt counters, fake CPU thermals, and simulated waves. Telemetry without verifiable physical or cryptographic provenance is fiction. When hardware is disconnected or unlinked, telemetry MUST evaluate to physical truth: `0` rates, `null` thermals (`--°C`), and explicit offline status. Synthetic digital twins are permitted ONLY in declared sandboxes carrying unambiguous provenance metadata (`source: 'cloud_snapshot'`) and prominent disclaimer banners. Never allow synthetic data to masquerade as live silicon.
+1. **No suppression of errors.**
+   Never bypass TypeScript errors (`// @ts-ignore`, loose `any` casts) or runtime exceptions with an empty `catch (e) {}`. Errors are handled deterministically at the protocol and state boundary. When a type error appears, fix the type; do not mask it.
+2. **Integer accounting and monotonic time.**
+   No floating-point arithmetic in packet accounting, byte rates, QoS budgets or SLA tracking. Counters are 64-bit integers (`BigInt`). Timestamps for intervals and durations use monotonic nanoseconds (`process.hrtime.bigint()`).
+3. **Fail closed.**
+   Routing, DNS filtering and flow-rule evaluation are fail-closed by construction. If a packet, rule or tenant context is ambiguous or unrecognized, it is dropped or quarantined, never forwarded.
+4. **Verify before actuating.**
+   Anything an agent proposes (a rule set, a policy, a query) must pass deterministic checks before it touches the data plane, and a person approves the install. Checks must be able to fail: a check that cannot reject anything (for example a loop check over a one-hop list) is not verification and must not be described as such. Say exactly what a check proves and what it does not.
+5. **Configurable, bounded and damped limits.**
+   No buried magic numbers for timeouts, buffers or rate limits: they are named, configurable and bounded. Where a control loop adapts a limit, it must be damped so it cannot oscillate or flap rules, and it must be exercised against real traffic before it is described as adaptive.
+6. **Provenance (no simulation passed off as live).**
+   *When a measure becomes a target, it ceases to be a good measure.* Agents pressured to satisfy a UI or a test suite will fabricate plausible counters and thermals. Telemetry without physical or cryptographic provenance is not shown as live. When hardware is disconnected, telemetry reports `0` rates, `null` thermals (`--°C`) and an explicit offline status. Synthetic data is allowed only in declared sandboxes carrying `source: 'cloud_snapshot'` and a visible disclaimer. Demo widgets with hardcoded numbers do not belong in live views.
 
 ---
 
-## Latency Numbers Every Systems & Network Engineer Must Know (The Dean Invariant)
+## Latency numbers every systems and network engineer should know
 
 ```text
 L1 cache reference:                    0.5 ns
@@ -49,33 +41,33 @@ WAN Roundtrip (cross-continent): 150,000,000 ns (150 ms)
 LLM Time-To-First-Token (TTFT):  500,000,000–2,000,000,000 ns (0.5–2 s)
 ```
 
-Never perform blocking synchronous I/O or unbounded recursion on critical packet or telemetry pathways.
+On this project's hardware the Zodiac FX adds about 58 µs per packet plus 4.24 µs per rule (measured; see the [whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md)). Never perform blocking synchronous I/O or unbounded recursion on critical packet or telemetry pathways.
 
 ---
 
-## The Network Engineering Council: Packet Forwarding & Infrastructure Invariants
+## Network engineering principles
 
-**Governing Minds & Perspectives:**
-
-1. **David D. Clark**: End-to-End Argument, Fate-Sharing & Stateless Core Forwarding.
-2. **Van Jacobson**: Packet Conservation Principle, ACK-Clocking, TCP Congestion Dynamics & BPF Wire Filtering.
-3. **Radia Perlman**: Loop-Free Topologies (STP), Distributed Partition Resilience & Zero-Configuration Convergence.
-4. **Nick McKeown**: Strict Data/Control Plane Separation, Match-Action Pipelines & TCAM/FIB Hardware Budgets.
-5. **Sally Floyd**: Active Queue Management (AQM), Explicit Congestion Notification (ECN) & Anti-Bufferbloat.
-6. **Jennifer Rexford**: Route Flap Damping, Longest Prefix Match (LPM) & Inter-Domain Autonomous Stability.
-
-**Local Context Management Role:**
-The CCIE Network Engineer agent acts as the repository's local context manager and state custodian for networking infrastructure. It maintains real-time institutional memory of physical/logical topologies, 802.1Q VLAN allocations, TCAM silicon quotas, and multi-track development roadmap progress.
+The packet-forwarding and infrastructure rules (control/data plane separation, fate-sharing, loop-free forwarding, flow-table budgets, queue management, flap damping) are in [.agents/rules/network-engineering-principles.md](.agents/rules/network-engineering-principles.md). The network review skill also keeps the topology and state ledger in [.agents/network-context.md](.agents/network-context.md): physical and logical topology, VLAN allocations and the 128-rule table budget.
 
 ---
 
-## Reference Guides
+## Working in this repo
 
-- Systems Invariant Rulebook: [.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)
-- Network Engineering Rulebook: [.agents/rules/network-engineering-principles.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/network-engineering-principles.md)
-- Senior Staff Overseer Skill: [.agents/skills/senior-staff-overseer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/senior-staff-overseer/SKILL.md)
-- CCIE Network Engineer Skill: [.agents/skills/ccie-network-engineer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/ccie-network-engineer/SKILL.md)
-- Network Context & State Matrix: [.agents/network-context.md](file:///Users/andymorven/git/agentic-era-networking/.agents/network-context.md)
-- Interactive Review Dialectic: [.agents/workflows/overseer-audit.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/overseer-audit.md)
-- Network Context Sync Workflow: [.agents/workflows/network-context-sync.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/network-context-sync.md)
-- Institutional Memory Audit Log: [.agents/audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md)
+- Use measured numbers. Cite the artifact in `docs/benchmarks/results/` or say the value is modelled or unmeasured.
+- Prefer the simplest thing that works: a flat table or a short pure function over layers of abstraction.
+- Write the failing test first for a new verifier property; negative states (link down, zero traffic, sensor fault) are tested as rigorously as positive ones.
+- Do not describe unimplemented work as implemented. The roadmap and README status tables are the source of truth for state.
+- AI review (`npm run review`) is a second reader, not a verifier. Model output is not evidence of correctness.
+
+---
+
+## Reference guides
+
+- Engineering rulebook: [.agents/rules/determinism-and-alignment.md](.agents/rules/determinism-and-alignment.md)
+- Network engineering rulebook: [.agents/rules/network-engineering-principles.md](.agents/rules/network-engineering-principles.md)
+- Invariant review skill: [.agents/skills/senior-staff-overseer/SKILL.md](.agents/skills/senior-staff-overseer/SKILL.md)
+- Network review and context skill: [.agents/skills/ccie-network-engineer/SKILL.md](.agents/skills/ccie-network-engineer/SKILL.md)
+- Network context and state matrix: [.agents/network-context.md](.agents/network-context.md)
+- Interactive review workflow: [.agents/workflows/overseer-audit.md](.agents/workflows/overseer-audit.md)
+- Network context sync workflow: [.agents/workflows/network-context-sync.md](.agents/workflows/network-context-sync.md)
+- Decision and audit log: [.agents/audit-log.md](.agents/audit-log.md)

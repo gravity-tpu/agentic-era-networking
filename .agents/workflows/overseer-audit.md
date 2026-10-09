@@ -2,9 +2,11 @@
 
 **Trigger:** `@overseer`, `overseer review`, `audit determinism`, or `/grill-me`
 
+See the [invariant review skill](../skills/senior-staff-overseer/SKILL.md).
+
 ## Objective
 
-Provide an interactive, Senior Staff (Google L7+ / Fellow track) dialectic session to evaluate an architectural design, PR diff, or networking concept against the tenets of Jeff Dean, Sanjay Ghemawat, and Demis Hassabis.
+Provide an interactive review session that evaluates an architectural design, PR diff or networking concept against the repository invariants in [AGENTS.md](../../AGENTS.md). The reviewer is a second reader: findings are hypotheses to check against the code.
 
 ---
 
@@ -37,15 +39,15 @@ Provide an interactive, Senior Staff (Google L7+ / Fellow track) dialectic sessi
    - Timeout and retry convergence under link flapping.
 2. Identify the single point of failure (SPOF) in the critical path.
 
-### Step 4: Ghemawat Simplification Challenge
+### Step 4: Simplification challenge
 
 1. Ask:
    - Can we delete 30–50% of the proposed code?
    - Can a flat lookup table or bitmask replace a layered hierarchy of classes?
    - Does this abstraction pay for itself in clarity, or does it merely add indirection?
 
-### Step 5: Verification Proof
+### Step 5: Verification proof
 
-1. Define the executable automated test that proves the invariant holds.
+1. Define the executable automated test that proves the invariant holds, and say what it does not prove. Check that the test can fail: a check that cannot reject its input is not verification.
 2. Execute `npm run check-types` and `npm run test` to verify no regressions exist.
 3. Provide a clear, actionable synthesis with prioritized recommendations.

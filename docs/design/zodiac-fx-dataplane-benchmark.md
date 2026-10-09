@@ -2,7 +2,9 @@
 
 **Status: PHYSICAL HARDWARE RUN RECORDED (`2026-10-03T23:26:49.149Z`).** Telemetry gathered from live bare-metal silicon across Port 1 (RPi 3B+) ⟷ Port 2 (Transit to Mac). Full architectural findings and CCIE analysis are cataloged in [Physical Data-Plane Benchmark Results & Architectural Findings](../benchmarks/zodiac-fx-dataplane-report.md) and raw artifact [dataplane-2026-10-03T23-26-49-149Z.json](../benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json). No figure in this document is an estimate, extrapolation, or datasheet number presented as a measurement.
 
-Governing invariants: Council Invariants 1, 2, 3, 4, 6 ([AGENTS.md](../../AGENTS.md)) and NET-002, NET-004, NET-005 ([network-engineering-principles.md](../../.agents/rules/network-engineering-principles.md)).
+> **Update 2026-10-09.** This is the runbook and the first three-depth run. The 2026-10-04 depth, layout and working-window campaign extends it and fits a cost model; see the [whitepaper](../benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md). The model is the hardware input to the policy verifier described in the [roadmap](../ROADMAP.md).
+
+Governing invariants: repository invariants 1, 2, 3, 4, 6 ([AGENTS.md](../../AGENTS.md)) and NET-002, NET-004, NET-005 ([network-engineering-principles.md](../../.agents/rules/network-engineering-principles.md)).
 
 ---
 
@@ -44,7 +46,7 @@ Design choices that make the rule-depth comparison meaningful:
 - **Quarantine priority 65535, forwarding priority 100.** This mirrors production (quarantine above everything) and is the worst case if the firmware scans in priority order: every packet is checked against every quarantine rule before it reaches its forwarding rule.
 - **Quarantine matches use `198.51.100.1` onward (RFC 5737 TEST-NET-2).** They fill the table without ever matching benchmark traffic. After each block the script re-reads the per-flow packet counts and **invalidates the run** if any quarantine rule matched a packet.
 - **No table-miss rule.** All benchmark traffic is covered by `in_port` rules; absent a table-miss entry OpenFlow 1.3 drops (fail-closed). This also keeps the production punt-to-controller path out of the measurement.
-- **Loop-free proof first.** Every path in every plan is run through `SymbolicRouteVerifier` before any message is sent to the switch (Invariant 4).
+- **Admissibility check first.** Every plan is run through `verifyPlanAdmissible` (table budget, no hairpin, DROP semantics for quarantine) before any message is sent to the switch (Invariant 4). Runs recorded before 2026-10-09 used a cycle check over fixed hop lists instead; it could not fail and was removed.
 
 ### 3.3 Tests per trial
 
@@ -151,11 +153,13 @@ sudo systemctl start zodiac-bridge.service   # restores production rules
 
 Useful flags: `--rules 0,32,128`, `--duration 10`, `--trials 5`, `--order interleaved|sequential`, `--tap-rates-mbps 10,20,...`, `--tap-trials 3`, `--tap-resolution-mbps 1`, `--skip-dataplane`, `--skip-tap`.
 
-## 7. CCIE design audit
+## 7. Design audit (historical)
+
+Recorded before the 2026-10-09 refocus. The loop-freedom line reflects a cycle check that could not fail; it is superseded by `verifyPlanAdmissible` (see section 3).
 
 ```text
 ══════════════════════════════════════════════════════════════════════
-  CCIE Network Engineering Audit: Zodiac FX data-plane benchmark
+  Network engineering audit: Zodiac FX data-plane benchmark
 ══════════════════════════════════════════════════════════════════════
 
 1. Physical & Layer Separation:
@@ -171,7 +175,7 @@ Useful flags: `--rules 0,32,128`, `--duration 10`, `--trials 5`, `--order interl
    - Drop Point Efficiency: switch-side (Port counters) separated from path-side (iperf3 loss)
 
 4. Loop-Freedom & Convergence:
-   - Directed Acyclic Forwarding: PROVEN per plan (SymbolicRouteVerifier) before install
+   - Plan admissibility: checked per plan (verifyPlanAdmissible) before install; earlier runs used a cycle check that could not fail
    - Flap Prevention (Hysteresis): N/A (static plans; no dynamic quarantine engine involved)
 
 5. Verdict:

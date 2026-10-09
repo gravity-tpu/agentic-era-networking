@@ -1,14 +1,14 @@
 # Zodiac Hailo-8 Neural Inference Microservice
 
-High-performance, autonomous, verifiable neural inference microservice exposing the **Raspberry Pi 5 + Hailo-8 M.2 (26 TOPS NPU)** accelerator over the network (`http://10.0.0.179:8000` and `http://10.0.2.51:8000`).
+Neural inference microservice exposing the **Raspberry Pi 5 + Hailo-8 M.2 (26 TOPS NPU)** accelerator over the network (`http://10.0.0.179:8000` and `http://10.0.2.51:8000`).
 
 ---
 
-## 1. Technical Staff Council Invariants
+## 1. Repository Invariants
 
 The microservice strictly enforces the governing principles defined in [`AGENTS.md`](file:///Users/andymorven/git/agentic-era-networking/AGENTS.md):
 
-1. **Zero Suppression of Reality (Anti-Shortcut Law / INV-1)**:
+1. **No suppression of errors (INV-1)**:
    All errors (corrupted images, missing model files, hardware PCIe timeouts) are handled deterministically at protocol boundaries and mapped to explicit HTTP status codes (`400`, `404`, `500`, `503`). No empty exception handlers.
 2. **Determinism in Telemetry & Metering (Dean & Ghemawat / INV-2)**:
    Timing instrumentation uses monotonic nanosecond precision (`time.perf_counter_ns()`, `time.monotonic_ns()`). Packet counters, frame counts, and latencies use integer arithmetic. Floating-point numbers are banished from accounting accumulators.

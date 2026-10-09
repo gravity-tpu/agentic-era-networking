@@ -55,7 +55,7 @@ import {
   planFlowState,
   refineTapThreshold,
   verifyFlowReadback,
-  verifyPlanLoopFree,
+  verifyPlanAdmissible,
 } from '../dist/sdn/dataplane-benchmark.js';
 import {
   ARTIFACT_SCHEMA,
@@ -362,7 +362,7 @@ async function applyCondition(
   plan: FlowPlan,
   allowUnverified: boolean,
 ): Promise<AppliedCondition & { readonly readbackSupported: boolean }> {
-  verifyPlanLoopFree(plan); // Invariant 4: throws before anything touches the switch
+  verifyPlanAdmissible(plan); // Invariant 4: throws before anything touches the switch
   rig.switchErrors.length = 0;
   log(`installing condition ${id}: ${plan.quarantineInstalled}/${plan.quarantineRequested} quarantine + ${plan.forwardingRuleCount} forwarding (mirror ${plan.mirror})`);
   await deleteAllFlows(rig.of);
@@ -1205,7 +1205,7 @@ async function withSessionRetry<T>(
 }
 
 async function applyDepthPlan(rig: Rig, plan: DepthPlan, allowUnverified: boolean): Promise<DepthReadbackVerdict | null> {
-  verifyPlanLoopFree(asFlowPlan(plan)); // Invariant 4: before anything touches the switch
+  verifyPlanAdmissible(asFlowPlan(plan)); // Invariant 4: before anything touches the switch
   const c = plan.condition;
   log(`installing ${c.id}: depth ${c.depth} ${c.match} ${c.priorityOrder}/${c.installOrder}${c.hit ? ` hit:${c.hit}` : ''}${c.distinctPriorities ? ' distinct' : ''}`);
   return withSessionRetry(rig, `install ${c.id}`, async (epoch) => {
@@ -1992,7 +1992,7 @@ async function cmdWorkday(cli: Cli): Promise<void> {
       let flushSendNs: bigint | null = null;
       let flushToVerifiedNs: bigint | null = null;
       if (w === 0) {
-        verifyPlanLoopFree(asFlowPlan(fullPlan));
+        verifyPlanAdmissible(asFlowPlan(fullPlan));
         const v0 = await withSessionRetry(rig, 'initial table', async (epoch) => {
           rig.switchErrors.length = 0;
           await deleteAllFlows(rig.of);

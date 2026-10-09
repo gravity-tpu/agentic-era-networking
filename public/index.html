@@ -85,7 +85,7 @@
       <!-- Navigation Tabs — Three pre-rendered nav groups, O(1) display toggle on device switch.
            Each item carries data-section (overview|council) and data-scroll (element ID or "").
            A single delegated click listener on #cf-sidebar-nav-container handles all routing.
-           No innerHTML manipulation, no per-item event bindings. (Ghemawat O(1) invariant) -->
+           No innerHTML manipulation, no per-item event bindings. -->
       <div id="cf-sidebar-nav-container">
 
         <!-- ── Zodiac FX ── (visible by default) -->
@@ -124,7 +124,7 @@
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Council Invariants
+            Invariants
           </a>
         </nav>
 
@@ -164,7 +164,7 @@
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Council Invariants
+            Invariants
           </a>
         </nav>
 
@@ -204,7 +204,7 @@
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Council Invariants
+            Invariants
           </a>
         </nav>
 
@@ -232,7 +232,7 @@
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Council Invariants
+            Invariants
           </a>
         </nav>
 
@@ -260,7 +260,7 @@
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Council Invariants
+            Invariants
           </a>
         </nav>
 
@@ -307,7 +307,7 @@
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Council Invariants
+            Invariants
           </a>
         </nav>
 
@@ -317,7 +317,7 @@
           <a class="cf-nav-item active" data-section="overview" data-scroll="">Controller Overview</a>
           <a class="cf-nav-item" data-section="overview" data-scroll="of-page-stats-card">Table Statistics</a>
           <a class="cf-nav-item" data-section="overview" data-scroll="of-page-flows-card">Flow Rules</a>
-          <a class="cf-nav-item" data-section="council" data-scroll="">Council Review</a>
+          <a class="cf-nav-item" data-section="council" data-scroll="">Invariants</a>
         </nav>
 
       </div><!-- #cf-sidebar-nav-container -->
@@ -473,7 +473,7 @@
               </div>
               <div class="cf-stat-footer">
                 <span>Total Packets: <strong class="cf-mono" id="kpi-rx-pkts">--</strong></span>
-                <span>Dean BigInt</span>
+                <span>BigInt</span>
               </div>
             </div>
 
@@ -489,7 +489,7 @@
               </div>
               <div class="cf-stat-footer">
                 <span>Total Packets: <strong class="cf-mono" id="kpi-tx-pkts">--</strong></span>
-                <span>Dean BigInt</span>
+                <span>BigInt</span>
               </div>
             </div>
 
@@ -829,7 +829,6 @@
 
             </div>
           </div>
-
 
           <!-- Physical Port Block Layout Card -->
           <div class="cf-card" id="cf-card-ports" style="margin-top: 1.5rem;">
@@ -1457,7 +1456,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                     </div>
                     <div>
                       <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Fail-Closed SLA</span>
-                      <span class="cf-pill-badge blue" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Council Invariant 3</span>
+                      <span class="cf-pill-badge blue" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Invariant 3</span>
                     </div>
                   </div>
                 </div>
@@ -1987,7 +1986,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                     </div>
                     <div>
                       <span style="color: var(--cf-text-secondary); display: block; margin-bottom: 2px;">Fail-Closed SLA</span>
-                      <span class="cf-pill-badge blue" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Council Invariant 3</span>
+                      <span class="cf-pill-badge blue" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Invariant 3</span>
                     </div>
                   </div>
                 </div>
@@ -2062,11 +2061,11 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- KPI 4: Dean Latency Budget -->
+              <!-- KPI 4: Latency Budget -->
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Latency Budget</span>
-                  <span class="cf-pill-badge gray">Dean Budget</span>
+                  <span class="cf-pill-badge gray">Latency budget</span>
                 </div>
                 <div class="cf-stat-value" style="color: #059669;">&lt; 500 µs</div>
                 <div class="cf-mini-bar">
@@ -2114,7 +2113,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
                   <div>
                     <h3 class="cf-card-title">Sub-Millisecond Classification Latency</h3>
-                    <div class="cf-card-subtitle">Dean Invariant target &lt; 500 µs (0.5 ms) line-rate packet triage</div>
+                    <div class="cf-card-subtitle">Latency target &lt; 500 µs (0.5 ms) line-rate packet triage</div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                     <div class="cf-time-range-group" id="cf-coral1-latency-time-selectors">
@@ -2125,7 +2124,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       <button class="cf-time-btn" data-range="7d">7 Days</button>
                       <button class="cf-time-btn" data-range="30d">30 Days</button>
                     </div>
-                    <span class="cf-pill-badge green">Dean Budget</span>
+                    <span class="cf-pill-badge green">Latency budget</span>
                   </div>
                 </div>
                 <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
@@ -2146,7 +2145,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-card-header">
                 <div>
                   <h3 class="cf-card-title">Dedicated Model Parallelism — Tap Classifier Pipeline</h3>
-                  <div class="cf-card-subtitle">Port 3 mirror frames triage with zero SRAM model reload overhead (Dean &amp; Ghemawat)</div>
+                  <div class="cf-card-subtitle">Port 3 mirror frames triage with zero SRAM model reload overhead</div>
                 </div>
                 <span class="cf-pill-badge purple">SRAM Pinned (8MB)</span>
               </div>
@@ -2378,7 +2377,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
             <div class="cf-page-header">
               <div>
                 <h1 class="cf-page-title" id="ws-page-title">MacBook M5 Workstation — Local Gemma 4 AI Gateway</h1>
-                <p class="cf-page-desc" id="ws-page-desc">Apple Silicon Metal GPU accelerated local AI code reviewer &amp; Council verification gateway running Gemma 4 (25.2B Q4_K_M).</p>
+                <p class="cf-page-desc" id="ws-page-desc">Apple Silicon Metal GPU accelerated local AI code reviewer running Gemma 4 (25.2B Q4_K_M).</p>
               </div>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <span class="cf-pill-badge amber" id="ws-chip-badge">Apple M5 Pro</span>
@@ -2439,11 +2438,11 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- KPI 4: Council Verification Gateway -->
+              <!-- KPI 4: Local Review Model -->
               <div class="cf-stat-card" id="workstation-gemma-card">
                 <div class="cf-stat-header">
-                  <span class="cf-stat-label">Council AI Gateway</span>
-                  <span class="cf-pill-badge purple">AlphaProof</span>
+                  <span class="cf-stat-label">Local Review Model</span>
+                  <span class="cf-pill-badge purple">Local</span>
                 </div>
                 <div class="cf-stat-value" style="color: #7e22ce;" id="ws-kpi-gateway-status">Verified</div>
                 <div class="cf-mini-bar">
@@ -2610,7 +2609,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       </tr>
                       <tr>
                         <td>
-                          <div style="font-weight: 600;">Council Subnet Isolation</div>
+                          <div style="font-weight: 600;">Subnet Isolation</div>
                           <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">Invariants 3 &amp; 5 Enforcement</div>
                         </td>
                         <td colspan="2">
@@ -2718,8 +2717,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
             <div class="cf-card" style="margin-top: 1.5rem;">
               <div class="cf-card-header">
                 <div>
-                  <h3 class="cf-card-title">Local Gemma 4 Token Accounting &amp; Council Inference Velocity</h3>
-                  <div class="cf-card-subtitle">Deterministic BigInt token counters &amp; nanosecond precision durations (Council Invariant 2)</div>
+                  <h3 class="cf-card-title">Local Gemma 4 Token Accounting &amp; Inference Velocity</h3>
+                  <div class="cf-card-subtitle">Deterministic BigInt token counters &amp; nanosecond precision durations (Invariant 2)</div>
                 </div>
                 <span class="cf-pill-badge purple" id="ws-ollama-model-badge">gemma4:26b Q4_K_M</span>
               </div>
@@ -2731,7 +2730,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         <th>Metric / Parameter</th>
                         <th>Accounting Unit</th>
                         <th>Physical Value</th>
-                        <th>Council Invariant Standard</th>
+                        <th>Invariant</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2745,10 +2744,10 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         <td><strong>Edge Compute Offload</strong></td>
                         <td>Silicon Execution Ratio</td>
                         <td id="ws-tbl-edge-ratio" style="font-weight: 600; color: #059669;">100.0% Local Metal GPU (Zero Cloud Tokens)</td>
-                        <td>Council Invariant 6 (Physical Epistemic Provenance)</td>
+                        <td>Invariant 6 (Physical Epistemic Provenance)</td>
                       </tr>
                       <tr>
-                        <td><strong>Council Inferences Executed</strong></td>
+                        <td><strong>Review Inferences Executed</strong></td>
                         <td>Review Runs Completed</td>
                         <td class="cf-mono" id="ws-tbl-total-inferences">0</td>
                         <td>Deterministic BigInt Counter</td>
@@ -2767,7 +2766,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       </tr>
                       <tr>
                         <td><strong>Cumulative Completion Tokens</strong></td>
-                        <td>Council Verdicts &amp; Egress</td>
+                        <td>Review Verdicts &amp; Egress</td>
                         <td class="cf-mono" id="ws-tbl-total-comp-tok">0</td>
                         <td>Integer Accounting (Zero Float Drift)</td>
                       </tr>
@@ -2804,8 +2803,8 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       <tr>
                         <td><strong>Time-To-First-Token (TTFT)</strong></td>
                         <td>Prompt Prefill Latency</td>
-                        <td class="cf-mono" id="ws-tbl-ttft">0 ms (Dean Budget: &lt; 2,000 ms)</td>
-                        <td>Jeff Dean TTFT Latency Standard (0.5–2.0s)</td>
+                        <td class="cf-mono" id="ws-tbl-ttft">0 ms (Budget: &lt; 2,000 ms)</td>
+                        <td>TTFT latency budget (0.5–2.0s)</td>
                       </tr>
                       <tr>
                         <td><strong>Per-Token Generation Latency</strong></td>
@@ -2817,7 +2816,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         <td><strong>Total Review Wall Latency</strong></td>
                         <td>Nanoseconds / Milliseconds</td>
                         <td class="cf-mono" id="ws-tbl-last-latency">0 ns (0.0 ms)</td>
-                        <td>process.hrtime.bigint() Dean Budget</td>
+                        <td>process.hrtime.bigint() latency budget</td>
                       </tr>
                       <tr>
                         <td><strong>Local Gateway Socket</strong></td>
@@ -2830,7 +2829,6 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
             </div>
-
 
           </div><!-- /view-device-workstation -->
 
@@ -2943,142 +2941,55 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
         <div id="section-council" style="display: none;">
           <div class="cf-page-header">
             <div>
-              <h1 class="cf-page-title">The Technical Staff Council: Determinism & Invariants</h1>
-              <p class="cf-page-desc">Governing architectural principles for autonomous agentic networking.</p>
+              <h1 class="cf-page-title">Engineering Invariants</h1>
+              <p class="cf-page-desc">Rules enforced by tests and CI. Agents propose, deterministic checks decide, and a person approves.</p>
             </div>
           </div>
 
           <div class="cf-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 2rem;">
-            
-            <div class="cf-stat-card">
-              <div class="cf-stat-label">Jeff Dean</div>
-              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Scale & Latency Budgets</div>
-              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Nanosecond-to-WAN hierarchy. Banish floating point packet accounting. Zero synchronous blocking on packet paths.</p>
-            </div>
 
             <div class="cf-stat-card">
-              <div class="cf-stat-label">Sanjay Ghemawat</div>
-              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Radical Simplicity</div>
-              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">The Ghemawat Razor: Flat cache-aligned memory layouts, zero unnecessary abstractions, and fail-closed isolation.</p>
+              <div class="cf-stat-label">Invariant 1</div>
+              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">No suppression of errors</div>
+              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">No <code>@ts-ignore</code>, no loose <code>any</code>, no empty <code>catch</code>. Errors are handled at the protocol and state boundary.</p>
             </div>
 
             <div class="cf-stat-card">
-              <div class="cf-stat-label">Quoc Le</div>
-              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Adaptive Control</div>
-              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Self-tuning flow controllers adapting to traffic distributions. Ban brittle magic constants.</p>
+              <div class="cf-stat-label">Invariant 2</div>
+              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Integer accounting</div>
+              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Packet, byte and rate counters are 64-bit integers. Timestamps are monotonic nanoseconds. No floating point in accounting.</p>
             </div>
 
             <div class="cf-stat-card">
-              <div class="cf-stat-label">Oriol Vinyals</div>
-              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Graph Routing</div>
-              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Pointer network representations for flow rules. Multi-agent convergence with anti-flapping hysteresis.</p>
+              <div class="cf-stat-label">Invariant 3</div>
+              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Fail closed</div>
+              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Ambiguous or unrecognized packets, rules or tenant context are dropped or quarantined, never forwarded.</p>
             </div>
 
             <div class="cf-stat-card">
-              <div class="cf-stat-label">Demis Hassabis</div>
-              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Verification Asymmetry</div>
-              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">The AlphaProof Paradigm: Probabilistic proposals from agents are cheap; formal symbolic DAG loop verifiers must gate the data plane.</p>
+              <div class="cf-stat-label">Invariant 4</div>
+              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Verify before actuating</div>
+              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Nothing an agent proposes reaches the data plane without passing deterministic checks and a human gate.</p>
             </div>
 
-          </div>
-
-          <!-- Live Invariant Verification Playground -->
-          <div class="cf-card" style="margin-bottom: 2rem;">
-            <div class="cf-card-header">
-              <div>
-                <h3 class="cf-card-title">Live Invariant Verification Playground</h3>
-                <div class="cf-card-subtitle">Autonomous, formal neuro-symbolic verification and deterministic state bounds</div>
-              </div>
-              <span class="cf-pill-badge green">Invariants Active</span>
+            <div class="cf-stat-card">
+              <div class="cf-stat-label">Invariant 5</div>
+              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Configurable, damped limits</div>
+              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">No buried magic numbers. Adaptive loops are damped so they cannot flap, and are exercised on real traffic.</p>
             </div>
-            <div class="cf-card-body">
-              <div class="cf-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom: 0;">
 
-                <!-- Widget 1: Telemetry Counter (Dean & Ghemawat) -->
-                <div style="background: #f8fafc; border: 1px solid var(--cf-border); border-radius: 6px; padding: 1.25rem;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                    <div style="font-weight: 600; font-size: 0.95rem; color: var(--cf-text-primary);">Dean &amp; Ghemawat Telemetry</div>
-                    <span class="cf-pill-badge green">LIVE MONITOR</span>
-                  </div>
-                  <p style="font-size: 0.78rem; color: var(--cf-text-muted); margin-bottom: 1rem;">
-                    Monotonic 64-bit integer packet accounting. Banish IEEE-754 floats.
-                  </p>
-                  <div style="font-size: 0.82rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Ingress Packets:</span>
-                    <strong class="cf-mono" id="val-packets">10,482,920</strong>
-                  </div>
-                  <div style="font-size: 0.82rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Ingress Bytes:</span>
-                    <strong class="cf-mono" id="val-bytes">15,871,140,880 B</strong>
-                  </div>
-                  <div style="font-size: 0.82rem; margin-bottom: 1rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Monotonic Clock:</span>
-                    <span class="cf-mono" id="val-clock" style="color: var(--cf-blue);">842,910,241 ns</span>
-                  </div>
-                  <button class="cf-btn cf-btn-primary" id="btn-burst" style="width: 100%; justify-content: center;">
-                    ⚡ Ingest 100k Packet Burst
-                  </button>
-                </div>
-
-                <!-- Widget 2: Neuro-Symbolic Loop Verifier (Hassabis & Vinyals) -->
-                <div style="background: #f8fafc; border: 1px solid var(--cf-border); border-radius: 6px; padding: 1.25rem;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                    <div style="font-weight: 600; font-size: 0.95rem; color: var(--cf-text-primary);">Hassabis &amp; Vinyals Verifier</div>
-                    <span class="cf-pill-badge green" id="dag-status">DAG LOOP-FREE</span>
-                  </div>
-                  <p style="font-size: 0.78rem; color: var(--cf-text-muted); margin-bottom: 1rem;">
-                    SDN routing proposals formally gated by symbolic cycle detection (AlphaProof Paradigm).
-                  </p>
-                  <div style="font-size: 0.82rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Active Hops:</span>
-                    <span class="cf-mono" style="font-size: 0.75rem;">edge-1 → spine-a → core-1</span>
-                  </div>
-                  <div style="font-size: 0.82rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Cycle Invariant:</span>
-                    <span style="color: var(--cf-green); font-weight: 600;">Acyclic Verified</span>
-                  </div>
-                  <button class="cf-btn" id="btn-inject-loop" style="width: 100%; justify-content: center; margin-bottom: 0.75rem; border-color: #fecdd3; color: var(--cf-red);">
-                    Inject Autonomous Agent Loop (core-1 → edge-1)
-                  </button>
-                  <div class="cf-terminal-output" id="dag-log" style="height: 48px; min-height: 48px; font-size: 0.74rem; padding: 0.5rem 0.75rem; border-radius: 4px; overflow-y: auto;">
-                    <span style="color: var(--cf-green); font-weight: 600;">✓ Symbolic Verifier: Verified 3 hops as strictly loop-free DAG.</span>
-                  </div>
-                </div>
-
-                <!-- Widget 3: Fail-Closed DNS Engine (Ghemawat & Hassabis) -->
-                <div style="background: #f8fafc; border: 1px solid var(--cf-border); border-radius: 6px; padding: 1.25rem;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                    <div style="font-weight: 600; font-size: 0.95rem; color: var(--cf-text-primary);">Fail-Closed DNS Engine</div>
-                    <span class="cf-pill-badge green" id="dns-status">DEFAULT DROP</span>
-                  </div>
-                  <p style="font-size: 0.78rem; color: var(--cf-text-muted); margin-bottom: 1rem;">
-                    Unrecognized hostnames fail closed immediately without plaintext leaks.
-                  </p>
-                  <div style="font-size: 0.82rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Authoritative Zone:</span>
-                    <span class="cf-mono" style="font-size: 0.75rem;">dns.cluster.internal</span>
-                  </div>
-                  <div style="font-size: 0.82rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between;">
-                    <span style="color: var(--cf-text-muted);">Default Action:</span>
-                    <span class="cf-mono" style="color: var(--cf-blue); font-size: 0.75rem;">NXDOMAIN Drop</span>
-                  </div>
-                  <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <button class="cf-btn" id="btn-resolve-valid" style="flex: 1; justify-content: center;">Resolve Valid</button>
-                    <button class="cf-btn" id="btn-resolve-invalid" style="flex: 1; justify-content: center; border-color: #fecdd3; color: var(--cf-red);">Resolve Unknown</button>
-                  </div>
-                  <div class="cf-terminal-output" id="dns-log" style="height: 48px; min-height: 48px; font-size: 0.74rem; padding: 0.5rem 0.75rem; border-radius: 4px; overflow-y: auto;">
-                    <span style="color: var(--cf-green); font-weight: 600;">✓ DNS Engine ready (Fail-Closed Default Active).</span>
-                  </div>
-                </div>
-
-              </div>
+            <div class="cf-stat-card">
+              <div class="cf-stat-label">Invariant 6</div>
+              <div style="font-weight: 700; font-size: 1.05rem; margin: 0.3rem 0; color: var(--cf-blue);">Provenance</div>
+              <p style="font-size: 0.82rem; color: var(--cf-text-secondary);">Telemetry without physical or cryptographic provenance is not shown as live. Disconnected hardware reports zero rates and an offline status.</p>
             </div>
+
           </div>
 
           <!-- Latency Numbers Table -->
           <div class="cf-card">
             <div class="cf-card-header">
-              <h3 class="cf-card-title">Latency Hierarchy (The Dean Invariant)</h3>
+              <h3 class="cf-card-title">Latency Hierarchy</h3>
             </div>
             <div class="cf-table-container">
               <table class="cf-table">
@@ -3182,7 +3093,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
     if (photoBtn) photoBtn.addEventListener('click', togglePhotoView);
   </script>
 
-  <!-- Google SSO Operator Authentication Modal Gate (Council Invariant 3: Fail-Closed Isolation) -->
+  <!-- Google SSO Operator Authentication Modal Gate (Invariant 3: Fail-Closed Isolation) -->
   <div id="z-auth-gate-modal" class="cf-auth-gate" style="display: none;">
     <div class="cf-auth-backdrop"></div>
     <div class="cf-auth-card">
@@ -3193,7 +3104,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
       </div>
       <h2 class="cf-auth-title">Zodiac FX Operator Access</h2>
       <p class="cf-auth-desc">
-        This network appliance dashboard is protected by Google Single Sign-On under Council Invariant 3 (Fail-Closed Isolation). Sign in with an authorized operator account to proceed.
+        This network appliance dashboard is protected by Google Single Sign-On under Invariant 3 (Fail-Closed Isolation). Sign in with an authorized operator account to proceed.
       </p>
 
       <a class="cf-google-btn" href="/api/auth/login" id="btn-google-modal-login">
@@ -3207,7 +3118,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
       </a>
 
       <div class="cf-auth-footer-note">
-        <span>🔒 Cryptographic Epistemic Provenance · Council Gate Active</span>
+        <span>🔒 Cryptographic Epistemic Provenance · Invariant Checks Active</span>
       </div>
     </div>
   </div>
@@ -3291,7 +3202,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </aside>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.405fef7291.js"></script>
+  <script defer src="zodiac-app.7d56be5e06.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

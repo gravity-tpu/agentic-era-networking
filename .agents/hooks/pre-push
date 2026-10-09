@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Agentic Era Networking — Senior Staff Overseer: Pre-Push Gate
+# Agentic Era Networking — Pre-Push Gate
 # ==============================================================================
 # Enforces determinism, type-safety, and alignment invariants before any push
 # reaches the remote repository.
@@ -27,7 +27,7 @@ COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'initial')"
 
 echo ""
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}${BOLD}║       Agentic Networking — Council Review Pre-Push Gate  ║${RESET}"
+echo -e "${CYAN}${BOLD}║       Agentic Networking — AI Review Pre-Push Gate       ║${RESET}"
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
 echo -e "  Branch: ${BOLD}$BRANCH${RESET}  Commit: ${BOLD}$COMMIT${RESET}"
 echo ""
@@ -35,7 +35,7 @@ echo ""
 # ── Read refs being pushed from stdin (standard Git pre-push protocol) ──
 FILES_TO_SCAN=()
 
-# Capture the push range so Gate 5 (AI Council Review) uses the same
+# Capture the push range so Gate 5 (AI Review) uses the same
 # GITHUB_BEFORE..GITHUB_SHA diff that GitHub Actions will see — not just
 # HEAD~1..HEAD (which only covers the last commit and diverges when multiple
 # commits are pushed in a single push or after a force-push).
@@ -233,7 +233,7 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
               done <<< "$ARTIFICIAL_INC"
             fi
 
-            # Hardware probe mock return check (Council Invariant 3 & 6)
+            # Hardware probe mock return check (Invariants 3 & 6)
             if [[ "$file" == *"hardware-probe.ts" ]]; then
               PROBE_MOCK=$(grep -nE "createDefault(Coral|Jetson)Snapshot\s*\(\s*false\s*\)" "$REPO_ROOT/$file" 2>/dev/null || true)
               if [ -n "$PROBE_MOCK" ]; then
@@ -252,7 +252,7 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
               fi
             fi
 
-            # Coral thermal simulation check (Council Invariant 6)
+            # Coral thermal simulation check (Invariant 6)
             CORAL_THERMAL=$(grep -nE "(coral.*temperatureC\s*:\s*[0-9.]+|temperatureC\s*:\s*[0-9.]+\s*.*coral)" "$REPO_ROOT/$file" 2>/dev/null || true)
             if [ -n "$CORAL_THERMAL" ]; then
               PROVENANCE_FAILURES+="\n  ${BOLD}$file (Coral thermal simulation detected; must evaluate to null):${RESET}\n"
@@ -261,7 +261,7 @@ if [ "$UNIQUE_COUNT" -gt 0 ]; then
               done <<< "$CORAL_THERMAL"
             fi
 
-            # Jetson UI status coupling check (Council Invariant 6)
+            # Jetson UI status coupling check (Invariant 6)
             if [[ "$file" == *"zodiac-app.js" ]]; then
               ORIN_COUPLING=$(grep -nE "orin.*snapshot\.source\s*!==\s*['\"]disconnected['\"]" "$REPO_ROOT/$file" 2>/dev/null || true)
               if [ -n "$ORIN_COUPLING" ]; then
@@ -289,8 +289,8 @@ else
 fi
 echo ""
 
-# ── Gate 5: Council Review — AI loop until clean ─────────
-# Runs the Council Review in --strict mode (blocks on Warnings as well as
+# ── Gate 5: AI Review — AI loop until clean ─────────
+# Runs the AI Review in --strict mode (blocks on Warnings as well as
 # Critical Issues). Retries up to 3 times: if the first pass has issues,
 # the developer is expected to fix them and re-run; the hook re-evaluates
 # the diff after each fix attempt. Passes only when the reviewer exits 0.
@@ -300,7 +300,7 @@ echo ""
 #   1 = Critical Issues (❌ CHANGES REQUESTED)
 #   2 = Warnings only (🟠) in strict mode
 #   non-zero but no API key = skipped gracefully (exit 0 via reviewer)
-echo -e "${BOLD}[Gate 6/6] Council Review — AI code review (strict: no warnings, no criticals)${RESET}"
+echo -e "${BOLD}[Gate 6/6] AI Review — AI code review (strict: no warnings, no criticals)${RESET}"
 
 COUNCIL_PASS=false
 COUNCIL_ATTEMPT=0
@@ -311,7 +311,7 @@ while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
 
   if [ "$COUNCIL_ATTEMPT" -gt 1 ]; then
     echo ""
-    echo -e "${YELLOW}  ↻ Council Review attempt ${COUNCIL_ATTEMPT}/${MAX_COUNCIL_ATTEMPTS} — re-evaluating after fixes...${RESET}"
+    echo -e "${YELLOW}  ↻ AI Review attempt ${COUNCIL_ATTEMPT}/${MAX_COUNCIL_ATTEMPTS} — re-evaluating after fixes...${RESET}"
     echo ""
   fi
 
@@ -324,18 +324,18 @@ while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
     node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
 
   if [ "$COUNCIL_EXIT" -eq 0 ]; then
-    echo -e "  ${GREEN}✓ Council Review passed — no Critical Issues or Warnings${RESET}"
+    echo -e "  ${GREEN}✓ AI Review passed — no Critical Issues or Warnings${RESET}"
     COUNCIL_PASS=true
     PASS_COUNT=$((PASS_COUNT + 1))
     break
   elif [ "$COUNCIL_EXIT" -eq 1 ]; then
-    echo -e "  ${RED}✗ Council Review: Critical Issues detected${RESET}"
+    echo -e "  ${RED}✗ AI Review: Critical Issues detected${RESET}"
     if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
       echo -e "  ${YELLOW}  Fix the Critical Issues above, then run: git commit --amend && git push${RESET}"
       echo -e "  ${YELLOW}  The hook will re-evaluate automatically on next push.${RESET}"
     fi
   elif [ "$COUNCIL_EXIT" -eq 2 ]; then
-    echo -e "  ${YELLOW}⚠ Council Review: Warnings detected${RESET}"
+    echo -e "  ${YELLOW}⚠ AI Review: Warnings detected${RESET}"
     if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
       echo -e "  ${YELLOW}  Resolve the Warnings above, then re-push.${RESET}"
     fi
@@ -346,7 +346,7 @@ while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
     # A verification gate that cannot execute MUST block the push, not silently
     # pass. If AI APIs are unavailable, the reviewer exits 0 internally before
     # Node even exits abnormally — this path is a genuine runtime failure.
-    echo -e "  ${RED}✗ Council Review crashed (exit code $COUNCIL_EXIT). Push blocked.${RESET}"
+    echo -e "  ${RED}✗ AI Review crashed (exit code $COUNCIL_EXIT). Push blocked.${RESET}"
     echo -e "  ${YELLOW}  Check that node is installed and GEMINI_API_KEY / ANTHROPIC_API_KEY is set.${RESET}"
     echo -e "  ${YELLOW}  Emergency bypass (audited): git push --no-verify${RESET}"
   fi
@@ -354,7 +354,7 @@ done
 
 if [ "$COUNCIL_PASS" = false ]; then
   FAIL_COUNT=$((FAIL_COUNT + 1))
-  FAILURES+=("Council Review: unresolved Critical Issues or Warnings after ${MAX_COUNCIL_ATTEMPTS} attempts")
+  FAILURES+=("AI Review: unresolved Critical Issues or Warnings after ${MAX_COUNCIL_ATTEMPTS} attempts")
 fi
 
 echo ""

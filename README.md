@@ -1,248 +1,170 @@
 # Zodiac
 
-> **Zodiac — Autonomous, Verifiable SDN Control Plane**  
-> Focus: Autonomous Monitoring, Latency Profiling, DNS Resolution Engines & Software Defined Networking (SDN).  
-> Hosted at: [https://github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking)
+> **A real-hardware testbed and verifier for agent-proposed SDN policy.**
+> Measure what a cheap OpenFlow switch can actually do, prove proposed rules are safe against that model, and test them against a live adversary.
+
+Software-driven networking, approached as a software engineering problem: network policy is code, so it should be typed, tested, verified before it ships, and measured against real hardware instead of assumed.
+
+Hosted at: [github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking)
 
 ---
 
-## 1. The Technical Staff Council: Governing Perspectives
+## 1. Why this exists
 
-This codebase is governed by the collective engineering rigor of five foundational systems and AI pioneers:
+Agents can now generate network policy (flow rules, ACLs, DNS filters) faster than anyone can review it. Generation is cheap; **verification is the scarce part**. Most work in this area is validated in simulation. This repository has a physical OpenFlow switch, a mirror tap, an instrumented controller and a hostile workload node, so claims can be checked against silicon.
 
-1. **Jeff Dean** (Systems Scale, Latency & Distributed Resilience):
-   - Nanosecond-to-WAN latency profiling (L1=0.5ns, RAM=100ns, 10Gbps=1µs, LAN=0.5ms, WAN=150ms, LLM=1s).
-   - Zero blocking synchronous I/O on packet paths; graceful degradation under split-brain partitions.
-2. **Sanjay Ghemawat** (Radical Simplicity, Invariants & Flat Layouts):
-   - The Ghemawat Razor: *"Make it work, make it simple, make it fast. If the abstraction is complex, you haven't understood the problem yet."*
-   - Elimination of unnecessary wrappers and indirection; cache-friendly flat state structures.
-3. **Quoc Le** (Neural Architecture Search & Adaptive Self-Tuning Control):
-   - Banning brittle handcoded magic constants for buffers, rate limits, and timeouts.
-   - Self-tuning feedback loops that continuously adjust against observed traffic arrival distributions; robustness under distribution shift.
-4. **Oriol Vinyals** (Graph Routing, Sequence Optimization & Multi-Agent Equilibrium):
-   - Graph sequence representations for Software Defined Networking (SDN) and topology mapping.
-   - Multi-agent coordination with hysteresis damping to prevent competitive route flapping and oscillations.
-5. **Demis Hassabis** (Verification Asymmetry & Hybrid Neuro-Symbolic Systems):
-   - The AlphaProof Invariant: *"Probabilistic generation proposes. Deterministic systems dispose."*
-   - Formal symbolic verifiers (e.g. loop-free DAG validation) must gate every agent-proposed routing or policy update before execution on the data plane.
+The question the project answers: **can an agent safely propose network policy, and what does "safely" have to mean on hardware this constrained?**
 
----
-
-## 2. Physical Hardware Architecture: Autonomous Master Appliance Co-Design
-
-This repository grounds autonomous SDN invariants in physical hardware, elevating the appliance from a passive coprocessor into a **dedicated 24/7 Autonomous Master Controller** supported by a multi-tier hardware ecosystem:
-
-- **Detailed Specification**: [docs/design/physical-sdn-edge-tpu.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md)
-- **Data Plane Switch**: Northbound Networks Zodiac FX OpenFlow Switch (4× 10/100 RJ-45 ports, Microchip KSZ8795 switch IC, Atmel SAM4E8E 120 MHz MCU, 128-flow bounded table).
-- **Intermediate Aggregation Switch**: NETGEAR GS105Ev2 5-Port Gigabit Smart Managed Switch (intermediate aggregation layer for Workload subnet; IEEE 802.3x Flow Control backpressure, 128KB packet buffer, 802.1Q multi-tenant readiness).
-- **Autonomous Master Appliance**: NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture, Tri-Interface stack, 500GB NVMe SSD @ 1.8 GB/s, 7W–15W 24/7 low-power operation, TensorRT INT8 neural engine, SSD1306 OLED telemetry).
-- **Edge Inference Accelerators**: Dual Google Coral Edge TPUs (8 TOPS INT8 total compute; TPU 0 for line-rate tap DPI, TPU 1 for RFC 1035 DNS sentinel).
-- **Dedicated Tap Ingress**: ASIX AX88179 USB 3.0 GbE Adapter (`enx*` in promiscuous mode attached to Zodiac Port 3).
-- **Untrusted Agent Workload Tier**:
-  - **Raspberry Pi 5 + Hailo-8** (`agentic-node-02`): Autonomous adversarial agent & Red Team workload generator on `eth0` (`10.0.2.51`) via NETGEAR Port 4; 26 TOPS INT8 PCIe Gen 3.0 x1 NPU (`/dev/hailo0`, HailoRT 4.20); out-of-band management via `wlan0` (`10.0.0.179`).
-  - **Raspberry Pi 3 Model B+** (`agentic-node-01`): Untrusted client agent workload on `eth0` (`10.0.2.50`) via NETGEAR Port 3; out-of-band management via `wlan0` (`10.0.0.45`).
-- **Gateway Transit**: ISP Gateway / Mesh Extender providing continuous internet uplink over 100BASE-TX to Zodiac Port 2.
-- **Local AI Workstation**: MacBook Pro M5 (20-core Apple Silicon Metal GPU, Unified Memory Architecture, 26B Gemma 4 local inference, zero-dependency Property List XML parser, 64-bit BigInt token accounting ledger).
-
-### System Architecture Diagram
+## 2. Approach
 
 ```text
-                                            +───────────────────────────────────+
-                                            |    Public Internet / Lab LAN     |
-                                            +-----------------+-----------------+
-                                                              │ (Mesh WiFi)
-                                                              ▼
-                                            +───────────────────────────────────+
-                                            |     ISP Gateway / Mesh Node       |
-                                            +-----------------+-----------------+
-                                                              │ 100BASE-TX Ethernet
-                                                              ▼
-+─────────────────────────────────────────────────────────────────────────────────────────────────────────+
-|                                  Zodiac FX OpenFlow Switch (Data Plane)                                 |
-|                                                                                                         |
-|   [Port 1]                      [Port 2]                  [Port 3]                    [Port 4]          |
-|   Untrusted Agent Workload      Gateway Uplink            Hardware Mirror Tap         OpenFlow 1.3 Ctrl |
-|   VLAN 100 (OpenFlow)           VLAN 100 (OpenFlow)       VLAN 100 (OpenFlow)         VLAN 200 (Native) |
-|   100BASE-TX                    100BASE-TX                100BASE-TX                  100BASE-TX        |
-+───────┬─────────────────────────────▲─────────────────────────┬───────────────────────────▲─────────────+
-        │                             │                         │                           │
-        │ RJ-45 Patch                 │ RJ-45 Patch             │ RJ-45 Patch               │ RJ-45 Patch
-        │                             │                         ▼                           │
-        │                             │             +───────────────────────+               │
-        │                             │             | ASIX AX88179 USB GbE  |               │
-        │                             │             | (enx* Promiscuous)    |               │
-        │                             │             +───────────┬───────────+               │
-        │                             │                         │ USB 3.0                   │
-        │                             │                         ▼                           │
-        │                        +----+-----------------------------------------------------+   Micro-USB
-        │                        |         NVIDIA Jetson Orin Nano Super Master Appliance   |<──Serial CDC
-        │                        |                                                          |   /dev/ttyACM0
-        │                        |  * Controller Plane: enP8p1s0 (<ctrl-subnet>) <──────────+───(115200 8N1)
-        │                        |  * Mirror Tap Ingress: enx* (Promiscuous)                |
-        │                        |  * Management Plane: wlP1p1s0 (<mgmt-subnet>)            |
-        │                        |  * OpenFlow 1.3 Controller Plane (:6633)                 |
-        │                        |  * RFC 1035 Transparent DNS Resolver (:53)              |
-        │                        |  * Local Telemetry Bridge & Web UI (:3003)               |
-        │                        |  * I2C SSD1306 0.96" OLED Telemetry (Bus 7, 0x3c)        |
-        │                        |  * USB-C Port: L4T Device Mode (192.168.55.1 / CDC-ACM)  |
-        │                        +──────────────┬───────────────────────────┬───────────────+
-        │                                       │                           │
-        │                                       │ Dual USB 3.0              │ DIRECT HIGH-SPEED USB-C CABLE
-        │                                       │ (Tap DPI & DNS Sentinel)  │ [Link 9: Management Tether]
-        │                                       ▼                           │ * CDC-NCM: 192.168.55.1 <-> en8
-        │                           +───────────────────────────────────+   │ * CDC-ACM: /dev/cu.usbmodem*
-        │                           | Dual Google Coral Edge TPUs       |   │ * 5 Gbps SuperSpeed USB 3.0
-        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │ * Priority: Tier 1 (Metric 50)
-        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │ * Fail-Closed (Zero Route Bleed)
-        │                           +───────────────────────────────────+   │
-        ▼                                                                   ▼
-+───────────────────────────────────+               +───────────────────────────────────────────────────+
-| NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
-|                                   |               |                                                   |
-| * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-| * Port 4: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
-|   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
-| * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * Port 2: RPi 5 USB-GbE (capture) |               | * Local Ollama Engine: gemma4:26b (:11434)        |
-| * 802.3x Flow Control Enabled     |               | * Dual-Stage Council Review Gate                  |
-| * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
-|                                   |               | * Operator Console: http://localhost:3000 & Cloud |
-+───────────────────────────────────+               +───────────────────────────────────────────────────+
+  Proposer            Verifier                 Actuator            Conformance
+  (human or LLM)      (static, deterministic)  (OpenFlow 1.3)      (hardware truth)
+
+  rule set  ───────►  property checks     ───►  human approval ──►  install on     ──►  read table back,
+                      + hardware cost model     (explicit gate)     Zodiac FX           compare to intent
+                      reject on any violation                                             │
+                                                                                          ▼
+                                                                    probe on the wire via mirror tap:
+                                                                    does the switch behave as the model says?
+                                                                                          │
+                                                                                          ▼
+                                                                    adversarial run from the Pi 5:
+                                                                    spoof, scan, flood, evade → measure
 ```
 
-### Dedicated Jetson Orin ↔ MacBook M5 Direct USB-C Hardware Interconnect (Link 9)
+Three ideas carry the design:
+
+1. **Verify properties of the rule set, not routes.** A static L2/L3 flow table has no routing loops to find. The useful checks are isolation, shadowed rules, hairpins, default-drop, quarantine precedence and rule/capacity budget.
+2. **Verify against a measured hardware model.** The switch's CPU, not its ports, is the bottleneck, and rule layout changes capacity by up to 2.6x. A policy that is logically correct can still take the switch down, so capacity is a checked property.
+3. **Close the loop on the wire.** Reading the table back proves intent was installed; only traffic through the tap proves behavior. Model-versus-hardware disagreement is a finding, not noise.
+
+Agents are in the loop as *proposers*. A human approves, and deterministic code decides admissibility. The project does not claim autonomous operation.
+
+## 3. Status
+
+| Capability | State | Evidence |
+| :--- | :--- | :--- |
+| Port-1 isolation policy builder and static verifier | Implemented, unit-tested | `src/sdn/port1-isolation.ts`, `test/invariants/port1-isolation.test.ts` |
+| Switch readback verification (match fields) | Implemented | `verifyIsolationReadback`; output actions are not yet parsed |
+| Hardware cost model and data-plane benchmark harness | Measured, documented | [Whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md), `scripts/zodiac-dataplane-bench.ts` |
+| Telemetry with provenance (no simulated data shown as live) | Implemented | `scripts/check-provenance.ts`, `test/invariants/goodharts-law-provenance.test.ts` |
+| Anomaly detector and quarantine path (Coral TPU, Jetson GPU) | Present; precision and recall **not measured** | `scripts/gpu-sdn-anomaly-sentinel.py`, `src/sdn/zodiac-controller.ts` |
+| Verifier consumes the cost model (capacity budget check) | Planned | [Roadmap](docs/ROADMAP.md), track A |
+| Shadowed-rule and action-level analysis | Planned | Roadmap, track A |
+| Model-versus-wire conformance probe | Planned | Roadmap, track B |
+| Repeatable adversarial suite (ARP spoofing, scan, flood, evasion) | Planned | Roadmap, track C |
+| Evaluation of LLM-proposed rule sets against the verifier | Planned | Roadmap, track A |
+
+## 4. What has been measured
+
+On a Zodiac FX (firmware 0.86), one switch, one workload node, one receiver path:
+
+- Per-packet cost is `38.5 µs + 34.8 ns per payload byte above 64 + 4.24 µs per rule`. The limit is the switch microcontroller, not the 100 Mbit/s ports.
+- A 600-byte stream capacity falls from about 17,800 pps with an empty table to 8,055 with 16 rules and 1,711 with 126.
+- Installing forwarding rules first and at the highest priority cuts the per-rule cost to 1.3 µs (1.6x to 2.6x more capacity).
+- Offered load of 1.3 to 2.3 times capacity makes the switch drop its OpenFlow session and flow table. This is the fragile part.
+
+Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md).
+
+## 5. Known gaps
+
+- **ARP crosses the P1 to P2 boundary.** The isolation policy forwards ARP between the workload and the lab LAN because firmware 0.86 `ARP_SPA`/`ARP_TPA` matching is unverified. This is documented in the code as address disclosure only; it is also a spoofing surface (a workload can send ARP claiming a LAN address). Testing this is the first item in track C.
+- **The policy has had no independent network-engineer review.** The verifier encodes the author's reading of L2 and flow-table semantics.
+- **Cost versus containment.** The cheapest measured layout (forwarding rules first) ranks forwarding above quarantine, so a quarantined source that also matches a forwarding rule would still be forwarded. Resolving this is the first verifier design question (roadmap A4 versus A9).
+- **Removed on 2026-10-09:** `SymbolicRouteVerifier` (its call sites passed hop lists that could not fail), the unused `AdaptiveFlowController`, and the dashboard's "Live Invariant Verification Playground" (hardcoded numbers shown as live). The verifier is the set of property checks in `port1-isolation.ts` and `verifyPlanAdmissible`.
+- **Single switch, single run set.** Many benchmark layouts are single rounds; see the whitepaper's limitations.
+- **No claim of production readiness.** This is a lab system on a 100 Mbit/s MCU switch.
+
+## 6. Hardware
+
+| Role | Device |
+| :--- | :--- |
+| Device under test | Northbound Networks Zodiac FX: SAM4E8E MCU, KSZ8795 switch IC, 4 x 100BASE-TX, 128-rule table, OpenFlow 1.3 |
+| Controller, benchmark host, detector | NVIDIA Jetson Orin Nano Super (Coral Edge TPU x2 for inference) |
+| Hostile workload and traffic generator | Raspberry Pi 5 with Hailo-8 |
+| Untrusted client workload | Raspberry Pi 3B+ |
+| Workload aggregation | NETGEAR GS105Ev2 (802.1Q, port mirror) |
+| Operator and local model host | Apple Silicon workstation |
 
 ```text
-+─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
-|    NVIDIA Jetson Orin Nano Super Appliance  |                 |       Apple MacBook M5 Workstation          |
-|                                             |                 |                                             |
-|  [USB-C Device Mode Controller]             |                 |  [Thunderbolt 4 / USB-C Port]               |
-|  * Linux for Tegra (L4T) Gadget Stack       |                 |  * VID: 0x0955 (NVIDIA), PID: 0x7020        |
-|  * CDC-NCM Bridge: l4tbr0 (192.168.55.1/24) |================>|  * en8 Point-to-Point IP: 169.254.91.144   |
-|  * CDC-ACM Serial Debug TTY (115200 8N1)    |  HIGH-SPEED     |  * Direct TTY: /dev/cu.usbmodem17916261208203|
-|  * Fail-Closed: net.ipv4.ip_forward = 0     |  USB-C CABLE    |  * Routing Priority: Tier 1 (Metric 50)     |
-|    (Zero Leakage into SDN Tenant Flows)     |  (5 Gbps Link)  |  * Physical IOKit IOUSBHostDevice Verified  |
-+─────────────────────────────────────────────+                 +─────────────────────────────────────────────+
+   Lab LAN / Internet (ISP extender)
+              │ P2 uplink
+        ┌─────┴──────┐  P3 mirror tap ───────► Jetson (tap NIC → detector)
+        │ Zodiac FX  │  P4 OpenFlow 1.3 ◄────► Jetson (controller :6633)
+        └─────┬──────┘
+              │ P1 workload (policy: isolate)
+        ┌─────┴──────┐
+        │ NETGEAR    │── Pi 5 + Hailo-8 (adversary)
+        │ GS105Ev2   │── Pi 3B+ (workload)
+        └────────────┘
 ```
 
-### Physical Interconnect Matrix
+Addresses, VLAN matrix, port assignments and the NETGEAR management path are kept in [`.agents/network-context.md`](.agents/network-context.md). Wiring detail and the management-plane hierarchy are in [`docs/design/physical-sdn-edge-tpu.md`](docs/design/physical-sdn-edge-tpu.md).
 
-> [!NOTE]
-> Detailed private IP allocations, hardware MAC addresses, and physical port assignments are documented in the local persistent context manager ([.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md)).
+## 7. Engineering invariants
 
-| Link | Source | Interface / Medium | Destination | Protocol / Speed | Role & Invariant |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Link 1** | Jetson Orin (`enP8p1s0`) | RJ-45 Patch Cable | Zodiac FX Port 4 | 100BASE-TX (Native Management) | **OpenFlow 1.3 Control Channel**: Isolated `:6633` plane (<1ms latency). |
-| **Link 2** | Zodiac FX (Micro-USB) | USB Cable | Jetson Orin (USB-A) | USB CDC (`/dev/ttyACM0` @ 115200) | **Hardware Register Telemetry**: 1–2 Hz continuous register stream. |
-| **Link 3** | Zodiac FX Port 2 | RJ-45 Patch Cable | ISP Gateway / Extender | 100BASE-TX (VLAN 100) | **WAN / Gateway Uplink**: Public Internet transit. |
-| **Link 4** | Zodiac FX Port 1 | RJ-45 Patch Cable | RPi 3B+ (`eth0`) | 100BASE-TX (VLAN 100) | **Untrusted Workload Port**: Monitored client agent data plane. |
-| **Link 5** | Zodiac FX Port 3 | RJ-45 Patch Cable | Jetson (`enx*` USB GbE) | 100BASE-TX (Port Mirror) | **Promiscuous Tap Ingress**: Line-rate packet capture for Coral Edge TPU. |
-| **Link 6** | Dual Coral Edge TPUs | Dual USB 3.0 | Jetson Orin (USB-A) | USB 3.0 (`18d1:9302`, `1a6e:089a`) | **Dedicated Edge Accelerators**: 8 TOPS INT8 total (TPU 0 Tap DPI, TPU 1 DNS Sentinel). |
-| **Link 7** | RPi 3B+ (`wlan0`) | Wireless 802.11n | Lab Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Out-of-Band Safety Link**: Guaranteed SSH access immune to SDN table flushes. |
-| **Link 8** | Jetson Orin (`wlP1p1s0`) | Wireless 802.11ax | Lab Wi-Fi LAN | WiFi (`<mgmt-subnet>`) | **Management Plane**: Web UI (`:3003`), SSH console, Vercel/Neon cloud relay. |
-| **Link 9** | Jetson Orin (USB-C) | USB-C to USB-C Cable | MacBook M5 (USB-C) | USB CDC-NCM (`en8`) + CDC-ACM (`/dev/cu.usbmodem*`) | **Direct Hardware Management Tether**: Point-to-point IP plane (`192.168.55.1` <-> `en8`) & serial console immune to network failure. |
-| **Link 10** | MacBook M5 Workstation | Wireless 802.11ax | Lab Mesh WiFi | WiFi 6 / 6E | **Local AI Workstation & Review Plane**: 20-core Metal GPU executing `gemma4:26b` for Council pre-push code verification, IOKit telemetry, and deterministic BigInt token accounting ledger. |
+These are enforced by tests, CI and the pre-push gate:
 
-### Management Plane Routing Hierarchy & Fail-Closed Invariants
+1. **No suppression of errors.** No `@ts-ignore`, no loose `any` casts, no empty `catch`. Errors are handled at the protocol and state boundary.
+2. **Integer accounting.** Packet, byte, rate and SLA counters are 64-bit integers (`BigInt`); timestamps come from the monotonic clock (`process.hrtime.bigint()`).
+3. **Fail closed.** Ambiguous or unrecognized packets, rules or tenant context are dropped or quarantined, never forwarded.
+4. **Verify before actuating.** Nothing an agent proposes reaches the data plane without passing deterministic checks and a human gate. Checks must be able to fail, and must say what they do not prove.
+5. **Configurable, bounded, damped limits.** No buried magic numbers; adaptive loops are damped and exercised on real traffic before they are called adaptive.
+6. **Provenance.** Telemetry without physical or cryptographic provenance is not shown as live. Disconnected hardware reports zero rates, `null` thermals and an offline status. Synthetic data is allowed only in declared sandboxes (`source: 'cloud_snapshot'`) with a visible disclaimer.
 
-To eliminate routing ambiguity, split-brain conditions, and non-deterministic interface flapping between the USB-C hardware tether and wireless network (Council Invariants 3 & 5), the management plane enforces a strict metric priority and interface isolation:
+The numbering matches [`AGENTS.md`](AGENTS.md), which code comments cite ("Invariant 3"). The long-form rulebooks and review checklists are in [`.agents/`](.agents/rules/determinism-and-alignment.md); they are review tooling, not system architecture.
 
-1. **Deterministic Recovery Hierarchy**:
-   - **Tier 1 — Direct Hardware Tether (Highest Priority, Metric 50)**: USB-C CDC-NCM point-to-point network (`en8` <-> `l4tbr0`, invariant subnet `192.168.55.0/24`). Lowest administrative distance for deterministic, ultra-low-latency operator access and telemetry bridging.
-   - **Tier 2 — Wireless Management Plane (Secondary, Metric 200)**: 802.11ax Wi-Fi (`en0` / `wlP1p1s0`, dynamic `<mgmt-subnet>`). Untethered roaming and cloud telemetry relay to Vercel/Neon.
-   - **Tier 3 — Hardware Serial Console (Emergency Out-of-Band)**: USB CDC-ACM direct serial device (`/dev/cu.usbmodem*` @ 115200 8N1). Zero-network kernel debugging and rescue console, operational even under total TCP/IP stack failure.
-2. **Subnet Non-Leakage Law (Fail-Closed Isolation)**:
-   - The point-to-point subnet `192.168.55.0/24` is strictly bound to `l4tbr0` on the Jetson appliance. Kernel IP forwarding between `192.168.55.0/24`, `<ctrl-subnet>` (`10.0.1.0/24`), and `<workload-subnet>` (`10.0.2.0/24`) is permanently disabled (`net.ipv4.conf.all.forwarding = 0`), preventing cross-plane packet leakage or routing bleed into SDN tenant flows.
+## 8. Repository map
 
-### The 5 Autonomous Appliance Invariant Roles
+| Path | Contents |
+| :--- | :--- |
+| `src/sdn/` | OpenFlow server, flow table, isolation policy and verifier, serial client, benchmark logic |
+| `src/core/` | Telemetry primitives and state machine |
+| `src/dns/`, `src/db/`, `src/security/`, `src/telemetry/` | DNS wire handling, telemetry storage, request attestation and rate limiting, Prometheus export |
+| `api/`, `public/` | Serverless read-only API and operator dashboard |
+| `scripts/` | Benchmark harness, inference daemons, provenance check, review tooling |
+| `deploy/` | systemd units and setup for Jetson, Pi 5 and macOS |
+| `test/invariants/` | Invariant and behavior tests |
+| `docs/design/` | Zodiac whitepaper (PDF), hardware blueprint, benchmark runbook, shared fonts |
+| `docs/benchmarks/` | Benchmark whitepaper, analysis, and physical-run artifacts |
+| `docs/archive/` | Superseded plans and the Sentinel design material (original roadmap, Sentinel design doc and PDF, GPU workload roadmap) |
 
-1. *Real-Time Flow Anomaly Detection & Fail-Closed Quarantine* (<4 ms intervention window).
-2. *Verification Asymmetry & Symbolic Proof* (AlphaProof DAG loop-freeness verifier gating neural routing).
-3. *Physical Hardware Reinforcement Learning* (Quoc Le self-tuning rate meters & dynamic buffer windows).
-4. *DNS Sentinel & Agent Intent Classification* (Quantized DGA & exfiltration detection on wire queries).
-5. *Local Edge Reasoning & Token Ledger* (Apple Silicon Metal GPU local inference, pre-push Council verification, and deterministic 64-bit BigInt token accounting).
+Deferred tracks (not on the current roadmap): the Sentinel bot and crawler module ([`docs/SENTINEL-ROADMAP.md`](docs/SENTINEL-ROADMAP.md)), the DNS reverse proxy, multi-agent routing stability and the agent intent firewall.
 
----
+## 9. Quick start
 
-## 3. Institutional Memory & Governance System
-
-The repository embeds stateful governance directly in the codebase:
-
-- **[AGENTS.md](file:///Users/andymorven/git/agentic-era-networking/AGENTS.md)**: Council rules and Dean latency numbers for any AI assistant working on the repo.
-- **[.agents/rules/determinism-and-alignment.md](file:///Users/andymorven/git/agentic-era-networking/.agents/rules/determinism-and-alignment.md)**: The formal Technical Staff Council rulebook for networking systems.
-- **[.agents/skills/senior-staff-overseer/SKILL.md](file:///Users/andymorven/git/agentic-era-networking/.agents/skills/senior-staff-overseer/SKILL.md)**: Overseer skill definition (L7+ Fellow track).
-- **[.agents/workflows/overseer-audit.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/overseer-audit.md)**: 5-Gate Dialectic Review workflow (`@overseer` or `/grill-me`).
-- **[.agents/audit-log.md](file:///Users/andymorven/git/agentic-era-networking/.agents/audit-log.md)**: Persistent institutional memory tracking invariant decisions, gate runs, and technical debt.
-- **[.agents/hooks/pre-push](file:///Users/andymorven/git/agentic-era-networking/.agents/hooks/pre-push)**: Git hook enforcing TypeScript compilation, invariant tests, and determinism scanning before every push.
-
----
-
-## 4. Multi-Model AI Code Review Pipeline
-
-Automated AI review executes both locally and in GitHub Actions CI:
-
-- **Council System Prompt**: Evaluates code through the combined standards of Dean, Ghemawat, Quoc Le, Vinyals, and Hassabis.
-- **Fallback Chain**: `Google Gemini (3.8 Flash / Pro)` → `Anthropic Claude (Sonnet / Opus)` → `OpenAI (GPT-4o / mini)`.
-- **Zero Dependencies**: Pure Node built-ins (`process.loadEnvFile`, `fetch`) — runs in CI without needing prior compilation.
-- **Gating**: Flags 🔴 Critical Issues, 🟠 Warnings, 🟡 Suggestions, and emits a structured verdict. Exits with code 1 on `❌ CHANGES REQUESTED` to block faulty commits.
-
-```bash
-# Review staged changes
-npm run review
-
-# Review the last commit
-npm run review:last
-
-# Review all working directory changes (HEAD)
-npm run review:head
-```
-
----
-
-## 5. Quick Start & Verification
-
-### Prerequisites
-
-- Node.js >= 22.x (see `.nvmrc`)
-- Git
-
-### 1. Install Dependencies & Git Hooks
+Prerequisites: Node.js 22 (see `.nvmrc`) and Git.
 
 ```bash
 npm install
-npm run setup-hooks
-```
-
-### 2. Verify TypeScript & Invariant Test Suite
-
-```bash
-# Zero-defect compile check
-npm run check-types
-
-# Run deterministic invariant test suite (132+ tests passing)
-npm run test
-```
-
-### 3. Configure Local Environment
-
-Copy `.env.example` to `.env.local` and add your API keys:
-
-```bash
+npm run setup-hooks     # git hooks: type check, invariant tests, determinism scan
+npm run check-types     # zero-defect compile check
+npm test                # invariant and behavior tests
 cp .env.example .env.local
 ```
 
----
+Hardware benchmarks (`npm run bench:dataplane`) require the physical bench. They wipe the flow table and saturate Port 2; see the [benchmark runbook](docs/design/zodiac-fx-dataplane-benchmark.md).
 
-## 6. Co-Ownership & Cloud Setup
+## 10. Operations
 
-- **GitHub Repository**: [https://github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking)
-  - Both collaborators have admin rights to push, manage pull requests, and configure CI secrets.
-- **Neon Database**:
-  - Provision a new dedicated Neon project (e.g. `agentic-networking-db`) and paste the connection string into `DATABASE_URL` in `.env.local` and GitHub repository secrets.
-- **Local Telemetry History (Jetson)**:
-  - The bridge server automatically writes 30-day JSONL history to `/var/lib/zodiac/history/` (falls back to `~/zodiac-history` or `/tmp/zodiac-history`).
-  - No configuration needed — ensure the `zodiac` service user has write access to `/var/lib/zodiac/`.
-  - After restarting the bridge server (`sudo systemctl restart zodiac-bridge`), history accumulates at ~2 points/min and historical ranges (`?range=6h` etc.) serve from local disk with no internet dependency.
-- **Vercel Project (Optional)**:
-  - Link `gravity-tpu/agentic-era-networking` to your Vercel project.
-  - Add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` to GitHub Secrets/Vars. The CI deploy job is self-skipping until configured.
+- **Telemetry history (Jetson).** The bridge server writes 30-day JSONL history to `/var/lib/zodiac/history/` (falling back to `~/zodiac-history` or `/tmp/zodiac-history`), at about 2 points per minute. Ranges such as `?range=6h` are served from local disk with no internet dependency. After a restart (`sudo systemctl restart zodiac-bridge`) history resumes accumulating.
+- **Cloud relay (optional).** Provision a Neon project and set `DATABASE_URL` in `.env.local` and the GitHub repository secrets. Link the repository to a Vercel project and add `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`; the CI deploy job skips itself until configured. The public layer is read-only: it has no path to mutate the switch.
+
+## 11. Development tooling: AI code review
+
+Pre-push and CI run a multi-model review (Gemini, then Claude, then OpenAI as fallbacks) with a rubric derived from the invariants above. It flags critical issues, warnings and suggestions, and blocks on `CHANGES REQUESTED`. It is a second reader, not a verifier: model output is not evidence of correctness.
+
+```bash
+npm run review          # staged changes
+npm run review:last     # last commit
+npm run review:head     # all working-tree changes
+```
+
+## 12. Documents
+
+- [Roadmap](docs/ROADMAP.md): goals, tracks, exit criteria, what is deferred.
+- [Zodiac whitepaper (PDF)](docs/design/zodiac-whitepaper.pdf): the testbed, measured hardware model, verifier design and evaluation plan. Rebuild with `python3 scripts/build-zodiac-whitepaper.py` (needs matplotlib and Chrome).
+- [Benchmark whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md): packet-rate limits of an OpenFlow edge switch under rule-table load.
+- [Benchmark archive](docs/benchmarks/README.md): runs, artifacts and analysis scripts.
+- [Hardware blueprint](docs/design/physical-sdn-edge-tpu.md): wiring, interfaces, management plane, detector and verifier components.

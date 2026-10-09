@@ -27,7 +27,6 @@ import {
 } from '../../src/sdn/openflow-types.js';
 import { OpenFlowServer } from '../../src/sdn/openflow-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
-import { RoutingLoopDetectedError } from '../../src/core/routing-verifier.js';
 
 describe('OpenFlow 1.3 Wire Protocol Serialization', () => {
   it('encodes and decodes standard 8-byte OpenFlow headers deterministically', () => {
@@ -582,30 +581,5 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     expect(server.metrics.coppPacketInDrops).toBe(3n);
 
     switchSocket.destroy();
-  });
-});
-
-describe('ZodiacController Invariant Protection Gate', () => {
-  it('strictly blocks flow rule dispatch when symbolic loop verifier detects a routing cycle', () => {
-    const controller = new ZodiacController();
-
-    const cyclicHops = [
-      { fromNode: 'switch-1', toNode: 'switch-2', cost: 1 },
-      { fromNode: 'switch-2', toNode: 'switch-3', cost: 1 },
-      { fromNode: 'switch-3', toNode: 'switch-1', cost: 1 }, // Cycle!
-    ];
-
-    const rule = {
-      id: 'rule-test-1',
-      priority: 100,
-      srcCidr: '10.0.0.0/24',
-      dstCidr: '10.0.1.0/24',
-      protocol: 'TCP' as const,
-      action: 'FORWARD' as const,
-    };
-
-    expect(() => {
-      controller.pushVerifiedRule(rule, cyclicHops, 1);
-    }).toThrow(RoutingLoopDetectedError);
   });
 });

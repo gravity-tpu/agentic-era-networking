@@ -11,13 +11,13 @@
  *   a trial instead of being guessed at.
  * - Invariant 3 (Fail-Closed): flow plans that would exceed the 128-entry hardware table
  *   are clamped and the clamp is reported, never silently overflowed (NET-2).
- * - Invariant 4 (Verification Asymmetry): every planned path is proven loop-free by
- *   SymbolicRouteVerifier before the plan may be handed to the data plane.
+ * - Invariant 4 (Verify before actuating): every plan must pass verifyPlanAdmissible
+ *   (table budget, no hairpin, DROP semantics for quarantine) before it may be handed to
+ *   the data plane.
  * - Invariant 6 (Anti-Simulation): this module contains NO measurement data. It only
  *   transforms measurements that a caller obtained from physical hardware.
  */
 
-import { SymbolicRouteVerifier, type NetworkHop } from '../core/routing-verifier.js';
 import {
   OFPP_ANY,
   OFPG_ANY,
@@ -433,7 +433,7 @@ export async function refineTapThreshold(args: {
 }
 
 // ---------------------------------------------------------------------------
-// Flow-table plan (what we intend to install) + loop-free proof
+// Flow-table plan (what we intend to install) + admissibility check
 // ---------------------------------------------------------------------------
 
 export interface PlannedFlow {
@@ -514,24 +514,45 @@ export function planFlowState(args: {
   };
 }
 
+export class PlanInadmissibleError extends Error {
+  constructor(public readonly violations: readonly string[]) {
+    super(`Flow plan rejected: ${violations.join('; ')}`);
+    this.name = 'PlanInadmissibleError';
+  }
+}
+
 /**
- * Invariant 4: prove every path the plan creates is loop-free before it may touch the switch.
- * Directional paths are verified independently (a flow and its return flow are different
- * flows, not a cycle). Throws RoutingLoopDetectedError on failure.
+ * Invariant 4: check a plan against properties of the rule set before it may touch the switch.
+ * A static flow table has no routing loops to find, so the checks are about the table itself:
+ *   - table budget: the plan fits the 128-entry hardware table (roadmap A7);
+ *   - no hairpin: no rule outputs to its own ingress port (roadmap A2);
+ *   - quarantine rules DROP (empty output list), forwarding rules do not;
+ *   - priorities are valid OpenFlow priorities (0..65535).
+ * Does NOT enforce quarantine-over-allow precedence: the forwarding-first layouts under test
+ * deliberately rank forwarding rules higher (see roadmap A4 / A9).
+ * Throws PlanInadmissibleError listing every violation.
  */
-export function verifyPlanLoopFree(plan: FlowPlan): void {
-  const path = (nodes: readonly string[]): NetworkHop[] =>
-    nodes.slice(0, -1).map((n, i) => ({ fromNode: n, toNode: nodes[i + 1]!, cost: 1 }));
-  SymbolicRouteVerifier.verifyLoopFree(path(['rpi', 'zodiac:p1', 'zodiac:p2', 'extender']));
-  SymbolicRouteVerifier.verifyLoopFree(path(['extender', 'zodiac:p2', 'zodiac:p1', 'rpi']));
-  if (plan.mirror) {
-    SymbolicRouteVerifier.verifyLoopFree(path(['zodiac:p1', 'zodiac:p3', 'jetson-tap']));
+export function verifyPlanAdmissible(plan: FlowPlan): void {
+  const violations: string[] = [];
+  if (plan.flows.length > FLOW_TABLE_CAPACITY) {
+    violations.push(`${plan.flows.length} flows exceed the ${FLOW_TABLE_CAPACITY}-entry table`);
   }
-  for (const f of plan.flows) {
-    if (f.kind === 'quarantine') {
-      SymbolicRouteVerifier.verifyLoopFree([{ fromNode: f.srcIp ?? 'unknown', toNode: 'DROP', cost: 0 }]);
+  plan.flows.forEach((f, i) => {
+    const label = `flow[${i}] (${f.kind})`;
+    if (!Number.isInteger(f.priority) || f.priority < 0 || f.priority > 65535) {
+      violations.push(`${label}: priority ${f.priority} outside 0..65535`);
     }
-  }
+    if (f.inPort !== undefined && f.outputPorts.includes(f.inPort)) {
+      violations.push(`${label}: hairpin output to ingress port ${f.inPort}`);
+    }
+    if (f.kind === 'quarantine' && f.outputPorts.length > 0) {
+      violations.push(`${label}: quarantine rule must DROP but outputs to [${f.outputPorts.join(', ')}]`);
+    }
+    if (f.kind === 'forward' && f.outputPorts.length === 0) {
+      violations.push(`${label}: forwarding rule has no output ports`);
+    }
+  });
+  if (violations.length > 0) throw new PlanInadmissibleError(violations);
 }
 
 // ---------------------------------------------------------------------------

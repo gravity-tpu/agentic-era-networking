@@ -1,6 +1,6 @@
 # Physical Data-Plane Benchmark Results & Architectural Findings
 
-**Custodian:** CCIE Network Engineer Agent  
+**Custodian:** network engineering review skill (a review aid, not a certified review)  
 **Repository:** `gravity-tpu/agentic-era-networking`  
 **Governing Invariants:** Council Invariants 1–6, `NET-001` through `NET-009`  
 **Corresponding Physical Artifact:** [`docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json`](file:///Users/andymorven/git/agentic-era-networking/docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json)  
@@ -134,7 +134,7 @@ During `udp_small` (64-byte payload, 84-byte on-wire frame):
 
 ---
 
-## 5. Network Engineering & CCIE Architectural Recommendations
+## 5. Network Engineering Recommendations
 
 Based on these empirical silicon boundaries, the following architectural guidelines must govern production SDN operations on the Zodiac FX fabric (`NET-002`, `NET-004`, `NET-005`):
 
@@ -183,7 +183,7 @@ The benchmark orchestrator recorded 16 rejected trials out of 40 total trial win
 This document and its companion artifact represent verified physical telemetry gathered from bare-metal hardware. In accordance with **Council Invariant 6 (Goodhart's Law & Epistemic Telemetry Provenance)**:
 
 - **No Synthetic Data**: Every throughput, PPS, and loss value originates from physical sysfs registers, live iperf3 execution, and Zodiac FX serial `show ports` MIB counters.
-- **Loop-Freedom Proven**: Every installed flow plan passed `SymbolicRouteVerifier.verifyLoopFree()` before touching switch silicon.
+- **Plan check (correction 2026-10-09)**: Every installed flow plan passed `SymbolicRouteVerifier.verifyLoopFree()` before touching switch silicon. That check ran over fixed hop lists and could not fail, so it did not prove loop-freedom; it was removed and replaced by `verifyPlanAdmissible` (table budget, hairpin, DROP semantics). The measurements in this report do not depend on it.
 - **Cryptographic Ground Truth**: The raw telemetry JSON artifact is archived at:
   [`docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json`](file:///Users/andymorven/git/agentic-era-networking/docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json)  
   - SHA-256 Digest: `dbd4babd04fdd766`

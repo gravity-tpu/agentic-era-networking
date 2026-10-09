@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# scripts/run-review.sh — Council Review Runner with Bounded Variance Retry
+# scripts/run-review.sh — AI Review Runner with Bounded Variance Retry
 # ==============================================================================
-# Executes an AI council review command with bounded retries strictly for exit code 2
+# Executes an AI review command with bounded retries strictly for exit code 2
 # (warning-only blocks due to LLM generation variance). Fails closed immediately on exit 1
 # (definitive rejection / critical issues / model exhaustion).
 # ==============================================================================
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 REVIEW_SCRIPT="${1:-council:review:last}"
-LABEL="${2:-Council Review}"
+LABEL="${2:-AI Review}"
 
 MAX_ATTEMPTS=3
 attempt=1

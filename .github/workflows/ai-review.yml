@@ -22,7 +22,7 @@ on:
 
 jobs:
   review:
-    name: Technical Staff Council Review
+    name: AI Code Review
     runs-on: ubuntu-latest
 
     steps:
@@ -49,9 +49,9 @@ jobs:
       - name: Run Invariant & Unit Test Suite
         run: npm run test
 
-      - name: Technical Staff Council Review
+      - name: AI Code Review
         timeout-minutes: 12
-        run: bash scripts/run-review.sh council:review:last "Technical Staff Council Review"
+        run: bash scripts/run-review.sh council:review:last "AI Code Review"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}
@@ -60,7 +60,7 @@ jobs:
           GITHUB_BEFORE: ${{ github.event.before }}
 
   ccie-review:
-    name: CCIE Network Engineering Council Review
+    name: Network Engineering Review
     runs-on: ubuntu-latest
 
     steps:
@@ -78,9 +78,9 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: CCIE Network Engineering Council Review
+      - name: Network Engineering Review
         timeout-minutes: 12
-        run: bash scripts/run-review.sh ccie:review:last "CCIE Network Engineering Council Review"
+        run: bash scripts/run-review.sh ccie:review:last "Network Engineering Review"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY || secrets.GEMINI_API_KEY }}

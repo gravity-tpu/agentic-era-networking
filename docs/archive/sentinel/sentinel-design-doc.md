@@ -1,5 +1,7 @@
 # Sentinel: Autonomous Bot & Crawler Mitigation System
 
+> **Archived 2026-10-09.** Sentinel (bot and crawler mitigation) is outside the current project scope, a verifier and testbed for agent-proposed SDN policy; see [ROADMAP](../../ROADMAP.md). This document is design history. Its Council attestations, "approved for production" status and latency claims were not validated on the project hardware and should not be cited.
+
 ## A Systems Whitepaper on High-Scale Origin Protection, Asynchronous Telemetry, and Neuro-Symbolic Verification
 
 ---

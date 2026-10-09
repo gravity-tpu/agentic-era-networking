@@ -10,7 +10,7 @@ Only the current active release line on `main` receives security patches and aut
 
 ## Reporting a Vulnerability
 
-Security and determinism are paramount to the Technical Staff Council invariants governing this repository.
+Security and determinism are central to the invariants governing this repository (see [AGENTS.md](AGENTS.md)).
 
 If you discover a security vulnerability, please do **not** open a public issue.
 

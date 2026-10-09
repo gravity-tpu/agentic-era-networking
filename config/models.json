@@ -11,7 +11,7 @@
   },
   "routing": {
     "local": {
-      "description": "Local Ollama models — pre-push hook only (not available in CI). Council invariants loaded via system prompt.",
+      "description": "Local Ollama models — pre-push hook only (not available in CI). Repository invariants loaded via system prompt.",
       "ollama": "gemma4:26b"
     },
     "fast": {
