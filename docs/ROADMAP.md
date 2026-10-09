@@ -55,7 +55,7 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 Turn the benchmark from a report into an input to the verifier, and check that the switch behaves as modeled.
 
 - Encode the fitted cost model (`t_packet = 38.5 µs + 0.0348 µs x (B - 64) + 4.24 µs x N`, base layout; 1.3 µs per rule for forwarding-first) as a pure function with tests against the stored artifacts. Feeds A8.
-- **Conformance probe.** For a set of generated packets, compute the model's verdict, send them from the Pi, and observe what leaves each port via the mirror tap. Any disagreement is a finding about the model or the firmware.
+- **Conformance probe.** For a set of generated packets, compute the model's verdict, send them from the workload node, and observe what actually crosses each port. Ground truth is the independent uplink capture (O3) and the NETGEAR mirror (O1); the Zodiac P3 tap (O2) is a copy chosen by the flow rules under test and is not ground truth. Any disagreement is a finding about the model or the firmware.
 - Close the open measurement items from the whitepaper: drop-path capacity (needs a mirror capture), direct CPU observation, and unexplained session losses.
 - Replicate the single-round layouts (3 or more rounds) before treating them as distributions.
 
@@ -63,7 +63,7 @@ Turn the benchmark from a report into an input to the verifier, and check that t
 
 ### Track C: Adversarial testing on hardware
 
-Use the Pi 5 as the red team against the live policy and report what happens.
+Use the adversary node (the Pi 3B+ in the target topology) as the red team against the live policy and report what happens. Workload `wlan0` interfaces are off during runs, otherwise the lab-LAN Wi-Fi path bypasses the isolation policy being tested.
 
 Scenarios, each repeatable by script and reported with detection and containment times:
 
@@ -73,7 +73,7 @@ Scenarios, each repeatable by script and reported with detection and containment
 4. Flood to the point of session loss (what an attacker can do to the control plane).
 5. Evasion: traffic crafted to fit allowed rules, fragmentation, rule-table exhaustion.
 
-Report per scenario: contained or not, time to detect, time to quarantine, false positives, and whether the verifier or the detector would have prevented it. The existing anomaly detector (Coral and Jetson GPU) is used as the detector under test; its precision and recall are unmeasured today and become a result of this track.
+Report per scenario: contained or not, time to detect, time to quarantine, false positives, and whether the verifier or the detector would have prevented it. The detectors under test are the Jetson GPU autoencoder and, once it exists, a Hailo-8 classifier on the Pi 5 sensor (section 3). Their precision and recall are unmeasured today and become a result of this track; the attack runs also produce the labelled captures needed to train a classifier.
 
 **Exit criteria:** scenarios 1 to 4 scripted and reproducible; results table published; any scenario that defeats the policy produces a new verifier property in track A.
 
@@ -81,17 +81,79 @@ Report per scenario: contained or not, time to detect, time to quarantine, false
 
 Keep what already differentiates the project: telemetry with provenance, integer counters, monotonic clocks and fail-closed defaults, enforced by `scripts/check-provenance.ts` and the invariant tests. No new scope here; changes are to keep the invariants true as the other tracks land.
 
-## 3. Sequence
+## 3. Target topology and hardware roles
+
+Reassessed 2026-10-09. The current rack has four problems for the experiments above:
+
+1. **Workload nodes are dual-homed to the lab LAN.** Both Pis keep `wlan0` on `10.0.0.0/24` as an out-of-band path, which bypasses the P1 to P2 isolation policy.
+2. **No independent observer of Zodiac P2 egress.** The P3 tap shows what the flow rules choose to copy, so it derives from the policy under test. The benchmark receiver was the Mac over Wi-Fi, which is a confound.
+3. **The Pi 5 is adversary and observer.** Its capture NIC shares a host with the traffic generator, so attacker CPU load can drop captured packets.
+4. **The Jetson is overloaded.** Controller, verifier, GPU detector and the Qwen proposer share 7.6 GB of memory and one GPU (96% load during inference), which distorts detector-latency measurements.
+
+Target topology (**NEW** marks changes from today):
+
+```text
+                         Lab LAN / Internet (ISP extender, 10.0.0.1)
+                                          │
+                             ┌────────────┴────────────┐
+                             │  Uplink mirror switch   │  NEW (any cheap mirror-capable switch)
+                             └──┬───────────────────┬──┘
+                          to Zodiac P2         mirror of the P2 link
+                                │                   │
+                                │                   └────► Jetson USB NIC #2   [O3 egress ground truth]  NEW
+                                │
+                   ┌────────────┴────────────┐
+                   │    Zodiac FX  (DUT)     │── P3 policy-derived copy ─► Jetson tap NIC  [O2]
+                   │                         │── P4 OpenFlow 1.3 ◄──────► Jetson enP8p1s0 (:6633)
+                   └────────────┬────────────┘
+                                │ P1 workload (100M, isolation policy)
+                   ┌────────────┴────────────┐
+                   │   NETGEAR GS105Ev2      │
+                   │  P5 uplink              │
+                   │  P3 ── Pi 3B+  (adversary)              wlan0 OFF during runs
+                   │  P4 ── workload node 2 (legit client)   NEW    wlan0 OFF during runs
+                   │  P2 ◄─ mirror of P5 ── Pi 5 capture NIC   [O1 pre-DUT]
+                   └─────────────────────────┘
+                                                  Pi 5 + Hailo-8 = SENSOR
+                                                  (passive capture, classifier, verdicts
+                                                   sent to the Jetson over the mgmt network)
+```
+
+| Role | Hardware | Notes |
+| :--- | :--- | :--- |
+| Device under test | Zodiac FX | |
+| Controller, verifier, approval gate, install, readback | Jetson (CPU) | No GPU contention |
+| Cross-check detector | Jetson GPU, fed by O2 | Compared with the Hailo verdicts on the same runs |
+| Sensor and classifier | Pi 5 + Hailo-8, fed by O1 | Passive; verdicts go to the controller, and any quarantine still passes the verifier and a human gate |
+| LLM proposer and evaluation harness | Mac (Gemma 4 26B); Jetson Qwen as a cheaper comparison | Off the measurement path |
+| Adversary | Pi 3B+ | |
+| Legitimate client | Workload node 2 (NEW) | Needs one spare Pi or laptop |
+
+Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink (everything the workload sent, before the DUT). **O2** is the Zodiac P3 policy-derived copy. **O3** is a mirror on the P2 link captured by the Jetson (what actually crossed the uplink); it does not exist today and is what makes the conformance probe independent.
+
+**End-to-end scenario (the integration test).** A local model proposes a rule set for a stated intent; the verifier checks it and a person approves; the controller installs it and reads the table back; the adversary attacks while the client sends legitimate traffic; O1 and O3 capture ground truth; both detectors score the traffic; any quarantine passes the verifier again. Report detection and quarantine times, false positives, and model-versus-wire agreement.
+
+**Open items for the topology:**
+
+- Out-of-band management of the workload nodes without a lab-LAN path (for example a second Jetson NIC on a management VLAN, or scheduled `wlan0` windows).
+- Verify that the Jetson has the USB ports and bandwidth for NIC #2 (parking the Coral TPUs should free some).
+- Without a spare workload node, fall back to the Pi 5 in both roles, pin its CPU, and measure capture loss.
+
+**Hailo-8 entry criteria.** The Hailo is parked as a sensor until (a) the Jetson detector has measured precision and recall on labelled captures from track C, and (b) a model for it compiles to a `.hef` with the Hailo Dataflow Compiler on an x86 Linux host (op support for the detector's convolutions is unverified). Until then it contributes nothing to the tracks. Its other candidate role, an adversary-side surrogate model for evasion testing, is research-heavy and deferred.
+
+---
+
+## 4. Sequence
 
 1. **A1, A2 and A3 hardening, plus a failing test for the ARP spoof (C1).** Establishes whether the current policy actually has the ARP gap suspected in the README.
 2. **B cost model as a function; A7 and A8.** The first place the hardware changes what the verifier accepts.
 3. **A5 and A6 (shadowing, conflicts), then action-level readback.**
-4. **B conformance probe.**
+4. **B conformance probe**, after the O3 uplink observer is cabled (the NETGEAR mirror O1 can be used first).
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
-6. **C scenarios 2 to 5.**
+6. **C scenarios 2 to 5**, then the end-to-end scenario in section 3.
 7. **Independent review of the policy and the property list by a network engineer**, before publishing results. This can happen earlier; it should not happen later.
 
-## 4. Deferred or dropped
+## 5. Deferred or dropped
 
 | Item | Decision | Reason |
 | :--- | :--- | :--- |
@@ -101,16 +163,18 @@ Keep what already differentiates the project: telemetry with provenance, integer
 | Autonomous agent intent firewall (old Phase 5) | Dropped | Needs application-layer visibility the hardware does not give |
 | `AdaptiveFlowController` | Removed 2026-10-09 | Exported but on no data path; its fixed 25% and 5% steps contradicted its own "no magic constants" claim |
 | `SymbolicRouteVerifier` | Removed 2026-10-09; replaced by `verifyPlanAdmissible` and track A checks | Its call sites passed hop lists that cannot fail, so it proved nothing |
+| Coral Edge TPUs | Parked | They run a stock model whose output is not consumed; no trained classifier exists. Revisit with the Hailo entry criteria |
+| Hailo-8 | Parked until entry criteria in section 3 are met | Overlaps the Jetson GPU for CNN inference; its value is isolation and a separate vantage point, which needs a trained detector first |
 | Full GPU workload series (old workloads 3 and 4) | Deferred; roadmap archived | No data path needs them yet |
 | Token ledger, local-model review plane, Link 9 tether work | Tooling, not scope | Maintained as development infrastructure only |
 
-## 5. Non-goals
+## 6. Non-goals
 
 - Production deployment or any availability claim.
 - Line-rate forwarding. The hardware cannot do it, and the measurements say so.
 - Replacing a network engineer's judgment. The project's claim is narrower: deterministic checks catch classes of mistakes cheaply, and measured hardware limits turn policy bugs into predictable failures.
 
-## 6. Completed foundation (kept)
+## 7. Completed foundation (kept)
 
 Work from the earlier plan that the new tracks build on, all present in the repository:
 
