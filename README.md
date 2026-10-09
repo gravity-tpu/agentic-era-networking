@@ -100,6 +100,8 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
         └────────────┘
 ```
 
+A reassessed target topology (independent uplink observer, Pi 5 as passive sensor, workload `wlan0` off during runs) is in the [roadmap](docs/ROADMAP.md#3-target-topology-and-hardware-roles); the diagram above is today's rack.
+
 Addresses, VLAN matrix, port assignments and the NETGEAR management path are kept in [`.agents/network-context.md`](.agents/network-context.md). Wiring detail and the management-plane hierarchy are in [`docs/design/physical-sdn-edge-tpu.md`](docs/design/physical-sdn-edge-tpu.md).
 
 ## 7. Engineering invariants
