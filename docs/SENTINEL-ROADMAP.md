@@ -402,6 +402,8 @@ The Zodiac FX SAM4E8E MCU enforces a **deterministic 128-entry OpenFlow flow tab
 
 **Design constraint for Sentinel (captured in milestone S2.A):** Quarantine rules must target **supernet prefixes** (`/16` or `/20` blocks), not individual /32 IPs. A bot collective operating across 200 /24 subnets almost always originates from a handful of /16 autonomous system blocks. Installing one `/16` DROP rule consumes one flow table entry and neutralizes the entire rotating-IP pool within it.
 
+*Note on Scale Simulation:* To evaluate proposed policy logic against massive flow tables (up to 10,000 rules) without physical MCU exhaustion, the Jetson Orin hosts a local Open vSwitch 2.17.12 userspace instance (`br-sim`, `127.0.0.1:6634`) serving as a bounded (10,000 rules) software reference testbed alongside the physical Zodiac FX switch.
+
 #### Layer 3: Coral Edge TPU — Supplementary Packet Telemetry (2.2% Sampling)
 
 Validated inference rate on physical hardware: **~230 inferences/second** (single-active TPU under `zodiac-coral.service` Phase 0.13 architecture; physical sysfs provenance per Invariant 6). The ~450 inf/s dual-active figure is the Phase 2 staged-pipeline target.

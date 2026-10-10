@@ -74,6 +74,7 @@ export interface ControllerMetrics {
   readonly lastEchoLatencyNs: bigint;
   readonly totalPacketIns?: bigint | undefined;
   readonly coppPacketInDrops?: bigint | undefined;
+  readonly rejectedConnections?: bigint | undefined;
 }
 
 export class OpenFlowServer extends EventEmitter {
@@ -94,6 +95,7 @@ export class OpenFlowServer extends EventEmitter {
   private _messagesReceived: bigint = 0n;
   private _bytesReceived: bigint = 0n;
   private _lastEchoLatencyNs: bigint = 0n;
+  private _rejectedConnections: bigint = 0n;
   private echoSentNs: bigint = 0n;
   private activeEchoXid: number | null = null;
   private lastRxNs: bigint = 0n;
@@ -187,6 +189,7 @@ export class OpenFlowServer extends EventEmitter {
       lastEchoLatencyNs: this._lastEchoLatencyNs,
       totalPacketIns: this._totalPacketIns,
       coppPacketInDrops: this._coppPacketInDrops,
+      rejectedConnections: this._rejectedConnections,
     };
   }
 
@@ -418,6 +421,17 @@ export class OpenFlowServer extends EventEmitter {
         this.emit('error', err);
       }
     });
+
+    // Invariant 3 (Fail-Closed) & NET-001 (Control Plane Resilience):
+    // Prevent unauthenticated connection hijacking or DoS against an active switch.
+    // If a switch session is already active (ESTABLISHED or in-progress HANDSHAKE),
+    // reject competing incoming connections immediately rather than terminating the live data-plane session.
+    if (this.clientSocket && !this.clientSocket.destroyed && (this.state === 'ESTABLISHED' || this.state === 'HANDSHAKE')) {
+      this._rejectedConnections += 1n;
+      this.emit('connectionRejected', remoteAddr, `Active switch session already ${this.state}`);
+      socket.destroy();
+      return;
+    }
 
     if (this.clientSocket && !this.clientSocket.destroyed) {
       this.clientSocket.destroy();
