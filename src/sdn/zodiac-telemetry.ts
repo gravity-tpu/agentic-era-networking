@@ -1020,7 +1020,7 @@ export function createDefaultRpi5Snapshot(isDisconnected: boolean = true): Rpi5T
 
   return {
     status: isDisconnected ? 'offline' : 'online',
-    deviceName: 'agentic-node-02',
+    deviceName: 'rpi-hailo',
     architecture: 'aarch64 (ARMv8-A Cortex-A76)',
     cpuModel: 'Broadcom BCM2712 (4 Cores @ 2.4 GHz)',
     cpuCoreCount: 4,

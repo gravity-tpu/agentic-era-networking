@@ -74,6 +74,7 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
 - **Cost versus containment.** The cheapest measured layout (forwarding rules first) ranks forwarding above quarantine, so a quarantined source that also matches a forwarding rule would still be forwarded. Resolving this is the first verifier design question (roadmap A4 versus A9).
 - **Removed on 2026-10-09:** `SymbolicRouteVerifier` (its call sites passed hop lists that could not fail), the unused `AdaptiveFlowController`, and the dashboard's "Live Invariant Verification Playground" (hardcoded numbers shown as live). The verifier is the set of property checks in `port1-isolation.ts` and `verifyPlanAdmissible`.
 - **Single switch, single run set.** Many benchmark layouts are single rounds; see the whitepaper's limitations.
+- **Confinement is address-based.** The isolation policy admits IPv4 whose source and destination are in `10.0.2.0/24`, and source addresses are forgeable. A host on the uplink side that takes a `10.0.2.x` address can reach the workload nodes; the Mac's benchmark alias does exactly this by design. Testing it is a track C scenario.
 - **No claim of production readiness.** This is a lab system on a 100 Mbit/s MCU switch.
 
 ## 6. Hardware
@@ -82,8 +83,8 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
 | :--- | :--- |
 | Device under test | Northbound Networks Zodiac FX: SAM4E8E MCU, KSZ8795 switch IC, 4 x 100BASE-TX, 128-rule table, OpenFlow 1.3 |
 | Controller, benchmark host, detector | NVIDIA Jetson Orin Nano Super (Coral Edge TPU x2 for inference) |
-| Hostile workload and traffic generator | Raspberry Pi 5 with Hailo-8 |
-| Untrusted client workload | Raspberry Pi 3B+ |
+| Hostile workload and traffic generator | Raspberry Pi 5 with Hailo-8 (`rpi-hailo`) |
+| Untrusted client workloads | Two Raspberry Pi 3B+ (`agentic-node-01`, `agentic-node-02`) |
 | Workload aggregation | NETGEAR GS105Ev2 (802.1Q, port mirror) |
 | Operator and local model host | Apple Silicon workstation |
 
@@ -95,8 +96,8 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
         └─────┬──────┘
               │ P1 workload (policy: isolate)
         ┌─────┴──────┐
-        │ NETGEAR    │── Pi 5 + Hailo-8 (adversary)
-        │ GS105Ev2   │── Pi 3B+ (workload)
+        │ NETGEAR    │── rpi-hailo: Pi 5 + Hailo-8 (adversary)
+        │ GS105Ev2   │── agentic-node-01, -02: Pi 3B+ (workload)
         └────────────┘
 ```
 

@@ -56,7 +56,7 @@ Returns epistemic provenance metadata satisfying INV-6:
     "temp_sample_count": 15420
   },
   "host": {
-    "hostname": "agentic-node-02",
+    "hostname": "rpi-hailo",
     "cpu_temp_c": 47.4,
     "load_avg_1m": 0.12,
     "pcie_current_link_speed": "8.0 GT/s PCIe",
@@ -165,7 +165,7 @@ Result:
 
 ## 6. Service Deployment & Lifecycle Management
 
-Managed via `systemd` on Raspberry Pi 5 (`agentic-node-02`):
+Managed via `systemd` on Raspberry Pi 5 (`rpi-hailo`):
 
 ```bash
 # Check service status
