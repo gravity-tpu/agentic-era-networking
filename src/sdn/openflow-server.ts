@@ -34,6 +34,8 @@ export interface OpenFlowServerEvents {
   ready: (features: SwitchFeatures) => void;
   echoLatency: (latencyNs: bigint) => void;
   deadPeerTimeout: (clientAddress: string) => void;
+  handshakeTimeout: (clientAddress: string) => void;
+  connectionRejected: (clientAddress: string, reason: string) => void;
   disconnected: (clientAddress: string) => void;
   error: (err: Error) => void;
   rawMessage: (type: OpenFlowType, length: number, xid: number) => void;
@@ -42,7 +44,7 @@ export interface OpenFlowServerEvents {
 
 export type SwitchState = 'DISCONNECTED' | 'HANDSHAKE' | 'ESTABLISHED';
 
-const DEFAULT_ECHO_DEAD_PEER_TIMEOUT_MS = 8_000;
+const DEFAULT_ECHO_DEAD_PEER_TIMEOUT_MS = 4_000;
 const parsedEchoTimeoutMs = process.env['OPENFLOW_ECHO_DEAD_PEER_TIMEOUT_MS']
   ? parseInt(process.env['OPENFLOW_ECHO_DEAD_PEER_TIMEOUT_MS'], 10)
   : NaN;
@@ -65,6 +67,16 @@ const HANDSHAKE_TIMEOUT_MS = Number.isFinite(parsedHandshakeTimeoutMs) && parsed
   ? Math.min(Math.max(parsedHandshakeTimeoutMs, 1_000), 30_000)
   : DEFAULT_HANDSHAKE_TIMEOUT_MS;
 
+const DEFAULT_TCP_KEEPALIVE_INITIAL_DELAY_MS = 1_000;
+const parsedKeepaliveMs = process.env['OPENFLOW_TCP_KEEPALIVE_MS']
+  ? parseInt(process.env['OPENFLOW_TCP_KEEPALIVE_MS'], 10)
+  : NaN;
+// Bounded between 500ms and 10,000ms per Invariant 5 (Configurable, bounded limits).
+const TCP_KEEPALIVE_INITIAL_DELAY_MS =
+  Number.isFinite(parsedKeepaliveMs) && parsedKeepaliveMs > 0
+    ? Math.min(Math.max(parsedKeepaliveMs, 500), 10_000)
+    : DEFAULT_TCP_KEEPALIVE_INITIAL_DELAY_MS;
+
 export interface ControllerMetrics {
   readonly state: SwitchState;
   readonly connectedAddress?: string | undefined;
@@ -74,7 +86,7 @@ export interface ControllerMetrics {
   readonly lastEchoLatencyNs: bigint;
   readonly totalPacketIns?: bigint | undefined;
   readonly coppPacketInDrops?: bigint | undefined;
-  readonly rejectedConnections?: bigint | undefined;
+  readonly rejectedConnections: bigint;
 }
 
 export class OpenFlowServer extends EventEmitter {
@@ -101,6 +113,8 @@ export class OpenFlowServer extends EventEmitter {
   private lastRxNs: bigint = 0n;
   private readonly echoDeadPeerTimeoutNs: bigint;
   private readonly handshakeTimeoutMs: number;
+  private readonly handshakeTimeoutNs: bigint;
+  private handshakeStartNs: bigint = 0n;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private handshakeTimer: NodeJS.Timeout | null = null;
 
@@ -121,6 +135,7 @@ export class OpenFlowServer extends EventEmitter {
     super();
     this.echoDeadPeerTimeoutNs = echoDeadPeerTimeoutNs;
     this.handshakeTimeoutMs = handshakeTimeoutMs;
+    this.handshakeTimeoutNs = BigInt(handshakeTimeoutMs) * 1_000_000n;
     this.coppRateLimit = coppRateLimit;
     this.coppMaxBurst = coppMaxBurst;
     this.coppTokens = coppMaxBurst;
@@ -156,8 +171,12 @@ export class OpenFlowServer extends EventEmitter {
    * resource exhaustion against the OpenFlow listener.
    */
   private startHandshakeTimeout(socket: net.Socket): void {
+    this.clearHandshakeTimeout();
+    this.handshakeStartNs = process.hrtime.bigint();
     this.handshakeTimer = setTimeout(() => {
       if (this.clientSocket === socket && this.state === 'HANDSHAKE') {
+        const remoteAddr = `${socket.remoteAddress}:${socket.remotePort}`;
+        this.emit('handshakeTimeout', remoteAddr);
         socket.destroy();
       }
     }, this.handshakeTimeoutMs);
@@ -169,6 +188,7 @@ export class OpenFlowServer extends EventEmitter {
       clearTimeout(this.handshakeTimer);
       this.handshakeTimer = null;
     }
+    this.handshakeStartNs = 0n;
   }
 
   public get totalPacketIns(): bigint {
@@ -177,6 +197,10 @@ export class OpenFlowServer extends EventEmitter {
 
   public get coppPacketInDrops(): bigint {
     return this._coppPacketInDrops;
+  }
+
+  public get rejectedConnections(): bigint {
+    return this._rejectedConnections;
   }
 
   public get metrics(): ControllerMetrics {
@@ -415,6 +439,9 @@ export class OpenFlowServer extends EventEmitter {
   private handleClient(socket: net.Socket): void {
     const remoteAddr = `${socket.remoteAddress}:${socket.remotePort}`;
 
+    socket.setKeepAlive(true, TCP_KEEPALIVE_INITIAL_DELAY_MS);
+    socket.setNoDelay(true);
+
     socket.on('error', (err) => {
       this.emit('clientError', err, remoteAddr);
       if (this.listenerCount('error') > 0) {
@@ -422,10 +449,45 @@ export class OpenFlowServer extends EventEmitter {
       }
     });
 
+    const nowNs = process.hrtime.bigint();
+
+    // Anti-Zombie / Stale Session Reaping (Invariant 3 & Invariant 5):
+    // Eagerly tear down stale sessions before evaluating new connections:
+    // 1) An ESTABLISHED session exceeding echoDeadPeerTimeoutNs without traffic.
+    // 2) A HANDSHAKE session exceeding handshakeTimeoutNs without completing features negotiation.
+    // This prevents switch reconnect lockout after ungraceful reboots and protects against
+    // Slowloris-style handshake stall DoS.
+    if (this.clientSocket && !this.clientSocket.destroyed) {
+      if (this.state === 'ESTABLISHED') {
+        if (this.lastRxNs > 0n && nowNs - this.lastRxNs > this.echoDeadPeerTimeoutNs) {
+          const staleAddr = `${this.clientSocket.remoteAddress}:${this.clientSocket.remotePort}`;
+          this.emit('deadPeerTimeout', staleAddr);
+          const staleSocket = this.clientSocket;
+          this.clientSocket = null;
+          this.state = 'DISCONNECTED';
+          this.stopHeartbeat();
+          staleSocket.destroy();
+          this.emit('disconnected', staleAddr);
+        }
+      } else if (this.state === 'HANDSHAKE') {
+        if (this.handshakeStartNs > 0n && nowNs - this.handshakeStartNs > this.handshakeTimeoutNs) {
+          const staleAddr = `${this.clientSocket.remoteAddress}:${this.clientSocket.remotePort}`;
+          this.emit('handshakeTimeout', staleAddr);
+          const staleSocket = this.clientSocket;
+          this.clientSocket = null;
+          this.state = 'DISCONNECTED';
+          this.clearHandshakeTimeout();
+          staleSocket.destroy();
+          this.emit('disconnected', staleAddr);
+        }
+      }
+    }
+
     // Invariant 3 (Fail-Closed) & NET-001 (Control Plane Resilience):
     // Prevent unauthenticated connection hijacking or DoS against an active switch.
-    // If a switch session is already active (ESTABLISHED or in-progress HANDSHAKE),
+    // If a switch session is active (ESTABLISHED or in-progress HANDSHAKE) and responsive within bounds,
     // reject competing incoming connections immediately rather than terminating the live data-plane session.
+    // Deliberately omit eager echo probes here to prevent amplification attacks under TCP SYN floods.
     if (this.clientSocket && !this.clientSocket.destroyed && (this.state === 'ESTABLISHED' || this.state === 'HANDSHAKE')) {
       this._rejectedConnections += 1n;
       this.emit('connectionRejected', remoteAddr, `Active switch session already ${this.state}`);

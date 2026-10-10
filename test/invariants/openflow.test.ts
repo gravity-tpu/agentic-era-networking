@@ -646,4 +646,146 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
 
     switchSocket.destroy();
   });
+
+  it('rejects competing incoming TCP connections when switch session is in HANDSHAKE state (Handshake Race Protection)', async () => {
+    server = new OpenFlowServer();
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    let rejectedEventFired = false;
+    server.on('connectionRejected', () => {
+      rejectedEventFired = true;
+    });
+
+    // 1. Initial switch initiates connection but remains in HANDSHAKE
+    const switchSocket = net.connect({ port: testPort, host: '127.0.0.1' }, () => {
+      switchSocket.write(buildOfpHello(1));
+    });
+
+    // Wait 25ms for server to transition to HANDSHAKE
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(server.metrics.state).toBe('HANDSHAKE');
+
+    // 2. Competing client attempts to connect during HANDSHAKE window
+    const rogueSocket = net.connect({ port: testPort, host: '127.0.0.1' });
+    const rogueClosed = new Promise<void>((resolve) => {
+      rogueSocket.on('close', () => resolve());
+    });
+
+    await rogueClosed;
+    expect(rejectedEventFired).toBe(true);
+    expect(server.metrics.rejectedConnections).toBe(1n);
+    expect(server.rejectedConnections).toBe(1n);
+    expect(server.metrics.state).toBe('HANDSHAKE');
+
+    switchSocket.destroy();
+  });
+
+  it('eagerly reaps dead-peer zombie session on incoming connection if heartbeat threshold was exceeded', async () => {
+    const shortTimeoutNs = 50_000_000n; // 50ms
+    server = new OpenFlowServer(shortTimeoutNs);
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    const handshakeComplete = new Promise<void>((resolve) => {
+      server.on('ready', () => resolve());
+    });
+
+    // 1. Establish session
+    let switchRx = Buffer.alloc(0);
+    const switchSocket = net.connect({ port: testPort, host: '127.0.0.1' }, () => {
+      switchSocket.write(buildOfpHello(1));
+    });
+
+    switchSocket.on('data', (chunk) => {
+      switchRx = Buffer.concat([switchRx, chunk]);
+      while (switchRx.length >= 8) {
+        const header = decodeOfpHeader(switchRx);
+        if (switchRx.length < header.length) break;
+        switchRx = switchRx.subarray(header.length);
+
+        if (header.type === OpenFlowType.OFPT_FEATURES_REQUEST) {
+          const reply = Buffer.alloc(32);
+          reply.writeUInt8(OFP_VERSION_1_3, 0);
+          reply.writeUInt8(OpenFlowType.OFPT_FEATURES_REPLY, 1);
+          reply.writeUInt16BE(32, 2);
+          reply.writeUInt32BE(header.xid, 4);
+          reply.writeBigUInt64BE(0x12345678n, 8);
+          reply.writeUInt32BE(128, 16);
+          reply.writeUInt8(1, 20);
+          reply.writeUInt8(0, 21);
+          reply.writeUInt32BE(0x01, 24);
+          switchSocket.write(reply);
+        }
+      }
+    });
+
+    await handshakeComplete;
+    expect(server.metrics.state).toBe('ESTABLISHED');
+
+    // Wait 70ms so the dead-peer timeout (50ms) has elapsed without new traffic
+    await new Promise((resolve) => setTimeout(resolve, 70));
+
+    let deadPeerFired = false;
+    server.on('deadPeerTimeout', () => { deadPeerFired = true; });
+
+    // 2. Reconnecting switch arrives: should reap the stale zombie session and accept new connection
+    const newSwitchConnected = new Promise<void>((resolve) => {
+      server.once('connected', () => resolve());
+    });
+
+    const newSwitchSocket = net.connect({ port: testPort, host: '127.0.0.1' });
+    await newSwitchConnected;
+
+    expect(deadPeerFired).toBe(true);
+    expect(server.metrics.state).toBe('HANDSHAKE');
+
+    switchSocket.destroy();
+    newSwitchSocket.destroy();
+  });
+
+  it('eagerly reaps a stalled HANDSHAKE session on incoming connection if handshake timeout was exceeded (Handshake DoS Protection)', async () => {
+    const shortTimeoutNs = 50_000_000n; // 50ms
+    const shortHandshakeMs = 40; // 40ms
+    server = new OpenFlowServer(shortTimeoutNs, shortHandshakeMs);
+    await server.listen(0, '127.0.0.1');
+
+    const address = (server['server'] as net.Server).address() as net.AddressInfo;
+    const testPort = address.port;
+
+    let handshakeTimeoutFired = false;
+    server.on('handshakeTimeout', () => {
+      handshakeTimeoutFired = true;
+    });
+
+    // 1. Initial client connects and initiates handshake but stalls without completing features reply
+    const stalledSocket = net.connect({ port: testPort, host: '127.0.0.1' }, () => {
+      stalledSocket.write(buildOfpHello(1));
+    });
+
+    // Wait 20ms for server to enter HANDSHAKE
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(server.metrics.state).toBe('HANDSHAKE');
+
+    // Wait past the 40ms handshake timeout
+    await new Promise((resolve) => setTimeout(resolve, 35));
+
+    // 2. Legitimate switch arrives: should reap the stalled handshake session immediately and accept connection
+    const newSwitchConnected = new Promise<void>((resolve) => {
+      server.once('connected', () => resolve());
+    });
+
+    const legitimateSocket = net.connect({ port: testPort, host: '127.0.0.1' });
+    await newSwitchConnected;
+
+    expect(handshakeTimeoutFired).toBe(true);
+    expect(server.metrics.state).toBe('HANDSHAKE');
+
+    stalledSocket.destroy();
+    legitimateSocket.destroy();
+  });
 });

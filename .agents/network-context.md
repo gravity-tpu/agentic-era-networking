@@ -120,7 +120,9 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 
 ### NETGEAR Management Access
 
-This section describes the **workload-side** switch. **Uplink switch #2** (installed 2026-10-09) sits on the lab LAN side: its management address is not yet recorded (a DHCP lease on `10.0.0.0/24`, or the factory fallback `192.168.0.239`, which is unreachable from the lab subnet), and its mirror of P4 (O3) is not configured. Both units default to `192.168.0.239`, which does not collide because they are in different L2 domains.
+This section describes the **workload-side** switch. **Uplink switch #2** (installed 2026-10-09) sits on the lab LAN side: its management address is not yet recorded (a DHCP lease on `10.0.0.0/24`, or the factory fallback `192.168.0.239`, which is unreachable from the lab subnet), and its mirror of P4 (O3) is not configured. Both units default to `192.168.0.239`. Do not assume they stay apart: the isolation policy forwards ARP across P1⟷P2, so if uplink switch #2 sits at its fallback address it can answer ARP for the same IP that the workload side uses to reach the workload-side switch (the `192.168.0.50` alias below), and management access to the workload-side switch would break intermittently. Give uplink switch #2 a distinct management address (a DHCP reservation or a static address outside `192.168.0.0/24` on the lab LAN) before relying on either UI.
+
+**Rate transition (NET-010).** Uplink switch #2 puts a GbE-to-100M transition in front of Zodiac P2 (ISP mesh at gigabit, Zodiac P2 at 100BASE-TX). Whether 802.3x flow control is enabled on its ports, as it is on the workload-side switch, has not been checked; until it is, bursts toward the Zodiac can tail-drop in its 128 KB shared buffer, which would show up as loss at the uplink that the Zodiac's own counters never see.
 
 The workload-side GS105Ev2 web UI is at `http://192.168.0.239/`. It sits outside the OpenFlow control plane and is not reachable from the lab LAN. Operator access is an SSH port-forward through a workload node (RPi 3B+ shown; `10.0.0.45` is its `wlan0`):
 
