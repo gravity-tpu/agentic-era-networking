@@ -24,7 +24,16 @@ This ledger tracks the physical, data link, network, and transport architecture 
                                          └───┬──────────────────┬──────────────────────┘
                                              │                  │ Lab Wi-Fi (802.11)
                    ┌─────────────────────────┘                  ├────────────────────────────────────┐
-                   │ Extender RJ45 (wired)                      │ 10.0.0.15                          │ 10.0.0.119
+                   │ Extender RJ45 → uplink switch #2 P5        │ 10.0.0.15                          │ 10.0.0.119
+                   ▼                                            │                                    │
+┌─────────────────────────────────────┐                         │                                    │
+│ NETGEAR GS105Ev2 (uplink switch #2) │                         │                                    │
+├─────────────────────────────────────┤                         │                                    │
+│ P5: ISP mesh / extender (RJ45)      │                         │                                    │
+│ P4: → Zodiac P2 (100M)              │                         │                                    │
+│ P1-P3: free; O3 mirror of P4 pending│                         │                                    │
+└──────────────────┬──────────────────┘                         │                                    │
+                   │ P4 RJ45 → Zodiac P2                        │                                    │
                    ▼                                            ▼                                    ▼
 ┌─────────────────────────────────────┐     ┌───────────────────────────────────────┐   ┌────────────────────────┐
 │           Zodiac FX Switch          │     │         Jetson Orin Nano Super        │   │    Mac Workstation     │
@@ -106,12 +115,14 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi 3 & Pi 5), `en0` (Mac), Zodiac Port 2 | Out-of-Band Mgmt & Gateway Uplink | SSH management, Internet gateway egress (`10.0.0.1`), physical uplink from Zodiac Port 2 to the ISP extender via uplink switch #2 (since 2026-10-09). |
 | `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
 | `10.0.2.0/24` | `eth0` (`agentic-node-01`: `10.0.2.50`, `rpi-hailo`: `10.0.2.51`, `agentic-node-02`: `10.0.2.52`) -> Netgear P3/P4/P1 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` lab LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
-| `192.168.0.0/24` | NETGEAR GS105Ev2 management (`192.168.0.239`, factory-default static IP, MAC `28:94:01:8b:70:d9`) | Switch Management (Out-of-Band, Operator-Only) | Smart-switch web UI (HTTP :80). Not routed anywhere; reached only by a temporary `192.168.0.50/24` alias on an `eth0` of a host on the NETGEAR. See *NETGEAR Management Access*. |
+| `192.168.0.0/24` | Workload-side NETGEAR GS105Ev2 management (`192.168.0.239`, factory-default static IP, MAC `28:94:01:8b:70:d9`) | Switch Management (Out-of-Band, Operator-Only) | Smart-switch web UI (HTTP :80). Not routed anywhere; reached only by a temporary `192.168.0.50/24` alias on an `eth0` of a host on the NETGEAR. See *NETGEAR Management Access*. |
 | `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
 
 ### NETGEAR Management Access
 
-The GS105Ev2 web UI is at `http://192.168.0.239/`. It sits outside the OpenFlow control plane and is not reachable from the lab LAN. Operator access is an SSH port-forward through a workload node (RPi 3B+ shown; `10.0.0.45` is its `wlan0`):
+This section describes the **workload-side** switch. **Uplink switch #2** (installed 2026-10-09) sits on the lab LAN side: its management address is not yet recorded (a DHCP lease on `10.0.0.0/24`, or the factory fallback `192.168.0.239`, which is unreachable from the lab subnet), and its mirror of P4 (O3) is not configured. Both units default to `192.168.0.239`, which does not collide because they are in different L2 domains.
+
+The workload-side GS105Ev2 web UI is at `http://192.168.0.239/`. It sits outside the OpenFlow control plane and is not reachable from the lab LAN. Operator access is an SSH port-forward through a workload node (RPi 3B+ shown; `10.0.0.45` is its `wlan0`):
 
 ```bash
 # 1. On the RPi 3B+: temporary alias on the NETGEAR-facing NIC (non-persistent; lost on reboot)

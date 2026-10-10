@@ -42,6 +42,8 @@ This work is the measurement foundation of Zodiac, a real-hardware testbed and v
                                                   enP8p1s0 100 Mbit/s 10.0.1.8
 ```
 
+> **Note (2026-10-09).** This diagram shows the setup of the recorded runs, with the ISP extender on Zodiac Port 2. Since 2026-10-09 a second NETGEAR GS105Ev2 (uplink switch #2) sits between them. The measurements predate it.
+
 Traffic was generated on the Raspberry Pi (`iperf3` and a small paced UDP sender), received on the Mac, and observed by the switch's own port counters read over its serial console. The controller on the Jetson installs and verifies flow rules (OpenFlow multipart readback) and records session events. Every artifact is stamped `origin: physical_bench_run` and uses 64-bit integer counters; there is no simulated data (the repository's integer-accounting and provenance invariants, see [1]).
 
 ## 2. Method in brief

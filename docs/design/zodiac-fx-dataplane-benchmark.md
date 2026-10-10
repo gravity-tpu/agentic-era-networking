@@ -22,6 +22,8 @@ Governing invariants: repository invariants 1, 2, 3, 4, 6 ([AGENTS.md](../../AGE
  Jetson enP8p1s0 10.0.1.8 ─ Port 4 ┘  VLAN 200 (OpenFlow control, 6633)
 ```
 
+> **Note (2026-10-09).** This diagram shows the setup of the recorded runs, with the ISP extender on Zodiac Port 2. Since 2026-10-09 a second NETGEAR GS105Ev2 (uplink switch #2) sits between them. The measurements predate it.
+
 Management of the workload is out of band: the Jetson reaches the Pi over `wlan0` (10.0.0.45) via SSH, so benchmark control traffic never crosses the switch under test.
 
 ## 3. Method

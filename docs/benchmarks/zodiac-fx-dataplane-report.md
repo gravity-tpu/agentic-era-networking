@@ -59,6 +59,8 @@ The physical testbed was attested and verified prior to measurement initiation:
        └────────────────────────┘                   └────────────────────────┘
 ```
 
+> **Note (2026-10-09).** This diagram shows the setup of the recorded runs, with the ISP extender on Zodiac Port 2. Since 2026-10-09 a second NETGEAR GS105Ev2 (uplink switch #2) sits between them. The measurements predate it.
+
 ### Physical Hardware Provenance
 
 | Component | Identifier / Silicon | Firmware / OS | Role in Benchmark |

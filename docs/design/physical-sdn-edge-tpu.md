@@ -41,7 +41,14 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
                                             +───────────────────────────────────+
                                             |     ISP Gateway / Mesh Node       |
                                             +-----------------+-----------------+
-                                                              │ 100BASE-TX Ethernet
+                                                              │ Ethernet (to switch P5)
+                                                              ▼
+                                            +───────────────────────────────────+
+                                            | NETGEAR GS105Ev2 · Uplink Switch 2|
+                                            | P5: ISP mesh   P4: Zodiac Port 2  |
+                                            | P1-P3 free; O3 mirror pending     |
+                                            +-----------------+-----------------+
+                                                              │ 100BASE-TX Ethernet (switch P4)
                                                               ▼
 +─────────────────────────────────────────────────────────────────────────────────────────────────────────+
 |                                  Zodiac FX OpenFlow Switch (Data Plane)                                 |
@@ -83,15 +90,15 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
         │                           +───────────────────────────────────+   │
         ▼                                                                   ▼
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
-| NETGEAR GS105Ev2 5-Port GbE Switch|               | MacBook M5 · Gemma 4 Local Workstation Plane      |
+| NETGEAR GS105Ev2 (workload side)  |               | MacBook M5 · Gemma 4 Local Workstation Plane      |
 |                                   |               |                                                   |
 | * Port 5: Uplink to Zodiac Port 1 | (AIR-GAPPED:  | * Direct USB-C Hardware Tether (Link 9):          |
-| * Port 4: RPi 5 (10.0.2.51)       |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
+| * Port 4: rpi-hailo (10.0.2.51)   |  NO CONNECTION|   - CDC-NCM: en8 (169.254.91.144 <-> 192.168.55.1)|
 |   - 26 TOPS Hailo-8 M.2 NPU       |  BETWEEN RPIS |   - CDC-ACM: /dev/cu.usbmodem17916261208203       |
-| * Port 3: RPi 3B+ (10.0.2.50)     |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
-| * Port 2: RPi 5 USB-GbE (capture) |               | * Local Ollama Engine: gemma4:26b (:11434)        |
-| * 802.3x Flow Control Enabled     |               | * Dual-Stage Review Gate                         |
-| * 802.1Q Multi-Tenant Ready       |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
+| * Port 3: node-01 Pi 3B+ (.50)    |  AND MACBOOK) | * 20-Core Apple Silicon Metal GPU (UMA VRAM)      |
+| * Port 2: Pi 5 USB-GbE (capture)  |               | * Local Ollama Engine: gemma4:26b (:11434)        |
+| * Port 1: node-02 Pi 3B+ (.52)    |               | * Dual-Stage Review Gate                         |
+| * 802.3x FC on; 802.1Q ready      |               | * Zero-Dependency Plist XML Scanner (IOKit)       |
 |                                   |               | * Operator Console: http://localhost:3000 & Cloud |
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
 ```
@@ -119,11 +126,12 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
 | Node | Interface / Medium | Hardware Identity | Logical Network | Target / Destination | Role & Invariant |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Zodiac FX Switch** | Port 1 (100BASE-TX) | KSZ8795 Port 1 | Workload Data Plane (VLAN 100) | NETGEAR Port 5 | **Untrusted Workload Transit**: Monitored agent data plane aggregation uplink. |
-| **Zodiac FX Switch** | Port 2 (100BASE-TX) | KSZ8795 Port 2 | Gateway Bridged (VLAN 100) | ISP Gateway / Mesh Node | **WAN / Gateway Uplink**: Egress to public internet. |
+| **Zodiac FX Switch** | Port 2 (100BASE-TX) | KSZ8795 Port 2 | Gateway Bridged (VLAN 100) | Uplink switch #2 (NETGEAR GS105Ev2) port 4, then the ISP Gateway / Mesh Node on its port 5 | **WAN / Gateway Uplink**: Egress to public internet. Since 2026-10-09 the ISP link terminates on uplink switch #2 instead of the Zodiac directly. |
 | **Zodiac FX Switch** | Port 3 (100BASE-TX) | KSZ8795 Port 3 | Port Mirror (VLAN 100) | Jetson `enx*` USB GbE | **Hardware Mirror Tap**: Zero-overhead port mirror for Coral/Jetson DPI. |
 | **Zodiac FX Switch** | Port 4 (100BASE-TX) | KSZ8795 Port 4 | Switch Management (VLAN 200) | Jetson `enP8p1s0` | **OpenFlow 1.3 Control Channel**: Isolated switch management. |
 | **Zodiac FX Switch** | Micro-USB (CDC-ACM) | Atmel VID 03eb PID 2404 | `/dev/ttyACM0` @ 115200 8N1 | Jetson USB Host | **Telemetry Stream**: 1–2 Hz hardware register stream. |
-| **NETGEAR GS105Ev2** | Ports 1–5 (1000BASE-T) | GS105E v2 | Workload Subnet Aggregation | P5: Zodiac P1, P4: RPi 5, P3: RPi 3, P2: RPi 5 USB-GbE capture, P1: Res | **Intermediate Aggregation Switch**: GbE aggregation layer, 128KB packet buffer, IEEE 802.3x flow control, rate transition bridging. |
+| **NETGEAR GS105Ev2** | Ports 1–5 (1000BASE-T) | GS105E v2 | Workload Subnet Aggregation | P5: Zodiac P1, P4: RPi 5, P3: RPi 3, P2: RPi 5 USB-GbE capture, P1: agentic-node-02 (RPi 3B+) | **Intermediate Aggregation Switch**: GbE aggregation layer, 128KB packet buffer, IEEE 802.3x flow control, rate transition bridging. |
+| **NETGEAR GS105Ev2 (uplink switch #2)** | Ports 1–5 (1000BASE-T) | GS105E v2 | Lab-side L2 uplink | P5: ISP Gateway / Mesh Node, P4: Zodiac P2, P1-P3: free | **Uplink Switch**: installed 2026-10-09 with only those two links. Port mirroring of its P4 is planned as observation point O3 (not configured; no capture interface attached). |
 | **Jetson Orin Nano** | `enP8p1s0` (Onboard GbE) | Onboard Realtek GbE | Dedicated Control Subnet | Zodiac Port 4 | **OpenFlow Controller**: Listens on `:6633` (<1ms latency). |
 | **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress**: Line-rate packet capture for Coral TPU. |
 | **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Lab Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |

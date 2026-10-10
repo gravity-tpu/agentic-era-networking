@@ -154,6 +154,7 @@ BODY = """
 <tr><td>Controller, benchmark host, detector</td><td>NVIDIA Jetson Orin Nano Super (two Coral Edge TPUs for inference)</td></tr>
 <tr><td>Hostile workload, traffic generator</td><td>Raspberry Pi 5 with Hailo-8; Raspberry Pi 3B+ as the client workload</td></tr>
 <tr><td>Workload aggregation</td><td>NETGEAR GS105Ev2 (802.1Q, port mirror)</td></tr>
+<tr><td>Uplink switch</td><td>Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac Port 2, installed 2026-10-09 after the measurements in section 3. Its mirror of the Zodiac P2 link (observation point O3) is not yet configured.</td></tr>
 </table>
 <p>Port 1 carries the untrusted workload segment, Port 2 the uplink to the lab LAN and Internet, Port 3 a mirror tap read by the Jetson, and Port 4 the OpenFlow control channel. The policy under test isolates the workload: only IPv4 whose source and destination are both inside the workload subnet, plus ARP, may cross Port 1 to Port 2; everything else from Port 1 is mirrored to the tap only; the table-miss entry drops.</p>
 <p><b>Provenance.</b> Every measurement artifact is stamped as a physical run, uses 64-bit integer counters and monotonic nanosecond clocks, and binds the switch identity and firmware version. Telemetry from disconnected hardware reports zero and offline, never a plausible value. Modelled values in this paper are marked as modelled.</p>

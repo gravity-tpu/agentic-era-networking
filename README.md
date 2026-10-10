@@ -86,17 +86,23 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
 | Hostile workload and traffic generator | Raspberry Pi 5 with Hailo-8 (`rpi-hailo`) |
 | Untrusted client workloads | Two Raspberry Pi 3B+ (`agentic-node-01`, `agentic-node-02`) |
 | Workload aggregation | NETGEAR GS105Ev2 (802.1Q, port mirror) |
+| Uplink switch | Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac P2 (installed 2026-10-09; O3 mirror not yet configured) |
 | Operator and local model host | Apple Silicon workstation |
 
 ```text
-   Lab LAN / Internet (ISP extender)
-              │ P2 uplink
+   Lab LAN / Internet (ISP mesh / extender)
+              │ P5
+        ┌─────┴──────┐
+        │ NETGEAR #2 │  uplink switch (P4 → Zodiac P2; mirror pending)
+        │ GS105Ev2   │
+        └─────┬──────┘
+              │ P4 ↔ Zodiac P2
         ┌─────┴──────┐  P3 mirror tap ───────► Jetson (tap NIC → detector)
         │ Zodiac FX  │  P4 OpenFlow 1.3 ◄────► Jetson (controller :6633)
         └─────┬──────┘
               │ P1 workload (policy: isolate)
         ┌─────┴──────┐
-        │ NETGEAR    │── rpi-hailo: Pi 5 + Hailo-8 (adversary)
+        │ NETGEAR #1 │── rpi-hailo: Pi 5 + Hailo-8 (adversary)
         │ GS105Ev2   │── agentic-node-01, -02: Pi 3B+ (workload)
         └────────────┘
 ```
