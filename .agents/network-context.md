@@ -99,14 +99,14 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | Node / Silicon | Hardware / SoC | MAC / Serial / ID | Network Interfaces | Roles & Capabilities |
 | :--- | :--- | :--- | :--- | :--- |
 | **Zodiac FX Switch** | Atmel SAM4E8E + KSZ8795CLX | DPID `0x70b3d58740c9`<br>MAC `70:B3:D5:87:40:C9`<br>FW `0.86`<br>UID `1396191488-826951736-858797360-925970489` | Port 1 (Workload)<br>Port 2 (Uplink switch #2, port 4; was the ISP extender until 2026-10-09)<br>Port 3 (Tap)<br>Port 4 (Mgmt) | 128-rule OpenFlow 1.3 switch fabric; hardware MIB counters via CDC-ACM `/dev/ttyACM0`. |
-| **NETGEAR GS105Ev2** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2 | Port 4 (RPi 5 GbE)<br>Port 3 (RPi 3B+ GbE)<br>Port 2 (RPi 5 USB-GbE capture NIC; mirror destination for P5, both directions verified 2026-10-07)<br>Port 1 (RPi 3B+ `agentic-node-02` GbE)<br>Port 5 (Zodiac Port 1 Uplink 100M) | Intermediate Gigabit aggregation layer for Workload subnet. 128 KB shared packet buffer; IEEE 802.3x Flow Control ENABLED to propagate backpressure across 1Gbps -> 100Mbps speed transition; store-and-forward latency (~12 µs GbE ingress + ~120 µs 100M egress per 1518B MTU); loop detection enabled, IGMP snooping disabled; 802.1Q tagging readiness (fail-closed drop on untagged frames for trunking). |
+| **NETGEAR GS105Ev2 (zodiac_netgear_1)** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2<br>MAC `28:94:01:8b:70:d9` | Port 4 (RPi 5 GbE)<br>Port 3 (RPi 3B+ GbE)<br>Port 2 (RPi 5 USB-GbE capture NIC; mirror destination for P5, both directions verified 2026-10-07)<br>Port 1 (RPi 3B+ `agentic-node-02` GbE)<br>Port 5 (Zodiac Port 1 Uplink 100M) | Intermediate Gigabit aggregation layer for Workload subnet. 128 KB shared packet buffer; IEEE 802.3x Flow Control ENABLED to propagate backpressure across 1Gbps -> 100Mbps speed transition; store-and-forward latency (~12 µs GbE ingress + ~120 µs 100M egress per 1518B MTU); loop detection enabled, IGMP snooping disabled; 802.1Q tagging readiness (fail-closed drop on untagged frames for trunking). Management IP `192.168.0.239`. |
 | **Jetson Appliance** | NVIDIA Jetson Orin Nano Super | Serial `1791626120820` | `wlP1p1s0` (`10.0.0.15`)<br>`enP8p1s0` (`10.0.1.8`)<br>`enx9c69d39dd0a6` (Tap)<br>`br-sim` (Internal OVS) | Master SDN controller, Sentinel ML daemon, dual Coral Edge TPU INT8 coprocessor host; hosts Open vSwitch 2.17.12 in userspace `netdev` mode (`br-sim`) for software reference evaluation and large-scale rule verification. |
 | **Raspberry Pi 5** | Broadcom BCM2712 + Hailo-8 (26 TOPS) | Hostname `rpi-hailo` (renamed from `agentic-node-02`, 2026-10-09)<br>MAC `98:fe:54:52:9d:85` | `wlan0` (`10.0.0.179`)<br>`eth0` (`10.0.2.51`)<br>Realtek RTL8153 USB 3.0 GbE (`0bda:8153`) capture NIC `eth1` (MAC `a0:ce:c8:0e:73:f7`, NETGEAR Port 2) | Adversarial edge workload, Red Team workload generator, 26 TOPS INT8 PCIe Gen 3.0 coprocessor host, line-rate GbE traffic engine. |
 | **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`; also carries `10.0.1.50/24`, see caveat 8) | Untrusted agent workload node, iperf3 client traffic generator. |
 | **Raspberry Pi 3B+** | Broadcom BCM2837B0 (Rev 1.4) | Hostname `agentic-node-02` (added 2026-10-09)<br>User `agent`, key-only SSH<br>`eth0` MAC `b8:27:eb:79:ff:0a`, `wlan0` MAC `b8:27:eb:2c:aa:5f` | `wlan0` (`10.0.0.177`)<br>`eth0` (`10.0.2.52/24`, profile `eth0-sdn`, never-default)<br>`tailscale0` (`100.105.255.18`) | Second untrusted workload node; planned legitimate client. Raspberry Pi OS Lite 64-bit (Debian 13), `arp_ignore=1`, `arp_announce=2`. Cabled to NETGEAR Port 1. |
 | **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, Wi-Fi)<br>`tailscale0` (`100.112.223.16`) | Operator terminal. Connected strictly via Wi-Fi and Tailscale mesh (no direct physical Ethernet link to Zodiac). |
 | **ISP Wi-Fi Extender** | Lab LAN / WAN Bridge | Gateway `10.0.0.1` | RJ45 Ethernet Port | Connected to uplink switch #2 port 5 (was Zodiac Port 2 until 2026-10-09); provides L2 attachment to lab LAN / WAN gateway. |
-| **NETGEAR GS105Ev2 (uplink switch #2)** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2 | Port 5 (ISP mesh / extender)<br>Port 4 (Zodiac Port 2)<br>Ports 1 to 3 free | Lab-side L2 aggregation for the uplink; installed 2026-10-09 and carrying only those two links. Port mirroring of its port 4 is planned as observation point O3 and is not yet configured; no capture interface is attached (plan: move the Jetson's USB NIC here for conformance sessions). Management plane uses dynamic DHCP on lab LAN (`10.0.0.0/24`) from ISP gateway; IEEE 802.3x Flow Control enabled to propagate backpressure across GbE -> 100M speed boundary. Verified after install: the Mac still reaches the workload nodes through the Zodiac and the workload cannot reach `10.0.0.1`. |
+| **NETGEAR GS105Ev2 (zodiac_netgear_2)** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2<br>MAC `28:94:01:8b:70:e5` | Port 5 (ISP mesh / extender)<br>Port 4 (Zodiac Port 2)<br>Ports 1 to 3 free | Lab-side L2 aggregation for the uplink (uplink switch #2); installed 2026-10-09 carrying those two links. Port mirroring of port 4 planned as observation point O3. Static management IP assigned at `192.168.0.240` to avoid address collision with `zodiac_netgear_1` (`192.168.0.239`); IEEE 802.3x Flow Control enabled to propagate backpressure across GbE -> 100M speed boundary. |
 
 ### L3 Subnet & Addressing Schema
 
@@ -115,29 +115,51 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | `10.0.0.0/24` | `wlP1p1s0` (Jetson), `wlan0` (Pi 3 & Pi 5), `en0` (Mac), Zodiac Port 2 | Out-of-Band Mgmt & Gateway Uplink | SSH management, Internet gateway egress (`10.0.0.1`), physical uplink from Zodiac Port 2 to the ISP extender via uplink switch #2 (since 2026-10-09). |
 | `10.0.1.0/24` | `enP8p1s0` (Jetson `10.0.1.8`) -> Port 4 (`10.0.1.99`) | Switch Control Plane | OpenFlow 1.3 control channel (`10.0.1.8:6633` <-> `10.0.1.99:6633`). |
 | `10.0.2.0/24` | `eth0` (`agentic-node-01`: `10.0.2.50`, `rpi-hailo`: `10.0.2.51`, `agentic-node-02`: `10.0.2.52`) -> Netgear P3/P4/P1 -> P5 -> Zodiac P1 | Untrusted Data Plane Subnet | Workload packet plane governed by SDN flow tables. Isolated from `10.0.0.0/24` lab LAN and WAN by the verified Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)): only IPv4 with src AND dst in `10.0.2.0/24`, plus ARP, may cross P1⟷P2; everything else from P1 is mirrored to the P3 tap only. Residual: ARP crosses P1⟷P2 (address disclosure only) until FW 0.86 `ARP_TPA` matching is verified. |
-| `192.168.0.0/24` | Workload-side NETGEAR GS105Ev2 management (`192.168.0.239`, factory-default static IP, MAC `28:94:01:8b:70:d9`) | Switch Management (Out-of-Band, Operator-Only) | Smart-switch web UI (HTTP :80). Not routed anywhere; reached only by a temporary `192.168.0.50/24` alias on an `eth0` of a host on the NETGEAR. See *NETGEAR Management Access*. |
+| `192.168.0.0/24` | NETGEAR management (`zodiac_netgear_1`: `192.168.0.239`, MAC `28:94:01:8b:70:d9`; `zodiac_netgear_2`: `192.168.0.240`, MAC `28:94:01:8b:70:e5`) | Switch Management (Out-of-Band, Operator-Only) | Smart-switch web UI (HTTP :80). Not routed anywhere; reached only by a temporary `192.168.0.x/24` alias on a connected host NIC. See *NETGEAR Management Access*. |
 | `100.64.0.0/10` | `tailscale0` (Jetson `100.118.64.16`, Mac `100.112.223.16`) | WireGuard Mesh | Remote operator access, secure WAN exit node (`174.181.87.229`). |
 
 ### NETGEAR Management Access
 
-This section describes the **workload-side** switch. **Uplink switch #2** (installed 2026-10-09) sits on the lab LAN side, cabled directly to the ISP Wi-Fi extender via Port 5.
+Two managed switches exist in the testbed topology:
 
-- *Management Plane Isolation:* Uplink switch #2 receives an IP address via DHCP from the ISP gateway on the lab LAN (`10.0.0.0/24`), remaining completely separate from the workload-side fallback address (`192.168.0.239`). Furthermore, under the Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)), IPv4 traffic to `192.168.0.0/24` is fail-closed quarantined from Port 2 (`in_port=1, dst 192.168.0.x → [P3]` tap only), ensuring management traffic to the workload switch never transits Port 2 and cannot collide with the lab LAN.
-- *Rate Transition & Flow Control (NET-010):* Uplink switch #2 mediates the speed transition between the Gigabit ISP mesh and the 100BASE-TX Zodiac Port 2 link. IEEE 802.3x Flow Control is enabled on the GS105Ev2 ports to push backpressure via standard PAUSE frames toward the gigabit source during bursts, preventing silent buffer exhaustion or tail-drops in the switch's 128 KB buffer. Observation point O3 (port mirror on uplink switch #2 Port 4) is planned to record wire frames entering Zodiac Port 2, guaranteeing full packet provenance without unobserved upstream loss.
+- **`zodiac_netgear_1` (Workload-Side Switch)**: IP `192.168.0.239`, MAC `28:94:01:8b:70:d9`. Attached to Zodiac Port 1. Reached via workload host `eth0` (e.g. `rpi-hailo` or `agentic-node-01`).
+- **`zodiac_netgear_2` (Uplink Switch #2)**: IP `192.168.0.240`, MAC `28:94:01:8b:70:e5`. Attached between ISP Wi-Fi Extender (P5) and Zodiac Port 2 (P4). Reached via lab LAN host `wlan0` (e.g. `rpi-hailo`). Distinct IP prevents ARP/IP collisions.
 
-The workload-side GS105Ev2 web UI is at `http://192.168.0.239/`. It sits outside the OpenFlow control plane and is not reachable from the lab LAN. Operator access is an SSH port-forward through a workload node (RPi 3B+ shown; `10.0.0.45` is its `wlan0`):
+- *Management Plane Isolation:* Under the Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)), IPv4 traffic to `192.168.0.0/24` is fail-closed quarantined from Port 2 (`in_port=1, dst 192.168.0.x → [P3]` tap only), ensuring management traffic to the workload switch never transits Port 2.
+- *Rate Transition & Flow Control (NET-010):* `zodiac_netgear_2` mediates the speed transition between the Gigabit ISP mesh and the 100BASE-TX Zodiac Port 2 link. IEEE 802.3x Flow Control is enabled on the GS105Ev2 ports to push backpressure via standard PAUSE frames toward the gigabit source during bursts, preventing silent buffer exhaustion or tail-drops in the switch's 128 KB buffer. Observation point O3 (port mirror on `zodiac_netgear_2` Port 4) is planned to record wire frames entering Zodiac Port 2.
+
+**Automated Tunneling (Recommended):**
+The operational procedure is codified in [.agents/workflows/netgear-switch-access.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/netgear-switch-access.md) and automated by [scripts/netgear-tunnel.sh](file:///Users/andymorven/git/agentic-era-networking/scripts/netgear-tunnel.sh):
 
 ```bash
-# 1. On the RPi 3B+: temporary alias on the NETGEAR-facing NIC (non-persistent; lost on reboot)
-sudo ip addr add 192.168.0.50/24 dev eth0
-# 2. On the Mac: forward localhost:8888 to the switch UI
-ssh -f -N -o ExitOnForwardFailure=yes -L 8888:192.168.0.239:80 agent@10.0.0.45   # then http://localhost:8888
-# 3. When done: stop the tunnel (Mac) and remove the alias (RPi 3B+)
-pkill -f "8888:192.168.0.239"
-sudo ip addr del 192.168.0.50/24 dev eth0
+# Workload switch (192.168.0.239 via eth0):
+npm run switch:workload   # or ./scripts/netgear-tunnel.sh 1
+
+# Uplink switch (192.168.0.240 via wlan0):
+npm run switch:uplink     # or ./scripts/netgear-tunnel.sh 2
+
+# Status check:
+npm run switch:status
+
+# Teardown & flush routes (preserves fail-closed Invariant 3):
+npm run switch:stop
 ```
 
-The alias is deliberately not persisted: the RPi 3B+ is the untrusted workload node, so a standing route to the switch management plane would violate fail-closed isolation (Invariant 3). Verified 2026-10-07: `192.168.0.239` answers ping and HTTP 200 once the alias exists.
+Once connected, browse to `http://localhost:8888/` (default password: `password`).
+
+**Manual Setup (Reference):**
+
+```bash
+# To access zodiac_netgear_1 (192.168.0.239) via workload eth0:
+ssh agent@10.0.0.179 "sudo ip addr add 192.168.0.51/24 dev eth0 2>/dev/null; sudo ip route replace 192.168.0.239/32 dev eth0 src 192.168.0.51; sudo ip neigh replace 192.168.0.239 lladdr 28:94:01:8b:70:d9 dev eth0"
+ssh -f -N -o ExitOnForwardFailure=yes -L 8888:192.168.0.239:80 agent@10.0.0.179
+
+# To access zodiac_netgear_2 (192.168.0.240) via lab LAN wlan0:
+ssh agent@10.0.0.179 "sudo ip addr add 192.168.0.179/24 dev wlan0 2>/dev/null; sudo ip route replace 192.168.0.240/32 dev wlan0 src 192.168.0.179; sudo ip neigh replace 192.168.0.240 lladdr 28:94:01:8b:70:e5 dev wlan0"
+ssh -f -N -o ExitOnForwardFailure=yes -L 8888:192.168.0.240:80 agent@10.0.0.179
+```
+
+The alias is deliberately not persisted: the RPi 3B+ and RPi 5 are untrusted/adversarial workload nodes, so a standing route to the switch management plane would violate fail-closed isolation (Invariant 3). Verified 2026-10-07 & 2026-10-10: both switches answer HTTP 200 once the alias, host route, and static ARP neighbor are applied.
 
 **Port mirroring (operator-confirmed in the UI 2026-10-07):** source Port 5, destination Port 2. The RPi 5 was rebooted but the NETGEAR was not power-cycled, so persistence of this config across a switch power cycle remains unverified.
 
