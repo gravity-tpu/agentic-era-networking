@@ -97,11 +97,11 @@ Target topology (**NEW** marks changes from today):
                          Lab LAN / Internet (ISP extender, 10.0.0.1)
                                           │
                              ┌────────────┴────────────┐
-                             │  Uplink mirror switch   │  NEW (any cheap mirror-capable switch)
+                             │  Uplink switch #2       │  GS105Ev2, built 2026-10-09: P5 = ISP mesh, P4 = Zodiac P2
                              └──┬───────────────────┬──┘
-                          to Zodiac P2         mirror of the P2 link
+                          to Zodiac P2         mirror of P4  (not yet configured)
                                 │                   │
-                                │                   └────► Jetson USB NIC #2   [O3 egress ground truth]  NEW
+                                │                   └────► Jetson USB NIC #2   [O3 egress ground truth]  NIC NEW
                                 │
                    ┌────────────┴────────────┐
                    │    Zodiac FX  (DUT)     │── P3 policy-derived copy ─► Jetson tap NIC  [O2]
@@ -130,7 +130,7 @@ Target topology (**NEW** marks changes from today):
 | Adversary | `agentic-node-01` (Pi 3B+) | |
 | Legitimate client | `agentic-node-02` (Pi 3B+, `10.0.2.52`, NETGEAR P1) | Provisioned 2026-10-09: Raspberry Pi OS Lite 64-bit, key-only SSH, Tailscale |
 
-Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink (everything the workload sent, before the DUT). **O2** is the Zodiac P3 policy-derived copy. **O3** is a mirror on the P2 link captured by the Jetson (what actually crossed the uplink); it does not exist today and is what makes the conformance probe independent.
+Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink (everything the workload sent, before the DUT). **O2** is the Zodiac P3 policy-derived copy. **O3** is a mirror of the Zodiac P2 link captured by the Jetson (what actually crossed the uplink). The uplink switch (a second GS105Ev2, installed 2026-10-09 with the ISP mesh on its P5 and Zodiac P2 on its P4; P1 to P3 free) can mirror its P4, but the mirror is not configured and no capture NIC is attached yet, so O3 does not exist today. It is what makes the conformance probe independent.
 
 **End-to-end scenario (the integration test).** A local model proposes a rule set for a stated intent; the verifier checks it and a person approves; the controller installs it and reads the table back; the adversary attacks while the client sends legitimate traffic; O1 and O3 capture ground truth; both detectors score the traffic; any quarantine passes the verifier again. Report detection and quarantine times, false positives, and model-versus-wire agreement.
 
@@ -138,6 +138,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 
 - Out-of-band management of the workload nodes without a lab-LAN path (for example a second Jetson NIC on a management VLAN, or scheduled `wlan0` windows).
 - Verify that the Jetson has the USB ports and bandwidth for NIC #2 (parking the Coral TPUs should free some).
+- Configure O3: find the uplink switch's management address (a DHCP lease on the lab LAN, or the factory fallback `192.168.0.239`), then mirror its P4 in both directions to a free port (P1 to P3) and attach a capture NIC to that port. The capture NIC must be fail-closed on egress, as for the Pi 5 capture NIC (ledger caveat 7).
 - Test whether `agentic-node-01`'s extra `10.0.1.50/24` address on `eth0` (control subnet) gives the untrusted segment a path to the controller; `agentic-node-02` was configured without it.
 
 **Hailo-8 entry criteria.** The Hailo is parked as a sensor until (a) the Jetson detector has measured precision and recall on labelled captures from track C, and (b) a model for it compiles to a `.hef` with the Hailo Dataflow Compiler on an x86 Linux host (op support for the detector's convolutions is unverified). Until then it contributes nothing to the tracks. Its other candidate role, an adversary-side surrogate model for evasion testing, is research-heavy and deferred.
@@ -149,7 +150,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 1. **A1, A2 and A3 hardening, plus a failing test for the ARP spoof (C1).** Establishes whether the current policy actually has the ARP gap suspected in the README.
 2. **B cost model as a function; A7 and A8.** The first place the hardware changes what the verifier accepts.
 3. **A5 and A6 (shadowing, conflicts), then action-level readback.**
-4. **B conformance probe**, after the O3 uplink observer is cabled (the NETGEAR mirror O1 can be used first).
+4. **B conformance probe**, after the O3 mirror is configured on the uplink switch and a capture NIC is attached (the NETGEAR mirror O1 can be used first).
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
 6. **C scenarios 2 to 6**, then the end-to-end scenario in section 3.
 7. **Independent review of the policy and the property list by a network engineer**, before publishing results. This can happen earlier; it should not happen later.
