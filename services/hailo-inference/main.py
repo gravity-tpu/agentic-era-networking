@@ -118,7 +118,7 @@ def get_root():
     return {
         "service": "Zodiac Hailo-8 Neural Inference Microservice",
         "version": "1.0.0",
-        "node": "agentic-node-02 (RPi 5 + Hailo-8)",
+        "node": "rpi-hailo (RPi 5 + Hailo-8)",
         "accelerator": "Hailo-8 M.2 (26 TOPS NPU)",
         "status": "ONLINE",
         "active_model": active_m,

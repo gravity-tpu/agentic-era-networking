@@ -2116,7 +2116,7 @@ export async function probeWorkstationHardware(
 }
 
 /**
- * Probes the Raspberry Pi 5 + Hailo-8 NPU appliance (agentic-node-02).
+ * Probes the Raspberry Pi 5 + Hailo-8 NPU appliance (hostname rpi-hailo).
  *
  * Council Invariant 6 (Anti-Simulation Law & Epistemic Truth):
  * Queries live physical telemetry from the Hailo inference service (/telemetry)
@@ -2172,7 +2172,7 @@ export async function probeRpi5Hardware(
 
     return {
       status: 'online',
-      deviceName: String(host['hostname'] || 'agentic-node-02'),
+      deviceName: String(host['hostname'] || 'rpi-hailo'),
       architecture: 'aarch64 (ARMv8-A Cortex-A76)',
       cpuModel: 'Broadcom BCM2712 (4 Cores @ 2.4 GHz)',
       cpuCoreCount: 4,

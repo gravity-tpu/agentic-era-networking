@@ -23,8 +23,9 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
 - **Dual Google Coral Edge TPUs**: Dedicated 8 TOPS INT8 USB 3.0 coprocessors ingesting mirrored tap frames for on-silicon inference (TPU 0; throughput/latency verified, trained classifier pending, ROADMAP Milestone 2C) and RFC 1035 DNS intent analysis (TPU 1) without taxing the Jetson GPU pipeline.
 - **Dedicated Mirror Tap Interface (ASIX AX88179 USB GbE)**: Dedicated secondary physical NIC (`enx*`) on the Jetson Orin operating in promiscuous mode, directly cabled to Zodiac Port 3 for zero-loss packet inspection.
 - **Untrusted Agent Workload Tier**:
-  - **Raspberry Pi 5 + Hailo-8** (`agentic-node-02`): Adversarial workload (red team) on `eth0` (`10.0.2.51`) via Netgear Port 4; 26 TOPS INT8 Hailo-8 NPU over PCIe Gen 3.0 x1 (`/dev/hailo0`, HailoRT 4.20) for CNN packet-classifier validation and surrogate-model evasion testing (traffic generation runs on the host CPU/NIC); out-of-band management via `wlan0` (`10.0.0.179`).
+  - **Raspberry Pi 5 + Hailo-8** (`rpi-hailo`, renamed from `agentic-node-02` on 2026-10-09): Adversarial workload (red team) on `eth0` (`10.0.2.51`) via Netgear Port 4; 26 TOPS INT8 Hailo-8 NPU over PCIe Gen 3.0 x1 (`/dev/hailo0`, HailoRT 4.20) for CNN packet-classifier validation and surrogate-model evasion testing (traffic generation runs on the host CPU/NIC); out-of-band management via `wlan0` (`10.0.0.179`).
   - **Raspberry Pi 3 Model B+** (`agentic-node-01`): Physical client agent workload on `eth0` (`10.0.2.50`) via Netgear Port 3; out-of-band management backdoor via `wlan0` (`10.0.0.45`).
+  - **Raspberry Pi 3 Model B+** (`agentic-node-02`, added 2026-10-09): second workload node on `eth0` (`10.0.2.52`) via Netgear Port 1; management via `wlan0` (`10.0.0.177`) and Tailscale (`100.105.255.18`). Planned role: legitimate client in the target topology (see [ROADMAP](../ROADMAP.md)).
 - **Operator workstation (Apple Silicon Mac)**: Hosts local models for the pre-push review tooling and records IOKit hardware profiling and a BigInt token ledger. It is development infrastructure and has no data-plane role.
 
 ---

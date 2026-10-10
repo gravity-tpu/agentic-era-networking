@@ -72,6 +72,7 @@ Scenarios, each repeatable by script and reported with detection and containment
 3. Port scan and low-rate scan.
 4. Flood to the point of session loss (what an attacker can do to the control plane).
 5. Evasion: traffic crafted to fit allowed rules, fragmentation, rule-table exhaustion.
+6. Address aliasing from the uplink side: a lab-LAN host takes a `10.0.2.x` address and reaches the workload nodes. Observed 2026-10-09: the Mac's benchmark alias `10.0.2.119` reaches `10.0.2.50` to `10.0.2.52` in about 10 ms (the intended receiver path; flow counters not yet read to confirm). Confinement is address-based and the source address is forgeable, so this tests whether anything on the uplink side can reach workloads by choosing an address.
 
 Report per scenario: contained or not, time to detect, time to quarantine, false positives, and whether the verifier or the detector would have prevented it. The detectors under test are the Jetson GPU autoencoder and, once it exists, a Hailo-8 classifier on the Pi 5 sensor (section 3). Their precision and recall are unmeasured today and become a result of this track; the attack runs also produce the labelled captures needed to train a classifier.
 
@@ -111,10 +112,10 @@ Target topology (**NEW** marks changes from today):
                    │   NETGEAR GS105Ev2      │
                    │  P5 uplink              │
                    │  P3 ── Pi 3B+  (adversary)              wlan0 OFF during runs
-                   │  P4 ── workload node 2 (legit client)   NEW    wlan0 OFF during runs
+                   │  P1 ── agentic-node-02 (legit client)   provisioned 2026-10-09, wlan0 OFF during runs
                    │  P2 ◄─ mirror of P5 ── Pi 5 capture NIC   [O1 pre-DUT]
                    └─────────────────────────┘
-                                                  Pi 5 + Hailo-8 = SENSOR
+                                                  rpi-hailo (Pi 5 + Hailo-8) = SENSOR
                                                   (passive capture, classifier, verdicts
                                                    sent to the Jetson over the mgmt network)
 ```
@@ -124,10 +125,10 @@ Target topology (**NEW** marks changes from today):
 | Device under test | Zodiac FX | |
 | Controller, verifier, approval gate, install, readback | Jetson (CPU) | No GPU contention |
 | Cross-check detector | Jetson GPU, fed by O2 | Compared with the Hailo verdicts on the same runs |
-| Sensor and classifier | Pi 5 + Hailo-8, fed by O1 | Passive; verdicts go to the controller, and any quarantine still passes the verifier and a human gate |
+| Sensor and classifier | `rpi-hailo` (Pi 5 + Hailo-8), fed by O1 | Passive; verdicts go to the controller, and any quarantine still passes the verifier and a human gate |
 | LLM proposer and evaluation harness | Mac (Gemma 4 26B); Jetson Qwen as a cheaper comparison | Off the measurement path |
-| Adversary | Pi 3B+ | |
-| Legitimate client | Workload node 2 (NEW) | Needs one spare Pi or laptop |
+| Adversary | `agentic-node-01` (Pi 3B+) | |
+| Legitimate client | `agentic-node-02` (Pi 3B+, `10.0.2.52`, NETGEAR P1) | Provisioned 2026-10-09: Raspberry Pi OS Lite 64-bit, key-only SSH, Tailscale |
 
 Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink (everything the workload sent, before the DUT). **O2** is the Zodiac P3 policy-derived copy. **O3** is a mirror on the P2 link captured by the Jetson (what actually crossed the uplink); it does not exist today and is what makes the conformance probe independent.
 
@@ -137,7 +138,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 
 - Out-of-band management of the workload nodes without a lab-LAN path (for example a second Jetson NIC on a management VLAN, or scheduled `wlan0` windows).
 - Verify that the Jetson has the USB ports and bandwidth for NIC #2 (parking the Coral TPUs should free some).
-- Without a spare workload node, fall back to the Pi 5 in both roles, pin its CPU, and measure capture loss.
+- Test whether `agentic-node-01`'s extra `10.0.1.50/24` address on `eth0` (control subnet) gives the untrusted segment a path to the controller; `agentic-node-02` was configured without it.
 
 **Hailo-8 entry criteria.** The Hailo is parked as a sensor until (a) the Jetson detector has measured precision and recall on labelled captures from track C, and (b) a model for it compiles to a `.hef` with the Hailo Dataflow Compiler on an x86 Linux host (op support for the detector's convolutions is unverified). Until then it contributes nothing to the tracks. Its other candidate role, an adversary-side surrogate model for evasion testing, is research-heavy and deferred.
 
@@ -150,7 +151,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 3. **A5 and A6 (shadowing, conflicts), then action-level readback.**
 4. **B conformance probe**, after the O3 uplink observer is cabled (the NETGEAR mirror O1 can be used first).
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
-6. **C scenarios 2 to 5**, then the end-to-end scenario in section 3.
+6. **C scenarios 2 to 6**, then the end-to-end scenario in section 3.
 7. **Independent review of the policy and the property list by a network engineer**, before publishing results. This can happen earlier; it should not happen later.
 
 ## 5. Deferred or dropped
