@@ -147,6 +147,7 @@ const BOOLEAN_FLAGS = new Set([
   'skip-depths',
   'skip-variants',
   'skip-hit',
+  'allow-dirty',
 ]);
 
 function parseCli(argv: readonly string[]): Cli {
@@ -838,6 +839,17 @@ async function gitInfo(): Promise<{ commit: string | null; dirty: boolean | null
   }
 }
 
+async function assertCleanGit(cli: Cli): Promise<void> {
+  const git = await gitInfo();
+  if (git.dirty && !cli.switches.has('allow-dirty')) {
+    throw new Error(
+      'Working tree is dirty (uncommitted changes detected). ' +
+      'Benchmark artifacts for headline results must be strictly reproducible from clean commits. ' +
+      'Pass --allow-dirty to override for exploratory runs.'
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
@@ -859,6 +871,7 @@ async function cmdPreflight(cli: Cli): Promise<void> {
 }
 
 async function cmdRun(cli: Cli): Promise<void> {
+  await assertCleanGit(cli);
   const startedMonotonicNs = nowNs();
   const startedAtIso = new Date().toISOString();
   const mtuPayload = intFlag(cli, 'mtu-payload', 1470);
@@ -1496,6 +1509,7 @@ async function cmdPlan(cli: Cli): Promise<void> {
 }
 
 async function cmdSweep(cli: Cli): Promise<void> {
+  await assertCleanGit(cli);
   const cfg = buildSweepConfig(cli);
   if (cfg.items.length === 0) throw new Error('sweep: nothing to run (all groups skipped)');
   for (const it of cfg.items) planDepthCondition(it.cond, HIT_SRC_IP); // validate every layout before touching hardware
@@ -1613,6 +1627,7 @@ interface BlackoutRecord {
 }
 
 async function cmdBlackout(cli: Cli): Promise<void> {
+  await assertCleanGit(cli);
   const reps = intFlag(cli, 'reps', 3);
   const depths = parseIntList(cli.flags.get('depths') ?? '0,126', '--depths');
   const modes = (cli.flags.get('modes') ?? 'none,wipe,selective').split(',').map((m) => m.trim() as FlushMode);
@@ -1737,6 +1752,7 @@ function ladderCondition(depth: number, layout: LadderLayout): DepthCondition {
  * events shows whether the switch CPU is still answering the controller.
  */
 async function cmdLadder(cli: Cli): Promise<void> {
+  await assertCleanGit(cli);
   const depths = parseIntList(cli.flags.get('depths') ?? '0,16,32,64,126', '--depths');
   const rates = parseIntList(cli.flags.get('rates-pps') ?? '500,1000,2000,4000,6000,8000,10000,12000,15000', '--rates-pps');
   const stepS = intFlag(cli, 'step-seconds', 45);
@@ -1946,6 +1962,7 @@ interface WorkdayWindow {
 }
 
 async function cmdWorkday(cli: Cli): Promise<void> {
+  await assertCleanGit(cli);
   const profileRaw = cli.flags.get('profile') ?? 'typical';
   if (!(profileRaw in WORKDAY_PROFILES)) throw new Error(`--profile must be one of ${Object.keys(WORKDAY_PROFILES).join(', ')}`);
   const profile = profileRaw as WorkdayProfile;
@@ -2171,7 +2188,7 @@ async function main(): Promise<void> {
           'sweep flags: --depths 0,1,2,4,... --trials 4 --duration 10 --gap-seconds 2 --tests udp_p64,udp_p572,udp_p1470,tcp\n' +
           '           --variant-depths 32,126 --variant-tests udp_p572 --skip-depths --skip-variants --skip-hit --out DIR\n' +
           'blackout flags: --reps 3 --depths 0,126 --modes none,wipe,selective --loads idle,udp --out DIR\n' +
-          'any run: --of-dead-peer-ms N (default 8000, the production rule)\n' +
+          'any run: --of-dead-peer-ms N (default 8000, the production rule) | --allow-dirty (permit uncommitted git tree)\n' +
           'ladder flags: --depths 0,16,32,64,126 --rates-pps 500,1000,2000,... --step-seconds 45 --rounds 1 --layout base|fwdfirst|fwdabove|fwdinstall|net16|distinct --payload 572\n' +
           'workday flags: --profile low|typical|worst --window-seconds 300 --total-seconds 3600 --flush-mode selective|wipe\n' +
           '           --udp-load-percent 50 --tcp-mbps 5 --udp-port 5201 --tcp-port 5202 --out DIR  (needs iperf3 servers on both ports)\n' +

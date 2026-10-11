@@ -11,9 +11,25 @@ Hosted at: [github.com/gravity-tpu/agentic-era-networking](https://github.com/gr
 
 ## 1. Why this exists
 
-Agents can now generate network policy (flow rules, ACLs, DNS filters) faster than anyone can review it. Generation is cheap; **verification is the scarce part**. Most work in this area is validated in simulation. This repository has a physical OpenFlow switch, a mirror tap, an instrumented controller and a hostile workload node, so claims can be checked against silicon.
+Large language models can now generate network configuration and SDN policy faster than human operators can audit it. However, generation is cheap; **verification is the scarce constraint**.
 
-The question the project answers: **can an agent safely propose network policy, and what does "safely" have to mean on hardware this constrained?**
+Prior research tackles isolated pieces of this challenge without connecting them to physical devices:
+
+- **Formal network verification** (Header Space Analysis, VeriFlow, NetPlumber, Batfish) checks isolation and reachability in abstract models, assuming infinite, frictionless silicon. These tools are blind to microcontroller lookup latency, buffer overflow cliffs, and control-plane drops.
+- **Switch micro-benchmarking** (OFLOPS, PAM 2015, Tango) proves that real OpenFlow hardware deviates wildly from specifications, bottlenecking on low-cost CPUs and dropping tables under overload. However, these systems focus purely on device measurement without automated policy synthesis.
+- **LLM configuration synthesis** (HotNets 2023, NetConfEval) demonstrates that models routinely hallucinate invalid syntax and unsafe rules, but evaluates corrections solely against emulators or software parsers.
+
+### Where Zodiac fits
+
+**Zodiac connects these domains into a closed, empirical testbed on physical silicon.** It pairs agentic policy proposal with:
+
+1. **A deterministic property verifier** that evaluates packet classes, prerequisites, isolation, and intent compliance before touching the switch;
+2. **A measured hardware cost model** that treats physical microcontroller processing budgets ($38.5\text{ µs} + 4.24\text{ µs}/\text{rule}$) as a formal verification condition;
+3. **Hardware conformance checks on the wire** using physical mirror taps to confirm switch behavior matches model predictions;
+4. **A live hardware adversary** (Raspberry Pi red team) testing evasion, spoofing, and control-plane flooding;
+5. **Strict epistemic provenance** (Invariant 6) ensuring no synthetic or simulated data is ever passed off as live hardware telemetry.
+
+A comprehensive survey of prior art is documented in [docs/research/prior-art.md](docs/research/prior-art.md). The pre-registered experimental methodology is in [docs/research/evaluation-plan.md](docs/research/evaluation-plan.md).
 
 ## 2. Approach
 
@@ -35,7 +51,7 @@ The question the project answers: **can an agent safely propose network policy, 
 
 Three ideas carry the design:
 
-1. **Verify properties of the rule set, not routes.** A static L2/L3 flow table has no routing loops to find. The useful checks are isolation, shadowed rules, hairpins, default-drop, quarantine precedence and rule/capacity budget.
+1. **Verify properties of the rule set, not routes.** A static L2/L3 flow table has no routing loops to find. The useful checks are isolation, shadowed rules, hairpins, default-drop, quarantine precedence, rule/capacity budget, and exact intent compliance.
 2. **Verify against a measured hardware model.** The switch's CPU, not its ports, is the bottleneck, and rule layout changes capacity by up to 2.6x. A policy that is logically correct can still take the switch down, so capacity is a checked property.
 3. **Close the loop on the wire.** Reading the table back proves intent was installed; only traffic through the tap proves behavior. Model-versus-hardware disagreement is a finding, not noise.
 
@@ -46,6 +62,10 @@ Agents are in the loop as *proposers*. A human approves, and deterministic code 
 | Capability | State | Evidence |
 | :--- | :--- | :--- |
 | Port-1 isolation policy builder and static verifier | Implemented, unit-tested | `src/sdn/port1-isolation.ts`, `test/invariants/port1-isolation.test.ts` |
+| Intent-compliance checker (exact packet-class evaluation, A11) | Implemented, unit-tested | `src/sdn/intent-spec.ts`, `test/invariants/intent-spec.test.ts` |
+| Deterministic rule mutation baseline | Implemented, unit-tested | `src/sdn/rule-mutations.ts`, `test/invariants/rule-mutations.test.ts` |
+| Observation point capture calibration harness (O1, O2, O3) | Implemented, unit-tested | `src/sdn/capture-calibration.ts`, `scripts/calibrate-capture.ts` |
+| Pre-registered empirical evaluation plan | Documented | `docs/research/evaluation-plan.md` |
 | Switch readback verification (match fields) | Implemented | `verifyIsolationReadback`; output actions are not yet parsed |
 | Hardware cost model and data-plane benchmark harness | Measured, documented | [Whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md), `scripts/zodiac-dataplane-bench.ts` |
 | Telemetry with provenance (no simulated data shown as live) | Implemented | `scripts/check-provenance.ts`, `test/invariants/goodharts-law-provenance.test.ts` |

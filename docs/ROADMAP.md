@@ -18,6 +18,20 @@ Measurements on the actual hardware ([whitepaper](benchmarks/zodiac-infrastructu
 
 Autonomy is therefore reframed as *agent-assisted, human-approved, machine-verified*. The route-loop verifier is replaced as the centerpiece by property checks over the flow table, because a static flow table has no routing loops to find.
 
+### The Research Thesis: Why Constrained Silicon is an Unfair Advantage
+
+Rather than a handicap, the strict physical limitations of the 120 MHz Zodiac FX define the core scientific contribution:
+
+1. **The *Drosophila* Principle (Magnified Microarchitectural Penalties):** High-end merchant silicon (Broadcom Tomahawk, Intel Tofino) executes TCAM lookups in 4 ns, masking agent inefficiencies, priority inversions, and rule bloat behind gigabit over-provisioning. On the Zodiac FX, flow evaluation happens in software on an embedded MCU: an extra 100 rules adds 424 µs of lookup latency, rule reordering changes capacity by up to 2.6x (1.3 µs vs 4.24 µs/rule), and minor overload drops the control plane entirely. Every mistake in an agent's proposal manifests as an immediate, physical failure on the wire.
+2. **Tractable and Exact Formal Verification:** In large enterprise topologies, Header Space Analysis and SAT/SMT verifiers face state space explosion, requiring heuristics or timeouts. With 128 rules and 4 ports, packet-class equivalence partitioning (`enumeratePacketClasses`) is mathematically complete, exact, and executes in $< 5\text{ ms}$ in CI without approximations.
+3. **Closing the Sim-to-Real Gap:** Prior literature (Mondal et al., HotNets '23; NetConfEval) evaluates LLM configuration synthesis against Batfish or software parsers. These simulators assume infinite, frictionless silicon—a mathematically valid rule set with 150 rules passes Batfish, but bricks constrained hardware. Zodiac tests whether generative agents can synthesize policies that are *physically admissible* within tight silicon and latency budgets.
+
+### Core Claims
+
+1. **Simulators assume infinite, frictionless silicon; hardware enforces physics.** Logical reachability is a necessary but insufficient condition for safe networking. Hardware limits (table capacity, MCU lookup overhead, buffer cliff) must be formal inputs to the policy verifier.
+2. **Generative models synthesize without consequence; deterministic verification provides the guardrail.** Unverified LLM proposals lead to table wipeouts and packet leaks. Grounded verification (A1–A11) with explicit error diagnostics enables self-correction without compromising data-plane safety.
+3. **Wire observation on physical mirror taps is the sole ground truth.** Software readback proves what was written to the control plane; only packet captures across independent taps (Uplink O3, NETGEAR mirror O1) prove forwarding behavior. Discrepancy between the verifier model and physical wire observation is a scientific finding about switch microarchitecture.
+
 ## 2. Tracks
 
 ### Track A: Policy verifier (core)
@@ -40,15 +54,16 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 | A8 | Capacity budget: modeled pps at the rule count and layout meets a declared target | Not started; needs the cost model (track B) |
 | A9 | Layout: forwarding rules ordered per the measured cheap layout | Not started. **Conflicts with A4** (see below) |
 | A10 | ARP confinement: no ARP forwarded across P1 and P2 unless explicitly allowed | Blocked on verifying `ARP_SPA`/`ARP_TPA` support in firmware 0.86 |
+| A11 | Intent compliance: exact packet-class evaluation confirms zero leaks and zero missing deliveries | Implemented (`src/sdn/intent-spec.ts`, `test/invariants/intent-spec.test.ts`) |
 
 **Also in this track:**
 
 - **Resolve the A4 versus A9 tension first.** The measured cheap layout installs forwarding rules above quarantine rules (1.3 µs versus 4.24 µs per rule, up to 2.6x more capacity), so a quarantined source that also matches a forwarding rule would still be forwarded. The benchmark gets away with it because its quarantine rules match addresses that never appear on the wire. Candidate resolutions to test: forwarding rules that exclude quarantined sources, a small block of high-priority quarantine rules above the forwarding rules with the rest below, or accepting quarantine-first cost. Each trades capacity against containment, and the choice should be measured and reported, not assumed.
 - Parse output actions in flow-stats readback so readback proves forwarding intent, not just match fields (today's documented gap).
 - Property-based tests: generate random rule sets and packets, and check the verifier's abstract evaluation against an independent reference evaluator (powered by local Open vSwitch 2.17.12 `br-sim` on Jetson port 6634, supporting bounded 10,000-rule evaluation without physical switch MCU exhaustion).
-- **Agent-proposal evaluation.** Have an LLM propose rule sets for a set of intents (for example "let the workload reach DNS but nothing else"). Record the fraction rejected, by which property, and whether the verifier-accepted sets behave correctly on hardware. This is the project's central empirical result.
+- **Agent-proposal evaluation.** Have an LLM propose rule sets for a set of intents (for example "let the workload reach DNS but nothing else"). Record the fraction rejected, by which property, and whether the verifier-accepted sets behave correctly on hardware. This is the project's central empirical result. The experimental methodology is pre-registered in [docs/research/evaluation-plan.md](research/evaluation-plan.md), evaluated against the deterministic mutation baseline in `src/sdn/rule-mutations.ts`, and grounded in surveyed prior art in [docs/research/prior-art.md](research/prior-art.md).
 
-**Exit criteria:** A1 to A9 enforced in CI; every rejection returns the violated property and the offending rules; the agent-proposal evaluation is published with its method and failure cases.
+**Exit criteria:** A1 to A11 enforced in CI; every rejection returns the violated property and the offending rules; the agent-proposal evaluation is published with its method and failure cases.
 
 ### Track B: Hardware model and conformance
 
@@ -189,4 +204,8 @@ Work from the earlier plan that the new tracks build on, all present in the repo
 - Port-1 isolation policy with static verification and readback comparison.
 - Data-plane benchmark harness and archive (`scripts/zodiac-dataplane-bench.ts`, `docs/benchmarks/`), and the [Zodiac whitepaper](design/zodiac-whitepaper.pdf) (`scripts/build-zodiac-whitepaper.py`).
 - Mirror-tap ingestion and the Coral and Jetson anomaly detector with live quarantine flow-mods (present; accuracy not yet measured).
+- Intent-compliance exact evaluator and machine-readable intent specs (`src/sdn/intent-spec.ts`, `src/sdn/intents.ts`).
+- Deterministic mutation baseline and scoring engine (`src/sdn/rule-mutations.ts`).
+- Observation point capture calibration harness (`src/sdn/capture-calibration.ts`, `scripts/calibrate-capture.ts`).
+- Pre-registered evaluation plan and prior-art taxonomy (`docs/research/evaluation-plan.md`, `docs/research/prior-art.md`).
 - Provenance-checked telemetry and the invariant test suite.
