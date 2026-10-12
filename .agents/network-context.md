@@ -128,38 +128,55 @@ Two managed switches exist in the testbed topology:
 - *Management Plane Isolation:* Under the Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)), IPv4 traffic to `192.168.0.0/24` is fail-closed quarantined from Port 2 (`in_port=1, dst 192.168.0.x → [P3]` tap only), ensuring management traffic to the workload switch never transits Port 2.
 - *Rate Transition & Flow Control (NET-010):* `zodiac_netgear_2` mediates the speed transition between the Gigabit ISP mesh and the 100BASE-TX Zodiac Port 2 link. IEEE 802.3x Flow Control is enabled on the GS105Ev2 ports to push backpressure via standard PAUSE frames toward the gigabit source during bursts, preventing silent buffer exhaustion or tail-drops in the switch's 128 KB buffer. Observation point O3 (port mirror on `zodiac_netgear_2` Port 4) is planned to record wire frames entering Zodiac Port 2.
 
-**Automated Tunneling (Recommended):**
-The operational procedure is codified in [.agents/workflows/netgear-switch-access.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/netgear-switch-access.md) and automated by [scripts/netgear-tunnel.sh](file:///Users/andymorven/git/agentic-era-networking/scripts/netgear-tunnel.sh):
+**Automated Tunneling & Permanent Boot Persistence:**
+The operational procedure is codified in [.agents/workflows/netgear-switch-access.md](file:///Users/andymorven/git/agentic-era-networking/.agents/workflows/netgear-switch-access.md) and automated by [scripts/netgear-tunnel.sh](file:///Users/andymorven/git/agentic-era-networking/scripts/netgear-tunnel.sh).
+
+1. **Persistent Operator Access across Reboots (Invariant 3 Compliant):**
+   - **macOS LaunchAgent (`com.zodiac.netgear-tunnels`):** Registered in `~/Library/LaunchAgents/` using [deploy/mac/zodiac-netgear-tunnel-supervisor.sh](file:///Users/andymorven/git/agentic-era-networking/deploy/mac/zodiac-netgear-tunnel-supervisor.sh). Starts on boot/login, reconnects across sleep/wake, and multiplexes local ports `:8888` and `:8889` over persistent SSH.
+   - **Zero Standing Routes on Pivot Host (Invariant 3):** Routes to `192.168.0.0/24` are deliberately **not** persisted as a systemd unit or static configuration on the Raspberry Pi. Instead, the supervisor executes a trapped SSH session (`trap cleanup EXIT INT TERM HUP`). Routes and aliases on the pivot exist strictly while the operator's authenticated SSH session is active, and are immediately sanitized if the connection drops, Mac sleeps, or operator logs out.
 
 ```bash
-# Workload switch (192.168.0.239 via eth0):
-npm run switch:workload   # or ./scripts/netgear-tunnel.sh 1
+# Install & activate supervisor LaunchAgent:
+npm run switch:service:install
 
-# Uplink switch (192.168.0.240 via wlan0):
-npm run switch:uplink     # or ./scripts/netgear-tunnel.sh 2
+# Status check (verifies LaunchAgent, pivot ephemeral isolation, and probes HTTP endpoints):
+npm run switch:service:status
 
-# Status check:
-npm run switch:status
+# Restart persistent supervisor:
+npm run switch:service:restart
 
-# Teardown & flush routes (preserves fail-closed Invariant 3):
-npm run switch:stop
+# Uninstall LaunchAgent & restore fail-closed isolation:
+npm run switch:service:uninstall
 ```
 
-Once connected, browse to `http://localhost:8888/` (default password: `password`).
+2. **Ad-Hoc Interactive Sessions (Foreground with Trap):**
+
+```bash
+# Workload switch #1 (192.168.0.239 via eth0 -> http://localhost:8888/):
+npm run switch:workload     # foreground session; Ctrl+C cleans up routes
+
+# Uplink switch #2 (192.168.0.240 via wlan0 -> http://localhost:8889/):
+npm run switch:uplink       # foreground session; Ctrl+C cleans up routes
+
+# Explicit teardown & flush (preserves fail-closed Invariant 3):
+npm run switch:stop         # or ./scripts/netgear-tunnel.sh stop
+```
+
+Once connected, browse to:
+- **Switch #1 (Workload):** `http://localhost:8888/` (default password: `password`)
+- **Switch #2 (Uplink):** `http://localhost:8889/` (default password: `password`)
 
 **Manual Setup (Reference):**
 
 ```bash
-# To access zodiac_netgear_1 (192.168.0.239) via workload eth0:
+# To access zodiac_netgear_1 (192.168.0.239) via workload eth0 (Port 8888):
 ssh agent@10.0.0.179 "sudo ip addr add 192.168.0.51/24 dev eth0 2>/dev/null; sudo ip route replace 192.168.0.239/32 dev eth0 src 192.168.0.51; sudo ip neigh replace 192.168.0.239 lladdr 28:94:01:8b:70:d9 dev eth0"
 ssh -f -N -o ExitOnForwardFailure=yes -L 8888:192.168.0.239:80 agent@10.0.0.179
 
-# To access zodiac_netgear_2 (192.168.0.240) via lab LAN wlan0:
+# To access zodiac_netgear_2 (192.168.0.240) via lab LAN wlan0 (Port 8889):
 ssh agent@10.0.0.179 "sudo ip addr add 192.168.0.179/24 dev wlan0 2>/dev/null; sudo ip route replace 192.168.0.240/32 dev wlan0 src 192.168.0.179; sudo ip neigh replace 192.168.0.240 lladdr 28:94:01:8b:70:e5 dev wlan0"
-ssh -f -N -o ExitOnForwardFailure=yes -L 8888:192.168.0.240:80 agent@10.0.0.179
+ssh -f -N -o ExitOnForwardFailure=yes -L 8889:192.168.0.240:80 agent@10.0.0.179
 ```
-
-The alias is deliberately not persisted: the RPi 3B+ and RPi 5 are untrusted/adversarial workload nodes, so a standing route to the switch management plane would violate fail-closed isolation (Invariant 3). Verified 2026-10-07 & 2026-10-10: both switches answer HTTP 200 once the alias, host route, and static ARP neighbor are applied.
 
 **Port mirroring (operator-confirmed in the UI 2026-10-07):** source Port 5, destination Port 2. The RPi 5 was rebooted but the NETGEAR was not power-cycled, so persistence of this config across a switch power cycle remains unverified.
 

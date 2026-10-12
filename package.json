@@ -47,6 +47,10 @@
     "switch:uplink": "bash scripts/netgear-tunnel.sh 2",
     "switch:stop": "bash scripts/netgear-tunnel.sh stop",
     "switch:status": "bash scripts/netgear-tunnel.sh status",
+    "switch:service:install": "bash scripts/netgear-tunnel.sh install-service",
+    "switch:service:uninstall": "bash scripts/netgear-tunnel.sh uninstall-service",
+    "switch:service:status": "bash scripts/netgear-tunnel.sh service-status",
+    "switch:service:restart": "bash scripts/netgear-tunnel.sh service-restart",
     "workstation:agent": "node --experimental-strip-types scripts/workstation-agent.ts",
     "bench:dataplane": "node --experimental-strip-types scripts/zodiac-dataplane-bench.ts",
     "bench:calibrate": "node --experimental-strip-types scripts/calibrate-capture.ts"

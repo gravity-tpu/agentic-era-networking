@@ -33,31 +33,53 @@ Establish secure, deterministic out-of-band operator access from the local works
 
 ---
 
-## Quick Access (Automated Helper)
+## Permanent Boot Persistence (Always Online across Reboots)
 
-Use the dedicated helper script [scripts/netgear-tunnel.sh](file:///Users/andymorven/git/agentic-era-networking/scripts/netgear-tunnel.sh) or npm shortcuts. The script runs strictly in the foreground with an automatic `trap` to ensure deterministic, fail-closed route cleanup the moment the session ends:
+To keep both ports `8888` and `8889` permanently active and self-healing across Mac reboots, sleep/wake, Wi-Fi drops, and Raspberry Pi power cycles:
 
 ```bash
-# Connect to Switch 1 (Workload switch @ 192.168.0.239)
-npm run switch:workload
-# or: ./scripts/netgear-tunnel.sh 1
-# (Press Ctrl+C when finished — the exit trap automatically flushes all routes across all pivot nodes)
+# 1. Install & enable permanent supervisor LaunchAgent:
+npm run switch:service:install
 
-# Connect to Switch 2 (Uplink switch @ 192.168.0.240)
-npm run switch:uplink
-# or: ./scripts/netgear-tunnel.sh 2
+# 2. Check full status of LaunchAgent, pivot ephemeral isolation, and HTTP endpoints:
+npm run switch:service:status
 
-# Check tunnel status & probe HTTP (from another shell if needed)
+# 3. Restart persistent supervisor if needed:
+npm run switch:service:restart
+
+# 4. Uninstall LaunchAgent and restore fail-closed isolation:
+npm run switch:service:uninstall
+```
+
+### Architecture of Permanent Persistence (Invariant 3 Compliant)
+- **macOS (`com.zodiac.netgear-tunnels` LaunchAgent):** Runs in the operator user domain via `~/Library/LaunchAgents/com.zodiac.netgear-tunnels.plist`. Supervised by [deploy/mac/zodiac-netgear-tunnel-supervisor.sh](file:///Users/andymorven/git/agentic-era-networking/deploy/mac/zodiac-netgear-tunnel-supervisor.sh). Multiplexes both ports `:8888` and `:8889` over resilient SSH with TCP keepalives (`ServerAliveInterval 15`). Automatically reconnects on login, sleep/wake, or network reconnects.
+- **Pivot Host Zero Standing Routes (Fail-Closed Isolation):** To uphold Invariant 3, the Raspberry Pi 5 workload host boots with zero permanent routes or systemd units to `192.168.0.0/24`. The supervisor script executes an inline trapped remote session (`trap cleanup EXIT INT TERM HUP`). Routes and aliases are only bound for the lifetime of the authenticated SSH connection; if the Mac disconnects, sleeps, or reboots, the remote trap immediately deletes the routes and aliases on the pivot.
+
+---
+
+## Ad-Hoc Sessions (Alternative)
+
+If background persistence is not desired, ad-hoc foreground sessions can still be run:
+
+```bash
+# Connect to Switch 1 (Workload switch @ 192.168.0.239 -> http://localhost:8888/)
+npm run switch:workload      # Foreground session; Ctrl+C cleans up routes
+
+# Connect to Switch 2 (Uplink switch @ 192.168.0.240 -> http://localhost:8889/)
+npm run switch:uplink        # Foreground session; Ctrl+C cleans up routes
+
+# Check tunnel status & probe HTTP for both switches
 npm run switch:status
 # or: ./scripts/netgear-tunnel.sh status
 
-# Explicitly stop tunnel & sanitize routes across all pivot hosts
+# Explicitly stop tunnel(s) & sanitize routes across all pivot hosts
 npm run switch:stop
 # or: ./scripts/netgear-tunnel.sh stop
 ```
 
-Once connected, open **`http://localhost:8888/`** in your browser.
-
+Access via browser:
+- **Switch #1 (`zodiac_netgear_1`, Workload):** **`http://localhost:8888/`**
+- **Switch #2 (`zodiac_netgear_2`, Uplink):** **`http://localhost:8889/`**
 - **Default password:** `password`
 
 ---
@@ -92,28 +114,33 @@ ssh -o BatchMode=yes agent@10.0.0.179 "
 
 ### Step 2: Clear Port Collisions on the Mac
 
-Before opening the tunnel, ensure no dangling SSH process is bound to port 8888:
+Before opening the tunnel, ensure no dangling SSH process is bound to the target port (`8888` for Switch 1, `8889` for Switch 2):
 
 ```bash
+# Clear Switch 1 (8888) or Switch 2 (8889):
 lsof -ti :8888 | xargs kill 2>/dev/null || true
-sleep 0.5
-lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+lsof -ti :8889 | xargs kill 2>/dev/null || true
 ```
 
 ### Step 3: Open Local Port Forwarding Tunnel
 
 ```bash
-# For zodiac_netgear_1:
+# For zodiac_netgear_1 (Port 8888):
 ssh -f -N -o BatchMode=yes -o ExitOnForwardFailure=yes -L 8888:192.168.0.239:80 agent@10.0.0.179
 
-# For zodiac_netgear_2:
-ssh -f -N -o BatchMode=yes -o ExitOnForwardFailure=yes -L 8888:192.168.0.240:80 agent@10.0.0.179
+# For zodiac_netgear_2 (Port 8889):
+ssh -f -N -o BatchMode=yes -o ExitOnForwardFailure=yes -L 8889:192.168.0.240:80 agent@10.0.0.179
 ```
 
-### Step 4: Verify Local Endpoint
+### Step 4: Verify Local Endpoints
 
 ```bash
+# Verify Switch 1:
 curl -s -m 2 http://localhost:8888/ | grep -i "<title>"
+# Expected output: <title>Redirect to Login</title>
+
+# Verify Switch 2:
+curl -s -m 2 http://localhost:8889/ | grep -i "<title>"
 # Expected output: <title>Redirect to Login</title>
 ```
 
@@ -122,10 +149,10 @@ curl -s -m 2 http://localhost:8888/ | grep -i "<title>"
 When the maintenance session is complete:
 
 ```bash
-# 1. Gracefully terminate local tunnel on Mac
-lsof -ti :8888 | xargs kill 2>/dev/null || true
+# 1. Gracefully terminate local tunnels on Mac
+lsof -ti :8888 :8889 | xargs kill 2>/dev/null || true
 sleep 0.5
-lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+lsof -ti :8888 :8889 | xargs kill -9 2>/dev/null || true
 
 # 2. Flush aliases and host routes on the Pi
 ssh -o BatchMode=yes agent@10.0.0.179 "

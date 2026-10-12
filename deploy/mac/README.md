@@ -66,3 +66,38 @@ To remove the daemon and restore default macOS network behavior:
 ```bash
 sudo bash deploy/mac/uninstall-dataplane-daemon.sh
 ```
+
+---
+
+## NETGEAR Switch Management Tunnels (`com.zodiac.netgear-tunnels`)
+
+This LaunchAgent maintains persistent, self-healing SSH port forwards from the Mac operator terminal to the two NETGEAR GS105Ev2 smart switches (`192.168.0.239` on `:8888` and `192.168.0.240` on `:8889`) across reboots, sleep/wake, and Wi-Fi reconnections.
+
+### Endpoints
+
+- **Switch #1 (Workload):** `http://localhost:8888/` (default password: `password`)
+- **Switch #2 (Uplink):** `http://localhost:8889/` (default password: `password`)
+
+### Installation & Management
+
+Installed as a user-level LaunchAgent (`~/Library/LaunchAgents/com.zodiac.netgear-tunnels.plist`):
+
+```bash
+# Install and activate (macOS launchd supervisor with trapped ephemeral routes on RPi 5):
+npm run switch:service:install
+
+# Check status of LaunchAgent and switch HTTP endpoints:
+npm run switch:service:status
+
+# Restart supervisor:
+npm run switch:service:restart
+
+# Uninstall and restore fail-closed isolation:
+npm run switch:service:uninstall
+```
+
+### Invariant 3 Architecture (Zero Standing Routes on Pivot)
+
+Per Invariant 3 (Fail Closed), untrusted or adversarial pivot nodes (such as the Raspberry Pi 5 workload host) must never maintain permanent standing routes or systemd units pointing to management hardware.
+
+The supervisor script (`zodiac-netgear-tunnel-supervisor.sh`) connects over SSH and executes a trapped session (`trap cleanup EXIT INT TERM HUP`). Ephemeral routes exist on the pivot **only while the operator's SSH session is actively connected**. When the Mac disconnects, sleeps, or reboots, the remote trap automatically sanitizes all routes and IP aliases immediately.
