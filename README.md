@@ -69,10 +69,10 @@ Agents are in the loop as *proposers*. A human approves, and deterministic code 
 | Switch readback verification (match fields) | Implemented | `verifyIsolationReadback`; output actions are not yet parsed |
 | Hardware cost model and data-plane benchmark harness | Measured, documented | [Whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md), `scripts/zodiac-dataplane-bench.ts` |
 | Telemetry with provenance (no simulated data shown as live) | Implemented | `scripts/check-provenance.ts`, `test/invariants/goodharts-law-provenance.test.ts` |
-| Anomaly detector and quarantine path (Coral TPU, Jetson GPU) | Present; precision and recall **not measured** | `scripts/gpu-sdn-anomaly-sentinel.py`, `src/sdn/zodiac-controller.ts` |
+| Anomaly detector and quarantine path (Jetson GPU; Corals parked) | Present; precision and recall **not measured** | `scripts/gpu-sdn-anomaly-sentinel.py`, `src/sdn/zodiac-controller.ts` |
 | Verifier consumes the cost model (capacity budget check) | Planned | [Roadmap](docs/ROADMAP.md), track A |
 | Shadowed-rule and action-level analysis | Planned | Roadmap, track A |
-| Model-versus-wire conformance probe | Planned | Roadmap, track B |
+| Model-versus-wire conformance probe | First manual run 2026-10-12: five checks matched (ICMP and ARP only, small sample, provenance sidecars on O2 and O3); automated probe planned | [Roadmap](docs/ROADMAP.md), track B |
 | Repeatable adversarial suite (ARP spoofing, scan, flood, evasion) | Planned | Roadmap, track C |
 | Evaluation of LLM-proposed rule sets against the verifier | Planned | Roadmap, track A |
 
@@ -95,6 +95,7 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
 - **Removed on 2026-10-09:** `SymbolicRouteVerifier` (its call sites passed hop lists that could not fail), the unused `AdaptiveFlowController`, and the dashboard's "Live Invariant Verification Playground" (hardcoded numbers shown as live). The verifier is the set of property checks in `port1-isolation.ts` and `verifyPlanAdmissible`.
 - **Single switch, single run set.** Many benchmark layouts are single rounds; see the whitepaper's limitations.
 - **Confinement is address-based.** The isolation policy admits IPv4 whose source and destination are in `10.0.2.0/24`, and source addresses are forgeable. A host on the uplink side that takes a `10.0.2.x` address can reach the workload nodes; the Mac's benchmark alias does exactly this by design. Testing it is a track C scenario.
+- **Mirror destination ports do not drop ingress by themselves.** A test on 2026-10-12 showed both NETGEAR switches' mirror ports accepted frames sent from the capture NICs (one of them the untrusted Pi 5's). Each is now isolated in its own VLAN and re-tested with untagged, single-tagged and double-tagged frames; the host-side egress drops remain partial, and the VLAN layer is what closes the path.
 - **No claim of production readiness.** This is a lab system on a 100 Mbit/s MCU switch.
 
 ## 6. Hardware
@@ -102,18 +103,18 @@ Full method, data and limitations: [benchmark whitepaper](docs/benchmarks/zodiac
 | Role | Device |
 | :--- | :--- |
 | Device under test | Northbound Networks Zodiac FX: SAM4E8E MCU, KSZ8795 switch IC, 4 x 100BASE-TX, 128-rule table, OpenFlow 1.3 |
-| Controller, benchmark host, detector | NVIDIA Jetson Orin Nano Super (Coral Edge TPU x2 for inference) |
+| Controller, benchmark host, detector | NVIDIA Jetson Orin Nano Super (three NICs: OpenFlow control, O2 tap, O3 uplink capture) |
 | Hostile workload and traffic generator | Raspberry Pi 5 with Hailo-8 (`rpi-hailo`) |
 | Untrusted client workloads | Two Raspberry Pi 3B+ (`agentic-node-01`, `agentic-node-02`) |
 | Workload aggregation | NETGEAR GS105Ev2 (802.1Q, port mirror) |
-| Uplink switch | Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac P2 (installed 2026-10-09; O3 mirror not yet configured) |
+| Uplink switch | Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac P2 (installed 2026-10-09; its P4 mirrors to P3, feeding the Jetson's O3 capture NIC) |
 | Operator and local model host | Apple Silicon workstation |
 
 ```text
    Lab LAN / Internet (ISP mesh / extender)
               │ P5
         ┌─────┴──────┐
-        │ NETGEAR #2 │  uplink switch (P4 → Zodiac P2; mirror pending)
+        │ NETGEAR #2 │  uplink switch (P4 → Zodiac P2; P3 = O3 mirror)
         │ GS105Ev2   │
         └─────┬──────┘
               │ P4 ↔ Zodiac P2

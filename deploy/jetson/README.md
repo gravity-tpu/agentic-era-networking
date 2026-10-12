@@ -12,7 +12,7 @@
 [ISP Gateway / Mesh Node]
           │ Ethernet
           ▼
-[NETGEAR GS105Ev2 #2 Port 5]   (uplink switch; installed 2026-10-09; P1-P3 free, O3 mirror pending)
+[NETGEAR GS105Ev2 #2 Port 5]   (uplink switch; installed 2026-10-09; its P4 mirrors to P3 = O3 capture NIC; P1-P2 free)
 [NETGEAR GS105Ev2 #2 Port 4]
           │ 100BASE-TX Ethernet
           ▼
@@ -26,8 +26,8 @@
 [Zodiac FX Port 4] ─── Ethernet RJ-45 ───► [Jetson Onboard GbE: enP8p1s0: <ctrl-subnet> (:6633)]
 [Zodiac Micro-USB] ─── USB-A Cable ──────► [Jetson /dev/ttyACM0 (Serial CDC Telemetry)]
                                            │
-                                           ├──► [Google Coral Edge TPU #1 (USB 3.0: Tap DPI)]
-                                           ├──► [Google Coral Edge TPU #2 (USB 3.0: DNS Sentinel)]
+                                           ├──► [O3 capture NIC enx9c69d39ddcc0 (USB 3.0, cabled to switch #2 Port 3)]
+                                           ├──► (Coral Edge TPUs removed 2026-10-11)
                                            ├──► [SSD1306 0.96" OLED (I2C Bus 7, 0x3c)]
                                            └──► [wlP1p1s0: <mgmt-subnet> (Wi-Fi Mgmt/Relay)]
 ```
@@ -41,7 +41,7 @@
 | --- | --- | --- | --- | --- |
 | **Port 1** | NETGEAR GS105Ev2 | Port 5 Uplink | Isolated Workload Subnet | **Workload Aggregation Layer**: Intermediate GbE switch aggregating RPi 5 + Hailo-8 (Port 4), RPi 3B+ (Port 3), and the RPi 5 USB-GbE capture NIC (Port 2). |
 | **Port 2** | NETGEAR GS105Ev2 #2 (port 4); the ISP Gateway / Mesh Node is on its port 5 | RJ-45 Uplink Cable | Gateway Bridged (VLAN 100) | **Gateway Transit**: Public Internet access through the uplink switch. |
-| **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap**: Wire-speed mirror for Coral DPI. |
+| **Port 3** | Jetson Orin Nano Super | `enx*` (ASIX AX88179) | Promiscuous Tap (No IP) | **Hardware Mirror Tap (O2)**: Wire-speed mirror for the Jetson capture; the detector runs on the Jetson GPU. |
 | **Port 4** | Jetson Orin Nano Super | `enP8p1s0` | Dedicated Control Subnet | **OpenFlow Control Channel**: Controller target `:6633`. |
 | **Micro-USB** | Jetson Orin Nano Super | USB CDC (VID 03eb PID 2404) | `/dev/ttyACM0` @ 115200 | **Hardware Register Telemetry**: 1–2 Hz hardware telemetry. |
 
@@ -179,7 +179,9 @@ journalctl -u zodiac-bridge -f
 
 ---
 
-## 7. Dual Google Coral TPUs (Phase 2A — Pre-Wired)
+## 7. Dual Google Coral TPUs (historical: removed 2026-10-11)
+
+> **Update 2026-10-11:** both Corals were physically removed from the Jetson and `zodiac-coral.service` is disabled. This section is kept as history.
 
 Both Corals are physically connected to the Jetson USB 3.0 ports (8 TOPS INT8 total compute). Phase 2A wiring is already
 stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phase 2A begins:

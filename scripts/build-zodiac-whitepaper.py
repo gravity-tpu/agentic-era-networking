@@ -134,12 +134,12 @@ BODY = """
 <div class="meta">
   <div><b>Document:</b> Position paper with a measured foundation</div>
   <div><b>Version:</b> __VERSION__ &nbsp; <b>Date:</b> __DATE__</div>
-  <div><b>Status:</b> Measurements final (2026-10-04). Verifier partly implemented. Evaluation planned, no results reported.</div>
+  <div><b>Status:</b> Measurements final (2026-10-04). Verifier partly implemented. First manual conformance run reported (E1; ICMP and ARP only, small sample); adversarial and agent-proposal evaluations planned, no results.</div>
   <div><b>Repository:</b> github.com/gravity-tpu/agentic-era-networking</div>
 </div>
 
 <div class="abstract">
-<p><b>Abstract.</b> Agents can generate network policy faster than people can review it, so the scarce resource is verification. We describe Zodiac, a testbed for studying that problem on physical hardware: an OpenFlow 1.3 switch with a 128-rule table, a mirror tap, an instrumented controller, and a hostile workload node. We report the measured hardware model. Forwarding cost is <code>38.5 µs + 34.8 ns per payload byte above 64 + 4.24 µs per rule</code>, set by the switch's microcontroller and not its 100 Mbit/s ports; rule layout changes capacity by up to 2.6x; and offered load of 1.3 to 2.3 times capacity makes the switch drop its control session and its flow table. We argue that the right verifier for this system checks properties of the rule set, including capacity, against that measured model, and closes the loop by testing model against wire. The verifier is partly built; the evaluation, including how often LLM-proposed rule sets are unsafe, is specified here and not yet run.</p>
+<p><b>Abstract.</b> Agents can generate network policy faster than people can review it, so the scarce resource is verification. We describe Zodiac, a testbed for studying that problem on physical hardware: an OpenFlow 1.3 switch with a 128-rule table, a mirror tap, an instrumented controller, and a hostile workload node. We report the measured hardware model. Forwarding cost is <code>38.5 µs + 34.8 ns per payload byte above 64 + 4.24 µs per rule</code>, set by the switch's microcontroller and not its 100 Mbit/s ports; rule layout changes capacity by up to 2.6x; and offered load of 1.3 to 2.3 times capacity makes the switch drop its control session and its flow table. We argue that the right verifier for this system checks properties of the rule set, including capacity, against that measured model, and closes the loop by testing model against wire. The verifier is partly built; the evaluation, including how often LLM-proposed rule sets are unsafe, is specified here and not yet run. The first manual conformance run (E1) is reported in section 5.</p>
 </div>
 
 <h2>1. Problem</h2>
@@ -151,10 +151,10 @@ BODY = """
 <table>
 <tr><th>Role</th><th>Device</th></tr>
 <tr><td>Device under test</td><td>Northbound Networks Zodiac FX, firmware 0.86: SAM4E8E 120 MHz MCU, KSZ8795 switch IC, 4 x 100BASE-TX, 128-rule flow table, OpenFlow 1.3</td></tr>
-<tr><td>Controller, benchmark host, detector</td><td>NVIDIA Jetson Orin Nano Super (two Coral Edge TPUs for inference)</td></tr>
+<tr><td>Controller, benchmark host, detector</td><td>NVIDIA Jetson Orin Nano Super (the Coral Edge TPUs were removed on 2026-10-11)</td></tr>
 <tr><td>Hostile workload, traffic generator</td><td>Raspberry Pi 5 with Hailo-8; Raspberry Pi 3B+ as the client workload</td></tr>
 <tr><td>Workload aggregation</td><td>NETGEAR GS105Ev2 (802.1Q, port mirror)</td></tr>
-<tr><td>Uplink switch</td><td>Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac Port 2, installed 2026-10-09 after the measurements in section 3. Its mirror of the Zodiac P2 link (observation point O3) is not yet configured.</td></tr>
+<tr><td>Uplink switch</td><td>Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac Port 2, installed 2026-10-09 after the measurements in section 3. It mirrors the Zodiac P2 link (its P4) to its P3, where the Jetson's third USB NIC captures it as observation point O3, live since 2026-10-12. The NIC is receive-only by two layers, neither a guarantee: egress is dropped by a blackhole qdisc (the Jetson kernel lacks <code>cls_matchall</code>), which does not stop a raw socket that bypasses the qdisc, and the mirror port is isolated in its own VLAN. A test on 2026-10-12 found that the mirror port initially accepted ingress, contradicting the documented behavior; after the VLAN isolation the same test no longer saw the injected frame. The first NETGEAR's mirror port, where the untrusted Pi 5's capture NIC sits, showed the same behavior and was isolated the same way; both re-tests, with untagged, single-tagged and double-tagged frames, were negative.</td></tr>
 </table>
 <p>Port 1 carries the untrusted workload segment, Port 2 the uplink to the lab LAN and Internet, Port 3 a mirror tap read by the Jetson, and Port 4 the OpenFlow control channel. The policy under test isolates the workload: only IPv4 whose source and destination are both inside the workload subnet, plus ARP, may cross Port 1 to Port 2; everything else from Port 1 is mirrored to the tap only; the table-miss entry drops.</p>
 <p><b>Provenance.</b> Every measurement artifact is stamped as a physical run, uses 64-bit integer counters and monotonic nanosecond clocks, and binds the switch identity and firmware version. Telemetry from disconnected hardware reports zero and offline, never a plausible value. Modelled values in this paper are marked as modelled.</p>
@@ -212,10 +212,11 @@ capacity = 1,000,000 / t_packet  packets per second</pre>
 <p>The isolation policy forwards ARP between the workload and the lab LAN, because firmware 0.86 support for ARP source and target fields is unverified. The code documents this as address disclosure only. We suspect it is also a spoofing surface: a workload can send ARP claiming a lab-LAN address. This is a hypothesis; testing it is the first adversarial scenario below, and a confirmed result becomes a verifier property.</p>
 
 <h2>5. Evaluation plan</h2>
-<p>None of the following has been run. It is specified so the results are interpretable, and so a negative result is reportable.</p>
+<p>Only E1 has had a first manual run (below); E2 and E3 have not been run. The evaluations are specified so the results are interpretable, and so a negative result is reportable.</p>
 
 <h3>E1. Model versus wire (conformance)</h3>
 <p>For a stated set of generated packets, compute the model's verdict, send the packets from the workload node, and observe what leaves each port through the mirror tap. Metric: agreement rate, with each disagreement classified as a model error, a firmware behavior, or a harness artifact. Falsifier: systematic disagreement on forwarding or drop decisions means the static checks cannot be trusted for this firmware.</p>
+<p><b>First manual run (2026-10-12).</b> With observation point O3 live (the uplink switch mirroring the Zodiac P2 link to a receive-only capture NIC on the Jetson) and the Zodiac P3 tap as O2, five checks were made by hand: allowed traffic appeared at O3 (10 of 10 expected ICMP packets, 5 requests plus 5 replies); blocked traffic did not (0 ICMP toward the gateway, with a control capture showing the capture was live); traffic between two workload nodes never reached the Zodiac (0, with a positive control in the same window); ARP from a workload node crossed to the uplink as documented (6 requests at both O2 and O3, repeated with provenance sidecars on both captures); and the tap saw only P1-ingress copies (5 replies, 0 requests, also repeated with sidecars). All five matched the model, and none disagreed. The sample is small (ICMP and ARP, five pings per run, one switch, firmware 0.86), and this is not yet an automated probe over a stated packet set, so it does not establish agreement rate.</p>
 
 <h3>E2. Adversarial scenarios from the Pi 5</h3>
 <ol>
@@ -249,7 +250,8 @@ capacity = 1,000,000 / t_packet  packets per second</pre>
 <tr><td>Hardware model and benchmark harness</td><td>Measured, documented [1]</td></tr>
 <tr><td>Isolation policy and static checks A1, A2; readback on match fields</td><td>Implemented and unit-tested</td></tr>
 <tr><td>Checks A3 to A10; action-level readback; cost-model input to the verifier</td><td>Planned</td></tr>
-<tr><td>E1 conformance, E2 adversarial suite, E3 agent evaluation</td><td>Planned; no results</td></tr>
+<tr><td>E1 conformance</td><td>First manual run done: five checks, all matched (section 5); automated probe planned</td></tr>
+<tr><td>E2 adversarial suite, E3 agent evaluation</td><td>Planned; no results</td></tr>
 <tr><td>Independent review of policy and property list</td><td>Planned before publication of results</td></tr>
 </table>
 <p>The roadmap [2] gives sequencing and exit criteria. Deferred or dropped from the earlier plan: the Sentinel bot-mitigation module, DNS reverse proxy, multi-agent routing stability, and the agent intent firewall.</p>

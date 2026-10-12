@@ -4,7 +4,7 @@
 
 > **Zodiac Hardware Specification & Integration Blueprint**  
 > **Device under test:** Northbound Networks Zodiac FX OpenFlow switch (SAM4E8E MCU, KSZ8795 switch IC, 128-rule table)  
-> **Controller and detector host:** NVIDIA Jetson Orin Nano Super with dual Google Coral Edge TPUs  
+> **Controller and detector host:** NVIDIA Jetson Orin Nano Super (the Coral Edge TPUs were removed on 2026-10-11)  
 > **Workload tier:** Raspberry Pi 5 (Hailo-8 NPU, adversary) and Raspberry Pi 3B+ (client workload) behind a NETGEAR GS105Ev2 smart switch  
 > **Tap interface:** ASIX AX88179 USB 3.0 GbE adapter (`enx*`, promiscuous) on Zodiac Port 3  
 > **Operator workstation:** Apple Silicon Mac (local model host for review tooling; not on the data plane)
@@ -20,7 +20,7 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
 - **Zodiac FX Switch**: Physical 4-port 10/100 Mbit/s OpenFlow switch (Microchip KSZ8795 switch IC + Atmel SAM4E8E 120 MHz ARM Cortex-M4 MCU) with a deterministic 128-entry flow table.
 - **Intermediate Aggregation Switch (NETGEAR GS105Ev2)**: 5-Port Gigabit Smart Managed Switch bridging the high-speed GbE workload tier to Zodiac Port 1 (100BASE-TX) with IEEE 802.3x Flow Control backpressure and 802.1Q VLAN isolation capability.
 - **Controller host (NVIDIA Jetson Orin Nano Super)**: Low-power (7W–15W) host for the OpenFlow 1.3 controller daemon (`:6633`), the RFC 1035 resolver (`:53`), the policy verifier, the anomaly detector (GPU), the SSD1306 OLED status daemon, and a local userspace Open vSwitch daemon (`br-sim` on `:6634`) serving as a bounded (10,000 rules) reference sandbox for Track A rule verification.
-- **Dual Google Coral Edge TPUs**: Dedicated 8 TOPS INT8 USB 3.0 coprocessors ingesting mirrored tap frames for on-silicon inference (TPU 0; throughput/latency verified, trained classifier pending, ROADMAP Milestone 2C) and RFC 1035 DNS intent analysis (TPU 1) without taxing the Jetson GPU pipeline.
+- **Dual Google Coral Edge TPUs (removed from the Jetson on 2026-10-11; one is idle on `rpi-hailo`, one is a spare; the text describes the earlier deployment)**: Dedicated 8 TOPS INT8 USB 3.0 coprocessors ingesting mirrored tap frames for on-silicon inference (TPU 0; throughput/latency verified, trained classifier pending, ROADMAP Milestone 2C) and RFC 1035 DNS intent analysis (TPU 1) without taxing the Jetson GPU pipeline.
 - **Dedicated Mirror Tap Interface (ASIX AX88179 USB GbE)**: Dedicated secondary physical NIC (`enx*`) on the Jetson Orin operating in promiscuous mode, directly cabled to Zodiac Port 3 for zero-loss packet inspection.
 - **Untrusted Agent Workload Tier**:
   - **Raspberry Pi 5 + Hailo-8** (`rpi-hailo`, renamed from `agentic-node-02` on 2026-10-09): Adversarial workload (red team) on `eth0` (`10.0.2.51`) via Netgear Port 4; 26 TOPS INT8 Hailo-8 NPU over PCIe Gen 3.0 x1 (`/dev/hailo0`, HailoRT 4.20) for CNN packet-classifier validation and surrogate-model evasion testing (traffic generation runs on the host CPU/NIC); out-of-band management via `wlan0` (`10.0.0.179`).
@@ -46,7 +46,7 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
                                             +───────────────────────────────────+
                                             | NETGEAR GS105Ev2 · Uplink Switch 2|
                                             | P5: ISP mesh   P4: Zodiac Port 2  |
-                                            | P1-P3 free; O3 mirror pending     |
+                                            | P3: O3 mirror dest; P1-P2 free    |
                                             +-----------------+-----------------+
                                                               │ 100BASE-TX Ethernet (switch P4)
                                                               ▼
@@ -80,13 +80,13 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
         │                        |  * USB-C Port: L4T Device Mode (192.168.55.1 / CDC-ACM)  |
         │                        +──────────────┬───────────────────────────┬───────────────+
         │                                       │                           │
-        │                                       │ Dual USB 3.0              │ DIRECT HIGH-SPEED USB-C CABLE
-        │                                       │ (Tap DPI & DNS Sentinel)  │ [Link 9: Management Tether]
+        │                                       │ USB 3.0 (5000M)           │ DIRECT HIGH-SPEED USB-C CABLE
+        │                                       │ (O3 capture NIC)          │ [Link 9: Management Tether]
         │                                       ▼                           │ * CDC-NCM: 192.168.55.1 <-> en8
         │                           +───────────────────────────────────+   │ * CDC-ACM: /dev/cu.usbmodem*
-        │                           | Dual Google Coral Edge TPUs       |   │ * 5 Gbps SuperSpeed USB 3.0
-        │                           | * TPU 0: Port 3 Mirror Tap DPI    |   │ * Priority: Tier 1 (Metric 50)
-        │                           | * TPU 1: RFC 1035 DNS Sentinel    |   │ * Fail-Closed (Zero Route Bleed)
+        │                           | O3 capture NIC (USB 3, 5000M)     |   │ * 5 Gbps SuperSpeed USB 3.0
+        │                           | * enx9c69d39ddcc0 -> switch #2 P3 |   │ * Priority: Tier 1 (Metric 50)
+        │                           | * Receive-only (qdisc + VLAN)     |   │ * Fail-Closed (Zero Route Bleed)
         │                           +───────────────────────────────────+   │
         ▼                                                                   ▼
 +───────────────────────────────────+               +───────────────────────────────────────────────────+
@@ -127,17 +127,18 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Zodiac FX Switch** | Port 1 (100BASE-TX) | KSZ8795 Port 1 | Workload Data Plane (VLAN 100) | NETGEAR Port 5 | **Untrusted Workload Transit**: Monitored agent data plane aggregation uplink. |
 | **Zodiac FX Switch** | Port 2 (100BASE-TX) | KSZ8795 Port 2 | Gateway Bridged (VLAN 100) | Uplink switch #2 (NETGEAR GS105Ev2) port 4, then the ISP Gateway / Mesh Node on its port 5 | **WAN / Gateway Uplink**: Egress to public internet. Since 2026-10-09 the ISP link terminates on uplink switch #2 instead of the Zodiac directly. |
-| **Zodiac FX Switch** | Port 3 (100BASE-TX) | KSZ8795 Port 3 | Port Mirror (VLAN 100) | Jetson `enx*` USB GbE | **Hardware Mirror Tap**: Zero-overhead port mirror for Coral/Jetson DPI. |
+| **Zodiac FX Switch** | Port 3 (100BASE-TX) | KSZ8795 Port 3 | Port Mirror (VLAN 100) | Jetson `enx*` USB GbE | **Hardware Mirror Tap (O2)**: Zero-overhead port mirror feeding the Jetson capture. |
 | **Zodiac FX Switch** | Port 4 (100BASE-TX) | KSZ8795 Port 4 | Switch Management (VLAN 200) | Jetson `enP8p1s0` | **OpenFlow 1.3 Control Channel**: Isolated switch management. |
 | **Zodiac FX Switch** | Micro-USB (CDC-ACM) | Atmel VID 03eb PID 2404 | `/dev/ttyACM0` @ 115200 8N1 | Jetson USB Host | **Telemetry Stream**: 1–2 Hz hardware register stream. |
 | **NETGEAR GS105Ev2** | Ports 1–5 (1000BASE-T) | GS105E v2 | Workload Subnet Aggregation | P5: Zodiac P1, P4: RPi 5, P3: RPi 3, P2: RPi 5 USB-GbE capture, P1: agentic-node-02 (RPi 3B+) | **Intermediate Aggregation Switch**: GbE aggregation layer, 128KB packet buffer, IEEE 802.3x flow control, rate transition bridging. |
-| **NETGEAR GS105Ev2 (uplink switch #2)** | Ports 1–5 (1000BASE-T) | GS105E v2 | Lab-side L2 uplink | P5: ISP Gateway / Mesh Node, P4: Zodiac P2, P1-P3: free | **Uplink Switch**: installed 2026-10-09 with only those two links. Port mirroring of its P4 is planned as observation point O3 (not configured; no capture interface attached). |
+| **NETGEAR GS105Ev2 (uplink switch #2)** | Ports 1–5 (1000BASE-T) | GS105E v2 | Lab-side L2 uplink | P5: ISP Gateway / Mesh Node, P4: Zodiac P2, P3: Jetson O3 capture NIC (mirror destination), P1-P2: free | **Uplink Switch**: installed 2026-10-09. Its P4 (the Zodiac P2 link) is mirrored to P3 as observation point O3, live since 2026-10-12. The mirror port was found to accept ingress and was isolated in its own VLAN on 2026-10-12 (see the network ledger, caveat 10). |
 | **Jetson Orin Nano** | `enP8p1s0` (Onboard GbE) | Onboard Realtek GbE | Dedicated Control Subnet | Zodiac Port 4 | **OpenFlow Controller**: Listens on `:6633` (<1ms latency). |
-| **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress**: Line-rate packet capture for Coral TPU. |
+| **Jetson Orin Nano** | `enx*` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP) | Zodiac Port 3 | **Mirror Tap Ingress (O2)**: Line-rate packet capture. |
+| **Jetson Orin Nano** | `enx9c69d39ddcc0` (USB 3.0 GbE) | ASIX AX88179 | Promiscuous (No IP), egress dropped by a blackhole qdisc (partial, see caveat 10) | Uplink switch #2 Port 3 | **O3 capture**: receive-only capture of the mirror of the Zodiac P2 link (what actually crossed the uplink). Live since 2026-10-12. |
 | **Jetson Orin Nano** | `wlP1p1s0` (Wi-Fi) | M.2 Key-E Wi-Fi | Management Plane Subnet | Lab Wireless LAN | **Management Plane**: Web UI (`:3003`), SSH, Cloud Relay. |
 | **Jetson Orin Nano** | `br-sim` (Virtual OVS) | Userspace `netdev` | Internal Sandbox | Localhost (`:6634`) | **Reference Switch Sandbox**: Software OpenFlow 1.3 bridge for Track A large-scale rule validation without MCU memory limits. |
-| **Google Coral TPU Primary** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` (uncompiled) / `9303` (delegate loaded) | USB path `2-1.3` | Jetson USB-A (Realtek hub port 3) | **Active Inference — Line-Rate Wire-Tap DPI**: `zodiac-coral.service` targets this TPU first (`CORAL_PRIMARY_USB_PATH=2-1.3`). MobileNet V2 INT8 shallow packet classifier on Port 3 mirror tap. `standbyMode: false` in telemetry. |
-| **Google Coral TPU Standby** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` / `9303` | USB path `2-1.2` | Jetson USB-A (Realtek hub port 2) | **Standby — Failover Tap DPI**: `zodiac-coral.service` activates this TPU if primary is absent or exceeds `MAX_CONSECUTIVE_ERRORS=5`. Runs identical MobileNet V2 INT8 model. `standbyMode: true` in telemetry. DNS Sentinel role planned for Phase 2. |
+| **Google Coral TPU Primary (removed from the Jetson 2026-10-11)** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` (uncompiled) / `9303` (delegate loaded) | USB path `2-1.3` | Jetson USB-A (Realtek hub port 3) | **Active Inference — Line-Rate Wire-Tap DPI**: `zodiac-coral.service` targets this TPU first (`CORAL_PRIMARY_USB_PATH=2-1.3`). MobileNet V2 INT8 shallow packet classifier on Port 3 mirror tap. `standbyMode: false` in telemetry. |
+| **Google Coral TPU Standby (removed from the Jetson 2026-10-11)** | USB 3.0 SuperSpeed | Pre-firmware: Global Unichip VID `1a6e` PID `089a` → Post-firmware: Google VID `18d1` PID `9302` / `9303` | USB path `2-1.2` | Jetson USB-A (Realtek hub port 2) | **Standby — Failover Tap DPI**: `zodiac-coral.service` activates this TPU if primary is absent or exceeds `MAX_CONSECUTIVE_ERRORS=5`. Runs identical MobileNet V2 INT8 model. `standbyMode: true` in telemetry. DNS Sentinel role planned for Phase 2. |
 | **SSD1306 OLED** | 4-Pin I2C (Bus 7) | Address `0x3c` | Jetson 40-Pin Header | Jetson Front Bezel | **Front Panel Telemetry**: 5-screen rotational physical display. |
 | **Raspberry Pi 5** | `eth0` (Onboard GbE) | Broadcom BCM54213PE | Isolated Workload Subnet | NETGEAR Port 4 | **Adversarial workload**: Red Team workload generator, rate-limiting stress testing. |
 | **Raspberry Pi 5** | `wlan0` (Wi-Fi) | Synaptics BCM43455 | Management Plane Subnet | Lab Wireless LAN | **Out-of-Band Safety**: Dedicated SSH backdoor to prevent lockouts. |
@@ -201,6 +202,8 @@ The Jetson Orin Nano Super executes quantized TensorRT neural inference in **< 1
 ### Detector and quarantine path (exists; accuracy not yet measured)
 
 > [!NOTE]
+> **Update 2026-10-11:** both Coral Edge TPUs were physically removed from the Jetson and `zodiac-coral.service` was disabled, so the Coral path below no longer runs. The Jetson GPU detector is unchanged. The text is kept as the record of the earlier deployment.
+
 > **Deployed topology (Phases 0.12–0.13)**: The Coral and Jetson GPU run as **two independent parallel inference paths on separate interfaces** — not as a Stage 1 → Stage 2 pipeline. No handoff occurs between them in the current codebase. The staged pipeline is the Phase 2 target once USB hub contention is resolved and dedicated per-TPU host controllers are available.
 
 - **Challenge**: AI agents executing tool-use loops can trigger rogue network behaviors (DDoS against local services, aggressive subnet scanning, abnormal packet burst frequencies, exfiltration bursts).
