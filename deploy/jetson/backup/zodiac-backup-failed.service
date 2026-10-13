@@ -1,0 +1,7 @@
+[Unit]
+Description=Record a failed Zodiac Jetson backup
+
+[Service]
+Type=oneshot
+# A failure leaves a marker and a journal entry; extend this unit to send a notification if you want one.
+ExecStart=/bin/sh -c 'logger -p user.err -t zodiac-backup "backup FAILED, see: journalctl -u zodiac-backup"; mkdir -p /var/lib/zodiac; date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ > /var/lib/zodiac/backup-last-failure'
