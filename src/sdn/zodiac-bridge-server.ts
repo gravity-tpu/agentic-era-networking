@@ -119,6 +119,19 @@ function clampValue(val: number, min: number, max: number): number {
   return Math.min(Math.max(val, min), max);
 }
 
+/**
+ * Pure deterministic slicing function to return timeSeries points strictly newer than sinceMs.
+ * Defined at module level to eliminate closure allocations on the hot delta-polling path (Dean Latency Invariant).
+ */
+function trimSeriesSince<T extends { readonly timestampMs: number }>(
+  series: readonly T[] | undefined,
+  sinceMs: number
+): T[] {
+  if (!series || series.length === 0) return [];
+  const idx = findCutoffIndex(series, sinceMs + 1);
+  return series.slice(idx);
+}
+
 export interface CopilotRuntimeConfig {
   readonly ttlSec: number;
   readonly timeoutMs: number;
@@ -1311,6 +1324,38 @@ export class ZodiacBridgeServer {
               ...this.cachedSnapshot.workstation,
               timeSeries: workstationPoints,
             },
+          } : {}),
+        }));
+        return;
+      }
+
+      // Delta polling: ?since=<timestampMs> returns only timeSeries points newer than
+      // the client's last observed timestamp. Slashes payload from ~5.5 MB down to ~2 KB,
+      // eliminating V8 memory churn, GC stalls, and false-negative timeout aborts (Dean Latency Budget).
+      const sinceRaw = Number(url.searchParams.get('since') ?? '0');
+      // Tolerate clock skew / NTP drift: if client timestamp is slightly ahead of server clock,
+      // findCutoffIndex deterministically yields an empty slice without falling back to full payload.
+      const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0
+        ? Math.floor(sinceRaw)
+        : 0;
+
+      if (sinceMs > 0) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(this.serializeSnapshot({
+          ...this.cachedSnapshot,
+          timeSeries: trimSeriesSince(this.cachedSnapshot.timeSeries, sinceMs),
+          ...(this.cachedSnapshot.jetson ? {
+            jetson: { ...this.cachedSnapshot.jetson, timeSeries: trimSeriesSince(this.cachedSnapshot.jetson.timeSeries, sinceMs) },
+          } : {}),
+          ...(this.cachedSnapshot.coral ? {
+            coral: { ...this.cachedSnapshot.coral, timeSeries: trimSeriesSince(this.cachedSnapshot.coral.timeSeries, sinceMs) },
+          } : {}),
+          ...(this.cachedSnapshot.workstation ? {
+            workstation: { ...this.cachedSnapshot.workstation, timeSeries: trimSeriesSince(this.cachedSnapshot.workstation.timeSeries, sinceMs) },
+          } : {}),
+          ...(this.cachedSnapshot.rpi5 ? {
+            rpi5: { ...this.cachedSnapshot.rpi5, timeSeries: trimSeriesSince(this.cachedSnapshot.rpi5.timeSeries, sinceMs) },
           } : {}),
         }));
         return;

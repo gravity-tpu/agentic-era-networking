@@ -37,6 +37,47 @@
   const MAX_UNVERIFIED_POLLS_BEFORE_FLAP = 3;
   const LIVE_HARDWARE_RETENTION_MS = (MAX_UNVERIFIED_POLLS_BEFORE_FLAP + 1) * TELEMETRY_POLL_INTERVAL_MS;
 
+  // Council Invariant 5 (Flap Damping & Hysteresis):
+  // Suppress transient device dropouts. A device requires DEVICE_FLAP_TOLERANCE consecutive
+  // failed probes before transitioning to OFFLINE, preventing flicker on single packet drops.
+  const DEVICE_FLAP_TOLERANCE = 3;
+  const deviceFailCounts = {
+    zodiac: 0,
+    orin: 0,
+    workstation: 0,
+    rpi5: 0,
+  };
+  const deviceOnlineStates = {
+    zodiac: false,
+    orin: false,
+    workstation: false,
+    rpi5: false,
+  };
+
+  function updateDeviceOnlineState(deviceName, isInstantOnline) {
+    if (isInstantOnline) {
+      deviceFailCounts[deviceName] = 0;
+      deviceOnlineStates[deviceName] = true;
+    } else {
+      deviceFailCounts[deviceName] = (deviceFailCounts[deviceName] || 0) + 1;
+      deviceOnlineStates[deviceName] = deviceFailCounts[deviceName] < DEVICE_FLAP_TOLERANCE;
+    }
+    return deviceOnlineStates[deviceName];
+  }
+
+  function updateAllDeviceStates(snapshot) {
+    if (!snapshot) return;
+    const isZodiacInstant = snapshot.source !== 'disconnected';
+    const isOrinInstant = Boolean(snapshot.jetson && snapshot.jetson.status === 'online');
+    const isWsInstant = Boolean(snapshot.workstation && snapshot.workstation.detected);
+    const isRpi5Instant = Boolean(snapshot.rpi5 && snapshot.rpi5.status === 'online');
+
+    updateDeviceOnlineState('zodiac', isZodiacInstant);
+    updateDeviceOnlineState('orin', isOrinInstant);
+    updateDeviceOnlineState('workstation', isWsInstant);
+    updateDeviceOnlineState('rpi5', isRpi5Instant);
+  }
+
   // Active Appliance Tier State ('zodiac' | 'orin' | 'coral')
   let activeDeviceId = 'zodiac';
   let jetsonTimeSeriesBuffer = [];
@@ -827,6 +868,7 @@
         lastLiveHardwarePerfMs = performance.now();
         consecutiveUnverifiedPolls = 0;
         currentSnapshot = data;
+        updateAllDeviceStates(data);
         renderTelemetry(data, /* isDegraded = */ false);
       } else {
         consecutiveUnverifiedPolls++;
@@ -841,10 +883,12 @@
         if (withinRetention) {
           // Flap damping: keep the live hardware snapshot active, but signal degraded link if appropriate
           console.warn(`[!] [Flap Damping] Suppressed unverified poll (${consecutiveUnverifiedPolls}/${MAX_UNVERIFIED_POLLS_BEFORE_FLAP}), retaining live hardware snapshot.`);
+          updateAllDeviceStates(currentSnapshot);
           renderTelemetry(currentSnapshot, /* isDegraded = */ true);
         } else {
           // Sustained disconnect or no prior live hardware: reflect physical truth
           currentSnapshot = data;
+          updateAllDeviceStates(data);
           renderTelemetry(data, /* isDegraded = */ false);
         }
       }
@@ -869,6 +913,10 @@
       }
 
       if (currentSnapshot) {
+        updateDeviceOnlineState('zodiac', false);
+        updateDeviceOnlineState('orin', false);
+        updateDeviceOnlineState('workstation', false);
+        updateDeviceOnlineState('rpi5', false);
         renderTelemetry(currentSnapshot, true);
       } else if (els.sourceTag && !isAbort) {
         els.sourceTag.innerText = 'Disconnected';
@@ -1175,13 +1223,12 @@
       }
     }
 
-    // Update Device Tier Selector Status Dots
+    // Update Device Tier Selector Status Dots (Flap damped, side-effect free)
     if (els.dotDeviceZodiac) {
-      els.dotDeviceZodiac.className = snapshot.source === 'disconnected' ? 'cf-status-dot down' : 'cf-status-dot green';
+      els.dotDeviceZodiac.className = deviceOnlineStates.zodiac ? 'cf-status-dot green' : 'cf-status-dot down';
     }
     if (els.dotDeviceOrin) {
-      const orinOnline = Boolean(snapshot.jetson && snapshot.jetson.status === 'online');
-      els.dotDeviceOrin.className = orinOnline ? 'cf-status-dot green' : 'cf-status-dot down';
+      els.dotDeviceOrin.className = deviceOnlineStates.orin ? 'cf-status-dot green' : 'cf-status-dot down';
     }
     const c = snapshot.coral;
     const d1 = Array.isArray(c?.devices) ? (c.devices.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') ?? null) : null;
@@ -1518,7 +1565,7 @@
     // 7. Jetson Orin Nano Appliance Telemetry
     if (snapshot.jetson) {
       const j = snapshot.jetson;
-      const isOnline = Boolean(j.status === 'online');
+      const isOnline = deviceOnlineStates.orin;
       if (els.dotDeviceOrin) {
         els.dotDeviceOrin.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
       }
@@ -1961,14 +2008,15 @@
     // 9. MacBook M5 Gemma 4 Workstation Appliance Telemetry
     if (snapshot.workstation) {
       const ws = snapshot.workstation;
-      const isOnline = Boolean(ws.detected && ws.ollamaStatus !== 'OFFLINE');
+      const isOnline = deviceOnlineStates.workstation;
+      const isOllamaOnline = Boolean(ws.ollamaStatus === 'ONLINE' || ws.ollamaStatus === 'BUSY');
 
       if (els.dotDeviceWorkstation) {
         els.dotDeviceWorkstation.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
       }
       if (els.btnDeviceWorkstationBadge) {
         els.btnDeviceWorkstationBadge.innerText = ws.activeModel ? ws.activeModel.split(':')[0] : 'Gemma 4';
-        els.btnDeviceWorkstationBadge.className = `cf-pill-badge ${isOnline ? 'amber' : 'gray'}`;
+        els.btnDeviceWorkstationBadge.className = `cf-pill-badge ${isOnline ? (isOllamaOnline ? 'amber' : 'purple') : 'gray'}`;
       }
 
       // Badges
@@ -1976,8 +2024,8 @@
       if (els.wsGpuBadge) els.wsGpuBadge.innerText = `${ws.gpuCoreCount || 20}-Core Metal GPU`;
       if (els.wsModelBadge) els.wsModelBadge.innerText = `${ws.activeModel || 'gemma4:26b'} · ${ws.modelParameterSize || '25.2B'}`;
       if (els.wsOllamaBadge) {
-        els.wsOllamaBadge.innerText = isOnline ? `Ollama ${ws.ollamaStatus}` : 'Ollama Offline';
-        els.wsOllamaBadge.className = `cf-pill-badge ${isOnline ? 'green' : 'gray'}`;
+        els.wsOllamaBadge.innerText = isOllamaOnline ? `Ollama ${ws.ollamaStatus}` : 'Ollama Offline';
+        els.wsOllamaBadge.className = `cf-pill-badge ${isOllamaOnline ? 'green' : 'gray'}`;
       }
 
       // KPI 1: GPU Compute
@@ -2263,7 +2311,7 @@
     // 10. Raspberry Pi 5 Appliance Telemetry (Node 02)
     if (snapshot.rpi5) {
       const r = snapshot.rpi5;
-      const isOnline = Boolean(r.status === 'online');
+      const isOnline = deviceOnlineStates.rpi5;
       if (els.dotDeviceRpi5) {
         els.dotDeviceRpi5.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
       }

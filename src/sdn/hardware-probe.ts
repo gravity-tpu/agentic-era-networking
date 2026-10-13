@@ -1486,13 +1486,24 @@ interface OllamaPsResponse {
 }
 
 // ── Workstation Agent probe constants ─────────────────────────────────────────
-// 350 ms is the upper bound for a 192.168.55.x USB-C LAN round-trip plus HTTP
-// serialisation overhead. A USB-C NCM link at 2.5 Gbps has ~0.3 ms physical RTT;
-// we budget 349 ms for kernel scheduling jitter and agent GC pauses.
+// 1,500 ms is the upper bound for workstation agent reachability under high CPU load or
+// model inference paging. A USB-C NCM link at 2.5 Gbps has ~0.3 ms physical RTT;
+// we budget up to ~1,500 ms to absorb macOS kernel scheduling jitter, local LLM token generation bursts,
+// and agent process GC pauses without producing false-negative disconnect alerts.
 //
 // Dean Latency Invariant: All candidates are raced concurrently via Promise.any()
-// so worst-case resolution latency == exactly one timeout (350ms), never N × 350ms.
-const WORKSTATION_AGENT_PROBE_TIMEOUT_MS = 350;
+// so worst-case resolution latency == exactly one timeout (1500ms), never N × 1500ms.
+export const DEFAULT_WORKSTATION_AGENT_PROBE_TIMEOUT_MS = 1500;
+export function getWorkstationAgentProbeTimeoutMs(): number {
+  const envVal = process.env['WORKSTATION_AGENT_PROBE_TIMEOUT_MS'];
+  if (typeof envVal === 'string' && envVal.length > 0) {
+    const parsed = parseInt(envVal, 10);
+    if (Number.isFinite(parsed) && parsed > 50 && parsed <= 5000) {
+      return parsed;
+    }
+  }
+  return DEFAULT_WORKSTATION_AGENT_PROBE_TIMEOUT_MS;
+}
 
 // Sanjay Ghemawat - Bounded Allocation Invariant: Maximum allowed payload from agent before aborting stream.
 const MAX_WORKSTATION_AGENT_PAYLOAD_BYTES = 65_536;
@@ -1521,7 +1532,8 @@ async function fetchFromAgent(
     parentSignal.addEventListener('abort', () => controller.abort(), { once: true });
   }
 
-  const timeout = setTimeout(() => controller.abort(), WORKSTATION_AGENT_PROBE_TIMEOUT_MS);
+  const timeoutMs = getWorkstationAgentProbeTimeoutMs();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(endpoint, { signal: controller.signal });
@@ -1784,7 +1796,7 @@ export function resolveOllamaEndpoint(envVar?: string): string | null {
 /**
  * Quoc Le - Adaptive Bounds: Configurable probe timeout with deterministic fallback bounds.
  */
-export const DEFAULT_OLLAMA_PROBE_TIMEOUT_MS = 500;
+export const DEFAULT_OLLAMA_PROBE_TIMEOUT_MS = 2000;
 export function getOllamaProbeTimeoutMs(): number {
   const envVal = process.env['OLLAMA_PROBE_TIMEOUT_MS'];
   if (typeof envVal === 'string' && envVal.length > 0) {
