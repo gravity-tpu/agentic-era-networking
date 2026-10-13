@@ -39,7 +39,7 @@ case "$cmd" in
     restic backup --tag "$TAG" --host "$(hostname -s)" "${PATHS[@]}"
     if [ "$(date +%u)" = 7 ]; then P="--prune"; else P=""; fi
     # shellcheck disable=SC2086
-    restic forget --tag "$TAG" --group-by host,tags --keep-daily 7 --keep-weekly 4 --keep-monthly 12 $P
+    restic forget --tag "$TAG" --group-by host,tags --keep-daily "${KEEP_DAILY:-7}" --keep-weekly "${KEEP_WEEKLY:-4}" --keep-monthly "${KEEP_MONTHLY:-6}" $P
     echo "backup-mac-local: ok" ;;
   *) sed -n '2,10p' "$0"; exit 2 ;;
 esac

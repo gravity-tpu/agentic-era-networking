@@ -47,7 +47,11 @@ echo "$listing" | grep -q "uname.txt" && ok "inventory dump present" || fail "in
 echo "5. second run adds a second snapshot"; "$HERE/zodiac-backup.sh" run >/dev/null
 n="$(restic snapshots --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"; [ "$n" = 2 ] && ok "2 snapshots" || fail "expected 2 snapshots, got $n"
 echo "6. restore drill"; "$HERE/zodiac-backup-restore-drill.sh" | tail -3
-echo "7. a changed file is reported by the drill"
+echo "7. a legitimate edit since the snapshot is advisory, not a failure"
 echo "SECRET_KEY=changed" > "$R/etc/zodiac/zodiac-bridge.env"
-"$HERE/zodiac-backup-restore-drill.sh" >/dev/null 2>&1 && fail "drill should report the difference" || ok "drill flagged the changed file"
+out="$("$HERE/zodiac-backup-restore-drill.sh" 2>&1)" || fail "drill failed on a legitimate edit: $out"
+echo "$out" | grep -q "live file differs" && ok "drift reported, drill still passes" || fail "drift not reported"
+echo "8. a bad restore is a failure (drill must be able to fail)"
+sed 's|restic dump "$snap" "$live"|echo tampered; : "$snap" "$live"|' "$HERE/zodiac-backup-restore-drill.sh" > "$W/drill-broken.sh"; chmod +x "$W/drill-broken.sh"
+"$W/drill-broken.sh" >/dev/null 2>&1 && fail "a mismatching restore should fail the drill" || ok "drill fails when the restore does not match the repository"
 echo "ALL CHECKS PASSED"

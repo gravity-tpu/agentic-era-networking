@@ -29,6 +29,7 @@ log() { echo "zodiac-backup: $*"; }
 set -a; . "$ENV_FILE"; set +a
 : "${RESTIC_REPOSITORY:?not set in $ENV_FILE}"
 : "${RESTIC_PASSWORD_FILE:?not set in $ENV_FILE}"
+case "${EXTRA_PATHS:-}" in *\\*) die "EXTRA_PATHS must be space-separated absolute paths without backslashes or spaces inside a path";; esac
 KEEP_DAILY="${KEEP_DAILY:-7}"; KEEP_WEEKLY="${KEEP_WEEKLY:-4}"; KEEP_MONTHLY="${KEEP_MONTHLY:-6}"
 
 # --- candidate paths (globs allowed; anything absent is skipped and logged) -----------------------
@@ -116,8 +117,9 @@ write_status() {  # write_status <snapshot-id> <warnings>
   python3 - "$STATUS_FILE" "$1" "$2" "${#PATHS[@]}" <<'PY'
 import json, sys, time
 f, snap, warn, npaths = sys.argv[1:5]
-json.dump({"origin": "backup_run", "last_success_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "snapshot_id": snap, "paths_backed_up": int(npaths), "warnings": warn}, open(f, "w"), indent=2)
+with open(f, "w") as fh:
+    json.dump({"origin": "backup_run", "last_success_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+               "snapshot_id": snap, "paths_backed_up": int(npaths), "warnings": warn}, fh, indent=2)
 PY
 }
 
@@ -137,12 +139,16 @@ case "$cmd" in
   run)
     [ -n "$ROOT" ] || [ "$(id -u)" -eq 0 ] || die "run as root (it reads /etc and /var/lib)"   # the root check is skipped only in test mode (ZODIAC_BACKUP_ROOT set)
     restic cat config >/dev/null 2>&1 || die "cannot open the repository at $RESTIC_REPOSITORY (run 'init' once, or check the password and rclone config)"
+    if command -v flock >/dev/null 2>&1; then   # a manual run must not overlap the timer
+      LOCK="${ZODIAC_BACKUP_LOCK:-${ROOT}/var/lock/zodiac-backup.lock}"; mkdir -p "$(dirname "$LOCK")"
+      exec 9>"$LOCK"; flock -n 9 || die "another backup run holds $LOCK"
+    fi
     take_inventory
     resolve_paths
     [ "${#PATHS[@]}" -gt 0 ] || die "nothing to back up: no candidate path exists"
     [ "${#SKIPPED[@]}" -eq 0 ] || log "skipped (not present): ${SKIPPED[*]}"
     set +e
-    restic backup --tag "$TAG" --host "$(hostname)" "${EXCLUDES[@]}" "${PATHS[@]}"
+    restic backup --tag "$TAG" --host "$(hostname -s)" "${EXCLUDES[@]}" "${PATHS[@]}"
     rc=$?
     set -e
     warn=""
@@ -150,7 +156,10 @@ case "$cmd" in
     elif [ "$rc" -ne 0 ]; then die "restic backup failed (exit $rc)"; fi
     snap="$(restic snapshots --tag "$TAG" --latest 1 --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[-1]["short_id"] if d else "")')"
     [ -n "$snap" ] || die "backup reported success but no snapshot is listed"
-    if [ "$(date +%u)" = 7 ]; then
+    # Retention never trims against a degraded run: a partial snapshot must not push complete ones out.
+    if [ -n "$warn" ]; then
+      log "skipping retention (forget/prune) because this run had warnings"
+    elif [ "$(date +%u)" = 7 ]; then
       restic forget --tag "$TAG" --group-by host,tags --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune
     else
       restic forget --tag "$TAG" --group-by host,tags --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY"

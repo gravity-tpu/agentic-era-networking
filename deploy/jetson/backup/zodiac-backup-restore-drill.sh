@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # zodiac-backup-restore-drill.sh -- prove the backup restores: restore the latest snapshot into a scratch
-# directory, compare critical files against the live copies, and spot-check repository integrity.
+# directory, check each critical restored file against the repository's own copy of it (`restic dump`), report
+# drift from the live files as advisory only, and spot-check repository integrity.
 # Run monthly (and after any change to the backup). Never writes outside the scratch directory.
 #   sudo ./zodiac-backup-restore-drill.sh
 set -euo pipefail
@@ -20,20 +21,24 @@ echo "restoring snapshot $snap into $T ..."
 restic restore "$snap" --target "$T" >/dev/null
 files="$(find "$T" -type f | wc -l)"; [ "$files" -gt 0 ] || die "restore produced no files"
 echo "  restored $files files"
-# compare critical, slow-changing files byte for byte against the live copies
-bad=0; checked=0
+# Oracle: the restored file must equal what the repository holds for that path. Live files may legitimately have
+# been edited since the snapshot, so a difference from live is reported but never fails the drill.
+bad=0; checked=0; drift=0
 for f in /etc/zodiac/zodiac-bridge.env /etc/modprobe.d/openvswitch.conf /etc/default/zodiac-o3-nic /etc/ssh/sshd_config.d/00-zodiac-hardening.conf; do
   live="${ROOT}${f}"; rest="${T}${live}"
   [ -e "$live" ] || continue
   checked=$((checked+1))
-  if [ ! -e "$rest" ]; then echo "  MISSING in restore: $f"; bad=$((bad+1)); continue; fi
-  cmp -s "$live" "$rest" && echo "  identical: $f" || { echo "  DIFFERS: $f (changed since the snapshot, or a bad restore)"; bad=$((bad+1)); }
+  if [ ! -e "$rest" ]; then echo "  not in snapshot: $f (added since the last backup?)"; drift=$((drift+1)); continue; fi
+  if restic dump "$snap" "$live" 2>/dev/null | cmp -s - "$rest"; then echo "  restore matches repository: $f"
+  else echo "  BAD RESTORE: $f differs from the repository copy"; bad=$((bad+1)); fi
+  cmp -s "$live" "$rest" || { echo "    note: live file differs from the snapshot (edited since the backup)"; drift=$((drift+1)); }
 done
 # the inventory dump must be present, and the secrets must NOT be
 ls "$T"/"${ROOT}"/var/backups/zodiac-inventory/*/uname.txt >/dev/null 2>&1 || die "no inventory dump in the snapshot"
 [ ! -e "${T}${ROOT}/etc/zodiac/restic-password" ] || die "restic-password was backed up (it must be excluded)"
 [ ! -e "${T}${ROOT}/etc/zodiac/rclone.conf" ] || die "rclone.conf was backed up (it must be excluded)"
 echo "  inventory present; secrets correctly excluded"
-echo "integrity spot-check (5% of data) ..."
+echo "integrity spot-check (5% of data; on a very small repository this can cover few or no packs) ..."
 restic check --read-data-subset=5% >/dev/null 2>&1 || die "restic check failed"
-[ "$bad" -eq 0 ] && echo "restore-drill: PASS ($checked critical files compared)" || { echo "restore-drill: DONE WITH DIFFERENCES ($bad of $checked): review above; differences can be legitimate edits since the snapshot"; exit 1; }
+[ "$bad" -eq 0 ] || { echo "restore-drill: FAIL ($bad of $checked critical files did not restore correctly)"; exit 1; }
+echo "restore-drill: PASS ($checked critical files verified against the repository; $drift advisory drift notes)"

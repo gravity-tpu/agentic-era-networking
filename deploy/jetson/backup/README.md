@@ -8,7 +8,7 @@ the host hardening that took effort to get right. Mac-side single-copy files are
 ## Status
 
 - Tested: the full round trip (init, run, second snapshot, content checks, secrets excluded, restore drill,
-  drill detects a changed file) against a local restic repository on the Mac with a fake root
+  the drill passes after a legitimate edit and fails on a restore that does not match the repository) against a local restic repository on the Mac with a fake root
   (`./test-backup-local.sh`).
 - **Not tested on the Jetson, and not tested against Google Drive.** First real run is the test. Do the restore
   drill (step 6) before trusting it.
@@ -57,4 +57,7 @@ restic password in your password manager. **Without it the backup is unrecoverab
 
 - Backs up files, not a bootable image. A dead disk means reinstall plus restore.
 - The inventory commands are best effort; a missing tool is recorded as `(not installed: ...)`.
-- restic exit code 3 (some files unreadable) is tolerated and recorded as a warning in the status file.
+- restic exit code 3 (some files unreadable) is tolerated and recorded as a warning in the status file. Retention
+  (`forget`/`prune`) is skipped on such a run so a degraded snapshot cannot push complete ones out.
+- `EXTRA_PATHS` is split on whitespace: no spaces inside a path.
+- The drill's 5% integrity check can cover few or no packs on a very small repository.
