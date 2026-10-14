@@ -41,6 +41,12 @@
   // Suppress transient device dropouts. A device requires DEVICE_FLAP_TOLERANCE consecutive
   // failed probes before transitioning to OFFLINE, preventing flicker on single packet drops.
   const DEVICE_FLAP_TOLERANCE = 3;
+  const deviceEverOnline = {
+    zodiac: false,
+    orin: false,
+    workstation: false,
+    rpi5: false,
+  };
   const deviceFailCounts = {
     zodiac: 0,
     orin: 0,
@@ -56,11 +62,18 @@
 
   function updateDeviceOnlineState(deviceName, isInstantOnline) {
     if (isInstantOnline) {
+      deviceEverOnline[deviceName] = true;
       deviceFailCounts[deviceName] = 0;
       deviceOnlineStates[deviceName] = true;
     } else {
       deviceFailCounts[deviceName] = (deviceFailCounts[deviceName] || 0) + 1;
-      deviceOnlineStates[deviceName] = deviceFailCounts[deviceName] < DEVICE_FLAP_TOLERANCE;
+      // Invariant 6 (Provenance & Anti-Simulation):
+      // Flap damping applies only to devices that have been previously verified online.
+      // A device that is offline at cold startup stays offline immediately.
+      deviceOnlineStates[deviceName] = Boolean(
+        deviceEverOnline[deviceName] &&
+        deviceFailCounts[deviceName] < DEVICE_FLAP_TOLERANCE
+      );
     }
     return deviceOnlineStates[deviceName];
   }

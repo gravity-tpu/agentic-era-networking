@@ -129,6 +129,7 @@ function trimSeriesSince<T extends { readonly timestampMs: number }>(
 ): T[] {
   if (!series || series.length === 0) return [];
   const idx = findCutoffIndex(series, sinceMs + 1);
+  if (idx < 0 || idx >= series.length) return [];
   return series.slice(idx);
 }
 
@@ -1333,10 +1334,10 @@ export class ZodiacBridgeServer {
       // the client's last observed timestamp. Slashes payload from ~5.5 MB down to ~2 KB,
       // eliminating V8 memory churn, GC stalls, and false-negative timeout aborts (Dean Latency Budget).
       const sinceRaw = Number(url.searchParams.get('since') ?? '0');
-      // Tolerate clock skew / NTP drift: if client timestamp is slightly ahead of server clock,
-      // findCutoffIndex deterministically yields an empty slice without falling back to full payload.
+      // Tolerate clock skew / NTP drift up to 60s ahead, while clamping runaway future timestamps
+      // to Date.now() + 60_000 to prevent clients from permanently blackholing their own telemetry.
       const sinceMs = Number.isFinite(sinceRaw) && sinceRaw > 0
-        ? Math.floor(sinceRaw)
+        ? Math.min(Math.floor(sinceRaw), Date.now() + 60_000)
         : 0;
 
       if (sinceMs > 0) {
