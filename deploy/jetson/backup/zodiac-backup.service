@@ -1,0 +1,22 @@
+[Unit]
+Description=Zodiac Jetson backup (restic to Google Drive via rclone)
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=network-online.target
+Wants=network-online.target
+OnFailure=zodiac-backup-failed.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/zodiac-backup.sh run
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=2h
+Environment=RESTIC_CACHE_DIR=/var/cache/zodiac-restic
+CacheDirectory=zodiac-restic
+
+# Hardening: it must read most of /etc and /var/lib, and rclone refreshes its token in /etc/zodiac.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/var/backups/zodiac-inventory /var/lib/zodiac /etc/zodiac
