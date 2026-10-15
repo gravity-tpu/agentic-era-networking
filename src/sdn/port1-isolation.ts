@@ -27,6 +27,7 @@
 import type { FlowModOptions } from './openflow-types.js';
 import { FlowModCommand } from './openflow-types.js';
 import type { FlowStatsEntry } from './dataplane-benchmark.js';
+import { verifyActionReadback, type ActionReadbackVerdict } from './action-readback.js';
 
 export const ETH_TYPE_IPV4 = 0x0800;
 export const ETH_TYPE_ARP = 0x0806;
@@ -182,10 +183,18 @@ function prefixLenToMask(len: number | undefined): string | undefined {
 }
 
 export interface IsolationReadbackVerdict {
+  /** Match level only: every rule present exactly once with identical match fields, plus a table-miss entry. */
   readonly verified: boolean;
   /** Policy rule ids confirmed present on the switch with an exact field-for-field match. */
   readonly confirmed: readonly string[];
   readonly mismatches: readonly string[];
+  /** Action level (output ports, table-miss drop) from the same reply. See action-readback.ts. */
+  readonly actions: ActionReadbackVerdict;
+  /**
+   * True only when the match level verified AND the switch reported the intended output ports. False when the
+   * switch reported different actions, and also when it reported none, so it never claims more than was seen.
+   */
+  readonly provenForwarding: boolean;
 }
 
 /**
@@ -193,8 +202,10 @@ export interface IsolationReadbackVerdict {
  * Each policy rule must appear exactly once with identical priority, in_port, eth_type and
  * masked IPv4 src/dst. A table-miss entry at priority 0 must also be present.
  *
- * Scope note: output actions are not parsed from flow-stats, so this proves the switch holds the
- * intended MATCH set; forwarding behaviour is covered by the on-wire leak test in the runbook.
+ * Scope note: `verified` is match level only. Output actions are checked separately and reported in `actions`;
+ * `provenForwarding` is true only when both hold. Whether the Zodiac FX firmware reports instructions in
+ * flow stats is unmeasured, so on that hardware `actions.status` may well be `unobservable`; forwarding
+ * behaviour is then covered only by the on-wire leak test in the runbook.
  */
 export function verifyIsolationReadback(
   rules: readonly IsolationRule[],
@@ -202,6 +213,7 @@ export function verifyIsolationReadback(
 ): IsolationReadbackVerdict {
   const confirmed: string[] = [];
   const mismatches: string[] = [];
+  const matchedEntries = new Map<string, FlowStatsEntry>();
 
   for (const { id, flowMod } of rules) {
     const m = flowMod.match;
@@ -226,6 +238,8 @@ export function verifyIsolationReadback(
     );
     if (hits.length === 1) {
       confirmed.push(id);
+      const only = hits[0];
+      if (only !== undefined) matchedEntries.set(id, only);
     } else if (hits.length === 0) {
       const samePrio = entries.filter((e) => e.priority === want.priority && e.inPort === want.inPort);
       mismatches.push(
@@ -242,5 +256,11 @@ export function verifyIsolationReadback(
     mismatches.push('table-miss: no priority-0 wildcard entry on switch');
   }
 
-  return { verified: mismatches.length === 0, confirmed, mismatches };
+  const actions = verifyActionReadback(
+    rules.map((r) => ({ id: r.id, outputPorts: r.flowMod.outputPorts ?? [] })),
+    matchedEntries,
+    entries,
+  );
+  const verified = mismatches.length === 0;
+  return { verified, confirmed, mismatches, actions, provenForwarding: verified && actions.status === 'confirmed' };
 }

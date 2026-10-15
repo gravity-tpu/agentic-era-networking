@@ -24,6 +24,7 @@ import {
   OFP_VERSION_1_3,
   OpenFlowType,
 } from './openflow-types.js';
+import { parseEntryActions, type FlowStatsActions } from './flow-actions.js';
 import type { ZodiacPortInfo } from './zodiac-serial.js';
 
 // ---------------------------------------------------------------------------
@@ -599,6 +600,11 @@ export interface FlowStatsEntry {
   readonly dstIp?: string;
   /** IPV4_DST mask as dotted quad; absent for an exact (unmasked) match. */
   readonly dstMask?: string;
+  /**
+   * What the entry does, from its instruction block (see flow-actions.ts). Always set by parseFlowStatsReply;
+   * absent on hand-built entries, which action-level readback treats as carrying no action information.
+   */
+  readonly actions?: FlowStatsActions;
 }
 
 const OXM_CLASS_BASIC = 0x8000;
@@ -618,7 +624,7 @@ function parseEntryMatch(
   packet: Buffer,
   matchOff: number,
   entryEnd: number,
-): Omit<FlowStatsEntry, 'tableId' | 'priority' | 'packetCount' | 'byteCount'> {
+): Omit<FlowStatsEntry, 'tableId' | 'priority' | 'packetCount' | 'byteCount' | 'actions'> {
   const out: { srcIp?: string; srcMask?: string; inPort?: number; ethType?: number; dstIp?: string; dstMask?: string } = {};
   if (matchOff + 4 > entryEnd || packet.readUInt16BE(matchOff) !== 1) return out;
   const matchLen = packet.readUInt16BE(matchOff + 2);
@@ -681,6 +687,7 @@ export function parseFlowStatsReply(packet: Buffer): FlowStatsReply {
       packetCount: packet.readBigUInt64BE(off + 32),
       byteCount: packet.readBigUInt64BE(off + 40),
       ...parseEntryMatch(packet, off + 48, off + len),
+      actions: parseEntryActions(packet, off + 48, off + len),
     });
     off += len;
   }

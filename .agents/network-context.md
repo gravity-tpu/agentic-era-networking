@@ -222,7 +222,8 @@ Current scope is a real-hardware testbed and verifier for agent-proposed SDN pol
 - [x] **A1 Isolation, A2 hairpin**: `verifyPort1Isolation` (`src/sdn/port1-isolation.ts`); plan-level table budget, hairpin and DROP semantics in `verifyPlanAdmissible` (`src/sdn/dataplane-benchmark.ts`).
 - [x] **Readback on match fields**: `verifyIsolationReadback`.
 - [x] **A5 and A6 implemented** (`src/sdn/rule-hygiene.ts`): shadowing (including coverage by several rules together) and equal-priority conflicts, plus duplicate match and priority keys. Not yet in the bridge install path.
-- [ ] **A3, A4, A9, A10**: default-drop check, quarantine precedence, layout, ARP confinement. A4 and A9 conflict (forwarding-first is cheaper but outranks quarantine); see the roadmap.
+- [x] **Action-level readback implemented** (`src/sdn/flow-actions.ts`, `src/sdn/action-readback.ts`): output ports and the table-miss drop are checked from the flow-stats instruction block. Tested on fixtures only; whether firmware 0.86 reports instructions is unmeasured (verdict is `unobservable` if not). Not yet in the bridge status.
+- [ ] **A3, A4, A9, A10**: default-drop check (table-miss drop is now checked at the action level, subject to the above), quarantine precedence, layout, ARP confinement. A4 and A9 conflict (forwarding-first is cheaper but outranks quarantine); see the roadmap.
 - [ ] **Output-action readback; agent-proposal evaluation.**
 
 ### Track B: Hardware model and conformance
