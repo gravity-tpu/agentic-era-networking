@@ -177,6 +177,45 @@ sudo systemctl restart zodiac-bridge
 journalctl -u zodiac-bridge -f
 ```
 
+### Flow-table probe (read-only)
+
+Asks the live Zodiac FX what is in its flow table and keeps the raw bytes. Its job is to answer one question that is
+currently unmeasured: **does firmware 0.86 include the instruction block (the output actions) in flow-stats
+entries?** Until that is known, action-level readback (`actions.status` in the isolation readback) cannot be said to
+prove forwarding intent on this hardware. See [docs/ROADMAP.md](../../docs/ROADMAP.md), track A.
+
+The probe sends **one OFPMP_FLOW request and no FlowMod**. It does not change the switch.
+
+1. Deploy the bridge build that contains the endpoint (the update steps above). The restart drops the OpenFlow
+   session and the bridge reinstalls the isolation policy on reconnect; until it does, the switch holds only
+   table-miss DROP, so the workload is isolated, not exposed.
+2. Wait for `Isolation readback VERIFIED` in `journalctl -u zodiac-bridge`. Probing mid-install shows a partial table.
+3. From the Mac, tunnel to the bridge (the hardware key touch is the SSH login) and probe. The endpoint accepts
+   operators on loopback or private IPv4 only, so a tunnel works and a direct Tailscale (`100.x`) connection is
+   refused with 401. It also refuses everything if `GOOGLE_CLIENT_ID` is set.
+
+   ```bash
+   ssh -N -L 3003:127.0.0.1:3003 jetson &        # leave running
+   npm run build
+   npm run probe:flows -- --firmware 0.86
+   ```
+
+4. Read the `finding` it prints:
+
+   | Finding | Meaning |
+   | :--- | :--- |
+   | `reports-instructions` | The firmware reports actions. Check `action level`: `confirmed` means the readback matches the policy; `mismatch` lists what differs. |
+   | `no-instructions-reported` | The firmware omits them (or every rule is a drop). Action-level readback stays `unobservable`; forwarding is proven only on the wire (O1, O3 captures). |
+   | `unreadable-instructions` | It sends something the parser cannot read. The entry hex is in the report; extend `src/sdn/flow-actions.ts`. |
+   | `no-entries` | The switch reported an empty table: the policy is not installed. |
+
+The report and a `.meta.json` sidecar (origin `physical_readback`, hashes, tool commit) are saved to
+`docs/benchmarks/results/flow-probe/`. Before saving, the script rebuilds the summary from the raw bytes and refuses
+(exit 3) if the bridge's summary disagrees with them. `--analyze <file>` re-derives a saved report offline. The raw
+reply bytes can later be turned into a parser test fixture, replacing the hand-built ones.
+
+Limits: one request per `ZODIAC_FLOW_PROBE_MIN_INTERVAL_MS` (default 5000, bounded 1000 to 3600000), one at a time.
+
 ---
 
 ## 7. Dual Google Coral TPUs (historical: removed 2026-10-11)

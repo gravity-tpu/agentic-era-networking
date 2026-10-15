@@ -53,6 +53,7 @@
     "switch:service:restart": "bash scripts/netgear-tunnel.sh service-restart",
     "workstation:agent": "node --experimental-strip-types scripts/workstation-agent.ts",
     "bench:dataplane": "node --experimental-strip-types scripts/zodiac-dataplane-bench.ts",
+    "probe:flows": "node --experimental-strip-types scripts/zodiac-flow-probe.ts",
     "bench:calibrate": "node --experimental-strip-types scripts/calibrate-capture.ts"
   },
   "keywords": [

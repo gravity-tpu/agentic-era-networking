@@ -71,7 +71,8 @@ import {
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback } from './port1-isolation.js';
-import { readFlowStats } from './flow-readback.js';
+import { readFlowStats, readFlowStatsRaw } from './flow-readback.js';
+import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
 // Council Invariant 5: switch flow-table readback deadline is configurable, not a buried constant.
@@ -80,6 +81,16 @@ const FLOW_READBACK_TIMEOUT_MS = (() => {
   if (raw === undefined) return 10_000;
   if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
     throw new Error(`ZODIAC_FLOW_READBACK_TIMEOUT_MS must be a positive integer, got ${JSON.stringify(raw)}`);
+  }
+  return Number(raw);
+})();
+// Council Invariant 5: minimum spacing between on-demand flow-table probes. The switch MCU is a 120 MHz part and a
+// probe is one OFPMP_FLOW request, so the limit is about not letting a client hammer it, not about throughput.
+const FLOW_PROBE_MIN_INTERVAL_MS = (() => {
+  const raw = process.env['ZODIAC_FLOW_PROBE_MIN_INTERVAL_MS'];
+  if (raw === undefined) return 5_000;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1_000 || Number(raw) > 3_600_000) {
+    throw new Error(`ZODIAC_FLOW_PROBE_MIN_INTERVAL_MS must be an integer in 1000..3600000, got ${JSON.stringify(raw)}`);
   }
   return Number(raw);
 })();
@@ -548,6 +559,8 @@ export class ZodiacBridgeServer {
   } | null = null;
   private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
+  private flowProbeInFlight = false;
+  private lastFlowProbeMonoNs: bigint | null = null;
   /** xid → isolation rule id for the current OpenFlow session; reset on every 'ready'. */
   private readonly flowModXidLabels: Map<number, string> = new Map();
   /** Switch-reported (not controller-intended) state of the Port 1 isolation policy. */
@@ -801,6 +814,39 @@ export class ZodiacBridgeServer {
       this.portRxCounters.set(inPort, currentPkts + 1n);
       this.portByteCounters.set(inPort, currentBytes + bytes);
     });
+  }
+
+  /**
+   * One read-only OFPMP_FLOW request to the switch, returned as a probe report with the raw reply bytes. Sends no
+   * FlowMod and changes nothing on the switch. At most one runs at a time and they are spaced by
+   * FLOW_PROBE_MIN_INTERVAL_MS (FlowProbeRateLimitedError otherwise). Rejects if there is no established session.
+   */
+  public async probeFlowTable(): Promise<FlowProbeReport> {
+    if (this.flowProbeInFlight) {
+      throw new FlowProbeRateLimitedError(FLOW_PROBE_MIN_INTERVAL_MS, 'a flow-table probe is already running');
+    }
+    const started = process.hrtime.bigint();
+    if (this.lastFlowProbeMonoNs !== null) {
+      const elapsedMs = (started - this.lastFlowProbeMonoNs) / 1_000_000n;
+      const minMs = BigInt(FLOW_PROBE_MIN_INTERVAL_MS);
+      if (elapsedMs < minMs) {
+        throw new FlowProbeRateLimitedError(Number(minMs - elapsedMs), 'flow-table probes are spaced; try again shortly');
+      }
+    }
+    this.flowProbeInFlight = true;
+    this.lastFlowProbeMonoNs = started;
+    try {
+      const { replies } = await readFlowStatsRaw(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS);
+      return buildFlowProbeReport({
+        policy: buildPort1IsolationPolicy(),
+        replies,
+        capturedAtIso: new Date().toISOString(),
+        capturedMonotonicNs: process.hrtime.bigint(),
+        context: { isolationState: this.isolationStatus.state, node: process.version },
+      });
+    } finally {
+      this.flowProbeInFlight = false;
+    }
   }
 
   public async start(requestedPort: number = 3000, host: string = '0.0.0.0'): Promise<number> {
@@ -1754,6 +1800,28 @@ export class ZodiacBridgeServer {
         },
         timestamp: Date.now(),
       }));
+      return;
+    }
+
+    // API: GET /api/zodiac/flows/probe (read-only: one OFPMP_FLOW request, raw reply bytes returned as evidence)
+    // Operator only. Sends no FlowMod. Rate limited and one at a time (see probeFlowTable).
+    if (url.pathname === '/api/zodiac/flows/probe' && req.method === 'GET') {
+      res.setHeader('Content-Type', 'application/json');
+      if (!isLanOperator(req)) {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: 'Unauthorized: Operator access required.' }));
+        return;
+      }
+      try {
+        const report = await this.probeFlowTable();
+        res.statusCode = 200;
+        res.end(JSON.stringify(report));
+      } catch (err: unknown) {
+        const mapped = probeErrorToHttp(err);
+        res.statusCode = mapped.status;
+        if (mapped.body.retryAfterSeconds !== undefined) res.setHeader('Retry-After', String(mapped.body.retryAfterSeconds));
+        res.end(JSON.stringify(mapped.body));
+      }
       return;
     }
 

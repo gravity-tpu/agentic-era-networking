@@ -12,6 +12,7 @@ import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js
 import { parseFlowStatsReply } from '../../src/sdn/dataplane-benchmark.js';
 import { parseEntryActions, portLabel } from '../../src/sdn/flow-actions.js';
 import { verifyActionReadback } from '../../src/sdn/action-readback.js';
+import { applyActions, entryFrom, instruction, otherAction, outputAction, replyOf } from '../helpers/flow-stats-fixtures.js';
 import {
   buildPort1IsolationPolicy,
   verifyIsolationReadback,
@@ -19,58 +20,6 @@ import {
 } from '../../src/sdn/port1-isolation.js';
 
 const OFPP_CONTROLLER = 0xfffffffd;
-
-/** One OUTPUT action (16 bytes). */
-function outputAction(port: number): Buffer {
-  const b = Buffer.alloc(16);
-  b.writeUInt16BE(0, 0);
-  b.writeUInt16BE(16, 2);
-  b.writeUInt32BE(port, 4);
-  return b;
-}
-
-/** A non-output action of the given type (16 bytes; content irrelevant to the parser). */
-function otherAction(type: number): Buffer {
-  const b = Buffer.alloc(16);
-  b.writeUInt16BE(type, 0);
-  b.writeUInt16BE(16, 2);
-  return b;
-}
-
-/** An instruction: 8-byte header (type, len, 4 pad) + body. */
-function instruction(type: number, body: Buffer = Buffer.alloc(0)): Buffer {
-  const b = Buffer.alloc(8 + body.length);
-  b.writeUInt16BE(type, 0);
-  b.writeUInt16BE(8 + body.length, 2);
-  body.copy(b, 8);
-  return b;
-}
-
-const applyActions = (...actions: Buffer[]): Buffer => instruction(4, Buffer.concat(actions));
-
-/** A flow-stats entry carrying the match bytes of `fm`, then `instructions` (default: what `fm` itself encodes). */
-function entryFrom(fm: Buffer, instructions?: Buffer): Buffer {
-  const priority = fm.readUInt16BE(30);
-  const matchPadded = Math.max(8, Math.ceil(fm.readUInt16BE(50) / 8) * 8);
-  const match = fm.subarray(48, 48 + matchPadded);
-  const instr = instructions ?? fm.subarray(48 + matchPadded);
-  const e = Buffer.alloc(48 + match.length + instr.length);
-  e.writeUInt16BE(e.length, 0);
-  e.writeUInt16BE(priority, 12);
-  match.copy(e, 48);
-  instr.copy(e, 48 + match.length);
-  return e;
-}
-
-function replyOf(entries: readonly Buffer[]): Buffer {
-  const body = Buffer.concat(entries);
-  const hdr = Buffer.alloc(16);
-  hdr.writeUInt8(4, 0);
-  hdr.writeUInt8(19, 1); // OFPT_MULTIPART_REPLY
-  hdr.writeUInt16BE(16 + body.length, 2);
-  hdr.writeUInt16BE(1, 8); // OFPMP_FLOW
-  return Buffer.concat([hdr, body]);
-}
 
 const policy = buildPort1IsolationPolicy();
 const flowMods = policy.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
