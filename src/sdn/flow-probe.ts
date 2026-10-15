@@ -93,7 +93,12 @@ export class FlowProbeRateLimitedError extends Error {
   }
 }
 
-/** The smallest ofp_flow_stats entry: the 48-byte fixed part plus an 8-byte empty match. */
+/**
+ * The smallest ofp_flow_stats entry (OpenFlow 1.3 section 7.3.5.2): the 48-byte fixed part (length 2, table_id 1,
+ * pad 1, duration_sec 4, duration_nsec 4, priority 2, idle_timeout 2, hard_timeout 2, flags 2, pad 4, cookie 8,
+ * packet_count 8, byte_count 8) plus an ofp_match of at least 8 bytes (4-byte header padded to 8). Same floor as
+ * parseFlowStatsReply.
+ */
 const MIN_FLOW_STATS_ENTRY_BYTES = 56;
 
 /**
@@ -164,8 +169,8 @@ export interface FlowProbeInput {
 
 /** Builds the report from raw reply bytes. Throws FlowProbeError if a reply cannot be parsed at all. */
 export function buildFlowProbeReport(input: FlowProbeInput): FlowProbeReport {
-  const entries: FlowStatsEntry[] = [];
-  const raw: Buffer[] = [];
+  // Each parsed entry is kept together with its own raw bytes, so the two can never be matched up by position.
+  const pairs: { readonly entry: FlowStatsEntry; readonly rawEntry: Buffer }[] = [];
   for (const [i, packet] of input.replies.entries()) {
     let reply;
     try {
@@ -179,14 +184,16 @@ export function buildFlowProbeReport(input: FlowProbeInput): FlowProbeReport {
       throw new FlowProbeError(`reply ${i}: parsed ${reply.entries.length} entries but found ${bufs.length} raw entries`);
     }
     reply.entries.forEach((entry, j) => {
-      entries.push(entry);
-      raw.push(bufs[j] ?? Buffer.alloc(0));
+      const rawEntry = bufs[j];
+      if (rawEntry === undefined) throw new FlowProbeError(`reply ${i}: no raw bytes for entry ${j}`);
+      pairs.push({ entry, rawEntry });
     });
   }
 
+  const entries = pairs.map((p) => p.entry);
   const verdict = verifyIsolationReadback(input.policy, entries);
   const { finding, detail } = classify(entries);
-  const probeEntries: FlowProbeEntry[] = entries.map((e, i) => ({
+  const probeEntries: FlowProbeEntry[] = pairs.map(({ entry: e, rawEntry }) => ({
     tableId: e.tableId,
     priority: e.priority,
     packetCount: e.packetCount.toString(),
@@ -198,7 +205,7 @@ export function buildFlowProbeReport(input: FlowProbeInput): FlowProbeReport {
     ...(e.dstIp !== undefined ? { dstIp: e.dstIp } : {}),
     ...(e.dstMask !== undefined ? { dstMask: e.dstMask } : {}),
     actions: e.actions ?? { outputPorts: [], otherActionTypes: [], otherInstructionTypes: [], hasInstructions: false, complete: false },
-    entryHex: hex(raw[i] ?? Buffer.alloc(0)),
+    entryHex: hex(rawEntry),
   }));
 
   return {

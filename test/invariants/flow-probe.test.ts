@@ -271,18 +271,25 @@ describe('bridge probeFlowTable', () => {
     vi.restoreAllMocks();
   });
 
-  it('spaces probes from the END of the previous one, so a slow probe cannot be followed at once', async () => {
+  it('spaces probes from the END of the previous one, and allows the next once the window has passed', async () => {
     const { controller, server } = make();
     const of = controller.openFlow;
     of.reserveXid = () => 42;
-    of.sendRaw = () => queueMicrotask(() => of.emit('multipartReply', 42, replyOf(faithful())));
-    // Clock readings, in order: probe 1 start, probe 1 report stamp, probe 1 end (10 s after its start), probe 2 start.
-    const readings = [0n, 5_000_000_000n, 10_000_000_000n, 10_001_000_000n];
-    let i = 0;
-    vi.spyOn(process.hrtime, 'bigint').mockImplementation(() => readings[Math.min(i++, readings.length - 1)] ?? 0n);
+    // A controllable monotonic clock: it only moves when the test moves it, so the test does not depend on how many
+    // times the code reads it.
+    let now = 0n;
+    vi.spyOn(process.hrtime, 'bigint').mockImplementation(() => now);
+    of.sendRaw = () => {
+      now += 10_000_000_000n; // this probe takes 10 s (up to the readback timeout)
+      queueMicrotask(() => of.emit('multipartReply', 42, replyOf(faithful())));
+    };
     await server.probeFlowTable();
-    // 10.001 s after the first started, but only 1 ms after it ended: still inside the spacing window.
+    // 10.001 s after it STARTED, 1 ms after it ENDED: start-to-start spacing would allow this, end-to-start must not.
+    now += 1_000_000n;
     await expect(server.probeFlowTable()).rejects.toBeInstanceOf(FlowProbeRateLimitedError);
+    // Once the default 5 s window since the end has passed, the next probe is allowed.
+    now += 6_000_000_000n;
+    await expect(server.probeFlowTable()).resolves.toMatchObject({ origin: FLOW_PROBE_ORIGIN });
   });
 
   it('refuses a concurrent probe while one is in flight', async () => {

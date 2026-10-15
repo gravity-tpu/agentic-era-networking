@@ -560,6 +560,7 @@ export class ZodiacBridgeServer {
   private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
   private flowProbeInFlight = false;
+  /** null until the first probe has finished, so the first probe is never refused for spacing. */
   private lastFlowProbeMonoNs: bigint | null = null;
   /** xid → isolation rule id for the current OpenFlow session; reset on every 'ready'. */
   private readonly flowModXidLabels: Map<number, string> = new Map();
