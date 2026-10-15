@@ -48,8 +48,8 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 | A2 | No hairpin: no rule outputs to its own ingress port | Implemented |
 | A3 | Default drop: a lowest-priority table-miss DROP exists | Partly (readback only) |
 | A4 | Quarantine precedence: every DROP quarantine outranks every allow | Constants only; needs a check. **Conflicts with A9** (see below) |
-| A5 | No shadowed rules: no rule is fully covered by a higher-priority rule | Not started |
-| A6 | No overlapping rules with conflicting actions at equal priority | Not started |
+| A5 | No shadowed rules: no rule is fully covered by a higher-priority rule | Implemented as a check (`checkRuleHygiene`, `src/sdn/rule-hygiene.ts`): exact over in_port, eth_type, MACs and IPv4 src/dst, including coverage by several rules together. Not yet called from the bridge install path |
+| A6 | No overlapping rules with conflicting actions at equal priority | Implemented as a check (same module): equal-priority overlaps with different outputs, plus identical match and priority (the switch replaces, so the second ADD would silently overwrite the first). How the firmware actually resolves ties is unmeasured |
 | A7 | Rule budget: count within the 128-rule table, with headroom for quarantine | Implemented as a check (`checkRuleBudget`, `src/sdn/capacity-budget.ts`): rules + table-miss + a declared quarantine reserve must fit 128 entries. Not yet called from the bridge install path |
 | A8 | Capacity budget: modeled pps at the rule count and layout meets a declared target | Implemented as a check (`checkCapacityBudget`), but **returns `unverifiable` for the deployed isolation policy**: the cost model was measured on two in_port-only forwarding rules plus /32 DROP rules, and the deployed policy (six rules with IPv4 confinement, ARP and tap rules) has not been measured. `unverifiable` is not a pass. Not yet called from the bridge install path |
 | A9 | Layout: forwarding rules ordered per the measured cheap layout | Not started. **Conflicts with A4** (see below) |
@@ -185,7 +185,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 
 1. **A1, A2 and A3 hardening, plus a failing test for the ARP spoof (C1).** Establishes whether the current policy actually has the ARP gap suspected in the README.
 2. **B cost model as a function; A7 and A8.** The first place the hardware changes what the verifier accepts. Done 2026-10-14 as pure checks (A7 passes the deployed policy with a reserve of 24; A8 is `unverifiable` for it, see track B). Wiring into the bridge install path is not done.
-3. **A5 and A6 (shadowing, conflicts), then action-level readback.**
+3. **A5 and A6 (shadowing, conflicts), then action-level readback.** A5 and A6 done 2026-10-14 as pure checks (not yet in the install path); action-level readback is next.
 4. **B conformance probe**: the first manual run was done on 2026-10-12 (T1 to T4, all matched, see track B); next is the one-command automated probe over a larger packet set.
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
 6. **C scenarios 2 to 6**, then the end-to-end scenario in section 3.
