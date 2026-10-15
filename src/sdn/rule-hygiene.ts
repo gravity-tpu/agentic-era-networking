@@ -9,7 +9,8 @@
  * over the modelled fields (in_port, eth_type, eth_src, eth_dst, ipv4_src, ipv4_dst), not a sample.
  * One extra "any other ingress port" class is added, because a rule that does not match in_port can be hit from
  * a port no rule names (for example a port outside flow-table control), and leaving it out would wrongly call
- * such a rule shadowed.
+ * such a rule shadowed. One such class suffices because in_port is the only port-valued field a rule can match,
+ * so no rule can tell two unnamed ports apart. A new port-valued match field would break that argument.
  *
  * A5 (shadowed): a rule matches at least one packet class but wins none of them, because a strictly
  * higher-priority rule takes every packet it matches. Several higher-priority rules can cover a lower one
@@ -20,6 +21,10 @@
  * differ. OpenFlow 1.3 leaves the winner undefined. Also reported: two rules with the same priority and the same
  * match, because the switch treats a second ADD with an identical match and priority as a replacement of the
  * first, so the table would hold fewer entries than were proposed.
+ *
+ * Actions are compared as output port sets (the only action FlowModOptions carries); set-field and queue actions
+ * are not modelled. A rule carrying a match field outside the modelled set is reported and excluded rather than
+ * silently projected onto the modelled fields, which could produce a false shadow verdict.
  *
  * What this does NOT prove: that the firmware resolves ties the way a given test expects, anything about fields
  * not modelled (L4 ports, VLAN, ARP SPA/TPA), or that the rules do what an intent asks (that is A11).
@@ -43,11 +48,12 @@ import { ZODIAC_PORT_TAP, ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD } from './por
 export const DEFAULT_HYGIENE_PORTS: readonly number[] = [ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP];
 
 /**
- * `prerequisite` is not a roadmap property: it marks a rule the switch would refuse (IPv4 match without
- * eth_type=0x0800). It is reported here, as A11 also does, so hygiene cannot pass while ignoring a rule.
+ * `prerequisite` and `unmodelled` are not roadmap properties. `prerequisite` marks a rule the switch would refuse
+ * (IPv4 match without eth_type=0x0800); `unmodelled` marks a rule with a match field this analysis cannot reason
+ * about. Both are reported, and excluded from the analysis, so hygiene cannot pass while ignoring a rule.
  */
-export type HygieneProperty = 'A5' | 'A6' | 'prerequisite';
-export type HygieneKind = 'shadowed' | 'conflict' | 'duplicate-key' | 'invalid-rule';
+export type HygieneProperty = 'A5' | 'A6' | 'prerequisite' | 'unmodelled';
+export type HygieneKind = 'shadowed' | 'conflict' | 'duplicate-key' | 'invalid-rule' | 'unmodelled-field';
 
 export interface HygieneViolation {
   readonly property: HygieneProperty;
@@ -73,7 +79,28 @@ export interface HygieneOptions {
 
 const sortedKey = (ports: readonly number[]): string => [...new Set(ports)].sort((a, b) => a - b).join(',');
 
-/** Canonical form of a match, so equivalent spellings (omitted /32, MAC case) compare equal. */
+const MODELLED_MATCH_FIELDS: ReadonlySet<string> = new Set([
+  'inPort',
+  'etherType',
+  'srcMac',
+  'dstMac',
+  'srcIp',
+  'srcIpPrefixLen',
+  'dstIp',
+  'dstIpPrefixLen',
+]);
+
+/**
+ * One IPv4 address constraint in canonical form. A /0 prefix matches every address, and every rule that reaches
+ * here carries the eth_type=IPv4 prerequisite, so it is the same constraint as no address match at all.
+ */
+function ipKey(ip: string | undefined, prefixLen: number | undefined): string | null {
+  if (ip === undefined) return null;
+  const len = prefixLen ?? 32;
+  return len === 0 ? null : `${ip}/${len}`;
+}
+
+/** Canonical form of a match, so equivalent spellings (omitted /32, /0 versus absent, MAC case) compare equal. */
 function matchKey(m: FlowModMatchOptions | undefined): string {
   const x = m ?? {};
   return JSON.stringify([
@@ -81,10 +108,8 @@ function matchKey(m: FlowModMatchOptions | undefined): string {
     x.etherType ?? null,
     x.srcMac?.trim().toLowerCase() ?? null,
     x.dstMac?.trim().toLowerCase() ?? null,
-    x.srcIp ?? null,
-    x.srcIp === undefined ? null : (x.srcIpPrefixLen ?? 32),
-    x.dstIp ?? null,
-    x.dstIp === undefined ? null : (x.dstIpPrefixLen ?? 32),
+    ipKey(x.srcIp, x.srcIpPrefixLen),
+    ipKey(x.dstIp, x.dstIpPrefixLen),
   ]);
 }
 
@@ -109,11 +134,29 @@ export function checkRuleHygiene(rules: readonly IsolationRule[], options: Hygie
     if (seenIds.has(r.id)) throw new HygieneInputError(`duplicate rule id ${r.id}`);
     seenIds.add(r.id);
   }
+  for (const r of rules) {
+    const p = r.flowMod.priority;
+    if (!Number.isInteger(p) || p < 0 || p > 65535) {
+      throw new HygieneInputError(`${r.id}: priority ${p} is not an integer in 0..65535`);
+    }
+  }
   const violations: HygieneViolation[] = [];
 
   const valid: IsolationRule[] = [];
   for (const r of rules) {
     const m = r.flowMod.match ?? {};
+    const unknown = Object.entries(m)
+      .filter(([k, v]) => v !== undefined && !MODELLED_MATCH_FIELDS.has(k))
+      .map(([k]) => k);
+    if (unknown.length > 0) {
+      violations.push({
+        property: 'unmodelled',
+        kind: 'unmodelled-field',
+        ruleIds: [r.id],
+        detail: `${r.id}: match field(s) ${unknown.join(', ')} are not modelled, so hygiene cannot reason about this rule; it was excluded`,
+      });
+      continue;
+    }
     if ((m.srcIp !== undefined || m.dstIp !== undefined) && m.etherType !== ETH_TYPE_IPV4_INTENT) {
       violations.push({
         property: 'prerequisite',
@@ -198,7 +241,7 @@ export function checkRuleHygiene(rules: readonly IsolationRule[], options: Hygie
         property: 'A5',
         kind: 'shadowed',
         ruleIds: [r.id, ...covering],
-        detail: `${r.id} never wins: every packet it matches is taken by higher-priority ${covering.join(', ')}`,
+        detail: `${r.id} never wins: each packet it matches is taken by one of the higher-priority rules ${covering.join(', ')}`,
       });
     }
   }

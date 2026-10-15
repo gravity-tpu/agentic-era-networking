@@ -175,6 +175,51 @@ describe('A6: conflicts and duplicate keys', () => {
   });
 });
 
+describe('exactness guards', () => {
+  it('treats a /0 source match as the same constraint as no source match for duplicate detection', () => {
+    const v = checkRuleHygiene([
+      rule('plain', 100, [2], ipv4({ inPort: 1 })),
+      rule('zero-prefix', 100, [2], ipv4({ inPort: 1, srcIp: '0.0.0.0', srcIpPrefixLen: 0 })),
+    ]);
+    expect(v.violations.map((x) => x.kind)).toEqual(['duplicate-key']);
+  });
+
+  it('reports three identical rules as one duplicate group, with no partial conflict', () => {
+    const v = checkRuleHygiene([
+      rule('t1', 100, [2], { inPort: 1 }),
+      rule('t2', 100, [3], { inPort: 1 }),
+      rule('t3', 100, [1], { inPort: 1 }),
+    ]);
+    expect(v.violations).toHaveLength(1);
+    expect(v.violations[0]?.kind).toBe('duplicate-key');
+    expect(v.violations[0]?.ruleIds).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('enumerates the expected number of packet classes, including the extra "other port" class', () => {
+    // ports {1,2,3} plus the unnamed-port representative = 4; one non-IP class (unused ethertype) + one IPv4 class each
+    expect(checkRuleHygiene([rule('only', 100, [2], { inPort: 1 })]).classesEvaluated).toBe(4 * 2);
+    // an IPv4 /24 source adds one IP atom boundary (the prefix start; its end is the top of the address space)
+    const withPrefix = checkRuleHygiene([rule('p', 100, [2], ipv4({ inPort: 1, srcIp: '10.0.0.0', srcIpPrefixLen: 24 }))]);
+    expect(withPrefix.classesEvaluated).toBe(4 * (1 + 3 * 1));
+  });
+
+  it('excludes and reports a rule carrying a match field outside the modelled set (no silent projection)', () => {
+    const tcp = Object.assign({ inPort: 1 }, { tcpDst: 80 });
+    const v = checkRuleHygiene([rule('l4', 200, [2], tcp), rule('low', 100, [3], { inPort: 1 })]);
+    expect(v.satisfied).toBe(false);
+    expect(v.violations).toHaveLength(1);
+    expect(v.violations[0]).toMatchObject({ property: 'unmodelled', kind: 'unmodelled-field', ruleIds: ['l4'] });
+    // the L4 rule must not be projected to {in_port 1} and used to call `low` shadowed
+    expect(v.violations.some((x) => x.kind === 'shadowed')).toBe(false);
+  });
+
+  it('rejects a priority that is not an integer in 0..65535', () => {
+    for (const p of [-1, 65536, 1.5, Number.NaN]) {
+      expect(() => checkRuleHygiene([rule('bad-priority', p, [2], { inPort: 1 })])).toThrow(HygieneInputError);
+    }
+  });
+});
+
 describe('input handling', () => {
   it('reports an IPv4 match without the eth_type prerequisite and does not pass', () => {
     const v = checkRuleHygiene([rule('bad', 100, [2], { inPort: 1, srcIp: '10.0.0.1' })]);
