@@ -70,7 +70,8 @@ Agents are in the loop as *proposers*. A human approves, and deterministic code 
 | Hardware cost model and data-plane benchmark harness | Measured, documented | [Whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md), `scripts/zodiac-dataplane-bench.ts` |
 | Telemetry with provenance (no simulated data shown as live) | Implemented | `scripts/check-provenance.ts`, `test/invariants/goodharts-law-provenance.test.ts` |
 | Anomaly detector and quarantine path (Jetson GPU; Corals parked) | Present; precision and recall **not measured** | `scripts/gpu-sdn-anomaly-sentinel.py`, `src/sdn/zodiac-controller.ts` |
-| Verifier consumes the cost model (capacity budget check) | Planned | [Roadmap](docs/ROADMAP.md), track A |
+| Cost model as a tested pure function (`src/sdn/zodiac-cost-model.ts`, checked against the stored artifacts) | Implemented | `test/invariants/zodiac-cost-model.test.ts` |
+| Verifier consumes the cost model (capacity budget check, A8) | Planned | [Roadmap](docs/ROADMAP.md), track A |
 | Shadowed-rule and action-level analysis | Planned | Roadmap, track A |
 | Model-versus-wire conformance probe | First manual run 2026-10-12: five checks matched (ICMP and ARP only, small sample, provenance sidecars on O2 and O3); automated probe planned | [Roadmap](docs/ROADMAP.md), track B |
 | Repeatable adversarial suite (ARP spoofing, scan, flood, evasion) | Planned | Roadmap, track C |

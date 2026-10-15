@@ -228,7 +228,8 @@ Current scope is a real-hardware testbed and verifier for agent-proposed SDN pol
 
 - [x] **Cost model fitted and documented**: 38.5 µs + 34.8 ns per payload byte above 64 + 4.24 µs per rule (1.3 µs forwarding-first); see the benchmark whitepaper.
 - [x] **First manual conformance run (2026-10-12) at O3, with O2 for comparison:** allowed traffic appeared, blocked traffic did not, local traffic never reached the Zodiac, ARP crossed toward the uplink (6 of 6 requests at both O2 and O3), and O2 saw only P1-ingress copies. All five checks matched the model; details in [ROADMAP.md](../docs/ROADMAP.md), track B. Small sample (ICMP and ARP only, five pings per run, one firmware).
-- [ ] **Cost model as a verifier input; one-command automated conformance probe over a larger packet set; open measurement items.**
+- [x] **Cost model encoded as a pure integer function** (`src/sdn/zodiac-cost-model.ts`), tested against the stored ladder artifacts (12 saturated points, worst error 1.23%, claimed tolerance 2%).
+- [ ] **Cost model as a verifier input (A8); one-command automated conformance probe over a larger packet set; open measurement items.**
 
 ### Track C: Adversarial testing
 

@@ -51,7 +51,7 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 | A5 | No shadowed rules: no rule is fully covered by a higher-priority rule | Not started |
 | A6 | No overlapping rules with conflicting actions at equal priority | Not started |
 | A7 | Rule budget: count within the 128-rule table, with headroom for quarantine | Not started |
-| A8 | Capacity budget: modeled pps at the rule count and layout meets a declared target | Not started; needs the cost model (track B) |
+| A8 | Capacity budget: modeled pps at the rule count and layout meets a declared target | Not started; the cost model now exists (`src/sdn/zodiac-cost-model.ts`, `meetsCapacityTarget`) but no verifier check calls it yet |
 | A9 | Layout: forwarding rules ordered per the measured cheap layout | Not started. **Conflicts with A4** (see below) |
 | A10 | ARP confinement: no ARP forwarded across P1 and P2 unless explicitly allowed | Blocked on verifying `ARP_SPA`/`ARP_TPA` support in firmware 0.86 |
 | A11 | Intent compliance: exact packet-class evaluation confirms zero leaks and zero missing deliveries | Implemented (`src/sdn/intent-spec.ts`, `test/invariants/intent-spec.test.ts`) |
@@ -69,7 +69,7 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 
 Turn the benchmark from a report into an input to the verifier, and check that the switch behaves as modeled.
 
-- Encode the fitted cost model (`t_packet = 38.5 µs + 0.0348 µs x (B - 64) + 4.24 µs x N`, base layout; 1.3 µs per rule for forwarding-first) as a pure function with tests against the stored artifacts. Feeds A8.
+- **Done (2026-10-14): the fitted cost model is a pure, integer-only function** (`src/sdn/zodiac-cost-model.ts`; `t_packet = 38.5 µs + 0.0348 µs x (B - 64) + 4.24 µs x N` for the base layout, 1.3 µs per rule for forwarding-first). `test/invariants/zodiac-cost-model.test.ts` re-reads the stored ladder artifacts: all 12 saturated points are within 1.23% of the model, the tolerance it claims is 2%, and a model with the per-rule cost off by 5% fails the test. It throws outside the measured domain (0 to 128 rules; `base` at 64 to 1470 B; `forward_first` at 572 B only, with no payload term borrowed from the base layout), because extrapolating would be an unverified claim. Limits: most layouts have one round; it says nothing about session loss, which began at about 1.3 to 2.3 times capacity. Feeds A8, which is not yet implemented.
 - **Conformance probe.** For a set of generated packets, compute the model's verdict, send them from the workload node, and observe what actually crosses each port. Ground truth is the independent uplink capture (O3) and the NETGEAR mirror (O1); the Zodiac P3 tap (O2) is a copy chosen by the flow rules under test and is not ground truth. Any disagreement is a finding about the model or the firmware.
 - Close the open measurement items from the whitepaper: drop-path capacity (needs a mirror capture), direct CPU observation, and unexplained session losses.
 - Replicate the single-round layouts (3 or more rounds) before treating them as distributions.
