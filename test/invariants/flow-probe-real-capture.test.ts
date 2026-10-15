@@ -67,8 +67,14 @@ describe('the real capture: what firmware 0.86 reported', () => {
   });
 
   it('echoes each rule\'s instruction bytes exactly as the controller encoded them', () => {
-    // A /24 mask in dotted form; the policy's IPv4 rules are the only masked matches.
-    const maskOf = (len: number | undefined): string | undefined => (len === 24 ? '255.255.255.0' : undefined);
+    // The dotted mask the switch reports for a prefix. An exact (/32 or omitted) match reports no mask. Any other
+    // length is converted generally; an out-of-range one throws rather than quietly matching nothing.
+    const maskOf = (len: number | undefined): string | undefined => {
+      if (len === undefined || len === 32) return undefined;
+      if (!Number.isInteger(len) || len < 1 || len > 31) throw new Error(`unsupported prefix length ${len}`);
+      const m = (0xffffffff << (32 - len)) >>> 0;
+      return `${m >>> 24}.${(m >>> 16) & 255}.${(m >>> 8) & 255}.${m & 255}`;
+    };
     const paired = new Set<string>();
     policy.forEach((rule, i) => {
       const m = rule.flowMod.match ?? {};
