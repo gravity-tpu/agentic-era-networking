@@ -8,7 +8,7 @@
  * machinery that will interpret it, not what firmware 0.86 actually reports.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js';
@@ -21,6 +21,7 @@ import {
   FlowProbeError,
   FlowProbeRateLimitedError,
   probeErrorToHttp,
+  splitFlowStatsEntries,
   type FlowProbeReport,
 } from '../../src/sdn/flow-probe.js';
 import { MAX_READBACK_RAW_BYTES, readFlowStats, readFlowStatsRaw } from '../../src/sdn/flow-readback.js';
@@ -62,6 +63,7 @@ describe('probe findings', () => {
     const r = report([replyOf(matchOnly())]);
     expect(r.finding).toBe('no-instructions-reported');
     expect(r.findingDetail).toContain('omits');
+    expect(r.findingDetail).not.toMatch(/likel/i); // a mechanical statement, not an inference
     expect(r.findingDetail).toContain('must not be described as proving forwarding intent');
     expect(r.readback.verified).toBe(true);
     expect(r.readback.actions.status).toBe('unobservable');
@@ -109,6 +111,29 @@ describe('probe findings', () => {
   it('rejects a reply that is not a flow-stats reply, naming which one', () => {
     expect(() => report([replyOf(faithful()), Buffer.alloc(8)])).toThrow(FlowProbeError);
     expect(() => report([replyOf(faithful()), Buffer.alloc(8)])).toThrow(/reply 1/);
+  });
+});
+
+describe('raw entry splitting', () => {
+  it('returns one buffer per entry, byte for byte', () => {
+    const entries = faithful();
+    expect(splitFlowStatsEntries(replyOf(entries)).map((b) => b.toString('hex'))).toEqual(entries.map((b) => b.toString('hex')));
+  });
+
+  it('rejects a zero, undersized or overrunning length instead of looping or truncating', () => {
+    const base = replyOf([entryFrom(tableMissMod)]);
+    for (const len of [0, 8, 55, 0xffff]) {
+      const bad = Buffer.from(base);
+      bad.writeUInt16BE(len, 16);
+      expect(() => splitFlowStatsEntries(bad), `len ${len}`).toThrow(FlowProbeError);
+    }
+    expect(() => splitFlowStatsEntries(Buffer.concat([base, Buffer.from([0])]))).toThrow(FlowProbeError); // 1 stray byte
+  });
+
+  it('a malformed reply never reaches the report: the report builder rejects it', () => {
+    const bad = Buffer.from(replyOf([entryFrom(tableMissMod)]));
+    bad.writeUInt16BE(0, 16);
+    expect(() => report([bad])).toThrow(FlowProbeError);
   });
 });
 
@@ -240,6 +265,24 @@ describe('bridge probeFlowTable', () => {
     const err = await server.probeFlowTable().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FlowProbeRateLimitedError);
     expect((err as FlowProbeRateLimitedError).retryAfterMs).toBeGreaterThan(0);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('spaces probes from the END of the previous one, so a slow probe cannot be followed at once', async () => {
+    const { controller, server } = make();
+    const of = controller.openFlow;
+    of.reserveXid = () => 42;
+    of.sendRaw = () => queueMicrotask(() => of.emit('multipartReply', 42, replyOf(faithful())));
+    // Clock readings, in order: probe 1 start, probe 1 report stamp, probe 1 end (10 s after its start), probe 2 start.
+    const readings = [0n, 5_000_000_000n, 10_000_000_000n, 10_001_000_000n];
+    let i = 0;
+    vi.spyOn(process.hrtime, 'bigint').mockImplementation(() => readings[Math.min(i++, readings.length - 1)] ?? 0n);
+    await server.probeFlowTable();
+    // 10.001 s after the first started, but only 1 ms after it ended: still inside the spacing window.
+    await expect(server.probeFlowTable()).rejects.toBeInstanceOf(FlowProbeRateLimitedError);
   });
 
   it('refuses a concurrent probe while one is in flight', async () => {

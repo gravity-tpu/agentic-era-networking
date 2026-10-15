@@ -93,12 +93,23 @@ export class FlowProbeRateLimitedError extends Error {
   }
 }
 
-/** The entries of one multipart reply, as raw bytes. Only call on a reply parseFlowStatsReply accepted. */
-function entryBuffers(packet: Buffer): Buffer[] {
+/** The smallest ofp_flow_stats entry: the 48-byte fixed part plus an 8-byte empty match. */
+const MIN_FLOW_STATS_ENTRY_BYTES = 56;
+
+/**
+ * The entries of one multipart reply, as raw bytes. These bytes are the evidence, so this does its own bounds
+ * checks rather than relying on parseFlowStatsReply having rejected a bad length: a zero length would otherwise
+ * never advance, and an overrun would silently truncate the evidence.
+ */
+export function splitFlowStatsEntries(packet: Buffer): Buffer[] {
   const out: Buffer[] = [];
   let off = 16;
   while (off < packet.length) {
+    if (off + 2 > packet.length) throw new FlowProbeError(`entry header truncated at offset ${off}`);
     const len = packet.readUInt16BE(off);
+    if (len < MIN_FLOW_STATS_ENTRY_BYTES || off + len > packet.length) {
+      throw new FlowProbeError(`entry length ${len} at offset ${off} is outside the ${packet.length}-byte reply`);
+    }
     out.push(packet.subarray(off, off + len));
     off += len;
   }
@@ -119,11 +130,10 @@ function classify(entries: readonly FlowStatsEntry[]): { finding: FlowProbeFindi
     return {
       finding: 'no-instructions-reported',
       detail:
-        `None of the ${entries.length} entries carried instruction bytes. Either firmware 0.86 omits the instruction ` +
-        'block from flow-stats entries, or every installed rule is a drop. The isolation policy forwards on purpose, ' +
-        'and the first conformance run saw its allowed traffic cross, so omission is the likelier reading; this ' +
-        'report alone cannot rule out that the rules lost their actions. Action-level readback is `unobservable` ' +
-        'on this firmware, and must not be described as proving forwarding intent.',
+        `None of the ${entries.length} entries carried instruction bytes. Either the firmware omits the instruction ` +
+        'block from flow-stats entries, or every installed rule has no actions (a drop, or an output that was lost). ' +
+        'This report cannot tell those apart; on-wire captures show whether traffic is actually forwarded. ' +
+        'Action-level readback is `unobservable` here, and must not be described as proving forwarding intent.',
     };
   }
   const unreadable = withInstructions.filter((e) => e.actions?.complete !== true);
@@ -163,7 +173,11 @@ export function buildFlowProbeReport(input: FlowProbeInput): FlowProbeReport {
     } catch (e: unknown) {
       throw new FlowProbeError(`reply ${i} is not a parseable OFPMP_FLOW reply: ${e instanceof Error ? e.message : String(e)}`);
     }
-    const bufs = entryBuffers(packet);
+    const bufs = splitFlowStatsEntries(packet);
+    if (bufs.length !== reply.entries.length) {
+      // Two independent walks of the same bytes must agree, or entryHex would not belong to its parsed entry.
+      throw new FlowProbeError(`reply ${i}: parsed ${reply.entries.length} entries but found ${bufs.length} raw entries`);
+    }
     reply.entries.forEach((entry, j) => {
       entries.push(entry);
       raw.push(bufs[j] ?? Buffer.alloc(0));

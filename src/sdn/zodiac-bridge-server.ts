@@ -819,7 +819,7 @@ export class ZodiacBridgeServer {
   /**
    * One read-only OFPMP_FLOW request to the switch, returned as a probe report with the raw reply bytes. Sends no
    * FlowMod and changes nothing on the switch. At most one runs at a time and they are spaced by
-   * FLOW_PROBE_MIN_INTERVAL_MS (FlowProbeRateLimitedError otherwise). Rejects if there is no established session.
+   * FLOW_PROBE_MIN_INTERVAL_MS, measured from the end of the previous probe (FlowProbeRateLimitedError otherwise). Rejects if there is no established session.
    */
   public async probeFlowTable(): Promise<FlowProbeReport> {
     if (this.flowProbeInFlight) {
@@ -846,6 +846,8 @@ export class ZodiacBridgeServer {
       });
     } finally {
       this.flowProbeInFlight = false;
+      // Space probes from the end of the last one, so a probe that ran into its timeout cannot be followed at once.
+      this.lastFlowProbeMonoNs = process.hrtime.bigint();
     }
   }
 
