@@ -17,7 +17,20 @@ import type { FlowStatsEntry } from './dataplane-benchmark.js';
  */
 export const MAX_READBACK_FLOW_ENTRIES = 512;
 
+/**
+ * Ceiling on the raw reply bytes retained by readFlowStatsRaw. Each multipart message is at most 64 KiB and the
+ * entry cap already bounds a conforming reply far below this; the byte cap also covers a firmware that keeps
+ * sending OFPMPF_REPLY_MORE segments with no entries.
+ */
+export const MAX_READBACK_RAW_BYTES = 1_048_576;
+
 export type FlowStatsSource = Pick<OpenFlowServer, 'reserveXid' | 'sendRaw' | 'on' | 'off'>;
+
+export interface RawFlowStats {
+  readonly entries: FlowStatsEntry[];
+  /** Every OFPT_MULTIPART_REPLY message received for the request, byte for byte, in arrival order. */
+  readonly replies: Buffer[];
+}
 
 /**
  * Requests every flow entry from the switch and resolves once the final multipart segment
@@ -27,14 +40,30 @@ export type FlowStatsSource = Pick<OpenFlowServer, 'reserveXid' | 'sendRaw' | 'o
  * Ordering: the request is written on the same TCP stream after any preceding FlowMods. The Zodiac FX
  * MCU processes controller messages sequentially, so FlowMod errors arrive before this reply.
  */
-export function readFlowStats(
+export async function readFlowStats(
   of: FlowStatsSource,
   timeoutMs: number,
   maxEntries: number = MAX_READBACK_FLOW_ENTRIES,
 ): Promise<FlowStatsEntry[]> {
+  return (await readFlowStatsRaw(of, timeoutMs, maxEntries)).entries;
+}
+
+/**
+ * Same request and the same bounds as readFlowStats, but also returns the raw reply messages. The bytes are the
+ * evidence: a parsed entry shows what this code understood, the raw message shows what the switch actually said,
+ * and it can be replayed through the parser later (for example into a test fixture) without touching hardware.
+ */
+export function readFlowStatsRaw(
+  of: FlowStatsSource,
+  timeoutMs: number,
+  maxEntries: number = MAX_READBACK_FLOW_ENTRIES,
+  maxRawBytes: number = MAX_READBACK_RAW_BYTES,
+): Promise<RawFlowStats> {
   const xid = of.reserveXid();
   const entries: FlowStatsEntry[] = [];
-  return new Promise<FlowStatsEntry[]>((resolve, reject) => {
+  const replies: Buffer[] = [];
+  let rawBytes = 0;
+  return new Promise<RawFlowStats>((resolve, reject) => {
     const done = (fn: () => void): void => {
       clearTimeout(timer);
       of.off('multipartReply', onReply);
@@ -48,6 +77,12 @@ export function readFlowStats(
     const onReply = (rxXid: number, packet: Buffer): void => {
       if (rxXid !== xid) return;
       try {
+        rawBytes += packet.length;
+        if (rawBytes > maxRawBytes) {
+          done(() => reject(new Error(`OFPMP_FLOW readback exceeded ${maxRawBytes} raw bytes; aborted to bound memory`)));
+          return;
+        }
+        replies.push(Buffer.from(packet)); // copy: the socket may reuse its buffer
         const reply = parseFlowStatsReply(packet);
         if (entries.length + reply.entries.length > maxEntries) {
           done(() =>
@@ -60,7 +95,7 @@ export function readFlowStats(
           return;
         }
         entries.push(...reply.entries);
-        if (!reply.more) done(() => resolve(entries));
+        if (!reply.more) done(() => resolve({ entries, replies }));
       } catch (e: unknown) {
         done(() => reject(e instanceof Error ? e : new Error(String(e))));
       }
