@@ -94,6 +94,29 @@ const FLOW_PROBE_MIN_INTERVAL_MS = (() => {
   }
   return Number(raw);
 })();
+// Council Invariant 3 (fail closed): a bridge that cannot bind its OpenFlow port controls nothing, and must not look
+// healthy to the process supervisor. By default it refuses to start. Development, where something else may hold 6633,
+// can opt back into the degraded mode explicitly.
+export class ControlPlaneBindError extends Error {
+  constructor(public readonly detail: string) {
+    super(`OpenFlow control plane failed to bind on 6633: ${detail}`);
+    this.name = 'ControlPlaneBindError';
+  }
+}
+
+/** True only for the literal value "1": any other value, or none, keeps the fail-closed default. */
+export function degradedControlPlaneAllowed(env: Readonly<Record<string, string | undefined>>): boolean {
+  return env['ZODIAC_ALLOW_DEGRADED_CONTROL_PLANE'] === '1';
+}
+
+/**
+ * The Coral inference daemon is opt-in. The Corals are parked (removed from the Jetson), and a child of the bridge
+ * shares its fate (a crash loop in the bridge's journal, a restart tied to the control plane). If a Coral is attached
+ * again, prefer the separate zodiac-coral.service unit; this flag keeps the old child-process mode available.
+ */
+export function coralDaemonEnabled(env: Readonly<Record<string, string | undefined>>): boolean {
+  return env['ZODIAC_ENABLE_CORAL_DAEMON'] === '1';
+}
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -859,7 +882,14 @@ export class ZodiacBridgeServer {
       this.controlPlaneState = 'ACTIVE';
     } catch (err: unknown) {
       this.controlPlaneState = 'DEGRADED_FAULT';
-      console.error('[!] [OpenFlow Error] Control plane failed to bind on 6633. Entering DEGRADED_FAULT state:', err instanceof Error ? err.message : String(err));
+      const detail = err instanceof Error ? err.message : String(err);
+      if (!degradedControlPlaneAllowed(process.env)) {
+        // Nothing else has been started yet. Failing here lets systemd report the unit as failed and apply its
+        // restart policy, instead of showing `active` for a bridge that controls no switch.
+        console.error(`[!] [OpenFlow Error] ${detail}. Refusing to run without the control plane (set ZODIAC_ALLOW_DEGRADED_CONTROL_PLANE=1 to override in development).`);
+        throw new ControlPlaneBindError(detail);
+      }
+      console.error('[!] [OpenFlow Error] Control plane failed to bind on 6633. Entering DEGRADED_FAULT state (explicitly allowed):', detail);
     }
 
     // 2. Start HTTP bridge server with automatic port hunting on EADDRINUSE
@@ -919,7 +949,7 @@ export class ZodiacBridgeServer {
     //    Produces /tmp/coral-telemetry.json read by probeCoralHardware().
     //    Only launched on Linux — no-ops silently on other platforms.
     if (process.platform === 'linux') {
-      this.spawnCoralDaemon(0);
+      this.startCoralDaemonIfEnabled(process.env);
     }
 
     // Systemd watchdog heartbeat: send WATCHDOG=1 every 10 seconds.
@@ -939,6 +969,16 @@ export class ZodiacBridgeServer {
     }
 
     return boundPort;
+  }
+
+  /** Starts the Coral daemon only when explicitly enabled; returns whether a start was attempted. */
+  public startCoralDaemonIfEnabled(env: Readonly<Record<string, string | undefined>>): boolean {
+    if (!coralDaemonEnabled(env)) {
+      console.log('[coral-daemon] Disabled (opt-in: set ZODIAC_ENABLE_CORAL_DAEMON=1). Coral metrics report STANDBY.');
+      return false;
+    }
+    this.spawnCoralDaemon(0);
+    return true;
   }
 
   /**
@@ -2700,7 +2740,11 @@ if (isMain) {
   bridge.start(port, host).then((boundPort) => {
     console.log(`[+] [ZodiacBridgeServer] Autonomous bridge active on http://${host}:${boundPort}`);
     const ctrlHost = process.env['SDN_CONTROLLER_IP'] ?? host;
-    console.log(`[+] [ZodiacBridgeServer] OpenFlow 1.3 controller listening on ${ctrlHost}:6633`);
+    if (bridge.controlPlaneState === 'ACTIVE') {
+      console.log(`[+] [ZodiacBridgeServer] OpenFlow 1.3 controller listening on ${ctrlHost}:6633`);
+    } else {
+      console.warn(`[!] [ZodiacBridgeServer] OpenFlow controller is NOT listening on ${ctrlHost}:6633 (state ${bridge.controlPlaneState}); running degraded by explicit override.`);
+    }
   }).catch((err) => {
     console.error('[-] [ZodiacBridgeServer] Fatal startup error:', err);
     process.exit(1);

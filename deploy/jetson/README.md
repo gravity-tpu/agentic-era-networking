@@ -188,8 +188,11 @@ The probe sends **one OFPMP_FLOW request and no FlowMod**. It does not change th
 
 1. Deploy the bridge build that contains the endpoint (the update steps above, with `npm ci` and
    `npm run build:server`, not `--omit=dev`, which cannot build). **Before starting or restarting the unit, check
-   for a stray controller: `ss -ltnp | grep -E ':6633|:3003'`.** A hand-started bridge holds the ports, and the unit's
-   new instance then fails to bind (`EADDRINUSE`) and sits in DEGRADED_FAULT while the old one keeps the switch.
+   for a stray controller: `ss -ltnp | grep -E ':6633|:3003'`.** A hand-started bridge holds the ports. The unit's
+   new instance then cannot bind 6633 and **exits with an error** (the unit shows `failed`, and systemd retries every
+   5 s until the port is free), while the old one keeps the switch. Before 2026-10-15 it instead logged
+   DEGRADED_FAULT and stayed `active`, which hid a stray controller for about 30 hours. For development only,
+   `ZODIAC_ALLOW_DEGRADED_CONTROL_PLANE=1` restores that degraded mode.
    The restart drops the OpenFlow session and the bridge reinstalls the isolation policy on reconnect; until it
    does, the switch holds only table-miss DROP, so the workload is isolated, not exposed.
 2. Wait for `Isolation readback VERIFIED` in `journalctl -u zodiac-bridge`. Probing mid-install shows a partial table.
