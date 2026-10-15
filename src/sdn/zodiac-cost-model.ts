@@ -93,15 +93,27 @@ function paramsFor(layout: string): LayoutParams {
   throw new CostModelDomainError(`unknown layout ${JSON.stringify(layout)}: no measured cost model for it`);
 }
 
-function checkDomain(layout: string, p: LayoutParams, payloadBytes: bigint, rules: bigint): void {
+function domainProblem(layout: string, p: LayoutParams, payloadBytes: bigint, rules: bigint): string | null {
   if (payloadBytes < p.minPayload || payloadBytes > p.maxPayload) {
-    throw new CostModelDomainError(
-      `payload ${payloadBytes} B is outside the measured range ${p.minPayload} to ${p.maxPayload} B for layout ${layout}`,
-    );
+    return `payload ${payloadBytes} B is outside the measured range ${p.minPayload} to ${p.maxPayload} B for layout ${layout}`;
   }
   if (rules < 0n || rules > MAX_MODELLED_RULES) {
-    throw new CostModelDomainError(`${rules} rules is outside 0 to ${MAX_MODELLED_RULES} (the table capacity)`);
+    return `${rules} rules is outside 0 to ${MAX_MODELLED_RULES} (the table capacity)`;
   }
+  return null;
+}
+
+/**
+ * Why the model cannot be applied here, or null when it can. Lets callers ask without catching exceptions, so a
+ * broad catch never has to stand between a real bug and an "unverifiable" verdict.
+ */
+export function explainDomain(layout: CostLayout, payloadBytes: bigint, rules: bigint): string | null {
+  return domainProblem(layout, paramsFor(layout), payloadBytes, rules);
+}
+
+function checkDomain(layout: string, p: LayoutParams, payloadBytes: bigint, rules: bigint): void {
+  const problem = domainProblem(layout, p, payloadBytes, rules);
+  if (problem !== null) throw new CostModelDomainError(problem);
 }
 
 /** Modelled per-packet service time in picoseconds. Throws CostModelDomainError outside the measured domain. */
