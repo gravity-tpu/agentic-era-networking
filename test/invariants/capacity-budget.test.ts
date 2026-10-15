@@ -142,6 +142,16 @@ describe('A8: shape classification against the benchmark layouts', () => {
     expect(r.modelled && r.shape.quarantineRuleIds).toEqual([]);
   });
 
+  it('does not model rules carrying any match field beyond the measured ones', () => {
+    const rules = rulesFromDepthPlan({ ...base, depth: 4 });
+    const withExtra = (index: number, extra: Record<string, number | string>): IsolationRule[] =>
+      rules.map((r, i) => (i === index ? { ...r, flowMod: { ...r.flowMod, match: { ...r.flowMod.match, ...extra } } } : r));
+    expect(classifyForCostModel(withExtra(0, { dstIp: '10.0.2.1' })).modelled).toBe(false); // a DROP with a dst match
+    expect(classifyForCostModel(withExtra(0, { etherType: 0x0800 })).modelled).toBe(false);
+    expect(classifyForCostModel(withExtra(rules.length - 1, { etherType: 0x0800 })).modelled).toBe(false); // a forward rule
+    expect(classifyForCostModel(withExtra(rules.length - 1, { srcMac: '02:00:00:00:00:01' })).modelled).toBe(false);
+  });
+
   it('does not model the deployed Port 1 isolation policy', () => {
     const r = classifyForCostModel(buildPort1IsolationPolicy());
     expect(r.modelled).toBe(false);
@@ -200,6 +210,43 @@ describe('A8: capacity budget', () => {
     const target = capacityPps('base', 572n, 40n); // too high for base once the tolerance is taken off
     expect(checkCapacityBudget(base16, { payloadBytes: 572n, targetPps: target, quarantineReserve: 24 }).status).toBe('fail');
     expect(checkCapacityBudget(fwd, { payloadBytes: 572n, targetPps: target, quarantineReserve: 24 }).status).toBe('pass');
+  });
+
+  it('with no DROP rules yet, requires the target at the lowest modelled layout (forward_first is lower at depth 0)', () => {
+    const none = rulesFromDepthPlan({ match: 'host32', priorityOrder: 'quarantine_above', installOrder: 'quarantine_first', depth: 0 });
+    const lowest = capacityPps('forward_first', 572n, 0n);
+    expect(lowest).toBeLessThan(capacityPps('base', 572n, 0n));
+    const v = checkCapacityBudget(none, { payloadBytes: 572n, targetPps: lowest / 2n, quarantineReserve: 0 });
+    expect(v.status).toBe('pass');
+    if (v.status !== 'unverifiable') {
+      expect(v.layout).toBe('forward_first');
+      expect(v.modelledPps).toBe(lowest);
+    }
+    // a target that base could meet but forward_first could not must fail
+    const baseOnly = capacityPps('base', 572n, 0n);
+    expect(checkCapacityBudget(none, { payloadBytes: 572n, targetPps: baseOnly - baseOnly / 100n, quarantineReserve: 0 }).status).toBe('fail');
+  });
+
+  it('with no DROP rules, outside the forward_first payload the base layout alone decides, and outside both it is unverifiable', () => {
+    const none = rulesFromDepthPlan({ match: 'host32', priorityOrder: 'quarantine_above', installOrder: 'quarantine_first', depth: 0 });
+    const v = checkCapacityBudget(none, { payloadBytes: 64n, targetPps: 1n, quarantineReserve: 0 });
+    expect(v.status).toBe('pass');
+    if (v.status !== 'unverifiable') expect(v.layout).toBe('base');
+    expect(checkCapacityBudget(none, { payloadBytes: 2000n, targetPps: 1n, quarantineReserve: 0 }).status).toBe('unverifiable');
+  });
+
+  it('uses the same reserve as A7: A7 total entries = A8 quarantine depth + 2 forwarding + 1 table-miss', () => {
+    const reserve = 24;
+    const a7 = checkRuleBudget(base16, { quarantineReserve: reserve });
+    const a8 = checkCapacityBudget(base16, { payloadBytes: 572n, targetPps: 1n, quarantineReserve: reserve });
+    expect(a8.status).toBe('pass');
+    if (a8.status !== 'unverifiable') {
+      expect(a7.policyRules + a7.tableMissEntries + a7.quarantineReserve).toBe(a8.quarantineDepth + 2 + TABLE_MISS_ENTRIES);
+    }
+  });
+
+  it('pins the default quarantine reserve to the measured typical working-window depth', () => {
+    expect(DEFAULT_QUARANTINE_RESERVE).toBe(24);
   });
 
   it('is unverifiable, never a pass, for the deployed isolation policy', () => {

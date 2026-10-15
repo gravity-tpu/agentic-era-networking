@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import {
   CostModelDomainError,
   MAX_MEASURED_PAYLOAD_BYTES,
+  explainDomain,
   MAX_MODELLED_RULES,
   MODEL_TOLERANCE_PPM,
   PS_PER_SECOND,
@@ -182,6 +183,17 @@ describe('cost model shape and domain', () => {
     expect(() => packetTimePs('base', 572n, -1n)).toThrow(CostModelDomainError);
     expect(() => packetTimePs('base', 572n, MAX_MODELLED_RULES + 1n)).toThrow(CostModelDomainError);
     expect(() => capacityPps('hitfirst' as CostLayout, 572n, 0n)).toThrow(CostModelDomainError);
+  });
+
+  it('explainDomain reports why a point is outside the model without throwing, and agrees with packetTimePs', () => {
+    expect(explainDomain('base', 572n, 24n)).toBeNull();
+    expect(explainDomain('forward_first', 572n, 24n)).toBeNull();
+    expect(explainDomain('forward_first', 64n, 0n)).toContain('outside the measured range');
+    expect(explainDomain('base', 572n, MAX_MODELLED_RULES + 1n)).toContain('rules is outside');
+    for (const [layout, payload, rules] of [['base', 63n, 0n], ['forward_first', 1470n, 0n], ['base', 572n, 129n]] as const) {
+      expect(explainDomain(layout, payload, rules)).not.toBeNull();
+      expect(() => packetTimePs(layout, payload, rules)).toThrow(CostModelDomainError);
+    }
   });
 
   it('meetsCapacityTarget rejects a target inside the model tolerance of capacity', () => {

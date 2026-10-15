@@ -13,17 +13,21 @@
  * either, because applying the model to an unmeasured shape would be an extrapolation presented as a bound.
  * Today that includes the deployed Port 1 isolation policy (six rules, IPv4 confinement, ARP, tap).
  *
+ * The quarantine reserve means the same thing in both: how many MORE quarantine rules may be added after the policy
+ * is installed. A7 counts it on top of every rule already present; A8 counts it on top of the DROP rules already
+ * present. So for a modelled policy, A7's total entries = A8's quarantine depth + 2 forwarding rules + 1 table-miss.
+ *
  * Invariant 2: integer arithmetic only. Invariant 3: unknown shapes are not accepted as passing.
  * Invariant 5: the quarantine reserve is a named, configurable, bounded input (default = the measured "typical
- * working window" depth).
+ * working window" depth, 24).
  */
 
 import { FLOW_TABLE_CAPACITY } from './dataplane-benchmark.js';
 import { WORKDAY_PROFILES } from './dataplane-depth.js';
 import {
-  CostModelDomainError,
   MODEL_TOLERANCE_PPM,
   capacityPps,
+  explainDomain,
   meetsCapacityTarget,
   type CostLayout,
 } from './zodiac-cost-model.js';
@@ -34,8 +38,9 @@ import { ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD } from './port1-isolation.js';
 export const TABLE_MISS_ENTRIES = 1;
 
 /**
- * Default headroom for quarantine rules added after the policy is installed: the depth of the measured "typical"
- * working window (rules ramp 0 to 24). Callers should pass their own value; this is only a measured default.
+ * Default headroom (24) for quarantine rules added after the policy is installed: the depth of the measured
+ * "typical" working window (rules ramp 0 to 24). Callers should pass their own value; this is only a measured
+ * default. The value is pinned by a test so a change to the benchmark profile cannot shift it silently.
  */
 export const DEFAULT_QUARANTINE_RESERVE = WORKDAY_PROFILES.typical;
 
@@ -96,7 +101,9 @@ export interface RuleBudgetVerdict {
 
 /**
  * A7. Passes when policy rules + table-miss + quarantine reserve <= table capacity. On failure, `ruleIds` names the
- * lowest-priority rules that do not fit (highest priority kept first; equal priorities keep their input order).
+ * rules that would be dropped if the policy were trimmed by priority (highest priority kept first; equal priorities
+ * keep their input order). That is a diagnostic ordering, not the install order: the switch fills its table in
+ * the order rules are sent, so the caller decides what actually gets cut.
  */
 export function checkRuleBudget(rules: readonly IsolationRule[], options: RuleBudgetOptions = {}): RuleBudgetVerdict {
   const capacity = checkedCapacity(options.capacity);
@@ -134,7 +141,8 @@ export function checkRuleBudget(rules: readonly IsolationRule[], options: RuleBu
 // ---------------------------------------------------------------------------
 
 export interface CostModelShape {
-  readonly layout: CostLayout;
+  /** null when the policy holds no DROP rules, so the layout is not yet determined. */
+  readonly layout: CostLayout | null;
   /** Source-IP DROP rules present in the policy (the model's "rules" term before any reserve). */
   readonly quarantineRuleIds: readonly string[];
 }
@@ -199,8 +207,9 @@ export function classifyForCostModel(rules: readonly IsolationRule[]): ShapeResu
 
   const quarantineRuleIds = drops.map((d) => d.rule.id);
   if (drops.length === 0) {
-    // With no DROP rules the layout is undistinguished; the zero-depth point is measured under the base layout.
-    return { modelled: true, shape: { layout: 'base', quarantineRuleIds } };
+    // With no DROP rules the layout the reserve will later be installed in is undeclared. layout: null tells
+    // checkCapacityBudget to evaluate every modelled layout and require the target at the lowest capacity.
+    return { modelled: true, shape: { layout: null, quarantineRuleIds } };
   }
   const dropsAllAbove = drops.every((d) => d.rule.flowMod.priority > fwdPriority);
   const dropsAllBelow = drops.every((d) => d.rule.flowMod.priority < fwdPriority);
@@ -253,32 +262,44 @@ export function checkCapacityBudget(rules: readonly IsolationRule[], spec: Capac
   if (!shape.modelled) return { property: 'A8', status: 'unverifiable', reason: shape.reason };
 
   const depth = shape.shape.quarantineRuleIds.length + reserve;
-  try {
-    const modelledPps = capacityPps(shape.shape.layout, spec.payloadBytes, BigInt(depth));
-    const ok = meetsCapacityTarget(shape.shape.layout, spec.payloadBytes, BigInt(depth), spec.targetPps);
-    return {
-      property: 'A8',
-      status: ok ? 'pass' : 'fail',
-      layout: shape.shape.layout,
-      quarantineDepth: depth,
-      modelledPps,
-      targetPps: spec.targetPps,
-      tolerancePpm: MODEL_TOLERANCE_PPM,
-      violations: ok
-        ? []
-        : [
-            {
-              property: 'A8',
-              ruleIds: shape.shape.quarantineRuleIds,
-              detail:
-                `modelled capacity ${modelledPps} pps (${spec.payloadBytes} B, ${shape.shape.layout}, ${depth} quarantine rules ` +
-                `including ${reserve} reserved) does not meet the ${spec.targetPps} pps target after the ` +
-                `${MODEL_TOLERANCE_PPM} ppm model tolerance`,
-            },
-          ],
-    };
-  } catch (e) {
-    if (e instanceof CostModelDomainError) return { property: 'A8', status: 'unverifiable', reason: e.message };
-    throw e;
+  const depthBig = BigInt(depth);
+  const candidates: readonly CostLayout[] = shape.shape.layout === null ? ['base', 'forward_first'] : [shape.shape.layout];
+
+  // Evaluate each candidate layout where the model is defined. With an undetermined layout, a layout the model
+  // does not cover at this payload is skipped, but the base layout must be covered, because it is the one every
+  // policy can end up in.
+  const evaluated: { layout: CostLayout; pps: bigint }[] = [];
+  const problems: string[] = [];
+  for (const layout of candidates) {
+    const problem = explainDomain(layout, spec.payloadBytes, depthBig);
+    if (problem === null) evaluated.push({ layout, pps: capacityPps(layout, spec.payloadBytes, depthBig) });
+    else problems.push(problem);
   }
+  const requiredLayout = shape.shape.layout ?? 'base';
+  if (!evaluated.some((e) => e.layout === requiredLayout)) {
+    return { property: 'A8', status: 'unverifiable', reason: problems.join('; ') };
+  }
+  const worst = evaluated.reduce((a, b) => (b.pps < a.pps ? b : a));
+  const ok = meetsCapacityTarget(worst.layout, spec.payloadBytes, depthBig, spec.targetPps);
+  return {
+    property: 'A8',
+    status: ok ? 'pass' : 'fail',
+    layout: worst.layout,
+    quarantineDepth: depth,
+    modelledPps: worst.pps,
+    targetPps: spec.targetPps,
+    tolerancePpm: MODEL_TOLERANCE_PPM,
+    violations: ok
+      ? []
+      : [
+          {
+            property: 'A8',
+            ruleIds: shape.shape.quarantineRuleIds,
+            detail:
+              `modelled capacity ${worst.pps} pps (${spec.payloadBytes} B, ${worst.layout}, ${depth} quarantine rules ` +
+              `including ${reserve} reserved) does not meet the ${spec.targetPps} pps target after the ` +
+              `${MODEL_TOLERANCE_PPM} ppm model tolerance`,
+          },
+        ],
+  };
 }
