@@ -72,7 +72,8 @@ Agents are in the loop as *proposers*. A human approves, and deterministic code 
 | Anomaly detector and quarantine path (Jetson GPU; Corals parked) | Present; precision and recall **not measured** | `scripts/gpu-sdn-anomaly-sentinel.py`, `src/sdn/zodiac-controller.ts` |
 | Cost model as a tested pure function (`src/sdn/zodiac-cost-model.ts`, checked against the stored artifacts) | Implemented | `test/invariants/zodiac-cost-model.test.ts` |
 | Rule budget (A7) and capacity budget (A8) checks | Implemented as pure checks; A8 reports `unverifiable` for the deployed policy (its shape was never measured); not yet in the install path | `src/sdn/capacity-budget.ts`, `test/invariants/capacity-budget.test.ts` |
-| Shadowed-rule and action-level analysis | Planned | Roadmap, track A |
+| Shadowed-rule (A5) and conflicting-overlap (A6) checks | Implemented as pure checks; not yet in the install path | `src/sdn/rule-hygiene.ts`, `test/invariants/rule-hygiene.test.ts` |
+| Action-level flow readback | Planned | Roadmap, track A |
 | Model-versus-wire conformance probe | First manual run 2026-10-12: five checks matched (ICMP and ARP only, small sample, provenance sidecars on O2 and O3); automated probe planned | [Roadmap](docs/ROADMAP.md), track B |
 | Repeatable adversarial suite (ARP spoofing, scan, flood, evasion) | Planned | Roadmap, track C |
 | Evaluation of LLM-proposed rule sets against the verifier | Planned | Roadmap, track A |
