@@ -7,18 +7,21 @@
 #   exit 1  critical issues, OR no model produced a verdict, OR the reviewer crashed
 #   exit 2  warnings only; the reviewer emits it only under --strict, but it is treated as advisory if it ever appears
 # Exit 1 is classified from the log so the job says which of the three happened: "the reviewer never ran" is
-# materially different from "the reviewer rejected the change".
+# materially different from "the reviewer rejected the change". If both markers appear, the no-model message wins.
+# The markers are human-readable lines in ai-reviewer.mjs; test/invariants/run-review-markers.test.ts pins them.
 # Deploy is gated by the deterministic `verify` job, not by this one; an LLM's non-deterministic warning count
 # should not turn a branch red. The local pre-push hook stays strict and calls the reviewer directly, not through
 # this script.
 # ==============================================================================
 
+# No `set -e`: the reviewer's exit status is captured through PIPESTATUS and every outcome is handled explicitly in
+# the case below. Anything that could fail before it (mktemp) is checked by hand.
 set -uo pipefail
 
 REVIEW_SCRIPT="${1:-council:review:last}"
 LABEL="${2:-AI Review}"
 
-LOG="$(mktemp)"
+LOG="$(mktemp)" || { echo "::error::${LABEL}: could not create a temp file for the review log."; exit 1; }
 trap 'rm -f "$LOG"' EXIT
 
 echo "::group::${LABEL}"
