@@ -67,21 +67,37 @@ describe('the real capture: what firmware 0.86 reported', () => {
   });
 
   it('echoes each rule\'s instruction bytes exactly as the controller encoded them', () => {
-    const entries = report.entries;
+    // A /24 mask in dotted form; the policy's IPv4 rules are the only masked matches.
+    const maskOf = (len: number | undefined): string | undefined => (len === 24 ? '255.255.255.0' : undefined);
+    const paired = new Set<string>();
     policy.forEach((rule, i) => {
       const m = rule.flowMod.match ?? {};
-      const entry = entries.find(
-        (e) => e.priority === rule.flowMod.priority && e.inPort === m.inPort && e.ethType === m.etherType && e.srcIp === m.srcIp && e.dstIp === m.dstIp,
+      // Every field of the match, masks included, and exactly one entry: no loose first-match pairing.
+      const candidates = report.entries.filter(
+        (e) =>
+          e.priority === rule.flowMod.priority &&
+          e.inPort === m.inPort &&
+          e.ethType === m.etherType &&
+          e.srcIp === m.srcIp &&
+          e.srcMask === maskOf(m.srcIpPrefixLen) &&
+          e.dstIp === m.dstIp &&
+          e.dstMask === maskOf(m.dstIpPrefixLen),
       );
-      expect(entry, rule.id).toBeDefined();
+      expect(candidates, rule.id).toHaveLength(1);
+      const entry = candidates[0];
+      paired.add(entry?.entryHex ?? '');
       const fm = buildOfpFlowMod(rule.flowMod, i + 1);
       const ours = fm.subarray(48 + Math.max(8, Math.ceil(fm.readUInt16BE(50) / 8) * 8));
       const theirs = instructionBytes(Buffer.from(entry?.entryHex ?? '', 'hex'));
       expect(theirs.toString('hex'), rule.id).toBe(ours.toString('hex'));
     });
+    expect(paired.size).toBe(policy.length); // six rules, six distinct entries
   });
 
-  it('the table-miss entry carries no instruction bytes (a drop)', () => {
+  // OpenFlow 1.3 defines a matched entry with no instructions as an empty action set, which drops the packet. That
+  // is the specification's meaning, and this asserts only what the bytes show: an entry with no instruction bytes.
+  // Whether the firmware honours it on the wire is a question for the O1/O3 captures, not for this readback.
+  it('the table-miss entry carries no instruction bytes (an empty action set: a drop under OpenFlow 1.3)', () => {
     const miss = report.entries.find((e) => e.priority === 0);
     expect(miss?.actions.hasInstructions).toBe(false);
     expect(Buffer.from(miss?.entryHex ?? '', 'hex').length).toBe(56);
