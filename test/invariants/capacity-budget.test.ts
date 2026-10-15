@@ -17,6 +17,7 @@ import {
 } from '../../src/sdn/capacity-budget.js';
 import { FLOW_TABLE_CAPACITY } from '../../src/sdn/dataplane-benchmark.js';
 import {
+  WORKDAY_PROFILES,
   planDepthCondition,
   type DepthCondition,
   type DepthFlow,
@@ -219,7 +220,7 @@ describe('A8: capacity budget', () => {
     const v = checkCapacityBudget(none, { payloadBytes: 572n, targetPps: lowest / 2n, quarantineReserve: 0 });
     expect(v.status).toBe('pass');
     if (v.status !== 'unverifiable') {
-      expect(v.layout).toBe('forward_first');
+      expect(v.decidingLayout).toBe('forward_first');
       expect(v.modelledPps).toBe(lowest);
     }
     // a target that base could meet but forward_first could not must fail
@@ -227,12 +228,24 @@ describe('A8: capacity budget', () => {
     expect(checkCapacityBudget(none, { payloadBytes: 572n, targetPps: baseOnly - baseOnly / 100n, quarantineReserve: 0 }).status).toBe('fail');
   });
 
-  it('with no DROP rules, outside the forward_first payload the base layout alone decides, and outside both it is unverifiable', () => {
+  it('with no DROP rules, is unverifiable at any payload where a candidate layout is not modelled', () => {
     const none = rulesFromDepthPlan({ match: 'host32', priorityOrder: 'quarantine_above', installOrder: 'quarantine_first', depth: 0 });
-    const v = checkCapacityBudget(none, { payloadBytes: 64n, targetPps: 1n, quarantineReserve: 0 });
-    expect(v.status).toBe('pass');
-    if (v.status !== 'unverifiable') expect(v.layout).toBe('base');
+    // forward_first is only modelled at 572 B, and the reserve could be installed in that layout
+    expect(checkCapacityBudget(none, { payloadBytes: 64n, targetPps: 1n, quarantineReserve: 0 }).status).toBe('unverifiable');
+    expect(checkCapacityBudget(none, { payloadBytes: 1470n, targetPps: 1n, quarantineReserve: 0 }).status).toBe('unverifiable');
     expect(checkCapacityBudget(none, { payloadBytes: 2000n, targetPps: 1n, quarantineReserve: 0 }).status).toBe('unverifiable');
+  });
+
+  it('with no DROP rules and a reserve, the lower of the two layouts decides (base is lower once rules are present)', () => {
+    const none = rulesFromDepthPlan({ match: 'host32', priorityOrder: 'quarantine_above', installOrder: 'quarantine_first', depth: 0 });
+    const lowest = capacityPps('base', 572n, 24n);
+    expect(lowest).toBeLessThan(capacityPps('forward_first', 572n, 24n));
+    const v = checkCapacityBudget(none, { payloadBytes: 572n, targetPps: lowest / 2n, quarantineReserve: 24 });
+    expect(v.status).toBe('pass');
+    if (v.status !== 'unverifiable') {
+      expect(v.decidingLayout).toBe('base');
+      expect(v.modelledPps).toBe(lowest);
+    }
   });
 
   it('uses the same reserve as A7: A7 total entries = A8 quarantine depth + 2 forwarding + 1 table-miss', () => {
@@ -247,6 +260,7 @@ describe('A8: capacity budget', () => {
 
   it('pins the default quarantine reserve to the measured typical working-window depth', () => {
     expect(DEFAULT_QUARANTINE_RESERVE).toBe(24);
+    expect(DEFAULT_QUARANTINE_RESERVE).toBe(WORKDAY_PROFILES.typical);
   });
 
   it('is unverifiable, never a pass, for the deployed isolation policy', () => {

@@ -19,7 +19,7 @@
  *
  * Invariant 2: integer arithmetic only. Invariant 3: unknown shapes are not accepted as passing.
  * Invariant 5: the quarantine reserve is a named, configurable, bounded input (default = the measured "typical
- * working window" depth, 24).
+ * working window" depth, `WORKDAY_PROFILES.typical`).
  */
 
 import { FLOW_TABLE_CAPACITY } from './dataplane-benchmark.js';
@@ -38,9 +38,9 @@ import { ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD } from './port1-isolation.js';
 export const TABLE_MISS_ENTRIES = 1;
 
 /**
- * Default headroom (24) for quarantine rules added after the policy is installed: the depth of the measured
- * "typical" working window (rules ramp 0 to 24). Callers should pass their own value; this is only a measured
- * default. The value is pinned by a test so a change to the benchmark profile cannot shift it silently.
+ * Default headroom for quarantine rules added after the policy is installed: the depth of the measured "typical"
+ * working window (`WORKDAY_PROFILES.typical`). Callers should pass their own value; this is only a measured
+ * default. A test pins both the literal and the tie to the profile, so a change cannot shift it silently.
  */
 export const DEFAULT_QUARANTINE_RESERVE = WORKDAY_PROFILES.typical;
 
@@ -239,7 +239,12 @@ export type CapacityVerdict =
   | {
       readonly property: 'A8';
       readonly status: 'pass' | 'fail';
-      readonly layout: CostLayout;
+      /**
+       * The layout whose modelled capacity the verdict rests on. For a policy with DROP rules this is the policy's
+       * layout. For a policy with none, the layout is undetermined and this is the lowest-capacity modelled layout:
+       * a bound, not a statement about what is installed.
+       */
+      readonly decidingLayout: CostLayout;
       /** Quarantine depth the model was evaluated at: DROP rules present plus the reserve. */
       readonly quarantineDepth: number;
       readonly modelledPps: bigint;
@@ -265,9 +270,9 @@ export function checkCapacityBudget(rules: readonly IsolationRule[], spec: Capac
   const depthBig = BigInt(depth);
   const candidates: readonly CostLayout[] = shape.shape.layout === null ? ['base', 'forward_first'] : [shape.shape.layout];
 
-  // Evaluate each candidate layout where the model is defined. With an undetermined layout, a layout the model
-  // does not cover at this payload is skipped, but the base layout must be covered, because it is the one every
-  // policy can end up in.
+  // Every candidate layout must be modelled at this payload and depth. When the layout is undetermined (no DROP
+  // rules yet) a pass has to hold in whichever layout the reserve is later installed in, so a layout the model
+  // does not cover cannot be skipped: that would be a pass for a case that was never evaluated.
   const evaluated: { layout: CostLayout; pps: bigint }[] = [];
   const problems: string[] = [];
   for (const layout of candidates) {
@@ -275,16 +280,15 @@ export function checkCapacityBudget(rules: readonly IsolationRule[], spec: Capac
     if (problem === null) evaluated.push({ layout, pps: capacityPps(layout, spec.payloadBytes, depthBig) });
     else problems.push(problem);
   }
-  const requiredLayout = shape.shape.layout ?? 'base';
-  if (!evaluated.some((e) => e.layout === requiredLayout)) {
-    return { property: 'A8', status: 'unverifiable', reason: problems.join('; ') };
-  }
-  const worst = evaluated.reduce((a, b) => (b.pps < a.pps ? b : a));
+  if (problems.length > 0) return { property: 'A8', status: 'unverifiable', reason: problems.join('; ') };
+  const [first, ...rest] = evaluated;
+  if (first === undefined) return { property: 'A8', status: 'unverifiable', reason: 'no layout to evaluate' };
+  const worst = rest.reduce((a, b) => (b.pps < a.pps ? b : a), first);
   const ok = meetsCapacityTarget(worst.layout, spec.payloadBytes, depthBig, spec.targetPps);
   return {
     property: 'A8',
     status: ok ? 'pass' : 'fail',
-    layout: worst.layout,
+    decidingLayout: worst.layout,
     quarantineDepth: depth,
     modelledPps: worst.pps,
     targetPps: spec.targetPps,
