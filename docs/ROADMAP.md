@@ -50,8 +50,8 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 | A4 | Quarantine precedence: every DROP quarantine outranks every allow | Constants only; needs a check. **Conflicts with A9** (see below) |
 | A5 | No shadowed rules: no rule is fully covered by a higher-priority rule | Not started |
 | A6 | No overlapping rules with conflicting actions at equal priority | Not started |
-| A7 | Rule budget: count within the 128-rule table, with headroom for quarantine | Not started |
-| A8 | Capacity budget: modeled pps at the rule count and layout meets a declared target | Not started; the cost model now exists (`src/sdn/zodiac-cost-model.ts`, `meetsCapacityTarget`) but no verifier check calls it yet |
+| A7 | Rule budget: count within the 128-rule table, with headroom for quarantine | Implemented as a check (`checkRuleBudget`, `src/sdn/capacity-budget.ts`): rules + table-miss + a declared quarantine reserve must fit 128 entries. Not yet called from the bridge install path |
+| A8 | Capacity budget: modeled pps at the rule count and layout meets a declared target | Implemented as a check (`checkCapacityBudget`), but **returns `unverifiable` for the deployed isolation policy**: the cost model was measured on two in_port-only forwarding rules plus /32 DROP rules, and the deployed policy (six rules with IPv4 confinement, ARP and tap rules) has not been measured. `unverifiable` is not a pass. Not yet called from the bridge install path |
 | A9 | Layout: forwarding rules ordered per the measured cheap layout | Not started. **Conflicts with A4** (see below) |
 | A10 | ARP confinement: no ARP forwarded across P1 and P2 unless explicitly allowed | Blocked on verifying `ARP_SPA`/`ARP_TPA` support in firmware 0.86 |
 | A11 | Intent compliance: exact packet-class evaluation confirms zero leaks and zero missing deliveries | Implemented (`src/sdn/intent-spec.ts`, `test/invariants/intent-spec.test.ts`) |
@@ -71,6 +71,7 @@ Turn the benchmark from a report into an input to the verifier, and check that t
 
 - **Done (2026-10-14): the fitted cost model is a pure, integer-only function** (`src/sdn/zodiac-cost-model.ts`; `t_packet = 38.5 µs + 0.0348 µs x (B - 64) + 4.24 µs x N` for the base layout, 1.3 µs per rule for forwarding-first). `test/invariants/zodiac-cost-model.test.ts` re-reads the stored ladder artifacts: all 12 saturated points are within 1.23% of the model, the tolerance it claims is 2%, and a model with the per-rule cost off by 5% fails the test. It throws outside the measured domain (0 to 128 rules; `base` at 64 to 1470 B; `forward_first` at 572 B only, with no payload term borrowed from the base layout), because extrapolating would be an unverified claim. Limits: most layouts have one round; it says nothing about session loss, which began at about 1.3 to 2.3 times capacity. Feeds A8, which is not yet implemented.
 - **Conformance probe.** For a set of generated packets, compute the model's verdict, send them from the workload node, and observe what actually crosses each port. Ground truth is the independent uplink capture (O3) and the NETGEAR mirror (O1); the Zodiac P3 tap (O2) is a copy chosen by the flow rules under test and is not ground truth. Any disagreement is a finding about the model or the firmware.
+- **Measure the deployed isolation policy** (six rules: IPv4 confinement, ARP, tap-only, tap return) with the existing ladder harness at several quarantine depths. Until this exists, A8 cannot say anything about the policy that is actually installed. Include the /16 DROP layout (4.39 µs per rule, 2 to 3% off the current model) if it is to be accepted.
 - Close the open measurement items from the whitepaper: drop-path capacity (needs a mirror capture), direct CPU observation, and unexplained session losses.
 - Replicate the single-round layouts (3 or more rounds) before treating them as distributions.
 
@@ -183,7 +184,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 ## 4. Sequence
 
 1. **A1, A2 and A3 hardening, plus a failing test for the ARP spoof (C1).** Establishes whether the current policy actually has the ARP gap suspected in the README.
-2. **B cost model as a function; A7 and A8.** The first place the hardware changes what the verifier accepts.
+2. **B cost model as a function; A7 and A8.** The first place the hardware changes what the verifier accepts. Done 2026-10-14 as pure checks (A7 passes the deployed policy with a reserve of 24; A8 is `unverifiable` for it, see track B). Wiring into the bridge install path is not done.
 3. **A5 and A6 (shadowing, conflicts), then action-level readback.**
 4. **B conformance probe**: the first manual run was done on 2026-10-12 (T1 to T4, all matched, see track B); next is the one-command automated probe over a larger packet set.
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
