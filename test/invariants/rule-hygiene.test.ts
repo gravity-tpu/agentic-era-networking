@@ -184,6 +184,22 @@ describe('exactness guards', () => {
     expect(v.violations.map((x) => x.kind)).toEqual(['duplicate-key']);
   });
 
+  it('shadows a /0 source match exactly as it shadows an absent source match (duplicate and shadow paths agree)', () => {
+    const higher = rule('higher', 200, [2], ipv4({ inPort: 1 }));
+    for (const lowerMatch of [ipv4({ inPort: 1 }), ipv4({ inPort: 1, srcIp: '0.0.0.0', srcIpPrefixLen: 0 })]) {
+      const v = checkRuleHygiene([higher, rule('lower', 100, [3], lowerMatch)]);
+      expect(v.violations.map((x) => x.kind)).toEqual(['shadowed']);
+      expect(v.violations[0]?.ruleIds).toEqual(['lower', 'higher']);
+    }
+  });
+
+  it('treats a known field explicitly set to null as unmodelled rather than comparing against it', () => {
+    const nulled = Object.assign({ inPort: 1 }, { etherType: null });
+    const v = checkRuleHygiene([rule('nulled', 100, [2], nulled)]);
+    expect(v.violations[0]).toMatchObject({ property: 'unmodelled', ruleIds: ['nulled'] });
+    expect(v.violations[0]?.detail).toContain('etherType=null');
+  });
+
   it('reports three identical rules as one duplicate group, with no partial conflict', () => {
     const v = checkRuleHygiene([
       rule('t1', 100, [2], { inPort: 1 }),

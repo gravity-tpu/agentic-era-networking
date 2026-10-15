@@ -79,16 +79,21 @@ export interface HygieneOptions {
 
 const sortedKey = (ports: readonly number[]): string => [...new Set(ports)].sort((a, b) => a - b).join(',');
 
-const MODELLED_MATCH_FIELDS: ReadonlySet<string> = new Set([
-  'inPort',
-  'etherType',
-  'srcMac',
-  'dstMac',
-  'srcIp',
-  'srcIpPrefixLen',
-  'dstIp',
-  'dstIpPrefixLen',
-]);
+/**
+ * Every field of FlowModMatchOptions the analysis understands. `satisfies Record<keyof FlowModMatchOptions, true>`
+ * makes the compiler fail if a field is added to the type and not decided here, or a name here is misspelled.
+ */
+const MODELLED_FIELD_FLAGS = {
+  inPort: true,
+  etherType: true,
+  srcMac: true,
+  dstMac: true,
+  srcIp: true,
+  srcIpPrefixLen: true,
+  dstIp: true,
+  dstIpPrefixLen: true,
+} satisfies Record<keyof FlowModMatchOptions, true>;
+const MODELLED_MATCH_FIELDS: ReadonlySet<string> = new Set(Object.keys(MODELLED_FIELD_FLAGS));
 
 /**
  * One IPv4 address constraint in canonical form. A /0 prefix matches every address, and every rule that reaches
@@ -145,9 +150,11 @@ export function checkRuleHygiene(rules: readonly IsolationRule[], options: Hygie
   const valid: IsolationRule[] = [];
   for (const r of rules) {
     const m = r.flowMod.match ?? {};
+    // Unknown field names, and known fields explicitly set to null (the type forbids it, but rules can arrive as
+    // parsed JSON), are both outside what the analysis can reason about.
     const unknown = Object.entries(m)
-      .filter(([k, v]) => v !== undefined && !MODELLED_MATCH_FIELDS.has(k))
-      .map(([k]) => k);
+      .filter(([k, v]) => v !== undefined && (!MODELLED_MATCH_FIELDS.has(k) || v === null))
+      .map(([k, v]) => (v === null ? `${k}=null` : k));
     if (unknown.length > 0) {
       violations.push({
         property: 'unmodelled',
@@ -169,7 +176,8 @@ export function checkRuleHygiene(rules: readonly IsolationRule[], options: Hygie
     }
   }
 
-  // Same priority and same match: the switch replaces, not adds.
+  // Same priority and same match: the switch replaces, not adds. Only rules that passed the checks above reach
+  // matchKey, so every IPv4 address constraint seen there carries the eth_type=IPv4 prerequisite (see ipKey).
   const byKey = new Map<string, IsolationRule[]>();
   for (const r of valid) {
     const k = `${r.flowMod.priority}|${matchKey(r.flowMod.match)}`;
