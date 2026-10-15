@@ -272,6 +272,25 @@ describe('action-level readback verdict', () => {
     expect(v.verified).toBe(false);
   });
 
+  it('fails closed on two table-miss entries, whichever order the reply lists them in', () => {
+    const forwarding = entryFrom(tableMissMod, applyActions(outputAction(OFPP_CONTROLLER)));
+    for (const order of [[entryFrom(tableMissMod), forwarding], [forwarding, entryFrom(tableMissMod)]]) {
+      const v = readback([...order, ...flowMods.map((fm) => entryFrom(fm))]);
+      expect(v.actions.tableMiss).toBe('unrecognised');
+      expect(v.actions.status).toBe('mismatch');
+      expect(v.actions.mismatches.some((m) => m.includes('2 priority-0 wildcard entries'))).toBe(true);
+    }
+  });
+
+  it('a real port mismatch outranks an absent table-miss: mismatch, not unobservable', () => {
+    const entries = faithful();
+    const idx = policy.findIndex((r) => r.id === 'p1-arp') + 1;
+    entries[idx] = entryFrom(flowMods[idx - 1] as Buffer, applyActions(outputAction(2))); // intended [2, 3]
+    const v = readback(entries.slice(1)); // and no table-miss entry
+    expect(v.actions.tableMiss).toBe('absent');
+    expect(v.actions.status).toBe('mismatch');
+  });
+
   it('lists a rule with no unique switch entry as unconfirmed, never confirmed', () => {
     const v = readback(faithful().filter((_, i) => i !== 1)); // drop the first policy rule
     expect(v.verified).toBe(false);

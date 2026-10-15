@@ -38,6 +38,15 @@ export interface IntendedActions {
 
 export type ActionReadbackStatus = 'confirmed' | 'mismatch' | 'unobservable';
 
+/**
+ * What the table-miss entry does.
+ *   drops         present once, reported with no output and nothing else attached
+ *   forwards      outputs somewhere (including a punt to the controller): not default-drop
+ *   unrecognised  carries instructions or actions we cannot read as a drop, an incomplete block, or more than one
+ *                 table-miss entry in the reply (the verdict would otherwise depend on reply order)
+ *   absent        no table-miss entry in the reply
+ *   unobservable  present, but the reply carries no action information
+ */
 export type TableMissReadback = 'drops' | 'forwards' | 'unrecognised' | 'absent' | 'unobservable';
 
 export interface ActionReadbackVerdict {
@@ -56,6 +65,11 @@ export interface ActionReadbackVerdict {
 const sorted = (ports: readonly number[]): number[] => [...ports].sort((a, b) => a - b);
 const list = (ports: readonly number[]): string => `[${ports.map(portLabel).join(', ')}]`;
 
+/**
+ * A priority-0 entry with none of the match fields the flow-stats parser extracts (in_port, eth_type, IPv4 src and
+ * dst). That is only as strong as that parser's field vocabulary: a priority-0 entry matching on a field the parser
+ * does not read would also count. The policy never installs one, and verifyIsolationReadback uses the same test.
+ */
 function isTableMiss(e: FlowStatsEntry): boolean {
   return (
     e.priority === 0 &&
@@ -113,9 +127,14 @@ export function verifyActionReadback(
   }
 
   let tableMiss: TableMissReadback;
-  const miss = entries.find(isTableMiss);
+  const misses = entries.filter(isTableMiss);
+  const miss = misses[0];
   if (miss === undefined) {
     tableMiss = 'absent';
+  } else if (misses.length > 1) {
+    // Two priority-0 wildcards cannot coexist on a conforming switch; if the reply has them, do not pick one.
+    tableMiss = 'unrecognised';
+    mismatches.push(`table-miss: ${misses.length} priority-0 wildcard entries in the reply; the default action is ambiguous`);
   } else if (!switchReportsActions || miss.actions === undefined) {
     tableMiss = 'unobservable';
   } else if (!miss.actions.complete || miss.actions.otherInstructionTypes.length > 0 || miss.actions.otherActionTypes.length > 0) {
