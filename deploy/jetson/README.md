@@ -186,19 +186,28 @@ prove forwarding intent on this hardware. See [docs/ROADMAP.md](../../docs/ROADM
 
 The probe sends **one OFPMP_FLOW request and no FlowMod**. It does not change the switch.
 
-1. Deploy the bridge build that contains the endpoint (the update steps above). The restart drops the OpenFlow
-   session and the bridge reinstalls the isolation policy on reconnect; until it does, the switch holds only
-   table-miss DROP, so the workload is isolated, not exposed.
+1. Deploy the bridge build that contains the endpoint (the update steps above, with `npm ci` and
+   `npm run build:server`, not `--omit=dev`, which cannot build). **Before starting or restarting the unit, check
+   for a stray controller: `ss -ltnp | grep -E ':6633|:3003'`.** A hand-started bridge holds the ports, and the unit's
+   new instance then fails to bind (`EADDRINUSE`) and sits in DEGRADED_FAULT while the old one keeps the switch.
+   The restart drops the OpenFlow session and the bridge reinstalls the isolation policy on reconnect; until it
+   does, the switch holds only table-miss DROP, so the workload is isolated, not exposed.
 2. Wait for `Isolation readback VERIFIED` in `journalctl -u zodiac-bridge`. Probing mid-install shows a partial table.
-3. From the Mac, tunnel to the bridge (the hardware key touch is the SSH login) and probe. The endpoint accepts
-   operators on loopback or private IPv4 only, so a tunnel works and a direct Tailscale (`100.x`) connection is
-   refused with 401. It also refuses everything if `GOOGLE_CLIENT_ID` is set.
+3. Run the client on the Jetson itself, where the bridge sees a loopback caller (no tunnel needed), then copy the
+   evidence back. The endpoint accepts operators on loopback or private IPv4 only, so a direct Tailscale (`100.x`)
+   connection from the Mac is refused with 401. It also refuses everything if `GOOGLE_CLIENT_ID` is set.
 
    ```bash
-   ssh -N -L 3003:127.0.0.1:3003 jetson &        # leave running
-   npm run build
-   npm run probe:flows -- --firmware 0.86
+   ssh jetson
+   cd ~/agentic-era-networking
+   node --experimental-strip-types scripts/zodiac-flow-probe.ts --out ~/flow-probe-evidence --firmware 0.86
+   # then, from the Mac:
+   scp 'jetson:flow-probe-evidence/*' docs/benchmarks/results/flow-probe/
    ```
+
+   From the Mac instead: `ssh -N -L 3003:127.0.0.1:3003 jetson &`, `npm run build`, `npm run probe:flows`.
+
+   The first run (2026-10-15) found `reports-instructions`: see `docs/benchmarks/results/flow-probe/`.
 
 4. Read the `finding` it prints:
 

@@ -1,0 +1,16 @@
+{
+  "origin": "physical_readback",
+  "source": "GET http://127.0.0.1:3003/api/zodiac/flows/probe",
+  "httpStatus": 200,
+  "savedFile": "flow-probe-2026-10-15T05-25-07-405Z.json",
+  "reportSha256": "203a1e1f7c6cc2ea5232e5a85678ff0d81eae7ef67edfe1dd357070afb4545ee",
+  "rawRepliesSha256": "95db3fd206f96e7dead6c6361881acf368144653cee764e67284d09891df0f47",
+  "finding": "reports-instructions",
+  "rederivedFromRawBytes": "summary matches",
+  "firmwareDeclaredByOperator": "0.86",
+  "tool": {
+    "scriptSha256": "e9d9a18838758202f4e4cfe91958a9e166969f371b3be188cd05c723bd72fea7",
+    "gitCommit": "36920e0",
+    "gitDirty": false
+  }
+}
