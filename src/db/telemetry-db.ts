@@ -913,6 +913,40 @@ export async function upsertUser(
  * Adheres to Dean Latency Budget: bounded by a 1500ms timeout.
  * Council Invariant 6 (Anti-Simulation Law): Strictly rejects rows older than maxAgeMs SLA (default 30s).
  */
+/**
+ * True when the shared database holds a verified live row newer than maxAgeMs. Used by the cloud relay handler to
+ * tell, from a serverless instance with empty memory, that some other instance has been receiving the real bridge.
+ * Bounded by the same latency deadline as the hydration query; any failure returns false (the cloud then does not
+ * claim a live source it cannot see, which is the fail-closed direction).
+ */
+export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolean> {
+  const prisma = getPrismaClient();
+  if (!prisma) return false;
+  let timerId: NodeJS.Timeout | undefined;
+  try {
+    const queryPromise = prisma.zodiacTelemetryPoint.findFirst({
+      where: { source: 'live_hardware' },
+      orderBy: { timestampMs: 'desc' },
+      select: { timestampMs: true, createdAt: true },
+    });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error('Fresh-live query timed out')), 1500);
+      timerId.unref?.();
+    });
+    const row = await Promise.race([queryPromise, timeoutPromise]);
+    if (!row) return false;
+    const rowTs = Number(row.timestampMs);
+    const effectiveTs = Math.max(rowTs, row.createdAt ? row.createdAt.getTime() : rowTs);
+    const wall = Date.now();
+    return wall >= effectiveTs ? wall - effectiveTs <= maxAgeMs : true;
+  } catch (err: unknown) {
+    console.warn('[!] [Telemetry DB] Fresh-live query failed:', err instanceof Error ? err.message : String(err));
+    return false;
+  } finally {
+    if (timerId !== undefined) clearTimeout(timerId);
+  }
+}
+
 export async function getLatestTelemetrySnapshotFromDb(
   maxAgeMs: number = 30_000
 ): Promise<ZodiacFullTelemetrySnapshot | null> {

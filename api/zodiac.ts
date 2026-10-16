@@ -21,9 +21,19 @@ import { requireOperatorAuth, isLocalDev, IS_PRODUCTION } from '../src/auth/goog
 import { checkRateLimit, getClientIp, rejectRateLimited } from '../src/security/rate-limiter.js';
 import { verifyBridgeAttestation } from '../src/security/request-attestation.js';
 import {
+  INITIAL_RELAY_AUTHORITY,
+  decideRelayPush,
+  isRelayLiveFresh,
+  nextRelayAuthority,
+  readBridgeId,
+  type IncomingPush,
+  type RelayAuthorityState,
+} from '../src/sdn/relay-authority.js';
+import {
   persistTelemetrySnapshot,
   getHistoricalMultiDeviceTelemetry,
   getLatestTelemetrySnapshotFromDb,
+  hasFreshLiveTelemetryRow,
   isValidRange,
   isPersistingTelemetry,
   findCutoffIndex,
@@ -37,6 +47,13 @@ const MAX_SERVERLESS_BUFFER_POINTS = CLOUD_RELAY_BOUNDS.MAX_SERVERLESS_POINTS;
 
 // In-memory cache for cloud serverless execution
 let latestSnapshot: ZodiacFullTelemetrySnapshot = createDefaultZodiacSnapshot();
+
+// Which relay pushes may overwrite latestSnapshot (see src/sdn/relay-authority.ts). Per instance, like latestSnapshot;
+// the shared database covers the instances that have not seen the real bridge.
+let relayAuthority: RelayAuthorityState = INITIAL_RELAY_AUTHORITY;
+let ignoredPushesSinceLog = 0;
+let lastIgnoredLogMs = 0;
+const IGNORED_PUSH_LOG_INTERVAL_MS = 60_000;
 
 /**
  * Merges incoming time series points into existing in-memory buffer,
@@ -339,6 +356,38 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         bridgeSecret,
         expectedSecret: process.env['ZODIAC_BRIDGE_SECRET'],
       });
+
+      // Which pushes may overwrite the live snapshot: a push with no hardware behind it (for example a development
+      // bridge on a laptop pointed at production) must not displace a fresh live snapshot or have its series merged in.
+      const nowMs = Date.now();
+      const staleMs = CLOUD_RELAY_BOUNDS.BRIDGE_PUSH_CADENCE_MS * CLOUD_RELAY_BOUNDS.MAX_MISSED_PUSH_CYCLES;
+      const incoming: IncomingPush = { verifiedSource, bridgeId: readBridgeId(parsed) };
+      // Instances do not share memory: if this one has not seen the real bridge, ask the shared database, but only for
+      // a non-live push (the rare path), never for the real bridge's own pushes.
+      const dbLiveFresh =
+        verifiedSource !== 'live_hardware' && !isRelayLiveFresh(relayAuthority, nowMs, staleMs)
+          ? await hasFreshLiveTelemetryRow(staleMs)
+          : false;
+      const relayDecision = decideRelayPush(relayAuthority, incoming, nowMs, staleMs, dbLiveFresh);
+      if (!relayDecision.accept) {
+        ignoredPushesSinceLog += 1;
+        if (nowMs - lastIgnoredLogMs >= IGNORED_PUSH_LOG_INTERVAL_MS) {
+          console.warn(
+            `[!] [Relay] Ignored ${ignoredPushesSinceLog} non-live push(es) from bridge ${incoming.bridgeId ?? 'unknown'} ` +
+              `(${verifiedSource}) while a live snapshot is fresh. A second bridge is pushing to this endpoint.`,
+          );
+          lastIgnoredLogMs = nowMs;
+          ignoredPushesSinceLog = 0;
+        }
+        res.setHeader('X-Relay-Decision', 'ignored');
+        res.statusCode = 200;
+        res.end(JSON.stringify({ status: 'ignored', synced: false, reason: relayDecision.reason, provenance: latestSnapshot.source }));
+        return;
+      }
+      if (relayDecision.competingLive) {
+        console.warn(`[!] [Relay] Two live bridges are pushing to this endpoint (now ${incoming.bridgeId ?? 'unknown'}); the dashboard will alternate between their views.`);
+      }
+      relayAuthority = nextRelayAuthority(relayAuthority, incoming, relayDecision, nowMs);
 
       // Council Invariant 6 (Anti-Simulation Law): If transitioning from synthetic cloud_snapshot
       // to verified live_hardware, discard synthetic rolling points entirely so fake waves
