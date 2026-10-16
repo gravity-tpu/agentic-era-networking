@@ -79,6 +79,11 @@ describe.skipIf(!isMac)('install-workstation-agent.sh --dry-run', () => {
       expect(r.status, JSON.stringify(host)).not.toBe(0);
       expect(r.stderr, JSON.stringify(host)).toContain('--host must be an IPv4 address or hostname');
     }
+    // an empty host (an unset variable collapsing to nothing) must not fall through to "every interface" or a bad plist
+    const empty = run(['--repo', repo, '--host', '', '--dry-run']);
+    expect(empty.status).not.toBe(0);
+    expect(empty.stderr).toContain('--host needs an address');
+    expect(empty.stdout).not.toContain('<plist');
     rmSync(repo, { recursive: true, force: true });
   });
 
