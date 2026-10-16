@@ -52,6 +52,13 @@ export function readDbQueryDeadlineMs(env: Readonly<Record<string, string | unde
  * its own limit: a row dated further ahead than this is a bad row, not a fresh one.
  */
 export const DB_FUTURE_SKEW_TOLERANCE_MS = 10_000;
+/** TELEMETRY_DB_FUTURE_SKEW_MS overrides the skew tolerance within 0..60000 ms; anything else uses the default. */
+export function readDbFutureSkewToleranceMs(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  const raw = env['TELEMETRY_DB_FUTURE_SKEW_MS'];
+  if (raw === undefined || !/^\d+$/.test(raw)) return DB_FUTURE_SKEW_TOLERANCE_MS;
+  const n = Number(raw);
+  return n <= 60_000 ? n : DB_FUTURE_SKEW_TOLERANCE_MS;
+}
 
 export function getPrismaClient(): PrismaClient | null {
   const dbUrl = process.env['DATABASE_URL'] || process.env['agentic_POSTGRES_PRISMA_URL'] || process.env['agentic_DATABASE_URL'] || process.env['POSTGRES_PRISMA_URL'];
@@ -962,7 +969,7 @@ export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolea
     // A past row is fresh within the staleness bound (maxAgeMs). A row dated ahead of this clock is fresh only within the
     // skew tolerance: a row dated far in the future (a bad row) must not pin "live is fresh" and keep suppressing
     // legitimate non-live pushes.
-    return wall >= effectiveTs ? wall - effectiveTs <= maxAgeMs : effectiveTs - wall <= DB_FUTURE_SKEW_TOLERANCE_MS;
+    return wall >= effectiveTs ? wall - effectiveTs <= maxAgeMs : effectiveTs - wall <= readDbFutureSkewToleranceMs();
   } catch (err: unknown) {
     console.warn('[!] [Telemetry DB] Fresh-live query failed:', err instanceof Error ? err.message : String(err));
     return false;

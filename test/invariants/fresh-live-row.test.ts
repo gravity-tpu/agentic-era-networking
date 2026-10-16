@@ -7,7 +7,7 @@
  * IMPORTANT (Invariant 6): the database is mocked; rows are fixtures.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const db = vi.hoisted(() => ({
   row: null as null | { timestampMs: bigint; createdAt: Date },
@@ -42,6 +42,11 @@ beforeEach(() => {
   process.env['DATABASE_URL'] = 'postgres://test';
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
+
 async function run(): Promise<boolean> {
   const { hasFreshLiveTelemetryRow } = await import('../../src/db/telemetry-db.js');
   return hasFreshLiveTelemetryRow(MAX_AGE);
@@ -67,6 +72,22 @@ describe('hasFreshLiveTelemetryRow', () => {
     db.row = rowAt(+(DB_FUTURE_SKEW_TOLERANCE_MS + 2_000)); // within MAX_AGE but beyond the skew tolerance
     expect(await run()).toBe(false);
     db.row = rowAt(+(MAX_AGE + 60_000));
+    expect(await run()).toBe(false);
+  });
+
+  it('the skew tolerance is a named, bounded, configurable limit', async () => {
+    const { DB_FUTURE_SKEW_TOLERANCE_MS, readDbFutureSkewToleranceMs } = await import('../../src/db/telemetry-db.js');
+    expect(readDbFutureSkewToleranceMs({})).toBe(DB_FUTURE_SKEW_TOLERANCE_MS);
+    expect(readDbFutureSkewToleranceMs({ TELEMETRY_DB_FUTURE_SKEW_MS: '3000' })).toBe(3000);
+    expect(readDbFutureSkewToleranceMs({ TELEMETRY_DB_FUTURE_SKEW_MS: '0' })).toBe(0);
+    for (const bad of ['60001', 'abc', '', '-1', '5s']) {
+      expect(readDbFutureSkewToleranceMs({ TELEMETRY_DB_FUTURE_SKEW_MS: bad }), bad).toBe(DB_FUTURE_SKEW_TOLERANCE_MS);
+    }
+  });
+
+  it('a configured skew tolerance changes what counts as fresh', async () => {
+    vi.stubEnv('TELEMETRY_DB_FUTURE_SKEW_MS', '1000');
+    db.row = rowAt(+5_000); // fresh under the 10 s default, not under 1 s
     expect(await run()).toBe(false);
   });
 
