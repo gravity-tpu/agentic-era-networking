@@ -112,6 +112,15 @@ describe.skipIf(!isMac || !distBuilt)('the agent refuses an invalid bind address
       env: { ...process.env, WORKSTATION_AGENT_PORT: '0', ...(host !== undefined ? { WORKSTATION_AGENT_HOST: host } : {}) },
     });
 
+  it('a charset-valid but bogus address is refused by listen() itself: non-zero exit, and it never listens', () => {
+    for (const bogus of ['999.999.999.999', '1.2.3.4.5.6', '---']) {
+      const r = runAgent(bogus);
+      expect(r.status, bogus).toBe(1);
+      expect(r.stderr, bogus).toContain('Server error');
+      expect(r.stdout, bogus).not.toContain('Listening on');
+    }
+  });
+
   it('a set but invalid host is fatal, with a non-zero exit and the reason, and never reaches listen', () => {
     for (const bad of ['a b', '1.2.3.4;x', '', '$(id)', 'x'.repeat(300)]) {
       const r = runAgent(bad);

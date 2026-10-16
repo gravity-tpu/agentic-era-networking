@@ -43,11 +43,13 @@ const PORT = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawP
 // USB-C tether and LAN paths rely on. On a laptop that serves hardware metrics, unauthenticated, to whatever network it
 // joins, so the LaunchAgent binds the Tailscale address instead.
 // Fail closed (Invariant 3): a value that IS set but invalid is a fatal error, never a quiet fall back to 0.0.0.0. A typo
-// in the setting meant to narrow the bind must not widen it.
+// in the setting meant to narrow the bind must not widen it. The pattern below only refuses an empty value and anything
+// outside letters, digits, dots and hyphens (spaces, shell and XML metacharacters); it does NOT prove the value is a real
+// address. A charset-valid but bogus value (999.999.999.999) is refused by listen() itself, which exits non-zero below.
 const hostFromEnv = process.env['WORKSTATION_AGENT_HOST'];
 if (hostFromEnv !== undefined && !/^[A-Za-z0-9.-]{1,253}$/.test(hostFromEnv)) {
   process.stderr.write(
-    `[workstation-agent] FATAL: WORKSTATION_AGENT_HOST ${JSON.stringify(hostFromEnv)} is not a valid IPv4 address or hostname. ` +
+    `[workstation-agent] FATAL: WORKSTATION_AGENT_HOST ${JSON.stringify(hostFromEnv)} is empty or has characters other than letters, digits, dots and hyphens. ` +
     'Refusing to start rather than listen on every interface. Unset it for the default, or fix it.\n'
   );
   process.exit(1);
