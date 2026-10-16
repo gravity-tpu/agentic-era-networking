@@ -18,6 +18,7 @@ import {
   RECHECK_FAILURES_BEFORE_UNKNOWN,
   RecheckConfigError,
   parseRecheckIntervalMs,
+  type RecheckDeps,
 } from '../../src/sdn/isolation-recheck.js';
 import {
   initialIsolationStatus,
@@ -50,7 +51,7 @@ function verifiedStatus(): IsolationStatus {
   return statusFromReadback(pendingReadbackStatus(), verifyIsolationReadback(policy, faithful()), 1, 1n);
 }
 
-function make(initial: IsolationStatus = verifiedStatus(), intervalMs = 10_000) {
+function make(initial: IsolationStatus = verifiedStatus(), intervalMs = 10_000, overrides: Partial<RecheckDeps> = {}) {
   let status = initial;
   let mono = 100n;
   let reads = 0;
@@ -72,6 +73,7 @@ function make(initial: IsolationStatus = verifiedStatus(), intervalMs = 10_000) 
     nowMs: () => 1_700_000_000_000,
     nowMonoNs: () => (mono += 1000n),
     intervalMs,
+    ...overrides,
   });
   return {
     rc,
@@ -319,6 +321,97 @@ describe('damping: recovery', () => {
     expect(t.status().state).toBe('readback_failed');
     await t.rc.runOnce();
     expect(t.status().state).toBe('verified');
+  });
+});
+
+describe('a fault in the re-check itself must never reach the process', () => {
+  /** Counts unhandled rejections, which on Node 22 would terminate the bridge. */
+  const watchRejections = () => {
+    const seen: unknown[] = [];
+    const listener = (reason: unknown): void => {
+      seen.push(reason);
+    };
+    process.on('unhandledRejection', listener);
+    return { seen, stop: () => process.off('unhandledRejection', listener) };
+  };
+
+  it('a throwing status callback makes runOnce a counted failure, not a rejection', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const t = make(verifiedStatus(), 10_000, {
+      setStatus: () => {
+        throw new Error('status store exploded');
+      },
+    });
+    for (let i = 0; i < 4; i++) await expect(t.rc.runOnce()).resolves.toBeDefined();
+    expect(stderr).toHaveBeenCalled(); // the final net reports it
+    stderr.mockRestore();
+  });
+
+  it('the timer survives a throwing callback: it keeps re-arming and raises no unhandled rejection', async () => {
+    vi.useFakeTimers();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const watch = watchRejections();
+    const t = make(verifiedStatus(), 10_000, {
+      setStatus: () => {
+        throw new Error('status store exploded');
+      },
+    });
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(t.reads()).toBeGreaterThanOrEqual(4); // still ticking after repeated faults
+    expect(watch.seen).toEqual([]);
+    t.rc.stop();
+    watch.stop();
+    stderr.mockRestore();
+  });
+
+  it('a throwing log callback does not reject runOnce either', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const t = make(verifiedStatus(), 10_000, {
+      log: () => {
+        throw new Error('logger exploded');
+      },
+    });
+    t.useRead(ok(leaky)); // a change, so the success path logs
+    await expect(t.rc.runOnce()).resolves.toBeDefined();
+    stderr.mockRestore();
+  });
+
+  it('a reply the verifier cannot interpret is a counted, damped failure', async () => {
+    const t = make();
+    t.useRead(() => {
+      const entries = faithful();
+      const first = entries[0];
+      if (first !== undefined) {
+        Object.defineProperty(first, 'priority', {
+          get: () => {
+            throw new Error('malformed entry');
+          },
+        });
+      }
+      return Promise.resolve(entries);
+    });
+    await expect(t.rc.runOnce()).resolves.toBe('unchanged'); // one failure: still verified
+    expect(t.status().state).toBe('verified');
+    for (let i = 1; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('readback_failed');
+    expect(t.logs.some((l) => l.text.includes('malformed entry'))).toBe(true);
+  });
+
+  it('even if runOnce itself were to reject, the timer neither crashes nor stops', async () => {
+    vi.useFakeTimers();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const watch = watchRejections();
+    const t = make(verifiedStatus(), 10_000);
+    const tick = vi.spyOn(t.rc, 'runOnce').mockRejectedValue(new Error('runOnce escaped'));
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(tick.mock.calls.length).toBeGreaterThanOrEqual(3); // re-armed after each rejection
+    expect(watch.seen).toEqual([]);
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('runOnce escaped'));
+    t.rc.stop();
+    watch.stop();
+    stderr.mockRestore();
   });
 });
 

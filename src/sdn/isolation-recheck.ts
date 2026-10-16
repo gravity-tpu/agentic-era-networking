@@ -153,12 +153,50 @@ export class IsolationRechecker {
     if (!this.running) return;
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.runOnce().finally(() => this.schedule());
+      // runOnce never rejects, but a timer callback in the controller's process must never be able to produce an
+      // unhandled rejection, so this is guarded again.
+      void this.runOnce()
+        .catch((err: unknown) => {
+          process.stderr.write(`[!] [Bridge Server] Isolation re-check: timer callback error: ${err instanceof Error ? err.message : String(err)}\n`);
+        })
+        .finally(() => this.schedule());
     }, this.deps.intervalMs);
     this.timer.unref?.();
   }
 
+  /**
+   * One check. Never rejects: this runs from a timer in the process that is also the OpenFlow controller, so a fault
+   * in this monitoring code (a throwing verifier or callback, say) must be reported and counted, not allowed to
+   * become an unhandled rejection that takes the bridge down.
+   */
   public async runOnce(): Promise<RecheckOutcome> {
+    try {
+      return await this.check();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Last resort, written directly so it cannot depend on a callback that may be the thing that threw.
+      process.stderr.write(`[!] [Bridge Server] Isolation re-check: internal error, check abandoned: ${message}\n`);
+      return 'unchanged';
+    }
+  }
+
+  /** A read, or the interpretation of its reply, failed. Counted; only repeated failures change the status. */
+  private recordFailure(err: unknown): RecheckOutcome {
+    const d = this.deps;
+    const message = err instanceof Error ? err.message : String(err);
+    this.consecutiveCleanReads = 0;
+    this.consecutiveFailures += 1;
+    const latest = d.getStatus();
+    if (this.consecutiveFailures >= RECHECK_FAILURES_BEFORE_UNKNOWN && latest.state === 'verified') {
+      d.setStatus(readbackFailedStatus(latest, message, d.nowMs(), d.nowMonoNs()));
+      d.log('error', `Isolation re-check: ${this.consecutiveFailures} failed readbacks in a row (${message}); status is now unknown (readback_failed).`);
+      return 'changed';
+    }
+    d.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
+    return 'unchanged';
+  }
+
+  private async check(): Promise<RecheckOutcome> {
     const d = this.deps;
     const current = d.getStatus();
     if (!ELIGIBLE.has(current.state)) return 'skipped';
@@ -170,46 +208,45 @@ export class IsolationRechecker {
       entries = await d.read();
     } catch (err: unknown) {
       if (epoch !== this.epoch) return 'skipped'; // a new session began while this read was outstanding
-      const message = err instanceof Error ? err.message : String(err);
-      this.consecutiveCleanReads = 0;
-      this.consecutiveFailures += 1;
-      const latest = d.getStatus();
-      if (this.consecutiveFailures >= RECHECK_FAILURES_BEFORE_UNKNOWN && latest.state === 'verified') {
-        d.setStatus(readbackFailedStatus(latest, message, d.nowMs(), d.nowMonoNs()));
-        d.log('error', `Isolation re-check: ${this.consecutiveFailures} failed readbacks in a row (${message}); status is now unknown (readback_failed).`);
-        return 'changed';
-      }
-      d.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
-      return 'unchanged';
+      return this.recordFailure(err);
     } finally {
       d.lock.release();
     }
 
     if (epoch !== this.epoch) return 'skipped';
-    this.consecutiveFailures = 0;
-    const latest = d.getStatus();
-    // The install path or a switch error may have moved the status while we were reading; judge against the latest.
-    if (!ELIGIBLE.has(latest.state)) return 'skipped';
-    const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
+    try {
+      // The failure streak is cleared only once a check has been interpreted AND recorded: clearing it up front would
+      // let a check that fails after the read (a throwing verifier or store) reset its own count every time and never
+      // be noticed.
+      const latest = d.getStatus();
+      // The install path or a switch error may have moved the status while we were reading; judge against the latest.
+      if (!ELIGIBLE.has(latest.state)) return 'skipped';
+      const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
 
-    // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only
-    // by the early return below, so every other path starts it over.
-    if (candidate.state === 'verified' && latest.state !== 'verified') {
-      this.consecutiveCleanReads += 1;
-      if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
-        d.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
-        return 'unchanged';
+      // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only
+      // by the early return below, so every other path starts it over.
+      if (candidate.state === 'verified' && latest.state !== 'verified') {
+        this.consecutiveCleanReads += 1;
+        if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
+          this.consecutiveFailures = 0;
+          d.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
+          return 'unchanged';
+        }
       }
-    }
-    this.consecutiveCleanReads = 0;
+      this.consecutiveCleanReads = 0;
 
-    const changed = signature(candidate) !== signature(latest);
-    d.setStatus(candidate);
-    if (changed) {
-      const line = describeReadback(candidate, d.policy.length, entries.length);
-      if (candidate.state === 'verified') d.log('info', `Isolation re-check: back to ${line}`);
-      else d.log('error', `Isolation re-check: the switch no longer matches the policy. ${line}`);
+      const changed = signature(candidate) !== signature(latest);
+      d.setStatus(candidate);
+      this.consecutiveFailures = 0;
+      if (changed) {
+        const line = describeReadback(candidate, d.policy.length, entries.length);
+        if (candidate.state === 'verified') d.log('info', `Isolation re-check: back to ${line}`);
+        else d.log('error', `Isolation re-check: the switch no longer matches the policy. ${line}`);
+      }
+      return changed ? 'changed' : 'unchanged';
+    } catch (err: unknown) {
+      // The read succeeded but its reply could not be interpreted or recorded: a failed check, counted and damped.
+      return this.recordFailure(err);
     }
-    return changed ? 'changed' : 'unchanged';
   }
 }
