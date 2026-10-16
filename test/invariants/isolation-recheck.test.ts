@@ -179,6 +179,17 @@ describe('steady state and drift', () => {
     expect(t.logs.some((l) => l.level === 'error' && l.text.includes('no longer matches the policy') && l.text.includes('p1-default-tap-only'))).toBe(true);
   });
 
+  it('an unchanged mismatch is not logged again on every check (no journal spam)', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    const logged = t.logs.length;
+    expect(await t.rc.runOnce()).toBe('unchanged');
+    expect(await t.rc.runOnce()).toBe('unchanged');
+    expect(t.logs).toHaveLength(logged);
+    expect(t.status().state).toBe('mismatch');
+  });
+
   it('a rule that vanishes, or an emptied table (a switch that rebooted), is recorded immediately', async () => {
     for (const drift of [missingRule, () => [] as FlowStatsEntry[]]) {
       const t = make();
@@ -186,6 +197,34 @@ describe('steady state and drift', () => {
       expect(await t.rc.runOnce()).toBe('changed');
       expect(t.status().state).toBe('mismatch');
     }
+  });
+});
+
+describe('a read that straddles a new session', () => {
+  it('a failure from the old session does not count towards the new session\'s failures', async () => {
+    const t = make();
+    let fail: (e: Error) => void = () => undefined;
+    t.useRead(() => new Promise<FlowStatsEntry[]>((_, reject) => { fail = reject; }));
+    const outstanding = t.rc.runOnce();
+    t.rc.reset(); // a new session installs
+    fail(new Error('old session timed out'));
+    expect(await outstanding).toBe('skipped');
+    // the failure was discarded, so it takes a full run of fresh failures to make the status unknown
+    t.useRead(fails());
+    for (let i = 1; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('verified');
+  });
+
+  it('a result from the old session is not recorded in the new one', async () => {
+    const t = make();
+    let finish: (e: FlowStatsEntry[]) => void = () => undefined;
+    t.useRead(() => new Promise<FlowStatsEntry[]>((resolve) => { finish = resolve; }));
+    const outstanding = t.rc.runOnce();
+    t.rc.reset();
+    finish(leaky());
+    expect(await outstanding).toBe('skipped');
+    expect(t.status().state).toBe('verified'); // the stale leak reading was discarded
+    expect(t.lock.isHeld).toBe(false);
   });
 });
 

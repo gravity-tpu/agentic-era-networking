@@ -121,6 +121,8 @@ export class IsolationRechecker {
   private running = false;
   private consecutiveFailures = 0;
   private consecutiveCleanReads = 0;
+  /** Bumped by reset(); a read that started in an earlier session is discarded when it finishes. */
+  private epoch = 0;
 
   constructor(private readonly deps: RecheckDeps) {}
 
@@ -137,8 +139,12 @@ export class IsolationRechecker {
     this.timer = null;
   }
 
-  /** A new OpenFlow session was installed: forget the previous session's streaks. */
+  /**
+   * A new OpenFlow session was installed: forget the previous session's streaks, and discard the result of any read
+   * still outstanding from it (success or failure), so an old session cannot move the new session's counters.
+   */
   public reset(): void {
+    this.epoch += 1;
     this.consecutiveFailures = 0;
     this.consecutiveCleanReads = 0;
   }
@@ -157,11 +163,13 @@ export class IsolationRechecker {
     const current = d.getStatus();
     if (!ELIGIBLE.has(current.state)) return 'skipped';
     if (!d.lock.tryAcquire()) return 'skipped';
+    const epoch = this.epoch;
 
     let entries: readonly FlowStatsEntry[];
     try {
       entries = await d.read();
     } catch (err: unknown) {
+      if (epoch !== this.epoch) return 'skipped'; // a new session began while this read was outstanding
       const message = err instanceof Error ? err.message : String(err);
       this.consecutiveCleanReads = 0;
       this.consecutiveFailures += 1;
@@ -177,6 +185,7 @@ export class IsolationRechecker {
       d.lock.release();
     }
 
+    if (epoch !== this.epoch) return 'skipped';
     this.consecutiveFailures = 0;
     const latest = d.getStatus();
     // The install path or a switch error may have moved the status while we were reading; judge against the latest.
