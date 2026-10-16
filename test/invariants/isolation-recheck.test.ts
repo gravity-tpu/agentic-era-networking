@@ -392,7 +392,7 @@ describe('a fault in the re-check itself must never reach the process', () => {
     stderr.mockRestore();
   });
 
-  it('a throwing log callback does not reject runOnce either', async () => {
+  it('a throwing logger cannot corrupt a correctly computed status: it is reported, not counted as a failed check', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const t = make(verifiedStatus(), 10_000, {
       log: () => {
@@ -400,7 +400,30 @@ describe('a fault in the re-check itself must never reach the process', () => {
       },
     });
     t.useRead(ok(leaky)); // a change, so the success path logs
-    await expect(t.rc.runOnce()).resolves.toBeDefined();
+    await expect(t.rc.runOnce()).resolves.toBe('changed'); // the check itself succeeded
+    expect(t.status().state).toBe('mismatch'); // the verdict that was computed and stored stands
+    expect(t.status().actions?.status).toBe('mismatch');
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('logger exploded'));
+    // and it was not counted as a failure: a later failed read is the first in its streak, not the second
+    t.useRead(fails());
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    stderr.mockRestore();
+  });
+
+  it('a throwing logger does not stop the timer from running checks', async () => {
+    vi.useFakeTimers();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const t = make(verifiedStatus(), 10_000, {
+      log: () => {
+        throw new Error('logger exploded');
+      },
+    });
+    t.useRead(fails()); // the failure path logs a warning, through the throwing logger
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(t.reads()).toBeGreaterThanOrEqual(3);
+    t.rc.stop();
     stderr.mockRestore();
   });
 

@@ -129,6 +129,18 @@ export class IsolationRechecker {
 
   constructor(private readonly deps: RecheckDeps) {}
 
+  /**
+   * Logging is best effort and isolated: a logger that throws is reported on stderr and is never counted as a failed
+   * check, so it cannot overwrite a status that was computed and stored correctly.
+   */
+  private log(level: 'info' | 'warn' | 'error', text: string): void {
+    try {
+      this.deps.log(level, text);
+    } catch (err: unknown) {
+      process.stderr.write(`[!] [Bridge Server] Isolation re-check: logger failed (${err instanceof Error ? err.message : String(err)}): ${text}\n`);
+    }
+  }
+
   /** Starts the chained timer. Idempotent; a no-op when the interval is 0. */
   public start(): void {
     if (this.deps.intervalMs === 0 || this.running) return;
@@ -183,6 +195,17 @@ export class IsolationRechecker {
     }
   }
 
+  /** The log line for a status that changed. Building it is isolated too: it must not be able to fail a check. */
+  private logChange(status: IsolationStatus, entryCount: number): void {
+    try {
+      const line = describeReadback(status, this.deps.policy.length, entryCount);
+      if (status.state === 'verified') this.log('info', `Isolation re-check: back to ${line}`);
+      else this.log('error', `Isolation re-check: the switch no longer matches the policy. ${line}`);
+    } catch (err: unknown) {
+      process.stderr.write(`[!] [Bridge Server] Isolation re-check: could not describe the change (${err instanceof Error ? err.message : String(err)})\n`);
+    }
+  }
+
   /**
    * A read, or the interpretation of its reply, failed. Counted; only repeated failures change the status. If the
    * status store or logger is itself what is failing, nothing can be recorded here: the throw reaches runOnce, which
@@ -196,10 +219,10 @@ export class IsolationRechecker {
     const latest = d.getStatus();
     if (this.consecutiveFailures >= RECHECK_FAILURES_BEFORE_UNKNOWN && latest.state === 'verified') {
       d.setStatus(readbackFailedStatus(latest, message, d.nowMs(), d.nowMonoNs()));
-      d.log('error', `Isolation re-check: ${this.consecutiveFailures} failed readbacks in a row (${message}); status is now unknown (readback_failed).`);
+      this.log('error', `Isolation re-check: ${this.consecutiveFailures} failed readbacks in a row (${message}); status is now unknown (readback_failed).`);
       return 'changed';
     }
-    d.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
+    this.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
     return 'unchanged';
   }
 
@@ -235,7 +258,7 @@ export class IsolationRechecker {
       if (candidate.state === 'verified' && latest.state !== 'verified') {
         this.consecutiveCleanReads += 1;
         if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
-          d.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
+          this.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
           this.consecutiveFailures = 0; // after the side effect, like the success path below
           return 'unchanged';
         }
@@ -245,11 +268,7 @@ export class IsolationRechecker {
       const changed = signature(candidate) !== signature(latest);
       d.setStatus(candidate);
       this.consecutiveFailures = 0;
-      if (changed) {
-        const line = describeReadback(candidate, d.policy.length, entries.length);
-        if (candidate.state === 'verified') d.log('info', `Isolation re-check: back to ${line}`);
-        else d.log('error', `Isolation re-check: the switch no longer matches the policy. ${line}`);
-      }
+      if (changed) this.logChange(candidate, entries.length);
       return changed ? 'changed' : 'unchanged';
     } catch (err: unknown) {
       // The read succeeded but its reply could not be interpreted or recorded: a failed check, counted and damped.
