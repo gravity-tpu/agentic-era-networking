@@ -19,6 +19,7 @@ import {
   readBridgeId,
   type IncomingPush,
   type RelayAuthorityState,
+  resolveCloudRelayUrl,
 } from '../../src/sdn/relay-authority.js';
 
 const FRESH_MS = 25_000; // CLOUD_RELAY_BOUNDS.BRIDGE_PUSH_CADENCE_MS * MAX_MISSED_PUSH_CYCLES
@@ -209,5 +210,16 @@ describe('isRelayIgnoredAck (how a bridge learns it was ignored)', () => {
   it('the pause is bounded: long enough to stop hammering, short enough that a recovered primary resumes', () => {
     expect(RELAY_IGNORED_PAUSE_MS).toBeGreaterThanOrEqual(10_000);
     expect(RELAY_IGNORED_PAUSE_MS).toBeLessThanOrEqual(300_000);
+  });
+});
+
+describe('resolveCloudRelayUrl: no default relay target', () => {
+  it('is undefined when unset or blank, so a stray bridge never pushes to production', () => {
+    expect(resolveCloudRelayUrl({})).toBeUndefined();
+    expect(resolveCloudRelayUrl({ ZODIAC_CLOUD_RELAY_URL: '' })).toBeUndefined();
+    expect(resolveCloudRelayUrl({ ZODIAC_CLOUD_RELAY_URL: '   ' })).toBeUndefined();
+  });
+  it('uses the configured value, trimmed', () => {
+    expect(resolveCloudRelayUrl({ ZODIAC_CLOUD_RELAY_URL: ' https://example.test ' })).toBe('https://example.test');
   });
 });
