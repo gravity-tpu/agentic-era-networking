@@ -2324,8 +2324,10 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
               ? `0x${health.openFlowMetrics.switchFeatures.datapathId.toString(16)}`
               : '0x70b3d58740bc',
             activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
-            // The switch's own entry count from the last readback; 0 until one has completed (port1Isolation says which).
-            activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? (this.isolationStatus.switchEntryCount ?? 0) : 0,
+            // The switch's own entry count from the last readback; omitted (unknown, not zero) until one has completed.
+            ...(health.openFlowMetrics.state === 'ESTABLISHED' && this.isolationStatus.switchEntryCount !== null
+              ? { activeFlows: this.isolationStatus.switchEntryCount }
+              : {}),
             tableLookups: health.openFlowMetrics.messagesReceived,
             tableMatches: health.openFlowMetrics.messagesReceived,
             lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,
@@ -2443,7 +2445,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
           txRateBps,
           cpuTemperatureC: this.cachedSnapshot.system.cpuTemperatureC,
           latencyNs: this.cachedSnapshot.openflow.lastHeartbeatLatencyNs,
-          activeFlows: this.cachedSnapshot.openflow.activeFlows,
+          ...(this.cachedSnapshot.openflow.activeFlows !== undefined ? { activeFlows: this.cachedSnapshot.openflow.activeFlows } : {}),
           tableLookups: this.cachedSnapshot.openflow.tableLookups,
           tableMatches: this.cachedSnapshot.openflow.tableMatches,
           ports: portsSeries,

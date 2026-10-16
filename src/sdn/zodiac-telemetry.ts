@@ -58,7 +58,8 @@ export interface ZodiacOpenFlowTelemetry {
   readonly version: string;
   readonly datapathId: string;
   readonly activeTables: number;
-  readonly activeFlows: number;
+  /** The switch's own flow-entry count from its last readback; absent when none has completed (unknown, not zero). */
+  readonly activeFlows?: number;
   readonly tableLookups: bigint;
   readonly tableMatches: bigint;
   readonly lastHeartbeatLatencyNs: bigint;
