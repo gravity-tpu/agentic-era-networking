@@ -1,0 +1,14 @@
+[09:55/10:00 (99.2%)] Inferences: 32,708 | Rate:  54.6 inf/s | DMA Latency: 11.19 ms | RTT: 54.5 ms | Temp: 53.0°C | Errors: 0
+[10:00/10:00 (100.0%)] Inferences: 32,987 | Rate:  55.8 inf/s | DMA Latency: 11.19 ms | RTT: 54.5 ms | Temp: 53.1°C | Errors: 0
+
+========================================================================
+  HAILO-8 INFERENCE STRESS TEST SUMMARY
+========================================================================
+  Total Duration   : 600.1s (10.00 minutes)
+  Total Inferences : 32,990 frames
+  Average Velocity : 54.97 inferences/second
+  Average DMA Time : 11.19 ms
+  Average HTTP RTT : 54.50 ms
+  Peak Silicon Temp: 53.09903335571289°C
+  Total Errors     : 0
+========================================================================
