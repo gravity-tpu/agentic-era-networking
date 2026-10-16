@@ -185,13 +185,23 @@ describe('API form', () => {
     const s = statusFor(faithful()); // checked at monotonic 42 ns
     expect(isolationStatusToJson(s, 42n + 5_000_000_000n).checkedAgeMs).toBe(5000);
     expect(isolationStatusToJson(s, 42n + 3_600_000_000_000n).checkedAgeMs).toBe(3_600_000); // an hour old
-    expect(isolationStatusToJson(s, 0n).checkedAgeMs).toBeNull(); // a clock that went backwards is not reported as an age
+    expect(isolationStatusToJson(s, 42n + 5_000_000_000n).ageStatus).toBe('ok');
+  });
+
+  it('a readback whose age cannot be read is a clock_error, distinct from never checked', () => {
+    const s = statusFor(faithful()); // checked at monotonic 42 ns
+    const backwards = isolationStatusToJson(s, 0n);
+    expect(backwards.checkedAgeMs).toBeNull();
+    expect(backwards.ageStatus).toBe('clock_error');
+    expect(backwards.state).toBe('verified'); // the state is untouched; ageStatus is what tells a consumer not to trust it
+    expect(isolationStatusToJson(initialIsolationStatus(), 99n).ageStatus).toBe('never_checked');
   });
 
   it('an unchecked status serialises null timestamp, null age and null action level', () => {
     const json = JSON.parse(JSON.stringify(isolationStatusToJson(initialIsolationStatus(), 99n))) as Record<string, unknown>;
     expect(json['checkedAtMonoNs']).toBeNull();
     expect(json['checkedAgeMs']).toBeNull();
+    expect(json['ageStatus']).toBe('never_checked');
     expect(json['actions']).toBeNull();
     expect(json['provenForwarding']).toBe(false);
   });

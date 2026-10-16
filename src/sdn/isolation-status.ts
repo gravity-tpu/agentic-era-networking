@@ -138,8 +138,14 @@ export function describeReadback(status: IsolationStatus, ruleCount: number, ent
 
 export type IsolationStatusJson = Omit<IsolationStatus, 'checkedAtMonoNs'> & {
   checkedAtMonoNs: string | null;
-  /** Milliseconds since the readback, from the monotonic clock; null if no readback has completed. */
+  /** Milliseconds since the readback, from the monotonic clock; null unless `ageStatus` is `ok`. */
   checkedAgeMs: number | null;
+  /**
+   * `never_checked`: no readback has completed. `ok`: checkedAgeMs is valid. `clock_error`: a readback exists but
+   * the monotonic clock reads earlier than it did then, so no age can be given; treat the status as unverifiable,
+   * not as fresh.
+   */
+  ageStatus: 'never_checked' | 'ok' | 'clock_error';
 };
 
 /**
@@ -148,9 +154,11 @@ export type IsolationStatusJson = Omit<IsolationStatus, 'checkedAtMonoNs'> & {
  */
 export function isolationStatusToJson(s: IsolationStatus, nowMonoNs: bigint): IsolationStatusJson {
   const ageNs = s.checkedAtMonoNs !== null ? nowMonoNs - s.checkedAtMonoNs : null;
+  const ageStatus = ageNs === null ? 'never_checked' : ageNs >= 0n ? 'ok' : 'clock_error';
   return {
     ...s,
     checkedAtMonoNs: s.checkedAtMonoNs !== null ? s.checkedAtMonoNs.toString() : null,
     checkedAgeMs: ageNs !== null && ageNs >= 0n ? Number(ageNs / 1_000_000n) : null,
+    ageStatus,
   };
 }
