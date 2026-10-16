@@ -938,7 +938,9 @@ export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolea
     const rowTs = Number(row.timestampMs);
     const effectiveTs = Math.max(rowTs, row.createdAt ? row.createdAt.getTime() : rowTs);
     const wall = Date.now();
-    return wall >= effectiveTs ? wall - effectiveTs <= maxAgeMs : true;
+    // Fresh means within maxAgeMs of now in EITHER direction: a row dated far in the future (clock skew, a bad row) must
+    // not pin the database into "live is fresh" and keep suppressing legitimate non-live pushes.
+    return Math.abs(wall - effectiveTs) <= maxAgeMs;
   } catch (err: unknown) {
     console.warn('[!] [Telemetry DB] Fresh-live query failed:', err instanceof Error ? err.message : String(err));
     return false;

@@ -98,6 +98,27 @@ describe('decideRelayPush', () => {
   });
 });
 
+describe('a real bridge is never the one that gets paused', () => {
+  it('a live push is accepted even when a different live sender is fresh, so a restarted bridge (new id) is not held back', () => {
+    const s = apply(INITIAL_RELAY_AUTHORITY, live('jetson-orin:100:1000'), 0).state;
+    const restarted = apply(s, live('jetson-orin:200:2000'), 3000);
+    expect(restarted.decision.accept).toBe(true);
+    expect(restarted.state.liveBridgeId).toBe('jetson-orin:200:2000');
+  });
+
+  it('only a non-live push can be ignored, and so only a non-live push is ever followed by the pause', () => {
+    const s = apply(INITIAL_RELAY_AUTHORITY, live('a'), 0).state;
+    for (const id of ['a', 'b', undefined]) {
+      expect(apply(s, live(id), 1000).decision.accept, `live from ${String(id)}`).toBe(true);
+    }
+  });
+
+  it('a restarted real bridge reporting a disconnect with its new id waits out the bound, like any other sender', () => {
+    const s = apply(INITIAL_RELAY_AUTHORITY, live('jetson-orin:100:1000'), 0).state;
+    expect(apply(s, disconnected('jetson-orin:200:2000'), 3000).decision.accept).toBe(false);
+  });
+});
+
 describe('the incident, replayed', () => {
   /** Last writer wins: what the cloud did before. Counts how many times the served source flipped. */
   function baselineFlips(pushes: Array<{ at: number; push: IncomingPush }>): number {

@@ -146,3 +146,65 @@ describe('sender identity is untrusted input', () => {
     expect(await (await post(harness, push('disconnected', 'jetson:1', T0, '0'))).json()).toMatchObject({ status: 'ok' });
   });
 });
+
+describe('attestation covers the sender identity', () => {
+  /** Signs a body the way the bridge does (src/security/request-attestation.ts). */
+  async function signedPost(h: Harness, body: unknown, secret: string) {
+    const { signBridgePayload } = await import('../../src/security/request-attestation.js');
+    const payload = JSON.stringify(body);
+    const { timestampNs, signature } = signBridgePayload(payload, secret);
+    return fetch(h.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Zodiac-Bridge-Secret': secret,
+        'X-Timestamp-Ns': timestampNs,
+        'X-Zodiac-Signature': signature,
+      },
+      body: payload,
+    });
+  }
+
+  it('an unsigned push, or one signed with the wrong secret, is rejected, so a forged id cannot inject a disconnect', async () => {
+    vi.stubEnv('ZODIAC_BRIDGE_SECRET', 'correct-horse-battery-staple');
+    harness = await start();
+    expect((await signedPost(harness, push('live_hardware', 'jetson:1', T0, '900'), 'correct-horse-battery-staple')).status).toBe(200);
+
+    // an attacker who knows the live bridge's id, but not the secret
+    const forged = push('disconnected', 'jetson:1', T0 + 1000, '0');
+    expect((await post(harness, forged)).status).toBe(401); // no attestation headers
+    expect((await signedPost(harness, forged, 'a-guess')).status).toBe(401); // wrong secret
+
+    const served = await get(harness);
+    expect(served.source).toBe('live_hardware');
+    vi.unstubAllEnvs();
+  });
+
+  it('tampering with the id after signing breaks the signature', async () => {
+    vi.stubEnv('ZODIAC_BRIDGE_SECRET', 'correct-horse-battery-staple');
+    harness = await start();
+    await signedPost(harness, push('live_hardware', 'jetson:1', T0, '900'), 'correct-horse-battery-staple');
+    const { signBridgePayload } = await import('../../src/security/request-attestation.js');
+    const signedFor = JSON.stringify(push('disconnected', 'mac:2', T0 + 1000, '0'));
+    const { timestampNs, signature } = signBridgePayload(signedFor, 'correct-horse-battery-staple');
+    const tampered = JSON.stringify(push('disconnected', 'jetson:1', T0 + 1000, '0')); // id swapped, signature kept
+    const r = await fetch(harness.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Zodiac-Bridge-Secret': 'correct-horse-battery-staple', 'X-Timestamp-Ns': timestampNs, 'X-Zodiac-Signature': signature },
+      body: tampered,
+    });
+    expect(r.status).toBe(401);
+    expect((await get(harness)).source).toBe('live_hardware');
+    vi.unstubAllEnvs();
+  });
+
+  it('with the secret, the real bridge own signed disconnect is still believed at once', async () => {
+    vi.stubEnv('ZODIAC_BRIDGE_SECRET', 'correct-horse-battery-staple');
+    harness = await start();
+    await signedPost(harness, push('live_hardware', 'jetson:1', T0, '900'), 'correct-horse-battery-staple');
+    const r = await signedPost(harness, push('disconnected', 'jetson:1', T0 + 2500, '0'), 'correct-horse-battery-staple');
+    expect(await r.json()).toMatchObject({ status: 'ok' });
+    expect((await get(harness)).source).toBe('disconnected');
+    vi.unstubAllEnvs();
+  });
+});

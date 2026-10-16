@@ -20,6 +20,15 @@
  * Serverless instances do not share memory, so the caller also supplies whether the shared database holds a fresh
  * live row. That is only consulted on the rare non-live path.
  *
+ * Two decisions worth recording, because they look like gaps and are not:
+ *   - A live push is ALWAYS accepted, even when a different live sender is fresh. Making the incumbent sticky would
+ *     also hold back a real bridge that restarted (a new bridgeId) for up to the freshness bound. Two live bridges on one
+ *     switch are a misconfiguration; the handler reports it (competingLive) instead of hiding it behind a tie-break.
+ *   - Because a live push is never ignored, a bridge that has hardware is never paused by RELAY_IGNORED_PAUSE_MS: that pause
+ *     only ever follows an ignored NON-live push.
+ * The bridgeId is not a credential. It travels inside the body that the bridge's HMAC attestation signs, so only a holder
+ * of the shared secret can set it; a holder of the secret can push live anyway.
+ *
  * Pure functions, no I/O. Time is the caller's wall clock (the cloud has no monotonic clock shared with the bridge).
  */
 
