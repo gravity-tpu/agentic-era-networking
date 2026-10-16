@@ -39,6 +39,15 @@ WARMUP_N           = 10              # more warmup than Coral to fully initialis
 
 # Rate-anomaly quarantine (Council Invariant 2: integer arithmetic throughout)
 QUARANTINE_THRESHOLD_PPS = int(os.environ.get('QUARANTINE_PPS_THRESHOLD', '10'))
+
+# What a rate anomaly does (Invariant 4: a person approves what touches the data plane).
+#   propose (default): record the proposal (log + telemetry) and install nothing.
+#   enforce: POST an immediate DROP to the bridge with no human step. Opt-in only, and it must be named explicitly:
+#            any other value is treated as propose, never as enforce.
+# Measured 2026-10-16: on the first run with a working tap, a 5 pps ping test client was auto-quarantined by a
+# priority-65535 DROP on the physical switch, with no approval and no audit record.
+QUARANTINE_MODE = 'enforce' if os.environ.get('QUARANTINE_MODE') == 'enforce' else 'propose'
+QUARANTINE_PROPOSAL_KEEP = 16  # newest proposals kept in telemetry; bounded
 RATE_WINDOW_NS           = 5_000_000_000  # 5-second sliding window per source MAC
 BRIDGE_QUARANTINE_URL    = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/quarantine'
 BRIDGE_RELEASE_URL       = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/release'
@@ -332,42 +341,72 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         }
 
 
-def _quarantine_worker() -> None:
-    """Immediate line-rate quarantine worker: posts fail-closed DROP immediately (<5ms)."""
+_quarantine_proposals: list = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
+
+
+def _record_proposal(src_ip: str, pps: int) -> None:
+    _quarantine_proposals.append({
+        'srcIp': src_ip,
+        'pps': pps,
+        'thresholdPps': QUARANTINE_THRESHOLD_PPS,
+        'observedMonotonicNs': time.monotonic_ns(),
+        'status': 'proposed_not_installed',
+    })
+    del _quarantine_proposals[:-QUARANTINE_PROPOSAL_KEEP]
+    print(
+        f'[trt-daemon] [PROPOSE-QUARANTINE] {src_ip} @ {pps} pps exceeds {QUARANTINE_THRESHOLD_PPS} pps -- '
+        f'NOT installed (QUARANTINE_MODE=propose); a person must approve a DROP',
+        flush=True,
+    )
+
+
+def _handle_quarantine(src_ip: str, pps: int) -> bool:
+    """Returns True when a DROP was actually installed, False when it was only proposed or the POST failed."""
     import urllib.request
+    if QUARANTINE_MODE != 'enforce':
+        _record_proposal(src_ip, pps)
+        return False
+
+    # Immediately install fail-closed DROP on the OpenFlow data plane
+    body = json.dumps({
+        'targetIp': src_ip,
+        'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
+        'priority': 65535,
+    }).encode()
+    req = urllib.request.Request(
+        BRIDGE_QUARANTINE_URL,
+        data=body,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            result = json.loads(resp.read())
+            print(
+                f'[trt-daemon] [FAIL-CLOSED DROP] {src_ip} @ {pps} pps -> '
+                f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
+                flush=True,
+            )
+        return True
+    except Exception as exc:
+        sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+        return False
+
+
+def _quarantine_worker() -> None:
+    """Quarantine worker: proposes by default, installs a DROP only when QUARANTINE_MODE=enforce."""
     while True:
         item = _quarantine_queue.get()
         if item is None:
             break
         src_ip, pps = item
-
-        # 1. Immediately install fail-closed DROP on the OpenFlow data plane
-        body = json.dumps({
-            'targetIp': src_ip,
-            'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
-            'priority': 65535,
-        }).encode()
-        req = urllib.request.Request(
-            BRIDGE_QUARANTINE_URL,
-            data=body,
-            headers={'Content-Type': 'application/json'},
-            method='POST',
-        )
         try:
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                result = json.loads(resp.read())
-                print(
-                    f'[trt-daemon] [FAIL-CLOSED DROP] {src_ip} @ {pps} pps -> '
-                    f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
-                    flush=True,
-                )
-        except Exception as exc:
-            sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+            installed = _handle_quarantine(src_ip, pps)
         finally:
             _quarantine_queue.task_done()
 
-        # 2. Enqueue out-of-band for Qwen triage to determine if quarantine should be lifted
-        if QWEN_TRIAGE_ENABLE:
+        # Out-of-band Qwen triage decides whether an INSTALLED quarantine should be lifted; nothing to lift for a proposal
+        if installed and QWEN_TRIAGE_ENABLE:
             try:
                 _triage_queue.put_nowait((src_ip, pps))
             except queue.Full:
@@ -659,6 +698,8 @@ def main() -> None:
                     'latencyP50Ns':           p50_ns,
                     'latencyP99Ns':           p99_ns,
                     'windowSampleCount':      n,
+                    'quarantineMode':         QUARANTINE_MODE,
+                    'quarantineProposals':    list(_quarantine_proposals),
                     'quarantineQueueDrops':   _quarantine_drops,
                     'triageQueueShedDrops':   _triage_shed_drops,
                     'timestampNs':            now_ns,
