@@ -875,6 +875,13 @@ export class ZodiacBridgeServer {
     }
   }
 
+  /**
+   * Starts the control plane, then the HTTP bridge. If the OpenFlow port cannot be bound it rejects with
+   * ControlPlaneBindError before anything else is started (unless ZODIAC_ALLOW_DEGRADED_CONTROL_PLANE=1).
+   * The process exits non-zero only because the `serve` entry turns that rejection into process.exit(1); any other
+   * caller must not swallow it, or the guarantee that a bridge controlling no switch never looks healthy is lost.
+   * On that refusal `controlPlaneState` stays DEGRADED_FAULT as a record of why, on an object that is not used again.
+   */
   public async start(requestedPort: number = 3000, host: string = '0.0.0.0'): Promise<number> {
     // 1. Start OpenFlow 1.3 controller in background
     try {

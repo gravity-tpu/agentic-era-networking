@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import http from 'node:http';
 import {
   ControlPlaneBindError,
   ZodiacBridgeServer,
@@ -41,8 +42,10 @@ describe('start() with the OpenFlow port already taken', () => {
     vi.stubEnv('ZODIAC_ALLOW_DEGRADED_CONTROL_PLANE', undefined);
     const { server } = make();
     const coral = vi.spyOn(server, 'startCoralDaemonIfEnabled');
+    const listen = vi.spyOn(http, 'createServer'); // the HTTP bridge is created only after the control plane binds
     await expect(server.start(0, '127.0.0.1')).rejects.toBeInstanceOf(ControlPlaneBindError);
     expect(coral).not.toHaveBeenCalled();
+    expect(listen).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
   });
 
