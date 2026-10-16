@@ -254,36 +254,43 @@ export class IsolationRechecker {
     }
 
     if (epoch !== this.epoch) return 'skipped';
+    let outcome: RecheckOutcome;
     try {
-      // The failure streak is cleared only once a check has been interpreted AND recorded: clearing it up front would
-      // let a check that fails after the read (a throwing verifier or store) reset its own count every time and never
-      // be noticed.
-      const latest = d.getStatus();
-      // The install path or a switch error may have moved the status while we were reading; judge against the latest.
-      if (!ELIGIBLE.has(latest.state)) return 'skipped';
-      const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
-
-      // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only
-      // by the early return below, so every other path starts it over. (That early return records nothing, so it only
-      // clears the failure streak: a clean read is a successful read.)
-      if (candidate.state === 'verified' && latest.state !== 'verified') {
-        this.consecutiveCleanReads += 1;
-        if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
-          this.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
-          this.consecutiveFailures = 0; // after the side effect, like the success path below
-          return 'unchanged';
-        }
-      }
-      this.consecutiveCleanReads = 0;
-
-      const changed = signature(candidate) !== signature(latest);
-      d.setStatus(candidate);
-      this.consecutiveFailures = 0;
-      if (changed) this.logChange(candidate, entries.length);
-      return changed ? 'changed' : 'unchanged';
+      outcome = this.interpret(entries);
     } catch (err: unknown) {
       // The read succeeded but its reply could not be interpreted or recorded: a failed check, counted and damped.
       return this.recordFailure(err);
     }
+    // The ONE place the failure streak is cleared, reached only when the whole interpretation, including recording the
+    // status, completed without throwing. Clearing it earlier would let a check that fails after the read (a throwing
+    // verifier or store) reset its own count every time and never be noticed; clearing it on several paths invites
+    // them drifting apart.
+    this.consecutiveFailures = 0;
+    return outcome;
+  }
+
+  /** Interprets a successful read and records the result. May throw; check() counts a throw as a failed check. */
+  private interpret(entries: readonly FlowStatsEntry[]): RecheckOutcome {
+    const d = this.deps;
+    const latest = d.getStatus();
+    // The install path or a switch error may have moved the status while we were reading; judge against the latest.
+    if (!ELIGIBLE.has(latest.state)) return 'skipped';
+    const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
+
+    // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only by
+    // the early return below, so every other path starts it over.
+    if (candidate.state === 'verified' && latest.state !== 'verified') {
+      this.consecutiveCleanReads += 1;
+      if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
+        this.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
+        return 'unchanged';
+      }
+    }
+    this.consecutiveCleanReads = 0;
+
+    const changed = signature(candidate) !== signature(latest);
+    d.setStatus(candidate);
+    if (changed) this.logChange(candidate, entries.length);
+    return changed ? 'changed' : 'unchanged';
   }
 }
