@@ -185,6 +185,14 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
+  if (HOST === '0.0.0.0') {
+    // Backward compatible default (the USB-C tether and LAN paths rely on it), but say so: these metrics are unauthenticated.
+    process.stderr.write(
+      '[workstation-agent] WARNING: listening on every interface (0.0.0.0); hardware and Ollama metrics are served, ' +
+      'unauthenticated, to any network this Mac joins. Set WORKSTATION_AGENT_HOST to the Tailscale address to narrow it ' +
+      '(the LaunchAgent in deploy/macos/ does).\n'
+    );
+  }
   process.stdout.write(
     `[workstation-agent] Listening on ${HOST}:${PORT}\n` +
     `  /api/hardware — live Apple Silicon + Ollama telemetry\n` +

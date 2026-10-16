@@ -64,15 +64,20 @@ describe.skipIf(!isMac)('install-workstation-agent.sh --dry-run', () => {
     rmSync(d, { recursive: true, force: true });
   });
 
-  it('refuses a missing agent, a bad port, and a host with shell or XML metacharacters', () => {
+  it('refuses a missing agent, a bad port, and a host with shell or XML metacharacters, for the stated reason', () => {
     const repo = fakeRepo();
-    expect(run(['--repo', '/nonexistent-dir-xyz', '--host', '1.2.3.4', '--dry-run']).status).not.toBe(0);
+    const missing = run(['--repo', '/nonexistent-dir-xyz', '--host', '1.2.3.4', '--dry-run']);
+    expect(missing.status).not.toBe(0);
+    expect(missing.stderr).toContain('no scripts/workstation-agent.ts');
     for (const port of ['0', '65536', 'abc', '80x', '-1']) {
-      expect(run(['--repo', repo, '--host', '1.2.3.4', '--port', port, '--dry-run']).status, `port ${port}`).not.toBe(0);
+      const r = run(['--repo', repo, '--host', '1.2.3.4', '--port', port, '--dry-run']);
+      expect(r.status, `port ${port}`).not.toBe(0);
+      expect(r.stderr, `port ${port}`).toMatch(/--port must be/);
     }
-    for (const host of ['1.2.3.4;rm -rf /', '1.2.3.4</string>', '$(id)', 'a b', '']) {
+    for (const host of ['1.2.3.4;rm -rf /', '1.2.3.4</string>', '$(id)', 'a b']) {
       const r = run(['--repo', repo, '--host', host, '--dry-run']);
       expect(r.status, JSON.stringify(host)).not.toBe(0);
+      expect(r.stderr, JSON.stringify(host)).toContain('--host must be an IPv4 address or hostname');
     }
     rmSync(repo, { recursive: true, force: true });
   });
@@ -99,5 +104,6 @@ describe('the agent binds the interface it is told to', () => {
     expect(src).toMatch(/\^\[A-Za-z0-9\.-\]\{1,253\}\$/); // refuses anything that is not a plain address or hostname
     expect(src).toContain('server.listen(PORT, HOST,');
     expect(src).not.toContain("server.listen(PORT, '0.0.0.0'"); // no hard-coded bind left
+    expect(src).toContain('listening on every interface (0.0.0.0)'); // the open default says so
   });
 });

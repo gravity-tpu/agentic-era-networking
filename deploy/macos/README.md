@@ -42,6 +42,9 @@ The bridge tries, at the same time, `WORKSTATION_AGENT_URL`, the USB-C tether (`
 `/etc/zodiac/zodiac-bridge.env` (read when the bridge starts). A LAN URL stops working once the agent binds only the
 Tailscale address, which is why the Tailscale URL is the one to rely on.
 
+The dashboard's `workstation.endpoint` says which URL answered (for example `http://10.0.0.119:11435` for the LAN path), so
+a change of path is visible rather than silent. Every path reaches the same agent on the same Mac.
+
 ## Log
 
 `ioreg` lives in `/usr/sbin`, which launchd's default `PATH` omits; the installer sets `PATH` so the Apple GPU metrics work.
