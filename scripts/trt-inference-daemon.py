@@ -524,6 +524,9 @@ def main() -> None:
         raw_sock.settimeout(0.2)
         print(f'[trt-daemon] AF_PACKET socket bound on {tap_iface} (promiscuous)', flush=True)
     except OSError as e:
+        if raw_sock is not None:
+            raw_sock.close()  # bound but not promiscuous: do not keep a half-configured socket open
+            raw_sock = None
         sys.stderr.write(
             f'[trt-daemon] Warning: cannot bind AF_PACKET or enable promiscuous mode on {tap_iface} ({e}). '
             f'Running in standby mode.\n'
