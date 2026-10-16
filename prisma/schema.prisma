@@ -79,6 +79,16 @@ model ZodiacTelemetryPoint {
   @@index([timestampMs])
 }
 
+// The single latest snapshot the bridge pushed, as received (BigInt as strings, each series cut to its newest point).
+// A cold serverless instance hydrates from this row instead of inventing defaults. Only live snapshots are written.
+model ZodiacLatestSnapshot {
+  id           String   @id
+  timestampMs  BigInt
+  source       String   // always 'live_hardware': a non-live push never overwrites this row
+  snapshotJson Json
+  updatedAt    DateTime @updatedAt
+}
+
 // Operator identity for Google SSO authentication guard
 model User {
   id          String   @id @default(uuid())
