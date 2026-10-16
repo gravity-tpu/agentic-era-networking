@@ -536,8 +536,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (isLocalStale) {
       const dbSnapshot = await getLatestTelemetrySnapshotFromDb(DB_HYDRATION_MAX_AGE_MS);
-      if (dbSnapshot && dbSnapshot.source === 'live_hardware') {
-        latestSnapshot = dbSnapshot;
+      if (dbSnapshot) {
+        // Overlay exactly what the bridge reported onto the current (disconnected) base; blocks the bridge did not send
+        // stay as the base's honest "not detected" defaults. The row is only ever written from a live snapshot.
+        latestSnapshot = { ...latestSnapshot, ...dbSnapshot, source: 'live_hardware' };
       }
     }
 

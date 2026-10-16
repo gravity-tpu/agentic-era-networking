@@ -13,18 +13,18 @@ import { PrismaNeon } from '@prisma/adapter-neon';
 import { PrismaClient, Prisma } from '@prisma/client';
 import ws from 'ws';
 import {
-  createDefaultZodiacSnapshot,
-  createDefaultJetsonSnapshot,
-  createDefaultCoralSnapshot,
-  createDefaultWorkstationSnapshot,
-  createDefaultRpi5Snapshot,
   type ZodiacFullTelemetrySnapshot,
-  type ZodiacPortTelemetry,
   type ZodiacTimeSeriesPoint,
   type JetsonTimeSeriesPoint,
   type CoralTimeSeriesPoint,
   type WorkstationTimeSeriesPoint,
 } from '../sdn/zodiac-telemetry.js';
+import {
+  LATEST_SNAPSHOT_ROW_ID,
+  prepareStoredSnapshot,
+  readStoredSnapshotMaxBytes,
+  restoreStoredSnapshot,
+} from '../sdn/stored-snapshot.js';
 
 // Required for Node.js environments connecting to Neon WebSockets
 neonConfig.webSocketConstructor = ws;
@@ -298,12 +298,50 @@ function serializeWorkstationPointExplicit(point: WorkstationTimeSeriesPoint): R
 
     await Promise.race([writePromise, timeoutPromise]);
 
+    await persistLatestSnapshot(prisma, snapshot, nowMs);
+
     return true;
   } catch (err: unknown) {
     console.warn('[!] [Telemetry DB] Failed to persist snapshot to Neon Postgres:', err instanceof Error ? err.message : String(err));
     return false;
   } finally {
     isPersisting = false;
+  }
+}
+
+/**
+ * Keep the single "latest" row current so a cold instance can hydrate without inventing anything. Only a live snapshot
+ * is written: a disconnected or cloud_snapshot push must not overwrite what the real bridge last reported. A failure is
+ * logged and does not fail the telemetry write that already succeeded.
+ */
+async function persistLatestSnapshot(prisma: PrismaClient, snapshot: ZodiacFullTelemetrySnapshot, nowMs: number): Promise<void> {
+  if (snapshot.source !== 'live_hardware') return;
+  const prepared = prepareStoredSnapshot(snapshot, readStoredSnapshotMaxBytes());
+  if (!prepared.ok) {
+    console.warn(`[!] [Telemetry DB] Latest snapshot not stored (${prepared.reason}, ${prepared.bytes} bytes).`);
+    return;
+  }
+  try {
+    const data = {
+      timestampMs: BigInt(nowMs),
+      source: 'live_hardware',
+      snapshotJson: prepared.json as Prisma.InputJsonValue,
+    };
+    const write = prisma.zodiacLatestSnapshot.upsert({
+      where: { id: LATEST_SNAPSHOT_ROW_ID },
+      create: { id: LATEST_SNAPSHOT_ROW_ID, ...data },
+      update: data,
+    });
+    const timeout = new Promise<never>((_, reject) => {
+      const t = setTimeout(() => reject(new Error(`Latest snapshot write timed out after ${DB_TIMEOUT_MS}ms`)), DB_TIMEOUT_MS);
+      t.unref?.();
+    });
+    write.catch((err: unknown) => {
+      console.warn('[!] [Telemetry DB] Background latest-snapshot write rejected post-timeout:', err instanceof Error ? err.message : String(err));
+    });
+    await Promise.race([write, timeout]);
+  } catch (err: unknown) {
+    console.warn('[!] [Telemetry DB] Failed to store the latest snapshot:', err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -993,177 +1031,45 @@ export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolea
   }
 }
 
+/**
+ * The latest live snapshot the bridge pushed, as stored by persistLatestSnapshot, or null when there is none, it is
+ * older than maxAgeMs, it is not live, or the read fails or times out. Nothing is synthesized: a block the bridge did
+ * not send is absent from the result, and the caller overlays it on its own (disconnected) base.
+ */
 export async function getLatestTelemetrySnapshotFromDb(
   maxAgeMs: number = 30_000
-): Promise<ZodiacFullTelemetrySnapshot | null> {
+): Promise<Partial<ZodiacFullTelemetrySnapshot> | null> {
   const prisma = getPrismaClient();
   if (!prisma) return null;
 
   let timerId: NodeJS.Timeout | undefined;
   try {
-    const queryPromise = prisma.zodiacTelemetryPoint.findFirst({
-      orderBy: { timestampMs: 'desc' },
-    });
-
+    const queryPromise = prisma.zodiacLatestSnapshot.findUnique({ where: { id: LATEST_SNAPSHOT_ROW_ID } });
     const timeoutPromise = new Promise<never>((_, reject) => {
       timerId = setTimeout(() => reject(new Error('Latest snapshot query timed out')), readDbQueryDeadlineMs());
       timerId.unref?.();
     });
-
     const row = await Promise.race([queryPromise, timeoutPromise]);
-    if (!row) return null;
+    if (!row || row.source !== 'live_hardware') return null;
 
+    // Freshness uses the later of the bridge-reported and the DB-stamped time, so clock skew between the edge and the
+    // database cannot make an old row look new (a row dated ahead of this clock is fresh only within the skew tolerance).
     const rowTs = Number(row.timestampMs);
-    // Council Invariant (Distributed Clock Skew Resilience & Anti-Simulation):
-    // Reconcile database-persisted row.createdAt (stamped by Neon Postgres server NOW())
-    // with edge-reported row.timestampMs and Vercel server wall-clock.
-    // Clamping negative clock skew (if DB/Edge clock is ahead of serverless container)
-    // prevents false SLA invalidations from NTP drift across distributed cloud regions.
-    const rowCreatedAtMs = row.createdAt ? row.createdAt.getTime() : rowTs;
-    const effectiveRowTs = Math.max(rowTs, rowCreatedAtMs);
-    const wallClockMs = Date.now();
-    const ageMs = wallClockMs >= effectiveRowTs ? (wallClockMs - effectiveRowTs) : 0;
-    if (ageMs > maxAgeMs) {
+    const effectiveTs = Math.max(rowTs, row.updatedAt ? row.updatedAt.getTime() : rowTs);
+    const wall = Date.now();
+    const fresh = wall >= effectiveTs ? wall - effectiveTs <= maxAgeMs : effectiveTs - wall <= readDbFutureSkewToleranceMs();
+    if (!fresh) return null;
+
+    const restored = restoreStoredSnapshot(row.snapshotJson);
+    if (!restored) {
+      console.warn('[!] [Telemetry DB] Stored latest snapshot has an unexpected shape; ignoring it.');
       return null;
     }
-
-    const defaultZodiac = createDefaultZodiacSnapshot();
-    const parsedPorts: ZodiacPortTelemetry[] = Array.isArray(row.portsJson) && row.portsJson.length > 0
-      ? (row.portsJson as Array<Record<string, unknown>>).map((p) => ({
-          port: Number(p['port'] ?? 1),
-          name: String(p['name'] ?? `Port ${p['port']}`),
-          status: p['status'] === 'UP' ? 'UP' : 'DOWN',
-          vlanType: String(p['vlanType'] ?? 'OpenFlow'),
-          vlanId: Number(p['vlanId'] ?? 100),
-          rxBytes: BigInt(String(p['rxBytes'] ?? '0')),
-          txBytes: BigInt(String(p['txBytes'] ?? '0')),
-          rxPackets: BigInt(String(p['rxPackets'] ?? '0')),
-          txPackets: BigInt(String(p['txPackets'] ?? '0')),
-          rxDropped: BigInt(String(p['rxDropped'] ?? '0')),
-          txDropped: BigInt(String(p['txDropped'] ?? '0')),
-          rxCrcErrors: BigInt(String(p['rxCrcErrors'] ?? '0')),
-          physicalLocation: String(p['physicalLocation'] ?? ''),
-          ipAddress: p['ipAddress'] ? String(p['ipAddress']) : null,
-          speedMbps: Number(p['speedMbps'] ?? 100),
-          rxErrors: BigInt(String(p['rxErrors'] ?? '0')),
-          txErrors: BigInt(String(p['txErrors'] ?? '0')),
-        }))
-      : defaultZodiac.ports;
-
-    const jetsonPoint = row.jetsonJson ? parseHistoricalJetsonPoint(row.jetsonJson, rowTs) : null;
-    const coralPoint = row.coralJson ? parseHistoricalCoralPoint(row.coralJson, rowTs) : null;
-    const wsPoint = row.workstationJson ? parseHistoricalWorkstationPoint(row.workstationJson, rowTs) : null;
-
-    const defaultJetson = createDefaultJetsonSnapshot(false);
-    const defaultCoral = createDefaultCoralSnapshot(false);
-    const defaultWs = createDefaultWorkstationSnapshot(false);
-    const defaultRpi5 = createDefaultRpi5Snapshot(false);
-
-    return {
-      source: row.source === 'live_hardware' ? 'live_hardware' : 'cloud_snapshot',
-      system: {
-        deviceName: 'Zodiac_FX',
-        macAddress: '70:B3:D5:87:40:BC',
-        ipAddress: process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1',
-        netmask: process.env['ZODIAC_NETMASK'] ?? '255.255.255.0',
-        defaultGateway: process.env['SDN_GATEWAY_IP'] ?? '127.0.0.1',
-        openFlowController: process.env['SDN_CONTROLLER_IP'] ?? '127.0.0.1',
-        openFlowPort: 6633,
-        failstate: 'Secure',
-        cpuTemperatureC: row.cpuTemperatureC ?? 31,
-        cpuUid: '1396191488-826951736-875574576-892547120',
-        firmwareVersion: '0.86',
-        uptime: '01:24:12',
-        timestampNs: BigInt(rowTs) * 1_000_000n,
-      },
-      ports: parsedPorts,
-      openflow: {
-        status: 'Connected',
-        version: '1.3',
-        datapathId: '0x70b3d58740bc',
-        activeTables: 10,
-        activeFlows: 0,
-        tableLookups: 0n,
-        tableMatches: 0n,
-        lastHeartbeatLatencyNs: row.latencyNs ?? 495625n,
-      },
-      timeSeries: [{
-        timestampMs: rowTs,
-        rxBytes: row.totalRxBytes,
-        txBytes: row.totalTxBytes,
-        rxPackets: row.totalRxPackets,
-        txPackets: row.totalTxPackets,
-        rxRatePps: row.rxRatePps,
-        txRatePps: row.txRatePps,
-        rxRateBps: row.rxRateBps,
-        txRateBps: row.txRateBps,
-        cpuTemperatureC: row.cpuTemperatureC,
-        latencyNs: row.latencyNs,
-      }],
-      jetson: jetsonPoint ? {
-        ...defaultJetson,
-        status: 'online',
-        cpuUtilizationPct: jetsonPoint.cpuUtilizationPct,
-        gpuUtilizationPct: jetsonPoint.gpuUtilizationPct,
-        powerMw: {
-          vddIn: Math.round(jetsonPoint.powerWatts * 1000),
-          vddCpuGpuCv: null,
-          vddSoc: null,
-        },
-        ramUsedBytes: jetsonPoint.ramUsedBytes,
-        nvmeReadRateBps: jetsonPoint.nvmeReadRateBps,
-        nvmeWriteRateBps: jetsonPoint.nvmeWriteRateBps,
-        temperatures: {
-          cpuC: jetsonPoint.cpuTempC,
-          gpuC: jetsonPoint.gpuTempC,
-          socC: jetsonPoint.junctionTempC,
-          junctionC: jetsonPoint.junctionTempC,
-        },
-        timeSeries: [jetsonPoint],
-      } : defaultJetson,
-      coral: coralPoint ? {
-        ...defaultCoral,
-        status: (coralPoint.inferencesPerSecond > 0n ? 'INFERENCE_ACTIVE' : 'STANDBY') as 'INFERENCE_ACTIVE' | 'STANDBY',
-        detected: true,
-        inferencesPerSecond: coralPoint.inferencesPerSecond,
-        latencyP50Ns: coralPoint.latencyP50Us * 1000n,
-        latencyP99Ns: coralPoint.latencyP99Us * 1000n,
-        devices: defaultCoral.devices.map((d) => {
-          const ips = d.id === 'coral-1' ? coralPoint.coral1Ips : coralPoint.coral2Ips;
-          const devStatus: 'INFERENCE_ACTIVE' | 'STANDBY' = ips > 0n ? 'INFERENCE_ACTIVE' : 'STANDBY';
-          return {
-            ...d,
-            status: devStatus,
-            inferencesPerSecond: ips,
-            latencyP50Ns: (d.id === 'coral-1' ? coralPoint.coral1LatencyP50Us : coralPoint.coral2LatencyP50Us) * 1000n,
-          };
-        }),
-        timeSeries: [coralPoint],
-      } : defaultCoral,
-      workstation: wsPoint ? {
-        ...defaultWs,
-        detected: true,
-        ollamaStatus: 'ONLINE',
-        activeModel: 'gemma4:26b',
-        cpuUtilizationPct: wsPoint.cpuUtilizationPct,
-        gpuUtilizationPct: wsPoint.gpuUtilizationPct,
-        gpuMemoryUsedBytes: wsPoint.gpuMemoryUsedBytes,
-        memoryUsedBytes: wsPoint.ramUsedBytes,
-        tokensPerSecond: wsPoint.tokensPerSecond,
-        promptTokensPerSecond: wsPoint.promptTokensPerSecond,
-        totalPromptTokens: wsPoint.totalPromptTokens,
-        totalCompletionTokens: wsPoint.totalCompletionTokens,
-        totalTokens: wsPoint.totalTokens,
-        timeSeries: [wsPoint],
-      } : defaultWs,
-      rpi5: defaultRpi5,
-    };
+    return restored as Partial<ZodiacFullTelemetrySnapshot>;
   } catch (err: unknown) {
     console.warn('[!] [Telemetry DB] Failed to query latest snapshot:', err instanceof Error ? err.message : String(err));
     return null;
   } finally {
-    if (timerId !== undefined) {
-      clearTimeout(timerId);
-    }
+    if (timerId !== undefined) clearTimeout(timerId);
   }
 }
