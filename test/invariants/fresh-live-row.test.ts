@@ -57,11 +57,37 @@ describe('hasFreshLiveTelemetryRow', () => {
     expect(await run()).toBe(false);
   });
 
-  it('a row only slightly ahead of this clock (skew) is fresh, but one far in the future is not', async () => {
+  it('a row ahead of this clock is fresh only within the skew tolerance, which is separate from the staleness bound', async () => {
+    const { DB_FUTURE_SKEW_TOLERANCE_MS } = await import('../../src/db/telemetry-db.js');
+    expect(DB_FUTURE_SKEW_TOLERANCE_MS).toBeLessThan(MAX_AGE); // tolerance for skew is much tighter than the staleness bound
     db.row = rowAt(+2_000);
     expect(await run()).toBe(true);
+    db.row = rowAt(+(DB_FUTURE_SKEW_TOLERANCE_MS - 1_000));
+    expect(await run()).toBe(true);
+    db.row = rowAt(+(DB_FUTURE_SKEW_TOLERANCE_MS + 2_000)); // within MAX_AGE but beyond the skew tolerance
+    expect(await run()).toBe(false);
     db.row = rowAt(+(MAX_AGE + 60_000));
     expect(await run()).toBe(false);
+  });
+
+  it('the query deadline is a named, bounded, configurable limit', async () => {
+    const { DEFAULT_DB_QUERY_DEADLINE_MS, readDbQueryDeadlineMs } = await import('../../src/db/telemetry-db.js');
+    expect(DEFAULT_DB_QUERY_DEADLINE_MS).toBe(1500);
+    expect(readDbQueryDeadlineMs({})).toBe(1500);
+    expect(readDbQueryDeadlineMs({ TELEMETRY_DB_QUERY_TIMEOUT_MS: '800' })).toBe(800);
+    for (const bad of ['99', '5001', 'abc', '', '-1', '1e3', '800ms']) {
+      expect(readDbQueryDeadlineMs({ TELEMETRY_DB_QUERY_TIMEOUT_MS: bad }), bad).toBe(1500);
+    }
+  });
+
+  it('a configured deadline governs the hang path', async () => {
+    vi.stubEnv('TELEMETRY_DB_QUERY_TIMEOUT_MS', '200');
+    db.mode = 'hang';
+    vi.useFakeTimers();
+    const pending = run();
+    await vi.advanceTimersByTimeAsync(250); // well under the 1500 ms default, past the configured 200 ms
+    expect(await pending).toBe(false);
+    vi.unstubAllEnvs();
   });
 
   it('reads as not fresh when the query fails, and when it does not answer in time', async () => {
