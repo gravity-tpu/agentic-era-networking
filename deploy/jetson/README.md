@@ -177,6 +177,17 @@ sudo systemctl restart zodiac-bridge
 journalctl -u zodiac-bridge -f
 ```
 
+### Only one bridge may push to production
+
+The cloud dashboard shows whatever the bridge pushes. A second bridge started anywhere (a laptop running `npm run serve`
+or `npm run dev` with `ZODIAC_CLOUD_RELAY_URL` set) has no hardware and pushes a `disconnected` view; before 2026-10-16 the
+cloud let the last writer win, which made every device flicker. The cloud now ignores a non-live push while a live one is
+fresh, and logs `[Relay] Ignored N non-live push(es) from bridge <id>` (visible with `npx vercel logs <domain>`), and a bridge
+that is ignored logs `[Cloud Relay] The cloud IGNORED this bridge's snapshot` and pauses 60 s. To check for a stray pusher:
+`npx vercel logs agentic-era-networking.vercel.app --json` for about a minute and look at the POST inter-arrival times. One
+bridge shows one steady interval (about 5 s from the Jetson); intervals under a second or two mean another pusher. Do not
+set `ZODIAC_CLOUD_RELAY_URL` in a development shell.
+
 ### Flow-table probe (read-only)
 
 Asks the live Zodiac FX what is in its flow table and keeps the raw bytes. Its job is to answer one question that is

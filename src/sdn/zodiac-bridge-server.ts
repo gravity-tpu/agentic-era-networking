@@ -71,6 +71,7 @@ import {
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback } from './port1-isolation.js';
+import os from 'node:os';
 import { readFlowStats, readFlowStatsRaw } from './flow-readback.js';
 import {
   describeReadback,
@@ -84,6 +85,7 @@ import {
   type IsolationStatus,
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
+import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck } from './relay-authority.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -588,6 +590,13 @@ export class ZodiacBridgeServer {
   private lastLocalHistoryFlushMs = 0;
   private consecutiveRelayFailures = 0;
   private lastRelayAttemptPerfMs = 0; // performance.now() — monotonic, NTP-immune
+  /** performance.now() until which relaying is paused because the cloud ignored this bridge's last push. */
+  private relayIgnoredUntilPerfMs = 0;
+  /**
+   * Stable for the life of this process and carried in every relay push, so the cloud can tell this bridge from any
+   * other that pushes to the same endpoint. Hostname, pid and start time: a restart is a new identity.
+   */
+  private readonly bridgeId: string = `${os.hostname().replace(/[^A-Za-z0-9._-]/g, '-')}:${process.pid}:${Date.now()}`;
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
   private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
   private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
@@ -2563,7 +2572,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
       // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud
       // Exponential backoff gates re-attempts after failures so a degraded Vercel endpoint
       // is not hammered at the full 2.5s poll cadence (Quoc Le stability invariant).
-      if (this.cloudRelayUrl && !this.isRelaying && this.isRelayBackoffElapsed(nowMs)) {
+      if (this.cloudRelayUrl && !this.isRelaying && this.isRelayBackoffElapsed(nowMs) && performance.now() >= this.relayIgnoredUntilPerfMs) {
         void this.relaySnapshotToCloud(this.cachedSnapshot);
       }
 
@@ -2675,7 +2684,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
         } : {}),
       };
 
-      const payload = this.serializeSnapshot(boundedSnapshot);
+      const payload = this.serializeSnapshot({ ...boundedSnapshot, bridgeId: this.bridgeId });
 
       // Guard: log payload size; skip send if over limit to avoid infinite 413 storm.
       const payloadBytes = Buffer.byteLength(payload, 'utf8');
@@ -2707,7 +2716,16 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
         this.consecutiveRelayFailures++;
         console.warn(`[!] [Cloud Relay] HTTP ${res.status} (failure #${this.consecutiveRelayFailures}, next retry in ${this.currentRelayBackoffMs / 1000}s): ${text}`);
       } else {
-        if (this.consecutiveRelayFailures > 0) {
+        const ack: unknown = await res.json().catch(() => null);
+        if (isRelayIgnoredAck(ack)) {
+          // Not a transport failure: the cloud received this and refused to let it overwrite a fresh live snapshot from
+          // another bridge. Pushing at the full cadence would only add load, so pause and say why.
+          this.relayIgnoredUntilPerfMs = performance.now() + RELAY_IGNORED_PAUSE_MS;
+          console.warn(
+            `[!] [Cloud Relay] The cloud IGNORED this bridge's snapshot (${ack.reason}): another bridge is the live source. ` +
+              `Pausing relay for ${RELAY_IGNORED_PAUSE_MS / 1000}s. If this is the real bridge, look for a second bridge pushing to the same endpoint.`,
+          );
+        } else if (this.consecutiveRelayFailures > 0) {
           console.log(`[+] [Cloud Relay] Relay recovered after ${this.consecutiveRelayFailures} consecutive failure(s).`);
           this.consecutiveRelayFailures = 0;
         }
@@ -2720,7 +2738,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
     }
   }
 
-  private serializeSnapshot(snapshot: ZodiacFullTelemetrySnapshot): string {
+  private serializeSnapshot(snapshot: ZodiacFullTelemetrySnapshot & { readonly bridgeId?: string }): string {
     return JSON.stringify(snapshot, (_, value) =>
       typeof value === 'bigint' ? value.toString() : value
     );

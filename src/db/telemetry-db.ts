@@ -32,6 +32,48 @@ neonConfig.webSocketConstructor = ws;
 // Global singleton instance for Vercel Serverless container reuse
 let globalPrisma: PrismaClient | null = null;
 
+/**
+ * Deadline for the cloud's small read queries (hydration and the fresh-live check). A serverless request must not wait
+ * on a slow database: past this the caller proceeds as if the database had no answer. Default 1500 ms (the Dean latency
+ * budget the hydration query already used); TELEMETRY_DB_QUERY_TIMEOUT_MS overrides it within 100..5000, and anything
+ * else falls back to the default rather than failing the function at import time.
+ */
+export const DEFAULT_DB_QUERY_DEADLINE_MS = 1500;
+
+/**
+ * An out-of-range or malformed limit falls back to its default (it is not clamped: a typo must not quietly become more
+ * permissive) and says so, once per variable and value, so the fallback is observable and does not repeat per request.
+ */
+const warnedBadLimits = new Set<string>();
+function warnBadLimit(name: string, raw: string, fallback: number): void {
+  const key = `${name}=${raw}`;
+  if (warnedBadLimits.has(key)) return;
+  warnedBadLimits.add(key);
+  console.warn(`[!] [Telemetry DB] ${name}=${JSON.stringify(raw)} is not valid; using the default ${fallback}.`);
+}
+export function readDbQueryDeadlineMs(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  const raw = env['TELEMETRY_DB_QUERY_TIMEOUT_MS'];
+  if (raw === undefined) return DEFAULT_DB_QUERY_DEADLINE_MS;
+  if (/^\d+$/.test(raw) && Number(raw) >= 100 && Number(raw) <= 5000) return Number(raw);
+  warnBadLimit('TELEMETRY_DB_QUERY_TIMEOUT_MS', raw, DEFAULT_DB_QUERY_DEADLINE_MS);
+  return DEFAULT_DB_QUERY_DEADLINE_MS;
+}
+
+/**
+ * How far ahead of this server's clock a database row's timestamp may be and still count as fresh. This is clock-skew
+ * tolerance (bridge, Neon and Vercel clocks differ by seconds), a different quantity from the staleness bound, so it is
+ * its own limit: a row dated further ahead than this is a bad row, not a fresh one.
+ */
+export const DB_FUTURE_SKEW_TOLERANCE_MS = 10_000;
+/** TELEMETRY_DB_FUTURE_SKEW_MS overrides the skew tolerance within 0..60000 ms; anything else uses the default. */
+export function readDbFutureSkewToleranceMs(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  const raw = env['TELEMETRY_DB_FUTURE_SKEW_MS'];
+  if (raw === undefined) return DB_FUTURE_SKEW_TOLERANCE_MS;
+  if (/^\d+$/.test(raw) && Number(raw) <= 60_000) return Number(raw);
+  warnBadLimit('TELEMETRY_DB_FUTURE_SKEW_MS', raw, DB_FUTURE_SKEW_TOLERANCE_MS);
+  return DB_FUTURE_SKEW_TOLERANCE_MS;
+}
+
 export function getPrismaClient(): PrismaClient | null {
   const dbUrl = process.env['DATABASE_URL'] || process.env['agentic_POSTGRES_PRISMA_URL'] || process.env['agentic_DATABASE_URL'] || process.env['POSTGRES_PRISMA_URL'];
   if (!dbUrl) {
@@ -913,6 +955,44 @@ export async function upsertUser(
  * Adheres to Dean Latency Budget: bounded by a 1500ms timeout.
  * Council Invariant 6 (Anti-Simulation Law): Strictly rejects rows older than maxAgeMs SLA (default 30s).
  */
+/**
+ * True when the shared database holds a verified live row newer than maxAgeMs. Used by the cloud relay handler to
+ * tell, from a serverless instance with empty memory, that some other instance has been receiving the real bridge.
+ * Bounded by the same latency deadline as the hydration query; any failure returns false (the cloud then does not
+ * claim a live source it cannot see, which is the fail-closed direction).
+ */
+export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolean> {
+  const prisma = getPrismaClient();
+  if (!prisma) return false;
+  let timerId: NodeJS.Timeout | undefined;
+  try {
+    // The LATEST row, whatever its source: if the real bridge's last accepted push was a disconnect, the latest row is
+    // non-live and nothing live is fresh, even though an older live row exists.
+    const queryPromise = prisma.zodiacTelemetryPoint.findFirst({
+      orderBy: { timestampMs: 'desc' },
+      select: { timestampMs: true, createdAt: true, source: true },
+    });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error('Fresh-live query timed out')), readDbQueryDeadlineMs());
+      timerId.unref?.();
+    });
+    const row = await Promise.race([queryPromise, timeoutPromise]);
+    if (!row || row.source !== 'live_hardware') return false;
+    const rowTs = Number(row.timestampMs);
+    const effectiveTs = Math.max(rowTs, row.createdAt ? row.createdAt.getTime() : rowTs);
+    const wall = Date.now();
+    // A past row is fresh within the staleness bound (maxAgeMs). A row dated ahead of this clock is fresh only within the
+    // skew tolerance: a row dated far in the future (a bad row) must not pin "live is fresh" and keep suppressing
+    // legitimate non-live pushes.
+    return wall >= effectiveTs ? wall - effectiveTs <= maxAgeMs : effectiveTs - wall <= readDbFutureSkewToleranceMs();
+  } catch (err: unknown) {
+    console.warn('[!] [Telemetry DB] Fresh-live query failed:', err instanceof Error ? err.message : String(err));
+    return false;
+  } finally {
+    if (timerId !== undefined) clearTimeout(timerId);
+  }
+}
+
 export async function getLatestTelemetrySnapshotFromDb(
   maxAgeMs: number = 30_000
 ): Promise<ZodiacFullTelemetrySnapshot | null> {
@@ -926,7 +1006,7 @@ export async function getLatestTelemetrySnapshotFromDb(
     });
 
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => reject(new Error('Latest snapshot query timed out')), 1500);
+      timerId = setTimeout(() => reject(new Error('Latest snapshot query timed out')), readDbQueryDeadlineMs());
       timerId.unref?.();
     });
 
