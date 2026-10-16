@@ -14,6 +14,9 @@
  * Usage (macOS only):
  *   npm run workstation:agent
  *   WORKSTATION_AGENT_PORT=11435 npm run workstation:agent
+ *   WORKSTATION_AGENT_HOST=100.x.y.z npm run workstation:agent   # bind one interface (default 0.0.0.0, every interface)
+ *
+ * To keep it running (start at login, restart on crash), install the LaunchAgent: deploy/macos/README.md.
  *
  * The Jetson reads from http://192.168.55.100:11435/api/hardware (USB-C tether)
  * or http://10.0.0.119:11435/api/hardware (Wi-Fi fallback).
@@ -36,6 +39,22 @@ if (os.platform() !== 'darwin') {
 const rawPort = parseInt(process.env['WORKSTATION_AGENT_PORT'] ?? '11435', 10);
 // Sanjay Ghemawat - Bounds Rigor: Validate numeric parse and TCP port boundary [1, 65535].
 const PORT = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 11435;
+// Which interface to listen on. UNSET means every interface (0.0.0.0): what a manual run has always done, which the
+// USB-C tether and LAN paths rely on. On a laptop that serves hardware metrics, unauthenticated, to whatever network it
+// joins, so the LaunchAgent binds the Tailscale address instead.
+// Fail closed (Invariant 3): a value that IS set but invalid is a fatal error, never a quiet fall back to 0.0.0.0. A typo
+// in the setting meant to narrow the bind must not widen it. The pattern below only refuses an empty value and anything
+// outside letters, digits, dots and hyphens (spaces, shell and XML metacharacters); it does NOT prove the value is a real
+// address. A charset-valid but bogus value (999.999.999.999) is refused by listen() itself, which exits non-zero below.
+const hostFromEnv = process.env['WORKSTATION_AGENT_HOST'];
+if (hostFromEnv !== undefined && !/^[A-Za-z0-9.-]{1,253}$/.test(hostFromEnv)) {
+  process.stderr.write(
+    `[workstation-agent] FATAL: WORKSTATION_AGENT_HOST ${JSON.stringify(hostFromEnv)} is empty or has characters other than letters, digits, dots and hyphens. ` +
+    'Refusing to start rather than listen on every interface. Unset it for the default, or fix it.\n'
+  );
+  process.exit(1);
+}
+const HOST = hostFromEnv ?? '0.0.0.0';
 const PROBE_INTERVAL_MS = 3_000;
 
 // ── Probe failure counter (Council Invariant 2: BigInt integer accounting) ───
@@ -173,9 +192,17 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, HOST, () => {
+  if (HOST === '0.0.0.0') {
+    // Backward compatible default (the USB-C tether and LAN paths rely on it), but say so: these metrics are unauthenticated.
+    process.stderr.write(
+      '[workstation-agent] WARNING: listening on every interface (0.0.0.0); hardware and Ollama metrics are served, ' +
+      'unauthenticated, to any network this Mac joins. Set WORKSTATION_AGENT_HOST to the Tailscale address to narrow it ' +
+      '(the LaunchAgent in deploy/macos/ does).\n'
+    );
+  }
   process.stdout.write(
-    `[workstation-agent] Listening on 0.0.0.0:${PORT}\n` +
+    `[workstation-agent] Listening on ${HOST}:${PORT}\n` +
     `  /api/hardware — live Apple Silicon + Ollama telemetry\n` +
     `  /health       — agent liveness\n` +
     `  Probe interval: ${PROBE_INTERVAL_MS}ms · source: live_hardware\n`
