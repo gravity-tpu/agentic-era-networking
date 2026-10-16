@@ -83,6 +83,7 @@ import {
   withSwitchError,
   type IsolationStatus,
 } from './isolation-status.js';
+import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -128,6 +129,9 @@ export function degradedControlPlaneAllowed(env: Readonly<Record<string, string 
 export function coralDaemonEnabled(env: Readonly<Record<string, string | undefined>>): boolean {
   return env['ZODIAC_ENABLE_CORAL_DAEMON'] === '1';
 }
+// Council Invariant 5: how often the bridge re-reads the switch's flow table to re-verify the isolation policy after
+// install. Default 60 s; the exact value 0 disables it; anything else outside 10 s..1 h is a startup error.
+const ISOLATION_RECHECK_INTERVAL_MS = parseRecheckIntervalMs(process.env);
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -593,7 +597,9 @@ export class ZodiacBridgeServer {
   } | null = null;
   private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
-  private flowProbeInFlight = false;
+  /** One flow-table read at a time: shared by the on-demand probe and the periodic isolation re-check. */
+  private readonly flowReadLock = new FlowReadLock();
+  private readonly isolationRechecker: IsolationRechecker;
   /** null until the first probe has finished, so the first probe is never refused for spacing. */
   private lastFlowProbeMonoNs: bigint | null = null;
   /** xid → isolation rule id for the current OpenFlow session; reset on every 'ready'. */
@@ -682,6 +688,24 @@ export class ZodiacBridgeServer {
     bridgeSecret?: string
   ) {
     this.controller = controller ?? new ZodiacController();
+    this.isolationRechecker = new IsolationRechecker({
+      policy: buildPort1IsolationPolicy(),
+      read: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
+      getStatus: () => this.isolationStatus,
+      setStatus: (s) => {
+        this.isolationStatus = s;
+      },
+      lock: this.flowReadLock,
+      log: (level, text) => {
+        const line = `[${level === 'info' ? '+' : '!'}] [Bridge Server] ${text}`;
+        if (level === 'error') console.error(line);
+        else if (level === 'warn') console.warn(line);
+        else console.log(line);
+      },
+      nowMs: () => Date.now(),
+      nowMonoNs: () => process.hrtime.bigint(),
+      intervalMs: ISOLATION_RECHECK_INTERVAL_MS,
+    });
     this.switchIp = switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1';
     this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '0.0.0.0';
     this.cloudRelayUrl = cloudRelayUrl ?? process.env['ZODIAC_CLOUD_RELAY_URL'];
@@ -760,6 +784,7 @@ export class ZodiacBridgeServer {
         return;
       }
       this.isolationStatus = pendingReadbackStatus();
+      this.isolationRechecker.reset(); // a new session: forget the previous session's streaks
       for (const rule of isolationPolicy) {
         const xid = this.controller.openFlow.sendFlowModOptions(rule.flowMod);
         this.flowModXidLabels.set(xid, rule.id);
@@ -824,8 +849,8 @@ export class ZodiacBridgeServer {
    * FLOW_PROBE_MIN_INTERVAL_MS, measured from the end of the previous probe (FlowProbeRateLimitedError otherwise). Rejects if there is no established session.
    */
   public async probeFlowTable(): Promise<FlowProbeReport> {
-    if (this.flowProbeInFlight) {
-      throw new FlowProbeRateLimitedError(FLOW_PROBE_MIN_INTERVAL_MS, 'a flow-table probe is already running');
+    if (this.flowReadLock.isHeld) {
+      throw new FlowProbeRateLimitedError(FLOW_PROBE_MIN_INTERVAL_MS, 'a flow-table read is already running');
     }
     const started = process.hrtime.bigint();
     if (this.lastFlowProbeMonoNs !== null) {
@@ -835,7 +860,9 @@ export class ZodiacBridgeServer {
         throw new FlowProbeRateLimitedError(Number(minMs - elapsedMs), 'flow-table probes are spaced; try again shortly');
       }
     }
-    this.flowProbeInFlight = true;
+    if (!this.flowReadLock.tryAcquire()) {
+      throw new FlowProbeRateLimitedError(FLOW_PROBE_MIN_INTERVAL_MS, 'a flow-table read is already running');
+    }
     this.lastFlowProbeMonoNs = started;
     try {
       const { replies } = await readFlowStatsRaw(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS);
@@ -847,7 +874,7 @@ export class ZodiacBridgeServer {
         context: { isolationState: this.isolationStatus.state, node: process.version },
       });
     } finally {
-      this.flowProbeInFlight = false;
+      this.flowReadLock.release();
       // Space probes from the end of the last one, so a probe that ran into its timeout cannot be followed at once.
       this.lastFlowProbeMonoNs = process.hrtime.bigint();
     }
@@ -953,6 +980,7 @@ export class ZodiacBridgeServer {
                          // alive if all other I/O drains (graceful shutdown).
     }
 
+    this.isolationRechecker.start(); // re-verifies the isolation policy against the switch on a timer (see isolation-recheck.ts)
     return boundPort;
   }
 
@@ -1129,6 +1157,7 @@ export class ZodiacBridgeServer {
   }
 
   public async stop(): Promise<void> {
+    this.isolationRechecker.stop();
     this.flushTelemetryStateToDiskSync();
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
