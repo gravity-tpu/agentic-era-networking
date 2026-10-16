@@ -1389,8 +1389,7 @@
       if (els.ofDpid) els.ofDpid.innerText = snapshot.openflow.datapathId || '0x000000000000';
       if (els.ofTables) els.ofTables.innerText = `${snapshot.openflow.activeTables || 10} tables`;
       if (els.ofActiveFlows) {
-        const flows = snapshot.openflow?.activeFlows;
-        els.ofActiveFlows.innerText = flows === undefined || flows === null ? '-- flows (not read back)' : `${flows} flows active`;
+        els.ofActiveFlows.innerText = `${snapshot.openflow?.activeFlows ?? 0} flows active`;
       }
       if (els.ofTableLookups && snapshot.openflow?.tableLookups !== undefined) {
         els.ofTableLookups.innerText = `${Number(snapshot.openflow.tableLookups).toLocaleString()} lookups`;
