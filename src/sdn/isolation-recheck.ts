@@ -275,7 +275,7 @@ export class IsolationRechecker {
     const latest = d.getStatus();
     // The install path or a switch error may have moved the status while we were reading; judge against the latest.
     if (!ELIGIBLE.has(latest.state)) return 'skipped';
-    const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs(), entries.length);
+    const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
 
     // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only by
     // the early return below, so every other path starts it over.

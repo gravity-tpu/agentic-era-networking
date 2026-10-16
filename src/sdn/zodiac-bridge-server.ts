@@ -248,10 +248,7 @@ export function parseIpv4ToUint32(ip: string): number | null {
 
 export interface CopilotSummaryMetrics {
   openFlowState: string;
-  /** Flow entries the switch reported in its last readback; null when the table has not been read back. */
-  switchEntryCount: number | null;
-  /** Size of the bridge's in-memory registry of rules it installed itself; not the switch's table. */
-  controllerRegistryRules: number;
+  activeRules: number;
   quarantinedCount: number;
   switchTempC: number | null;
   jetsonTempC: number | null;
@@ -809,7 +806,7 @@ export class ZodiacBridgeServer {
       readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS)
         .then((entries) => {
           const verdict = verifyIsolationReadback(isolationPolicy, entries);
-          this.isolationStatus = statusFromReadback(this.isolationStatus, verdict, Date.now(), process.hrtime.bigint(), entries.length);
+          this.isolationStatus = statusFromReadback(this.isolationStatus, verdict, Date.now(), process.hrtime.bigint());
           const line = describeReadback(this.isolationStatus, isolationPolicy.length, entries.length);
           if (this.isolationStatus.state === 'verified') {
             console.log(`[+] [Bridge Server] ${line}`);
@@ -1999,10 +1996,6 @@ export class ZodiacBridgeServer {
     this.copilotInFlightPromise = (async (): Promise<CopilotSummaryResponse> => {
       const ofState = this.controller.openFlow.metrics.state || this.cachedSnapshot.openflow?.status || 'Disconnected';
       const totalRules = this.flowRuleRegistry.size;
-      const switchEntryCount = this.isolationStatus.switchEntryCount;
-      const rulesText = switchEntryCount === null
-        ? `switch flow table not read back, ${totalRules} in the controller's own registry`
-        : `${switchEntryCount} flow entries on the switch at last readback, ${totalRules} in the controller's own registry`;
       let quarantinedCount = 0;
       for (const rule of this.flowRuleRegistry.values()) {
         if (rule.action === 'DROP' || rule.ruleId.startsWith('quarantine-')) {
@@ -2028,8 +2021,7 @@ export class ZodiacBridgeServer {
 
       const metrics: CopilotSummaryMetrics = {
         openFlowState: ofState,
-        switchEntryCount,
-        controllerRegistryRules: totalRules,
+        activeRules: totalRules,
         quarantinedCount,
         switchTempC,
         jetsonTempC,
@@ -2044,7 +2036,7 @@ export class ZodiacBridgeServer {
       const prompt = `You are the Zodiac Executive AI Copilot running on Jetson Orin Nano Super.
 Provide a concise, 3-bullet plain-English executive triage of the physical SDN infrastructure.
 Telemetry Signals:
-- OpenFlow 1.3 State: ${ofState} (${rulesText}; ${quarantinedCount} quarantined hosts)
+- OpenFlow 1.3 State: ${ofState} (${totalRules} active rules, ${quarantinedCount} quarantined hosts)
 - Physical Switch Ports: ${portsSummary || 'Port 1..4 monitored'}
 - Switch CPU Temp: ${switchTempC != null ? switchTempC + '°C' : 'N/A'}
 - Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
@@ -2111,7 +2103,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
           ofDisconnected ? 'ALERT' : hasQuarantine ? 'DEGRADED' : 'HEALTHY';
 
         const fallbackBullets: string[] = [
-          `OpenFlow 1.3 control plane is ${ofState} with ${rulesText} (${quarantinedCount} isolated).`,
+          `OpenFlow 1.3 control plane is ${ofState} with ${totalRules} active rules (${quarantinedCount} isolated).`,
           `Switch CPU is ${switchTempC != null ? switchTempC + '°C' : 'monitored'}; Jetson Orin silicon at ${jetsonTempC != null ? jetsonTempC + '°C' : 'nominal'} (${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'idle'}).`,
           wireTapInferencesPerSec > 0
             ? `Ampere GPU wire-tap inference active at ${wireTapInferencesPerSec} inferences/second.`
@@ -2324,8 +2316,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
               ? `0x${health.openFlowMetrics.switchFeatures.datapathId.toString(16)}`
               : '0x70b3d58740bc',
             activeTables: health.openFlowMetrics.switchFeatures?.nTables ?? 10,
-            // The switch's own entry count from the last readback; 0 until one has completed (port1Isolation says which).
-            activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? (this.isolationStatus.switchEntryCount ?? 0) : 0,
+            activeFlows: health.openFlowMetrics.state === 'ESTABLISHED' ? this.flowRuleRegistry.size : 0,
             tableLookups: health.openFlowMetrics.messagesReceived,
             tableMatches: health.openFlowMetrics.messagesReceived,
             lastHeartbeatLatencyNs: health.openFlowMetrics.lastEchoLatencyNs,

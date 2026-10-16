@@ -51,11 +51,6 @@ export interface IsolationStatus {
   readonly checkedAtMonoNs: bigint | null;
   /** Action level from the same readback; null until a readback has completed. */
   readonly actions: ActionReadbackVerdict | null;
-  /**
-   * Total flow entries the switch reported in the readback that produced this status (the table's real size, not just
-   * the policy's rules); null until a readback has completed, and again after a failed one.
-   */
-  readonly switchEntryCount: number | null;
   /** True only when the match level verified AND the switch reported exactly the intended output ports. */
   readonly provenForwarding: boolean;
 }
@@ -69,7 +64,6 @@ export function initialIsolationStatus(): IsolationStatus {
     checkedAtMs: null,
     checkedAtMonoNs: null,
     actions: null,
-    switchEntryCount: null,
     provenForwarding: false,
   };
 }
@@ -91,7 +85,6 @@ export function statusFromReadback(
   verdict: IsolationReadbackVerdict,
   nowMs: number,
   nowMonoNs: bigint,
-  switchEntryCount: number | null = null,
 ): IsolationStatus {
   const ok = verdict.verified && prev.switchErrors.length === 0 && verdict.actions.status !== 'mismatch';
   return {
@@ -102,7 +95,6 @@ export function statusFromReadback(
     checkedAtMs: nowMs,
     checkedAtMonoNs: nowMonoNs,
     actions: verdict.actions,
-    switchEntryCount,
     provenForwarding: ok && verdict.provenForwarding,
   };
 }
@@ -132,7 +124,6 @@ export function readbackFailedStatus(prev: IsolationStatus, message: string, now
     checkedAtMs: nowMs,
     checkedAtMonoNs: nowMonoNs,
     actions: null,
-    switchEntryCount: null,
     provenForwarding: false,
   };
 }
