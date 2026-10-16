@@ -43,6 +43,10 @@ export interface IsolationStatus {
   readonly mismatches: readonly string[];
   /** OFPT_ERROR messages the switch returned for isolation FlowMods. Never mutated: see withSwitchError. */
   readonly switchErrors: readonly string[];
+  /**
+   * When this status was last ESTABLISHED: a completed readback, or the moment it became `readback_failed`. A run of
+   * failed reads after that does not re-stamp it, so its age keeps growing while the status stays unknown.
+   */
   readonly checkedAtMs: number | null;
   readonly checkedAtMonoNs: bigint | null;
   /** Action level from the same readback; null until a readback has completed. */

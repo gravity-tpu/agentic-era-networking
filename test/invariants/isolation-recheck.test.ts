@@ -1,0 +1,545 @@
+/**
+ * isolation-recheck.test.ts
+ * Periodic re-verification of the isolation policy: eligibility, drift detection, damping, and the timer.
+ *
+ * IMPORTANT (Invariant 6): the switch replies are FIXTURES (test/helpers/flow-stats-fixtures.ts), and the clock is
+ * fake. This proves the logic that watches a switch, not how a switch behaves.
+ */
+
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js';
+import { parseFlowStatsReply, type FlowStatsEntry } from '../../src/sdn/dataplane-benchmark.js';
+import { buildPort1IsolationPolicy, verifyIsolationReadback } from '../../src/sdn/port1-isolation.js';
+import {
+  DEFAULT_RECHECK_INTERVAL_MS,
+  FlowReadLock,
+  IsolationRechecker,
+  RECHECK_CLEAN_READS_TO_RECOVER,
+  RECHECK_FAILURES_BEFORE_UNKNOWN,
+  RECHECK_REPEAT_LOG_EVERY,
+  RecheckConfigError,
+  parseRecheckIntervalMs,
+  type RecheckDeps,
+} from '../../src/sdn/isolation-recheck.js';
+import {
+  initialIsolationStatus,
+  pendingReadbackStatus,
+  statusFromReadback,
+  verifierRejectedStatus,
+  type IsolationStatus,
+} from '../../src/sdn/isolation-status.js';
+import { applyActions, entryFrom, outputAction, replyOf } from '../helpers/flow-stats-fixtures.js';
+
+const policy = buildPort1IsolationPolicy();
+const flowMods = policy.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
+const tableMissMod = buildOfpFlowMod({ command: FlowModCommand.OFPFC_ADD, priority: 0 }, 99);
+
+const entriesOf = (bufs: readonly Buffer[]): FlowStatsEntry[] => parseFlowStatsReply(replyOf(bufs)).entries;
+const faithful = (): FlowStatsEntry[] => entriesOf([entryFrom(tableMissMod), ...flowMods.map((fm) => entryFrom(fm))]);
+const leaky = (): FlowStatsEntry[] => {
+  const bufs = [entryFrom(tableMissMod), ...flowMods.map((fm) => entryFrom(fm))];
+  const idx = policy.findIndex((r) => r.id === 'p1-default-tap-only') + 1;
+  bufs[idx] = entryFrom(flowMods[idx - 1] as Buffer, applyActions(outputAction(2), outputAction(3)));
+  return entriesOf(bufs);
+};
+const missingRule = (): FlowStatsEntry[] => faithful().filter((_, i) => i !== 2);
+
+type Read = () => Promise<readonly FlowStatsEntry[]>;
+const ok = (entries: () => FlowStatsEntry[]): Read => () => Promise.resolve(entries());
+const fails = (msg = 'OFPMP_FLOW readback timed out after 10000 ms'): Read => () => Promise.reject(new Error(msg));
+
+function verifiedStatus(): IsolationStatus {
+  return statusFromReadback(pendingReadbackStatus(), verifyIsolationReadback(policy, faithful()), 1, 1n);
+}
+
+function make(initial: IsolationStatus = verifiedStatus(), intervalMs = 10_000, overrides: Partial<RecheckDeps> = {}) {
+  let status = initial;
+  let mono = 100n;
+  let reads = 0;
+  let read: Read = ok(faithful);
+  const logs: Array<{ level: string; text: string }> = [];
+  const lock = new FlowReadLock();
+  const rc = new IsolationRechecker({
+    policy,
+    read: () => {
+      reads += 1;
+      return read();
+    },
+    getStatus: () => status,
+    setStatus: (s) => {
+      status = s;
+    },
+    lock,
+    log: (level, text) => logs.push({ level, text }),
+    nowMs: () => 1_700_000_000_000,
+    nowMonoNs: () => (mono += 1000n),
+    intervalMs,
+    ...overrides,
+  });
+  return {
+    rc,
+    lock,
+    logs,
+    status: () => status,
+    setStatus: (s: IsolationStatus) => {
+      status = s;
+    },
+    reads: () => reads,
+    useRead: (r: Read) => {
+      read = r;
+    },
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('parseRecheckIntervalMs', () => {
+  it('defaults when unset, 0 disables, and a bounded integer is accepted', () => {
+    expect(parseRecheckIntervalMs({})).toBe(DEFAULT_RECHECK_INTERVAL_MS);
+    expect(parseRecheckIntervalMs({ ZODIAC_ISOLATION_RECHECK_INTERVAL_MS: '0' })).toBe(0);
+    expect(parseRecheckIntervalMs({ ZODIAC_ISOLATION_RECHECK_INTERVAL_MS: '10000' })).toBe(10_000);
+    expect(parseRecheckIntervalMs({ ZODIAC_ISOLATION_RECHECK_INTERVAL_MS: '3600000' })).toBe(3_600_000);
+  });
+
+  it('rejects anything else, so a typo cannot silently turn verification off', () => {
+    for (const v of ['9999', '3600001', '-1', 'abc', '', ' 60000', '1e4', '00', '60000ms']) {
+      expect(() => parseRecheckIntervalMs({ ZODIAC_ISOLATION_RECHECK_INTERVAL_MS: v }), JSON.stringify(v)).toThrow(RecheckConfigError);
+    }
+  });
+});
+
+describe('FlowReadLock', () => {
+  it('admits one holder at a time and is reusable after release', () => {
+    const lock = new FlowReadLock();
+    expect(lock.isHeld).toBe(false);
+    expect(lock.tryAcquire()).toBe(true);
+    expect(lock.isHeld).toBe(true);
+    expect(lock.tryAcquire()).toBe(false); // a second reader is refused, not queued
+    lock.release();
+    expect(lock.isHeld).toBe(false);
+    expect(lock.tryAcquire()).toBe(true);
+  });
+});
+
+describe('eligibility', () => {
+  it('does nothing before an install readback has produced a verdict (every such state)', async () => {
+    const states = [initialIsolationStatus(), pendingReadbackStatus(), verifierRejectedStatus(['x'], 1, 2n)];
+    expect(states.map((s) => s.state)).toEqual(['not_installed', 'pending_readback', 'verifier_rejected']);
+    for (const s of states) {
+      const t = make(s);
+      expect(await t.rc.runOnce(), s.state).toBe('skipped');
+      expect(t.reads(), s.state).toBe(0);
+    }
+  });
+
+  it('skips while another flow-table read holds the lock, and does not release a lock it did not take', async () => {
+    const t = make();
+    expect(t.lock.tryAcquire()).toBe(true); // e.g. the on-demand probe
+    expect(await t.rc.runOnce()).toBe('skipped');
+    expect(t.reads()).toBe(0);
+    expect(t.lock.isHeld).toBe(true);
+  });
+
+  it('releases the lock after a successful read and after a failed one', async () => {
+    const t = make();
+    await t.rc.runOnce();
+    expect(t.lock.isHeld).toBe(false);
+    t.useRead(fails());
+    await t.rc.runOnce();
+    expect(t.lock.isHeld).toBe(false);
+  });
+
+  it('judges against the latest status: if the install path moved it while reading, it records nothing', async () => {
+    const t = make();
+    t.useRead(() => {
+      t.setStatus(pendingReadbackStatus()); // a new session began installing
+      return Promise.resolve(faithful());
+    });
+    expect(await t.rc.runOnce()).toBe('skipped');
+    expect(t.status().state).toBe('pending_readback');
+  });
+});
+
+describe('steady state and drift', () => {
+  it('a healthy switch stays verified, the age is refreshed, and nothing is logged', async () => {
+    const t = make();
+    const before = t.status().checkedAtMonoNs;
+    expect(await t.rc.runOnce()).toBe('unchanged');
+    expect(t.status().state).toBe('verified');
+    expect(t.status().provenForwarding).toBe(true);
+    expect((t.status().checkedAtMonoNs ?? 0n) > (before ?? 0n)).toBe(true);
+    expect(t.logs).toEqual([]);
+  });
+
+  it('a leak that appears after install is recorded immediately, with an error log', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    expect(await t.rc.runOnce()).toBe('changed');
+    expect(t.status().state).toBe('mismatch');
+    expect(t.status().provenForwarding).toBe(false);
+    expect(t.logs.some((l) => l.level === 'error' && l.text.includes('no longer matches the policy') && l.text.includes('p1-default-tap-only'))).toBe(true);
+  });
+
+  it('an unchanged mismatch is not logged again on every check (no journal spam)', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    const logged = t.logs.length;
+    expect(await t.rc.runOnce()).toBe('unchanged');
+    expect(await t.rc.runOnce()).toBe('unchanged');
+    expect(t.logs).toHaveLength(logged);
+    expect(t.status().state).toBe('mismatch');
+  });
+
+  it('a rule that vanishes, or an emptied table (a switch that rebooted), is recorded immediately', async () => {
+    for (const drift of [missingRule, () => [] as FlowStatsEntry[]]) {
+      const t = make();
+      t.useRead(ok(drift));
+      expect(await t.rc.runOnce()).toBe('changed');
+      expect(t.status().state).toBe('mismatch');
+    }
+  });
+});
+
+describe('alternating good and bad reads (streaks are consecutive, by decision)', () => {
+  it('a mismatch stays a mismatch: alternation never reaches the recovery threshold', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    for (let i = 0; i < 6; i++) {
+      t.useRead(i % 2 === 0 ? ok(faithful) : ok(leaky));
+      await t.rc.runOnce();
+    }
+    expect(t.status().state).toBe('mismatch'); // the safe direction
+  });
+
+  it('a verified status stays verified while failures alternate with clean reads, and each failure is warned about', async () => {
+    const t = make();
+    for (let i = 0; i < 6; i++) {
+      t.useRead(i % 2 === 0 ? fails() : ok(faithful));
+      await t.rc.runOnce();
+    }
+    expect(t.status().state).toBe('verified');
+    expect(t.logs.filter((l) => l.level === 'warn')).toHaveLength(3); // the flakiness is visible, not silent
+  });
+});
+
+describe('a read that straddles a new session', () => {
+  it('a failure from the old session does not count towards the new session\'s failures', async () => {
+    const t = make();
+    let fail: (e: Error) => void = () => undefined;
+    t.useRead(() => new Promise<FlowStatsEntry[]>((_, reject) => { fail = reject; }));
+    const outstanding = t.rc.runOnce();
+    t.rc.reset(); // a new session installs
+    fail(new Error('old session timed out'));
+    expect(await outstanding).toBe('skipped');
+    expect(t.lock.isHeld).toBe(false); // the early return in the catch block still runs the finally that releases the lock
+    // the failure was discarded, so it takes a full run of fresh failures to make the status unknown
+    t.useRead(fails());
+    for (let i = 1; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('verified');
+  });
+
+  it('a result from the old session is not recorded in the new one', async () => {
+    const t = make();
+    let finish: (e: FlowStatsEntry[]) => void = () => undefined;
+    t.useRead(() => new Promise<FlowStatsEntry[]>((resolve) => { finish = resolve; }));
+    const outstanding = t.rc.runOnce();
+    t.rc.reset();
+    finish(leaky());
+    expect(await outstanding).toBe('skipped');
+    expect(t.status().state).toBe('verified'); // the stale leak reading was discarded
+    expect(t.lock.isHeld).toBe(false);
+  });
+});
+
+describe('damping: failed reads', () => {
+  it('one failed read does not change a verified status; consecutive failures do', async () => {
+    const t = make();
+    t.useRead(fails());
+    expect(await t.rc.runOnce()).toBe('unchanged');
+    expect(t.status().state).toBe('verified');
+    expect(t.logs.at(-1)?.level).toBe('warn');
+    for (let i = 1; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('readback_failed');
+    expect(t.status().provenForwarding).toBe(false);
+    expect(t.logs.at(-1)?.level).toBe('error');
+  });
+
+  it('an unreachable switch is not warned about every interval: the first failures, then every Nth', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce(); // a recorded mismatch, which failed reads never replace
+    const before = t.logs.length;
+    t.useRead(fails());
+    for (let i = 0; i < 25; i++) await t.rc.runOnce();
+    const warns = t.logs.slice(before).filter((l) => l.level === 'warn');
+    // failures 1..RECHECK_FAILURES_BEFORE_UNKNOWN, then 10 and 20
+    expect(warns).toHaveLength(RECHECK_FAILURES_BEFORE_UNKNOWN + Math.floor(25 / RECHECK_REPEAT_LOG_EVERY));
+    expect(t.status().state).toBe('mismatch');
+  });
+
+  it('the repeat interval is configurable', async () => {
+    const t = make(verifiedStatus(), 10_000, { repeatLogEvery: 5 });
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    const before = t.logs.length;
+    t.useRead(fails());
+    for (let i = 0; i < 12; i++) await t.rc.runOnce();
+    const warns = t.logs.slice(before).filter((l) => l.level === 'warn');
+    expect(warns).toHaveLength(RECHECK_FAILURES_BEFORE_UNKNOWN + 2); // failures 1, 2, then 5 and 10
+  });
+
+  it('a successful read between failures starts the count over', async () => {
+    const t = make();
+    t.useRead(fails());
+    await t.rc.runOnce();
+    t.useRead(ok(faithful));
+    await t.rc.runOnce();
+    t.useRead(fails());
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('verified');
+  });
+
+  it('failed reads never replace a recorded mismatch', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    const recorded = t.status().mismatches;
+    expect(t.status().state).toBe('mismatch');
+    t.useRead(fails());
+    for (let i = 0; i < RECHECK_FAILURES_BEFORE_UNKNOWN + 2; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    expect(t.status().mismatches).toEqual(recorded);
+    expect(t.status().actions?.status).toBe('mismatch');
+  });
+
+  it('reset() forgets the failures of a previous session', async () => {
+    const t = make();
+    t.useRead(fails());
+    await t.rc.runOnce();
+    t.rc.reset();
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('verified'); // two failures, but not in a row after the reset
+  });
+});
+
+describe('damping: recovery', () => {
+  const broken = async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    return t;
+  };
+
+  it('a single clean readback does not clear a mismatch; a run of them does', async () => {
+    const t = await broken();
+    t.useRead(ok(faithful));
+    for (let i = 1; i < RECHECK_CLEAN_READS_TO_RECOVER; i++) {
+      expect(await t.rc.runOnce()).toBe('unchanged');
+      expect(t.status().state).toBe('mismatch');
+    }
+    expect(await t.rc.runOnce()).toBe('changed');
+    expect(t.status().state).toBe('verified');
+    expect(t.status().provenForwarding).toBe(true);
+    expect(t.logs.at(-1)?.text).toContain('back to Isolation readback VERIFIED');
+  });
+
+  it('a bad readback between clean ones breaks the streak', async () => {
+    const t = await broken();
+    t.useRead(ok(faithful));
+    await t.rc.runOnce();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    t.useRead(ok(faithful));
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch'); // only one clean read since the last bad one
+  });
+
+  it('readback_failed also needs a run of clean reads to recover', async () => {
+    const t = make();
+    t.useRead(fails());
+    for (let i = 0; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('readback_failed');
+    t.useRead(ok(faithful));
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('readback_failed');
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('verified');
+  });
+});
+
+describe('a fault in the re-check itself must never reach the process', () => {
+  /** Counts unhandled rejections, which on Node 22 would terminate the bridge. */
+  const watchRejections = () => {
+    const seen: unknown[] = [];
+    const listener = (reason: unknown): void => {
+      seen.push(reason);
+    };
+    process.on('unhandledRejection', listener);
+    return { seen, stop: () => process.off('unhandledRejection', listener) };
+  };
+
+  it('a throwing status callback makes runOnce a counted failure, not a rejection', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const t = make(verifiedStatus(), 10_000, {
+      setStatus: () => {
+        throw new Error('status store exploded');
+      },
+    });
+    for (let i = 0; i < 4; i++) await expect(t.rc.runOnce()).resolves.toBeDefined();
+    expect(stderr).toHaveBeenCalled(); // the final net reports it
+    stderr.mockRestore();
+  });
+
+  it('the timer survives a throwing callback: it keeps re-arming and raises no unhandled rejection', async () => {
+    vi.useFakeTimers();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const watch = watchRejections();
+    let setStatusCalls = 0;
+    const t = make(verifiedStatus(), 10_000, {
+      setStatus: () => {
+        setStatusCalls += 1;
+        throw new Error('status store exploded');
+      },
+    });
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(t.reads()).toBeGreaterThanOrEqual(4); // still ticking after repeated faults
+    expect(setStatusCalls).toBeGreaterThanOrEqual(4); // and the throwing callback really was reached on each tick
+    expect(watch.seen).toEqual([]);
+    t.rc.stop();
+    watch.stop();
+    stderr.mockRestore();
+  });
+
+  it('a throwing logger cannot corrupt a correctly computed status: it is reported, not counted as a failed check', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const t = make(verifiedStatus(), 10_000, {
+      log: () => {
+        throw new Error('logger exploded');
+      },
+    });
+    t.useRead(ok(leaky)); // a change, so the success path logs
+    await expect(t.rc.runOnce()).resolves.toBe('changed'); // the check itself succeeded
+    expect(t.status().state).toBe('mismatch'); // the verdict that was computed and stored stands
+    expect(t.status().actions?.status).toBe('mismatch');
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('logger exploded'));
+    // and it was not counted as a failure: a later failed read is the first in its streak, not the second
+    t.useRead(fails());
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    stderr.mockRestore();
+  });
+
+  it('a throwing logger does not stop the timer from running checks', async () => {
+    vi.useFakeTimers();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const t = make(verifiedStatus(), 10_000, {
+      log: () => {
+        throw new Error('logger exploded');
+      },
+    });
+    t.useRead(fails()); // the failure path logs a warning, through the throwing logger
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(t.reads()).toBeGreaterThanOrEqual(3);
+    t.rc.stop();
+    stderr.mockRestore();
+  });
+
+  it('a reply the verifier cannot interpret is a counted, damped failure', async () => {
+    const t = make();
+    t.useRead(() => {
+      const entries = faithful();
+      const first = entries[0];
+      if (first !== undefined) {
+        Object.defineProperty(first, 'priority', {
+          get: () => {
+            throw new Error('malformed entry');
+          },
+        });
+      }
+      return Promise.resolve(entries);
+    });
+    await expect(t.rc.runOnce()).resolves.toBe('unchanged'); // one failure: still verified
+    expect(t.status().state).toBe('verified');
+    for (let i = 1; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
+    expect(t.status().state).toBe('readback_failed');
+    expect(t.logs.some((l) => l.text.includes('malformed entry'))).toBe(true);
+  });
+
+  it('timer guard: even if runOnce were to reject, the timer neither crashes nor stops', async () => {
+    vi.useFakeTimers();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const watch = watchRejections();
+    const t = make(verifiedStatus(), 10_000);
+    const tick = vi.spyOn(t.rc, 'runOnce').mockRejectedValue(new Error('runOnce escaped'));
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(tick.mock.calls.length).toBeGreaterThanOrEqual(3); // re-armed after each rejection
+    expect(watch.seen).toEqual([]);
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('runOnce escaped'));
+    t.rc.stop();
+    watch.stop();
+    stderr.mockRestore();
+  });
+});
+
+describe('the timer', () => {
+  it('reads once per interval, chained: the next check is scheduled after the last one finishes', async () => {
+    vi.useFakeTimers();
+    const t = make(verifiedStatus(), 10_000);
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(t.reads()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.reads()).toBe(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.reads()).toBe(2);
+    t.rc.stop();
+  });
+
+  it('a slow readback is never overlapped by the next tick', async () => {
+    vi.useFakeTimers();
+    const t = make(verifiedStatus(), 10_000);
+    let release: () => void = () => undefined;
+    t.useRead(() => new Promise<FlowStatsEntry[]>((resolve) => { release = () => resolve(faithful()); }));
+    // The lock would also refuse an overlapping read, so count the ticks that START a check: while one is
+    // outstanding, no further tick may even begin.
+    const ticks = vi.spyOn(t.rc, 'runOnce');
+    t.rc.start();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.reads()).toBe(1);
+    expect(ticks).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000); // the read is still outstanding
+    expect(t.reads()).toBe(1);
+    expect(ticks).toHaveBeenCalledTimes(1);
+    release();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.reads()).toBe(2);
+    expect(ticks).toHaveBeenCalledTimes(2);
+    t.rc.stop();
+  });
+
+  it('stop() ends it, start() is idempotent, and an interval of 0 never starts', async () => {
+    vi.useFakeTimers();
+    const t = make(verifiedStatus(), 10_000);
+    t.rc.start();
+    t.rc.start(); // a second start must not double the schedule
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.reads()).toBe(1);
+    t.rc.stop();
+    await vi.advanceTimersByTimeAsync(100_000);
+    expect(t.reads()).toBe(1);
+
+    const off = make(verifiedStatus(), 0);
+    off.rc.start();
+    await vi.advanceTimersByTimeAsync(10_000_000);
+    expect(off.reads()).toBe(0);
+  });
+});
