@@ -202,6 +202,30 @@ describe('steady state and drift', () => {
   });
 });
 
+describe('alternating good and bad reads (streaks are consecutive, by decision)', () => {
+  it('a mismatch stays a mismatch: alternation never reaches the recovery threshold', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    for (let i = 0; i < 6; i++) {
+      t.useRead(i % 2 === 0 ? ok(faithful) : ok(leaky));
+      await t.rc.runOnce();
+    }
+    expect(t.status().state).toBe('mismatch'); // the safe direction
+  });
+
+  it('a verified status stays verified while failures alternate with clean reads, and each failure is warned about', async () => {
+    const t = make();
+    for (let i = 0; i < 6; i++) {
+      t.useRead(i % 2 === 0 ? fails() : ok(faithful));
+      await t.rc.runOnce();
+    }
+    expect(t.status().state).toBe('verified');
+    expect(t.logs.filter((l) => l.level === 'warn')).toHaveLength(3); // the flakiness is visible, not silent
+  });
+});
+
 describe('a read that straddles a new session', () => {
   it('a failure from the old session does not count towards the new session\'s failures', async () => {
     const t = make();
@@ -351,14 +375,17 @@ describe('a fault in the re-check itself must never reach the process', () => {
     vi.useFakeTimers();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const watch = watchRejections();
+    let setStatusCalls = 0;
     const t = make(verifiedStatus(), 10_000, {
       setStatus: () => {
+        setStatusCalls += 1;
         throw new Error('status store exploded');
       },
     });
     t.rc.start();
     await vi.advanceTimersByTimeAsync(50_000);
     expect(t.reads()).toBeGreaterThanOrEqual(4); // still ticking after repeated faults
+    expect(setStatusCalls).toBeGreaterThanOrEqual(4); // and the throwing callback really was reached on each tick
     expect(watch.seen).toEqual([]);
     t.rc.stop();
     watch.stop();

@@ -18,6 +18,9 @@
  *     replace a recorded `mismatch`, which is the stronger and more specific finding;
  *   - leaving `mismatch` or `readback_failed` for `verified` takes RECHECK_CLEAN_READS_TO_RECOVER clean readbacks in
  *     a row, so a single clean read between bad ones does not read as recovery.
+ * Both streaks are CONSECUTIVE: a clean read clears the failure streak and a failure clears the clean streak. So a
+ * switch that alternates good and bad reads never reaches either threshold: a mismatch stays a mismatch (the safe
+ * direction), and a verified status stays verified while its age and the per-failure warnings show the flakiness.
  *
  * Fail closed (Invariant 3): it only runs once an install readback has produced a verdict, never while the install is
  * pending, and never concurrently with another flow-table read (the shared FlowReadLock), because the switch's MCU
