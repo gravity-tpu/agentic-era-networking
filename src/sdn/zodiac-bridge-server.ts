@@ -85,7 +85,7 @@ import {
   type IsolationStatus,
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
-import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck } from './relay-authority.js';
+import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -2755,7 +2755,10 @@ if (isMain) {
   const portArg = process.argv[2] === 'serve' ? process.argv[3] : process.argv[2];
   const port = parseInt(process.env['PORT'] ?? portArg ?? '3003', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
-  const cloudRelayUrl = process.env['ZODIAC_CLOUD_RELAY_URL'] ?? 'https://agentic-era-networking.vercel.app';
+  const cloudRelayUrl = resolveCloudRelayUrl();
+  if (cloudRelayUrl === undefined) {
+    console.warn('[!] [ZodiacBridgeServer] ZODIAC_CLOUD_RELAY_URL is not set: this bridge will NOT push to the cloud dashboard.');
+  }
   const bridgeSecret = process.env['ZODIAC_BRIDGE_SECRET'];
 
   const bridge = new ZodiacBridgeServer(
