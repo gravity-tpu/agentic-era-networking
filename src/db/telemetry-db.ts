@@ -324,7 +324,7 @@ async function persistLatestSnapshot(prisma: PrismaClient, snapshot: ZodiacFullT
   try {
     const data = {
       timestampMs: BigInt(nowMs),
-      source: 'live_hardware',
+      source: snapshot.source, // narrowed above: only a live snapshot reaches here
       snapshotJson: prepared.json as Prisma.InputJsonValue,
     };
     const write = prisma.zodiacLatestSnapshot.upsert({
