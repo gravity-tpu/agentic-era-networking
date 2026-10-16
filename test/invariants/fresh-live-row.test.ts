@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const db = vi.hoisted(() => ({
-  row: null as null | { timestampMs: bigint; createdAt: Date },
+  row: null as null | { timestampMs: bigint; createdAt: Date; source: string },
   mode: 'row' as 'row' | 'throw' | 'hang',
 }));
 
@@ -29,9 +29,9 @@ vi.mock('@prisma/client', () => ({
 }));
 
 const MAX_AGE = 25_000;
-const rowAt = (offsetMs: number) => {
+const rowAt = (offsetMs: number, source = 'live_hardware') => {
   const ts = Date.now() + offsetMs;
-  return { timestampMs: BigInt(ts), createdAt: new Date(ts) };
+  return { timestampMs: BigInt(ts), createdAt: new Date(ts), source };
 };
 
 beforeEach(() => {
@@ -60,6 +60,15 @@ describe('hasFreshLiveTelemetryRow', () => {
     expect(await run()).toBe(false);
     db.row = null;
     expect(await run()).toBe(false);
+  });
+
+  it('the latest row decides: a fresh NON-live latest row means nothing live is fresh, even if a live row came just before', async () => {
+    db.row = rowAt(-1_000, 'disconnected'); // the real bridge reported a disconnect; its live row is older and not returned
+    expect(await run()).toBe(false);
+    db.row = rowAt(-1_000, 'cloud_snapshot');
+    expect(await run()).toBe(false);
+    db.row = rowAt(-1_000, 'live_hardware');
+    expect(await run()).toBe(true);
   });
 
   it('a row ahead of this clock is fresh only within the skew tolerance, which is separate from the staleness bound', async () => {

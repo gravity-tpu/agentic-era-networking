@@ -966,17 +966,18 @@ export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolea
   if (!prisma) return false;
   let timerId: NodeJS.Timeout | undefined;
   try {
+    // The LATEST row, whatever its source: if the real bridge's last accepted push was a disconnect, the latest row is
+    // non-live and nothing live is fresh, even though an older live row exists.
     const queryPromise = prisma.zodiacTelemetryPoint.findFirst({
-      where: { source: 'live_hardware' },
       orderBy: { timestampMs: 'desc' },
-      select: { timestampMs: true, createdAt: true },
+      select: { timestampMs: true, createdAt: true, source: true },
     });
     const timeoutPromise = new Promise<never>((_, reject) => {
       timerId = setTimeout(() => reject(new Error('Fresh-live query timed out')), readDbQueryDeadlineMs());
       timerId.unref?.();
     });
     const row = await Promise.race([queryPromise, timeoutPromise]);
-    if (!row) return false;
+    if (!row || row.source !== 'live_hardware') return false;
     const rowTs = Number(row.timestampMs);
     const effectiveTs = Math.max(rowTs, row.createdAt ? row.createdAt.getTime() : rowTs);
     const wall = Date.now();
