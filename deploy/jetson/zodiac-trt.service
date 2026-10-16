@@ -78,7 +78,7 @@ ExecStart=/home/zodiac/trt-venv/bin/python3 -u \
 # Environment=TRT_ENGINE_PATH=/home/zodiac/coral-models/trt-mobilenet-v2-gpu.engine
 
 # Tap interface override (default: auto-detect enx*).
-# Environment=TAP_INTERFACE=enx9c69d39dd0a6
+Environment=TAP_INTERFACE=enx9c69d39dd0a6
 
 Restart=on-failure
 RestartSec=10s

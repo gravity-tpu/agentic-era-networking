@@ -25,6 +25,7 @@ import os
 import queue
 import signal
 import socket
+import struct
 import sys
 import threading
 import time
@@ -98,6 +99,23 @@ def percentile_ns(sorted_lats: list, p_num: int, p_den: int) -> int:
         return 0
     idx = min((n * p_num) // p_den, n - 1)
     return sorted_lats[idx]
+
+
+SOL_PACKET = 263          # linux/socket.h
+PACKET_ADD_MEMBERSHIP = 1  # linux/if_packet.h
+PACKET_MR_PROMISC = 1
+
+
+def enable_promiscuous(sock: socket.socket, iface: str) -> None:
+    """
+    Put the NIC in promiscuous mode for as long as this socket is open (PACKET_MR_PROMISC). The Zodiac P3 mirror copies
+    frames with their ORIGINAL destination MACs, so a NIC that is not promiscuous drops nearly all of them in hardware
+    and the detector sees almost nothing. Measured 2026-10-16: 150 echo requests crossed the switch, Zodiac P3 transmitted
+    212 frames, and this NIC's receive counter did not move (678 before and after).
+    The membership is released by the kernel when the socket closes, so no stray promiscuous state is left behind.
+    """
+    mreq = struct.pack('iHH8s', socket.if_nametoindex(iface), PACKET_MR_PROMISC, 0, b'')
+    sock.setsockopt(SOL_PACKET, PACKET_ADD_MEMBERSHIP, mreq)
 
 
 def find_tap_interface() -> str:
@@ -502,11 +520,15 @@ def main() -> None:
     try:
         raw_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
         raw_sock.bind((tap_iface, 0))
+        enable_promiscuous(raw_sock, tap_iface)
         raw_sock.settimeout(0.2)
-        print(f'[trt-daemon] AF_PACKET socket bound on {tap_iface}', flush=True)
+        print(f'[trt-daemon] AF_PACKET socket bound on {tap_iface} (promiscuous)', flush=True)
     except OSError as e:
+        if raw_sock is not None:
+            raw_sock.close()  # bound but not promiscuous: do not keep a half-configured socket open
+            raw_sock = None
         sys.stderr.write(
-            f'[trt-daemon] Warning: cannot bind AF_PACKET on {tap_iface} ({e}). '
+            f'[trt-daemon] Warning: cannot bind AF_PACKET or enable promiscuous mode on {tap_iface} ({e}). '
             f'Running in standby mode.\n'
         )
 
