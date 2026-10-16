@@ -14,6 +14,9 @@
  * Usage (macOS only):
  *   npm run workstation:agent
  *   WORKSTATION_AGENT_PORT=11435 npm run workstation:agent
+ *   WORKSTATION_AGENT_HOST=100.x.y.z npm run workstation:agent   # bind one interface (default 0.0.0.0, every interface)
+ *
+ * To keep it running (start at login, restart on crash), install the LaunchAgent: deploy/macos/README.md.
  *
  * The Jetson reads from http://192.168.55.100:11435/api/hardware (USB-C tether)
  * or http://10.0.0.119:11435/api/hardware (Wi-Fi fallback).
@@ -36,6 +39,14 @@ if (os.platform() !== 'darwin') {
 const rawPort = parseInt(process.env['WORKSTATION_AGENT_PORT'] ?? '11435', 10);
 // Sanjay Ghemawat - Bounds Rigor: Validate numeric parse and TCP port boundary [1, 65535].
 const PORT = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 11435;
+// Which interface to listen on. The default (every interface) is what a manual run has always used; on a laptop that
+// also serves hardware metrics, unauthenticated, to whatever network it joins, so the LaunchAgent binds the Tailscale
+// address instead. Anything that is not a plain IPv4 address or hostname is refused rather than passed to listen().
+const rawHost = process.env['WORKSTATION_AGENT_HOST'] ?? '0.0.0.0';
+const HOST = /^[A-Za-z0-9.-]{1,253}$/.test(rawHost) ? rawHost : '0.0.0.0';
+if (HOST !== rawHost) {
+  process.stderr.write(`[workstation-agent] WORKSTATION_AGENT_HOST ${JSON.stringify(rawHost)} is not valid; listening on 0.0.0.0.\n`);
+}
 const PROBE_INTERVAL_MS = 3_000;
 
 // ── Probe failure counter (Council Invariant 2: BigInt integer accounting) ───
@@ -173,9 +184,9 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, HOST, () => {
   process.stdout.write(
-    `[workstation-agent] Listening on 0.0.0.0:${PORT}\n` +
+    `[workstation-agent] Listening on ${HOST}:${PORT}\n` +
     `  /api/hardware — live Apple Silicon + Ollama telemetry\n` +
     `  /health       — agent liveness\n` +
     `  Probe interval: ${PROBE_INTERVAL_MS}ms · source: live_hardware\n`
