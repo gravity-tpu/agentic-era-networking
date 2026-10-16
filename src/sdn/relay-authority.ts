@@ -132,3 +132,13 @@ export function readBridgeId(payload: unknown): string | undefined {
   if (v.length === 0 || v.length > 128 || !/^[A-Za-z0-9._:@-]+$/.test(v)) return undefined;
   return v;
 }
+
+/**
+ * The cloud relay target comes only from ZODIAC_CLOUD_RELAY_URL. There is deliberately no default: a bridge started
+ * anywhere without it (a laptop, a dev shell) must not push to production, which is how a hardware-less bridge made the
+ * dashboard flicker (2026-10-16). Unset or blank means "do not relay".
+ */
+export function resolveCloudRelayUrl(env: Readonly<Record<string, string | undefined>> = process.env): string | undefined {
+  const raw = env['ZODIAC_CLOUD_RELAY_URL']?.trim();
+  return raw === undefined || raw === '' ? undefined : raw;
+}
