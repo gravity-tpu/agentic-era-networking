@@ -206,3 +206,24 @@ describe('API form', () => {
     expect(json['provenForwarding']).toBe(false);
   });
 });
+
+describe('switchEntryCount: the switch table size, as the readback saw it', () => {
+  it('is null before any readback and after a failed one', () => {
+    expect(initialIsolationStatus().switchEntryCount).toBeNull();
+    expect(pendingReadbackStatus().switchEntryCount).toBeNull();
+    const verified = statusFromReadback(pendingReadbackStatus(), verdictFor(faithful()), 1, 2n, 7);
+    expect(verified.switchEntryCount).toBe(7);
+    expect(readbackFailedStatus(verified, 'timed out', 3, 4n).switchEntryCount).toBeNull();
+  });
+
+  it('records the count of ALL entries the switch reported, not just the policy rules', () => {
+    const entries = faithful();
+    const s = statusFromReadback(pendingReadbackStatus(), verdictFor(entries), 1, 2n, entries.length);
+    expect(s.switchEntryCount).toBe(entries.length);
+    expect(entries.length).toBe(policy.length + 1); // six policy rules plus the table-miss entry
+  });
+
+  it('is not claimed when the caller does not supply one', () => {
+    expect(statusFromReadback(pendingReadbackStatus(), verdictFor(faithful()), 1, 2n).switchEntryCount).toBeNull();
+  });
+});
