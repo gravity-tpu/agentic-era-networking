@@ -85,6 +85,25 @@ describe('hasFreshLiveTelemetryRow', () => {
     }
   });
 
+  it('a rejected limit falls back to the default (not clamped) and says so once, not on every call', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { readDbFutureSkewToleranceMs, readDbQueryDeadlineMs } = await import('../../src/db/telemetry-db.js');
+    // an operator who meant "very tolerant" gets the default, not a quietly different value, and is told
+    expect(readDbFutureSkewToleranceMs({ TELEMETRY_DB_FUTURE_SKEW_MS: '70000' })).toBe(10_000);
+    expect(readDbFutureSkewToleranceMs({ TELEMETRY_DB_FUTURE_SKEW_MS: '70000' })).toBe(10_000);
+    expect(readDbQueryDeadlineMs({ TELEMETRY_DB_QUERY_TIMEOUT_MS: '50' })).toBe(1500);
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages.filter((m) => m.includes('TELEMETRY_DB_FUTURE_SKEW_MS'))).toHaveLength(1); // once per value
+    expect(messages.filter((m) => m.includes('TELEMETRY_DB_QUERY_TIMEOUT_MS'))).toHaveLength(1);
+    expect(messages[0]).toContain('using the default 10000');
+    // valid values and unset variables do not warn
+    warn.mockClear();
+    readDbFutureSkewToleranceMs({ TELEMETRY_DB_FUTURE_SKEW_MS: '3000' });
+    readDbFutureSkewToleranceMs({});
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('a configured skew tolerance changes what counts as fresh', async () => {
     vi.stubEnv('TELEMETRY_DB_FUTURE_SKEW_MS', '1000');
     db.row = rowAt(+5_000); // fresh under the 10 s default, not under 1 s

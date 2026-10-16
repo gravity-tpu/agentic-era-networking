@@ -39,11 +39,24 @@ let globalPrisma: PrismaClient | null = null;
  * else falls back to the default rather than failing the function at import time.
  */
 export const DEFAULT_DB_QUERY_DEADLINE_MS = 1500;
+
+/**
+ * An out-of-range or malformed limit falls back to its default (it is not clamped: a typo must not quietly become more
+ * permissive) and says so, once per variable and value, so the fallback is observable and does not repeat per request.
+ */
+const warnedBadLimits = new Set<string>();
+function warnBadLimit(name: string, raw: string, fallback: number): void {
+  const key = `${name}=${raw}`;
+  if (warnedBadLimits.has(key)) return;
+  warnedBadLimits.add(key);
+  console.warn(`[!] [Telemetry DB] ${name}=${JSON.stringify(raw)} is not valid; using the default ${fallback}.`);
+}
 export function readDbQueryDeadlineMs(env: Readonly<Record<string, string | undefined>> = process.env): number {
   const raw = env['TELEMETRY_DB_QUERY_TIMEOUT_MS'];
-  if (raw === undefined || !/^\d+$/.test(raw)) return DEFAULT_DB_QUERY_DEADLINE_MS;
-  const n = Number(raw);
-  return n >= 100 && n <= 5000 ? n : DEFAULT_DB_QUERY_DEADLINE_MS;
+  if (raw === undefined) return DEFAULT_DB_QUERY_DEADLINE_MS;
+  if (/^\d+$/.test(raw) && Number(raw) >= 100 && Number(raw) <= 5000) return Number(raw);
+  warnBadLimit('TELEMETRY_DB_QUERY_TIMEOUT_MS', raw, DEFAULT_DB_QUERY_DEADLINE_MS);
+  return DEFAULT_DB_QUERY_DEADLINE_MS;
 }
 
 /**
@@ -55,9 +68,10 @@ export const DB_FUTURE_SKEW_TOLERANCE_MS = 10_000;
 /** TELEMETRY_DB_FUTURE_SKEW_MS overrides the skew tolerance within 0..60000 ms; anything else uses the default. */
 export function readDbFutureSkewToleranceMs(env: Readonly<Record<string, string | undefined>> = process.env): number {
   const raw = env['TELEMETRY_DB_FUTURE_SKEW_MS'];
-  if (raw === undefined || !/^\d+$/.test(raw)) return DB_FUTURE_SKEW_TOLERANCE_MS;
-  const n = Number(raw);
-  return n <= 60_000 ? n : DB_FUTURE_SKEW_TOLERANCE_MS;
+  if (raw === undefined) return DB_FUTURE_SKEW_TOLERANCE_MS;
+  if (/^\d+$/.test(raw) && Number(raw) <= 60_000) return Number(raw);
+  warnBadLimit('TELEMETRY_DB_FUTURE_SKEW_MS', raw, DB_FUTURE_SKEW_TOLERANCE_MS);
+  return DB_FUTURE_SKEW_TOLERANCE_MS;
 }
 
 export function getPrismaClient(): PrismaClient | null {
