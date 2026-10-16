@@ -74,6 +74,27 @@ export function readDbFutureSkewToleranceMs(env: Readonly<Record<string, string 
   return DB_FUTURE_SKEW_TOLERANCE_MS;
 }
 
+/**
+ * Race a database read against the query deadline. The read keeps running after a timeout, so its eventual rejection
+ * is logged here: an unhandled rejection after the deadline would otherwise crash the function instance.
+ */
+async function raceDeadline<T>(read: PromiseLike<T>, label: string): Promise<T> {
+  let timerId: NodeJS.Timeout | undefined;
+  const readPromise = Promise.resolve(read);
+  readPromise.catch((err: unknown) => {
+    console.warn(`[!] [Telemetry DB] ${label} rejected:`, err instanceof Error ? err.message : String(err));
+  });
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timerId = setTimeout(() => reject(new Error(`${label} timed out`)), readDbQueryDeadlineMs());
+    timerId.unref?.();
+  });
+  try {
+    return await Promise.race([readPromise, timeoutPromise]);
+  } finally {
+    if (timerId !== undefined) clearTimeout(timerId);
+  }
+}
+
 export function getPrismaClient(): PrismaClient | null {
   const dbUrl = process.env['DATABASE_URL'] || process.env['agentic_POSTGRES_PRISMA_URL'] || process.env['agentic_DATABASE_URL'] || process.env['POSTGRES_PRISMA_URL'];
   if (!dbUrl) {
@@ -1002,19 +1023,13 @@ export async function upsertUser(
 export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolean> {
   const prisma = getPrismaClient();
   if (!prisma) return false;
-  let timerId: NodeJS.Timeout | undefined;
   try {
     // The LATEST row, whatever its source: if the real bridge's last accepted push was a disconnect, the latest row is
     // non-live and nothing live is fresh, even though an older live row exists.
-    const queryPromise = prisma.zodiacTelemetryPoint.findFirst({
+    const row = await raceDeadline(prisma.zodiacTelemetryPoint.findFirst({
       orderBy: { timestampMs: 'desc' },
       select: { timestampMs: true, createdAt: true, source: true },
-    });
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => reject(new Error('Fresh-live query timed out')), readDbQueryDeadlineMs());
-      timerId.unref?.();
-    });
-    const row = await Promise.race([queryPromise, timeoutPromise]);
+    }), 'Fresh-live query');
     if (!row || row.source !== 'live_hardware') return false;
     const rowTs = Number(row.timestampMs);
     const effectiveTs = Math.max(rowTs, row.createdAt ? row.createdAt.getTime() : rowTs);
@@ -1026,8 +1041,6 @@ export async function hasFreshLiveTelemetryRow(maxAgeMs: number): Promise<boolea
   } catch (err: unknown) {
     console.warn('[!] [Telemetry DB] Fresh-live query failed:', err instanceof Error ? err.message : String(err));
     return false;
-  } finally {
-    if (timerId !== undefined) clearTimeout(timerId);
   }
 }
 
@@ -1042,14 +1055,11 @@ export async function getLatestTelemetrySnapshotFromDb(
   const prisma = getPrismaClient();
   if (!prisma) return null;
 
-  let timerId: NodeJS.Timeout | undefined;
   try {
-    const queryPromise = prisma.zodiacLatestSnapshot.findUnique({ where: { id: LATEST_SNAPSHOT_ROW_ID } });
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => reject(new Error('Latest snapshot query timed out')), readDbQueryDeadlineMs());
-      timerId.unref?.();
-    });
-    const row = await Promise.race([queryPromise, timeoutPromise]);
+    const row = await raceDeadline(
+      prisma.zodiacLatestSnapshot.findUnique({ where: { id: LATEST_SNAPSHOT_ROW_ID } }),
+      'Latest snapshot query',
+    );
     if (!row || row.source !== 'live_hardware') return null;
 
     // Freshness uses the later of the bridge-reported and the DB-stamped time, so clock skew between the edge and the
@@ -1069,7 +1079,5 @@ export async function getLatestTelemetrySnapshotFromDb(
   } catch (err: unknown) {
     console.warn('[!] [Telemetry DB] Failed to query latest snapshot:', err instanceof Error ? err.message : String(err));
     return null;
-  } finally {
-    if (timerId !== undefined) clearTimeout(timerId);
   }
 }

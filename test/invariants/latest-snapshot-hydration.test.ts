@@ -18,7 +18,7 @@ import {
 const db = vi.hoisted(() => ({
   stored: null as null | { id: string; timestampMs: bigint; source: string; snapshotJson: unknown; updatedAt: Date },
   upserts: 0,
-  mode: 'row' as 'row' | 'throw' | 'hang',
+  mode: 'row' as 'row' | 'throw' | 'hang' | 'late_reject',
 }));
 
 vi.mock('@prisma/adapter-neon', () => ({ PrismaNeon: class { constructor(_o: unknown) {} } }));
@@ -29,6 +29,7 @@ vi.mock('@prisma/client', () => ({
       findUnique: async () => {
         if (db.mode === 'throw') throw new Error('connection refused');
         if (db.mode === 'hang') return new Promise(() => undefined);
+        if (db.mode === 'late_reject') return new Promise((_, rej) => setTimeout(() => rej(new Error('late failure')), 250));
         return db.stored;
       },
       upsert: async (args: { create: { id: string; timestampMs: bigint; source: string; snapshotJson: unknown } }) => {
@@ -177,5 +178,21 @@ describe('getLatestTelemetrySnapshotFromDb fails closed', () => {
     const m = await import('../../src/db/telemetry-db.js');
     db.mode = 'hang';
     expect(await m.getLatestTelemetrySnapshotFromDb(MAX_AGE)).toBeNull();
+  });
+
+  it('a query that fails after the deadline is logged, not left as an unhandled rejection', async () => {
+    vi.stubEnv('TELEMETRY_DB_QUERY_TIMEOUT_MS', '100');
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => { unhandled.push(e); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const m = await import('../../src/db/telemetry-db.js');
+      db.mode = 'late_reject';
+      expect(await m.getLatestTelemetrySnapshotFromDb(MAX_AGE)).toBeNull();
+      await new Promise((r) => setTimeout(r, 400));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });
