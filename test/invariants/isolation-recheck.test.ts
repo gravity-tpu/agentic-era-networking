@@ -398,7 +398,7 @@ describe('a fault in the re-check itself must never reach the process', () => {
     expect(t.logs.some((l) => l.text.includes('malformed entry'))).toBe(true);
   });
 
-  it('even if runOnce itself were to reject, the timer neither crashes nor stops', async () => {
+  it('timer guard: even if runOnce were to reject, the timer neither crashes nor stops', async () => {
     vi.useFakeTimers();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const watch = watchRejections();

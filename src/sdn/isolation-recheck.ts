@@ -180,7 +180,11 @@ export class IsolationRechecker {
     }
   }
 
-  /** A read, or the interpretation of its reply, failed. Counted; only repeated failures change the status. */
+  /**
+   * A read, or the interpretation of its reply, failed. Counted; only repeated failures change the status. If the
+   * status store or logger is itself what is failing, nothing can be recorded here: the throw reaches runOnce, which
+   * reports it on stderr every check rather than hiding it.
+   */
   private recordFailure(err: unknown): RecheckOutcome {
     const d = this.deps;
     const message = err instanceof Error ? err.message : String(err);
@@ -228,8 +232,8 @@ export class IsolationRechecker {
       if (candidate.state === 'verified' && latest.state !== 'verified') {
         this.consecutiveCleanReads += 1;
         if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
-          this.consecutiveFailures = 0;
           d.log('info', `Isolation re-check: clean readback ${this.consecutiveCleanReads}/${RECHECK_CLEAN_READS_TO_RECOVER}; staying ${latest.state} until it holds.`);
+          this.consecutiveFailures = 0; // after the side effect, like the success path below
           return 'unchanged';
         }
       }
