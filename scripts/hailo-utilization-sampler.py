@@ -10,7 +10,10 @@ short, bounded `hailortcli monitor` read plus the service's own /health chip tem
 read is written with `error` set and null values, never filled in or dropped (Invariant 6). Timestamps are monotonic
 nanoseconds (Invariant 2); utilization and FPS are tenths, kept as integers.
 
-Usage: python3 hailo-utilization-sampler.py --out run.jsonl --duration 120 [--interval-s 2] [--health http://127.0.0.1:8000/health]
+The sampling period is at least MONITOR_TIMEOUT_S: `hailortcli monitor` is a TUI that never exits, so every read lasts
+the full timeout. --interval-s below that is refused rather than silently not honoured.
+
+Usage: python3 hailo-utilization-sampler.py --out run.jsonl --duration 120 [--interval-s 3] [--health http://127.0.0.1:8000/health]
 """
 
 import argparse
@@ -72,11 +75,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--duration", type=int, required=True, help="seconds")
-    ap.add_argument("--interval-s", type=int, default=2)
+    ap.add_argument("--interval-s", type=int, default=MONITOR_TIMEOUT_S, help=f"seconds between sample starts, {MONITOR_TIMEOUT_S}..60")
     ap.add_argument("--health", default="http://127.0.0.1:8000/health")
     a = ap.parse_args()
-    if not 1 <= a.duration <= 7200 or not 1 <= a.interval_s <= 60:
-        sys.stderr.write("duration must be 1..7200 s and interval 1..60 s\n")
+    if not 1 <= a.duration <= 7200 or not MONITOR_TIMEOUT_S <= a.interval_s <= 60:
+        sys.stderr.write(f"duration must be 1..7200 s and interval {MONITOR_TIMEOUT_S}..60 s\n")
         return 2
     start = time.monotonic_ns()
     deadline = start + a.duration * 1_000_000_000

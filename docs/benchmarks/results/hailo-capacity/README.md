@@ -25,7 +25,8 @@ service loads today). Raw responses are the two JSON files in this directory.
 `hailo-inference` was restarted with `HAILO_MONITOR=1` (systemd drop-in
 `/etc/systemd/system/hailo-inference.service.d/monitor.conf`), then loaded for 600 s by `scripts/hailo-10m-test.py`
 (3 workers, `bus_640.jpg`, localhost) while `scripts/hailo-utilization-sampler.py` logged `hailortcli monitor` and the
-chip temperatures about every 3 s. Raw samples: `service-sustained-600s-2026-10-16.jsonl`; the load client's own
+chip temperatures about every 3 s (the shortest possible: each monitor read lasts its full 3 s timeout; the first run of
+the sampler was invoked with a 2 s interval it could not honour, and the script now refuses intervals under 3 s). Raw samples: `service-sustained-600s-2026-10-16.jsonl`; the load client's own
 summary: `service-sustained-600s-load-summary-2026-10-16.txt`.
 
 | Measure | Result |
