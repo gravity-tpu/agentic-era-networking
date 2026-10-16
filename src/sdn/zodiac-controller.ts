@@ -61,8 +61,8 @@ export class ZodiacController {
    * Rule-set properties (isolation, hairpin, table budget) are checked on whole sets, e.g.
    * verifyPort1Isolation and verifyPlanAdmissible, before sets are installed.
    */
-  public pushRule(rule: FlowRuleEntry, outPort?: number): void {
-    this.ofServer.sendFlowMod(rule, outPort);
+  public pushRule(rule: FlowRuleEntry, outPort?: number, hardTimeoutSeconds?: number): void {
+    this.ofServer.sendFlowMod(rule, outPort, hardTimeoutSeconds);
   }
 
   /**
@@ -74,6 +74,8 @@ export class ZodiacController {
     targetIp?: string | undefined;
     reason: string;
     priority?: number | undefined;
+    /** Ask the switch to remove the rule itself after this many seconds. */
+    hardTimeoutSeconds?: number | undefined;
   }): {
     success: boolean;
     ruleId: string;
@@ -104,7 +106,7 @@ export class ZodiacController {
     let openFlowInstalled = false;
     try {
       if (this.ofServer.metrics.state === 'ESTABLISHED') {
-        this.pushRule(rule);
+        this.pushRule(rule, undefined, options.hardTimeoutSeconds);
         openFlowInstalled = true;
       }
     } catch (err) {
