@@ -282,6 +282,17 @@ describe('damping: failed reads', () => {
     expect(t.status().state).toBe('mismatch');
   });
 
+  it('the repeat interval is configurable', async () => {
+    const t = make(verifiedStatus(), 10_000, { repeatLogEvery: 5 });
+    t.useRead(ok(leaky));
+    await t.rc.runOnce();
+    const before = t.logs.length;
+    t.useRead(fails());
+    for (let i = 0; i < 12; i++) await t.rc.runOnce();
+    const warns = t.logs.slice(before).filter((l) => l.level === 'warn');
+    expect(warns).toHaveLength(RECHECK_FAILURES_BEFORE_UNKNOWN + 2); // failures 1, 2, then 5 and 10
+  });
+
   it('a successful read between failures starts the count over', async () => {
     const t = make();
     t.useRead(fails());

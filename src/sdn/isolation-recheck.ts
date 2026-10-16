@@ -108,6 +108,8 @@ export interface RecheckDeps {
   readonly nowMonoNs: () => bigint;
   /** 0 disables the timer; runOnce still works (used by tests and on demand). */
   readonly intervalMs: number;
+  /** Repeat the unreachable-switch warning every this many failures once past the escalation threshold. Default RECHECK_REPEAT_LOG_EVERY. */
+  readonly repeatLogEvery?: number;
 }
 
 /** What matters about a status for "did it change": the verdict, not the timestamps. */
@@ -227,7 +229,8 @@ export class IsolationRechecker {
       this.log('error', `Isolation re-check: ${this.consecutiveFailures} failed readbacks in a row (${message}); status is now unknown (readback_failed).`);
       return 'changed';
     }
-    if (this.consecutiveFailures <= RECHECK_FAILURES_BEFORE_UNKNOWN || this.consecutiveFailures % RECHECK_REPEAT_LOG_EVERY === 0) {
+    const every = d.repeatLogEvery ?? RECHECK_REPEAT_LOG_EVERY;
+    if (this.consecutiveFailures <= RECHECK_FAILURES_BEFORE_UNKNOWN || this.consecutiveFailures % every === 0) {
       this.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
     }
     return 'unchanged';
@@ -261,7 +264,8 @@ export class IsolationRechecker {
       const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
 
       // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only
-      // by the early return below, so every other path starts it over.
+      // by the early return below, so every other path starts it over. (That early return records nothing, so it only
+      // clears the failure streak: a clean read is a successful read.)
       if (candidate.state === 'verified' && latest.state !== 'verified') {
         this.consecutiveCleanReads += 1;
         if (this.consecutiveCleanReads < RECHECK_CLEAN_READS_TO_RECOVER) {
