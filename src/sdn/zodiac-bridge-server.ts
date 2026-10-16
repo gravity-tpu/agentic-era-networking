@@ -80,6 +80,7 @@ import {
   readbackFailedStatus,
   statusFromReadback,
   verifierRejectedStatus,
+  withSwitchError,
   type IsolationStatus,
 } from './isolation-status.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
@@ -797,7 +798,7 @@ export class ZodiacBridgeServer {
       }
       const label = this.flowModXidLabels.get(xid);
       const line = `OFPT_ERROR xid ${xid}${label ? ` (isolation rule ${label})` : ''}: ${detail}`;
-      if (label) this.isolationStatus.switchErrors.push(line);
+      if (label) this.isolationStatus = withSwitchError(this.isolationStatus, line);
       console.error(`[!] [Bridge Server] Switch rejected message — ${line}`);
     });
 
@@ -1821,7 +1822,7 @@ export class ZodiacBridgeServer {
         note: 'Per-flow hardware stats (OFPT_MULTIPART_REQUEST) not yet implemented; showing controller-pushed rules only.',
         rules: Array.from(this.flowRuleRegistry.values()),
         totalRules: this.flowRuleRegistry.size,
-        port1Isolation: isolationStatusToJson(this.isolationStatus),
+        port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
         timestamp: Date.now(),
       }));
       return;

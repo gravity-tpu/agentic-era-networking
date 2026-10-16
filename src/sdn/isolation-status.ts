@@ -17,7 +17,11 @@
  *
  * Nothing here actuates: a mismatch is recorded and surfaced; it does not remove or reinstall rules.
  *
- * Pure functions, no I/O. Timestamps are supplied by the caller (monotonic ns from process.hrtime.bigint()).
+ * The status is a point-in-time record: the readback runs once, at install. Consumers must read it with its age
+ * (`checkedAgeMs` in the API form), not as a live fact.
+ *
+ * Pure functions, no I/O. Statuses are immutable; every change returns a new one. Timestamps are supplied by the
+ * caller (monotonic ns from process.hrtime.bigint()).
  */
 
 import type { ActionReadbackVerdict } from './action-readback.js';
@@ -37,8 +41,8 @@ export interface IsolationStatus {
   readonly confirmed: readonly string[];
   /** Match-level discrepancies, or the verifier's violations, or the readback failure message. */
   readonly mismatches: readonly string[];
-  /** OFPT_ERROR messages the switch returned for isolation FlowMods. Appended as they arrive. */
-  readonly switchErrors: string[];
+  /** OFPT_ERROR messages the switch returned for isolation FlowMods. Never mutated: see withSwitchError. */
+  readonly switchErrors: readonly string[];
   readonly checkedAtMs: number | null;
   readonly checkedAtMonoNs: bigint | null;
   /** Action level from the same readback; null until a readback has completed. */
@@ -69,8 +73,8 @@ export function pendingReadbackStatus(): IsolationStatus {
 }
 
 /**
- * The status after a completed readback. `prev.switchErrors` are carried over: an OFPT_ERROR for an isolation
- * FlowMod makes the state `mismatch` even if the readback otherwise looks right.
+ * The status after a completed readback. `prev.switchErrors` (a copy) are carried over: an OFPT_ERROR for an
+ * isolation FlowMod makes the state `mismatch` even if the readback otherwise looks right.
  */
 export function statusFromReadback(
   prev: IsolationStatus,
@@ -83,11 +87,26 @@ export function statusFromReadback(
     state: ok ? 'verified' : 'mismatch',
     confirmed: verdict.confirmed,
     mismatches: verdict.mismatches,
-    switchErrors: prev.switchErrors,
+    switchErrors: [...prev.switchErrors],
     checkedAtMs: nowMs,
     checkedAtMonoNs: nowMonoNs,
     actions: verdict.actions,
     provenForwarding: ok && verdict.provenForwarding,
+  };
+}
+
+/**
+ * Records an OFPT_ERROR the switch sent for an isolation FlowMod. Normally it arrives before the readback reply and
+ * statusFromReadback accounts for it; if it arrives after a `verified` status, that status is no longer true, so it
+ * becomes `mismatch` and forwarding is no longer proven. Returns a new status; `prev` is not changed.
+ */
+export function withSwitchError(prev: IsolationStatus, line: string): IsolationStatus {
+  const wasVerified = prev.state === 'verified';
+  return {
+    ...prev,
+    switchErrors: [...prev.switchErrors, line],
+    state: wasVerified ? 'mismatch' : prev.state,
+    provenForwarding: wasVerified ? false : prev.provenForwarding,
   };
 }
 
@@ -117,7 +136,21 @@ export function describeReadback(status: IsolationStatus, ruleCount: number, ent
   return `Isolation readback MISMATCH (${entryCount} switch entries):\n  ${problems.join('\n  ')}`;
 }
 
-/** JSON-safe form for the API: the monotonic timestamp is a BigInt, which JSON.stringify cannot encode. */
-export function isolationStatusToJson(s: IsolationStatus): Omit<IsolationStatus, 'checkedAtMonoNs'> & { checkedAtMonoNs: string | null } {
-  return { ...s, checkedAtMonoNs: s.checkedAtMonoNs !== null ? s.checkedAtMonoNs.toString() : null };
+export type IsolationStatusJson = Omit<IsolationStatus, 'checkedAtMonoNs'> & {
+  checkedAtMonoNs: string | null;
+  /** Milliseconds since the readback, from the monotonic clock; null if no readback has completed. */
+  checkedAgeMs: number | null;
+};
+
+/**
+ * JSON-safe form for the API: the monotonic timestamp is a BigInt, which JSON.stringify cannot encode. `checkedAgeMs`
+ * says how old the readback is, so a `verified` from hours ago is not mistaken for a live fact.
+ */
+export function isolationStatusToJson(s: IsolationStatus, nowMonoNs: bigint): IsolationStatusJson {
+  const ageNs = s.checkedAtMonoNs !== null ? nowMonoNs - s.checkedAtMonoNs : null;
+  return {
+    ...s,
+    checkedAtMonoNs: s.checkedAtMonoNs !== null ? s.checkedAtMonoNs.toString() : null,
+    checkedAgeMs: ageNs !== null && ageNs >= 0n ? Number(ageNs / 1_000_000n) : null,
+  };
 }

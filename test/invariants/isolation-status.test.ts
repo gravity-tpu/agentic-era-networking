@@ -19,6 +19,7 @@ import {
   readbackFailedStatus,
   statusFromReadback,
   verifierRejectedStatus,
+  withSwitchError,
   type IsolationStatus,
 } from '../../src/sdn/isolation-status.js';
 import { applyActions, entryFrom, outputAction, replyOf } from '../helpers/flow-stats-fixtures.js';
@@ -98,11 +99,30 @@ describe('statusFromReadback', () => {
     expect(describeReadback(s, policy.length, 7)).toContain('OFPT_ERROR');
   });
 
-  it('shares the switchErrors array with the previous status, so errors that arrive later are still recorded', () => {
+  it('does not alias the previous status: a later error never changes an earlier status', () => {
     const prev = pendingReadbackStatus();
     const s = statusFor(faithful(), prev);
-    prev.switchErrors.push('late error');
-    expect(s.switchErrors).toContain('late error');
+    const after = withSwitchError(s, 'late error');
+    expect(s.switchErrors).toEqual([]);
+    expect(prev.switchErrors).toEqual([]);
+    expect(after.switchErrors).toEqual(['late error']);
+  });
+
+  it('an error that arrives after a verified readback makes it a mismatch and withdraws the proof', () => {
+    const verified = statusFor(faithful());
+    expect(verified.provenForwarding).toBe(true);
+    const after = withSwitchError(verified, 'OFPT_ERROR xid 105 (isolation rule p2-ipv4-to-segment): type 5, code 1');
+    expect(after.state).toBe('mismatch');
+    expect(after.provenForwarding).toBe(false);
+    expect(verified.state).toBe('verified'); // the earlier status is untouched
+  });
+
+  it('an error that arrives before the readback is recorded and the readback then reports a mismatch', () => {
+    const pending = withSwitchError(pendingReadbackStatus(), 'OFPT_ERROR xid 104');
+    expect(pending.state).toBe('pending_readback');
+    const s = statusFor(faithful(), pending);
+    expect(s.state).toBe('mismatch');
+    expect(s.switchErrors).toEqual(['OFPT_ERROR xid 104']);
   });
 
   it('never claims more than it saw: provenForwarding implies verified and a confirmed action level', () => {
@@ -155,15 +175,23 @@ describe('the other states', () => {
 
 describe('API form', () => {
   it('serialises with JSON (the monotonic BigInt becomes a string) and keeps the action level', () => {
-    const json = JSON.parse(JSON.stringify(isolationStatusToJson(statusFor(faithful())))) as Record<string, unknown>;
+    const json = JSON.parse(JSON.stringify(isolationStatusToJson(statusFor(faithful()), 42n))) as Record<string, unknown>;
     expect(json['checkedAtMonoNs']).toBe('42');
     expect(json['provenForwarding']).toBe(true);
     expect((json['actions'] as Record<string, unknown>)['status']).toBe('confirmed');
   });
 
-  it('an unchecked status serialises its null timestamp and null action level', () => {
-    const json = JSON.parse(JSON.stringify(isolationStatusToJson(initialIsolationStatus()))) as Record<string, unknown>;
+  it('reports how old the readback is, from the monotonic clock, so a stale verified is visible', () => {
+    const s = statusFor(faithful()); // checked at monotonic 42 ns
+    expect(isolationStatusToJson(s, 42n + 5_000_000_000n).checkedAgeMs).toBe(5000);
+    expect(isolationStatusToJson(s, 42n + 3_600_000_000_000n).checkedAgeMs).toBe(3_600_000); // an hour old
+    expect(isolationStatusToJson(s, 0n).checkedAgeMs).toBeNull(); // a clock that went backwards is not reported as an age
+  });
+
+  it('an unchecked status serialises null timestamp, null age and null action level', () => {
+    const json = JSON.parse(JSON.stringify(isolationStatusToJson(initialIsolationStatus(), 99n))) as Record<string, unknown>;
     expect(json['checkedAtMonoNs']).toBeNull();
+    expect(json['checkedAgeMs']).toBeNull();
     expect(json['actions']).toBeNull();
     expect(json['provenForwarding']).toBe(false);
   });
