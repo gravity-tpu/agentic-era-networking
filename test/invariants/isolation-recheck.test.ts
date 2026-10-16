@@ -209,6 +209,7 @@ describe('a read that straddles a new session', () => {
     t.rc.reset(); // a new session installs
     fail(new Error('old session timed out'));
     expect(await outstanding).toBe('skipped');
+    expect(t.lock.isHeld).toBe(false); // the early return in the catch block still runs the finally that releases the lock
     // the failure was discarded, so it takes a full run of fresh failures to make the status unknown
     t.useRead(fails());
     for (let i = 1; i < RECHECK_FAILURES_BEFORE_UNKNOWN; i++) await t.rc.runOnce();
