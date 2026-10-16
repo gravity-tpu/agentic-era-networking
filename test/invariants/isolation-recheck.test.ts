@@ -16,6 +16,7 @@ import {
   IsolationRechecker,
   RECHECK_CLEAN_READS_TO_RECOVER,
   RECHECK_FAILURES_BEFORE_UNKNOWN,
+  RECHECK_REPEAT_LOG_EVERY,
   RecheckConfigError,
   parseRecheckIntervalMs,
   type RecheckDeps,
@@ -266,6 +267,19 @@ describe('damping: failed reads', () => {
     expect(t.status().state).toBe('readback_failed');
     expect(t.status().provenForwarding).toBe(false);
     expect(t.logs.at(-1)?.level).toBe('error');
+  });
+
+  it('an unreachable switch is not warned about every interval: the first failures, then every Nth', async () => {
+    const t = make();
+    t.useRead(ok(leaky));
+    await t.rc.runOnce(); // a recorded mismatch, which failed reads never replace
+    const before = t.logs.length;
+    t.useRead(fails());
+    for (let i = 0; i < 25; i++) await t.rc.runOnce();
+    const warns = t.logs.slice(before).filter((l) => l.level === 'warn');
+    // failures 1..RECHECK_FAILURES_BEFORE_UNKNOWN, then 10 and 20
+    expect(warns).toHaveLength(RECHECK_FAILURES_BEFORE_UNKNOWN + Math.floor(25 / RECHECK_REPEAT_LOG_EVERY));
+    expect(t.status().state).toBe('mismatch');
   });
 
   it('a successful read between failures starts the count over', async () => {

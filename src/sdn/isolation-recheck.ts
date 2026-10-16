@@ -44,6 +44,11 @@ export const MIN_RECHECK_INTERVAL_MS = 10_000;
 export const MAX_RECHECK_INTERVAL_MS = 3_600_000;
 /** Consecutive failed reads before the status becomes `readback_failed`. */
 export const RECHECK_FAILURES_BEFORE_UNKNOWN = 2;
+/**
+ * Once a failure streak is past RECHECK_FAILURES_BEFORE_UNKNOWN, repeat the warning only every this many failures, so an
+ * unreachable switch is not logged every interval forever. The status itself already says what is known.
+ */
+export const RECHECK_REPEAT_LOG_EVERY = 10;
 /** Consecutive clean readbacks before the status may return to `verified` from `mismatch` or `readback_failed`. */
 export const RECHECK_CLEAN_READS_TO_RECOVER = 2;
 
@@ -222,7 +227,9 @@ export class IsolationRechecker {
       this.log('error', `Isolation re-check: ${this.consecutiveFailures} failed readbacks in a row (${message}); status is now unknown (readback_failed).`);
       return 'changed';
     }
-    this.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
+    if (this.consecutiveFailures <= RECHECK_FAILURES_BEFORE_UNKNOWN || this.consecutiveFailures % RECHECK_REPEAT_LOG_EVERY === 0) {
+      this.log('warn', `Isolation re-check: readback failed (${message}); ${this.consecutiveFailures} in a row.`);
+    }
     return 'unchanged';
   }
 
