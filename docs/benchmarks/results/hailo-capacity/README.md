@@ -19,3 +19,25 @@ service loads today). Raw responses are the two JSON files in this directory.
   Temperature rose about 15 C in the 10 s saturation run; sustained-load thermals are unmeasured.
 - Utilization cannot be read from the running service today: `hailortcli monitor` only reports for a process
   that has `HAILO_MONITOR=1` in its environment, and the `hailo-inference` unit does not set it.
+
+## Through the service: 10-minute sustained run (2026-10-16)
+
+`hailo-inference` was restarted with `HAILO_MONITOR=1` (systemd drop-in
+`/etc/systemd/system/hailo-inference.service.d/monitor.conf`), then loaded for 600 s by `scripts/hailo-10m-test.py`
+(3 workers, `bus_640.jpg`, localhost) while `scripts/hailo-utilization-sampler.py` logged `hailortcli monitor` and the
+chip temperatures about every 3 s. Raw samples: `service-sustained-600s-2026-10-16.jsonl`; the load client's own
+summary: `service-sustained-600s-load-summary-2026-10-16.txt`.
+
+| Measure | Result |
+| :--- | :--- |
+| Inferences | 32,990 in 600.1 s (54.97 per second), 0 errors |
+| Hailo utilization (200 samples) | median 37.6%, max 41.8%; the one 0% sample is the last, after the load ended |
+| Model FPS reported by `hailortcli monitor` | median 55.9, max 61.9 |
+| Chip temperature | 47.8 C at the start, peak 53.1 C |
+| DMA time / HTTP round trip | 11.19 ms / 54.50 ms average |
+
+Reading: through the real service path the Hailo reaches about 55 inferences per second and a median 37.6%
+utilization, against the 300.8 frames/s the same model reaches in the native benchmark above. The host pipeline (HTTP,
+JPEG decode, post-processing on the Pi 5's CPU, one uvicorn worker) is the limit, not the accelerator. The temperature
+settled near 50 C with no throttling or errors. This is one run with one client configuration (3 workers); more workers
+or a different client were not tried, so the 37.6% is "this pipeline as deployed", not the most the service can do.
