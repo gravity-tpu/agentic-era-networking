@@ -39,14 +39,20 @@ if (os.platform() !== 'darwin') {
 const rawPort = parseInt(process.env['WORKSTATION_AGENT_PORT'] ?? '11435', 10);
 // Sanjay Ghemawat - Bounds Rigor: Validate numeric parse and TCP port boundary [1, 65535].
 const PORT = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 11435;
-// Which interface to listen on. The default (every interface) is what a manual run has always used; on a laptop that
-// also serves hardware metrics, unauthenticated, to whatever network it joins, so the LaunchAgent binds the Tailscale
-// address instead. Anything that is not a plain IPv4 address or hostname is refused rather than passed to listen().
-const rawHost = process.env['WORKSTATION_AGENT_HOST'] ?? '0.0.0.0';
-const HOST = /^[A-Za-z0-9.-]{1,253}$/.test(rawHost) ? rawHost : '0.0.0.0';
-if (HOST !== rawHost) {
-  process.stderr.write(`[workstation-agent] WORKSTATION_AGENT_HOST ${JSON.stringify(rawHost)} is not valid; listening on 0.0.0.0.\n`);
+// Which interface to listen on. UNSET means every interface (0.0.0.0): what a manual run has always done, which the
+// USB-C tether and LAN paths rely on. On a laptop that serves hardware metrics, unauthenticated, to whatever network it
+// joins, so the LaunchAgent binds the Tailscale address instead.
+// Fail closed (Invariant 3): a value that IS set but invalid is a fatal error, never a quiet fall back to 0.0.0.0. A typo
+// in the setting meant to narrow the bind must not widen it.
+const hostFromEnv = process.env['WORKSTATION_AGENT_HOST'];
+if (hostFromEnv !== undefined && !/^[A-Za-z0-9.-]{1,253}$/.test(hostFromEnv)) {
+  process.stderr.write(
+    `[workstation-agent] FATAL: WORKSTATION_AGENT_HOST ${JSON.stringify(hostFromEnv)} is not a valid IPv4 address or hostname. ` +
+    'Refusing to start rather than listen on every interface. Unset it for the default, or fix it.\n'
+  );
+  process.exit(1);
 }
+const HOST = hostFromEnv ?? '0.0.0.0';
 const PROBE_INTERVAL_MS = 3_000;
 
 // ── Probe failure counter (Council Invariant 2: BigInt integer accounting) ───

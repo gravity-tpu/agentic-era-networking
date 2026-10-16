@@ -6,12 +6,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SCRIPT = 'deploy/macos/install-workstation-agent.sh';
 const isMac = process.platform === 'darwin';
+// The real agent imports the compiled dist/, so running it needs `npm run build:server` first (CI builds before testing).
+const distBuilt = existsSync('dist/sdn/hardware-probe.js');
 
 /** A directory shaped like a built checkout, so the installer's preconditions pass. */
 function fakeRepo(): string {
@@ -101,11 +103,33 @@ describe.skipIf(!isMac)('install-workstation-agent.sh --dry-run', () => {
   });
 });
 
+describe.skipIf(!isMac || !distBuilt)('the agent refuses an invalid bind address instead of widening it', () => {
+  // Runs the real agent (macOS only, needs dist/): it must exit before listening, naming the setting.
+  const runAgent = (host: string | undefined) =>
+    spawnSync('node', ['--experimental-strip-types', 'scripts/workstation-agent.ts'], {
+      encoding: 'utf8',
+      timeout: 15_000,
+      env: { ...process.env, WORKSTATION_AGENT_PORT: '0', ...(host !== undefined ? { WORKSTATION_AGENT_HOST: host } : {}) },
+    });
+
+  it('a set but invalid host is fatal, with a non-zero exit and the reason, and never reaches listen', () => {
+    for (const bad of ['a b', '1.2.3.4;x', '', '$(id)', 'x'.repeat(300)]) {
+      const r = runAgent(bad);
+      expect(r.status, JSON.stringify(bad)).toBe(1);
+      expect(r.stderr, JSON.stringify(bad)).toContain('WORKSTATION_AGENT_HOST');
+      expect(r.stderr, JSON.stringify(bad)).toContain('Refusing to start');
+      expect(r.stdout, JSON.stringify(bad)).not.toContain('Listening on');
+    }
+  });
+});
+
 describe('the agent binds the interface it is told to', () => {
   it('reads WORKSTATION_AGENT_HOST, validates it, and defaults to every interface', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('scripts/workstation-agent.ts', 'utf8');
-    expect(src).toContain("process.env['WORKSTATION_AGENT_HOST'] ?? '0.0.0.0'");
+    expect(src).toContain("process.env['WORKSTATION_AGENT_HOST']");
+    expect(src).toContain("hostFromEnv ?? '0.0.0.0'"); // the default applies only when the variable is unset
+    expect(src).not.toContain('listening on 0.0.0.0.'); // no quiet fall back for an invalid value
     expect(src).toMatch(/\^\[A-Za-z0-9\.-\]\{1,253\}\$/); // refuses anything that is not a plain address or hostname
     expect(src).toContain('server.listen(PORT, HOST,');
     expect(src).not.toContain("server.listen(PORT, '0.0.0.0'"); // no hard-coded bind left
