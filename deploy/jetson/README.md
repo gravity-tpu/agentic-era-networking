@@ -195,7 +195,7 @@ The probe sends **one OFPMP_FLOW request and no FlowMod**. It does not change th
    `ZODIAC_ALLOW_DEGRADED_CONTROL_PLANE=1` restores that degraded mode.
    The restart drops the OpenFlow session and the bridge reinstalls the isolation policy on reconnect; until it
    does, the switch holds only table-miss DROP, so the workload is isolated, not exposed.
-2. Wait for `Isolation readback VERIFIED` in `journalctl -u zodiac-bridge`. Probing mid-install shows a partial table.
+2. Wait for `Isolation readback VERIFIED` in `journalctl -u zodiac-bridge`. Probing mid-install shows a partial table. The line now says whether forwarding is proven: `...; actions confirmed (output ports and table-miss drop).` is the healthy one, and `...MATCH LEVEL ONLY...` means the switch reported no actions. The same facts are in `curl -s http://127.0.0.1:3003/api/zodiac/flows` under `port1Isolation` (`state`, `actions.status`, `provenForwarding`, and `checkedAgeMs` with `ageStatus` (`ok`, `never_checked`, or `clock_error`): the readback runs once at install, so a `verified` is only as current as its age).
 3. Run the client on the Jetson itself, where the bridge sees a loopback caller (no tunnel needed), then copy the
    evidence back. The endpoint accepts operators on loopback or private IPv4 only, so a direct Tailscale (`100.x`)
    connection from the Mac is refused with 401. It also refuses everything if `GOOGLE_CLIENT_ID` is set.

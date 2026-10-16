@@ -72,6 +72,17 @@ import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback } from './port1-isolation.js';
 import { readFlowStats, readFlowStatsRaw } from './flow-readback.js';
+import {
+  describeReadback,
+  initialIsolationStatus,
+  isolationStatusToJson,
+  pendingReadbackStatus,
+  readbackFailedStatus,
+  statusFromReadback,
+  verifierRejectedStatus,
+  withSwitchError,
+  type IsolationStatus,
+} from './isolation-status.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -588,14 +599,7 @@ export class ZodiacBridgeServer {
   /** xid → isolation rule id for the current OpenFlow session; reset on every 'ready'. */
   private readonly flowModXidLabels: Map<number, string> = new Map();
   /** Switch-reported (not controller-intended) state of the Port 1 isolation policy. */
-  private isolationStatus: {
-    state: 'not_installed' | 'verifier_rejected' | 'pending_readback' | 'verified' | 'mismatch' | 'readback_failed';
-    confirmed: readonly string[];
-    mismatches: readonly string[];
-    switchErrors: string[];
-    checkedAtMs: number | null;
-    checkedAtMonoNs: bigint | null;
-  } = { state: 'not_installed', confirmed: [], mismatches: [], switchErrors: [], checkedAtMs: null, checkedAtMonoNs: null };
+  private isolationStatus: IsolationStatus = initialIsolationStatus();
 
   /**
    * Registers a flow rule entry in the bridge server's local registry.
@@ -751,25 +755,11 @@ export class ZodiacBridgeServer {
       this.flowModXidLabels.clear();
       const violations = verifyPort1Isolation(isolationPolicy);
       if (violations.length > 0) {
-        this.isolationStatus = {
-          state: 'verifier_rejected',
-          confirmed: [],
-          mismatches: violations,
-          switchErrors: [],
-          checkedAtMs: Date.now(),
-          checkedAtMonoNs: process.hrtime.bigint(),
-        };
+        this.isolationStatus = verifierRejectedStatus(violations, Date.now(), process.hrtime.bigint());
         console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);
         return;
       }
-      this.isolationStatus = {
-        state: 'pending_readback',
-        confirmed: [],
-        mismatches: [],
-        switchErrors: [],
-        checkedAtMs: null,
-        checkedAtMonoNs: null,
-      };
+      this.isolationStatus = pendingReadbackStatus();
       for (const rule of isolationPolicy) {
         const xid = this.controller.openFlow.sendFlowModOptions(rule.flowMod);
         this.flowModXidLabels.set(xid, rule.id);
@@ -782,29 +772,17 @@ export class ZodiacBridgeServer {
       readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS)
         .then((entries) => {
           const verdict = verifyIsolationReadback(isolationPolicy, entries);
-          this.isolationStatus = {
-            ...this.isolationStatus,
-            state: verdict.verified && this.isolationStatus.switchErrors.length === 0 ? 'verified' : 'mismatch',
-            confirmed: verdict.confirmed,
-            mismatches: verdict.mismatches,
-            checkedAtMs: Date.now(),
-            checkedAtMonoNs: process.hrtime.bigint(),
-          };
+          this.isolationStatus = statusFromReadback(this.isolationStatus, verdict, Date.now(), process.hrtime.bigint());
+          const line = describeReadback(this.isolationStatus, isolationPolicy.length, entries.length);
           if (this.isolationStatus.state === 'verified') {
-            console.log(`[+] [Bridge Server] Isolation readback VERIFIED: ${verdict.confirmed.length}/${isolationPolicy.length} rules confirmed on switch (${entries.length} total entries).`);
+            console.log(`[+] [Bridge Server] ${line}`);
           } else {
-            console.error(`[!] [Bridge Server] Isolation readback MISMATCH (${entries.length} switch entries):\n  ${[...verdict.mismatches, ...this.isolationStatus.switchErrors].join('\n  ')}`);
+            console.error(`[!] [Bridge Server] ${line}`);
           }
         })
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
-          this.isolationStatus = {
-            ...this.isolationStatus,
-            state: 'readback_failed',
-            mismatches: [msg],
-            checkedAtMs: Date.now(),
-            checkedAtMonoNs: process.hrtime.bigint(),
-          };
+          this.isolationStatus = readbackFailedStatus(this.isolationStatus, msg, Date.now(), process.hrtime.bigint());
           console.error(`[!] [Bridge Server] Isolation readback FAILED: ${msg}`);
         });
     });
@@ -820,7 +798,7 @@ export class ZodiacBridgeServer {
       }
       const label = this.flowModXidLabels.get(xid);
       const line = `OFPT_ERROR xid ${xid}${label ? ` (isolation rule ${label})` : ''}: ${detail}`;
-      if (label) this.isolationStatus.switchErrors.push(line);
+      if (label) this.isolationStatus = withSwitchError(this.isolationStatus, line);
       console.error(`[!] [Bridge Server] Switch rejected message — ${line}`);
     });
 
@@ -1844,10 +1822,7 @@ export class ZodiacBridgeServer {
         note: 'Per-flow hardware stats (OFPT_MULTIPART_REQUEST) not yet implemented; showing controller-pushed rules only.',
         rules: Array.from(this.flowRuleRegistry.values()),
         totalRules: this.flowRuleRegistry.size,
-        port1Isolation: {
-          ...this.isolationStatus,
-          checkedAtMonoNs: this.isolationStatus.checkedAtMonoNs !== null ? this.isolationStatus.checkedAtMonoNs.toString() : null,
-        },
+        port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
         timestamp: Date.now(),
       }));
       return;
