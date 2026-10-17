@@ -26,11 +26,11 @@ urllib.request.urlopen = lambda req, timeout=None: (posts.append(req.full_url), 
 spec = importlib.util.spec_from_file_location('trt_daemon', sys.argv[1])
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
-installed = m._handle_quarantine('10.0.2.52', 12, 6, 500000000)
-print(json.dumps({'mode': m.QUARANTINE_MODE, 'installed': installed, 'posts': posts, 'proposals': m._quarantine_proposals}))
+installed = m._handle_quarantine('10.0.2.52', 12, 6, 500000000, [100, 130, 130, 900000100])
+print(json.dumps({'gaps': m.interarrival_gaps_ns([5, 5, 20, 120]), 'empty': m.interarrival_gaps_ns([]), 'one': m.interarrival_gaps_ns([7]), 'mode': m.QUARANTINE_MODE, 'installed': installed, 'posts': posts, 'proposals': m._quarantine_proposals}))
 `;
 
-function run(mode: string | undefined): { mode: string; installed: boolean; posts: string[]; proposals: Array<Record<string, unknown>> } {
+function run(mode: string | undefined): { gaps: number[]; empty: number[]; one: number[]; mode: string; installed: boolean; posts: string[]; proposals: Array<Record<string, unknown>> } {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env['QUARANTINE_MODE'];
   if (mode !== undefined) env['QUARANTINE_MODE'] = mode;
@@ -50,6 +50,8 @@ describe.skipIf(!hasPython || !existsSync(DAEMON))('trt daemon quarantine mode',
     // The inputs behind the rate are kept, and re-derive it exactly (6 frames in 0.5 s = 12 pps).
     const p = out.proposals[0] as { windowFrames: number; windowElapsedNs: number; pps: number };
     expect(p).toMatchObject({ windowFrames: 6, windowElapsedNs: 500000000 });
+    // Read-time gaps are kept so batched reads are visible: three frames read within 30 ns, then one about 0.9 s later.
+    expect((p as unknown as { interArrivalNs: number[] }).interArrivalNs).toEqual([30, 0, 899999970]);
     expect((BigInt(p.windowFrames) * 1_000_000_000n) / BigInt(p.windowElapsedNs)).toBe(BigInt(p.pps)); // integer floor division, as in the daemon
   });
 
@@ -67,5 +69,12 @@ describe.skipIf(!hasPython || !existsSync(DAEMON))('trt daemon quarantine mode',
     expect(out.installed).toBe(true);
     expect(out.posts).toEqual(['http://localhost:3003/api/sdn/quarantine']);
     expect(out.proposals).toEqual([]);
+  });
+
+  it('computes inter-arrival gaps from read-time stamps (empty and single-frame inputs give none)', () => {
+    const out = run(undefined);
+    expect(out.gaps).toEqual([0, 15, 100]);
+    expect(out.empty).toEqual([]);
+    expect(out.one).toEqual([]);
   });
 });
