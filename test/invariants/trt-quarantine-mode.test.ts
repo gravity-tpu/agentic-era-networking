@@ -26,7 +26,7 @@ urllib.request.urlopen = lambda req, timeout=None: (posts.append(req.full_url), 
 spec = importlib.util.spec_from_file_location('trt_daemon', sys.argv[1])
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
-installed = m._handle_quarantine('10.0.2.52', 12)
+installed = m._handle_quarantine('10.0.2.52', 12, 6, 500000000)
 print(json.dumps({'mode': m.QUARANTINE_MODE, 'installed': installed, 'posts': posts, 'proposals': m._quarantine_proposals}))
 `;
 
@@ -47,6 +47,10 @@ describe.skipIf(!hasPython || !existsSync(DAEMON))('trt daemon quarantine mode',
     expect(out.posts).toEqual([]);
     expect(out.proposals).toHaveLength(1);
     expect(out.proposals[0]).toMatchObject({ srcIp: '10.0.2.52', pps: 12, status: 'proposed_not_installed' });
+    // The inputs behind the rate are kept, and re-derive it exactly (6 frames in 0.5 s = 12 pps).
+    const p = out.proposals[0] as { windowFrames: number; windowElapsedNs: number; pps: number };
+    expect(p).toMatchObject({ windowFrames: 6, windowElapsedNs: 500000000 });
+    expect((BigInt(p.windowFrames) * 1_000_000_000n) / BigInt(p.windowElapsedNs)).toBe(BigInt(p.pps)); // integer floor division, as in the daemon
   });
 
   it('treats any value other than the exact word enforce as propose', () => {
