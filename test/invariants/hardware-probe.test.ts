@@ -19,9 +19,38 @@ import {
   probeJetsonHardware,
   probeCoralHardware,
   compareUsbTopology,
+  getRpiProbeTimeoutMs,
+  DEFAULT_RPI_PROBE_TIMEOUT_MS,
 } from '../../src/sdn/hardware-probe.js';
 
 describe('Jetson Orin & Coral TPU Hardware Invariants', () => {
+  it('enforces Invariant 5 bounded and damped limits for RPi probe timeout', () => {
+    expect(DEFAULT_RPI_PROBE_TIMEOUT_MS).toBe(1500);
+    const orig = process.env['RPI_PROBE_TIMEOUT_MS'];
+    try {
+      delete process.env['RPI_PROBE_TIMEOUT_MS'];
+      expect(getRpiProbeTimeoutMs()).toBe(1500);
+
+      process.env['RPI_PROBE_TIMEOUT_MS'] = '2500';
+      expect(getRpiProbeTimeoutMs()).toBe(2500);
+
+      // Clamped / bounded rejection for unsafe values
+      process.env['RPI_PROBE_TIMEOUT_MS'] = '50'; // below 200ms
+      expect(getRpiProbeTimeoutMs()).toBe(1500);
+
+      process.env['RPI_PROBE_TIMEOUT_MS'] = '10000'; // above 5000ms
+      expect(getRpiProbeTimeoutMs()).toBe(1500);
+
+      process.env['RPI_PROBE_TIMEOUT_MS'] = 'not-a-number';
+      expect(getRpiProbeTimeoutMs()).toBe(1500);
+    } finally {
+      if (orig !== undefined) {
+        process.env['RPI_PROBE_TIMEOUT_MS'] = orig;
+      } else {
+        delete process.env['RPI_PROBE_TIMEOUT_MS'];
+      }
+    }
+  });
   it('deterministically sorts USB topologies numerically across port expansions (Quoc Le Invariant)', () => {
     const rawPaths = ['2-1.10', '2-1.2', '1-1.1', '2-1.1', '2-1.3'];
     rawPaths.sort(compareUsbTopology);
