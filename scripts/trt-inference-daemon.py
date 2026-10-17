@@ -363,7 +363,7 @@ def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns
     )
 
 
-def _handle_quarantine(src_ip: str, pps: int, window_count: int = 0, window_elapsed_ns: int = 0) -> bool:
+def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int) -> bool:
     """Returns True when a DROP was actually installed, False when it was only proposed or the POST failed."""
     import urllib.request
     if QUARANTINE_MODE != 'enforce':

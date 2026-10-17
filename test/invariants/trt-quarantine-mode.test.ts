@@ -50,7 +50,7 @@ describe.skipIf(!hasPython || !existsSync(DAEMON))('trt daemon quarantine mode',
     // The inputs behind the rate are kept, and re-derive it exactly (6 frames in 0.5 s = 12 pps).
     const p = out.proposals[0] as { windowFrames: number; windowElapsedNs: number; pps: number };
     expect(p).toMatchObject({ windowFrames: 6, windowElapsedNs: 500000000 });
-    expect((p.windowFrames * 1_000_000_000) / p.windowElapsedNs).toBe(p.pps);
+    expect((BigInt(p.windowFrames) * 1_000_000_000n) / BigInt(p.windowElapsedNs)).toBe(BigInt(p.pps)); // integer floor division, as in the daemon
   });
 
   it('treats any value other than the exact word enforce as propose', () => {
