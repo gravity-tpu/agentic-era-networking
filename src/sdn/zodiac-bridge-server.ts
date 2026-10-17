@@ -90,7 +90,7 @@ import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isol
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
 import {
   decideQuarantine,
-  isLoopbackAddress,
+  mayApproveQuarantine,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
   type EvidenceValue,
@@ -1866,12 +1866,11 @@ export class ZodiacBridgeServer {
     if (url.pathname === '/api/sdn/quarantine/approve' && req.method === 'POST') {
       // The bridge API has no authentication, so approval is limited to callers on this machine (ssh to the Jetson and
       // curl localhost): a process elsewhere on the LAN cannot approve its own proposal.
-      // A reverse proxy on this machine would make every request look local; the headers it adds give it away. Fail closed.
-      const viaProxy = req.headers['x-forwarded-for'] !== undefined || req.headers['forwarded'] !== undefined || req.headers['x-real-ip'] !== undefined;
-      if (viaProxy || !isLoopbackAddress(req.socket.remoteAddress)) {
+      // Local callers only, and none that carry proxy headers (see mayApproveQuarantine for what that does and does not cover).
+      if (!mayApproveQuarantine(req.socket.remoteAddress, req.headers)) {
         res.statusCode = 403;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ ok: false, error: 'approval is accepted only from the bridge host itself (loopback, not through a proxy)' }));
+        res.end(JSON.stringify({ ok: false, error: 'approval is accepted only from the bridge host itself (loopback, without proxy headers)' }));
         return;
       }
       const MAX_APPROVE_PAYLOAD = 4 * 1024;

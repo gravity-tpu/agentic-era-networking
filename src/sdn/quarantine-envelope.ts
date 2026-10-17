@@ -170,3 +170,19 @@ export function sanitizeEvidence(raw: unknown): Readonly<Record<string, Evidence
 export function isLoopbackAddress(address: string | undefined): boolean {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
+
+const PROXY_HEADERS = ['x-forwarded-for', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'via'] as const;
+
+/**
+ * Whether a request may approve a quarantine: it must come from the machine itself AND carry none of the headers a
+ * reverse proxy normally adds. This only defends against a cooperative proxy that sets one of those headers: a proxy
+ * on this machine that strips them, or any local process that forwards requests, still looks local. It does not make
+ * the approval route authenticated.
+ */
+export function mayApproveQuarantine(
+  remoteAddress: string | undefined,
+  headers: Readonly<Record<string, string | string[] | undefined>>,
+): boolean {
+  if (!isLoopbackAddress(remoteAddress)) return false;
+  return PROXY_HEADERS.every((h) => headers[h] === undefined);
+}

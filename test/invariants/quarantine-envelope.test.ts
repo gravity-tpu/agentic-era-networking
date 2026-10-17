@@ -12,6 +12,7 @@ import {
   decideQuarantine,
   MAX_EVIDENCE_SAMPLES,
   isLoopbackAddress,
+  mayApproveQuarantine,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
 } from '../../src/sdn/quarantine-envelope.js';
@@ -148,4 +149,22 @@ describe('isLoopbackAddress', () => {
     }
     expect(isLoopbackAddress(undefined)).toBe(false);
   });
+});
+
+describe('mayApproveQuarantine', () => {
+  it('allows a local caller with no proxy headers', () => {
+    expect(mayApproveQuarantine('127.0.0.1', {})).toBe(true);
+    expect(mayApproveQuarantine('::1', { 'content-type': 'application/json' })).toBe(true);
+  });
+  it('refuses a remote caller whatever its headers', () => {
+    expect(mayApproveQuarantine('10.0.0.15', {})).toBe(false);
+    expect(mayApproveQuarantine(undefined, {})).toBe(false);
+  });
+  it.each(['x-forwarded-for', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'via'])(
+    'refuses a local caller carrying %s',
+    (header) => {
+      expect(mayApproveQuarantine('127.0.0.1', { [header]: '203.0.113.9' })).toBe(false);
+      expect(mayApproveQuarantine('127.0.0.1', { [header]: [] })).toBe(false);
+    },
+  );
 });
