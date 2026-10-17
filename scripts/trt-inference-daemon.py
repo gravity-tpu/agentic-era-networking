@@ -237,7 +237,7 @@ _RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
 
 # Fast, bounded worker queue for immediate fail-closed quarantine POSTs.
 # Drains in <5ms without blocking packet capture (Dean Invariant).
-_quarantine_queue: queue.Queue[tuple[str, int, int, int, list] | None] = queue.Queue(maxsize=256)
+_quarantine_queue: queue.Queue[tuple[str, int, int, int, list[int]] | None] = queue.Queue(maxsize=256)
 _quarantine_drops: int = 0  # monotonic drop counter; logged at report interval, never in hot path
 
 # Asynchronous, out-of-band triage queue for Qwen 2.5 evaluation.
@@ -342,15 +342,15 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         }
 
 
-def interarrival_gaps_ns(stamps: list) -> list:
+def interarrival_gaps_ns(stamps: list[int]) -> list[int]:
     """Gaps between consecutive read-time stamps (ns). Many near-zero gaps mean frames were read back to back."""
     return [stamps[i] - stamps[i - 1] for i in range(1, len(stamps))]
 
 
-_quarantine_proposals: list = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
+_quarantine_proposals: list[dict[str, object]] = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
 
 
-def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list) -> None:
+def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> None:
     _quarantine_proposals.append({
         'srcIp': src_ip,
         'pps': pps,
@@ -372,7 +372,7 @@ def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns
     )
 
 
-def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list) -> bool:
+def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> bool:
     """Returns True when a DROP was actually installed, False when it was only proposed or the POST failed."""
     import urllib.request
     if QUARANTINE_MODE != 'enforce':
@@ -475,7 +475,7 @@ threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker
 threading.Thread(target=_qwen_triage_worker, daemon=True, name='qwen-triage-worker').start()
 
 
-def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list) -> None:
+def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> None:
     """Enqueue an IP for immediate fail-closed quarantine; fire-and-forget.
 
     _quarantined_ips.add() runs only on successful enqueue — if the queue is full the
@@ -593,7 +593,7 @@ def main() -> None:
     # OOM under random-IP spoofing attacks.
     mac_window_start: dict[str, int] = {}   # keyed by src IP string
     mac_window_count: dict[str, int] = {}
-    mac_window_stamps: dict[str, list] = {}  # first INTERARRIVAL_SAMPLE_FRAMES read-time stamps of the current window
+    mac_window_stamps: dict[str, list[int]] = {}  # first INTERARRIVAL_SAMPLE_FRAMES read-time stamps of the current window
     idle_cycles = 0                         # recv() timeout counter for observability
 
     write_standby(total_inferences)
