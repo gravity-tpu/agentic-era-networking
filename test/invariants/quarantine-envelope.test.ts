@@ -156,6 +156,13 @@ describe('mayApproveQuarantine', () => {
     expect(mayApproveQuarantine('127.0.0.1', {})).toBe(true);
     expect(mayApproveQuarantine('::1', { 'content-type': 'application/json' })).toBe(true);
   });
+  it('matches header names case-insensitively', () => {
+    expect(mayApproveQuarantine('127.0.0.1', { 'X-Forwarded-For': '203.0.113.9' })).toBe(false);
+    expect(mayApproveQuarantine('127.0.0.1', { VIA: '1.1 proxy' })).toBe(false);
+  });
+  it('a header present but undefined is not present', () => {
+    expect(mayApproveQuarantine('127.0.0.1', { 'x-real-ip': undefined })).toBe(true);
+  });
   it('refuses a remote caller whatever its headers', () => {
     expect(mayApproveQuarantine('10.0.0.15', {})).toBe(false);
     expect(mayApproveQuarantine(undefined, {})).toBe(false);

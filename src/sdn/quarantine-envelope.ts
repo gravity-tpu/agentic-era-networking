@@ -184,5 +184,7 @@ export function mayApproveQuarantine(
   headers: Readonly<Record<string, string | string[] | undefined>>,
 ): boolean {
   if (!isLoopbackAddress(remoteAddress)) return false;
-  return PROXY_HEADERS.every((h) => headers[h] === undefined);
+  // Compare case-insensitively whatever the caller passes (Node lowercases header names, a test or another caller may not).
+  const present = new Set(Object.keys(headers).filter((k) => headers[k] !== undefined).map((k) => k.toLowerCase()));
+  return PROXY_HEADERS.every((h) => !present.has(h));
 }
