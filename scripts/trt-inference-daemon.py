@@ -48,7 +48,9 @@ QUARANTINE_THRESHOLD_PPS = int(os.environ.get('QUARANTINE_PPS_THRESHOLD', '10'))
 # priority-65535 DROP on the physical switch, with no approval and no audit record.
 QUARANTINE_MODE = 'enforce' if os.environ.get('QUARANTINE_MODE') == 'enforce' else 'propose'
 QUARANTINE_PROPOSAL_KEEP = 16  # newest proposals kept in telemetry; bounded
-INTERARRIVAL_SAMPLE_FRAMES = 32  # read-time stamps kept per source window, to show whether frames were read in bursts
+INTERARRIVAL_SAMPLE_FRAMES = 32  # frames per source window whose timing is kept, to show whether frames were read in bursts
+SO_TIMESTAMPNS = getattr(socket, 'SO_TIMESTAMPNS', 35)  # linux/socket.h: kernel receive timestamp as a timespec
+PACKET_STATISTICS = 6  # linux/if_packet.h: tp_packets, tp_drops; reading RESETS the kernel counters
 RATE_WINDOW_NS           = 5_000_000_000  # 5-second sliding window per source MAC
 BRIDGE_QUARANTINE_URL    = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/quarantine'
 BRIDGE_RELEASE_URL       = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/release'
@@ -237,7 +239,7 @@ _RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
 
 # Fast, bounded worker queue for immediate fail-closed quarantine POSTs.
 # Drains in <5ms without blocking packet capture (Dean Invariant).
-_quarantine_queue: queue.Queue[tuple[str, int, int, int, list[int]] | None] = queue.Queue(maxsize=256)
+_quarantine_queue: queue.Queue[tuple[str, int, int, int, dict[str, list[int]]] | None] = queue.Queue(maxsize=256)
 _quarantine_drops: int = 0  # monotonic drop counter; logged at report interval, never in hot path
 
 # Asynchronous, out-of-band triage queue for Qwen 2.5 evaluation.
@@ -342,6 +344,24 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         }
 
 
+def parse_kernel_timestamp_ns(ancdata: list) -> int | None:
+    """
+    The kernel's receive time for a frame (CLOCK_REALTIME ns) from recvmsg ancillary data, or None when the kernel did
+    not attach one. It is when the frame reached the socket, before this loop got to it.
+    """
+    for level, kind, data in ancdata:
+        if level == socket.SOL_SOCKET and kind == SO_TIMESTAMPNS and len(data) >= 16:
+            sec, nsec = struct.unpack('ll', data[:16])
+            return sec * 1_000_000_000 + nsec
+    return None
+
+
+def read_socket_drops(sock: socket.socket) -> int:
+    """Frames the kernel dropped for this socket since the last call (the read resets the kernel counter)."""
+    _packets, drops = struct.unpack('II', sock.getsockopt(SOL_PACKET, PACKET_STATISTICS, 8))
+    return drops
+
+
 def interarrival_gaps_ns(stamps: list[int]) -> list[int]:
     """Gaps between consecutive read-time stamps (ns). Many near-zero gaps mean frames were read back to back."""
     return [stamps[i] - stamps[i - 1] for i in range(1, len(stamps))]
@@ -350,7 +370,7 @@ def interarrival_gaps_ns(stamps: list[int]) -> list[int]:
 _quarantine_proposals: list[dict[str, object]] = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
 
 
-def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> None:
+def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, evidence: dict[str, list[int]]) -> None:
     _quarantine_proposals.append({
         'srcIp': src_ip,
         'pps': pps,
@@ -359,7 +379,13 @@ def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns
         'windowElapsedNs': window_elapsed_ns,
         # Gaps between the first INTERARRIVAL_SAMPLE_FRAMES frames' READ times in this window: near-zero gaps mean the
         # daemon read frames back to back (a stalled loop or batched delivery), not that they arrived that fast.
-        'interArrivalNs': interarrival_gaps_ns(read_stamps),
+        'interArrivalNs': interarrival_gaps_ns(evidence['read']),
+        # The same frames by the KERNEL's receive stamps: evenly spread here but bunched above means this loop fell
+        # behind; bunched here too means the frames reached the socket in a burst (NIC or mirror port).
+        'kernelInterArrivalNs': interarrival_gaps_ns(evidence['kernel']),
+        # How long each of those frames waited in the kernel before being read (realtime clock, read time minus
+        # kernel stamp). Large and shrinking across the window is a backlog being drained.
+        'readLagNs': evidence['lag'],
         'thresholdPps': QUARANTINE_THRESHOLD_PPS,
         'observedMonotonicNs': time.monotonic_ns(),
         'status': 'proposed_not_installed',
@@ -372,11 +398,11 @@ def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns
     )
 
 
-def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> bool:
+def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, evidence: dict[str, list[int]]) -> bool:
     """Returns True when a DROP was actually installed, False when it was only proposed or the POST failed."""
     import urllib.request
     if QUARANTINE_MODE != 'enforce':
-        _record_proposal(src_ip, pps, window_count, window_elapsed_ns, read_stamps)
+        _record_proposal(src_ip, pps, window_count, window_elapsed_ns, evidence)
         return False
 
     # Immediately install fail-closed DROP on the OpenFlow data plane
@@ -411,9 +437,9 @@ def _quarantine_worker() -> None:
         item = _quarantine_queue.get()
         if item is None:
             break
-        src_ip, pps, window_count, window_elapsed_ns, read_stamps = item
+        src_ip, pps, window_count, window_elapsed_ns, evidence = item
         try:
-            installed = _handle_quarantine(src_ip, pps, window_count, window_elapsed_ns, read_stamps)
+            installed = _handle_quarantine(src_ip, pps, window_count, window_elapsed_ns, evidence)
         finally:
             _quarantine_queue.task_done()
 
@@ -475,7 +501,7 @@ threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker
 threading.Thread(target=_qwen_triage_worker, daemon=True, name='qwen-triage-worker').start()
 
 
-def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> None:
+def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, evidence: dict[str, list[int]]) -> None:
     """Enqueue an IP for immediate fail-closed quarantine; fire-and-forget.
 
     _quarantined_ips.add() runs only on successful enqueue — if the queue is full the
@@ -485,7 +511,7 @@ def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: 
     """
     global _quarantine_drops
     try:
-        _quarantine_queue.put_nowait((src_ip, pps, window_count, window_elapsed_ns, read_stamps))
+        _quarantine_queue.put_nowait((src_ip, pps, window_count, window_elapsed_ns, evidence))
         # Evict an arbitrary entry when the set is full so it stays bounded.
         if len(_quarantined_ips) >= _RATE_WINDOW_CAP:
             _quarantined_ips.discard(next(iter(_quarantined_ips)))
@@ -572,6 +598,10 @@ def main() -> None:
         raw_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
         raw_sock.bind((tap_iface, 0))
         enable_promiscuous(raw_sock, tap_iface)
+        try:
+            raw_sock.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
+        except OSError as e:
+            sys.stderr.write(f'[trt-daemon] Notice: kernel receive timestamps unavailable ({e}); proposals will lack them.\n')
         raw_sock.settimeout(0.2)
         print(f'[trt-daemon] AF_PACKET socket bound on {tap_iface} (promiscuous)', flush=True)
     except OSError as e:
@@ -593,7 +623,11 @@ def main() -> None:
     # OOM under random-IP spoofing attacks.
     mac_window_start: dict[str, int] = {}   # keyed by src IP string
     mac_window_count: dict[str, int] = {}
-    mac_window_stamps: dict[str, list[int]] = {}  # first INTERARRIVAL_SAMPLE_FRAMES read-time stamps of the current window
+    # First INTERARRIVAL_SAMPLE_FRAMES frames of each source's current window: read stamps (monotonic ns), kernel receive
+    # stamps (realtime ns) and the wait between them.
+    mac_window_stamps: dict[str, dict[str, list[int]]] = {}
+    socket_drops_total = 0
+    drops_unreadable_warned = False
     idle_cycles = 0                         # recv() timeout counter for observability
 
     write_standby(total_inferences)
@@ -625,10 +659,12 @@ def main() -> None:
         try:
             if raw_sock is not None:
                 try:
-                    frame = raw_sock.recv(65535)
+                    frame, ancdata, _msg_flags, _addr = raw_sock.recvmsg(65535, 64)
                     if frame:
                         src_ip = parse_src_ip(frame)
                         t_recv = time.monotonic_ns()  # timestamp at drain time, not post-inference
+                        t_kernel = parse_kernel_timestamp_ns(ancdata)
+                        lag_ns = time.time_ns() - t_kernel if t_kernel is not None else None
 
                         # Align frame bytes to float32 boundary before view() to avoid dtype-divisor error
                         # on small/odd-length frames (e.g. 15-byte ARP keepalives).
@@ -661,12 +697,19 @@ def main() -> None:
                             if ws is None or t_recv - ws >= RATE_WINDOW_NS:
                                 mac_window_start[src_ip] = t_recv
                                 mac_window_count[src_ip] = 1
-                                mac_window_stamps[src_ip] = [t_recv]
+                                evid: dict[str, list[int]] = {'read': [t_recv], 'kernel': [], 'lag': []}
+                                if t_kernel is not None and lag_ns is not None:
+                                    evid['kernel'].append(t_kernel)
+                                    evid['lag'].append(lag_ns)
+                                mac_window_stamps[src_ip] = evid
                             else:
                                 mac_window_count[src_ip] = mac_window_count.get(src_ip, 0) + 1
-                                stamps = mac_window_stamps.setdefault(src_ip, [])
-                                if len(stamps) < INTERARRIVAL_SAMPLE_FRAMES:
-                                    stamps.append(t_recv)
+                                evid = mac_window_stamps.setdefault(src_ip, {'read': [], 'kernel': [], 'lag': []})
+                                if len(evid['read']) < INTERARRIVAL_SAMPLE_FRAMES:
+                                    evid['read'].append(t_recv)
+                                    if t_kernel is not None and lag_ns is not None:
+                                        evid['kernel'].append(t_kernel)
+                                        evid['lag'].append(lag_ns)
                                 elapsed = t_recv - ws
                                 if elapsed >= 500_000_000:  # require >=0.5 s of data before acting
                                     pps = (mac_window_count[src_ip] * 1_000_000_000) // elapsed
@@ -677,7 +720,7 @@ def main() -> None:
                                             f'threshold {QUARANTINE_THRESHOLD_PPS} pps (mode={QUARANTINE_MODE})',
                                             flush=True,
                                          )
-                                        try_quarantine(src_ip, pps, mac_window_count[src_ip], elapsed, list(mac_window_stamps.get(src_ip, [])))
+                                        try_quarantine(src_ip, pps, mac_window_count[src_ip], elapsed, {k: list(v) for k, v in mac_window_stamps.get(src_ip, {'read': [], 'kernel': [], 'lag': []}).items()})
                 except socket.timeout:
                     idle_cycles += 1
                 except Exception as exc:
@@ -687,6 +730,13 @@ def main() -> None:
 
             now_ns = time.monotonic_ns()
             if now_ns - last_report_ns >= REPORT_INTERVAL_NS:
+                if raw_sock is not None:
+                    try:
+                        socket_drops_total += read_socket_drops(raw_sock)
+                    except OSError as e:
+                        if not drops_unreadable_warned:
+                            drops_unreadable_warned = True
+                            sys.stderr.write(f'[trt-daemon] Notice: socket drop counter unreadable ({e}); socketDrops will not grow.\n')
                 elapsed_ns  = now_ns - window_start_ns
                 sorted_lats = sorted(window_latencies)
                 n           = len(sorted_lats)
@@ -718,6 +768,7 @@ def main() -> None:
                     'latencyP99Ns':           p99_ns,
                     'windowSampleCount':      n,
                     'quarantineMode':         QUARANTINE_MODE,
+                    'socketDrops':            socket_drops_total,
                     'quarantineProposals':    list(_quarantine_proposals),
                     'quarantineQueueDrops':   _quarantine_drops,
                     'triageQueueShedDrops':   _triage_shed_drops,
