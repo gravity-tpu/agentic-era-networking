@@ -48,6 +48,7 @@ QUARANTINE_THRESHOLD_PPS = int(os.environ.get('QUARANTINE_PPS_THRESHOLD', '10'))
 # priority-65535 DROP on the physical switch, with no approval and no audit record.
 QUARANTINE_MODE = 'enforce' if os.environ.get('QUARANTINE_MODE') == 'enforce' else 'propose'
 QUARANTINE_PROPOSAL_KEEP = 16  # newest proposals kept in telemetry; bounded
+INTERARRIVAL_SAMPLE_FRAMES = 32  # read-time stamps kept per source window, to show whether frames were read in bursts
 RATE_WINDOW_NS           = 5_000_000_000  # 5-second sliding window per source MAC
 BRIDGE_QUARANTINE_URL    = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/quarantine'
 BRIDGE_RELEASE_URL       = os.environ.get('BRIDGE_URL', 'http://localhost:3003') + '/api/sdn/release'
@@ -236,7 +237,7 @@ _RATE_WINDOW_CAP = 1024  # max unique source IPs tracked before evicting oldest
 
 # Fast, bounded worker queue for immediate fail-closed quarantine POSTs.
 # Drains in <5ms without blocking packet capture (Dean Invariant).
-_quarantine_queue: queue.Queue[tuple[str, int, int, int] | None] = queue.Queue(maxsize=256)
+_quarantine_queue: queue.Queue[tuple[str, int, int, int, list[int]] | None] = queue.Queue(maxsize=256)
 _quarantine_drops: int = 0  # monotonic drop counter; logged at report interval, never in hot path
 
 # Asynchronous, out-of-band triage queue for Qwen 2.5 evaluation.
@@ -341,16 +342,24 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         }
 
 
-_quarantine_proposals: list = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
+def interarrival_gaps_ns(stamps: list[int]) -> list[int]:
+    """Gaps between consecutive read-time stamps (ns). Many near-zero gaps mean frames were read back to back."""
+    return [stamps[i] - stamps[i - 1] for i in range(1, len(stamps))]
 
 
-def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int) -> None:
+_quarantine_proposals: list[dict[str, object]] = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
+
+
+def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> None:
     _quarantine_proposals.append({
         'srcIp': src_ip,
         'pps': pps,
         # The inputs behind pps (pps = windowFrames * 1e9 // windowElapsedNs), so every rate can be re-derived.
         'windowFrames': window_count,
         'windowElapsedNs': window_elapsed_ns,
+        # Gaps between the first INTERARRIVAL_SAMPLE_FRAMES frames' READ times in this window: near-zero gaps mean the
+        # daemon read frames back to back (a stalled loop or batched delivery), not that they arrived that fast.
+        'interArrivalNs': interarrival_gaps_ns(read_stamps),
         'thresholdPps': QUARANTINE_THRESHOLD_PPS,
         'observedMonotonicNs': time.monotonic_ns(),
         'status': 'proposed_not_installed',
@@ -363,11 +372,11 @@ def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns
     )
 
 
-def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int) -> bool:
+def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> bool:
     """Returns True when a DROP was actually installed, False when it was only proposed or the POST failed."""
     import urllib.request
     if QUARANTINE_MODE != 'enforce':
-        _record_proposal(src_ip, pps, window_count, window_elapsed_ns)
+        _record_proposal(src_ip, pps, window_count, window_elapsed_ns, read_stamps)
         return False
 
     # Immediately install fail-closed DROP on the OpenFlow data plane
@@ -402,9 +411,9 @@ def _quarantine_worker() -> None:
         item = _quarantine_queue.get()
         if item is None:
             break
-        src_ip, pps, window_count, window_elapsed_ns = item
+        src_ip, pps, window_count, window_elapsed_ns, read_stamps = item
         try:
-            installed = _handle_quarantine(src_ip, pps, window_count, window_elapsed_ns)
+            installed = _handle_quarantine(src_ip, pps, window_count, window_elapsed_ns, read_stamps)
         finally:
             _quarantine_queue.task_done()
 
@@ -466,7 +475,7 @@ threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker
 threading.Thread(target=_qwen_triage_worker, daemon=True, name='qwen-triage-worker').start()
 
 
-def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int) -> None:
+def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, read_stamps: list[int]) -> None:
     """Enqueue an IP for immediate fail-closed quarantine; fire-and-forget.
 
     _quarantined_ips.add() runs only on successful enqueue — if the queue is full the
@@ -476,7 +485,7 @@ def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: 
     """
     global _quarantine_drops
     try:
-        _quarantine_queue.put_nowait((src_ip, pps, window_count, window_elapsed_ns))
+        _quarantine_queue.put_nowait((src_ip, pps, window_count, window_elapsed_ns, read_stamps))
         # Evict an arbitrary entry when the set is full so it stays bounded.
         if len(_quarantined_ips) >= _RATE_WINDOW_CAP:
             _quarantined_ips.discard(next(iter(_quarantined_ips)))
@@ -584,6 +593,7 @@ def main() -> None:
     # OOM under random-IP spoofing attacks.
     mac_window_start: dict[str, int] = {}   # keyed by src IP string
     mac_window_count: dict[str, int] = {}
+    mac_window_stamps: dict[str, list[int]] = {}  # first INTERARRIVAL_SAMPLE_FRAMES read-time stamps of the current window
     idle_cycles = 0                         # recv() timeout counter for observability
 
     write_standby(total_inferences)
@@ -646,12 +656,17 @@ def main() -> None:
                                 oldest = next(iter(mac_window_start))
                                 mac_window_start.pop(oldest, None)
                                 mac_window_count.pop(oldest, None)
+                                mac_window_stamps.pop(oldest, None)
                             ws = mac_window_start.get(src_ip)
                             if ws is None or t_recv - ws >= RATE_WINDOW_NS:
                                 mac_window_start[src_ip] = t_recv
                                 mac_window_count[src_ip] = 1
+                                mac_window_stamps[src_ip] = [t_recv]
                             else:
                                 mac_window_count[src_ip] = mac_window_count.get(src_ip, 0) + 1
+                                stamps = mac_window_stamps.setdefault(src_ip, [])
+                                if len(stamps) < INTERARRIVAL_SAMPLE_FRAMES:
+                                    stamps.append(t_recv)
                                 elapsed = t_recv - ws
                                 if elapsed >= 500_000_000:  # require >=0.5 s of data before acting
                                     pps = (mac_window_count[src_ip] * 1_000_000_000) // elapsed
@@ -662,7 +677,7 @@ def main() -> None:
                                             f'threshold {QUARANTINE_THRESHOLD_PPS} pps (mode={QUARANTINE_MODE})',
                                             flush=True,
                                          )
-                                        try_quarantine(src_ip, pps, mac_window_count[src_ip], elapsed)
+                                        try_quarantine(src_ip, pps, mac_window_count[src_ip], elapsed, list(mac_window_stamps.get(src_ip, [])))
                 except socket.timeout:
                     idle_cycles += 1
                 except Exception as exc:
