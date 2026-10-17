@@ -117,12 +117,14 @@ describe('manual release (carried over from the removed copilot test file)', () 
       installedAtMs: Date.now(),
       openFlowInstalled: true,
     });
+    const lift = vi.spyOn(controller, 'liftQuarantine').mockReturnValue({ success: false, timestampNs: 0n, error: 'OpenFlow control plane not ESTABLISHED' });
     const failed = server.releaseQuarantineRule({ targetIp: '10.0.2.105', reason: 'premature release while OpenFlow is disconnected' });
+    expect(lift).toHaveBeenCalledTimes(1); // the hardware delete really was attempted, and it failed
     expect(failed.released).toBe(false);
     expect(failed.releasedCount).toBe(0);
     expect(server['flowRuleRegistry'].has('quarantine-test-hardware')).toBe(true);
 
-    vi.spyOn(controller, 'liftQuarantine').mockReturnValue({ success: true, timestampNs: process.hrtime.bigint() });
+    lift.mockReturnValue({ success: true, timestampNs: process.hrtime.bigint() });
     const ok = server.releaseQuarantineRule({ targetIp: '10.0.2.105', reason: 'verified' });
     expect(ok.released).toBe(true);
     expect(ok.releasedRules).toContain('quarantine-test-hardware');
