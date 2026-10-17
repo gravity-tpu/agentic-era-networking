@@ -4,13 +4,15 @@
  * (A caller that is not on loopback cannot be produced from here; that decision is covered by mayApproveQuarantine's tests.)
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import http from 'node:http';
 import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
 
 let httpServer: http.Server;
 let port = 0;
+// A fresh bridge for every case, so no case depends on what an earlier one left behind.
+let bridge: ZodiacBridgeServer;
 
 interface Reply {
   proposed?: boolean;
@@ -46,7 +48,6 @@ beforeAll(async () => {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.stubEnv('ZODIAC_QUARANTINE_MODE', '');
   vi.stubEnv('ZODIAC_QUARANTINE_PROTECTED_IPS', '10.0.2.119');
-  const bridge = new ZodiacBridgeServer(new ZodiacController());
   httpServer = http.createServer((req, res) => {
     void bridge['handleRequest'](req, res);
   });
@@ -54,6 +55,10 @@ beforeAll(async () => {
   const addr = httpServer.address();
   if (addr === null || typeof addr === 'string') throw new Error('test server has no port');
   port = addr.port;
+});
+
+beforeEach(() => {
+  bridge = new ZodiacBridgeServer(new ZodiacController());
 });
 
 afterAll(async () => {
@@ -72,7 +77,9 @@ describe('quarantine proposal routes', () => {
     expect(list.json.mode).toBe('propose');
     const proposals = list.json.proposals ?? [];
     expect(proposals.map((p) => p.targetIp)).toEqual(['10.0.2.50']);
-    expect(proposals[0]?.evidence).toEqual({ pps: 18 }); // the string and the fraction were dropped
+    // Only integer evidence is kept: the string and the fraction were dropped. (sanitizeEvidence itself is unit-tested in
+    // quarantine-envelope.test.ts; this shows the route applies it.)
+    expect(proposals[0]?.evidence).toEqual({ pps: 18 });
   });
 
   it('a protected host is refused with 403 and never listed', async () => {
@@ -83,6 +90,7 @@ describe('quarantine proposal routes', () => {
   });
 
   it('approval carrying a proxy header is refused even from loopback', async () => {
+    await call('POST', '/api/sdn/quarantine', { targetIp: '10.0.2.50', reason: 'rate' });
     const r = await call('POST', '/api/sdn/quarantine/approve', { targetIp: '10.0.2.50' }, { 'X-Forwarded-For': '203.0.113.9' });
     expect(r.status).toBe(403);
     const list = await call('GET', '/api/sdn/quarantine/proposals');
@@ -96,6 +104,7 @@ describe('quarantine proposal routes', () => {
   });
 
   it('a local approval of a current proposal installs it, time-limited', async () => {
+    await call('POST', '/api/sdn/quarantine', { targetIp: '10.0.2.50', reason: 'rate' });
     const r = await call('POST', '/api/sdn/quarantine/approve', { targetIp: '10.0.2.50' });
     expect(r.status).toBe(200);
     expect(r.json.quarantined).toBe(true);
