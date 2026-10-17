@@ -173,7 +173,7 @@ export interface JetsonTelemetrySnapshot {
   readonly jetpackVersion: string;
   readonly uptime: string;
   readonly interfaces: JetsonNetworkInterfaceTelemetry[];
-  // Ollama LLM Inference Telemetry (qwen2.5:3b on Jetson Orin Nano)
+  // Optional Ollama LLM Inference Telemetry (dormant / OFFLINE when no model is active on Jetson)
   readonly ollamaStatus: 'ONLINE' | 'OFFLINE';
   readonly ollamaModel: string;
   readonly ollamaModelParamSize: string;

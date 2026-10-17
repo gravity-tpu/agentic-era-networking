@@ -44,7 +44,7 @@ This ledger tracks the physical, data link, network, and transport architecture 
 │ P3: Mirror Tap → Jetson  (VLAN 100) │────►│ • Tap NIC: enx9c69d39dd0a6 (USB)      │   │   100.112.223.16       │
 │ P1: Workload Ingress     (VLAN 100) │     │ • O3 NIC: enx9c69d39ddcc0 (USB 3)     │   │ No Ethernet to Zodiac  │
 └──────────────────┬──────────────────┘     │ • Bridge :3003 HTTP, :6633 OpenFlow   │   └────────────────────────┘
-                   │                        │ • Ollama qwen2.5:3b  :11434 (local)   │
+                   │                        │ • Ollama (stopped / unpopulated)      │
                    │                        │ • Tailscale 100.118.64.16             │
                    │                        └───────────────────────────────────────┘
                    │ P1 RJ45 100M — Port 1 Isolation Policy (see below)
@@ -192,7 +192,7 @@ ssh -f -N -o ExitOnForwardFailure=yes -L 8889:192.168.0.240:80 agent@10.0.0.179
 | `UDP 53` | RFC 1035 DNS Wire Server | Jetson Ingress / Workload | Default-drop on unrecognized domains; fail-closed resolver. |
 | `TCP 3003` | Zodiac Bridge HTTP / SSE | Local / Tailscale | Read-only telemetry exposition; real-time hardware status. |
 | `TCP 9100/9105` | Prometheus Metrics Exporter | Local / Scraping | 64-bit integer counters; zero floating point precision drift. |
-| `TCP 11434` | Ollama LLM Service (`qwen2.5`) | Localhost only | Out-of-band telemetry analysis; non-blocking to packet flow. |
+| `TCP 11434` | Ollama LLM Service | Localhost only (stopped) | Qwen removed from Jetson; copilot UI removed; non-blocking to packet flow. |
 | `TCP 8000` | Hailo-8 Neural Inference Service (FastAPI) | RPi 5 Ingress (`10.0.0.179` / `10.0.2.51`) | Exposes 26 TOPS NPU; sub-11ms DMA inference; monotonic nanosecond latency accounting (INV-2); epistemic silicon telemetry (INV-6); daemonized via `hailo-inference.service`. |
 
 ---
