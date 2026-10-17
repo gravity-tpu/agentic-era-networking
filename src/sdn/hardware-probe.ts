@@ -2130,6 +2130,23 @@ export async function probeWorkstationHardware(
   }
 }
 
+// Council Invariant 5 (Bounded & Configurable Limits):
+// Configurable probe timeout for networked Raspberry Pi nodes (RPi 5 & RPi 3).
+// Accommodates Wi-Fi jitter (management wlan0) and PCIe/NPU register read latency
+// while completing well within the 2500ms bridge telemetry tick cycle.
+export const DEFAULT_RPI_PROBE_TIMEOUT_MS = 1500;
+
+export function getRpiProbeTimeoutMs(): number {
+  const envVal = process.env['RPI_PROBE_TIMEOUT_MS'];
+  if (typeof envVal === 'string' && envVal.length > 0) {
+    const parsed = parseInt(envVal, 10);
+    if (Number.isFinite(parsed) && parsed >= 200 && parsed <= 5000) {
+      return parsed;
+    }
+  }
+  return DEFAULT_RPI_PROBE_TIMEOUT_MS;
+}
+
 /**
  * Probes the Raspberry Pi 5 + Hailo-8 NPU appliance (hostname rpi-hailo).
  *
@@ -2149,7 +2166,7 @@ export async function probeRpi5Hardware(
   ];
 
   const abortCtrl = new AbortController();
-  const timeoutId = setTimeout(() => abortCtrl.abort(), 400);
+  const timeoutId = setTimeout(() => abortCtrl.abort(), getRpiProbeTimeoutMs());
   timeoutId.unref?.();
 
   try {
@@ -2325,7 +2342,7 @@ export async function probeRpi3Hardware(
   ];
 
   const abortCtrl = new AbortController();
-  const timeoutId = setTimeout(() => abortCtrl.abort(), 400);
+  const timeoutId = setTimeout(() => abortCtrl.abort(), getRpiProbeTimeoutMs());
   timeoutId.unref?.();
 
   try {
