@@ -40,14 +40,8 @@ WARMUP_N           = 10              # more warmup than Coral to fully initialis
 # Rate-anomaly quarantine (Council Invariant 2: integer arithmetic throughout)
 QUARANTINE_THRESHOLD_PPS = int(os.environ.get('QUARANTINE_PPS_THRESHOLD', '10'))
 
-# What a rate anomaly does (Invariant 4: a person approves what touches the data plane).
-#   propose (default): record the proposal (log + telemetry) and install nothing.
-#   enforce: POST an immediate DROP to the bridge with no human step. Opt-in only, and it must be named explicitly:
-#            any other value is treated as propose, never as enforce.
-# Measured 2026-10-16: on the first run with a working tap, a 5 pps ping test client was auto-quarantined by a
-# priority-65535 DROP on the physical switch, with no approval and no audit record.
-QUARANTINE_MODE = 'enforce' if os.environ.get('QUARANTINE_MODE') == 'enforce' else 'propose'
-QUARANTINE_PROPOSAL_KEEP = 16  # newest proposals kept in telemetry; bounded
+# What happens to a rate anomaly is decided by the bridge (ZODIAC_QUARANTINE_MODE: propose or enforce, inside its envelope), not here:
+# every detector posts to /api/sdn/quarantine and the bridge is the single place that applies the mode.
 INTERARRIVAL_SAMPLE_FRAMES = 32  # frames per source window whose timing is kept, to show whether frames were read in bursts
 SO_TIMESTAMPNS = getattr(socket, 'SO_TIMESTAMPNS', 35)  # linux/socket.h: kernel receive timestamp as a timespec
 PACKET_STATISTICS = 6  # linux/if_packet.h: tp_packets, tp_drops; reading RESETS the kernel counters
@@ -367,49 +361,28 @@ def interarrival_gaps_ns(stamps: list[int]) -> list[int]:
     return [stamps[i] - stamps[i - 1] for i in range(1, len(stamps))]
 
 
-_quarantine_proposals: list[dict[str, object]] = []  # newest QUARANTINE_PROPOSAL_KEEP, oldest dropped; written to telemetry
-
-
-def _record_proposal(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, evidence: dict[str, list[int]]) -> None:
-    _quarantine_proposals.append({
-        'srcIp': src_ip,
-        'pps': pps,
-        # The inputs behind pps (pps = windowFrames * 1e9 // windowElapsedNs), so every rate can be re-derived.
-        'windowFrames': window_count,
-        'windowElapsedNs': window_elapsed_ns,
-        # Gaps between the first INTERARRIVAL_SAMPLE_FRAMES frames' READ times in this window: near-zero gaps mean the
-        # daemon read frames back to back (a stalled loop or batched delivery), not that they arrived that fast.
-        'interArrivalNs': interarrival_gaps_ns(evidence['read']),
-        # The same frames by the KERNEL's receive stamps: evenly spread here but bunched above means this loop fell
-        # behind; bunched here too means the frames reached the socket in a burst (NIC or mirror port).
-        'kernelInterArrivalNs': interarrival_gaps_ns(evidence['kernel']),
-        # How long each of those frames waited in the kernel before being read (realtime clock, read time minus
-        # kernel stamp). Large and shrinking across the window is a backlog being drained.
-        'readLagNs': evidence['lag'],
-        'thresholdPps': QUARANTINE_THRESHOLD_PPS,
-        'observedMonotonicNs': time.monotonic_ns(),
-        'status': 'proposed_not_installed',
-    })
-    del _quarantine_proposals[:-QUARANTINE_PROPOSAL_KEEP]
-    print(
-        f'[trt-daemon] [PROPOSE-QUARANTINE] {src_ip} @ {pps} pps exceeds {QUARANTINE_THRESHOLD_PPS} pps -- '
-        f'NOT installed (QUARANTINE_MODE=propose); a person must approve a DROP',
-        flush=True,
-    )
-
-
 def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, evidence: dict[str, list[int]]) -> bool:
-    """Returns True when a DROP was actually installed, False when it was only proposed or the POST failed."""
+    """
+    Ask the bridge to quarantine a source, with the numbers behind the request. The bridge decides what happens (propose,
+    enforce, or refuse as outside its envelope). Returns True only when the bridge reports it installed a DROP.
+    """
     import urllib.request
-    if QUARANTINE_MODE != 'enforce':
-        _record_proposal(src_ip, pps, window_count, window_elapsed_ns, evidence)
-        return False
-
-    # Immediately install fail-closed DROP on the OpenFlow data plane
     body = json.dumps({
         'targetIp': src_ip,
         'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {QUARANTINE_THRESHOLD_PPS} pps',
         'priority': 65535,
+        'evidence': {
+            # pps = windowFrames * 1e9 // windowElapsedNs, so every rate can be re-derived.
+            'pps': pps,
+            'thresholdPps': QUARANTINE_THRESHOLD_PPS,
+            'windowFrames': window_count,
+            'windowElapsedNs': window_elapsed_ns,
+            # The first INTERARRIVAL_SAMPLE_FRAMES frames of the window: gaps between read times, between kernel receive
+            # times, and how long each waited before being read. Near-zero gaps mean frames arrived or were read in a burst.
+            'interArrivalNs': interarrival_gaps_ns(evidence['read']),
+            'kernelInterArrivalNs': interarrival_gaps_ns(evidence['kernel']),
+            'readLagNs': evidence['lag'],
+        },
     }).encode()
     req = urllib.request.Request(
         BRIDGE_QUARANTINE_URL,
@@ -420,19 +393,29 @@ def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_
     try:
         with urllib.request.urlopen(req, timeout=3) as resp:
             result = json.loads(resp.read())
-            print(
-                f'[trt-daemon] [FAIL-CLOSED DROP] {src_ip} @ {pps} pps -> '
-                f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
-                flush=True,
-            )
-        return True
     except Exception as exc:
-        sys.stderr.write(f'[trt-daemon] Quarantine POST error for {src_ip}: {exc}\n')
+        sys.stderr.write(f'[trt-daemon] Quarantine request for {src_ip} not accepted: {exc}\n')
         return False
+    if result.get('proposed'):
+        print(
+            f'[trt-daemon] [QUARANTINE-REQUEST] {src_ip} @ {pps} pps: the bridge recorded a proposal and installed '
+            f'nothing (propose mode); a person must approve it',
+            flush=True,
+        )
+        return False
+    if result.get('quarantined'):
+        print(
+            f'[trt-daemon] [FAIL-CLOSED DROP] {src_ip} @ {pps} pps -> '
+            f'ruleId={result.get("ruleId","?")} openFlowInstalled={result.get("openFlowInstalled")}',
+            flush=True,
+        )
+        return True
+    sys.stderr.write(f'[trt-daemon] Quarantine request for {src_ip}: unexpected bridge reply {result}\n')
+    return False
 
 
 def _quarantine_worker() -> None:
-    """Quarantine worker: proposes by default, installs a DROP only when QUARANTINE_MODE=enforce."""
+    """Quarantine worker: forwards each request to the bridge, which decides (propose, enforce or refuse)."""
     while True:
         item = _quarantine_queue.get()
         if item is None:
@@ -717,7 +700,7 @@ def main() -> None:
                                         print(
                                             f'[trt-daemon] [ALERT] {src_ip}: {pps} pps '
                                             f'({mac_window_count[src_ip]} frames in {elapsed} ns) exceeds '
-                                            f'threshold {QUARANTINE_THRESHOLD_PPS} pps (mode={QUARANTINE_MODE})',
+                                            f'threshold {QUARANTINE_THRESHOLD_PPS} pps (the bridge decides what happens)',
                                             flush=True,
                                          )
                                         try_quarantine(src_ip, pps, mac_window_count[src_ip], elapsed, {k: list(v) for k, v in mac_window_stamps.get(src_ip, {'read': [], 'kernel': [], 'lag': []}).items()})
@@ -767,9 +750,7 @@ def main() -> None:
                     'latencyP50Ns':           p50_ns,
                     'latencyP99Ns':           p99_ns,
                     'windowSampleCount':      n,
-                    'quarantineMode':         QUARANTINE_MODE,
-                    'socketDrops':            socket_drops_total,
-                    'quarantineProposals':    list(_quarantine_proposals),
+                                'socketDrops':            socket_drops_total,
                     'quarantineQueueDrops':   _quarantine_drops,
                     'triageQueueShedDrops':   _triage_shed_drops,
                     'timestampNs':            now_ns,

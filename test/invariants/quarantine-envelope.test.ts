@@ -10,7 +10,9 @@ import {
   DEFAULT_QUARANTINE_MAX_ACTIVE,
   DEFAULT_QUARANTINE_TTL_MS,
   decideQuarantine,
+  MAX_EVIDENCE_SAMPLES,
   readQuarantineEnvelopeConfig,
+  sanitizeEvidence,
 } from '../../src/sdn/quarantine-envelope.js';
 
 const cfg = readQuarantineEnvelopeConfig({});
@@ -97,5 +99,37 @@ describe('decideQuarantine', () => {
 
   it('the default cap leaves most of the 128-entry table untouched', () => {
     expect(DEFAULT_QUARANTINE_MAX_ACTIVE).toBeLessThanOrEqual(16);
+  });
+});
+
+describe('quarantine mode', () => {
+  it('defaults to propose', () => {
+    expect(readQuarantineEnvelopeConfig({}).config.mode).toBe('propose');
+  });
+  it('only the exact value enforce selects enforce', () => {
+    expect(readQuarantineEnvelopeConfig({ ZODIAC_QUARANTINE_MODE: 'enforce' }).config.mode).toBe('enforce');
+    for (const v of ['', 'ENFORCE', 'Enforce', 'true', '1', 'on', 'enforce ', 'propose', 'enforce;']) {
+      expect(readQuarantineEnvelopeConfig({ ZODIAC_QUARANTINE_MODE: v }).config.mode, JSON.stringify(v)).toBe('propose');
+    }
+  });
+});
+
+describe('sanitizeEvidence', () => {
+  it('keeps finite numbers and short number lists under plain keys', () => {
+    expect(sanitizeEvidence({ pps: 18, windowFrames: 20, gaps: [1, 2, 3] })).toEqual({ pps: 18, windowFrames: 20, gaps: [1, 2, 3] });
+  });
+  it('drops everything else: strings, nested objects, non-finite numbers, odd keys, long or mixed lists', () => {
+    const long = Array.from({ length: MAX_EVIDENCE_SAMPLES + 1 }, (_, i) => i);
+    const out = sanitizeEvidence({
+      s: 'x', o: { a: 1 }, n: null, nan: NaN, inf: Infinity, 'bad key': 1, '1abc': 2, long, mixed: [1, 'a'], ok: 5,
+    });
+    expect(out).toEqual({ ok: 5 });
+  });
+  it('returns nothing for a non-object', () => {
+    for (const v of [null, undefined, 3, 'x', [1, 2]]) expect(sanitizeEvidence(v)).toEqual({});
+  });
+  it('caps the number of keys', () => {
+    const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`k${i}`, i]));
+    expect(Object.keys(sanitizeEvidence(many)).length).toBeLessThanOrEqual(12);
   });
 });

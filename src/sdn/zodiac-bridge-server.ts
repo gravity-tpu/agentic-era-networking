@@ -91,9 +91,12 @@ import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from 
 import {
   decideQuarantine,
   readQuarantineEnvelopeConfig,
+  sanitizeEvidence,
+  type EvidenceValue,
   type QuarantineEnvelopeConfig,
   type QuarantineRefusal,
 } from './quarantine-envelope.js';
+import { QuarantineProposals, type QuarantineProposal } from './quarantine-proposals.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -643,6 +646,8 @@ export class ZodiacBridgeServer {
   /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
   private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint }> = new Map();
   private quarantineSweepTimer: NodeJS.Timeout | null = null;
+  /** Requests inside the envelope that are waiting for a person (mode `propose`). */
+  private readonly quarantineProposals = new QuarantineProposals();
 
   private static readonly QUARANTINE_REFUSAL_STATUS: Readonly<Record<QuarantineRefusal, number>> = {
     config_invalid: 503,
@@ -676,6 +681,10 @@ export class ZodiacBridgeServer {
     targetMac?: string | undefined;
     reason: string;
     priority?: number | undefined;
+    /** The numbers behind the detector's decision; kept with a proposal so a person can judge it. */
+    evidence?: Readonly<Record<string, EvidenceValue>> | undefined;
+    /** True only when a person approved a proposal: installs even in mode `propose`. The envelope still applies. */
+    approved?: boolean | undefined;
   }): { status: number; body: Record<string, unknown> } {
     const decision = decideQuarantine({ targetIp: options.targetIp, targetMac: options.targetMac }, this.activeQuarantineIps(), this.quarantineEnvelope);
     if (!decision.allow) {
@@ -683,6 +692,29 @@ export class ZodiacBridgeServer {
       return {
         status: ZodiacBridgeServer.QUARANTINE_REFUSAL_STATUS[decision.code],
         body: { ok: false, quarantined: false, code: decision.code, error: decision.reason },
+      };
+    }
+
+    if (this.quarantineEnvelope.mode !== 'enforce' && options.approved !== true && options.targetIp !== undefined) {
+      const proposal = this.quarantineProposals.record(
+        { targetIp: options.targetIp, reason: options.reason, priority: options.priority ?? 65535, evidence: options.evidence ?? {} },
+        process.hrtime.bigint(),
+        Date.now(),
+      );
+      // The first request for a source is worth a line; repeats of the same proposal are not (a detector can ask every second).
+      if (proposal.requests === 1) {
+        console.warn(`[!] [Quarantine] PROPOSED (mode propose, nothing installed): ${options.targetIp}: ${options.reason}. Approve with POST /api/sdn/quarantine/approve.`);
+      }
+      return {
+        status: 202,
+        body: {
+          ok: true,
+          quarantined: false,
+          proposed: true,
+          targetIp: options.targetIp,
+          requests: proposal.requests,
+          message: 'Inside the quarantine envelope but the bridge is in propose mode: nothing was installed. A person can approve it.',
+        },
       };
     }
 
@@ -732,6 +764,31 @@ export class ZodiacBridgeServer {
         timestampNs: qResult.timestampNs.toString(),
       },
     };
+  }
+
+  /** Proposals a person can still approve, most recent first. */
+  public listQuarantineProposals(): { mode: string; proposals: readonly QuarantineProposal[] } {
+    return { mode: this.quarantineEnvelope.mode, proposals: this.quarantineProposals.list(process.hrtime.bigint()) };
+  }
+
+  /**
+   * A person approves a proposal: it is installed, time-limited, if it is still inside the envelope. The proposal is
+   * kept if the install is refused (for example the cap is full), so it can be approved again later.
+   */
+  public approveQuarantineProposal(targetIp: string): { status: number; body: Record<string, unknown> } {
+    const proposal = this.quarantineProposals.get(targetIp, process.hrtime.bigint());
+    if (proposal === null) {
+      return { status: 404, body: { ok: false, quarantined: false, error: `no current proposal for ${targetIp} (none was made, it was already handled, or it is older than the approval window)` } };
+    }
+    const outcome = this.requestQuarantine({
+      targetIp: proposal.targetIp,
+      reason: `${proposal.reason} (approved by a person)`,
+      priority: proposal.priority,
+      evidence: proposal.evidence,
+      approved: true,
+    });
+    if (outcome.status === 200) this.quarantineProposals.remove(targetIp);
+    return outcome;
   }
 
   /**
@@ -1777,6 +1834,7 @@ export class ZodiacBridgeServer {
             targetIp: cleanIp,
             reason: typeof reason === 'string' ? reason.trim() : 'Neural Anomaly Detected',
             priority: typeof priority === 'number' ? priority : 65535,
+            evidence: sanitizeEvidence(body.evidence),
           });
           res.statusCode = outcome.status;
           res.setHeader('Content-Type', 'application/json');
@@ -1785,6 +1843,68 @@ export class ZodiacBridgeServer {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+      return;
+    }
+
+    // API: GET /api/sdn/quarantine/proposals (read-only: what is waiting for a person, and the bridge's mode)
+    if (url.pathname === '/api/sdn/quarantine/proposals' && req.method === 'GET') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(this.listQuarantineProposals()));
+      return;
+    }
+
+    // API: POST /api/sdn/quarantine/approve {"targetIp": "..."} (a person approves a proposal; it is installed time-limited)
+    if (url.pathname === '/api/sdn/quarantine/approve' && req.method === 'POST') {
+      const MAX_APPROVE_PAYLOAD = 4 * 1024;
+      const chunks: Buffer[] = [];
+      let bytesReceived = 0;
+      let aborted = false;
+      const fail = (status: number, message: string): void => {
+        if (res.headersSent) return;
+        res.statusCode = status;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: message }));
+      };
+      req.setTimeout(5000, () => {
+        aborted = true;
+        fail(408, 'Request Timeout');
+        req.destroy();
+      });
+      req.on('error', (err: Error) => {
+        aborted = true;
+        fail(500, err.message);
+      });
+      req.on('data', (c: Buffer) => {
+        if (aborted || res.headersSent) return;
+        bytesReceived += c.length;
+        if (bytesReceived > MAX_APPROVE_PAYLOAD) {
+          aborted = true;
+          fail(413, 'Payload Too Large');
+          req.destroy();
+          return;
+        }
+        chunks.push(c);
+      });
+      req.on('end', () => {
+        if (aborted || res.headersSent) return;
+        try {
+          const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+          const targetIp = typeof parsed === 'object' && parsed !== null && 'targetIp' in parsed && typeof parsed.targetIp === 'string'
+            ? parsed.targetIp.trim()
+            : '';
+          if (!/^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$/.test(targetIp)) {
+            fail(400, 'targetIp (IPv4) required');
+            return;
+          }
+          const outcome = this.approveQuarantineProposal(targetIp);
+          res.statusCode = outcome.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(outcome.body));
+        } catch (err: unknown) {
+          fail(400, err instanceof Error ? err.message : String(err));
         }
       });
       return;
