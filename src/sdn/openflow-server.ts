@@ -262,7 +262,7 @@ export class OpenFlowServer extends EventEmitter {
   /**
    * Pushes a flow rule to the physical switch hardware.
    */
-  public sendFlowMod(rule: FlowRuleEntry, outPort?: number): void {
+  public sendFlowMod(rule: FlowRuleEntry, outPort?: number, hardTimeoutSeconds?: number): void {
     if (!this.clientSocket || this.state !== 'ESTABLISHED') {
       throw new Error(`Cannot send FlowMod: switch not in ESTABLISHED state (current: ${this.state})`);
     }
@@ -272,6 +272,9 @@ export class OpenFlowServer extends EventEmitter {
     const flowModPacket = buildOfpFlowMod({
       command: FlowModCommand.OFPFC_ADD,
       priority: rule.priority,
+      // The switch itself removes the rule after this many seconds (0/absent = never). Whether Zodiac FX firmware
+      // honours it is unmeasured; the bridge also sweeps expired quarantines on its own clock.
+      ...(hardTimeoutSeconds !== undefined ? { hardTimeout: hardTimeoutSeconds } : {}),
       // outputPorts drives the OpenFlow OUTPUT action list; outPort (offset 36) is the
       // delete-match field and must not be used for forwarding rules.
       outputPorts: isDrop || outPort === undefined ? [] : [outPort],

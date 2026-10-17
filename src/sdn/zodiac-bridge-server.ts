@@ -86,6 +86,12 @@ import {
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
+import {
+  decideQuarantine,
+  readQuarantineEnvelopeConfig,
+  type QuarantineEnvelopeConfig,
+  type QuarantineRefusal,
+} from './quarantine-envelope.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -627,6 +633,127 @@ export class ZodiacBridgeServer {
     this.flowRuleRegistry.set(entry.ruleId, entry);
   }
 
+  /** How often expired quarantines are looked for. */
+  public static readonly QUARANTINE_SWEEP_INTERVAL_MS = 5_000;
+  private readonly quarantineEnvelope: QuarantineEnvelopeConfig;
+  /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
+  private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint }> = new Map();
+  private quarantineSweepTimer: NodeJS.Timeout | null = null;
+
+  private static readonly QUARANTINE_REFUSAL_STATUS: Readonly<Record<QuarantineRefusal, number>> = {
+    config_invalid: 503,
+    no_ip: 400,
+    bad_ip: 400,
+    out_of_scope: 403,
+    protected: 403,
+    already_active: 409,
+    cap_reached: 429,
+  };
+
+  /** Source IPs that currently have a bridge-installed quarantine DROP. */
+  private activeQuarantineIps(): string[] {
+    const ips: string[] = [];
+    for (const rule of this.flowRuleRegistry.values()) {
+      if (rule.action === 'DROP' && rule.ruleId.startsWith('quarantine-') && rule.srcCidr.endsWith('/32')) {
+        ips.push(rule.srcCidr.slice(0, -3));
+      }
+    }
+    return ips;
+  }
+
+  /**
+   * Installs a time-limited quarantine DROP if, and only if, it is inside the quarantine envelope (see
+   * quarantine-envelope.ts): one source in the workload segment, not protected, under the cap, not already quarantined.
+   * The rule is removed after the envelope's time limit by the switch (hard timeout; firmware behaviour unmeasured) and
+   * by this bridge's own sweep.
+   */
+  public requestQuarantine(options: {
+    targetIp?: string | undefined;
+    targetMac?: string | undefined;
+    reason: string;
+    priority?: number | undefined;
+  }): { status: number; body: Record<string, unknown> } {
+    const decision = decideQuarantine({ targetIp: options.targetIp, targetMac: options.targetMac }, this.activeQuarantineIps(), this.quarantineEnvelope);
+    if (!decision.allow) {
+      console.warn(`[!] [Quarantine] Refused (${decision.code}): ${decision.reason}`);
+      return {
+        status: ZodiacBridgeServer.QUARANTINE_REFUSAL_STATUS[decision.code],
+        body: { ok: false, quarantined: false, code: decision.code, error: decision.reason },
+      };
+    }
+
+    const qResult = this.controller.quarantineAgent({
+      targetMac: undefined,
+      targetIp: options.targetIp,
+      reason: options.reason,
+      priority: options.priority ?? 65535,
+      hardTimeoutSeconds: Math.ceil(decision.ttlMs / 1000),
+    });
+
+    const auditEntry = {
+      ruleId: qResult.ruleId,
+      priority: qResult.priority,
+      action: qResult.action,
+      srcCidr: qResult.rule.srcCidr,
+      dstCidr: qResult.rule.dstCidr,
+      protocol: qResult.rule.protocol,
+      installedAtMs: Date.now(),
+      openFlowInstalled: qResult.openFlowInstalled,
+    };
+    // Bounded FIFO eviction: cap at 1000 entries so the registry never causes OOM.
+    if (this.flowRuleRegistry.size >= 1000) {
+      const oldestKey = this.flowRuleRegistry.keys().next().value;
+      if (oldestKey !== undefined) this.flowRuleRegistry.delete(oldestKey);
+    }
+    this.flowRuleRegistry.set(qResult.ruleId, auditEntry);
+    if (options.targetIp !== undefined) {
+      this.quarantineExpiry.set(qResult.ruleId, {
+        ip: options.targetIp,
+        expiresMonoNs: process.hrtime.bigint() + BigInt(decision.ttlMs) * 1_000_000n,
+      });
+    }
+    // Persist to local JSONL + Neon (fire-and-forget; appendQuarantineEvent never rejects).
+    void appendQuarantineEvent(auditEntry);
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        quarantined: true,
+        ruleId: qResult.ruleId,
+        action: qResult.action,
+        priority: qResult.priority,
+        openFlowInstalled: qResult.openFlowInstalled,
+        expiresInMs: decision.ttlMs,
+        timestampNs: qResult.timestampNs.toString(),
+      },
+    };
+  }
+
+  /**
+   * Removes quarantines whose time limit has passed. A rule that cannot be lifted (switch not connected) stays and is
+   * retried on the next sweep; one released by hand is just forgotten. Returns how many were lifted now.
+   */
+  public sweepExpiredQuarantines(nowMonoNs: bigint = process.hrtime.bigint()): number {
+    let lifted = 0;
+    for (const [ruleId, entry] of [...this.quarantineExpiry.entries()]) {
+      if (nowMonoNs < entry.expiresMonoNs) continue;
+      if (!this.flowRuleRegistry.has(ruleId)) {
+        this.quarantineExpiry.delete(ruleId);
+        continue;
+      }
+      const result = this.releaseQuarantineRule({ targetIp: entry.ip, reason: 'quarantine time limit reached' });
+      if (result.releasedRules.includes(ruleId)) {
+        this.quarantineExpiry.delete(ruleId);
+        lifted++;
+        console.log(`[+] [Quarantine] ${entry.ip} released: time limit reached (${ruleId}).`);
+      } else {
+        console.warn(`[!] [Quarantine] ${entry.ip} is past its time limit but could not be lifted yet (${ruleId}); will retry.`);
+      }
+    }
+    return lifted;
+  }
+
   /**
    * Releases an emergency quarantine rule matching targetIp or targetMac.
    * Invokes OpenFlow OFPFC_DELETE via controller and cleans up registry.
@@ -697,6 +824,9 @@ export class ZodiacBridgeServer {
     bridgeSecret?: string
   ) {
     this.controller = controller ?? new ZodiacController();
+    const envelope = readQuarantineEnvelopeConfig(process.env);
+    this.quarantineEnvelope = envelope.config;
+    for (const w of envelope.warnings) console.warn(`[!] [Quarantine] ${w}`);
     this.isolationRechecker = new IsolationRechecker({
       policy: buildPort1IsolationPolicy(),
       read: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
@@ -989,6 +1119,14 @@ export class ZodiacBridgeServer {
                          // alive if all other I/O drains (graceful shutdown).
     }
 
+    this.quarantineSweepTimer = setInterval(() => {
+      try {
+        this.sweepExpiredQuarantines();
+      } catch (err: unknown) {
+        console.warn('[!] [Quarantine] Expiry sweep failed:', err instanceof Error ? err.message : String(err));
+      }
+    }, ZodiacBridgeServer.QUARANTINE_SWEEP_INTERVAL_MS);
+    this.quarantineSweepTimer.unref();
     this.isolationRechecker.start(); // re-verifies the isolation policy against the switch on a timer (see isolation-recheck.ts)
     return boundPort;
   }
@@ -1167,6 +1305,10 @@ export class ZodiacBridgeServer {
 
   public async stop(): Promise<void> {
     this.isolationRechecker.stop();
+    if (this.quarantineSweepTimer) {
+      clearInterval(this.quarantineSweepTimer);
+      this.quarantineSweepTimer = null;
+    }
     this.flushTelemetryStateToDiskSync();
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
@@ -1609,49 +1751,15 @@ export class ZodiacBridgeServer {
             return;
           }
 
-          const qResult = this.controller.quarantineAgent({
+          const outcome = this.requestQuarantine({
             targetMac: cleanMac,
             targetIp: cleanIp,
             reason: typeof reason === 'string' ? reason.trim() : 'Neural Anomaly Detected',
             priority: typeof priority === 'number' ? priority : 65535,
           });
-
-          if (qResult.ruleId) {
-            // Bounded FIFO eviction: cap at 1000 entries so the registry never causes OOM
-            // (Maps preserve insertion order — first key is always the oldest).
-            if (this.flowRuleRegistry.size >= 1000) {
-              const oldestKey = this.flowRuleRegistry.keys().next().value;
-              if (oldestKey !== undefined) this.flowRuleRegistry.delete(oldestKey);
-            }
-            const auditEntry = {
-              ruleId: qResult.ruleId,
-              priority: qResult.priority ?? 65535,
-              action: qResult.action ?? 'DROP',
-              srcCidr: qResult.rule?.srcCidr ?? '0.0.0.0/0',
-              dstCidr: qResult.rule?.dstCidr ?? '0.0.0.0/0',
-              protocol: qResult.rule?.protocol ?? 'ANY',
-              ...(qResult.rule?.srcMac !== undefined ? { srcMac: qResult.rule.srcMac } : {}),
-              ...(qResult.rule?.dstMac !== undefined ? { dstMac: qResult.rule.dstMac } : {}),
-              installedAtMs: Date.now(),
-              openFlowInstalled: qResult.openFlowInstalled ?? false,
-            };
-            this.flowRuleRegistry.set(qResult.ruleId, auditEntry);
-            // Persist to local JSONL + Neon (fire-and-forget; appendQuarantineEvent
-            // uses Promise.allSettled internally and never rejects).
-            void appendQuarantineEvent(auditEntry);
-          }
-
-          res.statusCode = 200;
+          res.statusCode = outcome.status;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            ok: true,
-            quarantined: true,
-            ruleId: qResult.ruleId,
-            action: qResult.action,
-            priority: qResult.priority,
-            openFlowInstalled: qResult.openFlowInstalled,
-            timestampNs: qResult.timestampNs.toString(),
-          }));
+          res.end(JSON.stringify(outcome.body));
         } catch (err: unknown) {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');

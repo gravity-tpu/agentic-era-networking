@@ -154,7 +154,7 @@ Target topology (**NEW** marks changes from today):
 | Device under test | Zodiac FX | |
 | Controller, verifier, approval gate, install, readback | Jetson (CPU) | No GPU contention |
 | Cross-check detector | Jetson GPU, fed by O2 | Compared with the Hailo verdicts on the same runs |
-| Sensor and classifier | `rpi-hailo` (Pi 5 + Hailo-8), fed by O1 | Passive; verdicts go to the controller, and any quarantine still passes the verifier and a human gate |
+| Sensor and classifier | `rpi-hailo` (Pi 5 + Hailo-8), fed by O1 | Passive; verdicts go to the controller, and any quarantine stays inside the human-approved envelope (`src/sdn/quarantine-envelope.ts`: scope, protected hosts, cap, time limit); anything wider or longer needs a person |
 | LLM proposer and evaluation harness | Mac (Gemma 4 26B); Jetson Qwen as a cheaper comparison | Off the measurement path |
 | Adversary | `agentic-node-01` (Pi 3B+) | |
 | Legitimate client | `agentic-node-02` (Pi 3B+, `10.0.2.52`, NETGEAR P1) | Provisioned 2026-10-09: Raspberry Pi OS Lite 64-bit, key-only SSH, Tailscale |
@@ -165,7 +165,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 
 **Capture interface for O3.** The Jetson has three wired interfaces with separate jobs: the onboard NIC is the OpenFlow control channel to Zodiac P4, the first USB NIC is O2 on Zodiac P3, and the third USB NIC is O3 on switch #2 P3. O1, O2 and O3 therefore run live together with no cable swaps, and the earlier time-share plan is retired. This Tegra kernel has no `cls_matchall`, so the O3 NIC drops egress with a root blackhole qdisc (ledger caveat 10). Do not share one NIC across both switches with VLANs: it would mix two vantage points in one capture and make provenance ambiguous.
 
-**End-to-end scenario (the integration test).** A local model proposes a rule set for a stated intent; the verifier checks it and a person approves; the controller installs it and reads the table back; the adversary attacks while the client sends legitimate traffic; O1 and O3 capture ground truth; both detectors score the traffic; any quarantine passes the verifier again. Report detection and quarantine times, false positives, and model-versus-wire agreement.
+**End-to-end scenario (the integration test).** A local model proposes a rule set for a stated intent; the verifier checks it and a person approves; the controller installs it and reads the table back; the adversary attacks while the client sends legitimate traffic; O1 and O3 capture ground truth; both detectors score the traffic; any quarantine stays inside the approved envelope. Run it once with automatic quarantine and once with a person approving each one: the difference in time to quarantine is the measured cost of the human step. Report detection and quarantine times, false positives, and model-versus-wire agreement.
 
 **Open items for the topology:**
 
