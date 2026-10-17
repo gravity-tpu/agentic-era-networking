@@ -58,6 +58,8 @@
     orin: false,
     workstation: false,
     rpi5: false,
+    'rpi3-1': false,
+    'rpi3-2': false,
   };
 
   function updateDeviceOnlineState(deviceName, isInstantOnline) {
@@ -89,6 +91,10 @@
     updateDeviceOnlineState('orin', isOrinInstant);
     updateDeviceOnlineState('workstation', isWsInstant);
     updateDeviceOnlineState('rpi5', isRpi5Instant);
+    const isRpi3_1Instant = Boolean(snapshot.rpi3_1 && snapshot.rpi3_1.status === 'online');
+    const isRpi3_2Instant = Boolean(snapshot.rpi3_2 && snapshot.rpi3_2.status === 'online');
+    updateDeviceOnlineState('rpi3-1', isRpi3_1Instant);
+    updateDeviceOnlineState('rpi3-2', isRpi3_2Instant);
   }
 
   // Active Appliance Tier State ('zodiac' | 'orin' | 'coral')
@@ -96,6 +102,8 @@
   let jetsonTimeSeriesBuffer = [];
   let rpi5TimeSeriesBuffer = [];
   let rpi5SessionPeakHailoRate = 0n;
+  let rpi3_1TimeSeriesBuffer = [];
+  let rpi3_2TimeSeriesBuffer = [];
   let coralTimeSeriesBuffer = [];
   let workstationTimeSeriesBuffer = [];
   let coralBufferSeq = 0; // Monotonic sequence counter for coral buffer mutations (Council Invariant: Zero cache collision risk)
@@ -128,6 +136,8 @@
   let historicalTimeSeriesBuffer = [];
   let historicalJetsonTimeSeriesBuffer = [];
   let historicalRpi5TimeSeriesBuffer = [];
+  let historicalRpi3_1TimeSeriesBuffer = [];
+  let historicalRpi3_2TimeSeriesBuffer = [];
   let historicalCoralTimeSeriesBuffer = [];
   let historicalWorkstationTimeSeriesBuffer = [];
 
@@ -187,6 +197,8 @@
     zodiac: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
     jetson: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
     rpi5:   { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
+    rpi3_1: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
+    rpi3_2: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
     coral:  { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
     workstation: { histLen: -1, lastHistTs: -1, liveLen: -1, lastLiveTs: -1, ring: new TelemetryRingBuffer(MAX_FRONTEND_BUFFER_POINTS), data: [] },
   };
@@ -372,13 +384,19 @@
     dotDeviceZodiac: document.getElementById('dot-device-zodiac'),
     dotDeviceOrin: document.getElementById('dot-device-orin'),
     dotDeviceRpi5: document.getElementById('dot-device-rpi5'),
+    dotDeviceRpi3_1: document.getElementById('dot-device-rpi3-1'),
+    dotDeviceRpi3_2: document.getElementById('dot-device-rpi3-2'),
     dotDeviceCoral1: document.getElementById('dot-device-coral-1'),
     dotDeviceCoral2: document.getElementById('dot-device-coral-2'),
     dotDeviceCoral: document.getElementById('dot-device-coral'),
     dotDeviceWorkstation: document.getElementById('dot-device-workstation'),
+    btnDeviceRpi3_1: document.getElementById('btn-device-rpi3-1'),
+    btnDeviceRpi3_2: document.getElementById('btn-device-rpi3-2'),
     viewDeviceZodiac: document.getElementById('view-device-zodiac'),
     viewDeviceOrin: document.getElementById('view-device-orin'),
     viewDeviceRpi5: document.getElementById('view-device-rpi5'),
+    viewDeviceRpi3_1: document.getElementById('view-device-rpi3-1'),
+    viewDeviceRpi3_2: document.getElementById('view-device-rpi3-2'),
     viewDeviceCoral1: document.getElementById('view-device-coral-1'),
     viewDeviceCoral2: document.getElementById('view-device-coral-2'),
     viewDeviceCoral: document.getElementById('view-device-coral'),
@@ -637,6 +655,12 @@
     chartRpi5ComputeCanvas: document.getElementById('chart-rpi5-compute'),
     chartRpi5NetworkCanvas: document.getElementById('chart-rpi5-network'),
     chartRpi5ThermalCanvas: document.getElementById('chart-rpi5-thermal'),
+    chartRpi3_1ComputeCanvas: document.getElementById('chart-rpi3-1-compute'),
+    chartRpi3_1NetworkCanvas: document.getElementById('chart-rpi3-1-network'),
+    chartRpi3_1ThermalCanvas: document.getElementById('chart-rpi3-1-thermal'),
+    chartRpi3_2ComputeCanvas: document.getElementById('chart-rpi3-2-compute'),
+    chartRpi3_2NetworkCanvas: document.getElementById('chart-rpi3-2-network'),
+    chartRpi3_2ThermalCanvas: document.getElementById('chart-rpi3-2-thermal'),
     rpi5Eth0RateLegend: document.getElementById('rpi5-eth0-rate-legend'),
     rpi5Eth1RateLegend: document.getElementById('rpi5-eth1-rate-legend'),
     rpi5Wlan0RateLegend: document.getElementById('rpi5-wlan0-rate-legend'),
@@ -1183,6 +1207,8 @@
 
   function renderTelemetry(snapshot, isDegraded) {
     if (!snapshot || !snapshot.system) return;
+    currentSnapshot = snapshot;
+    updateAllDeviceStates(snapshot);
 
     // 1. Sidebar & Topbar Identity
     const devName = snapshot.system.deviceName || 'Zodiac_FX';
@@ -1191,6 +1217,12 @@
     if (els.breadcrumbName) {
       if (activeDeviceId === 'orin') {
         els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
+      } else if (activeDeviceId === 'rpi5') {
+        els.breadcrumbName.innerText = 'Raspberry Pi 5 · Hailo-8 (Node 02)';
+      } else if (activeDeviceId === 'rpi3-1') {
+        els.breadcrumbName.innerText = 'Raspberry Pi 3B+ · Red Team 1 (Node 01)';
+      } else if (activeDeviceId === 'rpi3-2') {
+        els.breadcrumbName.innerText = 'Raspberry Pi 3B+ · Red Team 2 (Node 02)';
       } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (activeDeviceId === 'coral-2') {
@@ -1207,6 +1239,12 @@
     if (els.sidebarDevName) {
       if (activeDeviceId === 'orin') {
         els.sidebarDevName.innerText = 'Jetson_Orin_Nano';
+      } else if (activeDeviceId === 'rpi5') {
+        els.sidebarDevName.innerText = 'Raspberry_Pi_5';
+      } else if (activeDeviceId === 'rpi3-1') {
+        els.sidebarDevName.innerText = 'RPi3_RedTeam_01';
+      } else if (activeDeviceId === 'rpi3-2') {
+        els.sidebarDevName.innerText = 'RPi3_RedTeam_02';
       } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
         els.sidebarDevName.innerText = 'Coral_TPU_Tap_DPI';
       } else if (activeDeviceId === 'coral-2') {
@@ -1223,6 +1261,12 @@
     if (els.sidebarIp) {
       if (activeDeviceId === 'orin') {
         els.sidebarIp.innerText = 'enP8p1s0 (SDN) · wlP1p1s0 (Wi-Fi)';
+      } else if (activeDeviceId === 'rpi5') {
+        els.sidebarIp.innerText = '10.0.2.51 (SDN) · 10.0.0.57 (Host)';
+      } else if (activeDeviceId === 'rpi3-1') {
+        els.sidebarIp.innerText = '10.0.2.50 (SDN) · 10.0.0.45 (Host)';
+      } else if (activeDeviceId === 'rpi3-2') {
+        els.sidebarIp.innerText = '10.0.2.52 (SDN) · 10.0.0.177 (Host)';
       } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
         els.sidebarIp.innerText = 'USB 3.1 · Bus 002 Dev 018 (Port 2)';
       } else if (activeDeviceId === 'coral-2') {
@@ -1242,6 +1286,15 @@
     }
     if (els.dotDeviceOrin) {
       els.dotDeviceOrin.className = deviceOnlineStates.orin ? 'cf-status-dot green' : 'cf-status-dot down';
+    }
+    if (els.dotDeviceRpi5) {
+      els.dotDeviceRpi5.className = deviceOnlineStates.rpi5 ? 'cf-status-dot green' : 'cf-status-dot down';
+    }
+    if (els.dotDeviceRpi3_1) {
+      els.dotDeviceRpi3_1.className = deviceOnlineStates['rpi3-1'] ? 'cf-status-dot green' : 'cf-status-dot down';
+    }
+    if (els.dotDeviceRpi3_2) {
+      els.dotDeviceRpi3_2.className = deviceOnlineStates['rpi3-2'] ? 'cf-status-dot green' : 'cf-status-dot down';
     }
     const c = snapshot.coral;
     const d1 = Array.isArray(c?.devices) ? (c.devices.find((d) => d.assignedRole === 'TAP_PACKET_CLASSIFIER' || d.id === 'coral-1') ?? null) : null;
@@ -2624,6 +2677,339 @@
       }
     }
 
+    // --- Raspberry Pi 3B+ Dual Workload Nodes (Node 01: Red Team, Node 02: Target) ---
+    function renderRpi3View(nodeNum, r) {
+      if (!r) return;
+      const isOnline = Boolean(deviceOnlineStates[`rpi3-${nodeNum}`] && r.status === 'online');
+      const prefix = `rpi3-${nodeNum}`;
+
+      const dotEl = nodeNum === 1 ? els.dotDeviceRpi3_1 : els.dotDeviceRpi3_2;
+      if (dotEl) {
+        dotEl.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
+      }
+
+      const uptimeEl = document.getElementById(`${prefix}-uptime`);
+      if (uptimeEl) uptimeEl.innerText = isOnline && r.uptime ? r.uptime : '--:--:--';
+
+      const osEl = document.getElementById(`${prefix}-os-badge`);
+      if (osEl && r.osVersion) osEl.innerText = `${r.osVersion.split(' ')[0]} · Linux 6.18`;
+
+      // KPI 1: Wire Injection Rate (eth0)
+      const ifaces = Array.isArray(r.interfaces) ? r.interfaces : [];
+      const eth0 = ifaces.find((i) => i.name === 'eth0');
+      const eth0Up = isOnline && eth0?.status === 'UP';
+      const eth0RateBps = eth0 ? safeBigInt(eth0.rxRateBps) + safeBigInt(eth0.txRateBps) : 0n;
+      const eth0Pps = eth0 ? safeBigInt(eth0.rxRatePps) + safeBigInt(eth0.txRatePps) : 0n;
+
+      const kpiRateEl = document.getElementById(`${prefix}-kpi-eth0-rate`);
+      if (kpiRateEl) kpiRateEl.innerText = isOnline ? `${formatBytes(eth0RateBps)}/s` : '--/s';
+
+      const kpiStatusEl = document.getElementById(`${prefix}-kpi-eth0-status`);
+      if (kpiStatusEl) {
+        kpiStatusEl.innerText = eth0Up ? `${eth0.speedMbps || 1000}M Full` : 'DOWN';
+        kpiStatusEl.className = `cf-pill-badge ${eth0Up ? 'green' : 'gray'}`;
+      }
+
+      const barEth0El = document.getElementById(`${prefix}-bar-eth0`);
+      if (barEth0El) {
+        const capPct = eth0RateBps > 0n ? Math.min(100, Number((eth0RateBps * 100n) / 12_500_000n)) : (eth0Up ? 5 : 0);
+        barEth0El.style.width = `${capPct}%`;
+      }
+
+      const kpiPpsEl = document.getElementById(`${prefix}-kpi-eth0-pps`);
+      if (kpiPpsEl) kpiPpsEl.innerText = isOnline ? `${formatNumber(eth0Pps)} pps` : '-- pps';
+
+      const kpiCapEl = document.getElementById(`${prefix}-kpi-eth0-cap`);
+      if (kpiCapEl) {
+        const capPct = eth0RateBps > 0n ? ((eth0RateBps * 100n) / 12_500_000n).toString() : '0';
+        kpiCapEl.innerText = isOnline ? `${capPct}%` : '--%';
+      }
+
+      // KPI 2: SDN Boundary Containment (Council Invariants 3 & 6: Data-plane verified isolation)
+      const adv = r.adversarial || {};
+      const p1Iso = currentSnapshot?.port1Isolation;
+      const isSwitchOnline = currentSnapshot?.source !== 'disconnected';
+      const isVerified = Boolean(isSwitchOnline && p1Iso?.state === 'verified');
+      const isMismatch = Boolean(isSwitchOnline && p1Iso?.state === 'mismatch');
+      const isRejected = Boolean(isSwitchOnline && p1Iso?.state === 'verifier_rejected');
+
+      const isoBadgeEl = document.getElementById(`${prefix}-kpi-isolation-badge`);
+      const isoStatusEl = document.getElementById(`${prefix}-kpi-isolation-status`);
+      const barIsoEl = document.getElementById(`${prefix}-bar-isolation`);
+      const gwEscapeEl = document.getElementById(`${prefix}-kpi-gw-escape`);
+      const port1PolicyEl = document.getElementById(`${prefix}-kpi-port1-status`);
+      const containmentHeaderBadgeEl = document.getElementById(`${prefix}-containment-status-badge`);
+
+      if (!isSwitchOnline || !p1Iso || p1Iso.state === 'not_installed') {
+        if (isoBadgeEl) { isoBadgeEl.innerText = '--'; isoBadgeEl.className = 'cf-pill-badge gray'; }
+        if (isoStatusEl) isoStatusEl.innerText = isSwitchOnline ? 'NOT INSTALLED' : '--';
+        if (barIsoEl) barIsoEl.style.width = '0%';
+        if (gwEscapeEl) gwEscapeEl.innerText = '--';
+        if (port1PolicyEl) port1PolicyEl.innerText = '--';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = isSwitchOnline ? 'NOT INSTALLED' : 'UNKNOWN';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge gray';
+        }
+      } else if (isVerified) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = 'FAIL-CLOSED'; isoBadgeEl.className = 'cf-pill-badge green'; }
+        if (isoStatusEl) isoStatusEl.innerText = 'ENFORCED';
+        if (barIsoEl) barIsoEl.style.width = '100%';
+        if (gwEscapeEl) gwEscapeEl.innerText = '0% LEAK';
+        if (port1PolicyEl) port1PolicyEl.innerText = 'ACTIVE';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = 'FAIL-CLOSED ENFORCED';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge green';
+        }
+      } else if (isMismatch) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = 'MISMATCH'; isoBadgeEl.className = 'cf-pill-badge red'; }
+        if (isoStatusEl) isoStatusEl.innerText = 'MISMATCH';
+        if (barIsoEl) barIsoEl.style.width = '30%';
+        if (gwEscapeEl) gwEscapeEl.innerText = 'LEAK RISK';
+        if (port1PolicyEl) port1PolicyEl.innerText = 'MISMATCH';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = 'READBACK MISMATCH';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge red';
+        }
+      } else if (isRejected) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = 'REJECTED'; isoBadgeEl.className = 'cf-pill-badge red'; }
+        if (isoStatusEl) isoStatusEl.innerText = 'REJECTED';
+        if (barIsoEl) barIsoEl.style.width = '0%';
+        if (gwEscapeEl) gwEscapeEl.innerText = 'UNPROTECTED';
+        if (port1PolicyEl) port1PolicyEl.innerText = 'REJECTED';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = 'VERIFIER REJECTED';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge red';
+        }
+      }
+
+      // Matrix Table Items (Council Invariant 6: Real hardware provenance from switch data plane)
+      const ctrlIsoEl = document.getElementById(`${prefix}-ctrl-iso-status`);
+      if (ctrlIsoEl) {
+        if (isVerified) {
+          ctrlIsoEl.innerText = '100% BLOCKED';
+          ctrlIsoEl.className = 'cf-pill-badge red';
+        } else {
+          ctrlIsoEl.innerText = '--';
+          ctrlIsoEl.className = 'cf-pill-badge gray';
+        }
+      }
+
+      const gwIsoEl = document.getElementById(`${prefix}-gw-iso-status`);
+      if (gwIsoEl) {
+        if (isVerified) {
+          gwIsoEl.innerText = '100% DROPPED';
+          gwIsoEl.className = 'cf-pill-badge red';
+        } else {
+          gwIsoEl.innerText = '--';
+          gwIsoEl.className = 'cf-pill-badge gray';
+        }
+      }
+
+      const hailoIsoEl = document.getElementById(`${prefix}-hailo-iso-status`);
+      if (hailoIsoEl) {
+        if (isVerified) {
+          hailoIsoEl.innerText = 'PERMITTED';
+          hailoIsoEl.className = 'cf-pill-badge green';
+        } else {
+          hailoIsoEl.innerText = '--';
+          hailoIsoEl.className = 'cf-pill-badge gray';
+        }
+      }
+
+      const peerTransitEl = document.getElementById(`${prefix}-peer-transit-status`);
+      if (peerTransitEl) {
+        if (isVerified) {
+          peerTransitEl.innerText = 'PERMITTED';
+          peerTransitEl.className = 'cf-pill-badge green';
+        } else {
+          peerTransitEl.innerText = '--';
+          peerTransitEl.className = 'cf-pill-badge gray';
+        }
+      }
+
+      const advRoleEl = document.getElementById(`${prefix}-adv-role`);
+      if (advRoleEl && adv.role) advRoleEl.innerText = adv.role;
+
+      const advSubnetEl = document.getElementById(`${prefix}-adv-subnet`);
+      if (advSubnetEl && adv.sdnWorkloadSubnet) advSubnetEl.innerText = adv.sdnWorkloadSubnet;
+
+      // KPI 3: Compute & SoftIRQ Load
+      const comp = r.compute || {};
+      const cpuPct = typeof comp.cpuUtilizationPct === 'number' ? comp.cpuUtilizationPct : 0;
+      const softirqPct = typeof comp.softirqPct === 'number' ? comp.softirqPct : 0;
+
+      const kpiComputeEl = document.getElementById(`${prefix}-kpi-compute`);
+      if (kpiComputeEl) kpiComputeEl.innerHTML = isOnline ? `${cpuPct.toFixed(1)}% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span>` : '--% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span>';
+
+      const barCpuEl = document.getElementById(`${prefix}-bar-cpu`);
+      if (barCpuEl) barCpuEl.style.width = isOnline ? `${Math.min(100, Math.max(0, cpuPct))}%` : '0%';
+
+      const kpiSoftirqEl = document.getElementById(`${prefix}-kpi-softirq`);
+      if (kpiSoftirqEl) kpiSoftirqEl.innerText = isOnline ? `${softirqPct.toFixed(1)}%` : '--%';
+
+      const kpiLoadEl = document.getElementById(`${prefix}-kpi-load`);
+      if (kpiLoadEl) {
+        kpiLoadEl.innerText = isOnline && comp.loadAvg1m !== undefined
+          ? `${comp.loadAvg1m.toFixed(2)}, ${comp.loadAvg5m?.toFixed(2) ?? '--'}`
+          : '--';
+      }
+
+      // KPI 4: Silicon Thermals & Voltage
+      const sil = r.silicon || {};
+      const cpuTempC = typeof sil.cpuTempC === 'number' ? sil.cpuTempC : null;
+      const throttledHex = sil.throttledHex || '0x0';
+      const flags = sil.throttledFlags || {};
+
+      const kpiTempEl = document.getElementById(`${prefix}-kpi-cpu-temp`);
+      if (kpiTempEl) kpiTempEl.innerText = isOnline && cpuTempC !== null ? `${cpuTempC.toFixed(1)}°C` : '--°C';
+
+      const barTempEl = document.getElementById(`${prefix}-bar-cpu-temp`);
+      if (barTempEl) {
+        const tempPct = cpuTempC !== null ? Math.min(100, Math.max(0, ((cpuTempC - 20) * 100) / 60)) : 0;
+        barTempEl.style.width = isOnline ? `${tempPct}%` : '0%';
+      }
+
+      const kpiThrottledEl = document.getElementById(`${prefix}-kpi-throttled`);
+      if (kpiThrottledEl) {
+        if (!isOnline) {
+          kpiThrottledEl.innerText = 'OFFLINE';
+        } else if (flags.under_voltage_now || flags.throttled_now) {
+          kpiThrottledEl.innerText = `ACTIVE (${throttledHex})`;
+          kpiThrottledEl.style.color = '#ef4444';
+        } else if (flags.under_voltage_occurred || flags.throttled_occurred) {
+          kpiThrottledEl.innerText = `HISTORIC (${throttledHex})`;
+          kpiThrottledEl.style.color = '#f59e0b';
+        } else {
+          kpiThrottledEl.innerText = 'NOMINAL (0x0)';
+          kpiThrottledEl.style.color = '';
+        }
+      }
+
+      const throttledBadgeEl = document.getElementById(`${prefix}-throttled-badge`);
+      if (throttledBadgeEl) {
+        if (!isOnline) {
+          throttledBadgeEl.innerText = 'OFFLINE';
+          throttledBadgeEl.className = 'cf-pill-badge gray';
+        } else if (flags.under_voltage_now || flags.throttled_now) {
+          throttledBadgeEl.innerText = `Voltage Throttled (${throttledHex})`;
+          throttledBadgeEl.className = 'cf-pill-badge red';
+        } else if (flags.under_voltage_occurred || flags.throttled_occurred) {
+          throttledBadgeEl.innerText = `Past Throttling Event (${throttledHex})`;
+          throttledBadgeEl.className = 'cf-pill-badge orange';
+        } else {
+          throttledBadgeEl.innerText = 'Voltage Nominal (0x0)';
+          throttledBadgeEl.className = 'cf-pill-badge green';
+        }
+      }
+
+      const kpiFreqEl = document.getElementById(`${prefix}-kpi-freq`);
+      if (kpiFreqEl) kpiFreqEl.innerText = isOnline && sil.cpuFreqMhz ? `${sil.cpuFreqMhz.toFixed(0)} MHz` : '-- MHz';
+
+      // KPI 5: LPDDR2 Memory & Sockets
+      const ramTotal = safeBigInt(comp.ramTotalBytes ?? 949006336n);
+      const ramUsed = safeBigInt(comp.ramUsedBytes ?? 0n);
+      const kpiRamEl = document.getElementById(`${prefix}-kpi-ram`);
+      if (kpiRamEl) {
+        kpiRamEl.innerText = isOnline && ramTotal > 0n
+          ? `${formatBytes(ramUsed)} / ${formatBytes(ramTotal)}`
+          : '-- / 949 MB';
+      }
+
+      const barRamEl = document.getElementById(`${prefix}-bar-ram`);
+      if (barRamEl && ramTotal > 0n) {
+        barRamEl.style.width = isOnline ? `${Math.min(100, Number((ramUsed * 100n) / ramTotal))}%` : '0%';
+      }
+
+      const rawSockEl = document.getElementById(`${prefix}-kpi-raw-sock`);
+      if (rawSockEl) rawSockEl.innerText = isOnline && typeof adv.activeRawSockets === 'number' ? String(adv.activeRawSockets) : '--';
+
+      const sockEl = document.getElementById(`${prefix}-kpi-sockets`);
+      if (sockEl) {
+        sockEl.innerText = isOnline && typeof adv.activeTcpConnections === 'number' && typeof adv.activeUdpSockets === 'number'
+          ? `TCP:${adv.activeTcpConnections} · UDP:${adv.activeUdpSockets}`
+          : '--';
+      }
+
+      const rawCountEl = document.getElementById(`${prefix}-raw-sockets-count`);
+      if (rawCountEl) rawCountEl.innerText = isOnline && typeof adv.activeRawSockets === 'number' ? String(adv.activeRawSockets) : '--';
+
+      const tcpCountEl = document.getElementById(`${prefix}-tcp-sockets-count`);
+      if (tcpCountEl) tcpCountEl.innerText = isOnline && typeof adv.activeTcpConnections === 'number' ? String(adv.activeTcpConnections) : '--';
+
+      const udpCountEl = document.getElementById(`${prefix}-udp-sockets-count`);
+      if (udpCountEl) udpCountEl.innerText = isOnline && typeof adv.activeUdpSockets === 'number' ? String(adv.activeUdpSockets) : '--';
+
+      // Populate Physical Network Interfaces Table
+      const tbody = document.getElementById(`${prefix}-interfaces-tbody`);
+      if (tbody && ifaces.length > 0) {
+        let rowsHtml = '';
+        for (const iface of ifaces) {
+          const up = isOnline && iface.status === 'UP';
+          const rxB = safeBigInt(iface.rxBytes);
+          const txB = safeBigInt(iface.txBytes);
+          const rxP = safeBigInt(iface.rxPackets);
+          const txP = safeBigInt(iface.txPackets);
+          const drop = safeBigInt(iface.rxDropped) + safeBigInt(iface.txDropped);
+          const err = safeBigInt(iface.rxErrors) + safeBigInt(iface.txErrors);
+
+          rowsHtml += `
+            <tr>
+              <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="cf-status-dot ${up ? 'green' : 'down'}" style="width: 8px; height: 8px;"></span>
+                  <strong>${escapeHtml(iface.name)}</strong>
+                </div>
+              </td>
+              <td>
+                <div style="font-weight: 600; color: var(--cf-text-primary);">${escapeHtml(iface.role || '--')}</div>
+                <div style="font-size: 0.72rem; color: var(--cf-text-secondary);">${iface.ipAddress ? escapeHtml(iface.ipAddress) : 'No IPv4'}</div>
+              </td>
+              <td>
+                <div class="cf-mono" style="font-size: 0.75rem;">${iface.speedMbps ? `${iface.speedMbps} Mbps` : '--'}</div>
+                <div class="cf-mono" style="font-size: 0.72rem; color: var(--cf-text-secondary);">${escapeHtml(iface.macAddress || '--')}</div>
+              </td>
+              <td>
+                <span class="cf-pill-badge ${up ? 'green' : 'gray'}">${up ? `UP · ${iface.speedMbps}M` : 'DOWN'}</span>
+              </td>
+              <td class="cf-mono">
+                <div style="font-weight: 600;">${formatBytes(rxB)} / ${formatBytes(txB)}</div>
+                <div style="font-size: 0.7rem; color: var(--cf-text-secondary);">RX / TX Bytes</div>
+              </td>
+              <td class="cf-mono">
+                <div style="font-weight: 600;">${formatNumber(rxP)} / ${formatNumber(txP)} pkts</div>
+                <div style="font-size: 0.7rem; color: ${drop > 0n || err > 0n ? '#ef4444' : '#10b981'};">${formatNumber(drop)} drops · ${formatNumber(err)} err</div>
+              </td>
+            </tr>
+          `;
+        }
+        tbody.innerHTML = rowsHtml;
+      }
+
+      // Time series buffer update
+      const buf = nodeNum === 1 ? rpi3_1TimeSeriesBuffer : rpi3_2TimeSeriesBuffer;
+      if (Array.isArray(r.timeSeries) && r.timeSeries.length > 0) {
+        const lastServerTs = r.timeSeries[r.timeSeries.length - 1].timestampMs;
+        if (buf.length === 0 || (buf[0] && lastServerTs < buf[0].timestampMs)) {
+          if (nodeNum === 1) rpi3_1TimeSeriesBuffer = r.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+          else rpi3_2TimeSeriesBuffer = r.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+        } else {
+          const lastLocalTs = buf[buf.length - 1].timestampMs;
+          const newPts = r.timeSeries.filter((p) => p.timestampMs > lastLocalTs);
+          if (newPts.length > 0) {
+            buf.push(...newPts);
+            if (buf.length > MAX_FRONTEND_BUFFER_POINTS) {
+              const trimmed = buf.slice(-MAX_FRONTEND_BUFFER_POINTS);
+              if (nodeNum === 1) rpi3_1TimeSeriesBuffer = trimmed;
+              else rpi3_2TimeSeriesBuffer = trimmed;
+            }
+          }
+        }
+      }
+    }
+
+    renderRpi3View(1, snapshot?.rpi3_1);
+    renderRpi3View(2, snapshot?.rpi3_2);
+
     updateCharts();
   }
 
@@ -3518,6 +3904,33 @@
     }
     if (currentSnapshot?.rpi5?.timeSeries && currentSnapshot.rpi5.timeSeries.length > 0) {
       return currentSnapshot.rpi5.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
+    }
+    return [];
+  }
+
+  function getRpi3PointsForDisplay(nodeNum) {
+    const isNode1 = nodeNum === 1;
+    const liveBuf = isNode1 ? rpi3_1TimeSeriesBuffer : rpi3_2TimeSeriesBuffer;
+    const histBuf = isNode1 ? historicalRpi3_1TimeSeriesBuffer : historicalRpi3_2TimeSeriesBuffer;
+    const slot    = isNode1 ? _stitchCache.rpi3_1 : _stitchCache.rpi3_2;
+    const snap    = isNode1 ? currentSnapshot?.rpi3_1 : currentSnapshot?.rpi3_2;
+
+    if (currentRange !== 'live') {
+      if (histBuf.length > 0) {
+        return stitchWithLive(histBuf, liveBuf, slot);
+      }
+      return [];
+    }
+
+    const durationMs = getRangeDurationMs('live');
+    const cutoffMs = Date.now() - durationMs;
+    if (liveBuf.length > 0) {
+      const windowPoints = liveBuf.filter((p) => p.timestampMs >= cutoffMs);
+      if (windowPoints.length > 0) return windowPoints;
+      return liveBuf;
+    }
+    if (snap?.timeSeries && snap.timeSeries.length > 0) {
+      return snap.timeSeries.filter((p) => p.timestampMs >= cutoffMs);
     }
     return [];
   }
@@ -4439,6 +4852,318 @@
     ctx.fillText('● Hailo-8 NPU (°C)', padLeft + 130, padTop - 6);
   }
 
+  // --- RPi 3 Chart 1: Physical Wire Injection & Egress Throughput ---
+  function drawRpi3NetworkChart(canvas, points, nodeNum) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 240;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 65;
+    const padRight = 15;
+    const padTop = 24;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const getTxRate = (pt) => safeBigInt(pt.eth0TxRateBps ?? (pt.txRateBps ?? 0n));
+    const getRxRate = (pt) => safeBigInt(pt.eth0RxRateBps ?? (pt.rxRateBps ?? 0n));
+    const getTxPps  = (pt) => safeBigInt(pt.eth0TxRatePps ?? (pt.txRatePps ?? 0n));
+
+    // Baseline: 12.5 MB/s (100 Mbps Zodiac switch uplink ceiling)
+    let maxY = 12_500_000n;
+    for (const pt of points) {
+      const tx = getTxRate(pt);
+      const rx = getRxRate(pt);
+      if (tx > maxY) maxY = tx;
+      if (rx > maxY) maxY = rx;
+    }
+    maxY = (maxY * 125n) / 100n;
+    const maxYNum = Number(maxY);
+
+    // Grid lines
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+
+      const gridVal = (maxY * BigInt(i)) / BigInt(steps);
+      ctx.fillText(`${formatBytes(gridVal)}/s`, padLeft - 8, y);
+    }
+
+    // 100 Mbps (12.5 MB/s) Zodiac Switch Uplink Ceiling Reference Line
+    const ceilingY = padTop + plotH - (12_500_000 / maxYNum) * plotH;
+    if (ceilingY >= padTop && ceilingY <= padTop + plotH) {
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(249, 115, 22, 0.5)';
+      ctx.beginPath();
+      ctx.moveTo(padLeft, ceilingY);
+      ctx.lineTo(width - padRight, ceilingY);
+      ctx.stroke();
+      ctx.fillStyle = '#f97316';
+      ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('100M Zodiac Link Limit (12.5 MB/s)', width - padRight - 5, ceilingY - 5);
+      ctx.restore();
+    }
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 6);
+
+    const getCoord = (pt, rateBigInt) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const valNum = Number(safeBigInt(rateBigInt));
+      const y = padTop + plotH - (valNum / maxYNum) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // TX Rate Line (Red #ef4444 for Node 1 Red Team, Blue #0051c3 for Node 2)
+    const txColor = nodeNum === 1 ? '#ef4444' : '#0051c3';
+    const txFill  = nodeNum === 1 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(0, 81, 195, 0.12)';
+    const txSegments = partitionContiguousSegments(points, currentRange, (pt) => Number(getTxRate(pt)));
+    drawSegmentedPath(ctx, txSegments, (pt) => getCoord(pt, getTxRate(pt)), txColor, txFill, 2, padTop + plotH);
+
+    // RX Rate Line (Blue #0051c3 for Node 1, Red #ef4444 for Node 2)
+    const rxColor = nodeNum === 1 ? '#0051c3' : '#ef4444';
+    const rxSegments = partitionContiguousSegments(points, currentRange, (pt) => Number(getRxRate(pt)));
+    drawSegmentedPath(ctx, rxSegments, (pt) => getCoord(pt, getRxRate(pt)), rxColor, null, 1.8, padTop + plotH);
+
+    // Update legend values if elements exist
+    const latest = points[points.length - 1];
+    const prefix = `rpi3-${nodeNum}`;
+    if (latest) {
+      const txLeg = document.getElementById(`${prefix}-eth0-tx-legend`);
+      if (txLeg) txLeg.innerText = `${formatBytes(getTxRate(latest))}/s`;
+      const rxLeg = document.getElementById(`${prefix}-eth0-rx-legend`);
+      if (rxLeg) rxLeg.innerText = `${formatBytes(getRxRate(latest))}/s`;
+      const ppsLeg = document.getElementById(`${prefix}-pps-legend`);
+      if (ppsLeg) ppsLeg.innerText = `${formatNumber(getTxPps(latest))} pps`;
+    }
+
+    // Canvas Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = txColor;
+    ctx.fillText(`● eth0 TX Rate (${nodeNum === 1 ? 'Generator' : 'Target'})`, padLeft + 10, padTop - 8);
+    ctx.fillStyle = rxColor;
+    ctx.fillText('● eth0 RX Rate', padLeft + 180, padTop - 8);
+    ctx.fillStyle = '#f97316';
+    ctx.fillText('┄ 100M Zodiac Link Limit', padLeft + 300, padTop - 8);
+  }
+
+  // --- RPi 3 Chart 2: Compute Utilization & SoftIRQ Network Overhead ---
+  function drawRpi3ComputeChart(canvas, points, nodeNum) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 220;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    // Grid lines: 0%, 25%, 50%, 75%, 100%
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const y = padTop + (plotH * (steps - i)) / steps;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${i * 25}%`, padLeft - 6, y);
+    }
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis timestamps
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
+
+    const getCoord = (pt, pctVal) => {
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const y = padTop + plotH - (Math.max(0, Math.min(100, Number(pctVal || 0))) / 100) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    const getCpuPct = (pt) => (typeof pt.cpuUtilizationPct === 'number' ? pt.cpuUtilizationPct : (pt.compute?.cpuUtilizationPct ?? 0));
+    const getSoftirqPct = (pt) => (typeof pt.softirqPct === 'number' ? pt.softirqPct : (pt.compute?.softirqPct ?? 0));
+    const getMemPct = (pt) => {
+      if (typeof pt.memoryUtilizationPct === 'number') return pt.memoryUtilizationPct;
+      const u = safeBigInt(pt.ramUsedBytes ?? pt.compute?.ramUsedBytes);
+      const total = safeBigInt(pt.ramTotalBytes ?? pt.compute?.ramTotalBytes ?? 949006336n);
+      if (total > 0n) return Number((u * 100n) / total);
+      return 0;
+    };
+
+    // CPU Line & Area Fill (Blue #0051c3)
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => getCpuPct(pt));
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, getCpuPct(pt)), '#0051c3', 'rgba(0, 81, 195, 0.16)', 1.8, padTop + plotH);
+
+    // SoftIRQ Network Line (Red #ef4444)
+    const softirqSegments = partitionContiguousSegments(points, currentRange, (pt) => getSoftirqPct(pt));
+    drawSegmentedPath(ctx, softirqSegments, (pt) => getCoord(pt, getSoftirqPct(pt)), '#ef4444', 'rgba(239, 68, 68, 0.12)', 1.8, padTop + plotH);
+
+    // Memory Line (Purple #7e22ce)
+    const memSegments = partitionContiguousSegments(points, currentRange, (pt) => getMemPct(pt));
+    drawSegmentedPath(ctx, memSegments, (pt) => getCoord(pt, getMemPct(pt)), '#7e22ce', null, 1.8, padTop + plotH);
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0051c3';
+    ctx.fillText('● BCM2837B0 CPU (%)', padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillText('● SoftIRQ NIC Overhead (%)', padLeft + 155, padTop - 6);
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillText('● LPDDR2 Memory (%)', padLeft + 315, padTop - 6);
+  }
+
+  // --- RPi 3 Chart 3: Silicon Thermal Dynamics & Voltage Regulation ---
+  function drawRpi3ThermalChart(canvas, points, nodeNum) {
+    if (!canvas || !points || points.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = rect.width || canvas.parentElement?.clientWidth || 460;
+    const height = rect.height || 180;
+
+    const targetW = Math.floor(width * dpr);
+    const targetH = Math.floor(height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 45;
+    const padRight = 15;
+    const padTop = 20;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const minTemp = 20;
+    const maxTemp = 90;
+    const rangeTemp = maxTemp - minTemp;
+
+    // Grid lines: 25, 45, 65, 80
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const tempLevels = [25, 45, 65, 80];
+    for (const lvl of tempLevels) {
+      const y = padTop + plotH - ((lvl - minTemp) / rangeTemp) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${lvl}°C`, padLeft - 6, y);
+    }
+
+    // 80°C BCM2837B0 Thermal Throttle Threshold Line
+    const threshY = padTop + plotH - ((80 - minTemp) / rangeTemp) * plotH;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(padLeft, threshY);
+    ctx.lineTo(width - padRight, threshY);
+    ctx.stroke();
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('80°C Throttle Threshold', width - padRight - 5, threshY - 6);
+    ctx.restore();
+
+    const { minTime, maxTime, durationMs } = getTimelineWindow(currentRange, points);
+
+    // Standardized X-axis
+    drawXAxisTimestamps(ctx, minTime, durationMs, padLeft, plotW, height - padBottom + 5, currentRange, 5);
+
+    const getCpuTemp = (pt) => (typeof pt.cpuTempC === 'number' ? pt.cpuTempC : (pt.silicon?.cpuTempC ?? null));
+
+    const getCoord = (pt, tempVal) => {
+      const v = typeof tempVal === 'number' ? tempVal : null;
+      if (v === null || isNaN(v)) return null;
+      const t = Math.max(minTime, Math.min(maxTime, pt.timestampMs));
+      const x = padLeft + (plotW * (t - minTime)) / Math.max(1, durationMs);
+      const y = padTop + plotH - ((v - minTemp) / rangeTemp) * plotH;
+      return { x, y: Math.max(padTop, Math.min(padTop + plotH, y)) };
+    };
+
+    // BCM2837B0 SoC Temperature Line (Orange #f97316)
+    const cpuSegments = partitionContiguousSegments(points, currentRange, (pt) => getCpuTemp(pt));
+    drawSegmentedPath(ctx, cpuSegments, (pt) => getCoord(pt, getCpuTemp(pt)), '#f97316', 'rgba(249, 115, 22, 0.12)', 2, padTop + plotH);
+
+    // Legend
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f97316';
+    ctx.fillText(`● BCM2837B0 Core Temp (°C) — Node 0${nodeNum}`, padLeft + 10, padTop - 6);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillText('┄ 80°C Throttle Limit', padLeft + 230, padTop - 6);
+  }
+
   // --- Coral Chart 1: Inference & Tap Ingestion Rate ---
   function drawCoralRateChart(canvas, points, options = {}) {
     if (!canvas || !points || points.length === 0) return;
@@ -4776,6 +5501,20 @@
         drawRpi5ComputeChart(els.chartRpi5ComputeCanvas, rpi5Points);
         drawRpi5NetworkChart(els.chartRpi5NetworkCanvas, rpi5Points);
         drawRpi5ThermalChart(els.chartRpi5ThermalCanvas, rpi5Points);
+      }
+    } else if (activeDeviceId === 'rpi3-1') {
+      const rpi3Points = getRpi3PointsForDisplay(1);
+      if (rpi3Points.length > 0) {
+        drawRpi3NetworkChart(els.chartRpi3_1NetworkCanvas, rpi3Points, 1);
+        drawRpi3ComputeChart(els.chartRpi3_1ComputeCanvas, rpi3Points, 1);
+        drawRpi3ThermalChart(els.chartRpi3_1ThermalCanvas, rpi3Points, 1);
+      }
+    } else if (activeDeviceId === 'rpi3-2') {
+      const rpi3Points = getRpi3PointsForDisplay(2);
+      if (rpi3Points.length > 0) {
+        drawRpi3NetworkChart(els.chartRpi3_2NetworkCanvas, rpi3Points, 2);
+        drawRpi3ComputeChart(els.chartRpi3_2ComputeCanvas, rpi3Points, 2);
+        drawRpi3ThermalChart(els.chartRpi3_2ThermalCanvas, rpi3Points, 2);
       }
     } else if (activeDeviceId === 'coral-1' || activeDeviceId === 'coral') {
       const coralPoints = getCoralPointsForDisplay('coral-1');
@@ -5303,6 +6042,92 @@ Please connect the physical switch via USB to execute '${command}' on device har
     `;
   });
 
+  // 8e. Raspberry Pi 3B+ (Node 01) Network Interfaces Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi3-1-network', () => getRpi3PointsForDisplay(1), 65, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const tx = safeBigInt(closestPt.eth0TxRateBps ?? (closestPt.eth0RateBps ?? 0n));
+    const rx = safeBigInt(closestPt.eth0RxRateBps ?? 0n);
+    const pps = safeBigInt(closestPt.eth0TxRatePps ?? (closestPt.eth0RatePps ?? 0n));
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 3-1 Wire Rate</div>
+      <div style="color: #ef4444; font-weight: 600;">● eth0 TX Rate: ${formatBytes(tx)}/s (${formatNumber(pps)} pps)</div>
+      <div style="color: #38bdf8;">● eth0 RX Rate: ${formatBytes(rx)}/s</div>
+    `;
+  });
+
+  // 8f. Raspberry Pi 3B+ (Node 01) Compute & SoftIRQ Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi3-1-compute', () => getRpi3PointsForDisplay(1), 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const cpu = closestPt.cpuUtilizationPct !== undefined ? Number(closestPt.cpuUtilizationPct).toFixed(1) + '%' : '--';
+    const softirq = closestPt.softirqPct !== undefined ? Number(closestPt.softirqPct).toFixed(1) + '%' : '--';
+    const ram = safeBigInt(closestPt.ramUsedBytes ?? 0n);
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 3-1 Compute & SoftIRQ</div>
+      <div style="color: #ef4444;">● CPU Core Load: ${cpu}</div>
+      <div style="color: #f97316;">● SoftIRQ Overhead: ${softirq}</div>
+      <div style="color: #38bdf8;">● RAM Used: ${formatBytes(ram)}</div>
+    `;
+  });
+
+  // 8g. Raspberry Pi 3B+ (Node 01) Thermals Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi3-1-thermal', () => getRpi3PointsForDisplay(1), 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const tVal = closestPt.cpuTempC;
+    const tStr = tVal !== undefined && tVal !== null ? Number(tVal).toFixed(1) + '°C' : '--';
+    const throttled = closestPt.throttledVal !== undefined ? `0x${closestPt.throttledVal.toString(16)}` : '0x0';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 3-1 Thermals</div>
+      <div style="color: #ef4444;">● BCM2837B0 Core: ${tStr}</div>
+      <div style="color: #94a3b8; font-size: 0.72rem;">● Throttled Bitmask: ${throttled}</div>
+    `;
+  });
+
+  // 8h. Raspberry Pi 3B+ (Node 02) Network Interfaces Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi3-2-network', () => getRpi3PointsForDisplay(2), 65, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const tx = safeBigInt(closestPt.eth0TxRateBps ?? (closestPt.eth0RateBps ?? 0n));
+    const rx = safeBigInt(closestPt.eth0RxRateBps ?? 0n);
+    const pps = safeBigInt(closestPt.eth0TxRatePps ?? (closestPt.eth0RatePps ?? 0n));
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 3-2 Wire Rate</div>
+      <div style="color: #f59e0b; font-weight: 600;">● eth0 TX Rate: ${formatBytes(tx)}/s (${formatNumber(pps)} pps)</div>
+      <div style="color: #38bdf8;">● eth0 RX Rate: ${formatBytes(rx)}/s</div>
+    `;
+  });
+
+  // 8i. Raspberry Pi 3B+ (Node 02) Compute & SoftIRQ Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi3-2-compute', () => getRpi3PointsForDisplay(2), 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const cpu = closestPt.cpuUtilizationPct !== undefined ? Number(closestPt.cpuUtilizationPct).toFixed(1) + '%' : '--';
+    const softirq = closestPt.softirqPct !== undefined ? Number(closestPt.softirqPct).toFixed(1) + '%' : '--';
+    const ram = safeBigInt(closestPt.ramUsedBytes ?? 0n);
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 3-2 Compute & SoftIRQ</div>
+      <div style="color: #f59e0b;">● CPU Core Load: ${cpu}</div>
+      <div style="color: #ef4444;">● SoftIRQ Overhead: ${softirq}</div>
+      <div style="color: #38bdf8;">● RAM Used: ${formatBytes(ram)}</div>
+    `;
+  });
+
+  // 8j. Raspberry Pi 3B+ (Node 02) Thermals Chart
+  bindChartHoverTooltip('canvas-wrapper-rpi3-2-thermal', () => getRpi3PointsForDisplay(2), 45, 15, (closestPt) => {
+    const d = new Date(closestPt.timestampMs);
+    const timeStr = d.toTimeString().slice(0, 8);
+    const tVal = closestPt.cpuTempC;
+    const tStr = tVal !== undefined && tVal !== null ? Number(tVal).toFixed(1) + '°C' : '--';
+    const throttled = closestPt.throttledVal !== undefined ? `0x${closestPt.throttledVal.toString(16)}` : '0x0';
+    return `
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · RPi 3-2 Thermals</div>
+      <div style="color: #f59e0b;">● BCM2837B0 Core: ${tStr}</div>
+      <div style="color: #94a3b8; font-size: 0.72rem;">● Throttled Bitmask: ${throttled}</div>
+    `;
+  });
+
 
   // 9a. Coral 1 Edge TPU Inference Rate Chart (Tap Classifier)
   bindChartHoverTooltip('canvas-wrapper-coral1-rate', () => getCoralPointsForDisplay('coral-1'), 55, 15, (closestPt) => {
@@ -5478,6 +6303,16 @@ Please connect the physical switch via USB to execute '${command}' on device har
       } else {
         historicalRpi5TimeSeriesBuffer = [];
       }
+      if (data?.rpi3_1 && Array.isArray(data.rpi3_1.timeSeries) && data.rpi3_1.timeSeries.length > 0) {
+        historicalRpi3_1TimeSeriesBuffer = data.rpi3_1.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        historicalRpi3_1TimeSeriesBuffer = [];
+      }
+      if (data?.rpi3_2 && Array.isArray(data.rpi3_2.timeSeries) && data.rpi3_2.timeSeries.length > 0) {
+        historicalRpi3_2TimeSeriesBuffer = data.rpi3_2.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
+      } else {
+        historicalRpi3_2TimeSeriesBuffer = [];
+      }
       if (data?.coral && Array.isArray(data.coral.timeSeries) && data.coral.timeSeries.length > 0) {
         // Enforce Ghemawat upper memory bound to prevent unbounded allocations during range queries
         historicalCoralTimeSeriesBuffer = data.coral.timeSeries.slice(-MAX_FRONTEND_BUFFER_POINTS);
@@ -5498,6 +6333,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
       historicalTimeSeriesBuffer = [];
       historicalJetsonTimeSeriesBuffer = [];
       historicalRpi5TimeSeriesBuffer = [];
+      historicalRpi3_1TimeSeriesBuffer = [];
+      historicalRpi3_2TimeSeriesBuffer = [];
       historicalCoralTimeSeriesBuffer = [];
       historicalWorkstationTimeSeriesBuffer = [];
       coralBufferSeq++;
@@ -5645,6 +6482,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     zodiac:      { hwName: 'Zodiac FX Hardware \u00b7 Rev B',           firmware: 'Firmware v0.86',                  navId: 'cf-nav-zodiac' },
     orin:        { hwName: 'NVIDIA Jetson Orin Nano \u00b7 Dev Kit',    firmware: 'JetPack 6.x \u00b7 Ubuntu 22.04', navId: 'cf-nav-orin'   },
     rpi5:        { hwName: 'Raspberry Pi 5 \u00b7 Broadcom BCM2712',    firmware: 'HailoRT 4.20 \u00b7 Hailo-8 (26 TOPS)', navId: 'cf-nav-rpi5' },
+    'rpi3-1':    { hwName: 'Raspberry Pi 3B+ \u00b7 Node 01 (Red Team Generator)', firmware: 'Broadcom BCM2837B0 \u00b7 LAN7515 (GbE)', navId: 'cf-nav-rpi3-1' },
+    'rpi3-2':    { hwName: 'Raspberry Pi 3B+ \u00b7 Node 02 (Adversarial Target)',   firmware: 'Broadcom BCM2837B0 \u00b7 LAN7515 (GbE)', navId: 'cf-nav-rpi3-2' },
     'coral-1':   { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
     'coral-2':   { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
     coral:       { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
@@ -5741,7 +6580,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Active Appliance Tier Switching Logic
   function switchDevice(device) {
     if (device === 'coral') device = 'coral-1';
-    if (!['zodiac', 'orin', 'rpi5', 'coral-1', 'coral-2', 'openflow', 'workstation'].includes(device)) return;
+    if (!['zodiac', 'orin', 'rpi5', 'rpi3-1', 'rpi3-2', 'coral-1', 'coral-2', 'openflow', 'workstation'].includes(device)) return;
     activeDeviceId = device;
 
     if (els.btnDeviceZodiac) {
@@ -5755,6 +6594,14 @@ Please connect the physical switch via USB to execute '${command}' on device har
     if (els.btnDeviceRpi5) {
       els.btnDeviceRpi5.classList.toggle('active', device === 'rpi5');
       els.btnDeviceRpi5.setAttribute('aria-selected', String(device === 'rpi5'));
+    }
+    if (els.btnDeviceRpi3_1) {
+      els.btnDeviceRpi3_1.classList.toggle('active', device === 'rpi3-1');
+      els.btnDeviceRpi3_1.setAttribute('aria-selected', String(device === 'rpi3-1'));
+    }
+    if (els.btnDeviceRpi3_2) {
+      els.btnDeviceRpi3_2.classList.toggle('active', device === 'rpi3-2');
+      els.btnDeviceRpi3_2.setAttribute('aria-selected', String(device === 'rpi3-2'));
     }
     if (els.btnDeviceCoral1) {
       els.btnDeviceCoral1.classList.toggle('active', device === 'coral-1');
@@ -5780,6 +6627,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
     if (els.viewDeviceZodiac) els.viewDeviceZodiac.style.display = device === 'zodiac' ? 'block' : 'none';
     if (els.viewDeviceOrin) els.viewDeviceOrin.style.display = device === 'orin' ? 'block' : 'none';
     if (els.viewDeviceRpi5) els.viewDeviceRpi5.style.display = device === 'rpi5' ? 'block' : 'none';
+    if (els.viewDeviceRpi3_1) els.viewDeviceRpi3_1.style.display = device === 'rpi3-1' ? 'block' : 'none';
+    if (els.viewDeviceRpi3_2) els.viewDeviceRpi3_2.style.display = device === 'rpi3-2' ? 'block' : 'none';
     if (els.viewDeviceCoral1) els.viewDeviceCoral1.style.display = device === 'coral-1' ? 'block' : 'none';
     if (els.viewDeviceCoral2) els.viewDeviceCoral2.style.display = device === 'coral-2' ? 'block' : 'none';
     if (els.viewDeviceCoral) els.viewDeviceCoral.style.display = device === 'coral-1' ? 'block' : 'none';
@@ -5794,6 +6643,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
         els.breadcrumbName.innerText = 'Jetson Orin Nano (Host)';
       } else if (device === 'rpi5') {
         els.breadcrumbName.innerText = 'Raspberry Pi 5 · Hailo-8 (Node 02)';
+      } else if (device === 'rpi3-1') {
+        els.breadcrumbName.innerText = 'Raspberry Pi 3B+ · Red Team 1 (Node 01)';
+      } else if (device === 'rpi3-2') {
+        els.breadcrumbName.innerText = 'Raspberry Pi 3B+ · Red Team 2 (Node 02)';
       } else if (device === 'coral-1') {
         els.breadcrumbName.innerText = 'Google Coral TPU · Tap DPI (4 TOPS)';
       } else if (device === 'coral-2') {
@@ -5829,6 +6682,12 @@ Please connect the physical switch via USB to execute '${command}' on device har
   if (els.btnDeviceRpi5) {
     els.btnDeviceRpi5.addEventListener('click', () => switchDevice('rpi5'));
   }
+  if (els.btnDeviceRpi3_1) {
+    els.btnDeviceRpi3_1.addEventListener('click', () => switchDevice('rpi3-1'));
+  }
+  if (els.btnDeviceRpi3_2) {
+    els.btnDeviceRpi3_2.addEventListener('click', () => switchDevice('rpi3-2'));
+  }
   if (els.btnDeviceCoral1) {
     els.btnDeviceCoral1.addEventListener('click', () => switchDevice('coral-1'));
   }
@@ -5852,6 +6711,10 @@ Please connect the physical switch via USB to execute '${command}' on device har
       switchDevice('orin');
     } else if (hash === '#sec-rpi5' || hash === '#rpi5') {
       switchDevice('rpi5');
+    } else if (hash === '#sec-rpi3-1' || hash === '#rpi3-1') {
+      switchDevice('rpi3-1');
+    } else if (hash === '#sec-rpi3-2' || hash === '#rpi3-2') {
+      switchDevice('rpi3-2');
     } else if (hash === '#sec-coral-1' || hash === '#coral-1' || hash === '#sec-coral' || hash === '#coral') {
       switchDevice('coral-1');
     } else if (hash === '#sec-coral-2' || hash === '#coral-2') {

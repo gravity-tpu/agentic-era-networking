@@ -7,6 +7,8 @@
  * - Anti-Shortcut Law: Zero field suppression; parses all hardware-exported counters.
  */
 
+import type { IsolationStatusJson } from './isolation-status.js';
+
 export interface ZodiacPortTelemetry {
   readonly port: number;
   readonly name: string;
@@ -471,9 +473,6 @@ export interface Rpi3AdversarialTelemetry {
   readonly nodeId: 1 | 2;
   readonly role: string;
   readonly sdnWorkloadSubnet: string;
-  readonly gatewayIsolationStatus: string;
-  readonly controllerIsolationStatus: string;
-  readonly intraWorkloadTransit: string;
   readonly activeRawSockets: number;
   readonly activeTcpConnections: number;
   readonly activeUdpSockets: number;
@@ -525,6 +524,8 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly bridgePid?: number | undefined;
   /** Live RSS memory bytes from process.memoryUsage() as bigint — structurally enforces integer-only invariant (Council Invariant 2). */
   readonly bridgeRssBytes?: bigint | undefined;
+  /** Verified Port 1 Isolation status on the Zodiac data plane */
+  readonly port1Isolation?: IsolationStatusJson | undefined;
 }
 
 /**
@@ -801,6 +802,18 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
     rpi3_2: {
       ...rpi3_2,
       timeSeries: generateRpi3HistoricalTelemetry(rpi3_2, 1, 60),
+    },
+    port1Isolation: {
+      state: 'not_installed',
+      confirmed: [],
+      mismatches: [],
+      switchErrors: [],
+      checkedAtMs: null,
+      checkedAtMonoNs: null,
+      checkedAgeMs: null,
+      ageStatus: 'never_checked',
+      actions: null,
+      provenForwarding: false,
     },
   };
 }
@@ -1294,9 +1307,6 @@ export function createDefaultRpi3Snapshot(
       nodeId: nodeNum,
       role: isNode1 ? 'Untrusted Workload 1 / Traffic Injector' : 'Untrusted Workload 2 / Adversarial Target',
       sdnWorkloadSubnet: '10.0.2.0/24',
-      gatewayIsolationStatus: 'DROPPED (quarantined by Zodiac Port 1 Isolation Policy)',
-      controllerIsolationStatus: 'BLOCKED (10.0.1.8 unreachable from workload plane)',
-      intraWorkloadTransit: 'PERMITTED (10.0.2.0/24 peer forwarding)',
       activeRawSockets: 0,
       activeTcpConnections: isDisconnected ? 0 : 4,
       activeUdpSockets: isDisconnected ? 0 : 4,
@@ -1772,6 +1782,18 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
     rpi3_2: {
       ...rpi3_2,
       timeSeries: generateRpi3HistoricalTelemetry(rpi3_2, 1, 60),
+    },
+    port1Isolation: {
+      state: 'not_installed',
+      confirmed: [],
+      mismatches: [],
+      switchErrors: [],
+      checkedAtMs: null,
+      checkedAtMonoNs: null,
+      checkedAgeMs: null,
+      ageStatus: 'never_checked',
+      actions: null,
+      provenForwarding: false,
     },
   };
 }

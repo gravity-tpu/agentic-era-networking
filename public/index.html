@@ -2088,6 +2088,556 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
           </div><!-- /view-device-rpi5 -->
 
+          <!-- RASPBERRY PI 3B+ (NODE 01) VIEW — ADVERSARIAL WORKLOAD GENERATOR -->
+          <div id="view-device-rpi3-1" style="display: none;">
+            <div class="cf-page-header">
+              <div>
+                <h1 class="cf-page-title" id="rpi3-1-page-title">Raspberry Pi 3B+ — Adversarial Workload Generator (Node 01)</h1>
+                <p class="cf-page-desc">Physical edge workload &amp; red-team traffic injector, Broadcom BCM2837B0 Quad-Core Cortex-A53 @ 1.4 GHz, Microchip LAN7515 USB 2.0 to GbE, NETGEAR GS105Ev2 Port 3.</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <span class="cf-pill-badge red" id="rpi3-1-role-badge">Red Team Generator</span>
+                <span class="cf-pill-badge purple" id="rpi3-1-containment-badge">UNCONSTRAINED · Priority 65535</span>
+                <span class="cf-pill-badge blue" id="rpi3-1-os-badge">Debian 13 · Linux 6.18</span>
+                <span class="cf-pill-badge gray">Uptime: <span id="rpi3-1-uptime" style="margin-left: 4px;">--:--:--</span></span>
+              </div>
+            </div>
+
+            <!-- RPi 3-1 Top 5 KPI Cards -->
+            <div class="cf-stats-grid">
+              
+              <!-- KPI 1: Wire Injection Rate (eth0) -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Wire Injection Rate (eth0)</span>
+                  <span class="cf-pill-badge green" style="font-size: 0.68rem;" id="rpi3-1-kpi-eth0-status">1000M Full</span>
+                </div>
+                <div class="cf-stat-value green" id="rpi3-1-kpi-eth0-rate">--/s</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="rpi3-1-bar-eth0" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Packet Velocity: <strong class="cf-mono" id="rpi3-1-kpi-eth0-pps">-- pps</strong></span>
+                  <span>Zodiac 100M Cap: <strong class="cf-mono" id="rpi3-1-kpi-eth0-cap">--%</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 2: SDN Boundary Containment -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">SDN Boundary Containment</span>
+                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;" id="rpi3-1-kpi-isolation-badge">--</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi3-1-kpi-isolation-status" style="font-size: 1.15rem; white-space: nowrap;">--</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="rpi3-1-bar-isolation" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Gateway Escape: <strong class="cf-mono" id="rpi3-1-kpi-gw-escape">--</strong></span>
+                  <span>Port 1 Policy: <strong class="cf-mono" id="rpi3-1-kpi-port1-status">--</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 3: Compute & SoftIRQ Load -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Compute &amp; SoftIRQ Load</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi3-1-kpi-compute" style="font-size: 1.45rem; white-space: nowrap;">--% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span></div>
+                <div class="cf-mini-bar" style="margin-top: 0.65rem;">
+                  <div class="cf-mini-bar-fill" id="rpi3-1-bar-cpu" style="width: 0%;" title="CPU Load"></div>
+                </div>
+                <div class="cf-stat-footer" style="margin-top: 0.65rem;">
+                  <span>SoftIRQ (NIC): <strong class="cf-mono" id="rpi3-1-kpi-softirq">--%</strong></span>
+                  <span>Load Avg: <strong class="cf-mono" id="rpi3-1-kpi-load">--</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 4: Silicon Thermals & Voltage -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Silicon Thermals &amp; Voltage</span>
+                  <span class="cf-pill-badge orange" style="font-size: 0.68rem;">80°C Limit</span>
+                </div>
+                <div class="cf-stat-value orange" id="rpi3-1-kpi-cpu-temp">--°C</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill orange" id="rpi3-1-bar-cpu-temp" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Throttled: <strong class="cf-mono" id="rpi3-1-kpi-throttled">NOMINAL</strong></span>
+                  <span>Core Freq: <strong class="cf-mono" id="rpi3-1-kpi-freq">-- MHz</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 5: LPDDR2 Memory & Sockets -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">LPDDR2 Memory &amp; Sockets</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">1 GB Total</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi3-1-kpi-ram">-- / 949 MB</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill blue" id="rpi3-1-bar-ram" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>RAW Sockets: <strong class="cf-mono" id="rpi3-1-kpi-raw-sock">0</strong></span>
+                  <span>TCP/UDP: <strong class="cf-mono" id="rpi3-1-kpi-sockets">--</strong></span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Primary Horizontal Network Interface Throughput Chart -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi3-1-network-card">
+              <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <h3 class="cf-card-title">Wire Injection &amp; Egress Throughput</h3>
+                  <div class="cf-card-subtitle">Physical eth0 TX/RX wire rate vs Zodiac 100 Mbps ASIC uplink bottleneck &amp; packet velocity (PPS)</div>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                  <div class="cf-time-range-group" id="cf-rpi3-1-time-selectors">
+                    <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                    <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                    <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                    <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span class="cf-pill-badge red">eth0 TX Rate</span>
+                    <span class="cf-pill-badge blue">eth0 RX Rate</span>
+                    <span class="cf-pill-badge purple">Injection PPS</span>
+                    <span class="cf-pill-badge orange">100M Ceiling</span>
+                  </div>
+                </div>
+              </div>
+              <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                <div class="cf-chart-legend-row" style="margin-bottom: 0.75rem;">
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot red"></span>
+                    <span>eth0 TX Wire: <strong id="rpi3-1-eth0-tx-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot blue"></span>
+                    <span>eth0 RX Wire: <strong id="rpi3-1-eth0-rx-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot purple"></span>
+                    <span>Packet Injection: <strong id="rpi3-1-pps-legend" class="cf-mono">-- pps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot orange"></span>
+                    <span>100M Wire Bottleneck: <strong class="cf-mono">12.5 MB/s (100 Mb/s)</strong></span>
+                  </div>
+                </div>
+                <div class="cf-canvas-container" id="canvas-wrapper-rpi3-1-network" style="position: relative; height: 240px;">
+                  <canvas id="chart-rpi3-1-network"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Compute & Adversarial Boundary Grid (Side by Side) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+              
+              <!-- Chart 1: Compute Utilization & SoftIRQ Overhead -->
+              <div class="cf-card" id="rpi3-1-compute-card">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">Compute Utilization &amp; SoftIRQ Network Overhead</h3>
+                    <div class="cf-card-subtitle">Broadcom BCM2837B0 Quad Cortex-A53 CPU (%) vs SoftIRQ Network Interrupts (%)</div>
+                  </div>
+                  <span class="cf-pill-badge blue">CPU &amp; SoftIRQ Dynamics</span>
+                </div>
+                <div class="cf-card-body">
+                  <div class="cf-canvas-container" id="canvas-wrapper-rpi3-1-compute" style="position: relative; height: 220px;">
+                    <canvas id="chart-rpi3-1-compute"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Panel 2: SDN Boundary Isolation & Adversarial Probing Matrix -->
+              <div class="cf-card" id="rpi3-1-adversarial-card">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">SDN Boundary Isolation &amp; Containment Matrix</h3>
+                    <div class="cf-card-subtitle">Active verification of Zodiac Port 1 Isolation &amp; Fail-Closed Boundary (Invariant 3)</div>
+                  </div>
+                  <span class="cf-pill-badge gray" id="rpi3-1-containment-status-badge">UNKNOWN</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1rem 1.5rem;">
+                  <div style="font-size: 0.8rem; margin-bottom: 0.85rem; color: var(--cf-text-secondary);">
+                    Role: <strong style="color: var(--cf-text-primary);" id="rpi3-1-adv-role">Offensive Traffic Generator / Red Team Arm</strong> · Subnet: <code class="cf-mono" id="rpi3-1-adv-subnet">10.0.2.0/24</code>
+                  </div>
+                  <div class="cf-table-container" style="border: 1px solid var(--cf-border); border-radius: 6px; overflow: hidden;">
+                    <table class="cf-table" style="font-size: 0.78rem;">
+                      <thead>
+                        <tr>
+                          <th>Target Role</th>
+                          <th>IP &amp; Port</th>
+                          <th>Wire Status</th>
+                          <th>SDN Policy Enforcement</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><strong>SDN Controller Plane</strong></td>
+                          <td><code class="cf-mono">10.0.1.8:6633</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-ctrl-iso-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">Port 1 Isolation Rule (Priority 65535)</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Management Gateway Escape</strong></td>
+                          <td><code class="cf-mono">10.0.0.1</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-gw-iso-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">Non-10.0.2.0/24 Egress Drop</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Hailo-8 AI Workload</strong></td>
+                          <td><code class="cf-mono">10.0.2.51:8000</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-hailo-iso-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">Inter-workload Data Plane Transit</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Peer Red Team Target</strong></td>
+                          <td><code class="cf-mono">10.0.2.52</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-peer-transit-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">East-West Data Plane Transit</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style="margin-top: 0.85rem; display: flex; gap: 1.25rem; font-size: 0.75rem; color: var(--cf-text-secondary);">
+                    <span>Active RAW Sockets: <strong class="cf-mono" id="rpi3-1-raw-sockets-count">--</strong></span>
+                    <span>TCP Sockets: <strong class="cf-mono" id="rpi3-1-tcp-sockets-count">--</strong></span>
+                    <span>UDP Sockets: <strong class="cf-mono" id="rpi3-1-udp-sockets-count">--</strong></span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Silicon Thermals & Voltage Throttling Chart -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi3-1-thermal-card">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Silicon Thermal Dynamics &amp; Voltage Regulation</h3>
+                  <div class="cf-card-subtitle">BCM2837B0 SoC Thermal Zone (°C) vs 80°C Throttle Limit &amp; vcgencmd Hardware Register Telemetry</div>
+                </div>
+                <span class="cf-pill-badge orange" id="rpi3-1-throttled-badge">Throttling: 0x0 (Nominal)</span>
+              </div>
+              <div class="cf-card-body">
+                <div class="cf-canvas-container" id="canvas-wrapper-rpi3-1-thermal" style="position: relative; height: 180px;">
+                  <canvas id="chart-rpi3-1-thermal"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- RPi 3-1 Physical Network Interfaces Table Card -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi3-1-interfaces-card">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Node Physical Network Interfaces</h3>
+                  <div class="cf-card-subtitle">Linux sysfs &amp; /proc/net/dev socket wire accounting for GbE workload (eth0), Wi-Fi OOB (wlan0), and WireGuard mesh (tailscale0)</div>
+                </div>
+                <span class="cf-pill-badge teal">Tri-Interface Stack</span>
+              </div>
+              <div class="cf-card-body" style="padding: 0;">
+                <div class="cf-table-container">
+                  <table class="cf-table">
+                    <thead>
+                      <tr>
+                        <th>Interface</th>
+                        <th>Topology Role</th>
+                        <th>Physical Link &amp; MAC</th>
+                        <th>Status</th>
+                        <th>Cumulative Wire Traffic</th>
+                        <th>Packet Accounting</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rpi3-1-interfaces-tbody">
+                      <tr><td colspan="6" style="text-align:center; padding: 1rem; color: var(--cf-text-secondary);">Awaiting telemetry hydration...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /view-device-rpi3-1 -->
+
+          <!-- RASPBERRY PI 3B+ (NODE 02) VIEW — TARGET & LEGITIMATE WORKLOAD -->
+          <div id="view-device-rpi3-2" style="display: none;">
+            <div class="cf-page-header">
+              <div>
+                <h1 class="cf-page-title" id="rpi3-2-page-title">Raspberry Pi 3B+ — Target &amp; Legitimate Workload (Node 02)</h1>
+                <p class="cf-page-desc">Physical edge workload &amp; adversarial target, Broadcom BCM2837B0 Quad-Core Cortex-A53 @ 1.4 GHz, Microchip LAN7515 USB 2.0 to GbE, NETGEAR GS105Ev2 Port 1.</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <span class="cf-pill-badge blue" id="rpi3-2-role-badge">Red Team Target / Peer</span>
+                <span class="cf-pill-badge purple" id="rpi3-2-containment-badge">UNCONSTRAINED · Priority 65535</span>
+                <span class="cf-pill-badge blue" id="rpi3-2-os-badge">Debian 13 · Linux 6.18</span>
+                <span class="cf-pill-badge gray">Uptime: <span id="rpi3-2-uptime" style="margin-left: 4px;">--:--:--</span></span>
+              </div>
+            </div>
+
+            <!-- RPi 3-2 Top 5 KPI Cards -->
+            <div class="cf-stats-grid">
+              
+              <!-- KPI 1: Wire Traffic Rate (eth0) -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Wire Traffic Rate (eth0)</span>
+                  <span class="cf-pill-badge green" style="font-size: 0.68rem;" id="rpi3-2-kpi-eth0-status">1000M Full</span>
+                </div>
+                <div class="cf-stat-value green" id="rpi3-2-kpi-eth0-rate">--/s</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="rpi3-2-bar-eth0" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Packet Velocity: <strong class="cf-mono" id="rpi3-2-kpi-eth0-pps">-- pps</strong></span>
+                  <span>Zodiac 100M Cap: <strong class="cf-mono" id="rpi3-2-kpi-eth0-cap">--%</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 2: SDN Boundary Containment -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">SDN Boundary Containment</span>
+                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;" id="rpi3-2-kpi-isolation-badge">--</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi3-2-kpi-isolation-status" style="font-size: 1.15rem; white-space: nowrap;">--</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill green" id="rpi3-2-bar-isolation" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Gateway Escape: <strong class="cf-mono" id="rpi3-2-kpi-gw-escape">--</strong></span>
+                  <span>Port 1 Policy: <strong class="cf-mono" id="rpi3-2-kpi-port1-status">--</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 3: Compute & SoftIRQ Load -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Compute &amp; SoftIRQ Load</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi3-2-kpi-compute" style="font-size: 1.45rem; white-space: nowrap;">--% <span style="font-size: 0.82rem; font-weight: 500; color: var(--cf-text-secondary);">CPU</span></div>
+                <div class="cf-mini-bar" style="margin-top: 0.65rem;">
+                  <div class="cf-mini-bar-fill" id="rpi3-2-bar-cpu" style="width: 0%;" title="CPU Load"></div>
+                </div>
+                <div class="cf-stat-footer" style="margin-top: 0.65rem;">
+                  <span>SoftIRQ (NIC): <strong class="cf-mono" id="rpi3-2-kpi-softirq">--%</strong></span>
+                  <span>Load Avg: <strong class="cf-mono" id="rpi3-2-kpi-load">--</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 4: Silicon Thermals & Voltage -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">Silicon Thermals &amp; Voltage</span>
+                  <span class="cf-pill-badge orange" style="font-size: 0.68rem;">80°C Limit</span>
+                </div>
+                <div class="cf-stat-value orange" id="rpi3-2-kpi-cpu-temp">--°C</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill orange" id="rpi3-2-bar-cpu-temp" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>Throttled: <strong class="cf-mono" id="rpi3-2-kpi-throttled">NOMINAL</strong></span>
+                  <span>Core Freq: <strong class="cf-mono" id="rpi3-2-kpi-freq">-- MHz</strong></span>
+                </div>
+              </div>
+
+              <!-- KPI 5: LPDDR2 Memory & Sockets -->
+              <div class="cf-stat-card">
+                <div class="cf-stat-header">
+                  <span class="cf-stat-label">LPDDR2 Memory &amp; Sockets</span>
+                  <span class="cf-pill-badge blue" style="font-size: 0.68rem;">1 GB Total</span>
+                </div>
+                <div class="cf-stat-value blue" id="rpi3-2-kpi-ram">-- / 949 MB</div>
+                <div class="cf-mini-bar">
+                  <div class="cf-mini-bar-fill blue" id="rpi3-2-bar-ram" style="width: 0%;"></div>
+                </div>
+                <div class="cf-stat-footer">
+                  <span>RAW Sockets: <strong class="cf-mono" id="rpi3-2-kpi-raw-sock">0</strong></span>
+                  <span>TCP/UDP: <strong class="cf-mono" id="rpi3-2-kpi-sockets">--</strong></span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Primary Horizontal Network Interface Throughput Chart -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi3-2-network-card">
+              <div class="cf-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <h3 class="cf-card-title">Wire Traffic &amp; Egress Throughput</h3>
+                  <div class="cf-card-subtitle">Physical eth0 TX/RX wire rate vs Zodiac 100 Mbps ASIC uplink bottleneck &amp; packet velocity (PPS)</div>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                  <div class="cf-time-range-group" id="cf-rpi3-2-time-selectors">
+                    <button class="cf-time-btn active" data-range="live">Live (10m)</button>
+                    <button class="cf-time-btn" data-range="1h">1 Hour</button>
+                    <button class="cf-time-btn" data-range="6h">6 Hours</button>
+                    <button class="cf-time-btn" data-range="24h">24 Hours</button>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span class="cf-pill-badge blue">eth0 RX Rate</span>
+                    <span class="cf-pill-badge red">eth0 TX Rate</span>
+                    <span class="cf-pill-badge purple">Packet PPS</span>
+                    <span class="cf-pill-badge orange">100M Ceiling</span>
+                  </div>
+                </div>
+              </div>
+              <div class="cf-card-body" style="padding: 1.25rem 1.5rem;">
+                <div class="cf-chart-legend-row" style="margin-bottom: 0.75rem;">
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot blue"></span>
+                    <span>eth0 RX Wire: <strong id="rpi3-2-eth0-rx-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot red"></span>
+                    <span>eth0 TX Wire: <strong id="rpi3-2-eth0-tx-legend" class="cf-mono">-- Bps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot purple"></span>
+                    <span>Packet Velocity: <strong id="rpi3-2-pps-legend" class="cf-mono">-- pps</strong></span>
+                  </div>
+                  <div class="cf-legend-item">
+                    <span class="cf-legend-dot orange"></span>
+                    <span>100M Wire Bottleneck: <strong class="cf-mono">12.5 MB/s (100 Mb/s)</strong></span>
+                  </div>
+                </div>
+                <div class="cf-canvas-container" id="canvas-wrapper-rpi3-2-network" style="position: relative; height: 240px;">
+                  <canvas id="chart-rpi3-2-network"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Compute & Adversarial Boundary Grid (Side by Side) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+              
+              <!-- Chart 1: Compute Utilization & SoftIRQ Overhead -->
+              <div class="cf-card" id="rpi3-2-compute-card">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">Compute Utilization &amp; SoftIRQ Network Overhead</h3>
+                    <div class="cf-card-subtitle">Broadcom BCM2837B0 Quad Cortex-A53 CPU (%) vs SoftIRQ Network Interrupts (%)</div>
+                  </div>
+                  <span class="cf-pill-badge blue">CPU &amp; SoftIRQ Dynamics</span>
+                </div>
+                <div class="cf-card-body">
+                  <div class="cf-canvas-container" id="canvas-wrapper-rpi3-2-compute" style="position: relative; height: 220px;">
+                    <canvas id="chart-rpi3-2-compute"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Panel 2: SDN Boundary Isolation & Adversarial Probing Matrix -->
+              <div class="cf-card" id="rpi3-2-adversarial-card">
+                <div class="cf-card-header">
+                  <div>
+                    <h3 class="cf-card-title">SDN Boundary Isolation &amp; Containment Matrix</h3>
+                    <div class="cf-card-subtitle">Active verification of Zodiac Port 1 Isolation &amp; Fail-Closed Boundary (Invariant 3)</div>
+                  </div>
+                  <span class="cf-pill-badge gray" id="rpi3-2-containment-status-badge">UNKNOWN</span>
+                </div>
+                <div class="cf-card-body" style="padding: 1rem 1.5rem;">
+                  <div style="font-size: 0.8rem; margin-bottom: 0.85rem; color: var(--cf-text-secondary);">
+                    Role: <strong style="color: var(--cf-text-primary);" id="rpi3-2-adv-role">Offensive Prober / Adversarial Target</strong> · Subnet: <code class="cf-mono" id="rpi3-2-adv-subnet">10.0.2.0/24</code>
+                  </div>
+                  <div class="cf-table-container" style="border: 1px solid var(--cf-border); border-radius: 6px; overflow: hidden;">
+                    <table class="cf-table" style="font-size: 0.78rem;">
+                      <thead>
+                        <tr>
+                          <th>Target Role</th>
+                          <th>IP &amp; Port</th>
+                          <th>Wire Status</th>
+                          <th>SDN Policy Enforcement</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><strong>SDN Controller Plane</strong></td>
+                          <td><code class="cf-mono">10.0.1.8:6633</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-ctrl-iso-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">Port 1 Isolation Rule (Priority 65535)</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Management Gateway Escape</strong></td>
+                          <td><code class="cf-mono">10.0.0.1</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-gw-iso-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">Non-10.0.2.0/24 Egress Drop</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Hailo-8 AI Workload</strong></td>
+                          <td><code class="cf-mono">10.0.2.51:8000</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-hailo-iso-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">Inter-workload Data Plane Transit</span></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Peer Red Team Generator</strong></td>
+                          <td><code class="cf-mono">10.0.2.50</code></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-peer-transit-status">--</span></td>
+                          <td><span style="color: var(--cf-text-secondary);">East-West Data Plane Transit</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style="margin-top: 0.85rem; display: flex; gap: 1.25rem; font-size: 0.75rem; color: var(--cf-text-secondary);">
+                    <span>Active RAW Sockets: <strong class="cf-mono" id="rpi3-2-raw-sockets-count">--</strong></span>
+                    <span>TCP Sockets: <strong class="cf-mono" id="rpi3-2-tcp-sockets-count">--</strong></span>
+                    <span>UDP Sockets: <strong class="cf-mono" id="rpi3-2-udp-sockets-count">--</strong></span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Silicon Thermals & Voltage Throttling Chart -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi3-2-thermal-card">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Silicon Thermal Dynamics &amp; Voltage Regulation</h3>
+                  <div class="cf-card-subtitle">BCM2837B0 SoC Thermal Zone (°C) vs 80°C Throttle Limit &amp; vcgencmd Hardware Register Telemetry</div>
+                </div>
+                <span class="cf-pill-badge orange" id="rpi3-2-throttled-badge">Throttling: 0x0 (Nominal)</span>
+              </div>
+              <div class="cf-card-body">
+                <div class="cf-canvas-container" id="canvas-wrapper-rpi3-2-thermal" style="position: relative; height: 180px;">
+                  <canvas id="chart-rpi3-2-thermal"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- RPi 3-2 Physical Network Interfaces Table Card -->
+            <div class="cf-card" style="margin-top: 1.5rem;" id="rpi3-2-interfaces-card">
+              <div class="cf-card-header">
+                <div>
+                  <h3 class="cf-card-title">Node Physical Network Interfaces</h3>
+                  <div class="cf-card-subtitle">Linux sysfs &amp; /proc/net/dev socket wire accounting for GbE workload (eth0), Wi-Fi OOB (wlan0), and WireGuard mesh (tailscale0)</div>
+                </div>
+                <span class="cf-pill-badge teal">Tri-Interface Stack</span>
+              </div>
+              <div class="cf-card-body" style="padding: 0;">
+                <div class="cf-table-container">
+                  <table class="cf-table">
+                    <thead>
+                      <tr>
+                        <th>Interface</th>
+                        <th>Topology Role</th>
+                        <th>Physical Link &amp; MAC</th>
+                        <th>Status</th>
+                        <th>Cumulative Wire Traffic</th>
+                        <th>Packet Accounting</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rpi3-2-interfaces-tbody">
+                      <tr><td colspan="6" style="text-align:center; padding: 1rem; color: var(--cf-text-secondary);">Awaiting telemetry hydration...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /view-device-rpi3-2 -->
+
           <!-- GOOGLE CORAL EDGE TPU #1 VIEW (Port 3 Mirror Tap DPI) -->
           <div id="view-device-coral-1" style="display: none;">
             <div class="cf-page-header">
@@ -3294,7 +3844,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </aside>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.8bbbcdb730.js"></script>
+  <script defer src="zodiac-app.c9d470651b.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>
