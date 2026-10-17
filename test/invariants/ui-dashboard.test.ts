@@ -723,6 +723,17 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(kpiCpuTemp1?.textContent).toBe('35.4°C');
     expect(kpiThrottled1?.textContent).toContain('0x0');
 
+    // Verify online isolation states
+    expect(document.getElementById('rpi3-1-kpi-isolation-status')?.textContent).toBe('ENFORCED');
+    expect(document.getElementById('rpi3-1-ctrl-iso-status')?.textContent).toBe('100% BLOCKED');
+    expect(document.getElementById('rpi3-1-gw-iso-status')?.textContent).toBe('100% DROPPED');
+    expect(document.getElementById('rpi3-1-hailo-iso-status')?.textContent).toBe('PERMITTED');
+    expect(document.getElementById('rpi3-1-peer-transit-status')?.textContent).toBe('PERMITTED');
+    expect(document.getElementById('rpi3-1-kpi-gw-escape')?.textContent).toBe('0% LEAK');
+    expect(document.getElementById('rpi3-1-kpi-port1-status')?.textContent).toBe('ACTIVE');
+    expect(document.getElementById('rpi3-1-raw-sockets-count')?.textContent).toBe('0');
+    expect(document.getElementById('rpi3-1-tcp-sockets-count')?.textContent).toBe('4');
+
     // Switch to Node 02
     app.switchDevice('rpi3-2');
     const kpiEth0Rate2 = document.getElementById('rpi3-2-kpi-eth0-rate');
@@ -747,6 +758,19 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('rpi3-2-kpi-cpu-temp')?.textContent).toBe('--°C');
     expect(document.getElementById('rpi3-1-uptime')?.textContent).toBe('--:--:--');
     expect(document.getElementById('rpi3-2-uptime')?.textContent).toBe('--:--:--');
+
+    // Invariant 6: Unasserted / OFFLINE states when telemetry is absent (no fabricated security success)
+    expect(document.getElementById('rpi3-1-kpi-isolation-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-ctrl-iso-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-gw-iso-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-hailo-iso-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-peer-transit-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-kpi-gw-escape')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-kpi-port1-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-raw-sockets-count')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-tcp-sockets-count')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-udp-sockets-count')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-containment-status-badge')?.textContent).toBe('UNKNOWN');
   });
 });
 

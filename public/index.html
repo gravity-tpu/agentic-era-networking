@@ -2126,15 +2126,15 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">SDN Boundary Containment</span>
-                  <span class="cf-pill-badge green" style="font-size: 0.68rem;" id="rpi3-1-kpi-isolation-badge">FAIL-CLOSED</span>
+                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;" id="rpi3-1-kpi-isolation-badge">--</span>
                 </div>
-                <div class="cf-stat-value blue" id="rpi3-1-kpi-isolation-status" style="font-size: 1.15rem; white-space: nowrap;">ENFORCED</div>
+                <div class="cf-stat-value blue" id="rpi3-1-kpi-isolation-status" style="font-size: 1.15rem; white-space: nowrap;">--</div>
                 <div class="cf-mini-bar">
-                  <div class="cf-mini-bar-fill green" id="rpi3-1-bar-isolation" style="width: 100%;"></div>
+                  <div class="cf-mini-bar-fill green" id="rpi3-1-bar-isolation" style="width: 0%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span>Gateway Escape: <strong class="cf-mono" id="rpi3-1-kpi-gw-escape">0% LEAK</strong></span>
-                  <span>Port 1 Policy: <strong class="cf-mono" id="rpi3-1-kpi-port1-status">ACTIVE</strong></span>
+                  <span>Gateway Escape: <strong class="cf-mono" id="rpi3-1-kpi-gw-escape">--</strong></span>
+                  <span>Port 1 Policy: <strong class="cf-mono" id="rpi3-1-kpi-port1-status">--</strong></span>
                 </div>
               </div>
 
@@ -2261,7 +2261,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                     <h3 class="cf-card-title">SDN Boundary Isolation &amp; Containment Matrix</h3>
                     <div class="cf-card-subtitle">Active verification of Zodiac Port 1 Isolation &amp; Fail-Closed Boundary (Invariant 3)</div>
                   </div>
-                  <span class="cf-pill-badge green" id="rpi3-1-containment-status-badge">FAIL-CLOSED ENFORCED</span>
+                  <span class="cf-pill-badge gray" id="rpi3-1-containment-status-badge">UNKNOWN</span>
                 </div>
                 <div class="cf-card-body" style="padding: 1rem 1.5rem;">
                   <div style="font-size: 0.8rem; margin-bottom: 0.85rem; color: var(--cf-text-secondary);">
@@ -2281,32 +2281,32 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         <tr>
                           <td><strong>SDN Controller Plane</strong></td>
                           <td><code class="cf-mono">10.0.1.8:6633</code></td>
-                          <td><span class="cf-pill-badge red" style="font-size: 0.65rem;" id="rpi3-1-ctrl-iso-status">100% BLOCKED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-ctrl-iso-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">Port 1 Isolation Rule (Priority 65535)</span></td>
                         </tr>
                         <tr>
                           <td><strong>Management Gateway Escape</strong></td>
                           <td><code class="cf-mono">10.0.0.1</code></td>
-                          <td><span class="cf-pill-badge red" style="font-size: 0.65rem;" id="rpi3-1-gw-iso-status">100% DROPPED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-gw-iso-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">Non-10.0.2.0/24 Egress Drop</span></td>
                         </tr>
                         <tr>
                           <td><strong>Hailo-8 AI Workload</strong></td>
                           <td><code class="cf-mono">10.0.2.51:8000</code></td>
-                          <td><span class="cf-pill-badge green" style="font-size: 0.65rem;">PERMITTED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-hailo-iso-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">Inter-workload Data Plane Transit</span></td>
                         </tr>
                         <tr>
                           <td><strong>Peer Red Team Target</strong></td>
                           <td><code class="cf-mono">10.0.2.52</code></td>
-                          <td><span class="cf-pill-badge green" style="font-size: 0.65rem;" id="rpi3-1-peer-transit-status">PERMITTED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-1-peer-transit-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">East-West Data Plane Transit</span></td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
                   <div style="margin-top: 0.85rem; display: flex; gap: 1.25rem; font-size: 0.75rem; color: var(--cf-text-secondary);">
-                    <span>Active RAW Sockets: <strong class="cf-mono" id="rpi3-1-raw-sockets-count">0</strong></span>
+                    <span>Active RAW Sockets: <strong class="cf-mono" id="rpi3-1-raw-sockets-count">--</strong></span>
                     <span>TCP Sockets: <strong class="cf-mono" id="rpi3-1-tcp-sockets-count">--</strong></span>
                     <span>UDP Sockets: <strong class="cf-mono" id="rpi3-1-udp-sockets-count">--</strong></span>
                   </div>
@@ -2401,15 +2401,15 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               <div class="cf-stat-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">SDN Boundary Containment</span>
-                  <span class="cf-pill-badge green" style="font-size: 0.68rem;" id="rpi3-2-kpi-isolation-badge">FAIL-CLOSED</span>
+                  <span class="cf-pill-badge gray" style="font-size: 0.68rem;" id="rpi3-2-kpi-isolation-badge">--</span>
                 </div>
-                <div class="cf-stat-value blue" id="rpi3-2-kpi-isolation-status" style="font-size: 1.15rem; white-space: nowrap;">ENFORCED</div>
+                <div class="cf-stat-value blue" id="rpi3-2-kpi-isolation-status" style="font-size: 1.15rem; white-space: nowrap;">--</div>
                 <div class="cf-mini-bar">
-                  <div class="cf-mini-bar-fill green" id="rpi3-2-bar-isolation" style="width: 100%;"></div>
+                  <div class="cf-mini-bar-fill green" id="rpi3-2-bar-isolation" style="width: 0%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span>Gateway Escape: <strong class="cf-mono" id="rpi3-2-kpi-gw-escape">0% LEAK</strong></span>
-                  <span>Port 1 Policy: <strong class="cf-mono" id="rpi3-2-kpi-port1-status">ACTIVE</strong></span>
+                  <span>Gateway Escape: <strong class="cf-mono" id="rpi3-2-kpi-gw-escape">--</strong></span>
+                  <span>Port 1 Policy: <strong class="cf-mono" id="rpi3-2-kpi-port1-status">--</strong></span>
                 </div>
               </div>
 
@@ -2536,7 +2536,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                     <h3 class="cf-card-title">SDN Boundary Isolation &amp; Containment Matrix</h3>
                     <div class="cf-card-subtitle">Active verification of Zodiac Port 1 Isolation &amp; Fail-Closed Boundary (Invariant 3)</div>
                   </div>
-                  <span class="cf-pill-badge green" id="rpi3-2-containment-status-badge">FAIL-CLOSED ENFORCED</span>
+                  <span class="cf-pill-badge gray" id="rpi3-2-containment-status-badge">UNKNOWN</span>
                 </div>
                 <div class="cf-card-body" style="padding: 1rem 1.5rem;">
                   <div style="font-size: 0.8rem; margin-bottom: 0.85rem; color: var(--cf-text-secondary);">
@@ -2556,32 +2556,32 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                         <tr>
                           <td><strong>SDN Controller Plane</strong></td>
                           <td><code class="cf-mono">10.0.1.8:6633</code></td>
-                          <td><span class="cf-pill-badge red" style="font-size: 0.65rem;" id="rpi3-2-ctrl-iso-status">100% BLOCKED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-ctrl-iso-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">Port 1 Isolation Rule (Priority 65535)</span></td>
                         </tr>
                         <tr>
                           <td><strong>Management Gateway Escape</strong></td>
                           <td><code class="cf-mono">10.0.0.1</code></td>
-                          <td><span class="cf-pill-badge red" style="font-size: 0.65rem;" id="rpi3-2-gw-iso-status">100% DROPPED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-gw-iso-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">Non-10.0.2.0/24 Egress Drop</span></td>
                         </tr>
                         <tr>
                           <td><strong>Hailo-8 AI Workload</strong></td>
                           <td><code class="cf-mono">10.0.2.51:8000</code></td>
-                          <td><span class="cf-pill-badge green" style="font-size: 0.65rem;">PERMITTED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-hailo-iso-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">Inter-workload Data Plane Transit</span></td>
                         </tr>
                         <tr>
                           <td><strong>Peer Red Team Generator</strong></td>
                           <td><code class="cf-mono">10.0.2.50</code></td>
-                          <td><span class="cf-pill-badge green" style="font-size: 0.65rem;" id="rpi3-2-peer-transit-status">PERMITTED</span></td>
+                          <td><span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="rpi3-2-peer-transit-status">--</span></td>
                           <td><span style="color: var(--cf-text-secondary);">East-West Data Plane Transit</span></td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
                   <div style="margin-top: 0.85rem; display: flex; gap: 1.25rem; font-size: 0.75rem; color: var(--cf-text-secondary);">
-                    <span>Active RAW Sockets: <strong class="cf-mono" id="rpi3-2-raw-sockets-count">0</strong></span>
+                    <span>Active RAW Sockets: <strong class="cf-mono" id="rpi3-2-raw-sockets-count">--</strong></span>
                     <span>TCP Sockets: <strong class="cf-mono" id="rpi3-2-tcp-sockets-count">--</strong></span>
                     <span>UDP Sockets: <strong class="cf-mono" id="rpi3-2-udp-sockets-count">--</strong></span>
                   </div>
@@ -3844,7 +3844,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
   </aside>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.44e6a28dc1.js"></script>
+  <script defer src="zodiac-app.c1f7c3dff8.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

@@ -2727,14 +2727,91 @@
 
       // KPI 2: SDN Boundary Containment
       const adv = r.adversarial || {};
+      const isoBadgeEl = document.getElementById(`${prefix}-kpi-isolation-badge`);
       const isoStatusEl = document.getElementById(`${prefix}-kpi-isolation-status`);
-      if (isoStatusEl) isoStatusEl.innerText = isOnline ? (adv.gatewayIsolationStatus?.includes('DROPPED') ? 'ENFORCED' : 'QUARANTINED') : 'FAIL-CLOSED';
+      const barIsoEl = document.getElementById(`${prefix}-bar-isolation`);
+      const gwEscapeEl = document.getElementById(`${prefix}-kpi-gw-escape`);
+      const port1PolicyEl = document.getElementById(`${prefix}-kpi-port1-status`);
+      const containmentHeaderBadgeEl = document.getElementById(`${prefix}-containment-status-badge`);
+
+      if (!isOnline) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = '--'; isoBadgeEl.className = 'cf-pill-badge gray'; }
+        if (isoStatusEl) isoStatusEl.innerText = '--';
+        if (barIsoEl) barIsoEl.style.width = '0%';
+        if (gwEscapeEl) gwEscapeEl.innerText = '--';
+        if (port1PolicyEl) port1PolicyEl.innerText = '--';
+        if (containmentHeaderBadgeEl) { containmentHeaderBadgeEl.innerText = 'UNKNOWN'; containmentHeaderBadgeEl.className = 'cf-pill-badge gray'; }
+      } else {
+        const isDropped = Boolean(adv.gatewayIsolationStatus && adv.gatewayIsolationStatus.includes('DROPPED'));
+        if (isoBadgeEl) {
+          isoBadgeEl.innerText = 'FAIL-CLOSED';
+          isoBadgeEl.className = 'cf-pill-badge green';
+        }
+        if (isoStatusEl) isoStatusEl.innerText = isDropped ? 'ENFORCED' : 'QUARANTINED';
+        if (barIsoEl) barIsoEl.style.width = isDropped ? '100%' : '50%';
+        if (gwEscapeEl) gwEscapeEl.innerText = isDropped ? '0% LEAK' : 'LEAK DETECTED';
+        if (port1PolicyEl) port1PolicyEl.innerText = 'ACTIVE';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = isDropped ? 'FAIL-CLOSED ENFORCED' : 'QUARANTINED';
+          containmentHeaderBadgeEl.className = isDropped ? 'cf-pill-badge green' : 'cf-pill-badge orange';
+        }
+      }
 
       const ctrlIsoEl = document.getElementById(`${prefix}-ctrl-iso-status`);
-      if (ctrlIsoEl) ctrlIsoEl.innerText = isOnline && adv.controllerIsolationStatus ? adv.controllerIsolationStatus : '100% BLOCKED';
+      if (ctrlIsoEl) {
+        if (!isOnline) {
+          ctrlIsoEl.innerText = '--';
+          ctrlIsoEl.className = 'cf-pill-badge gray';
+        } else if (adv.controllerIsolationStatus) {
+          const isBlocked = adv.controllerIsolationStatus.includes('BLOCKED');
+          ctrlIsoEl.innerText = isBlocked ? '100% BLOCKED' : adv.controllerIsolationStatus;
+          ctrlIsoEl.className = isBlocked ? 'cf-pill-badge red' : 'cf-pill-badge orange';
+        } else {
+          ctrlIsoEl.innerText = '--';
+          ctrlIsoEl.className = 'cf-pill-badge gray';
+        }
+      }
 
       const gwIsoEl = document.getElementById(`${prefix}-gw-iso-status`);
-      if (gwIsoEl) gwIsoEl.innerText = isOnline && adv.gatewayIsolationStatus ? adv.gatewayIsolationStatus : '100% DROPPED';
+      if (gwIsoEl) {
+        if (!isOnline) {
+          gwIsoEl.innerText = '--';
+          gwIsoEl.className = 'cf-pill-badge gray';
+        } else if (adv.gatewayIsolationStatus) {
+          const isDropped = adv.gatewayIsolationStatus.includes('DROPPED');
+          gwIsoEl.innerText = isDropped ? '100% DROPPED' : adv.gatewayIsolationStatus;
+          gwIsoEl.className = isDropped ? 'cf-pill-badge red' : 'cf-pill-badge orange';
+        } else {
+          gwIsoEl.innerText = '--';
+          gwIsoEl.className = 'cf-pill-badge gray';
+        }
+      }
+
+      const hailoIsoEl = document.getElementById(`${prefix}-hailo-iso-status`);
+      if (hailoIsoEl) {
+        if (!isOnline) {
+          hailoIsoEl.innerText = '--';
+          hailoIsoEl.className = 'cf-pill-badge gray';
+        } else {
+          hailoIsoEl.innerText = 'PERMITTED';
+          hailoIsoEl.className = 'cf-pill-badge green';
+        }
+      }
+
+      const peerTransitEl = document.getElementById(`${prefix}-peer-transit-status`);
+      if (peerTransitEl) {
+        if (!isOnline) {
+          peerTransitEl.innerText = '--';
+          peerTransitEl.className = 'cf-pill-badge gray';
+        } else if (adv.intraWorkloadTransit) {
+          const isPermitted = adv.intraWorkloadTransit.includes('PERMITTED');
+          peerTransitEl.innerText = isPermitted ? 'PERMITTED' : adv.intraWorkloadTransit;
+          peerTransitEl.className = isPermitted ? 'cf-pill-badge green' : 'cf-pill-badge orange';
+        } else {
+          peerTransitEl.innerText = '--';
+          peerTransitEl.className = 'cf-pill-badge gray';
+        }
+      }
 
       const advRoleEl = document.getElementById(`${prefix}-adv-role`);
       if (advRoleEl && adv.role) advRoleEl.innerText = adv.role;
@@ -2830,19 +2907,23 @@
       }
 
       const rawSockEl = document.getElementById(`${prefix}-kpi-raw-sock`);
-      if (rawSockEl) rawSockEl.innerText = isOnline ? String(adv.activeRawSockets ?? 0) : '0';
+      if (rawSockEl) rawSockEl.innerText = isOnline && typeof adv.activeRawSockets === 'number' ? String(adv.activeRawSockets) : '--';
 
       const sockEl = document.getElementById(`${prefix}-kpi-sockets`);
-      if (sockEl) sockEl.innerText = isOnline ? `TCP:${adv.activeTcpConnections ?? 0} · UDP:${adv.activeUdpSockets ?? 0}` : '--';
+      if (sockEl) {
+        sockEl.innerText = isOnline && typeof adv.activeTcpConnections === 'number' && typeof adv.activeUdpSockets === 'number'
+          ? `TCP:${adv.activeTcpConnections} · UDP:${adv.activeUdpSockets}`
+          : '--';
+      }
 
       const rawCountEl = document.getElementById(`${prefix}-raw-sockets-count`);
-      if (rawCountEl) rawCountEl.innerText = isOnline ? String(adv.activeRawSockets ?? 0) : '0';
+      if (rawCountEl) rawCountEl.innerText = isOnline && typeof adv.activeRawSockets === 'number' ? String(adv.activeRawSockets) : '--';
 
       const tcpCountEl = document.getElementById(`${prefix}-tcp-sockets-count`);
-      if (tcpCountEl) tcpCountEl.innerText = isOnline ? String(adv.activeTcpConnections ?? 0) : '--';
+      if (tcpCountEl) tcpCountEl.innerText = isOnline && typeof adv.activeTcpConnections === 'number' ? String(adv.activeTcpConnections) : '--';
 
       const udpCountEl = document.getElementById(`${prefix}-udp-sockets-count`);
-      if (udpCountEl) udpCountEl.innerText = isOnline ? String(adv.activeUdpSockets ?? 0) : '--';
+      if (udpCountEl) udpCountEl.innerText = isOnline && typeof adv.activeUdpSockets === 'number' ? String(adv.activeUdpSockets) : '--';
 
       // Populate Physical Network Interfaces Table
       const tbody = document.getElementById(`${prefix}-interfaces-tbody`);
