@@ -152,10 +152,19 @@ def remote_command(run):
     return ["timeout", str(secs + 5)] + inner
 
 
+def capture_pidfile(run_id):
+    return f"/tmp/labelled-{run_id}.pid"
+
+
 def capture_command(run_id):
-    """The argv that runs on the Jetson: capture the tap to a file, under timeout, for the whole run."""
-    return ["timeout", "-s", "INT", str(MAX_RUN_SECONDS + 2 * SETTLE_SECONDS + 10), "tcpdump", "-i", TAP_IFACE, "-n", "-U",
-            "-w", f"/tmp/labelled-{run_id}.pcap", CAPTURE_FILTER]
+    """
+    The argv that runs on the Jetson: record the pid, then become `timeout`, which runs tcpdump on the tap for the
+    whole run. Stopping it is `kill -INT <pid>` from the pid file (timeout forwards the signal to tcpdump), not a
+    match on the command line. run_id was validated to plain characters, so the script text holds nothing else.
+    """
+    inner = ["timeout", "-s", "INT", str(MAX_RUN_SECONDS + 2 * SETTLE_SECONDS + 10), "tcpdump", "-i", TAP_IFACE, "-n", "-U",
+             "-w", f"/tmp/labelled-{run_id}.pcap", CAPTURE_FILTER]
+    return ["sh", "-c", f"echo $$ > {capture_pidfile(run_id)}; exec {shlex.join(inner)}"]
 
 
 # --- the catalog -----------------------------------------------------------------------------------------------
@@ -187,13 +196,14 @@ def execute(run, outdir):
         time.sleep(SETTLE_SECONDS)
         if cap.poll() is not None:
             raise RuntimeError(f"capture exited early: {cap.stderr.read().decode()[:300]}")
-        t0 = time.time()
+        t0 = time.monotonic()
         res = subprocess.run(["ssh", run["sender"], shlex.join(remote_command(run))], capture_output=True, text=True,
                              timeout=run["seconds"] + 30)
-        t1 = time.time()
+        t1 = time.monotonic()
         time.sleep(SETTLE_SECONDS)
     finally:
-        subprocess.run(["ssh", JETSON, "pkill -INT -f 'tcpdump -i " + TAP_IFACE + " -n -U -w /tmp/labelled-" + rid + ".pcap'"], capture_output=True)
+        pidfile = capture_pidfile(rid)
+        subprocess.run(["ssh", JETSON, f"kill -INT $(cat {pidfile}) 2>/dev/null; rm -f {pidfile}"], capture_output=True)
         try:
             cap.wait(timeout=10)
         except subprocess.TimeoutExpired:

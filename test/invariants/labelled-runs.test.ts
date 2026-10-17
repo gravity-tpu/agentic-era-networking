@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const SCRIPT = resolve(__dirname, '../../scripts/labelled-runs.py');
@@ -93,6 +94,12 @@ describe.skipIf(!hasPython)('labelled-runs.py bounds', () => {
 });
 
 describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
+  it('never uses a wall clock for a duration, and never kills by command-line match', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src).not.toMatch(/time\.time\(/);
+    expect(src).not.toMatch(/pkill/);
+  });
+
   it('every catalog run passes validation and --list shows them all', () => {
     const r = spawnSync('python3', [SCRIPT, '--list'], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
@@ -110,7 +117,12 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
       expect(l.trim().startsWith('agentic-node-01:'), l).toBe(true);
       expect(l).toMatch(/sudo -n timeout \d+ /);
     }
-    for (const l of r.stdout.split('\n').filter((x) => x.includes('tcpdump'))) expect(l).toContain('timeout -s INT');
+    const captures = r.stdout.split('\n').filter((x) => x.includes('tcpdump'));
+    expect(captures.length).toBeGreaterThan(0);
+    for (const l of captures) {
+      expect(l).toContain('timeout -s INT');
+      expect(l).toMatch(/echo \$\$ > \/tmp\/labelled-[a-z0-9-]+\.pid; exec /); // pid recorded so teardown kills by pid, not by matching text
+    }
   });
 
   it('needs exactly one mode, and --execute needs --out', () => {
