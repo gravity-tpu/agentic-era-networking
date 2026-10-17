@@ -51,8 +51,13 @@ def losses(frames):
         if w is not None: out.append(kernel_loss(w))
     return out
 
+MAX_PCAP_BYTES = 64 * 1024 * 1024  # offline analysis of small lab captures; refuse anything larger rather than load it
+
 def parse_pcap(path):
-    d = open(path, 'rb').read()
+    if os.path.getsize(path) > MAX_PCAP_BYTES:
+        raise SystemExit(f'{path} is larger than {MAX_PCAP_BYTES} bytes; refusing to load it into memory')
+    with open(path, 'rb') as fh:
+        d = fh.read()
     magic = struct.unpack('<I', d[:4])[0]
     ns = magic == 0xa1b23c4d
     off = 24; frames = []
