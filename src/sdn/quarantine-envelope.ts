@@ -143,12 +143,12 @@ const MAX_EVIDENCE_KEYS = 12;
 export type EvidenceValue = number | readonly number[];
 
 function isShortNumberList(v: unknown): v is number[] {
-  return Array.isArray(v) && v.length <= MAX_EVIDENCE_SAMPLES && v.every((x) => typeof x === 'number' && Number.isFinite(x));
+  return Array.isArray(v) && v.length <= MAX_EVIDENCE_SAMPLES && v.every((x) => typeof x === 'number' && Number.isSafeInteger(x));
 }
 
 /**
- * A detector may attach the numbers behind its decision. Only finite numbers and short lists of finite numbers under
- * short plain keys are kept; everything else is dropped, so a request cannot store arbitrary data or grow the record.
+ * A detector may attach the numbers behind its decision. Only integers (counters, nanoseconds, packets per second:
+ * Invariant 2) and short lists of integers under short plain keys are kept; everything else is dropped, so a request cannot store arbitrary data or grow the record.
  */
 export function sanitizeEvidence(raw: unknown): Readonly<Record<string, EvidenceValue>> {
   const out: Record<string, EvidenceValue> = {};
@@ -157,11 +157,16 @@ export function sanitizeEvidence(raw: unknown): Readonly<Record<string, Evidence
     if (Object.keys(out).length >= MAX_EVIDENCE_KEYS) break;
     if (!/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(key)) continue;
     const value: unknown = entry;
-    if (typeof value === 'number' && Number.isFinite(value)) {
+    if (typeof value === 'number' && Number.isSafeInteger(value)) {
       out[key] = value;
     } else if (isShortNumberList(value)) {
       out[key] = value;
     }
   }
   return out;
+}
+
+/** True for the machine's own addresses: the only callers allowed to approve a quarantine. */
+export function isLoopbackAddress(address: string | undefined): boolean {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }

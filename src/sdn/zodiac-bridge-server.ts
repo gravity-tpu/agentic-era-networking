@@ -90,6 +90,7 @@ import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isol
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
 import {
   decideQuarantine,
+  isLoopbackAddress,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
   type EvidenceValue,
@@ -695,7 +696,12 @@ export class ZodiacBridgeServer {
       };
     }
 
-    if (this.quarantineEnvelope.mode !== 'enforce' && options.approved !== true && options.targetIp !== undefined) {
+    // decideQuarantine refuses a request with no IP, so one is always present here; if that ever stopped being true this
+    // must fail closed rather than fall through to an install.
+    if (options.targetIp === undefined) {
+      return { status: 400, body: { ok: false, quarantined: false, code: 'no_ip', error: 'an automated quarantine needs a source IPv4' } };
+    }
+    if (this.quarantineEnvelope.mode !== 'enforce' && options.approved !== true) {
       const proposal = this.quarantineProposals.record(
         { targetIp: options.targetIp, reason: options.reason, priority: options.priority ?? 65535, evidence: options.evidence ?? {} },
         process.hrtime.bigint(),
@@ -1858,6 +1864,14 @@ export class ZodiacBridgeServer {
 
     // API: POST /api/sdn/quarantine/approve {"targetIp": "..."} (a person approves a proposal; it is installed time-limited)
     if (url.pathname === '/api/sdn/quarantine/approve' && req.method === 'POST') {
+      // The bridge API has no authentication, so approval is limited to callers on this machine (ssh to the Jetson and
+      // curl localhost): a process elsewhere on the LAN cannot approve its own proposal.
+      if (!isLoopbackAddress(req.socket.remoteAddress)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: 'approval is accepted only from the bridge host itself (loopback)' }));
+        return;
+      }
       const MAX_APPROVE_PAYLOAD = 4 * 1024;
       const chunks: Buffer[] = [];
       let bytesReceived = 0;

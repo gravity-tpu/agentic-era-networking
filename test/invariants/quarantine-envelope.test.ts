@@ -11,6 +11,7 @@ import {
   DEFAULT_QUARANTINE_TTL_MS,
   decideQuarantine,
   MAX_EVIDENCE_SAMPLES,
+  isLoopbackAddress,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
 } from '../../src/sdn/quarantine-envelope.js';
@@ -118,6 +119,9 @@ describe('sanitizeEvidence', () => {
   it('keeps finite numbers and short number lists under plain keys', () => {
     expect(sanitizeEvidence({ pps: 18, windowFrames: 20, gaps: [1, 2, 3] })).toEqual({ pps: 18, windowFrames: 20, gaps: [1, 2, 3] });
   });
+  it('keeps integers only: a fractional value is dropped, as is anything past 2^53', () => {
+    expect(sanitizeEvidence({ a: 1.5, b: 2 ** 53, c: -3, d: [1, 2.5], e: [4, 5] })).toEqual({ c: -3, e: [4, 5] });
+  });
   it('drops everything else: strings, nested objects, non-finite numbers, odd keys, long or mixed lists', () => {
     const long = Array.from({ length: MAX_EVIDENCE_SAMPLES + 1 }, (_, i) => i);
     const out = sanitizeEvidence({
@@ -131,5 +135,17 @@ describe('sanitizeEvidence', () => {
   it('caps the number of keys', () => {
     const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`k${i}`, i]));
     expect(Object.keys(sanitizeEvidence(many)).length).toBeLessThanOrEqual(12);
+  });
+});
+
+describe('isLoopbackAddress', () => {
+  it('accepts only the machine itself', () => {
+    for (const a of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) expect(isLoopbackAddress(a), a).toBe(true);
+  });
+  it('refuses everything else, including look-alikes and no address', () => {
+    for (const a of ['10.0.0.15', '10.0.2.119', '100.118.64.16', '127.0.0.2', '127.0.0.1.evil', '::ffff:10.0.0.1', '', 'localhost']) {
+      expect(isLoopbackAddress(a), a).toBe(false);
+    }
+    expect(isLoopbackAddress(undefined)).toBe(false);
   });
 });
