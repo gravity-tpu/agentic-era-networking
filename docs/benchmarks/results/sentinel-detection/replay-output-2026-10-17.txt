@@ -1,0 +1,15 @@
+== captured traffic (timing from capture timestamps)
+idle segment, dev-server polling (380 frames)  n= 317  loss min/med/max = 0.108/0.123/0.141   static>=0.15:   0.0%   adaptive flags: 0
+5 pps ping + Tailscale burst (125 frames)      n=  62  loss min/med/max = 0.196/0.206/0.226   static>=0.15: 100.0%   adaptive flags: 62
+
+== synthetic patterns, same feature and kernel arithmetic
+benign: ICMP echo 5 pps (98 B)                 n= 537  loss min/med/max = 0.236/0.236/0.237   static>=0.15: 100.0%   adaptive flags: 537
+benign: DNS-like UDP (80 B, ports 53/ephemeral) n= 537  loss min/med/max = 0.172/0.184/0.199   static>=0.15: 100.0%   adaptive flags: 537
+benign: TCP bulk ACKs (1500 B, 443/50000)      n= 537  loss min/med/max = 0.080/0.080/0.082   static>=0.15:   0.0%   adaptive flags: 0
+benign: TCP web mix (60-1500 B, ACK/PSH)       n= 537  loss min/med/max = 0.138/0.157/0.174   static>=0.15:  84.9%   adaptive flags: 0
+ATTACK: SYN flood (60 B, random src ports)     n= 537  loss min/med/max = 0.141/0.154/0.166   static>=0.15:  82.3%   adaptive flags: 9
+ATTACK: SYN flood, fixed ports                 n= 537  loss min/med/max = 0.139/0.139/0.141   static>=0.15:   0.0%   adaptive flags: 0
+ATTACK: port scan, sequential dst, 10 ms       n= 537  loss min/med/max = 0.198/0.198/0.201   static>=0.15: 100.0%   adaptive flags: 537
+ATTACK: low-rate port scan, 500 ms             n= 537  loss min/med/max = 0.198/0.198/0.201   static>=0.15: 100.0%   adaptive flags: 537
+ATTACK: UDP flood (1400 B, random ports)       n= 537  loss min/med/max = 0.131/0.143/0.153   static>=0.15:   4.1%   adaptive flags: 0
+ATTACK: ARP flood (42 B, non-IP)               n= 537  loss min/med/max = 0.241/0.241/0.242   static>=0.15: 100.0%   adaptive flags: 537
