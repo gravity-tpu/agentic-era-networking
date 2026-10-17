@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import os from 'node:os';
 import {
   parseAppleSiliconGpuXml,
+  parseDarwinVmStat,
   probeWorkstationHardware,
   parseCandidateUrls,
 } from '../../src/sdn/hardware-probe.js';
@@ -221,6 +222,35 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
     expect(parseCandidateUrls('  ,  , ')).toEqual([]);
   });
 
+  it('parses Darwin vm_stat output and accounts for inactive and speculative reclaimable pages', () => {
+    const sampleVmStat = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                   100000.
+Pages active:                                1000000.
+Pages inactive:                              1500000.
+Pages speculative:                            100000.
+Pages throttled:                                   0.
+Pages wired down:                             300000.
+Pages purgeable:                               10000.
+Pages occupied by compressor:                  50000.
+`;
+    const totalMem = 68719476736n; // 64 GB
+    const res = parseDarwinVmStat(sampleVmStat, totalMem);
+
+    // Available pages = 100,000 (free) + 1,500,000 (inactive) + 100,000 (speculative) = 1,700,000
+    // Available bytes = 1,700,000 * 16,384 = 27,852,800,000
+    expect(res.freeBytes).toBe(27852800000n);
+    expect(res.usedBytes).toBe(totalMem - 27852800000n);
+    expect(res.usedBytes + res.freeBytes).toBe(totalMem);
+  });
+
+  it('fails closed to os.freemem fallback on malformed vm_stat output without throwing', () => {
+    const totalMem = 68719476736n;
+    const res = parseDarwinVmStat('invalid garbage output', totalMem);
+    expect(res.freeBytes).toBeGreaterThanOrEqual(0n);
+    expect(res.usedBytes).toBeGreaterThanOrEqual(0n);
+    expect(res.usedBytes + res.freeBytes).toBe(totalMem);
+  });
+
   it('probes live workstation hardware on darwin without crashing', async () => {
     if (os.platform() !== 'darwin') {
       const snapshot = await probeWorkstationHardware();
@@ -232,8 +262,12 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
     expect(snapshot.detected).toBe(true);
     expect(snapshot.cpuCores).toBeGreaterThan(0);
     expect(snapshot.memoryTotalBytes).toBeGreaterThan(0n);
+    expect(snapshot.memoryFreeBytes).toBeGreaterThan(0n);
+    expect(snapshot.memoryUsedBytes).toBeLessThanOrEqual(snapshot.memoryTotalBytes);
+    expect(snapshot.memoryUsedBytes + snapshot.memoryFreeBytes).toBe(snapshot.memoryTotalBytes);
     expect(snapshot.loadAvg.length).toBe(3);
     expect(typeof snapshot.gpuUtilizationPct).toBe('number');
     expect(typeof snapshot.tokensPerSecond).toBe('number');
   });
 });
+
