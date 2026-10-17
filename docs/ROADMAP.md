@@ -118,7 +118,7 @@ Reassessed 2026-10-09. The current rack has four problems for the experiments ab
 1. **Workload nodes are dual-homed to the lab LAN.** Both Pis keep `wlan0` on `10.0.0.0/24` as an out-of-band path, which bypasses the P1 to P2 isolation policy.
 2. **No independent observer of Zodiac P2 egress.** The P3 tap shows what the flow rules choose to copy, so it derives from the policy under test. The benchmark receiver was the Mac over Wi-Fi, which is a confound.
 3. **The Pi 5 is adversary and observer.** Its capture NIC shares a host with the traffic generator, so attacker CPU load can drop captured packets.
-4. **The Jetson is overloaded.** Controller, verifier, GPU detector and the Qwen proposer share 7.6 GB of memory and one GPU (96% load during inference), which distorts detector-latency measurements.
+4. **The Jetson was overloaded.** Controller, verifier, GPU detector and previous local LLM inference shared 7.6 GB of memory and one GPU (96% load during inference); local Qwen inference was subsequently removed from the Jetson to eliminate memory contention and measurement distortion.
 
 Target topology (**NEW** marks changes from today):
 
@@ -155,7 +155,7 @@ Target topology (**NEW** marks changes from today):
 | Controller, verifier, approval gate, install, readback | Jetson (CPU) | No GPU contention |
 | Cross-check detector | Jetson GPU, fed by O2 | Compared with the Hailo verdicts on the same runs |
 | Sensor and classifier | `rpi-hailo` (Pi 5 + Hailo-8), fed by O1 | Passive; verdicts go to the controller, and any quarantine stays inside the human-approved envelope (`src/sdn/quarantine-envelope.ts`: scope, protected hosts, cap, time limit); anything wider or longer needs a person |
-| LLM proposer and evaluation harness | Mac (Gemma 4 26B); Jetson Qwen as a cheaper comparison | Off the measurement path |
+| LLM proposer and evaluation harness | Mac (Gemma 4 26B) (Qwen removed from Jetson) | Off the measurement path |
 | Adversary | `agentic-node-01` (Pi 3B+) | |
 | Legitimate client | `agentic-node-02` (Pi 3B+, `10.0.2.52`, NETGEAR P1) | Provisioned 2026-10-09: Raspberry Pi OS Lite 64-bit, key-only SSH, Tailscale |
 

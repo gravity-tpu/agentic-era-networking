@@ -2154,7 +2154,7 @@ export class ZodiacBridgeServer {
 
     // API: GET /api/sdn/copilot/summary (Executive AI Telemetry Copilot)
     // Council Invariant 1 (Anti-Shortcut), Invariant 3 (Fail-Closed) & Invariant 6 (Epistemic Provenance):
-    // Synthesizes a plain-English executive triage of physical SDN signals via local Qwen 2.5 on Jetson Orin.
+    // Synthesizes a plain-English executive triage of physical SDN signals via Ollama or deterministic fallback.
     if (url.pathname === '/api/sdn/copilot/summary' && req.method === 'GET') {
       try {
         const summary = await this.generateCopilotSummary();
@@ -2294,73 +2294,7 @@ export class ZodiacBridgeServer {
         wireTapInferencesPerSec,
       };
 
-      const ollamaUrl = process.env['OLLAMA_API_URL'] || 'http://localhost:11434/api/generate';
-      const qwenModel = process.env['QWEN_MODEL'] || 'qwen2.5:3b';
-
-      const prompt = `You are the Zodiac Executive AI Copilot running on Jetson Orin Nano Super.
-Provide a concise, 3-bullet plain-English executive triage of the physical SDN infrastructure.
-Telemetry Signals:
-- OpenFlow 1.3 State: ${ofState} (${totalRules} active rules, ${quarantinedCount} quarantined hosts)
-- Physical Switch Ports: ${portsSummary || 'Port 1..4 monitored'}
-- Switch CPU Temp: ${switchTempC != null ? switchTempC + '°C' : 'N/A'}
-- Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
-- Wire-Tap Inference: ${wireTapInferencesPerSec > 0 ? `Active at ${wireTapInferencesPerSec} inf/s` : 'Standby / Idle'}
-
-Respond ONLY with valid JSON having the structure (keep each bullet under 15 words to prevent token truncation):
-{"status": "HEALTHY" | "DEGRADED" | "ALERT", "headline": string, "bullets": [string, string, string]}`;
-
-      let resultData: CopilotSummaryResponse;
-
-      try {
-        const response = await fetch(ollamaUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: qwenModel,
-            prompt,
-            format: 'json',
-            stream: false,
-            options: { temperature, num_predict: maxTokens },
-          }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Ollama returned HTTP ${response.status}`);
-        }
-
-        const resJson = (await response.json()) as { response?: string };
-        const parsed = JSON.parse(resJson.response || '{}') as {
-          status?: string;
-          headline?: string;
-          bullets?: string[];
-        };
-
-        const statusRaw = String(parsed.status || 'HEALTHY').toUpperCase();
-        const validStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
-          statusRaw === 'ALERT' ? 'ALERT' : statusRaw === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY';
-
-        resultData = {
-          status: validStatus,
-          headline: String(parsed.headline || 'Physical SDN Infrastructure Triage').trim(),
-          bullets: Array.isArray(parsed.bullets) && parsed.bullets.length > 0
-            ? parsed.bullets.map(b => String(b).trim()).slice(0, 4)
-            : ['SDN data plane operational', 'OpenFlow controller established', 'Telemetry counters monotonic'],
-          model: `${qwenModel} (Jetson Orin Nano Super)`,
-          timestampMs: Date.now(),
-          cached: false,
-          ttlSeconds: ttlSec,
-          metrics,
-        };
-      } catch (err: unknown) {
-        // Council Invariant 1 & 3: Fail-closed deterministic fallback
-        const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
-        if (isTimeout) {
-          console.warn('[!] [Copilot] Ollama inference timed out (thermal/budget limit), failing closed to deterministic fallback.');
-        } else {
-          console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
-        }
-
+      const buildDeterministicFallback = (): CopilotSummaryResponse => {
         const hasQuarantine = quarantinedCount > 0;
         const ofDisconnected = ofState !== 'ESTABLISHED';
         const fallbackStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
@@ -2374,7 +2308,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
             : 'Ampere GPU wire-tap inference in standby mode awaiting frame ingress.',
         ];
 
-        resultData = {
+        return {
           status: fallbackStatus,
           headline: 'Deterministic SDN Telemetry Triage (Ollama Offline Fallback)',
           bullets: fallbackBullets,
@@ -2384,6 +2318,84 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
           ttlSeconds: ttlSec,
           metrics,
         };
+      };
+
+      let resultData: CopilotSummaryResponse;
+      const configuredOllamaUrl = process.env['OLLAMA_API_URL'];
+
+      if (!configuredOllamaUrl) {
+        // Council Invariant 3 & Fate-Sharing: When Ollama is stopped/unconfigured on Jetson,
+        // immediately return deterministic telemetry triage without network timeout.
+        resultData = buildDeterministicFallback();
+      } else {
+        const qwenModel = process.env['QWEN_MODEL'] || 'qwen2.5:3b';
+
+        const prompt = `You are the Zodiac Executive AI Copilot running on Jetson Orin Nano Super.
+Provide a concise, 3-bullet plain-English executive triage of the physical SDN infrastructure.
+Telemetry Signals:
+- OpenFlow 1.3 State: ${ofState} (${totalRules} active rules, ${quarantinedCount} quarantined hosts)
+- Physical Switch Ports: ${portsSummary || 'Port 1..4 monitored'}
+- Switch CPU Temp: ${switchTempC != null ? switchTempC + '°C' : 'N/A'}
+- Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
+- Wire-Tap Inference: ${wireTapInferencesPerSec > 0 ? `Active at ${wireTapInferencesPerSec} inf/s` : 'Standby / Idle'}
+
+Respond ONLY with valid JSON having the structure (keep each bullet under 15 words to prevent token truncation):
+{"status": "HEALTHY" | "DEGRADED" | "ALERT", "headline": string, "bullets": [string, string, string]}`;
+
+        try {
+          const response = await fetch(configuredOllamaUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: qwenModel,
+              prompt,
+              format: 'json',
+              stream: false,
+              options: { temperature, num_predict: maxTokens },
+            }),
+            signal: AbortSignal.timeout(timeoutMs),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Ollama returned HTTP ${response.status}`);
+          }
+
+          const resJson = (await response.json()) as { model?: string; response?: string };
+          const parsed = JSON.parse(resJson.response || '{}') as {
+            status?: string;
+            headline?: string;
+            bullets?: string[];
+          };
+
+          const statusRaw = String(parsed.status || 'HEALTHY').toUpperCase();
+          const validStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
+            statusRaw === 'ALERT' ? 'ALERT' : statusRaw === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY';
+
+          const actualModel = resJson.model || qwenModel || 'unspecified-model';
+
+          resultData = {
+            status: validStatus,
+            headline: String(parsed.headline || 'Physical SDN Infrastructure Triage').trim(),
+            bullets: Array.isArray(parsed.bullets) && parsed.bullets.length > 0
+              ? parsed.bullets.map(b => String(b).trim()).slice(0, 4)
+              : ['SDN data plane operational', 'OpenFlow controller established', 'Telemetry counters monotonic'],
+            model: `${actualModel} (Ollama)`,
+            timestampMs: Date.now(),
+            cached: false,
+            ttlSeconds: ttlSec,
+            metrics,
+          };
+        } catch (err: unknown) {
+          // Council Invariant 1 & 3: Fail-closed deterministic fallback
+          const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+          if (isTimeout) {
+            console.warn('[!] [Copilot] Ollama inference timed out (thermal/budget limit), failing closed to deterministic fallback.');
+          } else {
+            console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
+          }
+
+          resultData = buildDeterministicFallback();
+        }
       }
 
       this.copilotSummaryCache = {
