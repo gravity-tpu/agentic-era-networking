@@ -59,6 +59,16 @@
             <span class="cf-device-btn-name">Raspberry Pi 5</span>
             <span class="cf-pill-badge purple" id="btn-device-rpi5-badge">Hailo-8</span>
           </button>
+          <button class="cf-device-btn" id="btn-device-rpi3-1" role="tab" aria-selected="false" data-device="rpi3-1">
+            <span class="cf-status-dot green" id="dot-device-rpi3-1"></span>
+            <span class="cf-device-btn-name">RPi 3B+ (Node 01)</span>
+            <span class="cf-pill-badge red" id="btn-device-rpi3-1-badge">Red Team 1</span>
+          </button>
+          <button class="cf-device-btn" id="btn-device-rpi3-2" role="tab" aria-selected="false" data-device="rpi3-2">
+            <span class="cf-status-dot green" id="dot-device-rpi3-2"></span>
+            <span class="cf-device-btn-name">RPi 3B+ (Node 02)</span>
+            <span class="cf-pill-badge red" id="btn-device-rpi3-2-badge">Red Team 2</span>
+          </button>
           <button class="cf-device-btn" id="btn-device-workstation" role="tab" aria-selected="false" data-device="workstation">
             <span class="cf-status-dot green" id="dot-device-workstation"></span>
             <span class="cf-device-btn-name">MacBook M5</span>
@@ -189,6 +199,98 @@
               <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>
             </svg>
             Hardware Inventory
+          </a>
+          <a class="cf-nav-item" data-section="council" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Invariants
+          </a>
+        </nav>
+
+        <!-- ── Raspberry Pi 3B+ (Node 01) ── (hidden until device switch) -->
+        <nav class="cf-nav-group" id="cf-nav-rpi3-1" style="display:none">
+          <a class="cf-nav-item active" data-section="overview" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            System Overview
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-1-network-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Wire Throughput &amp; PPS
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-1-compute-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>
+            </svg>
+            Compute &amp; SoftIRQ
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-1-adversarial-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            SDN Boundary Matrix
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-1-thermal-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+            </svg>
+            Thermals &amp; Throttling
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-1-interfaces-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>
+            </svg>
+            Physical Interfaces
+          </a>
+          <a class="cf-nav-item" data-section="council" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Invariants
+          </a>
+        </nav>
+
+        <!-- ── Raspberry Pi 3B+ (Node 02) ── (hidden until device switch) -->
+        <nav class="cf-nav-group" id="cf-nav-rpi3-2" style="display:none">
+          <a class="cf-nav-item active" data-section="overview" data-scroll="">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            System Overview
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-2-network-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Wire Throughput &amp; PPS
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-2-compute-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="15" x2="22" y2="15"/>
+            </svg>
+            Compute &amp; SoftIRQ
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-2-adversarial-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            SDN Boundary Matrix
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-2-thermal-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+            </svg>
+            Thermals &amp; Throttling
+          </a>
+          <a class="cf-nav-item" data-section="overview" data-scroll="rpi3-2-interfaces-card">
+            <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M12 7V3M8 7V3M16 7V3M6 11h.01M6 15h.01M10 11h.01M10 15h.01M14 11h.01M14 15h.01M18 11h.01M18 15h.01"/>
+            </svg>
+            Physical Interfaces
           </a>
           <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

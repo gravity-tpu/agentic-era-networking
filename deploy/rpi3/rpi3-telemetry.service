@@ -1,0 +1,14 @@
+[Unit]
+Description=Zodiac Raspberry Pi 3 Telemetry Daemon (Port 8001)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/rpi3-telemetry/telemetry_server.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Environment=RPI3_TELEMETRY_PORT=8001
+
+[Install]
+WantedBy=default.target

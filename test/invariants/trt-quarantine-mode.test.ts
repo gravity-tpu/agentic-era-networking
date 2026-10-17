@@ -26,8 +26,24 @@ urllib.request.urlopen = lambda req, timeout=None: (posts.append(req.full_url), 
 spec = importlib.util.spec_from_file_location('trt_daemon', sys.argv[1])
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
-installed = m._handle_quarantine('10.0.2.52', 12, 6, 500000000, [100, 130, 130, 900000100])
-print(json.dumps({'gaps': m.interarrival_gaps_ns([5, 5, 20, 120]), 'empty': m.interarrival_gaps_ns([]), 'one': m.interarrival_gaps_ns([7]), 'mode': m.QUARANTINE_MODE, 'installed': installed, 'posts': posts, 'proposals': m._quarantine_proposals}))
+import struct, socket, sys
+ts = struct.pack('ll', 1700000000, 123456789)
+parsed = m.parse_kernel_timestamp_ns([(socket.SOL_SOCKET, m.SO_TIMESTAMPNS, ts)])
+none_other = m.parse_kernel_timestamp_ns([(socket.SOL_SOCKET, 1, ts), (0, m.SO_TIMESTAMPNS, ts), (socket.SOL_SOCKET, m.SO_TIMESTAMPNS, b'short')])
+none_empty = m.parse_kernel_timestamp_ns([])
+installed = m._handle_quarantine('10.0.2.52', 12, 6, 500000000, {'read': [100, 130, 130, 900000100], 'kernel': [1000, 201000, 401000], 'lag': [5, 3, 1]})
+live = None
+if sys.platform.startswith('linux'):
+    # Real kernel ancillary data (UDP on loopback), so the parser is checked against what the kernel actually sends.
+    rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); rx.bind(('127.0.0.1', 0)); rx.settimeout(2)
+    rx.setsockopt(socket.SOL_SOCKET, m.SO_TIMESTAMPNS, 1)
+    tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    import time
+    before = time.time_ns(); tx.sendto(b'x', rx.getsockname())
+    _d, anc, _f, _a = rx.recvmsg(64, 64); after = time.time_ns()
+    k = m.parse_kernel_timestamp_ns(anc)
+    live = None if k is None else {'withinReadWindow': before - 1_000_000_000 <= k <= after + 1_000_000_000}
+print(json.dumps({'kernelLive': live, 'kernelTs': str(parsed), 'noneOther': none_other, 'noneEmpty': none_empty, 'gaps': m.interarrival_gaps_ns([5, 5, 20, 120]), 'empty': m.interarrival_gaps_ns([]), 'one': m.interarrival_gaps_ns([7]), 'mode': m.QUARANTINE_MODE, 'installed': installed, 'posts': posts, 'proposals': m._quarantine_proposals}))
 `;
 
 interface Proposal {
@@ -37,10 +53,16 @@ interface Proposal {
   windowFrames: number;
   windowElapsedNs: number;
   interArrivalNs: number[];
+  kernelInterArrivalNs: number[];
+  readLagNs: number[];
   status: string;
 }
 
 interface DriverOutput {
+  kernelLive: { withinReadWindow: boolean } | null;
+  kernelTs: string;
+  noneOther: number | null;
+  noneEmpty: number | null;
   gaps: number[];
   empty: number[];
   one: number[];
@@ -98,5 +120,23 @@ describe.skipIf(!hasPython || !existsSync(DAEMON))('trt daemon quarantine mode',
     expect(out.gaps).toEqual([0, 15, 100]);
     expect(out.empty).toEqual([]);
     expect(out.one).toEqual([]);
+  });
+
+  it('records the kernel-side timing next to the read-side timing in a proposal', () => {
+    const p = run(undefined).proposals[0];
+    if (p === undefined) throw new Error('no proposal recorded');
+    expect(p.kernelInterArrivalNs).toEqual([200000, 200000]);
+    expect(p.readLagNs).toEqual([5, 3, 1]);
+  });
+
+  it('reads the kernel receive timestamp only from a well-formed SCM_TIMESTAMPNS message', () => {
+    const out = run(undefined);
+    expect(out.kernelTs).toBe('1700000000123456789'); // as a string: this value exceeds 2^53
+    expect(out.noneOther).toBeNull();
+    expect(out.noneEmpty).toBeNull();
+  });
+
+  it.skipIf(process.platform !== 'linux')('parses the timestamp the Linux kernel actually attaches', () => {
+    expect(run(undefined).kernelLive).toEqual({ withinReadWindow: true });
   });
 });

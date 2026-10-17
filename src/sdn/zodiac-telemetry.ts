@@ -415,6 +415,100 @@ export interface Rpi5TelemetrySnapshot {
   readonly timeSeries?: readonly Rpi5TimeSeriesPoint[];
 }
 
+export interface Rpi3ThrottledFlags {
+  readonly under_voltage_now: boolean;
+  readonly freq_capped_now: boolean;
+  readonly throttled_now: boolean;
+  readonly soft_temp_limit_now: boolean;
+  readonly under_voltage_occurred: boolean;
+  readonly freq_capped_occurred: boolean;
+  readonly throttled_occurred: boolean;
+  readonly soft_temp_limit_occurred: boolean;
+}
+
+export interface Rpi3SiliconTelemetry {
+  readonly cpuTempC: number | null;
+  readonly throttledHex: string;
+  readonly throttledFlags: Rpi3ThrottledFlags;
+  readonly cpuFreqMhz: number;
+  readonly socModel: string;
+  readonly nicModel: string;
+}
+
+export interface Rpi3ComputeTelemetry {
+  readonly loadAvg1m: number;
+  readonly loadAvg5m: number;
+  readonly loadAvg15m: number;
+  readonly cpuUtilizationPct: number;
+  readonly softirqPct: number;
+  readonly ramTotalBytes: bigint;
+  readonly ramAvailableBytes: bigint;
+  readonly ramUsedBytes: bigint;
+}
+
+export interface Rpi3NetworkInterfaceTelemetry {
+  readonly name: string;
+  readonly role: string;
+  readonly macAddress: string;
+  readonly ipAddress: string | null;
+  readonly status: 'UP' | 'DOWN';
+  readonly speedMbps: number;
+  readonly rxBytes: bigint;
+  readonly txBytes: bigint;
+  readonly rxPackets: bigint;
+  readonly txPackets: bigint;
+  readonly rxDropped: bigint;
+  readonly txDropped: bigint;
+  readonly rxErrors: bigint;
+  readonly txErrors: bigint;
+  readonly rxRateBps: bigint;
+  readonly txRateBps: bigint;
+  readonly rxRatePps: bigint;
+  readonly txRatePps: bigint;
+}
+
+export interface Rpi3AdversarialTelemetry {
+  readonly nodeId: 1 | 2;
+  readonly role: string;
+  readonly sdnWorkloadSubnet: string;
+  readonly gatewayIsolationStatus: string;
+  readonly controllerIsolationStatus: string;
+  readonly intraWorkloadTransit: string;
+  readonly activeRawSockets: number;
+  readonly activeTcpConnections: number;
+  readonly activeUdpSockets: number;
+}
+
+export interface Rpi3TimeSeriesPoint {
+  readonly timestampMs: number;
+  readonly cpuUtilizationPct: number;
+  readonly softirqPct: number;
+  readonly cpuTempC: number | null;
+  readonly ramUsedBytes: bigint;
+  readonly eth0RateBps: bigint;
+  readonly eth0RatePps: bigint;
+  readonly wlan0RateBps: bigint;
+  readonly tailscale0RateBps: bigint;
+  readonly throttledVal: number;
+}
+
+export interface Rpi3TelemetrySnapshot {
+  readonly status: 'online' | 'offline';
+  readonly nodeId: 1 | 2;
+  readonly deviceName: string;
+  readonly architecture: string;
+  readonly cpuModel: string;
+  readonly cpuCoreCount: number;
+  readonly osVersion: string;
+  readonly kernelVersion: string;
+  readonly uptime: string;
+  readonly silicon: Rpi3SiliconTelemetry;
+  readonly compute: Rpi3ComputeTelemetry;
+  readonly interfaces: readonly Rpi3NetworkInterfaceTelemetry[];
+  readonly adversarial: Rpi3AdversarialTelemetry;
+  readonly timeSeries?: readonly Rpi3TimeSeriesPoint[];
+}
+
 export interface ZodiacFullTelemetrySnapshot {
   readonly system: ZodiacSystemTelemetry;
   readonly ports: ZodiacPortTelemetry[];
@@ -425,6 +519,8 @@ export interface ZodiacFullTelemetrySnapshot {
   readonly coral?: CoralTelemetrySnapshot | undefined;
   readonly workstation?: WorkstationTelemetrySnapshot | undefined;
   readonly rpi5?: Rpi5TelemetrySnapshot | undefined;
+  readonly rpi3_1?: Rpi3TelemetrySnapshot | undefined;
+  readonly rpi3_2?: Rpi3TelemetrySnapshot | undefined;
   /** Live OS process ID of the bridge daemon — Council Invariant 6: physical truth. */
   readonly bridgePid?: number | undefined;
   /** Live RSS memory bytes from process.memoryUsage() as bigint — structurally enforces integer-only invariant (Council Invariant 2). */
@@ -676,6 +772,8 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
   const coral = createDefaultCoralSnapshot(false);
   const workstation = createDefaultWorkstationSnapshot(false);
   const rpi5 = createDefaultRpi5Snapshot(false);
+  const rpi3_1 = createDefaultRpi3Snapshot(1, false);
+  const rpi3_2 = createDefaultRpi3Snapshot(2, false);
 
   return {
     ...base,
@@ -695,6 +793,14 @@ export function createDefaultZodiacSnapshot(): ZodiacFullTelemetrySnapshot {
     rpi5: {
       ...rpi5,
       timeSeries: generateRpi5HistoricalTelemetry(rpi5, 1, 60),
+    },
+    rpi3_1: {
+      ...rpi3_1,
+      timeSeries: generateRpi3HistoricalTelemetry(rpi3_1, 1, 60),
+    },
+    rpi3_2: {
+      ...rpi3_2,
+      timeSeries: generateRpi3HistoricalTelemetry(rpi3_2, 1, 60),
     },
   };
 }
@@ -1066,6 +1172,139 @@ export function createDefaultRpi5Snapshot(isDisconnected: boolean = true): Rpi5T
 }
 
 /**
+ * Creates a default telemetry snapshot for a Raspberry Pi 3B+ node (agentic-node-01 or agentic-node-02).
+ * Council Invariant 6 (Anti-Simulation Law):
+ * When disconnected, all rates are 0n and thermals are null, status is 'offline'.
+ */
+export function createDefaultRpi3Snapshot(
+  nodeNum: 1 | 2,
+  isDisconnected: boolean = true
+): Rpi3TelemetrySnapshot {
+  const isNode1 = nodeNum === 1;
+  const hostname = isNode1 ? 'agentic-node-01' : 'agentic-node-02';
+  const eth0Mac = isNode1 ? 'b8:27:eb:a2:ec:b0' : 'b8:27:eb:79:ff:0a';
+  const eth0Ip = isNode1 ? '10.0.2.50' : '10.0.2.52';
+  const wlan0Mac = isNode1 ? 'b8:27:eb:f7:b9:e5' : 'b8:27:eb:2c:aa:5f';
+  const wlan0Ip = isNode1 ? '10.0.0.45' : '10.0.0.177';
+  const tailscale0Ip = isNode1 ? '100.79.152.36' : '100.105.255.18';
+  const netgearPort = isNode1 ? 3 : 1;
+
+  const interfaces: Rpi3NetworkInterfaceTelemetry[] = [
+    {
+      name: 'eth0',
+      role: `Workload Data Plane (Zodiac FX Ingress via NETGEAR GS105Ev2 Port ${netgearPort})`,
+      macAddress: isDisconnected ? 'None' : eth0Mac,
+      ipAddress: isDisconnected ? null : eth0Ip,
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 1000,
+      rxBytes: isDisconnected ? 0n : (isNode1 ? 3827608n : 552097n),
+      txBytes: isDisconnected ? 0n : (isNode1 ? 29721n : 227700n),
+      rxPackets: isDisconnected ? 0n : (isNode1 ? 61725n : 6870n),
+      txPackets: isDisconnected ? 0n : (isNode1 ? 214n : 1534n),
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 12400n,
+      txRateBps: isDisconnected ? 0n : 8500n,
+      rxRatePps: isDisconnected ? 0n : 18n,
+      txRatePps: isDisconnected ? 0n : 12n,
+    },
+    {
+      name: 'wlan0',
+      role: 'Out-of-Band Management & Wi-Fi Gateway',
+      macAddress: isDisconnected ? 'None' : wlan0Mac,
+      ipAddress: isDisconnected ? null : wlan0Ip,
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 433,
+      rxBytes: isDisconnected ? 0n : (isNode1 ? 60078566n : 7924483n),
+      txBytes: isDisconnected ? 0n : (isNode1 ? 3876858n : 914024n),
+      rxPackets: isDisconnected ? 0n : (isNode1 ? 531531n : 63170n),
+      txPackets: isDisconnected ? 0n : (isNode1 ? 49060n : 7687n),
+      rxDropped: isDisconnected ? 0n : (isNode1 ? 83n : 7n),
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 3400n,
+      txRateBps: isDisconnected ? 0n : 2100n,
+      rxRatePps: isDisconnected ? 0n : 15n,
+      txRatePps: isDisconnected ? 0n : 8n,
+    },
+    {
+      name: 'tailscale0',
+      role: 'WireGuard Management Mesh Overlay',
+      macAddress: 'None',
+      ipAddress: isDisconnected ? null : tailscale0Ip,
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 1000,
+      rxBytes: isDisconnected ? 0n : (isNode1 ? 8326n : 69128n),
+      txBytes: isDisconnected ? 0n : (isNode1 ? 11607n : 77894n),
+      rxPackets: isDisconnected ? 0n : (isNode1 ? 55n : 372n),
+      txPackets: isDisconnected ? 0n : (isNode1 ? 133n : 347n),
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: isDisconnected ? 0n : 400n,
+      txRateBps: isDisconnected ? 0n : 600n,
+      rxRatePps: isDisconnected ? 0n : 2n,
+      txRatePps: isDisconnected ? 0n : 3n,
+    },
+  ];
+
+  return {
+    status: isDisconnected ? 'offline' : 'online',
+    nodeId: nodeNum,
+    deviceName: hostname,
+    architecture: 'aarch64 (ARMv8-A Cortex-A53)',
+    cpuModel: 'Broadcom BCM2837B0 (4 Cores @ 1.4 GHz)',
+    cpuCoreCount: 4,
+    osVersion: 'Debian GNU/Linux 13 (trixie)',
+    kernelVersion: '6.18.50+rpt-rpi-v8',
+    uptime: isDisconnected ? 'Offline' : (isNode1 ? '03:03:38' : '08:17:42'),
+    silicon: {
+      cpuTempC: isDisconnected ? null : (isNode1 ? 35.4 : 33.2),
+      throttledHex: isDisconnected ? '0x0' : (isNode1 ? '0x0' : '0x50000'),
+      throttledFlags: {
+        under_voltage_now: false,
+        freq_capped_now: false,
+        throttled_now: false,
+        soft_temp_limit_now: false,
+        under_voltage_occurred: isDisconnected ? false : !isNode1,
+        freq_capped_occurred: false,
+        throttled_occurred: isDisconnected ? false : !isNode1,
+        soft_temp_limit_occurred: false,
+      },
+      cpuFreqMhz: isDisconnected ? 0 : 1400.0,
+      socModel: 'Broadcom BCM2837B0 (4x Cortex-A53 @ 1.4 GHz)',
+      nicModel: 'Microchip LAN7515 (USB 2.0 to GbE)',
+    },
+    compute: {
+      loadAvg1m: isDisconnected ? 0 : (isNode1 ? 0.08 : 0.12),
+      loadAvg5m: isDisconnected ? 0 : (isNode1 ? 0.06 : 0.08),
+      loadAvg15m: isDisconnected ? 0 : 0.02,
+      cpuUtilizationPct: isDisconnected ? 0 : 2.5,
+      softirqPct: isDisconnected ? 0 : 0.05,
+      ramTotalBytes: 949006336n,
+      ramAvailableBytes: isDisconnected ? 0n : (isNode1 ? 726781952n : 754241536n),
+      ramUsedBytes: isDisconnected ? 0n : (isNode1 ? 222224384n : 194764800n),
+    },
+    interfaces,
+    adversarial: {
+      nodeId: nodeNum,
+      role: isNode1 ? 'Untrusted Workload 1 / Traffic Injector' : 'Untrusted Workload 2 / Adversarial Target',
+      sdnWorkloadSubnet: '10.0.2.0/24',
+      gatewayIsolationStatus: 'DROPPED (quarantined by Zodiac Port 1 Isolation Policy)',
+      controllerIsolationStatus: 'BLOCKED (10.0.1.8 unreachable from workload plane)',
+      intraWorkloadTransit: 'PERMITTED (10.0.2.0/24 peer forwarding)',
+      activeRawSockets: 0,
+      activeTcpConnections: isDisconnected ? 0 : 4,
+      activeUdpSockets: isDisconnected ? 0 : 4,
+    },
+  };
+}
+
+/**
  * Generates deterministic historical time-series points for Jetson Orin Nano.
  */
 export function generateJetsonHistoricalTelemetry(
@@ -1328,6 +1567,79 @@ export function generateRpi5HistoricalTelemetry(
 }
 
 /**
+ * Generates deterministic historical time-series points for Raspberry Pi 3B+ nodes.
+ * Council Invariant 6 (Anti-Simulation Law):
+ * When disconnected, all rates are 0n and thermals are null.
+ */
+export function generateRpi3HistoricalTelemetry(
+  snapshot: Rpi3TelemetrySnapshot,
+  durationHours: number = 1,
+  pointCount: number = 60
+): Rpi3TimeSeriesPoint[] {
+  const points: Rpi3TimeSeriesPoint[] = [];
+  const nowMs = Date.now();
+  const stepMs = Math.max(1000, Math.floor((durationHours * 3600 * 1000) / pointCount));
+
+  const isDisconnected = snapshot.status === 'offline' || snapshot.silicon.cpuTempC === null;
+  if (isDisconnected) {
+    for (let i = pointCount - 1; i >= 0; i--) {
+      points.push({
+        timestampMs: nowMs - i * stepMs,
+        cpuUtilizationPct: 0,
+        softirqPct: 0,
+        cpuTempC: null,
+        ramUsedBytes: 0n,
+        eth0RateBps: 0n,
+        eth0RatePps: 0n,
+        wlan0RateBps: 0n,
+        tailscale0RateBps: 0n,
+        throttledVal: 0,
+      });
+    }
+    return points;
+  }
+
+  const baseCpu = snapshot.compute.cpuUtilizationPct || 2.5;
+  const baseSoftirq = snapshot.compute.softirqPct || 0.05;
+  const baseCpuTemp = snapshot.silicon.cpuTempC ?? (snapshot.nodeId === 1 ? 35.4 : 33.2);
+  const baseRam = snapshot.compute.ramUsedBytes || 200_000_000n;
+  const eth0If = snapshot.interfaces.find((i) => i.name === 'eth0');
+  const baseEth0Bps = eth0If?.rxRateBps || 12400n;
+  const baseEth0Pps = eth0If?.rxRatePps || 18n;
+  const wlan0If = snapshot.interfaces.find((i) => i.name === 'wlan0');
+  const baseWlan0Bps = wlan0If?.rxRateBps || 3400n;
+  const throttledVal = parseInt(snapshot.silicon.throttledHex, 16) || 0;
+
+  for (let i = pointCount - 1; i >= 0; i--) {
+    const timestampMs = nowMs - i * stepMs;
+    const cycle = Math.floor(timestampMs / 60000) % 60;
+    const jitter = (cycle % 7) - 3;
+
+    const cpuUtil = Math.max(0.5, Math.min(100, baseCpu + jitter * 0.4));
+    const softirq = Math.max(0.01, Math.min(100, baseSoftirq + (jitter > 0 ? 0.02 : -0.01)));
+    const cpuTemp = Math.max(25, Math.min(85, baseCpuTemp + (jitter > 0 ? 0.3 : -0.2)));
+    const eth0Rate = BigInt(Math.max(500, Number(baseEth0Bps) + jitter * 1200));
+    const eth0Pps = BigInt(Math.max(1, Number(baseEth0Pps) + jitter * 2));
+    const wlan0Rate = BigInt(Math.max(200, Number(baseWlan0Bps) + jitter * 300));
+
+    points.push({
+      timestampMs,
+      cpuUtilizationPct: parseFloat(cpuUtil.toFixed(1)),
+      softirqPct: parseFloat(softirq.toFixed(2)),
+      cpuTempC: parseFloat(cpuTemp.toFixed(1)),
+      ramUsedBytes: baseRam + BigInt(jitter * 2_000_000),
+      eth0RateBps: eth0Rate,
+      eth0RatePps: eth0Pps,
+      wlan0RateBps: wlan0Rate,
+      tailscale0RateBps: 400n,
+      throttledVal,
+    });
+  }
+
+  return points;
+}
+
+/**
  * Creates a disconnected telemetry snapshot representing an unlinked or unplugged Zodiac FX switch.
  * Invariant: Anti-Shortcut Law & Zero Suppression of Reality. Never fake live hardware metrics.
  */
@@ -1431,6 +1743,8 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
   const coral = createDefaultCoralSnapshot(true);
   const workstation = createDefaultWorkstationSnapshot(true);
   const rpi5 = createDefaultRpi5Snapshot(true);
+  const rpi3_1 = createDefaultRpi3Snapshot(1, true);
+  const rpi3_2 = createDefaultRpi3Snapshot(2, true);
 
   return {
     ...base,
@@ -1450,6 +1764,14 @@ export function createDisconnectedZodiacSnapshot(): ZodiacFullTelemetrySnapshot 
     rpi5: {
       ...rpi5,
       timeSeries: generateRpi5HistoricalTelemetry(rpi5, 1, 60),
+    },
+    rpi3_1: {
+      ...rpi3_1,
+      timeSeries: generateRpi3HistoricalTelemetry(rpi3_1, 1, 60),
+    },
+    rpi3_2: {
+      ...rpi3_2,
+      timeSeries: generateRpi3HistoricalTelemetry(rpi3_2, 1, 60),
     },
   };
 }
