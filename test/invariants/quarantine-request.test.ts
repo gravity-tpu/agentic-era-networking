@@ -103,6 +103,35 @@ describe('time limit', () => {
   });
 });
 
+describe('manual release (carried over from the removed copilot test file)', () => {
+  it('does not forget a rule the switch could not be told to delete, and rejects a release with no identifiers', () => {
+    // Installed on hardware, but the OpenFlow session is not ESTABLISHED: the delete cannot be sent, so the registry must
+    // keep the rule (forgetting it would leave a DROP on the switch that nothing knows about).
+    server.registerFlowRule({
+      ruleId: 'quarantine-test-hardware',
+      priority: 65535,
+      action: 'DROP',
+      srcCidr: '10.0.2.105/32',
+      dstCidr: '0.0.0.0/0',
+      protocol: 'ANY',
+      installedAtMs: Date.now(),
+      openFlowInstalled: true,
+    });
+    const failed = server.releaseQuarantineRule({ targetIp: '10.0.2.105', reason: 'premature release while OpenFlow is disconnected' });
+    expect(failed.released).toBe(false);
+    expect(failed.releasedCount).toBe(0);
+    expect(server['flowRuleRegistry'].has('quarantine-test-hardware')).toBe(true);
+
+    vi.spyOn(controller, 'liftQuarantine').mockReturnValue({ success: true, timestampNs: process.hrtime.bigint() });
+    const ok = server.releaseQuarantineRule({ targetIp: '10.0.2.105', reason: 'verified' });
+    expect(ok.released).toBe(true);
+    expect(ok.releasedRules).toContain('quarantine-test-hardware');
+    expect(server['flowRuleRegistry'].has('quarantine-test-hardware')).toBe(false);
+
+    expect(() => server.releaseQuarantineRule({})).toThrow('targetMac or targetIp required');
+  });
+});
+
 describe('propose mode (the default): the bridge is the single place that decides', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
