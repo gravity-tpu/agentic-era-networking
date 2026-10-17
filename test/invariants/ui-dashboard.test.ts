@@ -723,7 +723,36 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(kpiCpuTemp1?.textContent).toBe('35.4°C');
     expect(kpiThrottled1?.textContent).toContain('0x0');
 
-    // Verify online isolation states
+    // Verify default unasserted isolation state (Council Invariant 6: no synthetic verification)
+    expect(document.getElementById('rpi3-1-kpi-isolation-status')?.textContent).toBe('NOT INSTALLED');
+    expect(document.getElementById('rpi3-1-ctrl-iso-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-gw-iso-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-hailo-iso-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-peer-transit-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-kpi-gw-escape')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-kpi-port1-status')?.textContent).toBe('--');
+    expect(document.getElementById('rpi3-1-raw-sockets-count')?.textContent).toBe('0');
+    expect(document.getElementById('rpi3-1-tcp-sockets-count')?.textContent).toBe('4');
+
+    // Render snapshot with hardware-verified Port 1 isolation
+    const verifiedSnap = {
+      ...snap,
+      port1Isolation: {
+        state: 'verified' as const,
+        confirmed: ['prio 200 in_port=1 -> [P2,P3]', 'prio 150 in_port=1 -> [P3]'],
+        mismatches: [],
+        switchErrors: [],
+        checkedAtMs: Date.now(),
+        checkedAtMonoNs: '1000',
+        checkedAgeMs: 50,
+        ageStatus: 'ok' as const,
+        actions: null,
+        provenForwarding: true,
+      },
+    };
+    app.renderTelemetry(verifiedSnap, false);
+
+    // Verify online isolation states when verified by hardware readback
     expect(document.getElementById('rpi3-1-kpi-isolation-status')?.textContent).toBe('ENFORCED');
     expect(document.getElementById('rpi3-1-ctrl-iso-status')?.textContent).toBe('100% BLOCKED');
     expect(document.getElementById('rpi3-1-gw-iso-status')?.textContent).toBe('100% DROPPED');
@@ -731,8 +760,6 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('rpi3-1-peer-transit-status')?.textContent).toBe('PERMITTED');
     expect(document.getElementById('rpi3-1-kpi-gw-escape')?.textContent).toBe('0% LEAK');
     expect(document.getElementById('rpi3-1-kpi-port1-status')?.textContent).toBe('ACTIVE');
-    expect(document.getElementById('rpi3-1-raw-sockets-count')?.textContent).toBe('0');
-    expect(document.getElementById('rpi3-1-tcp-sockets-count')?.textContent).toBe('4');
 
     // Switch to Node 02
     app.switchDevice('rpi3-2');

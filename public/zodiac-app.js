@@ -2725,8 +2725,14 @@
         kpiCapEl.innerText = isOnline ? `${capPct}%` : '--%';
       }
 
-      // KPI 2: SDN Boundary Containment
+      // KPI 2: SDN Boundary Containment (Council Invariants 3 & 6: Data-plane verified isolation)
       const adv = r.adversarial || {};
+      const p1Iso = currentSnapshot?.port1Isolation;
+      const isSwitchOnline = currentSnapshot?.source !== 'disconnected';
+      const isVerified = Boolean(isSwitchOnline && p1Iso?.state === 'verified');
+      const isMismatch = Boolean(isSwitchOnline && p1Iso?.state === 'mismatch');
+      const isRejected = Boolean(isSwitchOnline && p1Iso?.state === 'verifier_rejected');
+
       const isoBadgeEl = document.getElementById(`${prefix}-kpi-isolation-badge`);
       const isoStatusEl = document.getElementById(`${prefix}-kpi-isolation-status`);
       const barIsoEl = document.getElementById(`${prefix}-bar-isolation`);
@@ -2734,38 +2740,54 @@
       const port1PolicyEl = document.getElementById(`${prefix}-kpi-port1-status`);
       const containmentHeaderBadgeEl = document.getElementById(`${prefix}-containment-status-badge`);
 
-      if (!isOnline) {
+      if (!isSwitchOnline || !p1Iso || p1Iso.state === 'not_installed') {
         if (isoBadgeEl) { isoBadgeEl.innerText = '--'; isoBadgeEl.className = 'cf-pill-badge gray'; }
-        if (isoStatusEl) isoStatusEl.innerText = '--';
+        if (isoStatusEl) isoStatusEl.innerText = isSwitchOnline ? 'NOT INSTALLED' : '--';
         if (barIsoEl) barIsoEl.style.width = '0%';
         if (gwEscapeEl) gwEscapeEl.innerText = '--';
         if (port1PolicyEl) port1PolicyEl.innerText = '--';
-        if (containmentHeaderBadgeEl) { containmentHeaderBadgeEl.innerText = 'UNKNOWN'; containmentHeaderBadgeEl.className = 'cf-pill-badge gray'; }
-      } else {
-        const isDropped = Boolean(adv.gatewayIsolationStatus && adv.gatewayIsolationStatus.includes('DROPPED'));
-        if (isoBadgeEl) {
-          isoBadgeEl.innerText = 'FAIL-CLOSED';
-          isoBadgeEl.className = 'cf-pill-badge green';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = isSwitchOnline ? 'NOT INSTALLED' : 'UNKNOWN';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge gray';
         }
-        if (isoStatusEl) isoStatusEl.innerText = isDropped ? 'ENFORCED' : 'QUARANTINED';
-        if (barIsoEl) barIsoEl.style.width = isDropped ? '100%' : '50%';
-        if (gwEscapeEl) gwEscapeEl.innerText = isDropped ? '0% LEAK' : 'LEAK DETECTED';
+      } else if (isVerified) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = 'FAIL-CLOSED'; isoBadgeEl.className = 'cf-pill-badge green'; }
+        if (isoStatusEl) isoStatusEl.innerText = 'ENFORCED';
+        if (barIsoEl) barIsoEl.style.width = '100%';
+        if (gwEscapeEl) gwEscapeEl.innerText = '0% LEAK';
         if (port1PolicyEl) port1PolicyEl.innerText = 'ACTIVE';
         if (containmentHeaderBadgeEl) {
-          containmentHeaderBadgeEl.innerText = isDropped ? 'FAIL-CLOSED ENFORCED' : 'QUARANTINED';
-          containmentHeaderBadgeEl.className = isDropped ? 'cf-pill-badge green' : 'cf-pill-badge orange';
+          containmentHeaderBadgeEl.innerText = 'FAIL-CLOSED ENFORCED';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge green';
+        }
+      } else if (isMismatch) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = 'MISMATCH'; isoBadgeEl.className = 'cf-pill-badge red'; }
+        if (isoStatusEl) isoStatusEl.innerText = 'MISMATCH';
+        if (barIsoEl) barIsoEl.style.width = '30%';
+        if (gwEscapeEl) gwEscapeEl.innerText = 'LEAK RISK';
+        if (port1PolicyEl) port1PolicyEl.innerText = 'MISMATCH';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = 'READBACK MISMATCH';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge red';
+        }
+      } else if (isRejected) {
+        if (isoBadgeEl) { isoBadgeEl.innerText = 'REJECTED'; isoBadgeEl.className = 'cf-pill-badge red'; }
+        if (isoStatusEl) isoStatusEl.innerText = 'REJECTED';
+        if (barIsoEl) barIsoEl.style.width = '0%';
+        if (gwEscapeEl) gwEscapeEl.innerText = 'UNPROTECTED';
+        if (port1PolicyEl) port1PolicyEl.innerText = 'REJECTED';
+        if (containmentHeaderBadgeEl) {
+          containmentHeaderBadgeEl.innerText = 'VERIFIER REJECTED';
+          containmentHeaderBadgeEl.className = 'cf-pill-badge red';
         }
       }
 
+      // Matrix Table Items (Council Invariant 6: Real hardware provenance from switch data plane)
       const ctrlIsoEl = document.getElementById(`${prefix}-ctrl-iso-status`);
       if (ctrlIsoEl) {
-        if (!isOnline) {
-          ctrlIsoEl.innerText = '--';
-          ctrlIsoEl.className = 'cf-pill-badge gray';
-        } else if (adv.controllerIsolationStatus) {
-          const isBlocked = adv.controllerIsolationStatus.includes('BLOCKED');
-          ctrlIsoEl.innerText = isBlocked ? '100% BLOCKED' : adv.controllerIsolationStatus;
-          ctrlIsoEl.className = isBlocked ? 'cf-pill-badge red' : 'cf-pill-badge orange';
+        if (isVerified) {
+          ctrlIsoEl.innerText = '100% BLOCKED';
+          ctrlIsoEl.className = 'cf-pill-badge red';
         } else {
           ctrlIsoEl.innerText = '--';
           ctrlIsoEl.className = 'cf-pill-badge gray';
@@ -2774,13 +2796,9 @@
 
       const gwIsoEl = document.getElementById(`${prefix}-gw-iso-status`);
       if (gwIsoEl) {
-        if (!isOnline) {
-          gwIsoEl.innerText = '--';
-          gwIsoEl.className = 'cf-pill-badge gray';
-        } else if (adv.gatewayIsolationStatus) {
-          const isDropped = adv.gatewayIsolationStatus.includes('DROPPED');
-          gwIsoEl.innerText = isDropped ? '100% DROPPED' : adv.gatewayIsolationStatus;
-          gwIsoEl.className = isDropped ? 'cf-pill-badge red' : 'cf-pill-badge orange';
+        if (isVerified) {
+          gwIsoEl.innerText = '100% DROPPED';
+          gwIsoEl.className = 'cf-pill-badge red';
         } else {
           gwIsoEl.innerText = '--';
           gwIsoEl.className = 'cf-pill-badge gray';
@@ -2789,24 +2807,20 @@
 
       const hailoIsoEl = document.getElementById(`${prefix}-hailo-iso-status`);
       if (hailoIsoEl) {
-        if (!isOnline) {
-          hailoIsoEl.innerText = '--';
-          hailoIsoEl.className = 'cf-pill-badge gray';
-        } else {
+        if (isVerified) {
           hailoIsoEl.innerText = 'PERMITTED';
           hailoIsoEl.className = 'cf-pill-badge green';
+        } else {
+          hailoIsoEl.innerText = '--';
+          hailoIsoEl.className = 'cf-pill-badge gray';
         }
       }
 
       const peerTransitEl = document.getElementById(`${prefix}-peer-transit-status`);
       if (peerTransitEl) {
-        if (!isOnline) {
-          peerTransitEl.innerText = '--';
-          peerTransitEl.className = 'cf-pill-badge gray';
-        } else if (adv.intraWorkloadTransit) {
-          const isPermitted = adv.intraWorkloadTransit.includes('PERMITTED');
-          peerTransitEl.innerText = isPermitted ? 'PERMITTED' : adv.intraWorkloadTransit;
-          peerTransitEl.className = isPermitted ? 'cf-pill-badge green' : 'cf-pill-badge orange';
+        if (isVerified) {
+          peerTransitEl.innerText = 'PERMITTED';
+          peerTransitEl.className = 'cf-pill-badge green';
         } else {
           peerTransitEl.innerText = '--';
           peerTransitEl.className = 'cf-pill-badge gray';

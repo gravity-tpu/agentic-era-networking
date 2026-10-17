@@ -905,6 +905,7 @@ export class ZodiacBridgeServer {
         ...this.cachedSnapshot.rpi3_2,
         timeSeries: this.rpi3_2TimeSeries,
       } : undefined,
+      port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
     };
 
     // Prune local JSONL history files older than 30 days (fast sync directory scan at startup)
@@ -2745,6 +2746,7 @@ Respond ONLY with valid JSON having the structure (keep each bullet under 15 wor
           ...liveRpi3_2,
           timeSeries: this.rpi3_2TimeSeries,
         },
+        port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
       };
 
       // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud
