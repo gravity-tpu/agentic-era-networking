@@ -44,7 +44,7 @@ To decouple the data plane from inference load, model inference executes off the
 1. **Workstation Local Model:**  
    `Gemma 4 26B` (Apple Silicon Mac workstation via Ollama/local runner, 8-bit quantized).
 2. **Embedded Edge Model:**  
-   `Qwen 2.5 7B` (Jetson Orin Nano, running on GPU memory when data plane is idle).
+   None at present. The Jetson's `Qwen 2.5` was removed on 2026-10-16 (it could not load under shared-memory pressure and added no measured value over the deterministic summary), so the small-local-model comparison is dropped unless it is re-planned with its own memory budget.
 3. **Frontier Reference Models (API Baselines):**  
    - `Claude 3.5 Sonnet` / `Claude 3.7 Sonnet`
    - `GPT-4o`

@@ -159,29 +159,6 @@ function getShutdownTimeoutMs(): number {
   return DEFAULT_SHUTDOWN_TIMEOUT_MS;
 }
 
-// Council Invariant 5 (Adaptive Control & System Scale - Quoc Le & Jeff Dean):
-// Configurable LLM copilot inference bounds with strict min/max clamping to eliminate
-// unbounded inference latency or memory exhaustion under distribution shifts or misconfiguration.
-const DEFAULT_COPILOT_TTL_SEC = 20;
-const MIN_COPILOT_TTL_SEC = 5;
-const MAX_COPILOT_TTL_SEC = 300;
-
-const DEFAULT_COPILOT_TIMEOUT_MS = 8000;
-const MIN_COPILOT_TIMEOUT_MS = 1000;
-const MAX_COPILOT_TIMEOUT_MS = 30000;
-
-const DEFAULT_COPILOT_MAX_TOKENS = 120;
-const MIN_COPILOT_MAX_TOKENS = 32;
-const MAX_COPILOT_MAX_TOKENS = 1024;
-
-const DEFAULT_COPILOT_TEMPERATURE = 0.2;
-const MIN_COPILOT_TEMPERATURE = 0.0;
-const MAX_COPILOT_TEMPERATURE = 1.0;
-
-function clampValue(val: number, min: number, max: number): number {
-  return Math.min(Math.max(val, min), max);
-}
-
 /**
  * Pure deterministic slicing function to return timeSeries points strictly newer than sinceMs.
  * Defined at module level to eliminate closure allocations on the hot delta-polling path (Dean Latency Invariant).
@@ -194,40 +171,6 @@ function trimSeriesSince<T extends { readonly timestampMs: number }>(
   const idx = findCutoffIndex(series, sinceMs + 1);
   if (idx < 0 || idx >= series.length) return [];
   return series.slice(idx);
-}
-
-export interface CopilotRuntimeConfig {
-  readonly ttlSec: number;
-  readonly timeoutMs: number;
-  readonly maxTokens: number;
-  readonly temperature: number;
-}
-
-export function parseCopilotConfig(): CopilotRuntimeConfig {
-  const envTtl = process.env['ZODIAC_COPILOT_TTL_SEC'];
-  const envTimeout = process.env['ZODIAC_COPILOT_TIMEOUT_MS'];
-  const envTokens = process.env['ZODIAC_COPILOT_MAX_TOKENS'];
-  const envTemp = process.env['ZODIAC_COPILOT_TEMP'];
-
-  const ttlSec = envTtl ? Number.parseInt(envTtl, 10) : DEFAULT_COPILOT_TTL_SEC;
-  const timeoutMs = envTimeout ? Number.parseInt(envTimeout, 10) : DEFAULT_COPILOT_TIMEOUT_MS;
-  const maxTokens = envTokens ? Number.parseInt(envTokens, 10) : DEFAULT_COPILOT_MAX_TOKENS;
-  const temperature = envTemp ? Number.parseFloat(envTemp) : DEFAULT_COPILOT_TEMPERATURE;
-
-  return Object.freeze({
-    ttlSec: Number.isFinite(ttlSec) ? clampValue(ttlSec, MIN_COPILOT_TTL_SEC, MAX_COPILOT_TTL_SEC) : DEFAULT_COPILOT_TTL_SEC,
-    timeoutMs: Number.isFinite(timeoutMs) ? clampValue(timeoutMs, MIN_COPILOT_TIMEOUT_MS, MAX_COPILOT_TIMEOUT_MS) : DEFAULT_COPILOT_TIMEOUT_MS,
-    maxTokens: Number.isFinite(maxTokens) ? clampValue(maxTokens, MIN_COPILOT_MAX_TOKENS, MAX_COPILOT_MAX_TOKENS) : DEFAULT_COPILOT_MAX_TOKENS,
-    temperature: Number.isFinite(temperature) ? clampValue(temperature, MIN_COPILOT_TEMPERATURE, MAX_COPILOT_TEMPERATURE) : DEFAULT_COPILOT_TEMPERATURE,
-  });
-}
-
-// Sanjay Ghemawat - Flat-State Invariant: Parsed once at module initialization
-// to eliminate crossing V8 C++ process.env boundary on runtime requests.
-const MODULE_COPILOT_CONFIG: CopilotRuntimeConfig = parseCopilotConfig();
-
-export function getCopilotConfig(): CopilotRuntimeConfig {
-  return MODULE_COPILOT_CONFIG;
 }
 
 /**
@@ -256,28 +199,6 @@ export function parseIpv4ToUint32(ip: string): number | null {
     uint32 = ((uint32 << 8) | byte) >>> 0;
   }
   return uint32;
-}
-
-export interface CopilotSummaryMetrics {
-  openFlowState: string;
-  activeRules: number;
-  quarantinedCount: number;
-  switchTempC: number | null;
-  jetsonTempC: number | null;
-  jetsonPowerMw: number | null;
-  jetsonFreeRamMb: number | null;
-  wireTapInferencesPerSec: number;
-}
-
-export interface CopilotSummaryResponse {
-  status: 'HEALTHY' | 'DEGRADED' | 'ALERT' | 'OFFLINE';
-  headline: string;
-  bullets: string[];
-  model: string;
-  timestampMs: number;
-  cached: boolean;
-  ttlSeconds: number;
-  metrics: CopilotSummaryMetrics;
 }
 
 /**
@@ -565,7 +486,6 @@ function mergeHistoricalSeries<T extends { readonly timestampMs: number }>(
 
 export class ZodiacBridgeServer {
   public controlPlaneState: 'INITIALIZING' | 'ACTIVE' | 'DEGRADED_FAULT' = 'INITIALIZING';
-  public readonly copilotConfig: CopilotRuntimeConfig = MODULE_COPILOT_CONFIG;
   private readonly controller: ZodiacController;
   private readonly switchIp: string;
   private readonly controllerIp: string;
@@ -614,11 +534,6 @@ export class ZodiacBridgeServer {
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
   private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
   private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
-  private copilotSummaryCache: {
-    data: CopilotSummaryResponse;
-    cachedAtPerfMs: number;
-  } | null = null;
-  private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
   /** One flow-table read at a time: shared by the on-demand probe and the periodic isolation re-check. */
   private readonly flowReadLock = new FlowReadLock();
@@ -2152,30 +2067,6 @@ export class ZodiacBridgeServer {
       return;
     }
 
-    // API: GET /api/sdn/copilot/summary (Executive AI Telemetry Copilot)
-    // Council Invariant 1 (Anti-Shortcut), Invariant 3 (Fail-Closed) & Invariant 6 (Epistemic Provenance):
-    // Synthesizes a plain-English executive triage of physical SDN signals via Ollama or deterministic fallback.
-    if (url.pathname === '/api/sdn/copilot/summary' && req.method === 'GET') {
-      try {
-        const summary = await this.generateCopilotSummary();
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-        res.statusCode = 200;
-        res.end(JSON.stringify(summary));
-      } catch (err: unknown) {
-        res.statusCode = 500;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({
-          status: 'OFFLINE',
-          headline: 'Executive Copilot Fault',
-          bullets: ['Copilot evaluation encountered an internal error.'],
-          error: err instanceof Error ? err.message : String(err),
-          timestampMs: Date.now(),
-        }));
-      }
-      return;
-    }
-
     // Static File Serving from public/ (Asynchronous & Path-Traversal Protected)
     let reqPath = url.pathname;
     if (reqPath === '/' || reqPath === '') {
@@ -2238,178 +2129,6 @@ export class ZodiacBridgeServer {
       if (result.length >= cap) break;
     }
     return result;
-  }
-
-  public async generateCopilotSummary(): Promise<CopilotSummaryResponse> {
-    const nowPerf = performance.now();
-    // Sanjay Ghemawat Invariant: Use readonly pre-parsed configuration to avoid V8 process.env overhead
-    const { ttlSec, timeoutMs, maxTokens, temperature } = this.copilotConfig;
-
-    // Dean Latency Invariant: Check memory cache first
-    if (this.copilotSummaryCache && (nowPerf - this.copilotSummaryCache.cachedAtPerfMs) < ttlSec * 1000) {
-      return {
-        ...this.copilotSummaryCache.data,
-        cached: true,
-      };
-    }
-
-    if (this.copilotInFlightPromise) {
-      return await this.copilotInFlightPromise;
-    }
-
-    this.copilotInFlightPromise = (async (): Promise<CopilotSummaryResponse> => {
-      const ofState = this.controller.openFlow.metrics.state || this.cachedSnapshot.openflow?.status || 'Disconnected';
-      const totalRules = this.flowRuleRegistry.size;
-      let quarantinedCount = 0;
-      for (const rule of this.flowRuleRegistry.values()) {
-        if (rule.action === 'DROP' || rule.ruleId.startsWith('quarantine-')) {
-          quarantinedCount++;
-        }
-      }
-
-      const switchTempC = this.cachedSnapshot.system?.cpuTemperatureC ?? null;
-      const jetsonTempC = this.cachedSnapshot.jetson?.temperatures?.socC ?? this.cachedSnapshot.jetson?.temperatures?.gpuC ?? this.cachedSnapshot.jetson?.temperatures?.cpuC ?? null;
-      const vddInMw = this.cachedSnapshot.jetson?.powerMw?.vddIn;
-      // Council Invariant 2 (Dean & Ghemawat): Integer milliwatts, zero floating-point division
-      const jetsonPowerMw = vddInMw != null ? Math.trunc(vddInMw) : null;
-      const ramUsedBytes = this.cachedSnapshot.jetson?.ramUsedBytes;
-      const ramTotalBytes = this.cachedSnapshot.jetson?.ramTotalBytes;
-      const jetsonFreeRamMb = (ramTotalBytes != null && ramUsedBytes != null && ramTotalBytes > ramUsedBytes)
-        ? Number((ramTotalBytes - ramUsedBytes) / (1024n * 1024n))
-        : null;
-      const wireTapInferencesPerSec = Number(this.cachedSnapshot.coral?.inferencesPerSecond ?? 0n);
-
-      const portsSummary = (this.cachedSnapshot.ports || [])
-        .map(p => `Port ${p.port} (${p.name}): ${p.status}`)
-        .join(', ');
-
-      const metrics: CopilotSummaryMetrics = {
-        openFlowState: ofState,
-        activeRules: totalRules,
-        quarantinedCount,
-        switchTempC,
-        jetsonTempC,
-        jetsonPowerMw,
-        jetsonFreeRamMb,
-        wireTapInferencesPerSec,
-      };
-
-      const buildDeterministicFallback = (): CopilotSummaryResponse => {
-        const hasQuarantine = quarantinedCount > 0;
-        const ofDisconnected = ofState !== 'ESTABLISHED';
-        const fallbackStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
-          ofDisconnected ? 'ALERT' : hasQuarantine ? 'DEGRADED' : 'HEALTHY';
-
-        const fallbackBullets: string[] = [
-          `OpenFlow 1.3 control plane is ${ofState} with ${totalRules} active rules (${quarantinedCount} isolated).`,
-          `Switch CPU is ${switchTempC != null ? switchTempC + '°C' : 'monitored'}; Jetson Orin silicon at ${jetsonTempC != null ? jetsonTempC + '°C' : 'nominal'} (${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'idle'}).`,
-          wireTapInferencesPerSec > 0
-            ? `Ampere GPU wire-tap inference active at ${wireTapInferencesPerSec} inferences/second.`
-            : 'Ampere GPU wire-tap inference in standby mode awaiting frame ingress.',
-        ];
-
-        return {
-          status: fallbackStatus,
-          headline: 'Deterministic SDN Telemetry Triage (Ollama Offline Fallback)',
-          bullets: fallbackBullets,
-          model: 'deterministic_rules (fail-closed fallback)',
-          timestampMs: Date.now(),
-          cached: false,
-          ttlSeconds: ttlSec,
-          metrics,
-        };
-      };
-
-      let resultData: CopilotSummaryResponse;
-      const configuredOllamaUrl = process.env['OLLAMA_API_URL'];
-
-      if (!configuredOllamaUrl) {
-        // Council Invariant 3 & Fate-Sharing: When Ollama is stopped/unconfigured on Jetson,
-        // immediately return deterministic telemetry triage without network timeout.
-        resultData = buildDeterministicFallback();
-      } else {
-        const qwenModel = process.env['QWEN_MODEL'] || 'qwen2.5:3b';
-
-        const prompt = `You are the Zodiac Executive AI Copilot running on Jetson Orin Nano Super.
-Provide a concise, 3-bullet plain-English executive triage of the physical SDN infrastructure.
-Telemetry Signals:
-- OpenFlow 1.3 State: ${ofState} (${totalRules} active rules, ${quarantinedCount} quarantined hosts)
-- Physical Switch Ports: ${portsSummary || 'Port 1..4 monitored'}
-- Switch CPU Temp: ${switchTempC != null ? switchTempC + '°C' : 'N/A'}
-- Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
-- Wire-Tap Inference: ${wireTapInferencesPerSec > 0 ? `Active at ${wireTapInferencesPerSec} inf/s` : 'Standby / Idle'}
-
-Respond ONLY with valid JSON having the structure (keep each bullet under 15 words to prevent token truncation):
-{"status": "HEALTHY" | "DEGRADED" | "ALERT", "headline": string, "bullets": [string, string, string]}`;
-
-        try {
-          const response = await fetch(configuredOllamaUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: qwenModel,
-              prompt,
-              format: 'json',
-              stream: false,
-              options: { temperature, num_predict: maxTokens },
-            }),
-            signal: AbortSignal.timeout(timeoutMs),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Ollama returned HTTP ${response.status}`);
-          }
-
-          const resJson = (await response.json()) as { model?: string; response?: string };
-          const parsed = JSON.parse(resJson.response || '{}') as {
-            status?: string;
-            headline?: string;
-            bullets?: string[];
-          };
-
-          const statusRaw = String(parsed.status || 'HEALTHY').toUpperCase();
-          const validStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
-            statusRaw === 'ALERT' ? 'ALERT' : statusRaw === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY';
-
-          const actualModel = resJson.model || qwenModel || 'unspecified-model';
-
-          resultData = {
-            status: validStatus,
-            headline: String(parsed.headline || 'Physical SDN Infrastructure Triage').trim(),
-            bullets: Array.isArray(parsed.bullets) && parsed.bullets.length > 0
-              ? parsed.bullets.map(b => String(b).trim()).slice(0, 4)
-              : ['SDN data plane operational', 'OpenFlow controller established', 'Telemetry counters monotonic'],
-            model: `${actualModel} (Ollama)`,
-            timestampMs: Date.now(),
-            cached: false,
-            ttlSeconds: ttlSec,
-            metrics,
-          };
-        } catch (err: unknown) {
-          // Council Invariant 1 & 3: Fail-closed deterministic fallback
-          const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
-          if (isTimeout) {
-            console.warn('[!] [Copilot] Ollama inference timed out (thermal/budget limit), failing closed to deterministic fallback.');
-          } else {
-            console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
-          }
-
-          resultData = buildDeterministicFallback();
-        }
-      }
-
-      this.copilotSummaryCache = {
-        data: resultData,
-        cachedAtPerfMs: performance.now(),
-      };
-      return resultData;
-    })();
-
-    try {
-      return await this.copilotInFlightPromise;
-    } finally {
-      this.copilotInFlightPromise = null;
-    }
   }
 
   private async fetchSwitchHttpStatus(): Promise<import('./zodiac-serial.js').ZodiacDeviceStatus | undefined> {
