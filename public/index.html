@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="zodiac.64dd656dc4.css">
+  <link rel="stylesheet" href="zodiac.46a46f0ec9.css">
   <!-- Favicon — three-tier network topology node (transparent SVG) -->
   <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
   <link rel="apple-touch-icon" href="img/favicon.svg">
@@ -444,13 +444,6 @@
         </div>
 
         <div class="cf-topbar-actions">
-          <!-- Executive AI Copilot Topbar Pill (Workflow 3: Qwen 2.5 on Jetson Orin Nano) -->
-          <button class="cf-copilot-topbar-pill" id="btn-copilot-topbar" title="Open Executive AI Copilot Drawer (Workflow 3: Qwen 2.5 on Jetson Orin) [⌘K]" aria-label="Open Executive AI Copilot Drawer">
-            <span class="cf-copilot-dot" id="copilot-topbar-dot" style="display: none;"></span>
-            <span class="cf-copilot-topbar-title">Copilot</span>
-            <span class="cf-pill-badge gray" id="copilot-topbar-badge">STANDBY</span>
-            <kbd class="cf-copilot-kbd">⌘K</kbd>
-          </button>
           <span class="cf-pill-badge gray" id="cf-poll-status" title="Telemetry Polling Rate: 2.5s (Switch Wire Latency: <1ms)">Live (2.5s)</span>
           <button class="cf-btn" id="btn-toggle-photo">Hardware Photos</button>
           <a class="cf-btn" href="https://github.com/gravity-tpu/agentic-era-networking" target="_blank" rel="noopener">
@@ -503,38 +496,6 @@
         <!-- OVERVIEW / HARDWARE VIEW -->
         <div id="section-overview">
 
-          <!-- Executive AI Copilot Anomaly Banner (Auto-collapsing when nominal) -->
-          <div class="cf-card cf-copilot-card is-collapsed is-nominal" id="cf-copilot-card">
-            <div class="cf-card-header" id="copilot-banner-header">
-              <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
-                <span class="cf-copilot-banner-icon" id="copilot-banner-icon">⚡</span>
-                <div style="min-width: 0; flex: 1;">
-                  <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                    <h3 class="cf-card-title" style="margin: 0; font-size: 0.9rem;">
-                      Executive AI Copilot
-                    </h3>
-                    <span class="cf-pill-badge blue" style="font-size: 0.65rem;" id="copilot-model-badge">qwen2.5:3b · Orin GPU</span>
-                    <span class="cf-pill-badge gray" id="copilot-status-badge">STANDBY</span>
-                  </div>
-                  <div class="cf-card-subtitle" id="copilot-headline" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Evaluating physical SDN telemetry...</div>
-                </div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
-                <button id="copilot-toggle-btn" class="cf-btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; cursor: pointer;" title="Toggle Copilot Anomaly Details">Details ▾</button>
-                <button id="copilot-refresh-btn" class="cf-btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; cursor: pointer;" title="Re-evaluate Telemetry with Qwen">↻ Refresh</button>
-                <button id="copilot-open-drawer-btn" class="cf-btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.72rem; cursor: pointer;" title="Open Slide-Over Copilot Drawer">Drawer ↗</button>
-              </div>
-            </div>
-            <div class="cf-card-body" id="copilot-card-body">
-              <ul id="copilot-bullets">
-                <li>Connecting to local Qwen 2.5 3B on Jetson Orin Nano...</li>
-              </ul>
-              <div class="cf-copilot-card-footer">
-                <span>Neuro-symbolic edge inference via Ollama (Port 11434) · Zero cloud egress</span>
-                <span id="copilot-timestamp">Last updated: --:--:--</span>
-              </div>
-            </div>
-          </div>
 
           <!-- ZODIAC FX SWITCH VIEW -->
           <div id="view-device-zodiac">
@@ -1252,9 +1213,9 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 <div class="cf-card-header">
                   <div>
                     <h3 class="cf-card-title">Ollama LLM Inference</h3>
-                    <div class="cf-card-subtitle" id="orin-ollama-subtitle">qwen2.5:3b · Q4_K_M · 32768 ctx · Jetson Orin Nano</div>
+                    <div class="cf-card-subtitle" id="orin-ollama-subtitle">-- · Jetson Orin Nano</div>
                   </div>
-                  <span class="cf-pill-badge green" id="orin-ollama-status-badge">OFFLINE</span>
+                  <span class="cf-pill-badge gray" id="orin-ollama-status-badge">OFFLINE</span>
                 </div>
                 <div class="cf-card-body" style="padding: 1rem 1.5rem;">
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1.5rem; align-items: start;">
@@ -1278,10 +1239,10 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                     </div>
                   </div>
                   <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--cf-border); display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Model: <strong class="cf-mono" id="orin-ollama-model-detail">qwen2.5:3b</strong></span>
-                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Params: <strong class="cf-mono" id="orin-ollama-params">3B</strong></span>
-                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Quant: <strong class="cf-mono" id="orin-ollama-quant">Q4_K_M</strong></span>
-                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Context: <strong class="cf-mono" id="orin-ollama-ctx">32768</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Model: <strong class="cf-mono" id="orin-ollama-model-detail">--</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Params: <strong class="cf-mono" id="orin-ollama-params">--</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Quant: <strong class="cf-mono" id="orin-ollama-quant">--</strong></span>
+                    <span style="font-size: 0.75rem; color: var(--cf-text-secondary);">Context: <strong class="cf-mono" id="orin-ollama-ctx">--</strong></span>
                   </div>
                 </div>
               </div>
@@ -3765,86 +3726,9 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
     </div>
   </div>
 
-  <!-- Executive AI Copilot Slide-Over Drawer (Workflow 3: Qwen 2.5 on Jetson Orin Nano) -->
-  <div id="cf-copilot-drawer-backdrop" class="cf-drawer-backdrop" style="display: none;"></div>
-  <aside id="cf-copilot-drawer" class="cf-drawer" aria-hidden="true" role="dialog" aria-labelledby="copilot-drawer-title">
-    <div class="cf-drawer-header">
-      <div style="display: flex; align-items: center; gap: 0.65rem;">
-        <div class="cf-copilot-icon-badge">⚡</div>
-        <div>
-          <h3 id="copilot-drawer-title" class="cf-drawer-title">Executive AI Copilot</h3>
-          <div class="cf-drawer-subtitle">
-            <span class="cf-pill-badge blue" style="font-size: 0.65rem;" id="copilot-drawer-model-badge">qwen2.5:3b · Orin GPU</span>
-            <span class="cf-pill-badge gray" style="font-size: 0.65rem;" id="copilot-drawer-status-badge">STANDBY</span>
-          </div>
-        </div>
-      </div>
-      <button id="cf-copilot-drawer-close" class="cf-drawer-close-btn" title="Close Copilot Drawer" aria-label="Close">✕</button>
-    </div>
-
-    <div class="cf-drawer-body">
-      <!-- Real-time Executive Triage Headline -->
-      <div class="cf-drawer-headline-box">
-        <div class="cf-drawer-headline-label">Executive Triage Summary</div>
-        <div class="cf-drawer-headline-text" id="copilot-drawer-headline">Evaluating physical SDN telemetry...</div>
-      </div>
-
-      <!-- Actionable Executive Bullets -->
-      <div class="cf-drawer-section">
-        <div class="cf-drawer-section-title">Operational Observations</div>
-        <ul class="cf-drawer-bullets" id="copilot-drawer-bullets">
-          <li>Connecting to local Qwen 2.5 3B on Jetson Orin Nano...</li>
-        </ul>
-      </div>
-
-      <!-- Telemetry Signals Monitored -->
-      <div class="cf-drawer-section">
-        <div class="cf-drawer-section-title">Telemetry Signals Monitored</div>
-        <div class="cf-drawer-signals-grid">
-          <div class="cf-drawer-signal-item">
-            <span class="cf-signal-name">OpenFlow Controller</span>
-            <span class="cf-signal-val" id="copilot-drawer-sig-of">Checking...</span>
-          </div>
-          <div class="cf-drawer-signal-item">
-            <span class="cf-signal-name">Quarantine Rules</span>
-            <span class="cf-signal-val" id="copilot-drawer-sig-quarantine">0 active</span>
-          </div>
-          <div class="cf-drawer-signal-item">
-            <span class="cf-signal-name">Orin SoC Thermal</span>
-            <span class="cf-signal-val" id="copilot-drawer-sig-temp">--°C</span>
-          </div>
-          <div class="cf-drawer-signal-item">
-            <span class="cf-signal-name">Wire-Tap Inferences</span>
-            <span class="cf-signal-val" id="copilot-drawer-sig-tap">-- inf/s</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Architecture & Provenance Info (Goodhart's Law & Invariant 6) -->
-      <div class="cf-drawer-provenance">
-        <div class="cf-provenance-title">🛡 Epistemic Edge Provenance</div>
-        <p class="cf-provenance-desc">
-          Workflow 3 neuro-symbolic triage computed entirely on physical Jetson Orin GPU via Ollama (Port 11434). Zero packet-path blocking (out-of-band), zero cloud egress, deterministic fail-closed state bounds.
-        </p>
-        <div class="cf-provenance-meta">
-          <span id="copilot-drawer-timestamp">Last evaluated: --:--:--</span>
-          <span class="cf-pill-badge blue" style="font-size: 0.65rem;">Orin SM_87</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="cf-drawer-footer">
-      <button id="copilot-drawer-refresh-btn" class="cf-btn cf-btn-primary" style="flex: 1; justify-content: center;">
-        ↻ Re-evaluate Telemetry
-      </button>
-      <button id="copilot-drawer-jump-orin" class="cf-btn" title="View Jetson Orin Host Details">
-        Host GPU
-      </button>
-    </div>
-  </aside>
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.c9d470651b.js"></script>
+  <script defer src="zodiac-app.f486c03da5.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

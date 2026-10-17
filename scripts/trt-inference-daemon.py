@@ -250,10 +250,12 @@ _triage_shed_drops: int = 0  # monotonic load-shedding counter for epistemic tel
 # Single module-level set of active quarantined IPs for suppress & out-of-band release
 _quarantined_ips: set[str] = set()
 
-
-OLLAMA_API_URL          = os.environ.get('OLLAMA_API_URL', 'http://localhost:11434/api/generate')
-QWEN_MODEL              = os.environ.get('QWEN_MODEL', 'qwen2.5:3b')
-QWEN_TRIAGE_ENABLE      = os.environ.get('QWEN_TRIAGE_ENABLED', '1') == '1'
+# Ollama & Qwen triage configuration:
+# Dormant / disabled by default (QWEN_TRIAGE_ENABLED=0) because Qwen is no longer running on the Jetson.
+# Fast-path line-rate packet capture, inference, and hardware quarantine are 100% decoupled from this out-of-band triage path.
+OLLAMA_API_URL          = os.environ.get('OLLAMA_API_URL', '')
+QWEN_MODEL              = os.environ.get('QWEN_MODEL', '')
+QWEN_TRIAGE_ENABLE      = os.environ.get('QWEN_TRIAGE_ENABLED', '0') == '1'
 def _parse_env_int(name: str, default: int, min_val: int = 1, max_val: int = 10000) -> int:
     val = os.environ.get(name)
     if val is None:
@@ -289,7 +291,7 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
     If Ollama times out (configurable budget) or returns an unparsable response, falls back
     to deterministic fail-closed quarantine.
     """
-    if not QWEN_TRIAGE_ENABLE:
+    if not QWEN_TRIAGE_ENABLE or not OLLAMA_API_URL:
         return {
             'verdict': 'QUARANTINE',
             'reason': f'Wire-tap rate anomaly: {pps} pps from {src_ip} exceeds threshold {threshold} pps',
@@ -309,7 +311,7 @@ def query_qwen_triage(src_ip: str, pps: int, threshold: int) -> dict:
         f"Verdict JSON:"
     )
     req_body = json.dumps({
-        'model': QWEN_MODEL,
+        'model': QWEN_MODEL or 'qwen2.5:3b',
         'prompt': prompt,
         'format': 'json',
         'options': {'temperature': QWEN_TRIAGE_TEMP, 'num_predict': QWEN_TRIAGE_MAX_TOKENS},
@@ -432,7 +434,14 @@ def _handle_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_
 
 
 def _quarantine_worker() -> None:
-    """Quarantine worker: proposes by default, installs a DROP only when QUARANTINE_MODE=enforce."""
+    """Quarantine worker: proposes by default, installs a DROP only when QUARANTINE_MODE=enforce.
+
+    Council Invariant 3 (Fail-Closed) & Network Engineering Fate-Sharing:
+    This fast worker operates directly on line-rate packets (<5ms turnaround) and communicates
+    with the bridge server to propose or install quarantine. It is strictly decoupled from LLM
+    triage: if QWEN_TRIAGE_ENABLE is False (default), _triage_queue is never populated and line-rate
+    quarantine functions with zero latency penalty or Ollama dependency.
+    """
     while True:
         item = _quarantine_queue.get()
         if item is None:
@@ -443,7 +452,9 @@ def _quarantine_worker() -> None:
         finally:
             _quarantine_queue.task_done()
 
-        # Out-of-band Qwen triage decides whether an INSTALLED quarantine should be lifted; nothing to lift for a proposal
+        # Council Invariant 5 (Bounded Memory Invariant):
+        # _triage_queue is strictly gated behind QWEN_TRIAGE_ENABLE and capped at maxsize=32 with load-shedding.
+        # When disabled (default), nothing is ever enqueued, preventing buffer leaks when the triage worker is stopped.
         if installed and QWEN_TRIAGE_ENABLE:
             try:
                 _triage_queue.put_nowait((src_ip, pps))
@@ -498,11 +509,15 @@ def _qwen_triage_worker() -> None:
 
 
 threading.Thread(target=_quarantine_worker, daemon=True, name='quarantine-worker').start()
-threading.Thread(target=_qwen_triage_worker, daemon=True, name='qwen-triage-worker').start()
+if QWEN_TRIAGE_ENABLE:
+    threading.Thread(target=_qwen_triage_worker, daemon=True, name='qwen-triage-worker').start()
 
 
 def try_quarantine(src_ip: str, pps: int, window_count: int, window_elapsed_ns: int, evidence: dict[str, list[int]]) -> None:
     """Enqueue an IP for immediate fail-closed quarantine; fire-and-forget.
+
+    Enqueues exclusively to _quarantine_queue (drained by the unconditional _quarantine_worker).
+    Does NOT touch _triage_queue (which is strictly gated in _quarantine_worker behind QWEN_TRIAGE_ENABLE).
 
     _quarantined_ips.add() runs only on successful enqueue — if the queue is full the
     IP is NOT suppressed so the next packet still triggers the alert path and

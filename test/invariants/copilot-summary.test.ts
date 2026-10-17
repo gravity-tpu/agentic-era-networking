@@ -17,19 +17,41 @@ describe('Executive AI Copilot Telemetry Triage (Workflow 3)', () => {
   let controller: ZodiacController;
   let server: ZodiacBridgeServer;
   const originalFetch = globalThis.fetch;
+  const originalOllamaUrl = process.env['OLLAMA_API_URL'];
 
   beforeEach(() => {
     controller = new ZodiacController();
     server = new ZodiacBridgeServer(controller);
+    process.env['OLLAMA_API_URL'] = 'http://localhost:11434/api/generate';
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    if (originalOllamaUrl !== undefined) {
+      process.env['OLLAMA_API_URL'] = originalOllamaUrl;
+    } else {
+      delete process.env['OLLAMA_API_URL'];
+    }
     vi.restoreAllMocks();
+  });
+
+  it('immediately returns deterministic fallback without fetch when OLLAMA_API_URL is unset', async () => {
+    delete process.env['OLLAMA_API_URL'];
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy;
+
+    const summary = await server.generateCopilotSummary();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(['HEALTHY', 'DEGRADED', 'ALERT']).toContain(summary.status);
+    expect(summary.headline).toContain('Deterministic');
+    expect(summary.model).toBe('deterministic_rules (fail-closed fallback)');
+    expect(summary.bullets.length).toBeGreaterThanOrEqual(3);
   });
 
   it('synthesizes an executive summary from local Qwen 2.5 Ollama response', async () => {
     const mockOllamaResponse = {
+      model: 'qwen2.5:3b',
       response: JSON.stringify({
         status: 'HEALTHY',
         headline: 'Physical SDN Fabric Operational',
@@ -54,7 +76,7 @@ describe('Executive AI Copilot Telemetry Triage (Workflow 3)', () => {
     expect(summary.headline).toBe('Physical SDN Fabric Operational');
     expect(summary.bullets).toHaveLength(3);
     expect(summary.bullets[0]).toContain('OpenFlow 1.3');
-    expect(summary.model).toContain('qwen2.5:3b (Jetson Orin Nano Super)');
+    expect(summary.model).toBe('qwen2.5:3b (Ollama)');
     expect(summary.cached).toBe(false);
     expect(summary.ttlSeconds).toBe(20);
     expect(summary.metrics).toBeDefined();
