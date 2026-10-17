@@ -10,7 +10,11 @@ import {
   DEFAULT_QUARANTINE_MAX_ACTIVE,
   DEFAULT_QUARANTINE_TTL_MS,
   decideQuarantine,
+  MAX_EVIDENCE_SAMPLES,
+  isLoopbackAddress,
+  mayApproveQuarantine,
   readQuarantineEnvelopeConfig,
+  sanitizeEvidence,
 } from '../../src/sdn/quarantine-envelope.js';
 
 const cfg = readQuarantineEnvelopeConfig({});
@@ -98,4 +102,76 @@ describe('decideQuarantine', () => {
   it('the default cap leaves most of the 128-entry table untouched', () => {
     expect(DEFAULT_QUARANTINE_MAX_ACTIVE).toBeLessThanOrEqual(16);
   });
+});
+
+describe('quarantine mode', () => {
+  it('defaults to propose', () => {
+    expect(readQuarantineEnvelopeConfig({}).config.mode).toBe('propose');
+  });
+  it('only the exact value enforce selects enforce', () => {
+    expect(readQuarantineEnvelopeConfig({ ZODIAC_QUARANTINE_MODE: 'enforce' }).config.mode).toBe('enforce');
+    for (const v of ['', 'ENFORCE', 'Enforce', 'true', '1', 'on', 'enforce ', 'propose', 'enforce;']) {
+      expect(readQuarantineEnvelopeConfig({ ZODIAC_QUARANTINE_MODE: v }).config.mode, JSON.stringify(v)).toBe('propose');
+    }
+  });
+});
+
+describe('sanitizeEvidence', () => {
+  it('keeps finite numbers and short number lists under plain keys', () => {
+    expect(sanitizeEvidence({ pps: 18, windowFrames: 20, gaps: [1, 2, 3] })).toEqual({ pps: 18, windowFrames: 20, gaps: [1, 2, 3] });
+  });
+  it('keeps integers only: a fractional value is dropped, as is anything past 2^53', () => {
+    expect(sanitizeEvidence({ a: 1.5, b: 2 ** 53, c: -3, d: [1, 2.5], e: [4, 5] })).toEqual({ c: -3, e: [4, 5] });
+  });
+  it('drops everything else: strings, nested objects, non-finite numbers, odd keys, long or mixed lists', () => {
+    const long = Array.from({ length: MAX_EVIDENCE_SAMPLES + 1 }, (_, i) => i);
+    const out = sanitizeEvidence({
+      s: 'x', o: { a: 1 }, n: null, nan: NaN, inf: Infinity, 'bad key': 1, '1abc': 2, long, mixed: [1, 'a'], ok: 5,
+    });
+    expect(out).toEqual({ ok: 5 });
+  });
+  it('returns nothing for a non-object', () => {
+    for (const v of [null, undefined, 3, 'x', [1, 2]]) expect(sanitizeEvidence(v)).toEqual({});
+  });
+  it('caps the number of keys', () => {
+    const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`k${i}`, i]));
+    expect(Object.keys(sanitizeEvidence(many)).length).toBeLessThanOrEqual(12);
+  });
+});
+
+describe('isLoopbackAddress', () => {
+  it('accepts only the machine itself', () => {
+    for (const a of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) expect(isLoopbackAddress(a), a).toBe(true);
+  });
+  it('refuses everything else, including look-alikes and no address', () => {
+    for (const a of ['10.0.0.15', '10.0.2.119', '100.118.64.16', '127.0.0.2', '127.0.0.1.evil', '::ffff:10.0.0.1', '', 'localhost']) {
+      expect(isLoopbackAddress(a), a).toBe(false);
+    }
+    expect(isLoopbackAddress(undefined)).toBe(false);
+  });
+});
+
+describe('mayApproveQuarantine', () => {
+  it('allows a local caller with no proxy headers', () => {
+    expect(mayApproveQuarantine('127.0.0.1', {})).toBe(true);
+    expect(mayApproveQuarantine('::1', { 'content-type': 'application/json' })).toBe(true);
+  });
+  it('matches header names case-insensitively', () => {
+    expect(mayApproveQuarantine('127.0.0.1', { 'X-Forwarded-For': '203.0.113.9' })).toBe(false);
+    expect(mayApproveQuarantine('127.0.0.1', { VIA: '1.1 proxy' })).toBe(false);
+  });
+  it('a header present but undefined is not present', () => {
+    expect(mayApproveQuarantine('127.0.0.1', { 'x-real-ip': undefined })).toBe(true);
+  });
+  it('refuses a remote caller whatever its headers', () => {
+    expect(mayApproveQuarantine('10.0.0.15', {})).toBe(false);
+    expect(mayApproveQuarantine(undefined, {})).toBe(false);
+  });
+  it.each(['x-forwarded-for', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'via'])(
+    'refuses a local caller carrying %s',
+    (header) => {
+      expect(mayApproveQuarantine('127.0.0.1', { [header]: '203.0.113.9' })).toBe(false);
+      expect(mayApproveQuarantine('127.0.0.1', { [header]: [] })).toBe(false);
+    },
+  );
 });

@@ -23,7 +23,17 @@ export const DEFAULT_QUARANTINE_MAX_ACTIVE = 8;
 export const MIN_QUARANTINE_MAX_ACTIVE = 1;
 export const MAX_QUARANTINE_MAX_ACTIVE = 32;
 
+/**
+ * What the bridge does with a request that is inside the envelope.
+ *   propose (default): record it as a proposal for a person to approve; install nothing.
+ *   enforce: install it, time-limited. Only the exact value `enforce` selects this: anything else is `propose`.
+ * The bridge is the single place this is decided, so every detector that posts to it (the trt daemon, the GPU
+ * sentinel, anything later) obeys it.
+ */
+export type QuarantineMode = 'propose' | 'enforce';
+
 export interface QuarantineEnvelopeConfig {
+  readonly mode: QuarantineMode;
   readonly ttlMs: number;
   readonly maxActive: number;
   readonly scopeSubnet: string;
@@ -84,7 +94,7 @@ export function readQuarantineEnvelopeConfig(
     }
   }
   return {
-    config: { ttlMs, maxActive, scopeSubnet: WORKLOAD_SUBNET, scopePrefixLen: WORKLOAD_PREFIX_LEN, protectedIps, protectedListInvalid },
+    config: { mode: env['ZODIAC_QUARANTINE_MODE'] === 'enforce' ? 'enforce' : 'propose', ttlMs, maxActive, scopeSubnet: WORKLOAD_SUBNET, scopePrefixLen: WORKLOAD_PREFIX_LEN, protectedIps, protectedListInvalid },
     warnings,
   };
 }
@@ -124,4 +134,57 @@ export function decideQuarantine(
   if (activeIps.includes(request.targetIp)) return refuse('already_active', `${request.targetIp} is already quarantined`);
   if (activeIps.length >= config.maxActive) return refuse('cap_reached', `${activeIps.length} quarantines are already active (limit ${config.maxActive})`);
   return { allow: true, ttlMs: config.ttlMs };
+}
+
+/** Largest number of samples kept per evidence list. */
+export const MAX_EVIDENCE_SAMPLES = 32;
+const MAX_EVIDENCE_KEYS = 12;
+
+export type EvidenceValue = number | readonly number[];
+
+function isShortNumberList(v: unknown): v is number[] {
+  return Array.isArray(v) && v.length <= MAX_EVIDENCE_SAMPLES && v.every((x) => typeof x === 'number' && Number.isSafeInteger(x));
+}
+
+/**
+ * A detector may attach the numbers behind its decision. Only integers (counters, nanoseconds, packets per second:
+ * Invariant 2) and short lists of integers under short plain keys are kept; everything else is dropped, so a request cannot store arbitrary data or grow the record.
+ */
+export function sanitizeEvidence(raw: unknown): Readonly<Record<string, EvidenceValue>> {
+  const out: Record<string, EvidenceValue> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  for (const [key, entry] of Object.entries(raw)) {
+    if (Object.keys(out).length >= MAX_EVIDENCE_KEYS) break;
+    if (!/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(key)) continue;
+    const value: unknown = entry;
+    if (typeof value === 'number' && Number.isSafeInteger(value)) {
+      out[key] = value;
+    } else if (isShortNumberList(value)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** True for the machine's own addresses: the only callers allowed to approve a quarantine. */
+export function isLoopbackAddress(address: string | undefined): boolean {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+const PROXY_HEADERS = ['x-forwarded-for', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'via'] as const;
+
+/**
+ * Whether a request may approve a quarantine: it must come from the machine itself AND carry none of the headers a
+ * reverse proxy normally adds. This only defends against a cooperative proxy that sets one of those headers: a proxy
+ * on this machine that strips them, or any local process that forwards requests, still looks local. It does not make
+ * the approval route authenticated.
+ */
+export function mayApproveQuarantine(
+  remoteAddress: string | undefined,
+  headers: Readonly<Record<string, string | string[] | undefined>>,
+): boolean {
+  if (!isLoopbackAddress(remoteAddress)) return false;
+  // Compare case-insensitively whatever the caller passes (Node lowercases header names, a test or another caller may not).
+  const present = new Set(Object.keys(headers).filter((k) => headers[k] !== undefined).map((k) => k.toLowerCase()));
+  return PROXY_HEADERS.every((h) => !present.has(h));
 }

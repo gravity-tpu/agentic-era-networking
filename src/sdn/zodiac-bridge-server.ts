@@ -90,10 +90,14 @@ import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isol
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
 import {
   decideQuarantine,
+  mayApproveQuarantine,
   readQuarantineEnvelopeConfig,
+  sanitizeEvidence,
+  type EvidenceValue,
   type QuarantineEnvelopeConfig,
   type QuarantineRefusal,
 } from './quarantine-envelope.js';
+import { QuarantineProposals, type QuarantineProposal } from './quarantine-proposals.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
 
@@ -155,29 +159,6 @@ function getShutdownTimeoutMs(): number {
   return DEFAULT_SHUTDOWN_TIMEOUT_MS;
 }
 
-// Council Invariant 5 (Adaptive Control & System Scale - Quoc Le & Jeff Dean):
-// Configurable LLM copilot inference bounds with strict min/max clamping to eliminate
-// unbounded inference latency or memory exhaustion under distribution shifts or misconfiguration.
-const DEFAULT_COPILOT_TTL_SEC = 20;
-const MIN_COPILOT_TTL_SEC = 5;
-const MAX_COPILOT_TTL_SEC = 300;
-
-const DEFAULT_COPILOT_TIMEOUT_MS = 8000;
-const MIN_COPILOT_TIMEOUT_MS = 1000;
-const MAX_COPILOT_TIMEOUT_MS = 30000;
-
-const DEFAULT_COPILOT_MAX_TOKENS = 120;
-const MIN_COPILOT_MAX_TOKENS = 32;
-const MAX_COPILOT_MAX_TOKENS = 1024;
-
-const DEFAULT_COPILOT_TEMPERATURE = 0.2;
-const MIN_COPILOT_TEMPERATURE = 0.0;
-const MAX_COPILOT_TEMPERATURE = 1.0;
-
-function clampValue(val: number, min: number, max: number): number {
-  return Math.min(Math.max(val, min), max);
-}
-
 /**
  * Pure deterministic slicing function to return timeSeries points strictly newer than sinceMs.
  * Defined at module level to eliminate closure allocations on the hot delta-polling path (Dean Latency Invariant).
@@ -190,40 +171,6 @@ function trimSeriesSince<T extends { readonly timestampMs: number }>(
   const idx = findCutoffIndex(series, sinceMs + 1);
   if (idx < 0 || idx >= series.length) return [];
   return series.slice(idx);
-}
-
-export interface CopilotRuntimeConfig {
-  readonly ttlSec: number;
-  readonly timeoutMs: number;
-  readonly maxTokens: number;
-  readonly temperature: number;
-}
-
-export function parseCopilotConfig(): CopilotRuntimeConfig {
-  const envTtl = process.env['ZODIAC_COPILOT_TTL_SEC'];
-  const envTimeout = process.env['ZODIAC_COPILOT_TIMEOUT_MS'];
-  const envTokens = process.env['ZODIAC_COPILOT_MAX_TOKENS'];
-  const envTemp = process.env['ZODIAC_COPILOT_TEMP'];
-
-  const ttlSec = envTtl ? Number.parseInt(envTtl, 10) : DEFAULT_COPILOT_TTL_SEC;
-  const timeoutMs = envTimeout ? Number.parseInt(envTimeout, 10) : DEFAULT_COPILOT_TIMEOUT_MS;
-  const maxTokens = envTokens ? Number.parseInt(envTokens, 10) : DEFAULT_COPILOT_MAX_TOKENS;
-  const temperature = envTemp ? Number.parseFloat(envTemp) : DEFAULT_COPILOT_TEMPERATURE;
-
-  return Object.freeze({
-    ttlSec: Number.isFinite(ttlSec) ? clampValue(ttlSec, MIN_COPILOT_TTL_SEC, MAX_COPILOT_TTL_SEC) : DEFAULT_COPILOT_TTL_SEC,
-    timeoutMs: Number.isFinite(timeoutMs) ? clampValue(timeoutMs, MIN_COPILOT_TIMEOUT_MS, MAX_COPILOT_TIMEOUT_MS) : DEFAULT_COPILOT_TIMEOUT_MS,
-    maxTokens: Number.isFinite(maxTokens) ? clampValue(maxTokens, MIN_COPILOT_MAX_TOKENS, MAX_COPILOT_MAX_TOKENS) : DEFAULT_COPILOT_MAX_TOKENS,
-    temperature: Number.isFinite(temperature) ? clampValue(temperature, MIN_COPILOT_TEMPERATURE, MAX_COPILOT_TEMPERATURE) : DEFAULT_COPILOT_TEMPERATURE,
-  });
-}
-
-// Sanjay Ghemawat - Flat-State Invariant: Parsed once at module initialization
-// to eliminate crossing V8 C++ process.env boundary on runtime requests.
-const MODULE_COPILOT_CONFIG: CopilotRuntimeConfig = parseCopilotConfig();
-
-export function getCopilotConfig(): CopilotRuntimeConfig {
-  return MODULE_COPILOT_CONFIG;
 }
 
 /**
@@ -252,28 +199,6 @@ export function parseIpv4ToUint32(ip: string): number | null {
     uint32 = ((uint32 << 8) | byte) >>> 0;
   }
   return uint32;
-}
-
-export interface CopilotSummaryMetrics {
-  openFlowState: string;
-  activeRules: number;
-  quarantinedCount: number;
-  switchTempC: number | null;
-  jetsonTempC: number | null;
-  jetsonPowerMw: number | null;
-  jetsonFreeRamMb: number | null;
-  wireTapInferencesPerSec: number;
-}
-
-export interface CopilotSummaryResponse {
-  status: 'HEALTHY' | 'DEGRADED' | 'ALERT' | 'OFFLINE';
-  headline: string;
-  bullets: string[];
-  model: string;
-  timestampMs: number;
-  cached: boolean;
-  ttlSeconds: number;
-  metrics: CopilotSummaryMetrics;
 }
 
 /**
@@ -561,7 +486,6 @@ function mergeHistoricalSeries<T extends { readonly timestampMs: number }>(
 
 export class ZodiacBridgeServer {
   public controlPlaneState: 'INITIALIZING' | 'ACTIVE' | 'DEGRADED_FAULT' = 'INITIALIZING';
-  public readonly copilotConfig: CopilotRuntimeConfig = MODULE_COPILOT_CONFIG;
   private readonly controller: ZodiacController;
   private readonly switchIp: string;
   private readonly controllerIp: string;
@@ -610,11 +534,6 @@ export class ZodiacBridgeServer {
   public static readonly STATE_FLUSH_INTERVAL_MS = 30_000;
   private static readonly RELAY_BASE_BACKOFF_MS  = 5_000;   // 5 s initial backoff
   private static readonly RELAY_MAX_BACKOFF_MS   = 60_000;  // 60 s ceiling
-  private copilotSummaryCache: {
-    data: CopilotSummaryResponse;
-    cachedAtPerfMs: number;
-  } | null = null;
-  private copilotInFlightPromise: Promise<CopilotSummaryResponse> | null = null;
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
   /** One flow-table read at a time: shared by the on-demand probe and the periodic isolation re-check. */
   private readonly flowReadLock = new FlowReadLock();
@@ -643,6 +562,8 @@ export class ZodiacBridgeServer {
   /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
   private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint }> = new Map();
   private quarantineSweepTimer: NodeJS.Timeout | null = null;
+  /** Requests inside the envelope that are waiting for a person (mode `propose`). */
+  private readonly quarantineProposals = new QuarantineProposals();
 
   private static readonly QUARANTINE_REFUSAL_STATUS: Readonly<Record<QuarantineRefusal, number>> = {
     config_invalid: 503,
@@ -676,6 +597,10 @@ export class ZodiacBridgeServer {
     targetMac?: string | undefined;
     reason: string;
     priority?: number | undefined;
+    /** The numbers behind the detector's decision; kept with a proposal so a person can judge it. */
+    evidence?: Readonly<Record<string, EvidenceValue>> | undefined;
+    /** True only when a person approved a proposal: installs even in mode `propose`. The envelope still applies. */
+    approved?: boolean | undefined;
   }): { status: number; body: Record<string, unknown> } {
     const decision = decideQuarantine({ targetIp: options.targetIp, targetMac: options.targetMac }, this.activeQuarantineIps(), this.quarantineEnvelope);
     if (!decision.allow) {
@@ -683,6 +608,34 @@ export class ZodiacBridgeServer {
       return {
         status: ZodiacBridgeServer.QUARANTINE_REFUSAL_STATUS[decision.code],
         body: { ok: false, quarantined: false, code: decision.code, error: decision.reason },
+      };
+    }
+
+    // decideQuarantine refuses a request with no IP, so one is always present here; if that ever stopped being true this
+    // must fail closed rather than fall through to an install.
+    if (options.targetIp === undefined) {
+      return { status: 400, body: { ok: false, quarantined: false, code: 'no_ip', error: 'an automated quarantine needs a source IPv4' } };
+    }
+    if (this.quarantineEnvelope.mode !== 'enforce' && options.approved !== true) {
+      const proposal = this.quarantineProposals.record(
+        { targetIp: options.targetIp, reason: options.reason, priority: options.priority ?? 65535, evidence: options.evidence ?? {} },
+        process.hrtime.bigint(),
+        Date.now(),
+      );
+      // The first request for a source is worth a line; repeats of the same proposal are not (a detector can ask every second).
+      if (proposal.requests === 1) {
+        console.warn(`[!] [Quarantine] PROPOSED (mode propose, nothing installed): ${options.targetIp}: ${options.reason}. Approve with POST /api/sdn/quarantine/approve.`);
+      }
+      return {
+        status: 202,
+        body: {
+          ok: true,
+          quarantined: false,
+          proposed: true,
+          targetIp: options.targetIp,
+          requests: proposal.requests,
+          message: 'Inside the quarantine envelope but the bridge is in propose mode: nothing was installed. A person can approve it.',
+        },
       };
     }
 
@@ -732,6 +685,31 @@ export class ZodiacBridgeServer {
         timestampNs: qResult.timestampNs.toString(),
       },
     };
+  }
+
+  /** Proposals a person can still approve, most recent first. */
+  public listQuarantineProposals(): { mode: string; proposals: readonly QuarantineProposal[] } {
+    return { mode: this.quarantineEnvelope.mode, proposals: this.quarantineProposals.list(process.hrtime.bigint()) };
+  }
+
+  /**
+   * A person approves a proposal: it is installed, time-limited, if it is still inside the envelope. The proposal is
+   * kept if the install is refused (for example the cap is full), so it can be approved again later.
+   */
+  public approveQuarantineProposal(targetIp: string): { status: number; body: Record<string, unknown> } {
+    const proposal = this.quarantineProposals.get(targetIp, process.hrtime.bigint());
+    if (proposal === null) {
+      return { status: 404, body: { ok: false, quarantined: false, error: `no current proposal for ${targetIp} (none was made, it was already handled, or it is older than the approval window)` } };
+    }
+    const outcome = this.requestQuarantine({
+      targetIp: proposal.targetIp,
+      reason: `${proposal.reason} (approved by a person)`,
+      priority: proposal.priority,
+      evidence: proposal.evidence,
+      approved: true,
+    });
+    if (outcome.status === 200) this.quarantineProposals.remove(targetIp);
+    return outcome;
   }
 
   /**
@@ -1777,6 +1755,7 @@ export class ZodiacBridgeServer {
             targetIp: cleanIp,
             reason: typeof reason === 'string' ? reason.trim() : 'Neural Anomaly Detected',
             priority: typeof priority === 'number' ? priority : 65535,
+            evidence: sanitizeEvidence(body.evidence),
           });
           res.statusCode = outcome.status;
           res.setHeader('Content-Type', 'application/json');
@@ -1785,6 +1764,77 @@ export class ZodiacBridgeServer {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+      return;
+    }
+
+    // API: GET /api/sdn/quarantine/proposals (read-only: what is waiting for a person, and the bridge's mode)
+    if (url.pathname === '/api/sdn/quarantine/proposals' && req.method === 'GET') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(this.listQuarantineProposals()));
+      return;
+    }
+
+    // API: POST /api/sdn/quarantine/approve {"targetIp": "..."} (a person approves a proposal; it is installed time-limited)
+    if (url.pathname === '/api/sdn/quarantine/approve' && req.method === 'POST') {
+      // The bridge API has no authentication, so approval is limited to callers on this machine (ssh to the Jetson and
+      // curl localhost): a process elsewhere on the LAN cannot approve its own proposal.
+      // Local callers only, and none that carry proxy headers (see mayApproveQuarantine for what that does and does not cover).
+      if (!mayApproveQuarantine(req.socket.remoteAddress, req.headers)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: 'approval is accepted only from the bridge host itself (loopback, without proxy headers)' }));
+        return;
+      }
+      const MAX_APPROVE_PAYLOAD = 4 * 1024;
+      const chunks: Buffer[] = [];
+      let bytesReceived = 0;
+      let aborted = false;
+      const fail = (status: number, message: string): void => {
+        if (res.headersSent) return;
+        res.statusCode = status;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: message }));
+      };
+      req.setTimeout(5000, () => {
+        aborted = true;
+        fail(408, 'Request Timeout');
+        req.destroy();
+      });
+      req.on('error', (err: Error) => {
+        aborted = true;
+        fail(500, err.message);
+      });
+      req.on('data', (c: Buffer) => {
+        if (aborted || res.headersSent) return;
+        bytesReceived += c.length;
+        if (bytesReceived > MAX_APPROVE_PAYLOAD) {
+          aborted = true;
+          fail(413, 'Payload Too Large');
+          req.destroy();
+          return;
+        }
+        chunks.push(c);
+      });
+      req.on('end', () => {
+        if (aborted || res.headersSent) return;
+        try {
+          const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+          const targetIp = typeof parsed === 'object' && parsed !== null && 'targetIp' in parsed && typeof parsed.targetIp === 'string'
+            ? parsed.targetIp.trim()
+            : '';
+          if (!/^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$/.test(targetIp)) {
+            fail(400, 'targetIp (IPv4) required');
+            return;
+          }
+          const outcome = this.approveQuarantineProposal(targetIp);
+          res.statusCode = outcome.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(outcome.body));
+        } catch (err: unknown) {
+          fail(400, err instanceof Error ? err.message : String(err));
         }
       });
       return;
@@ -2017,30 +2067,6 @@ export class ZodiacBridgeServer {
       return;
     }
 
-    // API: GET /api/sdn/copilot/summary (Executive AI Telemetry Copilot)
-    // Council Invariant 1 (Anti-Shortcut), Invariant 3 (Fail-Closed) & Invariant 6 (Epistemic Provenance):
-    // Synthesizes a plain-English executive triage of physical SDN signals via Ollama or deterministic fallback.
-    if (url.pathname === '/api/sdn/copilot/summary' && req.method === 'GET') {
-      try {
-        const summary = await this.generateCopilotSummary();
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-        res.statusCode = 200;
-        res.end(JSON.stringify(summary));
-      } catch (err: unknown) {
-        res.statusCode = 500;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({
-          status: 'OFFLINE',
-          headline: 'Executive Copilot Fault',
-          bullets: ['Copilot evaluation encountered an internal error.'],
-          error: err instanceof Error ? err.message : String(err),
-          timestampMs: Date.now(),
-        }));
-      }
-      return;
-    }
-
     // Static File Serving from public/ (Asynchronous & Path-Traversal Protected)
     let reqPath = url.pathname;
     if (reqPath === '/' || reqPath === '') {
@@ -2103,178 +2129,6 @@ export class ZodiacBridgeServer {
       if (result.length >= cap) break;
     }
     return result;
-  }
-
-  public async generateCopilotSummary(): Promise<CopilotSummaryResponse> {
-    const nowPerf = performance.now();
-    // Sanjay Ghemawat Invariant: Use readonly pre-parsed configuration to avoid V8 process.env overhead
-    const { ttlSec, timeoutMs, maxTokens, temperature } = this.copilotConfig;
-
-    // Dean Latency Invariant: Check memory cache first
-    if (this.copilotSummaryCache && (nowPerf - this.copilotSummaryCache.cachedAtPerfMs) < ttlSec * 1000) {
-      return {
-        ...this.copilotSummaryCache.data,
-        cached: true,
-      };
-    }
-
-    if (this.copilotInFlightPromise) {
-      return await this.copilotInFlightPromise;
-    }
-
-    this.copilotInFlightPromise = (async (): Promise<CopilotSummaryResponse> => {
-      const ofState = this.controller.openFlow.metrics.state || this.cachedSnapshot.openflow?.status || 'Disconnected';
-      const totalRules = this.flowRuleRegistry.size;
-      let quarantinedCount = 0;
-      for (const rule of this.flowRuleRegistry.values()) {
-        if (rule.action === 'DROP' || rule.ruleId.startsWith('quarantine-')) {
-          quarantinedCount++;
-        }
-      }
-
-      const switchTempC = this.cachedSnapshot.system?.cpuTemperatureC ?? null;
-      const jetsonTempC = this.cachedSnapshot.jetson?.temperatures?.socC ?? this.cachedSnapshot.jetson?.temperatures?.gpuC ?? this.cachedSnapshot.jetson?.temperatures?.cpuC ?? null;
-      const vddInMw = this.cachedSnapshot.jetson?.powerMw?.vddIn;
-      // Council Invariant 2 (Dean & Ghemawat): Integer milliwatts, zero floating-point division
-      const jetsonPowerMw = vddInMw != null ? Math.trunc(vddInMw) : null;
-      const ramUsedBytes = this.cachedSnapshot.jetson?.ramUsedBytes;
-      const ramTotalBytes = this.cachedSnapshot.jetson?.ramTotalBytes;
-      const jetsonFreeRamMb = (ramTotalBytes != null && ramUsedBytes != null && ramTotalBytes > ramUsedBytes)
-        ? Number((ramTotalBytes - ramUsedBytes) / (1024n * 1024n))
-        : null;
-      const wireTapInferencesPerSec = Number(this.cachedSnapshot.coral?.inferencesPerSecond ?? 0n);
-
-      const portsSummary = (this.cachedSnapshot.ports || [])
-        .map(p => `Port ${p.port} (${p.name}): ${p.status}`)
-        .join(', ');
-
-      const metrics: CopilotSummaryMetrics = {
-        openFlowState: ofState,
-        activeRules: totalRules,
-        quarantinedCount,
-        switchTempC,
-        jetsonTempC,
-        jetsonPowerMw,
-        jetsonFreeRamMb,
-        wireTapInferencesPerSec,
-      };
-
-      const buildDeterministicFallback = (): CopilotSummaryResponse => {
-        const hasQuarantine = quarantinedCount > 0;
-        const ofDisconnected = ofState !== 'ESTABLISHED';
-        const fallbackStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
-          ofDisconnected ? 'ALERT' : hasQuarantine ? 'DEGRADED' : 'HEALTHY';
-
-        const fallbackBullets: string[] = [
-          `OpenFlow 1.3 control plane is ${ofState} with ${totalRules} active rules (${quarantinedCount} isolated).`,
-          `Switch CPU is ${switchTempC != null ? switchTempC + '°C' : 'monitored'}; Jetson Orin silicon at ${jetsonTempC != null ? jetsonTempC + '°C' : 'nominal'} (${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'idle'}).`,
-          wireTapInferencesPerSec > 0
-            ? `Ampere GPU wire-tap inference active at ${wireTapInferencesPerSec} inferences/second.`
-            : 'Ampere GPU wire-tap inference in standby mode awaiting frame ingress.',
-        ];
-
-        return {
-          status: fallbackStatus,
-          headline: 'Deterministic SDN Telemetry Triage (Ollama Offline Fallback)',
-          bullets: fallbackBullets,
-          model: 'deterministic_rules (fail-closed fallback)',
-          timestampMs: Date.now(),
-          cached: false,
-          ttlSeconds: ttlSec,
-          metrics,
-        };
-      };
-
-      let resultData: CopilotSummaryResponse;
-      const configuredOllamaUrl = process.env['OLLAMA_API_URL'];
-
-      if (!configuredOllamaUrl) {
-        // Council Invariant 3 & Fate-Sharing: When Ollama is stopped/unconfigured on Jetson,
-        // immediately return deterministic telemetry triage without network timeout.
-        resultData = buildDeterministicFallback();
-      } else {
-        const qwenModel = process.env['QWEN_MODEL'] || 'qwen2.5:3b';
-
-        const prompt = `You are the Zodiac Executive AI Copilot running on Jetson Orin Nano Super.
-Provide a concise, 3-bullet plain-English executive triage of the physical SDN infrastructure.
-Telemetry Signals:
-- OpenFlow 1.3 State: ${ofState} (${totalRules} active rules, ${quarantinedCount} quarantined hosts)
-- Physical Switch Ports: ${portsSummary || 'Port 1..4 monitored'}
-- Switch CPU Temp: ${switchTempC != null ? switchTempC + '°C' : 'N/A'}
-- Jetson Orin Hardware: ${jetsonTempC != null ? jetsonTempC + '°C' : 'N/A'}, Power: ${jetsonPowerMw != null ? jetsonPowerMw + ' mW' : 'N/A'}, Free RAM: ${jetsonFreeRamMb != null ? jetsonFreeRamMb + 'MB' : 'N/A'}
-- Wire-Tap Inference: ${wireTapInferencesPerSec > 0 ? `Active at ${wireTapInferencesPerSec} inf/s` : 'Standby / Idle'}
-
-Respond ONLY with valid JSON having the structure (keep each bullet under 15 words to prevent token truncation):
-{"status": "HEALTHY" | "DEGRADED" | "ALERT", "headline": string, "bullets": [string, string, string]}`;
-
-        try {
-          const response = await fetch(configuredOllamaUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: qwenModel,
-              prompt,
-              format: 'json',
-              stream: false,
-              options: { temperature, num_predict: maxTokens },
-            }),
-            signal: AbortSignal.timeout(timeoutMs),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Ollama returned HTTP ${response.status}`);
-          }
-
-          const resJson = (await response.json()) as { model?: string; response?: string };
-          const parsed = JSON.parse(resJson.response || '{}') as {
-            status?: string;
-            headline?: string;
-            bullets?: string[];
-          };
-
-          const statusRaw = String(parsed.status || 'HEALTHY').toUpperCase();
-          const validStatus: 'HEALTHY' | 'DEGRADED' | 'ALERT' =
-            statusRaw === 'ALERT' ? 'ALERT' : statusRaw === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY';
-
-          const actualModel = resJson.model || qwenModel || 'unspecified-model';
-
-          resultData = {
-            status: validStatus,
-            headline: String(parsed.headline || 'Physical SDN Infrastructure Triage').trim(),
-            bullets: Array.isArray(parsed.bullets) && parsed.bullets.length > 0
-              ? parsed.bullets.map(b => String(b).trim()).slice(0, 4)
-              : ['SDN data plane operational', 'OpenFlow controller established', 'Telemetry counters monotonic'],
-            model: `${actualModel} (Ollama)`,
-            timestampMs: Date.now(),
-            cached: false,
-            ttlSeconds: ttlSec,
-            metrics,
-          };
-        } catch (err: unknown) {
-          // Council Invariant 1 & 3: Fail-closed deterministic fallback
-          const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
-          if (isTimeout) {
-            console.warn('[!] [Copilot] Ollama inference timed out (thermal/budget limit), failing closed to deterministic fallback.');
-          } else {
-            console.warn('[!] [Copilot] Ollama query failed, using deterministic fallback:', err instanceof Error ? err.message : String(err));
-          }
-
-          resultData = buildDeterministicFallback();
-        }
-      }
-
-      this.copilotSummaryCache = {
-        data: resultData,
-        cachedAtPerfMs: performance.now(),
-      };
-      return resultData;
-    })();
-
-    try {
-      return await this.copilotInFlightPromise;
-    } finally {
-      this.copilotInFlightPromise = null;
-    }
   }
 
   private async fetchSwitchHttpStatus(): Promise<import('./zodiac-serial.js').ZodiacDeviceStatus | undefined> {

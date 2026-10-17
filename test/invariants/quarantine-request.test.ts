@@ -16,12 +16,17 @@ let server: ZodiacBridgeServer;
 let controller: ZodiacController;
 
 beforeEach(() => {
+  // These cases are about the envelope and the time limit, which apply once the bridge installs: so mode enforce.
+  vi.stubEnv('ZODIAC_QUARANTINE_MODE', 'enforce');
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   controller = new ZodiacController();
   server = new ZodiacBridgeServer(controller);
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 const ask = (ip: string | undefined, mac?: string) =>
   server.requestQuarantine({ targetIp: ip, targetMac: mac, reason: 'test' });
@@ -95,5 +100,113 @@ describe('time limit', () => {
     expect(ask('10.0.2.50').status).toBe(200);
     expect(server.releaseQuarantineRule({ targetIp: '10.0.2.50' }).releasedCount).toBe(1);
     expect(server.sweepExpiredQuarantines(process.hrtime.bigint() + BigInt(DEFAULT_QUARANTINE_TTL_MS) * 2_000_000n)).toBe(0);
+  });
+});
+
+describe('manual release (carried over from the removed copilot test file)', () => {
+  it('does not forget a rule the switch could not be told to delete, and rejects a release with no identifiers', () => {
+    // Installed on hardware, but the OpenFlow session is not ESTABLISHED: the delete cannot be sent, so the registry must
+    // keep the rule (forgetting it would leave a DROP on the switch that nothing knows about).
+    server.registerFlowRule({
+      ruleId: 'quarantine-test-hardware',
+      priority: 65535,
+      action: 'DROP',
+      srcCidr: '10.0.2.105/32',
+      dstCidr: '0.0.0.0/0',
+      protocol: 'ANY',
+      installedAtMs: Date.now(),
+      openFlowInstalled: true,
+    });
+    const lift = vi.spyOn(controller, 'liftQuarantine').mockReturnValue({ success: false, timestampNs: 0n, error: 'OpenFlow control plane not ESTABLISHED' });
+    const failed = server.releaseQuarantineRule({ targetIp: '10.0.2.105', reason: 'premature release while OpenFlow is disconnected' });
+    expect(lift).toHaveBeenCalledTimes(1); // the hardware delete really was attempted, and it failed
+    expect(failed.released).toBe(false);
+    expect(failed.releasedCount).toBe(0);
+    expect(server['flowRuleRegistry'].has('quarantine-test-hardware')).toBe(true);
+
+    lift.mockReturnValue({ success: true, timestampNs: process.hrtime.bigint() });
+    const ok = server.releaseQuarantineRule({ targetIp: '10.0.2.105', reason: 'verified' });
+    expect(ok.released).toBe(true);
+    expect(ok.releasedRules).toContain('quarantine-test-hardware');
+    expect(server['flowRuleRegistry'].has('quarantine-test-hardware')).toBe(false);
+
+    expect(() => server.releaseQuarantineRule({})).toThrow('targetMac or targetIp required');
+  });
+});
+
+describe('propose mode (the default): the bridge is the single place that decides', () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv('ZODIAC_QUARANTINE_MODE', '');
+    server = new ZodiacBridgeServer(new ZodiacController());
+  });
+
+  it('a request inside the envelope is recorded as a proposal and installs nothing', () => {
+    const r = server.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', evidence: { pps: 18, windowFrames: 20 } });
+    expect(r.status).toBe(202);
+    expect(r.body['proposed']).toBe(true);
+    expect(r.body['quarantined']).toBe(false);
+    expect(server['flowRuleRegistry'].size).toBe(0);
+    expect(server['activeQuarantineIps']()).toEqual([]);
+    const listed = server.listQuarantineProposals();
+    expect(listed.mode).toBe('propose');
+    expect(listed.proposals).toHaveLength(1);
+    expect(listed.proposals[0]).toMatchObject({ targetIp: '10.0.2.50', requests: 1, evidence: { pps: 18, windowFrames: 20 } });
+  });
+
+  it('repeat requests update one proposal rather than adding more', () => {
+    for (let i = 0; i < 5; i++) server.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' });
+    const listed = server.listQuarantineProposals().proposals;
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.requests).toBe(5);
+  });
+
+  it('the envelope still refuses first: an out-of-scope source never becomes a proposal', () => {
+    const r = server.requestQuarantine({ targetIp: '10.0.0.1', reason: 'rate' });
+    expect(r.status).toBe(403);
+    expect(server.listQuarantineProposals().proposals).toEqual([]);
+  });
+
+  it('a protected host never becomes a proposal', () => {
+    vi.stubEnv('ZODIAC_QUARANTINE_PROTECTED_IPS', '10.0.2.119, 10.0.2.51, 10.0.2.52');
+    const s2 = new ZodiacBridgeServer(new ZodiacController());
+    for (const ip of ['10.0.2.119', '10.0.2.51', '10.0.2.52']) {
+      expect(s2.requestQuarantine({ targetIp: ip, reason: 'rate' }).status, ip).toBe(403);
+    }
+    expect(s2.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' }).status).toBe(202);
+  });
+
+  it('a person approving a proposal installs it, time-limited, and clears the proposal', () => {
+    server.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' });
+    const r = server.approveQuarantineProposal('10.0.2.50');
+    expect(r.status).toBe(200);
+    expect(r.body['quarantined']).toBe(true);
+    expect(r.body['expiresInMs']).toBe(DEFAULT_QUARANTINE_TTL_MS);
+    expect(server['activeQuarantineIps']()).toEqual(['10.0.2.50']);
+    expect(server.listQuarantineProposals().proposals).toEqual([]);
+  });
+
+  it('approving something that was never proposed is refused', () => {
+    expect(server.approveQuarantineProposal('10.0.2.50').status).toBe(404);
+    expect(server['activeQuarantineIps']()).toEqual([]);
+  });
+
+  it('approval is still bounded by the envelope: at the cap it is refused and the proposal is kept', () => {
+    const ips = Array.from({ length: DEFAULT_QUARANTINE_MAX_ACTIVE + 1 }, (_, i) => `10.0.2.${100 + i}`);
+    for (const ip of ips) server.requestQuarantine({ targetIp: ip, reason: 'rate' });
+    for (const ip of ips.slice(0, DEFAULT_QUARANTINE_MAX_ACTIVE)) expect(server.approveQuarantineProposal(ip).status).toBe(200);
+    const last = ips[DEFAULT_QUARANTINE_MAX_ACTIVE] as string;
+    expect(server.approveQuarantineProposal(last).status).toBe(429);
+    expect(server.listQuarantineProposals().proposals.map((p) => p.targetIp)).toContain(last);
+  });
+
+  it('only the exact value enforce makes the bridge install without a person', () => {
+    for (const v of ['ENFORCE', 'true', '1', 'enforce ', 'on']) {
+      vi.stubEnv('ZODIAC_QUARANTINE_MODE', v);
+      const s = new ZodiacBridgeServer(new ZodiacController());
+      expect(s.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' }).status, v).toBe(202);
+    }
+    vi.stubEnv('ZODIAC_QUARANTINE_MODE', 'enforce');
+    expect(new ZodiacBridgeServer(new ZodiacController()).requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' }).status).toBe(200);
   });
 });
