@@ -180,6 +180,10 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('view-device-orin')).not.toBeNull();
     expect(document.getElementById('view-device-rpi5')).not.toBeNull();
     expect(document.getElementById('btn-device-rpi5')).not.toBeNull();
+    expect(document.getElementById('view-device-rpi3-1')).not.toBeNull();
+    expect(document.getElementById('btn-device-rpi3-1')).not.toBeNull();
+    expect(document.getElementById('view-device-rpi3-2')).not.toBeNull();
+    expect(document.getElementById('btn-device-rpi3-2')).not.toBeNull();
     expect(document.getElementById('view-device-coral-1')).not.toBeNull();
     expect(document.getElementById('view-device-coral-2')).not.toBeNull();
     expect(document.getElementById('view-device-workstation')).not.toBeNull();
@@ -208,6 +212,23 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('chart-coral1-latency')).not.toBeNull();
     expect(document.getElementById('chart-coral2-rate')).not.toBeNull();
     expect(document.getElementById('chart-coral2-latency')).not.toBeNull();
+
+    // Raspberry Pi 3B+ Dual Red Team Nodes
+    expect(document.getElementById('chart-rpi3-1-network')).not.toBeNull();
+    expect(document.getElementById('chart-rpi3-1-compute')).not.toBeNull();
+    expect(document.getElementById('chart-rpi3-1-thermal')).not.toBeNull();
+    expect(document.getElementById('rpi3-1-kpi-eth0-rate')).not.toBeNull();
+    expect(document.getElementById('rpi3-1-kpi-compute')).not.toBeNull();
+    expect(document.getElementById('rpi3-1-kpi-cpu-temp')).not.toBeNull();
+    expect(document.getElementById('rpi3-1-kpi-throttled')).not.toBeNull();
+
+    expect(document.getElementById('chart-rpi3-2-network')).not.toBeNull();
+    expect(document.getElementById('chart-rpi3-2-compute')).not.toBeNull();
+    expect(document.getElementById('chart-rpi3-2-thermal')).not.toBeNull();
+    expect(document.getElementById('rpi3-2-kpi-eth0-rate')).not.toBeNull();
+    expect(document.getElementById('rpi3-2-kpi-compute')).not.toBeNull();
+    expect(document.getElementById('rpi3-2-kpi-cpu-temp')).not.toBeNull();
+    expect(document.getElementById('rpi3-2-kpi-throttled')).not.toBeNull();
 
     // Executive AI Copilot Elements
     expect(document.getElementById('cf-copilot-card')).not.toBeNull();
@@ -676,6 +697,56 @@ describe('Zodiac Dashboard UI & Chart Invariants', () => {
     expect(document.getElementById('rpi5-kpi-hailo-badge')?.textContent).toBe('OFFLINE');
     expect(document.getElementById('rpi5-kpi-hailo-rate')?.textContent).toContain('--');
     expect(document.getElementById('rpi5-kpi-eth0-status')?.textContent).toBe('DOWN');
+  });
+
+  it('renders Raspberry Pi 3B+ Red Team (Node 01 & 02) telemetry and isolation matrix in accordance with Council Invariants', () => {
+    const app = (window as unknown as {
+      ZodiacApp: {
+        renderTelemetry: (s: unknown, d: boolean) => void;
+        switchDevice: (d: string) => void;
+        updateCharts: () => void;
+      };
+    }).ZodiacApp;
+
+    // 1. Render default snapshot (online simulated twin)
+    const snap = createDefaultZodiacSnapshot();
+    app.renderTelemetry(snap, false);
+    app.switchDevice('rpi3-1');
+
+    const kpiEth0Rate1 = document.getElementById('rpi3-1-kpi-eth0-rate');
+    const kpiCompute1 = document.getElementById('rpi3-1-kpi-compute');
+    const kpiCpuTemp1 = document.getElementById('rpi3-1-kpi-cpu-temp');
+    const kpiThrottled1 = document.getElementById('rpi3-1-kpi-throttled');
+
+    expect(kpiEth0Rate1?.textContent).toContain('/s');
+    expect(kpiCompute1?.textContent).toContain('%');
+    expect(kpiCpuTemp1?.textContent).toBe('35.4°C');
+    expect(kpiThrottled1?.textContent).toContain('0x0');
+
+    // Switch to Node 02
+    app.switchDevice('rpi3-2');
+    const kpiEth0Rate2 = document.getElementById('rpi3-2-kpi-eth0-rate');
+    const kpiCompute2 = document.getElementById('rpi3-2-kpi-compute');
+    const kpiCpuTemp2 = document.getElementById('rpi3-2-kpi-cpu-temp');
+    const kpiThrottled2 = document.getElementById('rpi3-2-kpi-throttled');
+
+    expect(kpiEth0Rate2?.textContent).toContain('/s');
+    expect(kpiCompute2?.textContent).toContain('%');
+    expect(kpiCpuTemp2?.textContent).toBe('33.2°C');
+    // Invariant 6: Real hardware provenance reflected in 0x50000 throttled register
+    expect(kpiThrottled2?.textContent).toContain('0x50000');
+
+    // Verify all charts draw without error
+    expect(() => app.updateCharts()).not.toThrow();
+
+    // 2. Render disconnected snapshot (Council Invariant 6: physical truth)
+    const disconnectedSnap = createDisconnectedZodiacSnapshot();
+    app.renderTelemetry(disconnectedSnap, false);
+
+    expect(document.getElementById('rpi3-1-kpi-cpu-temp')?.textContent).toBe('--°C');
+    expect(document.getElementById('rpi3-2-kpi-cpu-temp')?.textContent).toBe('--°C');
+    expect(document.getElementById('rpi3-1-uptime')?.textContent).toBe('--:--:--');
+    expect(document.getElementById('rpi3-2-uptime')?.textContent).toBe('--:--:--');
   });
 });
 
