@@ -59,19 +59,42 @@ print(json.dumps([zsc.find_openers(dev, os.path.join(root, 'proc')), zsc.find_op
     expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([[111, 333], [], []]);
   });
 
-  it('refuses to restart while another process holds the port, and says why (exit 3)', () => {
+  // /proc exists on Linux only: elsewhere the scan cannot see holders and the tool would go on to open a real serial port.
+  it.skipIf(process.platform !== 'linux')('refuses to restart while another process holds the port, and says why (exit 3)', () => {
     const r = spawnSync('python3', ['-c', `
 import importlib.util, os, subprocess, sys, tempfile
 spec = importlib.util.spec_from_file_location('zsc', sys.argv[1]); zsc = importlib.util.module_from_spec(spec); spec.loader.exec_module(zsc)
-dev = os.path.join(tempfile.mkdtemp(), 'ttyACM0'); open(dev, 'w').close()
-holder = open(dev)  # this very process holds it, so another process (a child) sees one holder
-child = subprocess.run([sys.executable, '-c', 'import importlib.util,sys;s=importlib.util.spec_from_file_location("z",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);m.OPENER_WAIT_SECONDS=1;sys.argv=["z","--restart","--dev",sys.argv[2]];sys.exit(m.main())', sys.argv[1], dev], capture_output=True, text=True)
-print(child.returncode); print(child.stderr.strip()[:140])
+dev = os.path.join(tempfile.mkdtemp(), 'ttyACM0'); open(dev, 'w').write('')
+holder = open(dev)  # this very process holds the device, so the child process sees exactly one other holder
+child_code = (
+    'import importlib.util,sys;'
+    's=importlib.util.spec_from_file_location("z",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);'
+    'm.OPENER_WAIT_SECONDS=1;m.runs_as_bridge_user=lambda *a, **k: True;'  # isolate this case from the run-as-user check, tested below
+    'sys.argv=["z","--restart","--dev",sys.argv[2]];sys.exit(m.main())')
+child = subprocess.run([sys.executable, '-c', child_code, sys.argv[1], dev], capture_output=True, text=True)
+print(child.returncode); print(child.stderr.strip()[:160])
 `, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
     const [code, msg] = r.stdout.trim().split('\n');
-    expect(code).toBe(process.platform === 'linux' ? '3' : code); // /proc exists on Linux only; elsewhere the check cannot see holders
-    if (process.platform === 'linux') expect(msg).toMatch(/refusing to restart: process\(es\) \[\d+\] still have/);
+    expect(code).toBe('3');
+    expect(msg).toMatch(/refusing to restart: process\(es\) \[\d+\] still have/);
+  });
+
+  it('refuses to restart from any user but the bridge\'s, before it looks at the port at all (exit 4)', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, subprocess, sys
+child_code = (
+    'import importlib.util,sys;'
+    's=importlib.util.spec_from_file_location("z",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);'
+    'm.runs_as_bridge_user=lambda *a, **k: False;'
+    'sys.argv=["z","--restart","--dev","/dev/does-not-exist"];sys.exit(m.main())')
+child = subprocess.run([sys.executable, '-c', child_code, sys.argv[1]], capture_output=True, text=True)
+print(child.returncode); print(child.stderr.strip()[:200])
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    const [code, msg] = r.stdout.trim().split('\n');
+    expect(code).toBe('4');
+    expect(msg).toMatch(/run this as the user the bridge runs as \(zodiac\)/);
   });
 
   it('looks for other openers once more just before the restart goes out, and declines if any appeared', () => {
