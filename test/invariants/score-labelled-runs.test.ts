@@ -129,9 +129,9 @@ base = {'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.
 def valid(extra): return sc.score({**base, **extra}, frames)['valid']
 print(json.dumps([valid({}), valid({'rackHealthyAfter': True}), valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 0}),
                   valid({'rackHealthyAfter': False}), valid({'rackHealthyAfter': None}), valid({'rackHealthyAfter': 'true'}), valid({'rackHealthyAfter': 1}),
-                  valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 1})]))
+                  valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 1}), valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': None})]))
 `, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, true, true, false, false, false, false, false]);
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, true, true, false, false, false, false, false, false]); // the last: an unreadable journal (None) is not zero drops
   });
 });

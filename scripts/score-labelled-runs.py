@@ -120,7 +120,9 @@ def rack_ok(label):
     """
     if "rackHealthyAfter" not in label:
         return True
-    return label["rackHealthyAfter"] is True and label.get("controllerDropsDuringRun", 0) in (0, None)
+    # A drop count of None means the journal could not be read for the run window: not evidence of zero drops.
+    drops = label.get("controllerDropsDuringRun", 0)
+    return label["rackHealthyAfter"] is True and drops == 0 and drops is not False
 
 
 def score(label, frames):
