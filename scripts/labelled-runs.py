@@ -52,8 +52,8 @@ ADVERSARY = "agentic-node-01"
 ALLOWED_TARGETS = ("10.0.2.119", "10.0.2.51")  # the Mac's benchmark alias and the Pi 5
 SEGMENT = ipaddress.ip_network("10.0.2.0/24")
 
-BENIGN_TOOLS = ("ping", "http-get", "udp-small", "tcp-stream", "idle")
-ATTACK_TOOLS = ("hping3", "nmap")
+BENIGN_TOOLS = ("ping", "http-get", "udp-small", "tcp-stream", "tcp-interactive", "http-burst", "udp-burst", "idle")
+ATTACK_TOOLS = ("hping3", "nmap", "arp-flood")
 TOOLS = BENIGN_TOOLS + ATTACK_TOOLS
 # Traffic only reaches the tap if it CROSSES the Zodiac. node-01, node-02 and the Pi 5 are all on the workload side of the
 # same switch, so traffic among them never does (measured 2026-10-17: HTTP and iperf3 runs to the Pi 5 left 0 sender frames
@@ -67,6 +67,12 @@ MAX_RPS = 20
 MAX_UDP_SMALL_PPS = 50
 STREAM_PORT = 5201
 MAX_STREAM_MBIT = 20
+MAX_INTERACTIVE_EPS = 30        # tcp-interactive: keystroke-sized writes per second
+MAX_BURST_CONNS = 16            # http-burst: parallel connections per burst
+MAX_UDP_BURST = 40              # udp-burst: datagrams back to back
+MAX_ARP_PPS = 300
+MAX_SCAN_DELAY_MS = 5000
+UDP_BURST_PORT = 51820          # not 41641: the nodes drop Tailscale's own port on eth0 (see deploy/workload)
 SPACING_SECONDS = 5            # quiet gap between consecutive runs, so one run's tail is not in the next capture
 # Bulk TCP uses plain Python at both ends (the Mac's firewall silently dropped inbound connections to iperf3 while allowing
 # Python, measured 2026-10-17). A sink on this machine and a rate-limited sender on the node, both fixed scripts.
@@ -96,6 +102,36 @@ TCP_STREAM_SCRIPT = (
     "k.close()\n"
 )
 HTTP_LOOP_SCRIPT = 'end=$(( $(date +%s) + $3 )); while [ $(date +%s) -lt $end ]; do curl -s -m 2 --interface eth0 -o /dev/null "$1"; sleep "$2"; done'
+# ssh-like traffic (modelled, not a real ssh session: there is no key from the nodes to anything reachable): small writes of
+# 40 to 120 bytes at irregular gaps averaging 1/events-per-second, over one TCP connection. Integer nanoseconds throughout; the
+# pseudo-random numbers are a fixed linear congruential generator so a run is repeatable.
+TCP_INTERACTIVE_SCRIPT = (
+    "import socket,sys,time;"
+    "t,p,e,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5];"
+    "k=socket.socket();k.bind((b,0));k.settimeout(10);k.connect((t,p));k.settimeout(5);k.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1);"
+    "g=1_000_000_000//e;now=time.monotonic_ns();end=now+s*1_000_000_000;nxt=now;x=12345\n"
+    "while time.monotonic_ns()<end:\n"
+    " x=(x*1103515245+12345)%2147483648;k.sendall(b'k'*(40+x%81))\n"
+    " x=(x*1103515245+12345)%2147483648;nxt+=g//2+x%g;w=nxt-time.monotonic_ns()\n"
+    " if w>0: time.sleep(w/1e9)\n"
+    "k.close()\n"
+)
+# Browsing-like traffic: every PERIOD seconds, a burst of parallel connections each fetching a 20 KB page, plus one small request.
+# Arguments: base url, connections, period in seconds, duration in seconds. The text is constant; nothing is spliced into it.
+HTTP_BURST_SCRIPT = ('end=$(( $(date +%s) + $4 )); while [ $(date +%s) -lt $end ]; do i=0; '
+                     'while [ $i -lt $2 ]; do curl -s -m 3 --interface eth0 -o /dev/null "$1/page" & i=$((i+1)); done; '
+                     'curl -s -m 3 --interface eth0 -o /dev/null "$1/health"; wait; sleep $3; done')
+# Tailscale-like traffic (MODELLED from the 2026-10-16 capture: a burst of full-size UDP datagrams, then about one small
+# keepalive a second). It is not Tailscale and not WireGuard. Arguments: target port burst payload period secs bind.
+UDP_BURST_SCRIPT = (
+    "import socket,sys,time;"
+    "t,p,bu,n,pe,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]),int(sys.argv[6]),sys.argv[7];"
+    "k=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);k.bind((b,0));d=b'x'*n;ka=b'k'*148;end=time.monotonic_ns()+s*1_000_000_000\n"
+    "while time.monotonic_ns()<end:\n"
+    " for _ in range(bu): k.sendto(d,(t,p))\n"
+    " for _ in range(pe-1):\n"
+    "  time.sleep(1);k.sendto(ka,(t,p))\n"
+)
 # A fixed script: sends small UDP datagrams at a bounded rate for a bounded time. Arguments: target port pps seconds payload.
 UDP_SMALL_SCRIPT = (
     "import socket,sys,time;"
@@ -183,6 +219,9 @@ def validate(run):
         pr = run.get("ports", "")
         if not re.fullmatch(r"\d{1,5}-\d{1,5}", str(pr)) or int(str(pr).split("-")[1]) - int(str(pr).split("-")[0]) > 2000:
             errors.append("nmap ports must be a range of at most 2000 ports, like 1-1000")
+        d = run.get("delay_ms", 0)
+        if not isinstance(d, int) or isinstance(d, bool) or not 0 <= d <= MAX_SCAN_DELAY_MS:
+            errors.append(f"nmap delay_ms must be an integer from 0 to {MAX_SCAN_DELAY_MS}")
     if tool == "http-get":
         if run.get("target") != HTTP_TARGET:
             errors.append(f"http-get only targets {HTTP_TARGET}")
@@ -198,6 +237,32 @@ def validate(run):
             errors.append("udp-small payload_bytes must be 20 to 200")
         if run.get("port", 53) != 53 and not (isinstance(run.get("port"), int) and 1 <= run["port"] <= 65535):
             errors.append("udp-small port must be 1 to 65535")
+    if tool == "tcp-interactive":
+        if run.get("target") != LOCAL_RECEIVER_TARGET:
+            errors.append(f"tcp-interactive only targets {LOCAL_RECEIVER_TARGET}")
+        if not isinstance(run.get("events_per_s"), int) or isinstance(run.get("events_per_s"), bool) or not 1 <= run["events_per_s"] <= MAX_INTERACTIVE_EPS:
+            errors.append(f"tcp-interactive events_per_s must be 1 to {MAX_INTERACTIVE_EPS}")
+    if tool == "http-burst":
+        if run.get("target") != HTTP_TARGET:
+            errors.append(f"http-burst only targets {HTTP_TARGET}")
+        if not isinstance(run.get("conns"), int) or isinstance(run.get("conns"), bool) or not 1 <= run["conns"] <= MAX_BURST_CONNS:
+            errors.append(f"http-burst conns must be 1 to {MAX_BURST_CONNS}")
+        if not isinstance(run.get("period_s"), int) or isinstance(run.get("period_s"), bool) or not 1 <= run["period_s"] <= 10:
+            errors.append("http-burst period_s must be 1 to 10")
+    if tool == "udp-burst":
+        if not isinstance(run.get("burst"), int) or isinstance(run.get("burst"), bool) or not 1 <= run["burst"] <= MAX_UDP_BURST:
+            errors.append(f"udp-burst burst must be 1 to {MAX_UDP_BURST}")
+        if not isinstance(run.get("payload_bytes"), int) or isinstance(run.get("payload_bytes"), bool) or not 600 <= run["payload_bytes"] <= MAX_PAYLOAD_BYTES:
+            errors.append(f"udp-burst payload_bytes must be 600 to {MAX_PAYLOAD_BYTES}")
+        if not isinstance(run.get("period_s"), int) or isinstance(run.get("period_s"), bool) or not 2 <= run["period_s"] <= 30:
+            errors.append("udp-burst period_s must be 2 to 30")
+    if tool == "arp-flood":
+        if not isinstance(pps, int) or isinstance(pps, bool) or pps > MAX_ARP_PPS:
+            errors.append(f"arp-flood pps must be a positive integer of at most {MAX_ARP_PPS}")
+        if not isinstance(run.get("count"), int) or isinstance(run.get("count"), bool) or run["count"] <= 0:
+            errors.append("arp-flood needs a positive integer count")
+        elif isinstance(pps, int) and pps > 0 and run["count"] / pps > MAX_RUN_SECONDS:
+            errors.append(f"arp-flood count/pps = {run['count'] / pps:.0f} s is above the {MAX_RUN_SECONDS} s limit")
     if tool == "tcp-stream":
         if run.get("target") != LOCAL_RECEIVER_TARGET:
             errors.append(f"tcp-stream needs a receiver this harness can start; its only target is {LOCAL_RECEIVER_TARGET}")
@@ -238,6 +303,15 @@ def remote_command(run):
                 str(run.get("payload_bytes", 60)), HOSTS[run["sender"]]]
     elif tool == "tcp-stream":
         return ["timeout", str(secs + 10), "python3", "-c", TCP_STREAM_SCRIPT, tgt, str(STREAM_PORT), str(run["bandwidth_mbit"]), str(secs), HOSTS[run["sender"]]]
+    elif tool == "tcp-interactive":
+        return ["timeout", str(secs + 10), "python3", "-c", TCP_INTERACTIVE_SCRIPT, tgt, str(STREAM_PORT), str(run["events_per_s"]), str(secs), HOSTS[run["sender"]]]
+    elif tool == "http-burst":
+        return ["timeout", str(secs + 10), "sh", "-c", HTTP_BURST_SCRIPT, "sh", f"http://{tgt}:{HTTP_PORT}", str(run["conns"]), str(run["period_s"]), str(secs)]
+    elif tool == "udp-burst":
+        return ["timeout", str(secs + 10), "python3", "-c", UDP_BURST_SCRIPT, tgt, str(UDP_BURST_PORT), str(run["burst"]), str(run["payload_bytes"]),
+                str(run["period_s"]), str(secs), HOSTS[run["sender"]]]
+    elif tool == "arp-flood":
+        inner = ["nping", "--arp", "--arp-type", "arp-request", "--arp-target-ip", tgt, "--rate", str(run["pps"]), "-c", str(run["count"]), "-e", "eth0", tgt]
     elif tool == "hping3":
         interval_us = max(1, 1_000_000 // run["pps"])
         inner = ["hping3", "-c", str(run["count"]), "-i", f"u{interval_us}", "-I", "eth0", "-d", str(run.get("payload_bytes", 0)), "-q"]
@@ -248,16 +322,20 @@ def remote_command(run):
             inner += ["--udp", "-p", str(run.get("port", 5001))]
         inner.append(tgt)
     else:  # nmap
-        inner = ["nmap", "-sS", f"-T{run['timing']}", "-p", run["ports"], "-n", "-Pn", "--max-retries", "0", tgt]
+        inner = ["nmap", "-sS", f"-T{run['timing']}", "-p", run["ports"], "-n", "-Pn", "--max-retries", "0"]
+        if run.get("delay_ms"):
+            inner += ["--scan-delay", f"{run['delay_ms']}ms"]
+        inner.append(tgt)
     # hping3 and nmap need raw sockets: run them as root through passwordless sudo on the adversary node, with the
     # `timeout` INSIDE sudo so it is root that kills the tool when the limit is reached.
-    if tool in ("hping3", "nmap"):
+    if tool in ("hping3", "nmap", "arp-flood"):
         return ["sudo", "-n", "timeout", str(secs + 5)] + inner
     return ["timeout", str(secs + 5)] + inner
 
 
 # The two files the local web server serves; the allowlisted request paths map to them.
 HTTP_FILES = {"health": '{"status":"HEALTHY","hailo_device":"CONNECTED","active_model":"yolov8s_h8.hef"}',
+              "page": "<html><body>" + ("The quick brown fox jumps over the lazy dog. " * 440)[:20000] + "</body></html>",
               "models": '{"active_model":"yolov8s_h8.hef","models":[' + ",".join('{"name":"m%d","filename":"m%d.hef"}' % (i, i) for i in range(12)) + "]}"}
 
 
@@ -267,9 +345,9 @@ def receiver_command(run, docroot=None):
     http-get needs the directory the two static files are in (docroot); the harness creates it.
     """
     validate(run)
-    if run["tool"] == "tcp-stream":
+    if run["tool"] in ("tcp-stream", "tcp-interactive"):
         return ["python3", "-c", TCP_SINK_SCRIPT, LOCAL_RECEIVER_TARGET, str(STREAM_PORT), str(run["seconds"] + 15)]
-    if run["tool"] == "http-get":
+    if run["tool"] in ("http-get", "http-burst"):
         return ["python3", "-m", "http.server", str(HTTP_PORT), "--bind", LOCAL_RECEIVER_TARGET, "--directory", docroot or "<docroot>"]
     return None
 
@@ -321,12 +399,22 @@ CATALOG = (
     + repeats(_benign("benign-udp-small-50pps", "udp-small", "agentic-node-02", "10.0.2.119", 30, pps=50, payload_bytes=100, port=53), 2)
     + repeats(_benign("benign-bulk-tcp-10mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=10), 2)
     + repeats(_benign("benign-bulk-tcp-node01-10mbit", "tcp-stream", "agentic-node-01", "10.0.2.119", 20, bandwidth_mbit=10), 2)
+    # --- benign workloads added for the second recording (modelled where stated)
+    + repeats(_benign("benign-bulk-tcp-2mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=2), 2)
+    + repeats(_benign("benign-bulk-tcp-5mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=5), 2)
+    + repeats(_benign("benign-bulk-tcp-20mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=20), 2)
+    + repeats(_benign("benign-interactive-8eps", "tcp-interactive", "agentic-node-02", "10.0.2.119", 30, events_per_s=8), 3)  # ssh-like, modelled
+    + repeats(_benign("benign-http-burst-8conns", "http-burst", "agentic-node-02", "10.0.2.119", 30, conns=8, period_s=3), 3)  # browsing-like
+    + repeats(_benign("benign-udp-burst-tailscale-like", "udp-burst", "agentic-node-02", "10.0.2.119", 30, burst=25, payload_bytes=1300, period_s=10), 3)  # modelled
     # --- attacks (first recorded 2026-10-17), repeated for the next round
     + repeats(_attack("attack-synflood-1000pps", "hping3", "10.0.2.119", 10, pps=1000, count=10000, flags_or_proto="syn", port=80), 3)
     + repeats(_attack("attack-synflood-200pps", "hping3", "10.0.2.119", 30, pps=200, count=6000, flags_or_proto="syn", port=80), 3)
     + repeats(_attack("attack-udpflood-500pps-1400b", "hping3", "10.0.2.119", 10, pps=500, count=5000, flags_or_proto="udp", payload_bytes=1400, port=5001), 3)
     + repeats(_attack("attack-portscan-fast", "nmap", "10.0.2.119", 20, timing=4, ports="1-1000"), 3)
     + repeats(_attack("attack-portscan-slow", "nmap", "10.0.2.119", 120, timing=2, ports="1-200"), 3)
+    + repeats(_attack("attack-portscan-1pps", "nmap", "10.0.2.119", 70, timing=2, ports="1-60", delay_ms=1000), 2)
+    + repeats(_attack("attack-portscan-half-pps", "nmap", "10.0.2.119", 70, timing=2, ports="1-30", delay_ms=2000), 2)
+    + repeats(_attack("attack-arpflood-200pps", "arp-flood", "10.0.2.119", 12, pps=200, count=2000), 3)
 )
 
 
@@ -358,7 +446,7 @@ def execute(run, outdir):
     cap = subprocess.Popen(["ssh", JETSON, shlex.join(capture_command(rid))], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     srv = None
     docroot = None
-    if run["tool"] == "http-get":
+    if run["tool"] in ("http-get", "http-burst"):
         docroot = tempfile.mkdtemp(prefix="labelled-docroot-")
         for name, body in HTTP_FILES.items():
             with open(os.path.join(docroot, name), "w") as fh:
@@ -375,7 +463,7 @@ def execute(run, outdir):
             if srv.poll() is not None:
                 raise RuntimeError(f"the local receiver {rcv[0]} exited at once (is the port free and the alias up?)")
             # Proof it accepts connections, not just that its process exists (an intermittent miss was seen without this).
-            wait_listening(LOCAL_RECEIVER_TARGET, HTTP_PORT if run["tool"] == "http-get" else STREAM_PORT, srv)
+            wait_listening(LOCAL_RECEIVER_TARGET, HTTP_PORT if run["tool"] in ("http-get", "http-burst") else STREAM_PORT, srv)
         t0 = time.monotonic()
         cmd = remote_command(run)
         if cmd is None:
@@ -446,11 +534,11 @@ def preflight(runs):
     r = subprocess.run(["ssh", JETSON, "getcap /usr/bin/tcpdump"], capture_output=True, text=True, timeout=20)
     if "cap_net_raw" not in r.stdout:
         raise SystemExit("capture is not set up: on the Jetson run  sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump")
-    if any(x["tool"] in ("tcp-stream", "http-get") for x in runs):
+    if any(x["tool"] in ("tcp-stream", "tcp-interactive", "http-get", "http-burst") for x in runs):
         r = subprocess.run(["ifconfig"], capture_output=True, text=True)
         if f"inet {LOCAL_RECEIVER_TARGET} " not in r.stdout:
             raise SystemExit(f"this machine does not have {LOCAL_RECEIVER_TARGET}, where the local receivers must bind")
-    for host in sorted({x["sender"] for x in runs if x["tool"] in ("hping3", "nmap")}):
+    for host in sorted({x["sender"] for x in runs if x["tool"] in ("hping3", "nmap", "arp-flood")}):
         if subprocess.run(["ssh", host, "sudo -n true"], capture_output=True, timeout=20).returncode != 0:
             raise SystemExit(f"{host} has no passwordless sudo, which hping3 and nmap need for raw sockets")
 

@@ -283,3 +283,85 @@ print(bad, rep)
     expect(all.stdout).toMatch(/\sbenign\s/);
   });
 });
+
+describe.skipIf(!hasPython)('labelled-runs.py second-recording workloads', () => {
+  it('builds ssh-like interactive TCP from one fixed script, bounded, with a local sink as receiver', () => {
+    const [v] = check([{ ...benign, tool: 'tcp-interactive', events_per_s: 8 }]);
+    expect(v?.ok).toBe(true);
+    expect(v?.cmd?.slice(0, 4)).toEqual(['timeout', '40', 'python3', '-c']);
+    expect(v?.cmd?.slice(5)).toEqual(['10.0.2.119', '5201', '8', '30', '10.0.2.52']);
+    expect(v?.recv?.slice(0, 2)).toEqual(['python3', '-c']);
+    const [hi, wrong] = check([
+      { ...benign, tool: 'tcp-interactive', events_per_s: 500 },
+      { ...benign, tool: 'tcp-interactive', events_per_s: 8, target: '10.0.2.51' },
+    ]);
+    expect(hi?.why).toMatch(/events_per_s must be 1 to 30/);
+    expect(wrong?.why).toMatch(/tcp-interactive only targets 10\.0\.2\.119/);
+  });
+
+  it('builds the browsing-like burst from a constant script with its values as arguments', () => {
+    const [v] = check([{ ...benign, tool: 'http-burst', conns: 8, period_s: 3 }]);
+    expect(v?.ok).toBe(true);
+    expect(v?.cmd?.slice(0, 4)).toEqual(['timeout', '40', 'sh', '-c']);
+    expect(v?.cmd?.[4]).not.toContain('10.0.2.119');
+    expect(v?.cmd?.slice(5)).toEqual(['sh', 'http://10.0.2.119:8000', '8', '3', '30']);
+    expect(v?.recv?.slice(0, 5)).toEqual(['python3', '-m', 'http.server', '8000', '--bind']);
+    const [many, slow] = check([
+      { ...benign, tool: 'http-burst', conns: 200, period_s: 3 },
+      { ...benign, tool: 'http-burst', conns: 8, period_s: 60 },
+    ]);
+    expect(many?.why).toMatch(/conns must be 1 to 16/);
+    expect(slow?.why).toMatch(/period_s must be 1 to 10/);
+  });
+
+  it('builds the Tailscale-like UDP burst on a port other than the one the nodes drop, bounded', () => {
+    const [v] = check([{ ...benign, tool: 'udp-burst', burst: 25, payload_bytes: 1300, period_s: 10 }]);
+    expect(v?.ok).toBe(true);
+    expect(v?.cmd?.slice(5)).toEqual(['10.0.2.119', '51820', '25', '1300', '10', '30', '10.0.2.52']);
+    const [big, tiny, many] = check([
+      { ...benign, tool: 'udp-burst', burst: 25, payload_bytes: 9000, period_s: 10 },
+      { ...benign, tool: 'udp-burst', burst: 25, payload_bytes: 100, period_s: 10 },
+      { ...benign, tool: 'udp-burst', burst: 400, payload_bytes: 1300, period_s: 10 },
+    ]);
+    expect(big?.why).toMatch(/payload_bytes must be 600 to 1400/);
+    expect(tiny?.why).toMatch(/payload_bytes must be 600 to 1400/);
+    expect(many?.why).toMatch(/burst must be 1 to 40/);
+  });
+
+  it('an ARP flood is an attack tool: root, from the adversary only, under timeout, bounded in rate and duration', () => {
+    const flood = { id: 'a', class: 'attack', tool: 'arp-flood', sender: 'agentic-node-01', target: '10.0.2.119', seconds: 12, pps: 200, count: 2000 };
+    const [v, fast, long, fromNode2, asBenign] = check([
+      flood,
+      { ...flood, pps: 5000 },
+      { ...flood, pps: 10, count: 20000 },
+      { ...flood, sender: 'agentic-node-02' },
+      { ...flood, class: 'benign' },
+    ]);
+    expect(v?.ok).toBe(true);
+    expect(v?.cmd).toEqual(['sudo', '-n', 'timeout', '17', 'nping', '--arp', '--arp-type', 'arp-request', '--arp-target-ip', '10.0.2.119', '--rate', '200', '-c', '2000', '-e', 'eth0', '10.0.2.119']);
+    expect(fast?.why).toMatch(/pps must be a positive integer of at most 300/);
+    expect(long?.why).toMatch(/above the 120 s limit/);
+    expect(fromNode2?.why).toMatch(/an attack may only come from/);
+    expect(asBenign?.why).toMatch(/attack tool and cannot be a benign run/);
+  });
+
+  it('a scan delay is bounded and goes to nmap as milliseconds', () => {
+    const scan = { id: 's', class: 'attack', tool: 'nmap', sender: 'agentic-node-01', target: '10.0.2.119', seconds: 70, timing: 2, ports: '1-60' };
+    const [v, none, big] = check([{ ...scan, delay_ms: 1000 }, scan, { ...scan, delay_ms: 600000 }]);
+    expect(v?.cmd).toEqual(['sudo', '-n', 'timeout', '75', 'nmap', '-sS', '-T2', '-p', '1-60', '-n', '-Pn', '--max-retries', '0', '--scan-delay', '1000ms', '10.0.2.119']);
+    expect(none?.cmd).not.toContain('--scan-delay');
+    expect(big?.why).toMatch(/delay_ms must be an integer from 0 to 5000/);
+  });
+
+  it('the catalog covers every workload family the guard asks for and the evasion-boundary scans', () => {
+    const r = spawnSync('python3', [SCRIPT, '--list'], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    const rows = r.stdout.trim().split('\n').map((l) => l.trim().split(/\s+/));
+    const benignTools = new Set(rows.filter((x) => x[1] === 'benign').map((x) => x[2]));
+    for (const t of ['ping', 'idle', 'http-get', 'http-burst', 'udp-small', 'udp-burst', 'tcp-stream', 'tcp-interactive']) expect(benignTools.has(t), t).toBe(true);
+    const ids = rows.map((x) => x[0] ?? '');
+    for (const base of ['attack-portscan-1pps', 'attack-portscan-half-pps', 'attack-arpflood-200pps', 'benign-bulk-tcp-2mbit', 'benign-bulk-tcp-20mbit']) {
+      expect(ids.some((i) => i === base || i.startsWith(`${base}-r`)), base).toBe(true);
+    }
+  });
+});
