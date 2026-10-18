@@ -266,3 +266,26 @@ stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phas
 | `Connection refused :6633` | OpenFlow controller not bound | Check `journalctl -u zodiac-bridge` for bind errors; verify port not in use |
 | `HTTP 401 from Vercel relay` | `ZODIAC_BRIDGE_SECRET` mismatch | Verify secret matches `ZODIAC_BRIDGE_SECRET` in Vercel environment variables |
 | Service not restarting after crash | `StartLimitBurst` hit | `sudo systemctl reset-failed zodiac-bridge && sudo systemctl start zodiac-bridge` |
+
+## Recovering a switch whose controller session is dead
+
+Symptom (2026-10-17 and 2026-10-18, three times): the bridge logs `Dead peer detected (10.0.1.99): no OFPT_ECHO_REPLY`,
+`/api/zodiac` shows `openflow.status: Disconnected`, `port1Isolation` goes to `readback_failed`, ARP for `10.0.1.99` from the
+Jetson fails, and traffic through the Zodiac stops (its flow table is empty and failstate is Secure). The switch's firmware is
+still running: its serial-reported uptime keeps advancing.
+
+Read its own state, then restart it, from the Jetson (the switch's USB port is on it):
+
+```sh
+python3 scripts/zodiac-serial-console.py              # diagnostics only: status, config, OpenFlow status, ports
+python3 scripts/zodiac-serial-console.py --restart    # the same diagnostics first, then `restart`
+```
+
+What the console showed during the 2026-10-18 drop, before the restart: configuration correct (`10.0.1.99/24`, controller
+`10.0.1.8:6633`, OpenFlow enabled, failstate Secure), OpenFlow status `Disconnected` with 0 flows and 0 lookups, ports 1 to 4
+up, uptime 12 h 55 min. After `restart`: the serial port dropped as the device reset, uptime counted from 0, OpenFlow
+`Connected` within 30 s, the bridge reinstalled the isolation policy (6 of 6 rules and their actions read back verified,
+7 entries), `10.0.1.99` answered ARP and ping, and pings across the rack passed. No power cycle was needed.
+
+After any restart, confirm `curl localhost:3003/api/zodiac/flows` shows `port1Isolation` `verified` before sending traffic
+(the labelled-run harness refuses to start otherwise). The cause of the drops is unknown.
