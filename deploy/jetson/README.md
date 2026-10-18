@@ -287,6 +287,11 @@ up, uptime 12 h 55 min. After `restart`: the serial port dropped as the device r
 `Connected` within 30 s, the bridge reinstalled the isolation policy (6 of 6 rules and their actions read back verified,
 7 entries), `10.0.1.99` answered ARP and ping, and pings across the rack passed. No power cycle was needed.
 
+**How far to trust this:** it worked once, on one of three drops (the first two were cleared by a power cycle), so it is a
+recovery that has been seen to work, not a tested procedure. It clears the state; it does not explain or prevent the drops.
+If the serial console does not answer at all (`--diagnostics` shows nothing, or the device node is missing), fall back to a
+power cycle.
+
 Run it as the `zodiac` user (the user the bridge runs as; `--restart` refuses from any other user, because its check for other
 openers of the port can only see processes of its own user).
 
