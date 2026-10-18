@@ -101,6 +101,17 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
     expect(src).toContain("iso.get(\"state\") != \"verified\"");
   });
 
+  it('paces in integer nanoseconds: no float rate arithmetic in the scripts it sends', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    for (const marker of ['UDP_SMALL_SCRIPT', 'TCP_STREAM_SCRIPT']) {
+      const start = src.indexOf(`${marker} = (`);
+      const block = src.slice(start, src.indexOf('\n)\n', start));
+      expect(block, marker).not.toMatch(/\d\.\d|1\.0\/|\.0\b|monotonic\(\)/); // no float literal and no float-second clock
+      expect(block, marker).toContain('monotonic_ns()');
+    }
+    expect(src).not.toMatch(/f"\{1 \/ run/);
+  });
+
   it('never uses a wall clock for a duration, and never kills by command-line match', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     expect(src).not.toMatch(/time\.time\(/);
@@ -151,7 +162,7 @@ describe.skipIf(!hasPython)('labelled-runs.py benign workloads', () => {
     // The loop text is constant; url, gap and duration are arguments, never spliced into the script.
     expect(v?.cmd?.[4]).toContain('"$1"');
     expect(v?.cmd?.[4]).not.toContain('10.0.2.119');
-    expect(v?.cmd?.slice(5)).toEqual(['sh', 'http://10.0.2.119:8000/health', '0.200', '30']);
+    expect(v?.cmd?.slice(5)).toEqual(['sh', 'http://10.0.2.119:8000/health', '0.200', '30']); // 0.200 s from integer arithmetic
     // The receiver is a local web server on the Mac's uplink-side alias (traffic to the Pi 5 never crosses the Zodiac).
     expect(v?.recv?.slice(0, 5)).toEqual(['python3', '-m', 'http.server', '8000', '--bind']);
     expect(v?.recv?.[5]).toBe('10.0.2.119');

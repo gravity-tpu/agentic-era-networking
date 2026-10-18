@@ -89,10 +89,10 @@ TCP_STREAM_SCRIPT = (
     "import socket,sys,time;"
     "t,p,m,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5];"
     "k=socket.socket();k.bind((b,0));k.settimeout(10);k.connect((t,p));k.settimeout(5);"
-    "d=b'x'*1448;rate=m*125000.0;st=time.monotonic();e=st+s;sent=0\n"
-    "while time.monotonic()<e:\n"
-    " k.sendall(d);sent+=1448;w=sent/rate-(time.monotonic()-st)\n"
-    " if w>0: time.sleep(w)\n"
+    "d=b'x'*1448;bps=m*125000;st=time.monotonic_ns();e=st+s*1_000_000_000;sent=0\n"
+    "while time.monotonic_ns()<e:\n"
+    " k.sendall(d);sent+=1448;w=st+sent*1_000_000_000//bps-time.monotonic_ns()\n"
+    " if w>0: time.sleep(w/1e9)\n"
     "k.close()\n"
 )
 HTTP_LOOP_SCRIPT = 'end=$(( $(date +%s) + $3 )); while [ $(date +%s) -lt $end ]; do curl -s -m 2 --interface eth0 -o /dev/null "$1"; sleep "$2"; done'
@@ -101,10 +101,10 @@ UDP_SMALL_SCRIPT = (
     "import socket,sys,time;"
     "t,p,r,s,n=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]);"
     "k=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);k.bind((sys.argv[6],0));d=b'x'*n;"
-    "g=1.0/r;e=time.monotonic()+s;nxt=time.monotonic()\n"
-    "while time.monotonic()<e:\n"
-    " k.sendto(d,(t,p));nxt+=g;w=nxt-time.monotonic()\n"
-    " if w>0: time.sleep(w)\n"
+    "g=1_000_000_000//r;now=time.monotonic_ns();e=now+s*1_000_000_000;nxt=now\n"
+    "while time.monotonic_ns()<e:\n"
+    " k.sendto(d,(t,p));nxt+=g;w=nxt-time.monotonic_ns()\n"
+    " if w>0: time.sleep(w/1e9)\n"
 )
 BENIGN, ATTACK = "benign", "attack"
 
@@ -208,6 +208,12 @@ def validate(run):
     return run
 
 
+def interval_text(per_second):
+    """The gap between events at `per_second` events a second, as the decimal text ping and sleep take, by integer arithmetic."""
+    ms = 1000 // per_second
+    return f"{ms // 1000}.{ms % 1000:03d}"
+
+
 def remote_command(run):
     """The argv that runs on the sender, from fixed templates. Always under `timeout`. None for an idle run."""
     validate(run)
@@ -217,11 +223,11 @@ def remote_command(run):
     tgt = run["target"]
     secs = run["seconds"]
     if tool == "ping":
-        inner = ["ping", "-I", "eth0", "-c", str(secs * run["pps"]), "-i", f"{1 / run['pps']:.3f}", "-q", tgt]
+        inner = ["ping", "-I", "eth0", "-c", str(secs * run["pps"]), "-i", interval_text(run["pps"]), "-q", tgt]
     elif tool == "http-get":
         # Small GETs to the Pi 5's Hailo service at a bounded rate. Only validated integers and an allowlisted path are used.
         url = f"http://{tgt}:{HTTP_PORT}{run['path']}"
-        gap = f"{1 / run['rps']:.3f}"
+        gap = interval_text(run["rps"])
         # The loop text is a constant; the url, gap and duration are passed as arguments ($1, $2, $3), never spliced into it.
         return ["timeout", str(secs + 5), "sh", "-c", HTTP_LOOP_SCRIPT, "sh", url, gap, str(secs)]
     elif tool == "udp-small":

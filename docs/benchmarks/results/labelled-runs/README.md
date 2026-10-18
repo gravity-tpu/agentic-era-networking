@@ -74,3 +74,9 @@ last valid HTTP run ended at 22:20:12, 13 s earlier; the first bulk-TCP attempt 
 switch's firmware was still running (its serial-reported uptime kept advancing, 145 h at the time), so it had not
 power-cycled; its IP and OpenFlow stack was unresponsive. The cause is unknown and the recorded traffic cannot be excluded
 as a trigger. The bulk-TCP runs were captured during the outage and are excluded.
+
+A review suggested the switch's CPU was starved by `OFPT_PACKET_IN` table-miss punts. The flow probe argues against that:
+the table-miss entry (priority 0) has no actions, so unmatched frames are dropped, not sent to the controller, and the
+isolation policy's rules output only to ports. That is evidence against one mechanism, not an explanation; the cause is
+still unknown. The bulk sender also paces with the operating system's sleep, which is coarse, so it may send in small
+bursts; it has not run successfully, so that is untested.
