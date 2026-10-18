@@ -1,0 +1,32 @@
+{
+  "id": "benign-interactive-8eps-r2",
+  "class": "benign",
+  "tool": "tcp-interactive",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "pattern": "benign-interactive-8eps",
+  "params": {
+    "seconds": 30,
+    "events_per_s": 8
+  },
+  "command": [
+    "timeout",
+    "40",
+    "python3",
+    "-c",
+    "import socket,sys,time;t,p,e,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5];k=socket.socket();k.bind((b,0));k.settimeout(10);k.connect((t,p));k.settimeout(5);k.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1);g=1_000_000_000//e;now=time.monotonic_ns();end=now+s*1_000_000_000;nxt=now;x=12345\nwhile time.monotonic_ns()<end:\n x=(x*1103515245+12345)%2147483648;k.sendall(b'k'*(40+x%81))\n x=(x*1103515245+12345)%2147483648;nxt+=g//2+x%g;w=nxt-time.monotonic_ns()\n if w>0: time.sleep(w/1e9)\nk.close()\n",
+    "10.0.2.119",
+    "5201",
+    "8",
+    "30",
+    "10.0.2.52"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 30.6,
+  "pcap": "benign-interactive-8eps-r2.pcap",
+  "commandStderrTail": "",
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
+}

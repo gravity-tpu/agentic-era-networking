@@ -17,8 +17,8 @@ alerts when any feature is above its threshold in at least HITS of the last WIND
 SEVERE times its threshold in a single bucket. A source
 is reported again only after QUIET_BUCKETS quiet buckets (no "once until restart").
 
-Two scorings: in-sample (thresholds from all benign runs) and leave-one-benign-workload-family-out (thresholds from the
-other families, tested on the held-out one), which shows how much of the result is the data and how much the floors.
+Two scorings: in-sample (thresholds from all benign runs) and leave-one-benign-workload-group-out (thresholds from the
+other groups, tested on the held-out one), which shows how much of the result is the data and how much the floors.
 
 Usage: python3 scripts/baseline-detector.py docs/benchmarks/results/labelled-runs
 Needs numpy (through scripts/sentinel-replay.py).
@@ -48,6 +48,10 @@ SEVERE = 10
 # only show the benign runs sit far below them and the attacks far above.
 FLOORS = {"nontcp_pps": 100, "nontcp_bytes": 100_000, "syn_per_s": 30, "ports_10s": 10}
 FEATURES = tuple(FLOORS)
+# Benign tools grouped by how they behave, for the leave-one-out test: holding out only `http-get` while `http-burst` stays in the
+# training data is not a test of an unseen kind of workload, because a near twin is still there.
+GROUPS = {"ping": "ping", "idle": "idle", "http-get": "http", "http-burst": "http", "udp-small": "udp", "udp-burst": "udp",
+          "tcp-stream": "tcp", "tcp-interactive": "tcp"}
 TCP, UDP = 6, 17
 
 
@@ -127,7 +131,19 @@ def alerts(series, thr):
     return out
 
 
+_score_spec = importlib.util.spec_from_file_location("score_labelled_runs", os.path.join(HERE, "score-labelled-runs.py"))
+_score = importlib.util.module_from_spec(_score_spec)
+_score_spec.loader.exec_module(_score)
+
+
+def sender_frame_count(frames, sender_ip):
+    """How many of the run's frames came from its sender (the tuple position is named in sentinel-replay.py)."""
+    return sum(1 for f in frames if f[sr.FRAME_SRC_IP] == sender_ip)
+
+
 def load(datadir):
+    """Labelled runs that count: a run recorded on an unhealthy rack, or in which the sender is barely seen, is left out here too,
+    by the same rule the scorer uses (a run that tested nothing is not a clean benign run)."""
     runs = []
     for lp in sorted(glob.glob(os.path.join(datadir, "*.label.json"))):
         label = json.load(open(lp))
@@ -135,8 +151,12 @@ def load(datadir):
         if not os.path.exists(pcap) and os.path.exists(pcap + ".gz"):
             pcap += ".gz"
         frames = sr.parse_pcap(pcap, with_src=True)
+        sender_ip = label.get("senderIp")
+        if not _score.rack_ok(label) or (sender_ip is not None and sender_frame_count(frames, sender_ip) < _score.MIN_SENDER_FRAMES):
+            print(f"INVALID (left out): {label['id']}")
+            continue
         pattern = label.get("pattern") or re.sub(r"-r\d+$", "", label["id"])  # earlier labels carry no pattern field
-        runs.append({"label": label, "pattern": pattern, "family": label.get("tool"), "series": source_buckets(frames)})
+        runs.append({"label": label, "pattern": pattern, "family": GROUPS.get(label.get("tool"), label.get("tool")), "series": source_buckets(frames)})
     return runs
 
 
@@ -178,7 +198,7 @@ def main():
     print()
     summarize("in-sample (thresholds from all benign runs)", runs, thr)
     print()
-    print("leave one benign workload FAMILY out (ping, idle, HTTP, small UDP: thresholds from the other families; the held-out family and all attacks are scored):")
+    print("leave one benign workload GROUP out (ping, idle, http = polls and bursts, udp = small and bursty, tcp = bulk and interactive: thresholds from the other groups; the held-out group and all attacks are scored):")
     patterns = sorted({r["family"] for r in benign})
     tot_fp = tot_n = tot_fp0 = 0
     for pat in patterns:

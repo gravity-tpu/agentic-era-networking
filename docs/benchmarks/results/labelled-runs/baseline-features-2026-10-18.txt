@@ -4,11 +4,19 @@ attack-portscan-slow             attack     200       3       180         3     
 attack-synflood-1000pps          attack    9943     936     56160       936         1      1
 attack-synflood-200pps           attack    6000     198     11880       198         1      1
 attack-udpflood-500pps-1400b     attack    4935     484    697928         0         1      1
+benign-bulk-tcp-2mbit            benign    3458     175    262062         1         1      1
+benign-bulk-tcp-2mbit-r2         benign    3463     181    274034         1         1      1
 benign-http-20rps                benign    1325      50      4230        10         1      1
 benign-http-20rps-r2             benign    1305      50      4230        10         1      1
 benign-http-5rps                 benign     535      20      1692         4         1      1
 benign-http-5rps-r2              benign     535      20      1692         4         1      1
 benign-http-5rps-r3              benign     530      20      1692         4         1      1
+benign-http-burst-8conns         benign     776     103      7791         9         1      1
+benign-http-burst-8conns-r2      benign     884     108      8543         9         1      1
+benign-http-burst-8conns-r3      benign     821     103      7907         9         1      1
+benign-interactive-8eps          benign     245      10      1608         1         1      1
+benign-interactive-8eps-r2       benign     246      12      1905         1         1      1
+benign-interactive-8eps-r3       benign     247      11      1918         1         1      1
 benign-ping-20pps                benign     600      20      1960         0         0      0
 benign-ping-20pps-r2             benign     600      21      2058         0         0      0
 benign-ping-5pps                 benign     300       6       588         0         0      0
@@ -22,8 +30,8 @@ benign-udp-small-50pps           benign    1500      51      7242         0     
 benign-udp-small-50pps-r2        benign    1500      51      7242         0         1      1
 
 Separation per feature (largest benign value vs smallest attack value; a margin > 1 means one threshold separates them on this data):
-  pps                        largest benign        51   smallest attack         3 (attack-portscan-slow)   attack/benign 0.1x
-  bytes/s                    largest benign      7242   smallest attack       180 (attack-portscan-slow)   attack/benign 0.0x
+  pps                        largest benign       181   smallest attack         3 (attack-portscan-slow)   attack/benign 0.0x
+  bytes/s                    largest benign    274034   smallest attack       180 (attack-portscan-slow)   attack/benign 0.0x
   SYN/s                      largest benign        10   smallest attack         0 (attack-udpflood-500pps-1400b)   attack/benign 0.0x
   distinct ports per 10 s    largest benign         1   smallest attack         1 (attack-synflood-1000pps)   attack/benign 1.0x
   distinct ports per run     largest benign         1   smallest attack         1 (attack-synflood-1000pps)   attack/benign 1.0x

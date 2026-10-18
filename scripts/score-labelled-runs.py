@@ -113,12 +113,24 @@ def seconds_text(delta_ns):
     return f"{delta_ns // 1_000_000_000}.{(delta_ns % 1_000_000_000) // 10_000_000:02d}"
 
 
+def rack_ok(label):
+    """
+    A label recorded before the post-run check existed has no field and is accepted as it was. A label that has the field must
+    say exactly True: false, null, a string or a number is not evidence of a healthy rack, and neither is a recorded drop count.
+    """
+    if "rackHealthyAfter" not in label:
+        return True
+    # A drop count of None means the journal could not be read for the run window: not evidence of zero drops.
+    drops = label.get("controllerDropsDuringRun", 0)
+    return label["rackHealthyAfter"] is True and drops == 0 and drops is not False
+
+
 def score(label, frames):
     sender = label["senderIp"]  # None for an idle run: nothing was sent, so any alert in it is a false positive
     sender_frames = [f for f in frames if sender is not None and f[6] == sender]
     t0 = sender_frames[0][7] if sender_frames else None
     res = {"id": label["id"], "class": label["class"], "tool": label.get("tool"), "pattern": pattern_of(label), "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames),
-           "valid": sender is None or len(sender_frames) >= MIN_SENDER_FRAMES}
+           "valid": (sender is None or len(sender_frames) >= MIN_SENDER_FRAMES) and rack_ok(label)}
     for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
         named_sender = [a for a in alerts if a[1] == sender]
         other = [a for a in alerts if a[1] != sender]
@@ -143,7 +155,7 @@ def main():
     invalid = [r for r in scored if not r["valid"]]
     results = [r for r in scored if r["valid"]]
     for r in invalid:
-        print(f"INVALID (left out of every rate): {r['id']} - the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES})")
+        print(f"INVALID (left out of every rate): {r['id']} - the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES}) or the rack was unhealthy after the run")
     if invalid:
         print()
     print(f"{'run':32s} {'class':7s} {'frames':>6s} | {'rate rule':30s} | {'sentinel':44s}")

@@ -36,9 +36,9 @@ Per source IPv4, per one-second bucket, all integer counts on kernel arrival tim
 | `syn_per_s` | TCP SYN without ACK | SYN floods, fast scans |
 | `ports_10s` | distinct TCP/UDP destination ports in the last 10 s | scans, fast or slow |
 
-TCP data volume is deliberately **not** a feature: a bulk transfer is benign and is not yet recorded, so any rule on it would
-be a guess (modelled, not measured: a 10 Mbit per second TCP stream is about 1.25 MB per second, which would exceed a
-100,000 byte floor if TCP bytes were counted).
+TCP data volume is deliberately **not** a feature: a bulk transfer is benign. **Measured:** a 2 Mbit per second TCP stream (two runs) is 175 to 181 frames and 262 to 274
+thousand bytes a second, above the non-TCP floors of 100 frames and 100,000 bytes, so counting TCP data would have
+false-alerted on it. Bulk TCP above 2 Mbit is not recorded (the attempts coincided with switch outages).
 
 - **Threshold per feature** = `max(FLOOR, MARGIN x the largest value that feature took in the benign training runs)`, with
   `MARGIN = 3` and floors of 100 frames, 100,000 bytes, 30 SYN and 10 ports.
@@ -58,14 +58,17 @@ file produced by an offline script from the labelled benign runs, not computed o
 | Scoring | Attacks detected with the right sender | Benign runs with an alert |
 | :--- | :--- | :--- |
 | In sample (thresholds from all benign runs) | 5 of 5 | 0 of 18 |
-| Leave one benign family out (ping, idle, HTTP, small UDP), with floors | 5 of 5 in every fold | 0 of 18 |
-| The same, thresholds from data only (no floors) | 5 of 5 | **5 of 18** |
+| Leave one benign workload group out (ping, idle, HTTP, UDP, TCP), with floors | 5 of 5 in every fold | 0 of 26 |
+| The same, thresholds from data only (no floors) | 5 of 5 | **8 of 26** |
 
-Read the last row carefully. Thresholds learned only from the other workload families **false-alert on every held-out HTTP
-run**, because no other family ever sent a SYN. A baseline learned from a few workloads cannot know a workload it has not seen,
-and a floor is what prevents that. The floors are **judgment, not measurement**: the data only show the benign runs sit far
-below them and the attacks far above. Every number in this table is on one repeat of each attack pattern by two tools
-(`hping3`, `nmap`), so it is a feasibility result, not a performance claim.
+Read the last row carefully. Thresholds learned only from the other workload groups **false-alert on all 8 held-out HTTP
+runs**, because no other group ever sent a SYN. A baseline learned from a few workloads cannot know a *kind* of workload it
+has not seen, and a floor is what prevents that. (Holding out only one HTTP tool, while its near twin stays in the data,
+does not show this: with both `http-get` and `http-burst` present, data-only thresholds already passed each of them. The
+groups exist so the test removes the twin too.) The floors are **judgment, not measurement**: the data only show the benign
+runs sit far below them and the attacks far above. Every number in this table is on one repeat of each attack pattern by
+two tools (`hping3`, `nmap`), so it is a feasibility result, not a performance claim. The run recorded while the switch
+dropped its controller session (a Tailscale-like UDP burst) is left out of every figure.
 
 Time to alert: floods 0 to 1 s after the first frame, the fast scan 0 s (through the severe path), the slow scan 5 s.
 
@@ -103,7 +106,8 @@ Time to alert: floods 0 to 1 s after the first frame, the fast scan 0 s (through
 - **TCP floods that look like data.** An ACK or data flood passes, because TCP data volume is not a feature.
 - **Spoofed sources.** Source addresses are forgeable on the untrusted segment; an alert can name a forged host (the bridge's
   envelope and protected list limit what that can do).
-- **Workloads not in the data.** Bulk TCP, ssh, browsing and Tailscale-style traffic are not recorded; each can cross a
+- **Workloads not in the data.** Bulk TCP above 2 Mbit, real ssh, real browsing and real Tailscale traffic are not
+  recorded (ssh, browsing and Tailscale-like traffic are modelled, and the Tailscale-like run is invalid); each can cross a
   floor. They must be recorded before the thresholds are frozen.
 - **A coordinated mix** below every threshold at once.
 - It is a threshold on a few counters, chosen from a small set of runs; it is explainable, not intelligent.

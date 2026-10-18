@@ -91,12 +91,19 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
   it('reproduces the recorded scores', () => {
     const r = spawnSync('python3', [SCRIPT, DATA], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 12/18');
-    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/18');
+    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 20/26');
+    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/26');
     // By workload: the rate rule flags every HTTP and small-UDP run; neither detector flags the idle runs.
     expect(r.stdout).toMatch(/http-get\s+rate rule 5\/5\s+sentinel 1\/5/);
     expect(r.stdout).toMatch(/udp-small\s+rate rule 5\/5\s+sentinel 4\/5/);
     expect(r.stdout).toMatch(/idle\s+rate rule 0\/2\s+sentinel 0\/2/);
+    // Bulk TCP at 2 Mbit: the rate rule flags it (about 175 frames a second), the sentinel does not (large frames score low).
+    expect(r.stdout).toMatch(/tcp-stream\s+rate rule 2\/2\s+sentinel 0\/2/);
+    // ssh-like and browsing-like traffic: the rate rule flags all of it, the sentinel none.
+    expect(r.stdout).toMatch(/tcp-interactive\s+rate rule 3\/3\s+sentinel 0\/3/);
+    expect(r.stdout).toMatch(/http-burst\s+rate rule 3\/3\s+sentinel 0\/3/);
+    // The run recorded while the switch dropped its controller session is reported invalid and counted nowhere.
+    expect(r.stdout).toContain('INVALID (left out of every rate): benign-udp-burst-tailscale-like');
     const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
     expect(row('attack-portscan-fast')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
     expect(row('attack-portscan-slow')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
@@ -116,5 +123,20 @@ print(json.dumps([sc.score({'id': 'x', 'class': 'benign', 'tool': 'http-get', 's
 `, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
     expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([false, 20]);
+  });
+
+  it('only an explicit True counts as a healthy rack: a legacy label without the field is accepted, anything else is not', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('sc', sys.argv[1]); sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
+frames = [(1.0, 60, 6, 2, 1, 2, '10.0.2.52', 1000 + i) for i in range(50)]
+base = {'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52'}
+def valid(extra): return sc.score({**base, **extra}, frames)['valid']
+print(json.dumps([valid({}), valid({'rackHealthyAfter': True}), valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 0}),
+                  valid({'rackHealthyAfter': False}), valid({'rackHealthyAfter': None}), valid({'rackHealthyAfter': 'true'}), valid({'rackHealthyAfter': 1}),
+                  valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 1}), valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': None})]))
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, true, true, false, false, false, false, false, false]); // the last: an unreadable journal (None) is not zero drops
   });
 });

@@ -65,6 +65,11 @@ def run_features(frames, sender):
     }
 
 
+_score_spec = importlib.util.spec_from_file_location("score_labelled_runs", os.path.join(HERE, "score-labelled-runs.py"))
+_score = importlib.util.module_from_spec(_score_spec)
+_score_spec.loader.exec_module(_score)
+
+
 def load(datadir):
     rows = []
     for lp in sorted(glob.glob(os.path.join(datadir, "*.label.json"))):
@@ -75,7 +80,9 @@ def load(datadir):
         if not os.path.exists(pcap) and os.path.exists(pcap + ".gz"):
             pcap += ".gz"
         feats = run_features(sr.parse_pcap(pcap, with_src=True), label["senderIp"])
-        if feats is not None:
+        if not _score.rack_ok(label):
+            continue  # recorded on an unhealthy rack: left out, as in the scorer
+        if feats is not None and feats["frames"] >= _score.MIN_SENDER_FRAMES:
             pattern = label.get("pattern") or label["id"]
             rows.append({"id": label["id"], "class": label["class"], "tool": label["tool"], "pattern": pattern, **feats})
     return rows

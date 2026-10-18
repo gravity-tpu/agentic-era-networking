@@ -1,0 +1,33 @@
+{
+  "id": "benign-http-burst-8conns-r2",
+  "class": "benign",
+  "tool": "http-burst",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "pattern": "benign-http-burst-8conns",
+  "params": {
+    "seconds": 30,
+    "conns": 8,
+    "period_s": 3
+  },
+  "command": [
+    "timeout",
+    "40",
+    "sh",
+    "-c",
+    "end=$(( $(date +%s) + $4 )); while [ $(date +%s) -lt $end ]; do i=0; while [ $i -lt $2 ]; do curl -s -m 3 --interface eth0 -o /dev/null \"$1/page\" & i=$((i+1)); done; curl -s -m 3 --interface eth0 -o /dev/null \"$1/health\"; wait; sleep $3; done",
+    "sh",
+    "http://10.0.2.119:8000",
+    "8",
+    "3",
+    "30"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 32.0,
+  "pcap": "benign-http-burst-8conns-r2.pcap",
+  "commandStderrTail": "",
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
+}

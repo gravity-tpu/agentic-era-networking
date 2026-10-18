@@ -1,0 +1,29 @@
+{
+  "id": "benign-bulk-tcp-2mbit-r2",
+  "class": "benign",
+  "tool": "tcp-stream",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "pattern": "benign-bulk-tcp-2mbit",
+  "params": {
+    "seconds": 20,
+    "bandwidth_mbit": 2
+  },
+  "command": [
+    "timeout",
+    "30",
+    "python3",
+    "-c",
+    "import socket,sys,time;t,p,m,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5];k=socket.socket();k.bind((b,0));k.settimeout(10);k.connect((t,p));k.settimeout(5);d=b'x'*1448;bps=m*125000;st=time.monotonic_ns();e=st+s*1_000_000_000;sent=0\nwhile time.monotonic_ns()<e:\n k.sendall(d);sent+=1448;w=st+sent*1_000_000_000//bps-time.monotonic_ns()\n if w>0: time.sleep(w/1e9)\nk.close()\n",
+    "10.0.2.119",
+    "5201",
+    "2",
+    "20",
+    "10.0.2.52"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 20.6,
+  "pcap": "benign-bulk-tcp-2mbit-r2.pcap",
+  "commandStderrTail": ""
+}

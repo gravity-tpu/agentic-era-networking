@@ -266,3 +266,40 @@ stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phas
 | `Connection refused :6633` | OpenFlow controller not bound | Check `journalctl -u zodiac-bridge` for bind errors; verify port not in use |
 | `HTTP 401 from Vercel relay` | `ZODIAC_BRIDGE_SECRET` mismatch | Verify secret matches `ZODIAC_BRIDGE_SECRET` in Vercel environment variables |
 | Service not restarting after crash | `StartLimitBurst` hit | `sudo systemctl reset-failed zodiac-bridge && sudo systemctl start zodiac-bridge` |
+
+## Recovering a switch whose controller session is dead
+
+Symptom (2026-10-17 and 2026-10-18, three times): the bridge logs `Dead peer detected (10.0.1.99): no OFPT_ECHO_REPLY`,
+`/api/zodiac` shows `openflow.status: Disconnected`, `port1Isolation` goes to `readback_failed`, ARP for `10.0.1.99` from the
+Jetson fails, and traffic through the Zodiac stops (its flow table is empty and failstate is Secure). The switch's firmware is
+still running: its serial-reported uptime keeps advancing.
+
+Read its own state, then restart it, from the Jetson (the switch's USB port is on it):
+
+```sh
+python3 scripts/zodiac-serial-console.py              # diagnostics only: status, config, OpenFlow status, ports
+python3 scripts/zodiac-serial-console.py --restart    # the same diagnostics first, then `restart`
+```
+
+What the console showed during the 2026-10-18 drop, before the restart: configuration correct (`10.0.1.99/24`, controller
+`10.0.1.8:6633`, OpenFlow enabled, failstate Secure), OpenFlow status `Disconnected` with 0 flows and 0 lookups, ports 1 to 4
+up, uptime 12 h 55 min. After `restart`: the serial port dropped as the device reset, uptime counted from 0, OpenFlow
+`Connected` within 30 s, the bridge reinstalled the isolation policy (6 of 6 rules and their actions read back verified,
+7 entries), `10.0.1.99` answered ARP and ping, and pings across the rack passed. No power cycle was needed.
+
+**How far to trust this:** it worked once, on one of three drops (the first two were cleared by a power cycle), so it is a
+recovery that has been seen to work, not a tested procedure. It clears the state; it does not explain or prevent the drops.
+If the serial console does not answer at all (`--diagnostics` shows nothing, or the device node is missing), fall back to a
+power cycle.
+
+Run it as the `zodiac` user (the user the bridge runs as; `--restart` refuses from any other user, because its check for other
+openers of the port can only see processes of its own user).
+
+The tool's safeguards are best effort, not a guarantee: it opens the port exclusively and `--restart` waits for other
+openers to let go and looks once more just before sending, but it can only see processes of its own user (a process of
+another user, root for instance, is invisible to it), and the bridge opens the port to poll, so a poll can still collide with
+the diagnostics (garbled or lagging replies). Read the diagnostics with that in mind, and do not restart while something
+else is known to be working with the switch's serial console.
+
+After any restart, confirm `curl localhost:3003/api/zodiac/flows` shows `port1Isolation` `verified` before sending traffic
+(the labelled-run harness refuses to start otherwise). The cause of the drops is unknown.
