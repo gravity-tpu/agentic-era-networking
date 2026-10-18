@@ -1,0 +1,154 @@
+[
+  {
+    "id": "attack-portscan-fast",
+    "class": "attack",
+    "sender": "10.0.2.50",
+    "frames": 988,
+    "senderFrames": 987,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 925,
+      "namedSender": 925,
+      "namedOthers": [],
+      "firstSenderAlertNs": 38155000
+    }
+  },
+  {
+    "id": "attack-portscan-slow",
+    "class": "attack",
+    "sender": "10.0.2.50",
+    "frames": 205,
+    "senderFrames": 200,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 142,
+      "namedSender": 142,
+      "namedOthers": [],
+      "firstSenderAlertNs": 24427279000
+    }
+  },
+  {
+    "id": "attack-synflood-1000pps",
+    "class": "attack",
+    "sender": "10.0.2.50",
+    "frames": 9945,
+    "senderFrames": 9943,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 500837000
+    },
+    "sentinel": {
+      "alerts": 532,
+      "namedSender": 532,
+      "namedOthers": [],
+      "firstSenderAlertNs": 66598000
+    }
+  },
+  {
+    "id": "attack-synflood-200pps",
+    "class": "attack",
+    "sender": "10.0.2.50",
+    "frames": 6007,
+    "senderFrames": 6000,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 501962000
+    },
+    "sentinel": {
+      "alerts": 4888,
+      "namedSender": 4888,
+      "namedOthers": [],
+      "firstSenderAlertNs": 319313000
+    }
+  },
+  {
+    "id": "attack-udpflood-500pps-1400b",
+    "class": "attack",
+    "sender": "10.0.2.50",
+    "frames": 4937,
+    "senderFrames": 4935,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 501115000
+    },
+    "sentinel": {
+      "alerts": 4874,
+      "namedSender": 4874,
+      "namedOthers": [],
+      "firstSenderAlertNs": 130146000
+    }
+  },
+  {
+    "id": "benign-ping-20pps",
+    "class": "benign",
+    "sender": "10.0.2.52",
+    "frames": 609,
+    "senderFrames": 600,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 550392000
+    },
+    "sentinel": {
+      "alerts": 546,
+      "namedSender": 546,
+      "namedOthers": [],
+      "firstSenderAlertNs": 3189945000
+    }
+  },
+  {
+    "id": "benign-ping-5pps-node01",
+    "class": "benign",
+    "sender": "10.0.2.50",
+    "frames": 305,
+    "senderFrames": 300,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 242,
+      "namedSender": 242,
+      "namedOthers": [],
+      "firstSenderAlertNs": 12257272000
+    }
+  },
+  {
+    "id": "benign-ping-5pps",
+    "class": "benign",
+    "sender": "10.0.2.52",
+    "frames": 306,
+    "senderFrames": 300,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 243,
+      "namedSender": 243,
+      "namedOthers": [],
+      "firstSenderAlertNs": 12037727000
+    }
+  }
+]

@@ -40,6 +40,13 @@ Reading: the loss is high for **small frames and non-TCP traffic** and low for *
 traffic and misses or barely flags floods. The two captured rows match what the deployed sentinel did: it stayed quiet
 on idle polling and flagged the ping sources (38 anomalies and quarantines in one evening).
 
+## Correction (real flood runs, 2026-10-17)
+
+The synthetic rows above predicted that floods are missed. The labelled runs in `../labelled-runs/` contradict that: on real
+`hping3` SYN and UDP floods the sentinel alerts in every run, and it also alerts in all three benign ping runs. The
+synthetic rows were approximations of the features and were wrong about floods; what the real runs confirm is that it does
+not discriminate, and it was never trained.
+
 ## Caveats
 
 - The synthetic rows are approximations of attacks built from the same feature formulas, not recorded attack traffic.

@@ -53,20 +53,32 @@ def losses(frames):
 
 MAX_PCAP_BYTES = 64 * 1024 * 1024  # offline analysis of small lab captures; refuse anything larger rather than load it
 
-def parse_pcap(path):
-    if os.path.getsize(path) > MAX_PCAP_BYTES:
-        raise SystemExit(f'{path} is larger than {MAX_PCAP_BYTES} bytes; refusing to load it into memory')
-    with open(path, 'rb') as fh:
-        d = fh.read()
+def parse_pcap(path, with_src=False):
+    """Frames as (t_us, wire_len, proto, tcp_flags, src_port, dst_port); with_src adds the IPv4 source (or None) and the exact
+    integer-nanosecond timestamp as items 7 and 8.
+    A path ending in .gz is decompressed in memory, with the same cap applied to the decompressed size."""
+    if path.endswith('.gz'):
+        import gzip
+        with gzip.open(path, 'rb') as fh:
+            d = fh.read(MAX_PCAP_BYTES + 1)
+        if len(d) > MAX_PCAP_BYTES:
+            raise SystemExit(f'{path} is larger than {MAX_PCAP_BYTES} bytes once decompressed; refusing to load it')
+    else:
+        if os.path.getsize(path) > MAX_PCAP_BYTES:
+            raise SystemExit(f'{path} is larger than {MAX_PCAP_BYTES} bytes; refusing to load it into memory')
+        with open(path, 'rb') as fh:
+            d = fh.read()
     magic = struct.unpack('<I', d[:4])[0]
     ns = magic == 0xa1b23c4d
     off = 24; frames = []
     while off + 16 <= len(d):
         sec, frac, cl, ol = struct.unpack('<IIII', d[off:off+16]); off += 16
         fr = d[off:off+cl]; off += cl
-        t_us = sec * 1e6 + (frac / 1000.0 if ns else frac)
+        t_us = sec * 1e6 + (frac / 1000.0 if ns else frac)  # float microseconds: the sentinel's own feature math is float
+        t_ns = sec * 1_000_000_000 + (frac if ns else frac * 1000)  # sec and frac are ints from struct.unpack: exact integer nanoseconds
         ln = ol
         proto = flags = sp = dp = 0
+        src_ip = None
         if len(fr) >= 14:
             et = struct.unpack('!H', fr[12:14])[0]; l3 = 14
             if et == 0x8100 and len(fr) >= 18: et = struct.unpack('!H', fr[16:18])[0]; l3 = 18
@@ -74,9 +86,10 @@ def parse_pcap(path):
                 ihl = (fr[l3] & 0x0F) * 4
                 if ihl >= 20 and len(fr) >= l3 + ihl:
                     proto = fr[l3 + 9]; l4 = l3 + ihl
+                    src_ip = '.'.join(str(b) for b in fr[l3 + 12:l3 + 16])
                     if proto == 6 and len(fr) >= l4 + 20: sp, dp = struct.unpack('!HH', fr[l4:l4+4]); flags = fr[l4 + 13]
                     elif proto == 17 and len(fr) >= l4 + 8: sp, dp = struct.unpack('!HH', fr[l4:l4+4])
-        frames.append((t_us, ln, proto, flags, sp, dp))
+        frames.append((t_us, ln, proto, flags, sp, dp, src_ip, t_ns) if with_src else (t_us, ln, proto, flags, sp, dp))
     return frames
 
 class Adaptive:

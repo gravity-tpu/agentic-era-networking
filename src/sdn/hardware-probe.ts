@@ -1473,6 +1473,82 @@ async function queryAppleGpuMetrics(timeoutMs: number = 200): Promise<AppleSilic
   });
 }
 
+/**
+ * Physical Mach Virtual Memory parsed from `vm_stat` on macOS (Darwin).
+ * Council Invariant 6 (Anti-Simulation): Extracts exact physical Mach VM statistics,
+ * differentiating between truly in-use memory (active + wired + compressed) and
+ * reclaimable cache (inactive + speculative), preventing false 98% utilization reporting.
+ * Council Invariant 2 (Integer Accounting): All calculations strictly use 64-bit BigInt.
+ */
+export function parseDarwinVmStat(
+  stdout: string,
+  totalMemBytes: bigint
+): { freeBytes: bigint; usedBytes: bigint } {
+  try {
+    const pageSizeMatch = stdout.match(/page size of (\d+) bytes/i);
+    const pageSize = pageSizeMatch && pageSizeMatch[1] ? BigInt(pageSizeMatch[1]) : 16384n;
+
+    const getCount = (label: string): bigint => {
+      const m = stdout.match(new RegExp(`${label}:\\s+(\\d+)`, 'i'));
+      return m && m[1] ? BigInt(m[1]) : 0n;
+    };
+
+    const freePages = getCount('Pages free');
+    const inactivePages = getCount('Pages inactive');
+    const speculativePages = getCount('Pages speculative');
+
+    // Available memory in Darwin Mach VM includes free pages plus reclaimable inactive and speculative pages
+    const availableBytes = (freePages + inactivePages + speculativePages) * pageSize;
+    const freeBytes = availableBytes <= totalMemBytes ? availableBytes : BigInt(os.freemem());
+    const usedBytes = totalMemBytes >= freeBytes ? totalMemBytes - freeBytes : 0n;
+
+    return { freeBytes, usedBytes };
+  } catch (err) {
+    process.stderr.write(
+      `[hardware-probe] Failed to parse Darwin vm_stat output: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`
+    );
+    const fallbackFree = BigInt(os.freemem());
+    const fallbackUsed = totalMemBytes >= fallbackFree ? totalMemBytes - fallbackFree : 0n;
+    return { freeBytes: fallbackFree, usedBytes: fallbackUsed };
+  }
+}
+
+export async function queryDarwinMemoryMetrics(
+  totalMemBytes: bigint,
+  timeoutMs: number = 200
+): Promise<{ freeBytes: bigint; usedBytes: bigint }> {
+  // Fail-closed platform boundary (Sanjay Ghemawat): never spawn vm_stat on Linux / Jetson
+  if (os.platform() !== 'darwin') {
+    const freeBytes = BigInt(os.freemem());
+    const usedBytes = totalMemBytes >= freeBytes ? totalMemBytes - freeBytes : 0n;
+    return { freeBytes, usedBytes };
+  }
+
+  return new Promise((resolve) => {
+    execFile('vm_stat', [], { timeout: timeoutMs }, (err, stdout) => {
+      if (err) {
+        process.stderr.write(
+          `[hardware-probe] vm_stat query error (${(err as NodeJS.ErrnoException).code ?? err.message}): ${err.message}\n`
+        );
+        const freeBytes = BigInt(os.freemem());
+        const usedBytes = totalMemBytes >= freeBytes ? totalMemBytes - freeBytes : 0n;
+        resolve({ freeBytes, usedBytes });
+        return;
+      }
+      if (!stdout || !stdout.trim()) {
+        process.stderr.write(`[hardware-probe] vm_stat query returned empty output\n`);
+        const freeBytes = BigInt(os.freemem());
+        const usedBytes = totalMemBytes >= freeBytes ? totalMemBytes - freeBytes : 0n;
+        resolve({ freeBytes, usedBytes });
+        return;
+      }
+      resolve(parseDarwinVmStat(stdout, totalMemBytes));
+    });
+  });
+}
+
 interface OllamaPsResponse {
   models?: Array<{
     name?: string;
@@ -1856,8 +1932,6 @@ export async function probeWorkstationHardware(
     prevWorkstationCpu = { total, idle };
 
     const totalMemBytes = BigInt(os.totalmem());
-    const freeMemBytes = BigInt(os.freemem());
-    const usedMemBytes = totalMemBytes >= freeMemBytes ? totalMemBytes - freeMemBytes : 0n;
 
     const load = os.loadavg();
     const loadAvg: [number, number, number] = [
@@ -1866,9 +1940,10 @@ export async function probeWorkstationHardware(
       parseFloat(load[2]!.toFixed(2)),
     ];
 
-    // Query Apple Silicon GPU via IOKit, Ollama status, and USB tether concurrently
-    const [gpuInfo, ollamaInfo, usbTether] = await Promise.all([
+    // Query Apple Silicon GPU via IOKit, Darwin VM memory, Ollama status, and USB tether concurrently
+    const [gpuInfo, memoryMetrics, ollamaInfo, usbTether] = await Promise.all([
       queryAppleGpuMetrics(200),
+      queryDarwinMemoryMetrics(totalMemBytes, 200),
       (async (): Promise<{ online: boolean; model: NonNullable<OllamaPsResponse['models']>[number] | null; endpoint: string }> => {
         // Sanjay Ghemawat - Bounded Allocation Invariant:
         // Restrict candidate endpoints strictly to loopback and designated mesh/tether interfaces (at most 4).
@@ -2082,8 +2157,8 @@ export async function probeWorkstationHardware(
       cpuCores,
       cpuUtilizationPct,
       memoryTotalBytes: totalMemBytes,
-      memoryUsedBytes: usedMemBytes,
-      memoryFreeBytes: freeMemBytes,
+      memoryUsedBytes: memoryMetrics.usedBytes,
+      memoryFreeBytes: memoryMetrics.freeBytes,
       loadAvg,
       usbTether,
       gpuModel: gpuInfo.gpuModel,
