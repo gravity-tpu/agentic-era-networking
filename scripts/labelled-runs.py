@@ -38,7 +38,7 @@ MAX_RUN_SECONDS = 120          # hard cap on how long any single run may last
 MAX_PPS = 2000                 # most packets per second any run may be asked to send
 MAX_PACKETS = 20000            # most packets any one run may send
 MAX_PAYLOAD_BYTES = 1400       # largest payload any run may use
-RACK_STATUS_MAX_AGE_MS = 180_000  # the bridge re-reads the table every 60 s; older than this means it has stopped
+RACK_STATUS_MAX_AGE_MS = 180_000  # three of the bridge's 60 s re-read intervals: an older readback means it has stopped reading
 SETTLE_SECONDS = 3             # quiet time before and after each run inside the capture
 CAPTURE_FILTER = "ip or arp"
 
@@ -415,11 +415,16 @@ def rack_healthy():
     a run against a switch whose control plane is down tests nothing and may be making things worse. Read through the bridge on
     the Jetson. The check runs before every run, and a failure stops the whole batch.
     """
-    r = subprocess.run(["ssh", JETSON, "curl -s -m 8 localhost:3003/api/zodiac/flows"], capture_output=True, text=True, timeout=30)
+    try:
+        r = subprocess.run(["ssh", JETSON, "curl -s -m 8 localhost:3003/api/zodiac/flows"], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return False, "the Jetson did not answer within 30 s"  # fail closed: no answer is not "healthy"
     try:
         iso = json.loads(r.stdout)["port1Isolation"]
     except (ValueError, KeyError, TypeError):
         return False, "the bridge on the Jetson did not return an isolation status"
+    if not isinstance(iso, dict):
+        return False, "the isolation status is not an object"
     if iso.get("state") != "verified":
         return False, f"the isolation policy reads {iso.get('state')!r}, not 'verified' (the switch's control plane may be down)"
     age = iso.get("checkedAgeMs")
