@@ -66,12 +66,23 @@ describe.skipIf(!hasNumpy)('baseline detector rules', () => {
     expect(run({ alerts: [syn(30), syn(30), syn(30)] }).alerts).toEqual([]);
   });
 
-  it('is re-armed after QUIET_BUCKETS quiet buckets, not "once until restart", and does not repeat while it is still hot', () => {
-    const hot = [syn(40), syn(40), syn(40), syn(40), syn(40), syn(40)];
-    expect(run({ alerts: hot }).alerts).toHaveLength(1); // one report per episode, however long it lasts
-    const quiet = Array.from({ length: 6 }, () => ({}));
-    const again = run({ alerts: [...hot.slice(0, 2), ...quiet, ...hot.slice(0, 2)] }).alerts ?? [];
-    expect(again).toHaveLength(2);
+  it('reports a sustained attack once, however long it lasts (one report per episode)', () => {
+    const hot = Array.from({ length: 40 }, () => syn(40)); // far longer than QUIET_BUCKETS, never quiet
+    expect(run({ alerts: hot }).alerts).toHaveLength(1);
+  });
+
+  it('re-arms only after QUIET_BUCKETS consecutive quiet buckets: 4 quiet is not enough, 5 is', () => {
+    const hot = [syn(40), syn(40)];
+    const quiet = (n: number) => Array.from({ length: n }, () => ({}));
+    expect(run({ alerts: [...hot, ...quiet(4), ...hot] }).alerts).toHaveLength(1);
+    expect(run({ alerts: [...hot, ...quiet(5), ...hot] }).alerts).toHaveLength(2);
+  });
+
+  it('a quiet gap that is interrupted does not re-arm: the quiet buckets must be consecutive', () => {
+    const hot = [syn(40), syn(40)];
+    const q = (n: number) => Array.from({ length: n }, () => ({}));
+    // 3 quiet, one over-threshold bucket, 3 quiet: neither run reaches 5.
+    expect(run({ alerts: [...hot, ...q(3), syn(40), ...q(3), ...hot] }).alerts).toHaveLength(1);
   });
 
   it('judges each feature on its own threshold and reports every feature that is over', () => {
@@ -88,10 +99,15 @@ describe.skipIf(!hasNumpy)('baseline detector rules', () => {
 });
 
 describe.skipIf(!hasNumpy)('baseline detector on the committed labelled runs', () => {
-  const out = () => {
-    const r = spawnSync('python3', [SCRIPT, DATA], { encoding: 'utf-8' });
-    expect(r.status, r.stderr).toBe(0);
-    return r.stdout;
+  // One run of the script, shared by every assertion below (it parses every committed capture).
+  let cached: string | undefined;
+  const out = (): string => {
+    if (cached === undefined) {
+      const r = spawnSync('python3', [SCRIPT, DATA], { encoding: 'utf-8' });
+      expect(r.status, r.stderr).toBe(0);
+      cached = r.stdout;
+    }
+    return cached;
   };
 
   it('detects all five attacks with the right sender and alerts on none of the 18 benign runs, in sample', () => {
@@ -107,7 +123,7 @@ describe.skipIf(!hasNumpy)('baseline detector on the committed labelled runs', (
   it('catches the fast scan only through the severe path, and the slow scan late', () => {
     const o = out();
     expect(o).toMatch(/attack-portscan-fast\s+attack\s+1\s+yes\s+0\s+ports_10s,syn_per_s/);
-    expect(o).toMatch(/attack-portscan-slow\s+attack\s+16\s+yes\s+5\s+ports_10s/);
+    expect(o).toMatch(/attack-portscan-slow\s+attack\s+1\s+yes\s+5\s+ports_10s/); // one report per episode, not one per second
   });
 
   it('records the constants the design document quotes', () => {

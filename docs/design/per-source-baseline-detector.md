@@ -137,6 +137,13 @@ detector correct. It is an audit trail and a speed bump, not security.
 | 4 | Scorecard and the guard | review |
 | 5 | Optional `enforce` for this detector only | owner decision |
 
+## The biggest open risk
+
+The generalization to workloads not yet seen rests on hand-chosen floors, and the guard's own bounds are unvalidated
+proposals. Until bulk TCP, ssh, browsing and Tailscale-style traffic are recorded and the thresholds are scored on runs
+recorded after a freeze, any freeze is premature. That must be settled before step 5, and it is the first thing to re-check
+before anyone sets `enforce`.
+
 ## Decisions for the owner
 
 1. A global benign envelope in v1 with per-host learning deferred (above), or learned baselines from the start.

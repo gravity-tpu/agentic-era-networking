@@ -3,10 +3,10 @@ thresholds from all benign runs: {'nontcp_pps': 153, 'nontcp_bytes': 100000, 'sy
 
 run                              class   alerts  sender?  first alert (s)  features
 attack-portscan-fast             attack       1  yes                    0  ports_10s,syn_per_s
-attack-portscan-slow             attack      16  yes                    5  ports_10s
-attack-synflood-1000pps          attack       3  yes                    0  syn_per_s
-attack-synflood-200pps           attack       6  yes                    1  syn_per_s
-attack-udpflood-500pps-1400b     attack       2  yes                    1  nontcp_bytes,nontcp_pps
+attack-portscan-slow             attack       1  yes                    5  ports_10s
+attack-synflood-1000pps          attack       1  yes                    0  syn_per_s
+attack-synflood-200pps           attack       1  yes                    1  syn_per_s
+attack-udpflood-500pps-1400b     attack       1  yes                    1  nontcp_bytes,nontcp_pps
 benign-http-20rps                benign       0  no                     -  
 benign-http-20rps-r2             benign       0  no                     -  
 benign-http-5rps                 benign       0  no                     -  

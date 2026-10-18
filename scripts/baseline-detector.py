@@ -52,6 +52,9 @@ TCP, UDP = 6, 17
 
 
 def usable_source(ip):
+    """A real unicast source. Loopback, unspecified, multicast and broadcast addresses are not hosts that can be quarantined, so
+    they are not tracked (the trt daemon's parse_src_ip applies the same rule). scripts/baseline-features.py keys on the run's
+    own sender, which is always a unicast host, so the two agree on every labelled run."""
     if ip is None:
         return False
     first = int(ip.split(".")[0])
@@ -103,17 +106,24 @@ def thresholds(benign_series, floors=True):
 
 
 def alerts(series, thr):
-    """[(bucket, [features over threshold])] with damping: HITS of the last WINDOW buckets, re-armed after QUIET_BUCKETS quiet ones."""
-    out, recent, quiet = [], collections.deque(maxlen=WINDOW), QUIET_BUCKETS
+    """
+    [(bucket, [features over threshold])]. Damping: HITS of the last WINDOW buckets over threshold, or one bucket at SEVERE
+    times a threshold. One report per episode: after a report the source is silent, however long it stays hot, and is re-armed
+    only after QUIET_BUCKETS CONSECUTIVE buckets with no feature over its threshold.
+    """
+    out, recent = [], collections.deque(maxlen=WINDOW)
+    armed, quiet_run = True, 0
     for b in sorted(series):
         over = [f for f in FEATURES if series[b][f] > thr[f]]
         recent.append(over)
-        quiet = 0 if over else min(QUIET_BUCKETS, quiet + 1)
+        quiet_run = 0 if over else quiet_run + 1
+        if quiet_run >= QUIET_BUCKETS:
+            armed = True
         counts = collections.Counter(f for o in recent for f in o)
-        hot = [f for f, c in counts.items() if c >= HITS] + [f for f in over if series[b][f] >= SEVERE * max(1, thr[f])]
-        hot = sorted(set(hot))
-        if hot and quiet == 0 and not (out and b - out[-1][0] < QUIET_BUCKETS):
-            out.append((b, sorted(hot)))
+        hot = sorted(set([f for f, c in counts.items() if c >= HITS] + [f for f in over if series[b][f] >= SEVERE * max(1, thr[f])]))
+        if hot and armed:
+            out.append((b, hot))
+            armed = False
     return out
 
 
