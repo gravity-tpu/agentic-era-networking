@@ -136,6 +136,11 @@ _score = importlib.util.module_from_spec(_score_spec)
 _score_spec.loader.exec_module(_score)
 
 
+def sender_frame_count(frames, sender_ip):
+    """How many of the run's frames came from its sender (the tuple position is named in sentinel-replay.py)."""
+    return sum(1 for f in frames if f[sr.FRAME_SRC_IP] == sender_ip)
+
+
 def load(datadir):
     """Labelled runs that count: a run recorded on an unhealthy rack, or in which the sender is barely seen, is left out here too,
     by the same rule the scorer uses (a run that tested nothing is not a clean benign run)."""
@@ -147,7 +152,7 @@ def load(datadir):
             pcap += ".gz"
         frames = sr.parse_pcap(pcap, with_src=True)
         sender_ip = label.get("senderIp")
-        if not _score.rack_ok(label) or (sender_ip is not None and sum(1 for f in frames if f[6] == sender_ip) < _score.MIN_SENDER_FRAMES):
+        if not _score.rack_ok(label) or (sender_ip is not None and sender_frame_count(frames, sender_ip) < _score.MIN_SENDER_FRAMES):
             print(f"INVALID (left out): {label['id']}")
             continue
         pattern = label.get("pattern") or re.sub(r"-r\d+$", "", label["id"])  # earlier labels carry no pattern field

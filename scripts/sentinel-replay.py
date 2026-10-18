@@ -51,6 +51,8 @@ def losses(frames):
         if w is not None: out.append(kernel_loss(w))
     return out
 
+# Positions in a frame tuple returned by parse_pcap(..., with_src=True): (t_us, wire_len, proto, flags, src_port, dst_port, src_ip, t_ns).
+FRAME_SRC_IP, FRAME_T_NS = 6, 7
 MAX_PCAP_BYTES = 64 * 1024 * 1024  # offline analysis of small lab captures; refuse anything larger rather than load it
 
 def parse_pcap(path, with_src=False):
