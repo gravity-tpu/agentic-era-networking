@@ -33,7 +33,9 @@ describe('capture parser: ARP frames', () => {
     const r = spawnSync('python3', ['-c', DRIVER, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
     // well-formed -> 10.0.2.50; wrong hardware type, wrong address length, truncated, and a 0.0.0.0 probe -> no source.
-    const [plain, arp] = JSON.parse(r.stdout.trim().split('\n').pop() ?? '[[],[]]');
+    const last = r.stdout.trim().split('\n').pop();
+    expect(last, 'the driver printed nothing').toBeTruthy();
+    const [plain, arp] = JSON.parse(last as string);
     expect(plain).toEqual([null, null, null, null, null]);
     expect(arp).toEqual(['10.0.2.50', null, null, null, null]);
   });

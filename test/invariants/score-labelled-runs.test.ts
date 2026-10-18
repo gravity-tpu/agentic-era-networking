@@ -111,7 +111,7 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
     expect(r.stdout).toContain('runs naming a non-sender: 0/45');
     expect(r.stdout).toMatch(/\nbenign-udp-burst-tailscale-like-ok /);
     expect(r.stdout).toMatch(/udp-burst\s+rate rule 1\/1\s+sentinel 1\/1/);
-    const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
+    const row = (id: string) => r.stdout.split('\n').find((l) => l.split(/\s+/)[0] === id.trim()) ?? '';
     expect(row('attack-portscan-fast ')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
     expect(row('attack-portscan-slow ')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
     expect(row('attack-synflood-1000pps ')).toMatch(/\| names sender, first at 0\.50 s/);

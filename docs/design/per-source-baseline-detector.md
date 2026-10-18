@@ -55,6 +55,8 @@ file produced by an offline script from the labelled benign runs, not computed o
 
 ### Offline result (prototype `scripts/baseline-detector.py`, 48 runs, 45 for the replicas plus the 3 ARP floods only the prototype attributes)
 
+**Not comparable with the replica scores as a headline.** 14 of those 17 detections are on the 45 runs the replicas also score (the replicas get 8 and 15 of 18 there); the other 3 are ARP floods that the deployed daemon cannot see at all, and that the prototype sees only because it reads the ARP sender address, which is forgeable.
+
 | Scoring | Attacks detected with the right sender | Benign runs with an alert |
 | :--- | :--- | :--- |
 | In sample (thresholds from all benign runs) | 17 of 21 | 0 of 27 |
