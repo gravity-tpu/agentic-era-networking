@@ -104,7 +104,9 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
     // A session that is not Connected is unhealthy even when an old readback still says verified.
     expect(src).toContain('of_status != "Connected"');
     // A drop that recovered before the check is still caught: the bridge's own dead-peer log lines are counted across the run window.
-    expect(src).toContain("grep -c 'Dead peer detected'");
+    expect(src).toContain('"Dead peer detected" in line'); // counted here, so a failed read is not mistaken for zero matches
+    expect(src).toMatch(/if drops is None:\n\s+healthy_after, why_after = False/); // an unreadable journal is unhealthy
+    expect(src).toContain('could not read the Jetson\'s clock');
     expect(src).toContain('controller_drops_since(window_start)');
     expect(src).toContain('"controllerDropsDuringRun": drops');
   });

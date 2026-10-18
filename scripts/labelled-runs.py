@@ -481,7 +481,9 @@ def execute(run, outdir):
         time.sleep(POST_RUN_GRACE_SECONDS)
         healthy_after, why_after = rack_healthy()
         drops = controller_drops_since(window_start)
-        if drops:
+        if drops is None:
+            healthy_after, why_after = False, "the bridge's journal could not be read for the run window"
+        elif drops:
             healthy_after, why_after = False, f"the bridge logged {drops} dead-peer event(s) during the run window"
     finally:
         pidfile = capture_pidfile(rid)
@@ -551,19 +553,29 @@ def rack_healthy():
 
 
 def jetson_epoch():
-    """Whole seconds since the epoch on the Jetson's own clock, so a journal window is not skewed by this machine's clock."""
-    r = subprocess.run(["ssh", JETSON, "date +%s"], capture_output=True, text=True, timeout=30)
-    return int(r.stdout.strip())
+    """Whole seconds since the epoch on the Jetson's own clock, so a journal window is not skewed by this machine's clock.
+    Called before any traffic is sent, so a failure here stops the batch with nothing sent."""
+    try:
+        r = subprocess.run(["ssh", JETSON, "date +%s"], capture_output=True, text=True, timeout=30)
+        return int(r.stdout.strip())
+    except (subprocess.TimeoutExpired, ValueError) as e:
+        raise SystemExit(f"could not read the Jetson's clock ({type(e).__name__}); nothing was sent")
 
 
 def controller_drops_since(epoch):
     """
-    How many times the bridge logged a dead OpenFlow peer since `epoch` (Jetson clock). A drop that recovered before the post-run
-    health check still counts: the check of the current state cannot see it, the journal can.
+    How many times the bridge logged a dead OpenFlow peer since `epoch` (Jetson clock), or None when that cannot be read. A drop
+    that recovered before the post-run health check still counts: the check of the current state cannot see it, the journal can.
+    The journal text is fetched and counted here (a failed read is not mistaken for "zero matches"), and the caller treats
+    None as unhealthy.
     """
-    r = subprocess.run(["ssh", JETSON, f"journalctl -u zodiac-bridge --no-pager --since @{int(epoch)} | grep -c 'Dead peer detected'"],
-                       capture_output=True, text=True, timeout=40)
-    return int(r.stdout.strip() or 0)
+    try:
+        r = subprocess.run(["ssh", JETSON, f"journalctl -u zodiac-bridge --no-pager --since @{int(epoch)}"], capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        return None
+    if r.returncode != 0:
+        return None
+    return sum(1 for line in r.stdout.splitlines() if "Dead peer detected" in line)
 
 
 def preflight(runs):
