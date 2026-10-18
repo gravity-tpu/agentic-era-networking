@@ -14,7 +14,7 @@ the workload segment; commands are built from fixed templates, never from free t
 Usage:
   python3 scripts/labelled-runs.py --list                  show the catalog and the validation verdict for each run
   python3 scripts/labelled-runs.py --dry-run               print every command that would run, run nothing
-  python3 scripts/labelled-runs.py --execute --out DIR [--only ID ...]   run (needs the one-time capture setup below)
+  python3 scripts/labelled-runs.py --execute --out DIR [--only ID ...] [--class benign|attack]   run (needs the one-time capture setup below)
 
 One-time setup on the Jetson (needs root; lets the zodiac user capture the tap without root):
   sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump
@@ -26,8 +26,11 @@ import json
 import os
 import re
 import shlex
+import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 # --- bounds (named, so a change is a visible review item) -------------------------------------------------------
@@ -35,6 +38,7 @@ MAX_RUN_SECONDS = 120          # hard cap on how long any single run may last
 MAX_PPS = 2000                 # most packets per second any run may be asked to send
 MAX_PACKETS = 20000            # most packets any one run may send
 MAX_PAYLOAD_BYTES = 1400       # largest payload any run may use
+RACK_STATUS_MAX_AGE_MS = 180_000  # three of the bridge's 60 s re-read intervals: an older readback means it has stopped reading
 SETTLE_SECONDS = 3             # quiet time before and after each run inside the capture
 CAPTURE_FILTER = "ip or arp"
 
@@ -48,7 +52,60 @@ ADVERSARY = "agentic-node-01"
 ALLOWED_TARGETS = ("10.0.2.119", "10.0.2.51")  # the Mac's benchmark alias and the Pi 5
 SEGMENT = ipaddress.ip_network("10.0.2.0/24")
 
-TOOLS = ("ping", "hping3", "nmap", "iperf3-udp")
+BENIGN_TOOLS = ("ping", "http-get", "udp-small", "tcp-stream", "idle")
+ATTACK_TOOLS = ("hping3", "nmap")
+TOOLS = BENIGN_TOOLS + ATTACK_TOOLS
+# Traffic only reaches the tap if it CROSSES the Zodiac. node-01, node-02 and the Pi 5 are all on the workload side of the
+# same switch, so traffic among them never does (measured 2026-10-17: HTTP and iperf3 runs to the Pi 5 left 0 sender frames
+# at the tap). Receivers that must be started therefore run on THIS machine (the Mac), bound to its 10.0.2.119 alias on the
+# uplink side, which every sender reaches through the Zodiac.
+LOCAL_RECEIVER_TARGET = "10.0.2.119"
+HTTP_TARGET = LOCAL_RECEIVER_TARGET  # a small local web server serving two tiny static files
+HTTP_PORT = 8000
+HTTP_PATHS = ("/health", "/models")
+MAX_RPS = 20
+MAX_UDP_SMALL_PPS = 50
+STREAM_PORT = 5201
+MAX_STREAM_MBIT = 20
+SPACING_SECONDS = 5            # quiet gap between consecutive runs, so one run's tail is not in the next capture
+# Bulk TCP uses plain Python at both ends (the Mac's firewall silently dropped inbound connections to iperf3 while allowing
+# Python, measured 2026-10-17). A sink on this machine and a rate-limited sender on the node, both fixed scripts.
+TCP_SINK_SCRIPT = (
+    "import socket,sys,time;"
+    "h,p,s=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]);"
+    "k=socket.socket();k.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);k.bind((h,p));k.listen(4);k.settimeout(1.0);"
+    "e=time.monotonic()+s\n"
+    "while time.monotonic()<e:\n"
+    " try: c,_=k.accept()\n"
+    " except socket.timeout: continue\n"
+    " c.settimeout(5)\n"
+    " while time.monotonic()<e:\n"
+    "  try: d=c.recv(65536)\n"
+    "  except socket.timeout: break\n"
+    "  if not d: break\n"
+    " c.close()\n"
+)
+TCP_STREAM_SCRIPT = (
+    "import socket,sys,time;"
+    "t,p,m,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5];"
+    "k=socket.socket();k.bind((b,0));k.settimeout(10);k.connect((t,p));k.settimeout(5);"
+    "d=b'x'*1448;bps=m*125000;st=time.monotonic_ns();e=st+s*1_000_000_000;sent=0\n"
+    "while time.monotonic_ns()<e:\n"
+    " k.sendall(d);sent+=1448;w=st+sent*1_000_000_000//bps-time.monotonic_ns()\n"
+    " if w>0: time.sleep(w/1e9)\n"
+    "k.close()\n"
+)
+HTTP_LOOP_SCRIPT = 'end=$(( $(date +%s) + $3 )); while [ $(date +%s) -lt $end ]; do curl -s -m 2 --interface eth0 -o /dev/null "$1"; sleep "$2"; done'
+# A fixed script: sends small UDP datagrams at a bounded rate for a bounded time. Arguments: target port pps seconds payload.
+UDP_SMALL_SCRIPT = (
+    "import socket,sys,time;"
+    "t,p,r,s,n=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]);"
+    "k=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);k.bind((sys.argv[6],0));d=b'x'*n;"
+    "g=1_000_000_000//r;now=time.monotonic_ns();e=now+s*1_000_000_000;nxt=now\n"
+    "while time.monotonic_ns()<e:\n"
+    " k.sendto(d,(t,p));nxt+=g;w=nxt-time.monotonic_ns()\n"
+    " if w>0: time.sleep(w/1e9)\n"
+)
 BENIGN, ATTACK = "benign", "attack"
 
 
@@ -75,19 +132,29 @@ def validate(run):
         errors.append(f"class must be {BENIGN!r} or {ATTACK!r}")
     if run.get("tool") not in TOOLS:
         errors.append(f"tool must be one of {TOOLS}")
+    tool = run.get("tool")
+    cls = run.get("class")
+    if cls == BENIGN and tool in ATTACK_TOOLS:
+        errors.append(f"{tool} is an attack tool and cannot be a benign run")
+    if cls == ATTACK and tool in BENIGN_TOOLS:
+        errors.append(f"{tool} is a benign tool and cannot be an attack run")
     sender = run.get("sender")
-    if sender not in HOSTS:
-        errors.append(f"sender must be one of {tuple(HOSTS)}")
-    elif run.get("class") == ATTACK and sender != ADVERSARY:
-        errors.append(f"an attack may only come from {ADVERSARY}")
-    target = run.get("target")
-    try:
-        t_ip = ipaddress.ip_address(target)
-    except ValueError:
-        errors.append(f"target {target!r} is not an IP address")
+    if tool == "idle":
+        if sender is not None or run.get("target") is not None:
+            errors.append("an idle run has no sender and no target")
     else:
-        if target not in ALLOWED_TARGETS or t_ip not in SEGMENT:
-            errors.append(f"target {target} is not one of the allowed receivers {ALLOWED_TARGETS}")
+        if sender not in HOSTS:
+            errors.append(f"sender must be one of {tuple(HOSTS)}")
+        elif cls == ATTACK and sender != ADVERSARY:
+            errors.append(f"an attack may only come from {ADVERSARY}")
+        target = run.get("target")
+        try:
+            t_ip = ipaddress.ip_address(target)
+        except ValueError:
+            errors.append(f"target {target!r} is not an IP address")
+        else:
+            if target not in ALLOWED_TARGETS or t_ip not in SEGMENT:
+                errors.append(f"target {target} is not one of the allowed receivers {ALLOWED_TARGETS}")
     seconds = _positive_int(run, "seconds", errors, MAX_RUN_SECONDS)
     pps = run.get("pps")
     if pps is not None:
@@ -116,24 +183,61 @@ def validate(run):
         pr = run.get("ports", "")
         if not re.fullmatch(r"\d{1,5}-\d{1,5}", str(pr)) or int(str(pr).split("-")[1]) - int(str(pr).split("-")[0]) > 2000:
             errors.append("nmap ports must be a range of at most 2000 ports, like 1-1000")
-    if run.get("tool") == "iperf3-udp":
-        for key in ("bandwidth_mbit",):
-            if not isinstance(run.get(key), int) or not 1 <= run[key] <= 20:
-                errors.append("iperf3-udp bandwidth_mbit must be 1 to 20")
-        errors.append("iperf3-udp needs a receiver running on the target, which this harness does not start; not in the catalog")
+    if tool == "http-get":
+        if run.get("target") != HTTP_TARGET:
+            errors.append(f"http-get only targets {HTTP_TARGET}")
+        if run.get("path") not in HTTP_PATHS:
+            errors.append(f"http-get path must be one of {HTTP_PATHS}")
+        if not isinstance(run.get("rps"), int) or isinstance(run.get("rps"), bool) or not 1 <= run["rps"] <= MAX_RPS:
+            errors.append(f"http-get rps must be 1 to {MAX_RPS}")
+    if tool == "udp-small":
+        if not isinstance(pps, int) or isinstance(pps, bool) or pps > MAX_UDP_SMALL_PPS:
+            errors.append(f"udp-small pps must be a positive integer of at most {MAX_UDP_SMALL_PPS}")
+        n = run.get("payload_bytes", 60)
+        if not isinstance(n, int) or isinstance(n, bool) or not 20 <= n <= 200:
+            errors.append("udp-small payload_bytes must be 20 to 200")
+        if run.get("port", 53) != 53 and not (isinstance(run.get("port"), int) and 1 <= run["port"] <= 65535):
+            errors.append("udp-small port must be 1 to 65535")
+    if tool == "tcp-stream":
+        if run.get("target") != LOCAL_RECEIVER_TARGET:
+            errors.append(f"tcp-stream needs a receiver this harness can start; its only target is {LOCAL_RECEIVER_TARGET}")
+        if not isinstance(run.get("bandwidth_mbit"), int) or isinstance(run.get("bandwidth_mbit"), bool) or not 1 <= run["bandwidth_mbit"] <= MAX_STREAM_MBIT:
+            errors.append(f"tcp-stream bandwidth_mbit must be 1 to {MAX_STREAM_MBIT}")
     if errors:
         raise RunRejected("; ".join(errors))
     return run
 
 
+def interval_text(per_second):
+    """The gap between events at `per_second` events a second, as the decimal text ping and sleep take: microsecond precision,
+    by integer arithmetic (exact for rates that divide a million, such as every rate in the catalog; otherwise truncated)."""
+    if not isinstance(per_second, int) or isinstance(per_second, bool) or not 1 <= per_second <= 1000:
+        raise ValueError(f"per_second must be an integer from 1 to 1000 (got {per_second!r})")
+    us = 1_000_000 // per_second
+    return f"{us // 1_000_000}.{us % 1_000_000:06d}"
+
+
 def remote_command(run):
-    """The argv that runs on the sender, from fixed templates. Always under `timeout`."""
+    """The argv that runs on the sender, from fixed templates. Always under `timeout`. None for an idle run."""
     validate(run)
+    tool = run["tool"]
+    if tool == "idle":
+        return None
     tgt = run["target"]
     secs = run["seconds"]
-    tool = run["tool"]
     if tool == "ping":
-        inner = ["ping", "-I", "eth0", "-c", str(secs * run["pps"]), "-i", f"{1 / run['pps']:.3f}", "-q", tgt]
+        inner = ["ping", "-I", "eth0", "-c", str(secs * run["pps"]), "-i", interval_text(run["pps"]), "-q", tgt]
+    elif tool == "http-get":
+        # Small GETs to the Pi 5's Hailo service at a bounded rate. Only validated integers and an allowlisted path are used.
+        url = f"http://{tgt}:{HTTP_PORT}{run['path']}"
+        gap = interval_text(run["rps"])
+        # The loop text is a constant; the url, gap and duration are passed as arguments ($1, $2, $3), never spliced into it.
+        return ["timeout", str(secs + 5), "sh", "-c", HTTP_LOOP_SCRIPT, "sh", url, gap, str(secs)]
+    elif tool == "udp-small":
+        return ["timeout", str(secs + 5), "python3", "-c", UDP_SMALL_SCRIPT, tgt, str(run.get("port", 53)), str(run["pps"]), str(secs),
+                str(run.get("payload_bytes", 60)), HOSTS[run["sender"]]]
+    elif tool == "tcp-stream":
+        return ["timeout", str(secs + 10), "python3", "-c", TCP_STREAM_SCRIPT, tgt, str(STREAM_PORT), str(run["bandwidth_mbit"]), str(secs), HOSTS[run["sender"]]]
     elif tool == "hping3":
         interval_us = max(1, 1_000_000 // run["pps"])
         inner = ["hping3", "-c", str(run["count"]), "-i", f"u{interval_us}", "-I", "eth0", "-d", str(run.get("payload_bytes", 0)), "-q"]
@@ -150,6 +254,24 @@ def remote_command(run):
     if tool in ("hping3", "nmap"):
         return ["sudo", "-n", "timeout", str(secs + 5)] + inner
     return ["timeout", str(secs + 5)] + inner
+
+
+# The two files the local web server serves; the allowlisted request paths map to them.
+HTTP_FILES = {"health": '{"status":"HEALTHY","hailo_device":"CONNECTED","active_model":"yolov8s_h8.hef"}',
+              "models": '{"active_model":"yolov8s_h8.hef","models":[' + ",".join('{"name":"m%d","filename":"m%d.hef"}' % (i, i) for i in range(12)) + "]}"}
+
+
+def receiver_command(run, docroot=None):
+    """
+    The argv of a receiver this harness starts on THIS machine before the sender, or None when the target needs no server.
+    http-get needs the directory the two static files are in (docroot); the harness creates it.
+    """
+    validate(run)
+    if run["tool"] == "tcp-stream":
+        return ["python3", "-c", TCP_SINK_SCRIPT, LOCAL_RECEIVER_TARGET, str(STREAM_PORT), str(run["seconds"] + 15)]
+    if run["tool"] == "http-get":
+        return ["python3", "-m", "http.server", str(HTTP_PORT), "--bind", LOCAL_RECEIVER_TARGET, "--directory", docroot or "<docroot>"]
+    return None
 
 
 def capture_pidfile(run_id):
@@ -176,29 +298,92 @@ def _attack(id_, tool, target, seconds, **kw):
     return {"id": id_, "class": ATTACK, "tool": tool, "sender": ADVERSARY, "target": target, "seconds": seconds, **kw}
 
 
-CATALOG = [
-    _benign("benign-ping-5pps", "ping", "agentic-node-02", "10.0.2.119", 60, pps=5),
-    _benign("benign-ping-5pps-node01", "ping", "agentic-node-01", "10.0.2.119", 60, pps=5),
-    _benign("benign-ping-20pps", "ping", "agentic-node-02", "10.0.2.119", 30, pps=20),
-    _attack("attack-synflood-1000pps", "hping3", "10.0.2.119", 10, pps=1000, count=10000, flags_or_proto="syn", port=80),
-    _attack("attack-synflood-200pps", "hping3", "10.0.2.119", 30, pps=200, count=6000, flags_or_proto="syn", port=80),
-    _attack("attack-udpflood-500pps-1400b", "hping3", "10.0.2.119", 10, pps=500, count=5000, flags_or_proto="udp", payload_bytes=1400, port=5001),
-    _attack("attack-portscan-fast", "nmap", "10.0.2.119", 20, timing=4, ports="1-1000"),
-    _attack("attack-portscan-slow", "nmap", "10.0.2.119", 120, timing=2, ports="1-200"),
-]
+def _idle(id_, seconds):
+    return {"id": id_, "class": BENIGN, "tool": "idle", "sender": None, "target": None, "seconds": seconds}
+
+
+def repeats(run, n):
+    """The run and n-1 repeats: the first keeps its id (so earlier recordings still match), the others get -r2, -r3, ..."""
+    pattern = run["id"]
+    return [{**run, "pattern": pattern}] + [{**run, "id": f"{pattern}-r{i}", "pattern": pattern} for i in range(2, n + 1)]
+
+
+CATALOG = (
+    # --- benign: ping (first recorded 2026-10-17)
+    repeats(_benign("benign-ping-5pps", "ping", "agentic-node-02", "10.0.2.119", 60, pps=5), 3)
+    + [_benign("benign-ping-5pps-node01", "ping", "agentic-node-01", "10.0.2.119", 60, pps=5)]
+    + repeats(_benign("benign-ping-20pps", "ping", "agentic-node-02", "10.0.2.119", 30, pps=20), 2)
+    # --- benign: the classes added for the next scoring round
+    + repeats(_idle("benign-idle-60s", 60), 2)
+    + repeats(_benign("benign-http-5rps", "http-get", "agentic-node-02", "10.0.2.119", 30, rps=5, path="/health"), 3)
+    + repeats(_benign("benign-http-20rps", "http-get", "agentic-node-02", "10.0.2.119", 30, rps=20, path="/models"), 2)
+    + repeats(_benign("benign-udp-small-10pps", "udp-small", "agentic-node-02", "10.0.2.119", 30, pps=10, payload_bytes=60, port=53), 3)
+    + repeats(_benign("benign-udp-small-50pps", "udp-small", "agentic-node-02", "10.0.2.119", 30, pps=50, payload_bytes=100, port=53), 2)
+    + repeats(_benign("benign-bulk-tcp-10mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=10), 2)
+    + repeats(_benign("benign-bulk-tcp-node01-10mbit", "tcp-stream", "agentic-node-01", "10.0.2.119", 20, bandwidth_mbit=10), 2)
+    # --- attacks (first recorded 2026-10-17), repeated for the next round
+    + repeats(_attack("attack-synflood-1000pps", "hping3", "10.0.2.119", 10, pps=1000, count=10000, flags_or_proto="syn", port=80), 3)
+    + repeats(_attack("attack-synflood-200pps", "hping3", "10.0.2.119", 30, pps=200, count=6000, flags_or_proto="syn", port=80), 3)
+    + repeats(_attack("attack-udpflood-500pps-1400b", "hping3", "10.0.2.119", 10, pps=500, count=5000, flags_or_proto="udp", payload_bytes=1400, port=5001), 3)
+    + repeats(_attack("attack-portscan-fast", "nmap", "10.0.2.119", 20, timing=4, ports="1-1000"), 3)
+    + repeats(_attack("attack-portscan-slow", "nmap", "10.0.2.119", 120, timing=2, ports="1-200"), 3)
+)
+
+
+for _run in CATALOG:
+    _run.setdefault("pattern", _run["id"])  # a run with no repeats is its own pattern
+
+
+def wait_listening(host, port, proc, seconds=8):
+    """Wait until host:port accepts a TCP connection, or fail: a sender must not start against a receiver that is not up."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError("the local receiver exited while starting")
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return
+        except OSError:
+            time.sleep(0.2)
+    raise RuntimeError(f"the local receiver did not accept connections on {host}:{port} within {seconds} s")
 
 
 def execute(run, outdir):
+    ok, why = rack_healthy()
+    if not ok:
+        raise SystemExit(f"stopping before {run['id']}: {why}")
     rid = run["id"]
-    print(f"[run] {rid}: {run['class']} from {run['sender']} -> {run['target']} for up to {run['seconds']} s", flush=True)
+    who = f"from {run['sender']} -> {run['target']}" if run["tool"] != "idle" else "nothing sent"
+    print(f"[run] {rid}: {run['class']} {who} for up to {run['seconds']} s", flush=True)
     cap = subprocess.Popen(["ssh", JETSON, shlex.join(capture_command(rid))], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    srv = None
+    docroot = None
+    if run["tool"] == "http-get":
+        docroot = tempfile.mkdtemp(prefix="labelled-docroot-")
+        for name, body in HTTP_FILES.items():
+            with open(os.path.join(docroot, name), "w") as fh:
+                fh.write(body)
+    returncode, stderr_tail, t0, t1 = None, "", time.monotonic(), time.monotonic()
     try:
         time.sleep(SETTLE_SECONDS)
         if cap.poll() is not None:
             raise RuntimeError(f"capture exited early: {cap.stderr.read().decode()[:300]}")
+        rcv = receiver_command(run, docroot)
+        if rcv is not None:
+            srv = subprocess.Popen(rcv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(1)
+            if srv.poll() is not None:
+                raise RuntimeError(f"the local receiver {rcv[0]} exited at once (is the port free and the alias up?)")
+            # Proof it accepts connections, not just that its process exists (an intermittent miss was seen without this).
+            wait_listening(LOCAL_RECEIVER_TARGET, HTTP_PORT if run["tool"] == "http-get" else STREAM_PORT, srv)
         t0 = time.monotonic()
-        res = subprocess.run(["ssh", run["sender"], shlex.join(remote_command(run))], capture_output=True, text=True,
-                             timeout=run["seconds"] + 30)
+        cmd = remote_command(run)
+        if cmd is None:
+            time.sleep(run["seconds"])  # idle: the capture alone is the run
+            returncode = 0
+        else:
+            res = subprocess.run(["ssh", run["sender"], shlex.join(cmd)], capture_output=True, text=True, timeout=run["seconds"] + 30)
+            returncode, stderr_tail = res.returncode, res.stderr[-300:]
         t1 = time.monotonic()
         time.sleep(SETTLE_SECONDS)
     finally:
@@ -208,24 +393,63 @@ def execute(run, outdir):
             cap.wait(timeout=10)
         except subprocess.TimeoutExpired:
             cap.kill()
+        if srv is not None:
+            srv.terminate()  # macOS has no `timeout`: stop the local receiver explicitly
+            try:
+                srv.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                srv.kill()
+        if docroot is not None:
+            shutil.rmtree(docroot, ignore_errors=True)
     os.makedirs(outdir, exist_ok=True)
     pcap = os.path.join(outdir, f"{rid}.pcap")
     subprocess.run(["scp", "-q", f"{JETSON}:/tmp/labelled-{rid}.pcap", pcap], check=True)
     label = {
-        "id": rid, "class": run["class"], "tool": run["tool"], "sender": run["sender"], "senderIp": HOSTS[run["sender"]],
-        "target": run["target"], "params": {k: v for k, v in run.items() if k not in ("id", "class", "tool", "sender", "target")},
-        "command": remote_command(run), "commandExit": res.returncode, "commandSeconds": round(t1 - t0, 1),
-        "pcap": os.path.basename(pcap), "commandStderrTail": res.stderr[-300:],
+        "id": rid, "class": run["class"], "tool": run["tool"], "sender": run["sender"],
+        "senderIp": HOSTS.get(run["sender"]) if run["sender"] else None,
+        "target": run["target"], "pattern": run.get("pattern", rid),
+        "params": {k: v for k, v in run.items() if k not in ("id", "class", "tool", "sender", "target", "pattern")},
+        "command": remote_command(run), "commandExit": returncode, "commandSeconds": round(t1 - t0, 1),
+        "pcap": os.path.basename(pcap), "commandStderrTail": stderr_tail,
     }
     with open(os.path.join(outdir, f"{rid}.label.json"), "w") as f:
         json.dump(label, f, indent=2)
-    print(f"[run] {rid}: done, command exit {res.returncode}, {label['commandSeconds']} s, {os.path.getsize(pcap)} bytes captured", flush=True)
+    print(f"[run] {rid}: done, command exit {returncode}, {label['commandSeconds']} s, {os.path.getsize(pcap)} bytes captured", flush=True)
+    time.sleep(SPACING_SECONDS)
+
+
+def rack_healthy():
+    """
+    (ok, why). The Zodiac's isolation policy must read back verified from the switch, freshly, before any traffic is sent:
+    a run against a switch whose control plane is down tests nothing and may be making things worse. Read through the bridge on
+    the Jetson. The check runs before every run, and a failure stops the whole batch.
+    """
+    try:
+        r = subprocess.run(["ssh", JETSON, "curl -s -m 8 localhost:3003/api/zodiac/flows"], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return False, "the Jetson did not answer within 30 s"  # fail closed: no answer is not "healthy"
+    try:
+        iso = json.loads(r.stdout)["port1Isolation"]
+    except (ValueError, KeyError, TypeError):
+        return False, "the bridge on the Jetson did not return an isolation status"
+    if not isinstance(iso, dict):
+        return False, "the isolation status is not an object"
+    if iso.get("state") != "verified":
+        return False, f"the isolation policy reads {iso.get('state')!r}, not 'verified' (the switch's control plane may be down)"
+    age = iso.get("checkedAgeMs")
+    if not isinstance(age, int) or age > RACK_STATUS_MAX_AGE_MS:
+        return False, f"the isolation readback is {age!r} ms old (limit {RACK_STATUS_MAX_AGE_MS})"
+    return True, "isolation verified"
 
 
 def preflight(runs):
     r = subprocess.run(["ssh", JETSON, "getcap /usr/bin/tcpdump"], capture_output=True, text=True, timeout=20)
     if "cap_net_raw" not in r.stdout:
         raise SystemExit("capture is not set up: on the Jetson run  sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump")
+    if any(x["tool"] in ("tcp-stream", "http-get") for x in runs):
+        r = subprocess.run(["ifconfig"], capture_output=True, text=True)
+        if f"inet {LOCAL_RECEIVER_TARGET} " not in r.stdout:
+            raise SystemExit(f"this machine does not have {LOCAL_RECEIVER_TARGET}, where the local receivers must bind")
     for host in sorted({x["sender"] for x in runs if x["tool"] in ("hping3", "nmap")}):
         if subprocess.run(["ssh", host, "sudo -n true"], capture_output=True, timeout=20).returncode != 0:
             raise SystemExit(f"{host} has no passwordless sudo, which hping3 and nmap need for raw sockets")
@@ -238,10 +462,11 @@ def main():
     ap.add_argument("--execute", action="store_true")
     ap.add_argument("--out")
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--class", dest="klass", choices=(BENIGN, ATTACK))
     a = ap.parse_args()
     if sum([a.list, a.dry_run, a.execute]) != 1:
         ap.error("choose exactly one of --list, --dry-run, --execute")
-    runs = [r for r in CATALOG if not a.only or r["id"] in a.only]
+    runs = [r for r in CATALOG if (not a.only or r["id"] in a.only) and (a.klass is None or r["class"] == a.klass)]
     if a.only and len(runs) != len(a.only):
         ap.error("unknown run id in --only")
     bad = 0
@@ -255,10 +480,14 @@ def main():
         raise SystemExit(f"{bad} catalog run(s) break a bound; nothing will run")
     if a.list:
         for r in runs:
-            print(f"{r['id']:34s} {r['class']:7s} {r['tool']:7s} {r['sender']:16s} -> {r['target']:11s} {r['seconds']:3d} s")
+            print(f"{r['id']:34s} {r['class']:7s} {r['tool']:10s} {str(r['sender'] or '-'):16s} -> {str(r['target'] or '-'):11s} {r['seconds']:3d} s")
     elif a.dry_run:
         for r in runs:
-            print(f"# {r['id']}\n  jetson: {shlex.join(capture_command(r['id']))}\n  {r['sender']}: {shlex.join(remote_command(r))}")
+            rcv, cmd = receiver_command(r), remote_command(r)
+            print(f"# {r['id']}\n  jetson: {shlex.join(capture_command(r['id']))}")
+            if rcv is not None:
+                print(f"  this machine (receiver): {shlex.join(rcv)}")
+            print(f"  {r['sender']}: {shlex.join(cmd)}" if cmd is not None else "  (idle: nothing is sent)")
     else:
         if not a.out:
             ap.error("--execute needs --out DIR")

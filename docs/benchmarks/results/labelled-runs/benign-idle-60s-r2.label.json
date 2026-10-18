@@ -1,0 +1,16 @@
+{
+  "id": "benign-idle-60s-r2",
+  "class": "benign",
+  "tool": "idle",
+  "sender": null,
+  "senderIp": null,
+  "target": null,
+  "params": {
+    "seconds": 60
+  },
+  "command": null,
+  "commandExit": 0,
+  "commandSeconds": 60.0,
+  "pcap": "benign-idle-60s-r2.pcap",
+  "commandStderrTail": ""
+}

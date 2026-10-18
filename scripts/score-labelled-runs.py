@@ -25,6 +25,7 @@ import glob
 import importlib.util
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +37,9 @@ _spec.loader.exec_module(sr)
 RATE_WINDOW_NS = 5_000_000_000
 RATE_MIN_ELAPSED_NS = 500_000_000
 RATE_THRESHOLD_PPS = 10
+# A run in which the sender is not seen at the tap at least this many times did not test anything (the traffic never crossed
+# the Zodiac, or the receiver was not up). It is reported as invalid and left out of every rate, never counted as a clean run.
+MIN_SENDER_FRAMES = 20
 
 
 def usable_source(ip):
@@ -97,16 +101,24 @@ def load_runs(datadir):
     return runs
 
 
+def pattern_of(label):
+    """The run's pattern: the label's own field, or for earlier labels the id without a trailing repeat suffix (-r2, -r3, ...)."""
+    if label.get("pattern"):
+        return label["pattern"]
+    return re.sub(r"-r\d+$", "", label["id"])
+
+
 def seconds_text(delta_ns):
     """Integer nanoseconds as seconds with two decimals, by integer arithmetic."""
     return f"{delta_ns // 1_000_000_000}.{(delta_ns % 1_000_000_000) // 10_000_000:02d}"
 
 
 def score(label, frames):
-    sender = label["senderIp"]
-    sender_frames = [f for f in frames if f[6] == sender]
+    sender = label["senderIp"]  # None for an idle run: nothing was sent, so any alert in it is a false positive
+    sender_frames = [f for f in frames if sender is not None and f[6] == sender]
     t0 = sender_frames[0][7] if sender_frames else None
-    res = {"id": label["id"], "class": label["class"], "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames)}
+    res = {"id": label["id"], "class": label["class"], "tool": label.get("tool"), "pattern": pattern_of(label), "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames),
+           "valid": sender is None or len(sender_frames) >= MIN_SENDER_FRAMES}
     for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
         named_sender = [a for a in alerts if a[1] == sender]
         other = [a for a in alerts if a[1] != sender]
@@ -127,7 +139,13 @@ def main():
         out_json = args[i + 1]
         del args[i:i + 2]
     runs = load_runs(args[0])
-    results = [score(label, frames) for label, frames in runs]
+    scored = [score(label, frames) for label, frames in runs]
+    invalid = [r for r in scored if not r["valid"]]
+    results = [r for r in scored if r["valid"]]
+    for r in invalid:
+        print(f"INVALID (left out of every rate): {r['id']} - the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES})")
+    if invalid:
+        print()
     print(f"{'run':32s} {'class':7s} {'frames':>6s} | {'rate rule':30s} | {'sentinel':44s}")
     for r in results:
         def cell(d, adaptive_windows=False):
@@ -137,6 +155,17 @@ def main():
             extra = f", first at {seconds_text(d['firstSenderAlertNs'])} s" if d["firstSenderAlertNs"] is not None else ""
             return f"{who}{extra}" + (f" ({d['alerts']} alerts)" if adaptive_windows else "")
         print(f"{r['id']:32s} {r['class']:7s} {r['frames']:6d} | {cell(r['rate']):30s} | {cell(r['sentinel'], True):44s}")
+    print()
+    print("benign false positives by workload (runs with any alert / runs):")
+    tools = sorted({r["tool"] for r in results if r["class"] == "benign"})
+    for tool in tools:
+        group = [r for r in results if r["class"] == "benign" and r["tool"] == tool]
+        print(f"  {tool:12s} rate rule {sum(1 for r in group if r['rate']['alerts'] > 0)}/{len(group)}   sentinel {sum(1 for r in group if r['sentinel']['alerts'] > 0)}/{len(group)}")
+    print("attack detection by pattern (runs detected with the right sender / runs):")
+    pats = sorted({r["pattern"] for r in results if r["class"] == "attack"})
+    for pat in pats:
+        group = [r for r in results if r["class"] == "attack" and r["pattern"] == pat]
+        print(f"  {pat:34s} rate rule {sum(1 for r in group if r['rate']['namedSender'])}/{len(group)}   sentinel {sum(1 for r in group if r['sentinel']['namedSender'])}/{len(group)}")
     print()
     for name in ("rate", "sentinel"):
         att = [r for r in results if r["class"] == "attack"]

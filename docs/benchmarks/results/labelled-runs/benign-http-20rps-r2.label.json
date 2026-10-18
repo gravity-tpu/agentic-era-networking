@@ -1,0 +1,24 @@
+{
+  "id": "benign-http-20rps-r2",
+  "class": "benign",
+  "tool": "http-get",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "params": {
+    "seconds": 30,
+    "rps": 20,
+    "path": "/models"
+  },
+  "command": [
+    "timeout",
+    "35",
+    "sh",
+    "-c",
+    "end=$(( $(date +%s) + 30 )); while [ $(date +%s) -lt $end ]; do curl -s -m 2 --interface eth0 -o /dev/null http://10.0.2.119:8000/models; sleep 0.050; done"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 30.4,
+  "pcap": "benign-http-20rps-r2.pcap",
+  "commandStderrTail": ""
+}

@@ -4,9 +4,36 @@ attack-portscan-slow             attack     205 | no alert                      
 attack-synflood-1000pps          attack    9945 | names sender, first at 0.50 s  | names sender, first at 0.06 s (532 alerts)  
 attack-synflood-200pps           attack    6007 | names sender, first at 0.50 s  | names sender, first at 0.31 s (4888 alerts) 
 attack-udpflood-500pps-1400b     attack    4937 | names sender, first at 0.50 s  | names sender, first at 0.13 s (4874 alerts) 
+benign-http-20rps-r2             benign    1310 | names sender, first at 0.55 s  | names sender, first at 19.58 s (1 alerts)   
+benign-http-20rps                benign    1332 | names sender, first at 0.55 s  | no alert                                    
+benign-http-5rps-r2              benign     540 | names sender, first at 0.67 s  | no alert                                    
+benign-http-5rps-r3              benign     531 | names sender, first at 0.54 s  | no alert                                    
+benign-http-5rps                 benign     537 | names sender, first at 0.56 s  | no alert                                    
+benign-idle-60s-r2               benign       2 | no alert                       | no alert                                    
+benign-idle-60s                  benign       3 | no alert                       | no alert                                    
+benign-ping-20pps-r2             benign     609 | names sender, first at 0.52 s  | names sender, first at 3.11 s (411 alerts)  
 benign-ping-20pps                benign     609 | names sender, first at 0.55 s  | names sender, first at 3.18 s (546 alerts)  
 benign-ping-5pps-node01          benign     305 | no alert                       | names sender, first at 12.25 s (242 alerts) 
+benign-ping-5pps-r2              benign     341 | no alert                       | names sender, first at 10.02 s (278 alerts) 
+benign-ping-5pps-r3              benign     304 | no alert                       | names sender, first at 12.64 s (241 alerts) 
 benign-ping-5pps                 benign     306 | no alert                       | names sender, first at 12.03 s (243 alerts) 
+benign-udp-small-10pps-r2        benign     302 | names sender, first at 0.59 s  | no alert                                    
+benign-udp-small-10pps-r3        benign     301 | names sender, first at 0.68 s  | names sender, first at 6.21 s (238 alerts)  
+benign-udp-small-10pps           benign     302 | names sender, first at 0.78 s  | names sender, first at 6.08 s (1 alerts)    
+benign-udp-small-50pps-r2        benign    1508 | names sender, first at 0.50 s  | names sender, first at 17.72 s (1 alerts)   
+benign-udp-small-50pps           benign    1503 | names sender, first at 0.51 s  | names sender, first at 16.36 s (2 alerts)   
 
-rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 1/3   runs naming a non-sender: 0/8
-sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 3/3   runs naming a non-sender: 0/8
+benign false positives by workload (runs with any alert / runs):
+  http-get     rate rule 5/5   sentinel 1/5
+  idle         rate rule 0/2   sentinel 0/2
+  ping         rate rule 2/6   sentinel 6/6
+  udp-small    rate rule 5/5   sentinel 4/5
+attack detection by pattern (runs detected with the right sender / runs):
+  attack-portscan-fast               rate rule 0/1   sentinel 1/1
+  attack-portscan-slow               rate rule 0/1   sentinel 1/1
+  attack-synflood-1000pps            rate rule 1/1   sentinel 1/1
+  attack-synflood-200pps             rate rule 1/1   sentinel 1/1
+  attack-udpflood-500pps-1400b       rate rule 1/1   sentinel 1/1
+
+rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 12/18   runs naming a non-sender: 0/23
+sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/18   runs naming a non-sender: 0/23
