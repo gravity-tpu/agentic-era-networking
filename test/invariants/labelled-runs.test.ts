@@ -114,7 +114,7 @@ for bad in (0, -1, 1001, True, 2.5):
 print(out)
 `, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout.trim()).toBe("['1.000', '0.200', '0.050', '0.001', 'refused', 'refused', 'refused', 'refused', 'refused']");
+    expect(r.stdout.trim()).toBe("['1.000000', '0.200000', '0.050000', '0.001000', 'refused', 'refused', 'refused', 'refused', 'refused']");
   });
 
   it('paces in integer nanoseconds: no float rate arithmetic in the scripts it sends', () => {
@@ -178,7 +178,7 @@ describe.skipIf(!hasPython)('labelled-runs.py benign workloads', () => {
     // The loop text is constant; url, gap and duration are arguments, never spliced into the script.
     expect(v?.cmd?.[4]).toContain('"$1"');
     expect(v?.cmd?.[4]).not.toContain('10.0.2.119');
-    expect(v?.cmd?.slice(5)).toEqual(['sh', 'http://10.0.2.119:8000/health', '0.200', '30']); // 0.200 s from integer arithmetic
+    expect(v?.cmd?.slice(5)).toEqual(['sh', 'http://10.0.2.119:8000/health', '0.200000', '30']); // from integer arithmetic
     // The receiver is a local web server on the Mac's uplink-side alias (traffic to the Pi 5 never crosses the Zodiac).
     expect(v?.recv?.slice(0, 5)).toEqual(['python3', '-m', 'http.server', '8000', '--bind']);
     expect(v?.recv?.[5]).toBe('10.0.2.119');

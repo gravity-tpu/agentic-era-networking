@@ -209,11 +209,12 @@ def validate(run):
 
 
 def interval_text(per_second):
-    """The gap between events at `per_second` events a second, as the decimal text ping and sleep take, by integer arithmetic."""
+    """The gap between events at `per_second` events a second, as the decimal text ping and sleep take: microsecond precision,
+    by integer arithmetic (exact for rates that divide a million, such as every rate in the catalog; otherwise truncated)."""
     if not isinstance(per_second, int) or isinstance(per_second, bool) or not 1 <= per_second <= 1000:
-        raise ValueError(f"per_second must be an integer from 1 to 1000 (got {per_second!r}); above that the gap rounds to 0.000")
-    ms = 1000 // per_second
-    return f"{ms // 1000}.{ms % 1000:03d}"
+        raise ValueError(f"per_second must be an integer from 1 to 1000 (got {per_second!r})")
+    us = 1_000_000 // per_second
+    return f"{us // 1_000_000}.{us % 1_000_000:06d}"
 
 
 def remote_command(run):
