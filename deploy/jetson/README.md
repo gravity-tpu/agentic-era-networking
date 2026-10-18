@@ -287,6 +287,9 @@ up, uptime 12 h 55 min. After `restart`: the serial port dropped as the device r
 `Connected` within 30 s, the bridge reinstalled the isolation policy (6 of 6 rules and their actions read back verified,
 7 entries), `10.0.1.99` answered ARP and ping, and pings across the rack passed. No power cycle was needed.
 
+Run it as the `zodiac` user (the user the bridge runs as; `--restart` refuses from any other user, because its check for other
+openers of the port can only see processes of its own user).
+
 The tool's safeguards are best effort, not a guarantee: it opens the port exclusively and `--restart` waits for other
 openers to let go and looks once more just before sending, but it can only see processes of its own user (a process of
 another user, root for instance, is invisible to it), and the bridge opens the port to poll, so a poll can still collide with

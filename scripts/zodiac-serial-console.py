@@ -20,12 +20,14 @@ opens the port exclusively (an opener that arrives while it is running fails wit
 
 import argparse
 import os
+import pwd
 import sys
 import time
 
 DEFAULT_DEV = "/dev/ttyACM0"
 BAUD = 115200
 QUIET_SECONDS = 1.5
+BRIDGE_USER = "zodiac"      # deploy/jetson/zodiac-bridge.service runs the bridge as this user
 MAX_SECONDS_PER_COMMAND = 15  # hard cap: a device or a second opener that keeps streaming cannot hold a command open
 OPENER_WAIT_SECONDS = 15      # how long --restart waits for another process to let go of the port
 # Each step is (command, what it reads). Sub-menus are entered and left with `config`/`openflow` and `exit`.
@@ -36,6 +38,15 @@ RESTART = "restart"
 def plan(restart):
     """The exact commands this run would send, in order. `restart` is last, and present only when asked for."""
     return list(DIAGNOSTICS) + ([RESTART] if restart else [])
+
+
+def runs_as_bridge_user(uid=None, lookup=pwd.getpwnam):
+    """True when this process runs as the bridge's own user. The opener scan only sees processes of the same user, so a restart
+    from any other user could not see the bridge opening the port; --restart therefore requires this (diagnostics do not)."""
+    try:
+        return (os.getuid() if uid is None else uid) == lookup(BRIDGE_USER).pw_uid
+    except KeyError:
+        return False  # no such user on this machine: not the Jetson
 
 
 def find_openers(dev, proc_root="/proc"):
@@ -126,6 +137,10 @@ def main():
             print(c or "<enter>")
         return 0
     if a.restart:
+        if not runs_as_bridge_user():
+            print(f"refusing to restart: run this as the user the bridge runs as ({BRIDGE_USER}); from another user the check for "
+                  "other openers of the port is blind to the bridge", file=sys.stderr)
+            return 4
         holders = wait_for_exclusive_use(a.dev)
         if holders:
             print(f"refusing to restart: process(es) {holders} still have {a.dev} open after {OPENER_WAIT_SECONDS} s; "

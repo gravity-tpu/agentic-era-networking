@@ -83,6 +83,22 @@ print(child.returncode); print(child.stderr.strip()[:140])
     expect(readFileSync(SCRIPT, 'utf-8')).toContain('dsrdtr=False, exclusive=True)');
   });
 
+  it('--restart requires the bridge\'s own user (the opener scan is blind to other users), diagnostics do not', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('zsc', sys.argv[1]); zsc = importlib.util.module_from_spec(spec); spec.loader.exec_module(zsc)
+class P: pw_uid = 1000
+lookup = lambda name: P()
+def missing(name): raise KeyError(name)
+print(json.dumps([zsc.runs_as_bridge_user(1000, lookup), zsc.runs_as_bridge_user(0, lookup), zsc.runs_as_bridge_user(501, lookup), zsc.runs_as_bridge_user(1000, missing), zsc.BRIDGE_USER]))
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, false, false, false, 'zodiac']);
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src).toMatch(/if a\.restart:\n\s+if not runs_as_bridge_user\(\):[\s\S]*?return 4/);
+    expect(readFileSync(resolve(__dirname, '../../deploy/jetson/zodiac-bridge.service'), 'utf-8')).toMatch(/^User=zodiac$/m);
+  });
+
   it('every command read is capped in total time, not only by a quiet gap', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     expect(src).toContain('time.monotonic() - started < MAX_SECONDS_PER_COMMAND');
