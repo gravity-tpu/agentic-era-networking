@@ -101,6 +101,22 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
     expect(src).toContain("iso.get(\"state\") != \"verified\"");
   });
 
+  it('interval_text is exact where it can be and refuses a rate that would round to a zero gap', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('lr', sys.argv[1]); lr = importlib.util.module_from_spec(spec); spec.loader.exec_module(lr)
+out = [lr.interval_text(n) for n in (1, 5, 20, 1000)]
+for bad in (0, -1, 1001, True, 2.5):
+    try:
+        lr.interval_text(bad); out.append('accepted')
+    except ValueError:
+        out.append('refused')
+print(out)
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toBe("['1.000', '0.200', '0.050', '0.001', 'refused', 'refused', 'refused', 'refused', 'refused']");
+  });
+
   it('paces in integer nanoseconds: no float rate arithmetic in the scripts it sends', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     for (const marker of ['UDP_SMALL_SCRIPT', 'TCP_STREAM_SCRIPT']) {
