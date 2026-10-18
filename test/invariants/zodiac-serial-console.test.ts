@@ -40,4 +40,42 @@ describe.skipIf(!hasPython)('zodiac-serial-console.py', () => {
     const r = dry('--restart', '--dev', '/dev/does-not-exist');
     expect(r.status, r.stderr).toBe(0);
   });
+
+  it('finds the processes holding the device from /proc, ignoring itself and others', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, json, os, sys, tempfile
+spec = importlib.util.spec_from_file_location('zsc', sys.argv[1]); zsc = importlib.util.module_from_spec(spec); spec.loader.exec_module(zsc)
+root = tempfile.mkdtemp()
+dev = os.path.join(root, 'ttyACM0'); open(dev, 'w').close()
+other = os.path.join(root, 'other'); open(other, 'w').close()
+def proc(pid, target):
+    d = os.path.join(root, 'proc', str(pid), 'fd'); os.makedirs(d); os.symlink(target, os.path.join(d, '3'))
+os.makedirs(os.path.join(root, 'proc'))
+proc(111, dev); proc(222, other); proc(333, dev); proc(os.getpid(), dev)
+os.makedirs(os.path.join(root, 'proc', 'self')); os.makedirs(os.path.join(root, 'proc', 'notapid'))
+print(json.dumps([zsc.find_openers(dev, os.path.join(root, 'proc')), zsc.find_openers(os.path.join(root, 'missing'), os.path.join(root, 'proc')), zsc.find_openers(dev, os.path.join(root, 'no-such-proc'))]))
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([[111, 333], [], []]);
+  });
+
+  it('refuses to restart while another process holds the port, and says why (exit 3)', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, os, subprocess, sys, tempfile
+spec = importlib.util.spec_from_file_location('zsc', sys.argv[1]); zsc = importlib.util.module_from_spec(spec); spec.loader.exec_module(zsc)
+dev = os.path.join(tempfile.mkdtemp(), 'ttyACM0'); open(dev, 'w').close()
+holder = open(dev)  # this very process holds it, so another process (a child) sees one holder
+child = subprocess.run([sys.executable, '-c', 'import importlib.util,sys;s=importlib.util.spec_from_file_location("z",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);m.OPENER_WAIT_SECONDS=1;sys.argv=["z","--restart","--dev",sys.argv[2]];sys.exit(m.main())', sys.argv[1], dev], capture_output=True, text=True)
+print(child.returncode); print(child.stderr.strip()[:140])
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    const [code, msg] = r.stdout.trim().split('\n');
+    expect(code).toBe(process.platform === 'linux' ? '3' : code); // /proc exists on Linux only; elsewhere the check cannot see holders
+    if (process.platform === 'linux') expect(msg).toMatch(/refusing to restart: process\(es\) \[\d+\] still have/);
+  });
+
+  it('every command read is capped in total time, not only by a quiet gap', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src).toContain('time.monotonic() - started < MAX_SECONDS_PER_COMMAND');
+  });
 });

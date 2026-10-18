@@ -18,12 +18,15 @@ the output with that in mind. Needs pyserial and membership of the dialout group
 """
 
 import argparse
+import os
 import sys
 import time
 
 DEFAULT_DEV = "/dev/ttyACM0"
 BAUD = 115200
 QUIET_SECONDS = 1.5
+MAX_SECONDS_PER_COMMAND = 15  # hard cap: a device or a second opener that keeps streaming cannot hold a command open
+OPENER_WAIT_SECONDS = 15      # how long --restart waits for another process to let go of the port
 # Each step is (command, what it reads). Sub-menus are entered and left with `config`/`openflow` and `exit`.
 DIAGNOSTICS = ("", "show status", "show ports", "config", "show config", "exit", "openflow", "show status", "exit")
 RESTART = "restart"
@@ -32,6 +35,43 @@ RESTART = "restart"
 def plan(restart):
     """The exact commands this run would send, in order. `restart` is last, and present only when asked for."""
     return list(DIAGNOSTICS) + ([RESTART] if restart else [])
+
+
+def find_openers(dev, proc_root="/proc"):
+    """PIDs (other than this process) that currently have `dev` open, read from /proc/<pid>/fd. Best effort: a process of another
+    user cannot be inspected, and is not reported."""
+    real = os.path.realpath(dev)
+    pids = []
+    try:
+        entries = os.listdir(proc_root)
+    except OSError:
+        return pids
+    for name in entries:
+        if not name.isdigit() or int(name) == os.getpid():
+            continue
+        fd_dir = os.path.join(proc_root, name, "fd")
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                if os.path.realpath(os.path.join(fd_dir, fd)) == real or os.readlink(os.path.join(fd_dir, fd)) == real:
+                    pids.append(int(name))
+                    break
+            except OSError:
+                continue
+    return sorted(pids)
+
+
+def wait_for_exclusive_use(dev, seconds=OPENER_WAIT_SECONDS, proc_root="/proc"):
+    """Wait until no other process has the device open (the bridge opens it only briefly to poll); return the PIDs still holding it."""
+    deadline = time.monotonic() + seconds
+    holders = find_openers(dev, proc_root)
+    while holders and time.monotonic() < deadline:
+        time.sleep(0.5)
+        holders = find_openers(dev, proc_root)
+    return holders
 
 
 def run(dev, commands):
@@ -43,9 +83,10 @@ def run(dev, commands):
             ser.reset_input_buffer()
             ser.write((cmd + "\r\n").encode("ascii"))
             buf = b""
-            deadline = time.monotonic() + QUIET_SECONDS
+            started = time.monotonic()
+            deadline = started + QUIET_SECONDS
             try:
-                while time.monotonic() < deadline:
+                while time.monotonic() < deadline and time.monotonic() - started < MAX_SECONDS_PER_COMMAND:
                     chunk = ser.read(4096)
                     if chunk:
                         buf += chunk
@@ -75,6 +116,12 @@ def main():
         for c in cmds:
             print(c or "<enter>")
         return 0
+    if a.restart:
+        holders = wait_for_exclusive_use(a.dev)
+        if holders:
+            print(f"refusing to restart: process(es) {holders} still have {a.dev} open after {OPENER_WAIT_SECONDS} s; "
+                  "a restart issued against interleaved replies could act on stale state", file=sys.stderr)
+            return 3
     run(a.dev, cmds)
     return 0
 
