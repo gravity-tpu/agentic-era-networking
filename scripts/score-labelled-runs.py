@@ -46,13 +46,12 @@ def usable_source(ip):
 
 
 def rate_rule_alerts(frames):
-    """[(t_us, src_ip, pps)], the daemon's logic over (t_us, ..., src_ip) frames."""
+    """[(t_ns, src_ip, pps)], the daemon's logic (integer nanoseconds and integer packets per second) over frames."""
     start, count, reported, out = {}, {}, set(), []
     for fr in frames:
-        t_us, src = fr[0], fr[6]
+        src, t_ns = fr[6], fr[7]
         if not usable_source(src) or src in reported:
             continue
-        t_ns = int(t_us * 1000)
         ws = start.get(src)
         if ws is None or t_ns - ws >= RATE_WINDOW_NS:
             start[src], count[src] = t_ns, 1
@@ -63,16 +62,16 @@ def rate_rule_alerts(frames):
             pps = (count[src] * 1_000_000_000) // elapsed
             if pps > RATE_THRESHOLD_PPS:
                 reported.add(src)
-                out.append((t_us, src, pps))
+                out.append((t_ns, src, pps))
     return out
 
 
 def sentinel_alerts(frames):
-    """[(t_us, predominant_src, loss)], one per anomalous 64-packet window."""
+    """[(t_ns, predominant_src, loss)], one per anomalous 64-packet window (the loss itself is the kernel's float math)."""
     ex, ad = sr.Extractor(), sr.Adaptive()
     srcs = collections.deque()
     out = []
-    for t_us, flen, proto, flags, sp, dp, src in frames:
+    for t_us, flen, proto, flags, sp, dp, src, t_ns in frames:
         srcs.append(src or "unknown")
         if len(srcs) > sr.WIN:
             srcs.popleft()
@@ -83,7 +82,7 @@ def sentinel_alerts(frames):
         is_anom, _tau = ad.check(loss)
         if is_anom:
             known = collections.Counter(s for s in srcs if s != "unknown")
-            out.append((t_us, known.most_common(1)[0][0] if known else "unknown", loss))
+            out.append((t_ns, known.most_common(1)[0][0] if known else "unknown", loss))
     return out
 
 
@@ -98,10 +97,15 @@ def load_runs(datadir):
     return runs
 
 
+def seconds_text(delta_ns):
+    """Integer nanoseconds as seconds with two decimals, by integer arithmetic."""
+    return f"{delta_ns // 1_000_000_000}.{(delta_ns % 1_000_000_000) // 10_000_000:02d}"
+
+
 def score(label, frames):
     sender = label["senderIp"]
     sender_frames = [f for f in frames if f[6] == sender]
-    t0 = sender_frames[0][0] if sender_frames else None
+    t0 = sender_frames[0][7] if sender_frames else None
     res = {"id": label["id"], "class": label["class"], "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames)}
     for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
         named_sender = [a for a in alerts if a[1] == sender]
@@ -110,7 +114,7 @@ def score(label, frames):
             "alerts": len(alerts),
             "namedSender": len(named_sender),
             "namedOthers": sorted({a[1] for a in other}),
-            "firstSenderAlertSeconds": round((named_sender[0][0] - t0) / 1e6, 2) if named_sender and t0 else None,
+            "firstSenderAlertSeconds": seconds_text(named_sender[0][0] - t0) if named_sender and t0 is not None else None,
         }
     return res
 

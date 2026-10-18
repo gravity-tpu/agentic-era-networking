@@ -19,11 +19,11 @@ const hasNumpy = spawnSync('python3', ['-c', 'import numpy']).status === 0;
 const DRIVER = `
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location('sc', sys.argv[1]); sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
-def frames(src, gaps_ms, t0=1_000_000.0):
-    t = t0; out = []
-    for g in [0.0] + gaps_ms:
-        t += g * 1000.0
-        out.append((t, 60, 6, 2, 1, 2, src))
+def frames(src, gaps_us, t0_ns=1_000_000_000_000):
+    t = t0_ns; out = []
+    for g in [0] + gaps_us:
+        t += g * 1000
+        out.append((t / 1000.0, 60, 6, 2, 1, 2, src, t))
     return out
 cases = json.loads(sys.argv[2])
 res = {}
@@ -31,13 +31,14 @@ for name, spec_ in cases.items():
     fr = []
     for src, gaps in spec_:
         fr += frames(src, gaps)
-    fr.sort(key=lambda f: f[0])
+    fr.sort(key=lambda f: f[7])
     res[name] = [[a[1], a[2]] for a in sc.rate_rule_alerts(fr)]
 res['consts'] = [sc.RATE_WINDOW_NS, sc.RATE_MIN_ELAPSED_NS, sc.RATE_THRESHOLD_PPS]
 print(json.dumps(res))
 `;
 
-const every = (n: number, ms: number): number[] => Array.from({ length: n }, () => ms);
+// Gaps are in integer microseconds, so frame times are exact nanoseconds.
+const every = (n: number, us: number): number[] => Array.from({ length: n }, () => us);
 
 function run(cases: Record<string, Array<[string, number[]]>>): Record<string, unknown> {
   const r = spawnSync('python3', ['-c', DRIVER, SCRIPT, JSON.stringify(cases)], { encoding: 'utf-8' });
@@ -60,7 +61,7 @@ describe.skipIf(!hasNumpy)('score-labelled-runs rate rule', () => {
   });
 
   it('alerts a source above the threshold once 0.5 s of data exist, and only once', () => {
-    const out = run({ fast: [['10.0.2.50', every(60, 20)]] }); // 50 pps for 1.2 s
+    const out = run({ fast: [['10.0.2.50', every(60, 20_000)]] }); // 50 pps for 1.2 s
     const alerts = out['fast'] as Array<[string, number]>;
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.[0]).toBe('10.0.2.50');
@@ -68,20 +69,20 @@ describe.skipIf(!hasNumpy)('score-labelled-runs rate rule', () => {
   });
 
   it('does not alert a source at or below the threshold', () => {
-    expect(run({ slow: [['10.0.2.52', every(30, 200)]] })['slow']).toEqual([]); // 5 pps
+    expect(run({ slow: [['10.0.2.52', every(30, 200_000)]] })['slow']).toEqual([]); // 5 pps
   });
 
   it('never rules on a burst that ends before 0.5 s of data (the fast-scan blind spot)', () => {
-    expect(run({ burst: [['10.0.2.50', every(980, 0.35)]] })['burst']).toEqual([]); // ~0.34 s, about 2800 pps
+    expect(run({ burst: [['10.0.2.50', every(980, 350)]] })['burst']).toEqual([]); // ~0.34 s, about 2800 pps
   });
 
   it('ignores loopback, multicast and broadcast sources', () => {
-    const out = run({ odd: [['127.0.0.1', every(60, 20)], ['239.255.255.250', every(60, 20)], ['255.255.255.255', every(60, 20)]] });
+    const out = run({ odd: [['127.0.0.1', every(60, 20_000)], ['239.255.255.250', every(60, 20_000)], ['255.255.255.255', every(60, 20_000)]] });
     expect(out['odd']).toEqual([]);
   });
 
   it('judges each source by its own frames', () => {
-    const out = run({ two: [['10.0.2.50', every(60, 20)], ['10.0.2.52', every(30, 200)]] });
+    const out = run({ two: [['10.0.2.50', every(60, 20_000)], ['10.0.2.52', every(30, 200_000)]] });
     expect((out['two'] as Array<[string, number]>).map((a) => a[0])).toEqual(['10.0.2.50']);
   });
 });

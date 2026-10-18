@@ -15,7 +15,7 @@
       "alerts": 925,
       "namedSender": 925,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.04
+      "firstSenderAlertSeconds": "0.03"
     }
   },
   {
@@ -34,7 +34,7 @@
       "alerts": 142,
       "namedSender": 142,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 24.43
+      "firstSenderAlertSeconds": "24.42"
     }
   },
   {
@@ -47,13 +47,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.5
+      "firstSenderAlertSeconds": "0.50"
     },
     "sentinel": {
       "alerts": 532,
       "namedSender": 532,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.07
+      "firstSenderAlertSeconds": "0.06"
     }
   },
   {
@@ -66,13 +66,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.5
+      "firstSenderAlertSeconds": "0.50"
     },
     "sentinel": {
       "alerts": 4888,
       "namedSender": 4888,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.32
+      "firstSenderAlertSeconds": "0.31"
     }
   },
   {
@@ -85,13 +85,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.5
+      "firstSenderAlertSeconds": "0.50"
     },
     "sentinel": {
       "alerts": 4874,
       "namedSender": 4874,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.13
+      "firstSenderAlertSeconds": "0.13"
     }
   },
   {
@@ -104,13 +104,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 0.55
+      "firstSenderAlertSeconds": "0.55"
     },
     "sentinel": {
       "alerts": 546,
       "namedSender": 546,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 3.19
+      "firstSenderAlertSeconds": "3.18"
     }
   },
   {
@@ -129,7 +129,7 @@
       "alerts": 242,
       "namedSender": 242,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 12.26
+      "firstSenderAlertSeconds": "12.25"
     }
   },
   {
@@ -148,7 +148,7 @@
       "alerts": 243,
       "namedSender": 243,
       "namedOthers": [],
-      "firstSenderAlertSeconds": 12.04
+      "firstSenderAlertSeconds": "12.03"
     }
   }
 ]
