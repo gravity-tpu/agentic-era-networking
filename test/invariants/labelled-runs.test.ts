@@ -95,6 +95,12 @@ describe.skipIf(!hasPython)('labelled-runs.py bounds', () => {
 });
 
 describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
+  it('checks the rack is healthy before every run, and stops the batch if not', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src).toMatch(/def execute\(run, outdir\):\n    ok, why = rack_healthy\(\)\n    if not ok:\n        raise SystemExit/);
+    expect(src).toContain("iso.get(\"state\") != \"verified\"");
+  });
+
   it('never uses a wall clock for a duration, and never kills by command-line match', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     expect(src).not.toMatch(/time\.time\(/);
@@ -141,9 +147,11 @@ describe.skipIf(!hasPython)('labelled-runs.py benign workloads', () => {
   it('builds the HTTP poll from validated numbers and an allowlisted path only', () => {
     const [v] = check([{ ...benign, tool: 'http-get', rps: 5, path: '/health' }]);
     expect(v?.ok).toBe(true);
-    expect(v?.cmd?.slice(0, 3)).toEqual(['timeout', '35', 'sh']);
-    expect(v?.cmd?.[4]).toContain('http://10.0.2.119:8000/health');
-    expect(v?.cmd?.[4]).toContain('sleep 0.200');
+    expect(v?.cmd?.slice(0, 4)).toEqual(['timeout', '35', 'sh', '-c']);
+    // The loop text is constant; url, gap and duration are arguments, never spliced into the script.
+    expect(v?.cmd?.[4]).toContain('"$1"');
+    expect(v?.cmd?.[4]).not.toContain('10.0.2.119');
+    expect(v?.cmd?.slice(5)).toEqual(['sh', 'http://10.0.2.119:8000/health', '0.200', '30']);
     // The receiver is a local web server on the Mac's uplink-side alias (traffic to the Pi 5 never crosses the Zodiac).
     expect(v?.recv?.slice(0, 5)).toEqual(['python3', '-m', 'http.server', '8000', '--bind']);
     expect(v?.recv?.[5]).toBe('10.0.2.119');
@@ -227,6 +235,18 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog shape', () => {
     for (const base of ['benign-http-5rps', 'benign-udp-small-10pps', 'attack-synflood-1000pps', 'attack-portscan-fast']) {
       expect(ids.filter((i) => i === base || i.startsWith(`${base}-r`)).length, base).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('every run carries an explicit pattern, shared by its repeats', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('lr', sys.argv[1]); lr = importlib.util.module_from_spec(spec); spec.loader.exec_module(lr)
+bad = [r['id'] for r in lr.CATALOG if not r['id'].startswith(r['pattern']) ]
+rep = [r['id'] for r in lr.CATALOG if r['pattern'] == 'benign-http-5rps']
+print(bad, rep)
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toBe("[] ['benign-http-5rps', 'benign-http-5rps-r2', 'benign-http-5rps-r3']");
   });
 
   it('--class selects only that class', () => {

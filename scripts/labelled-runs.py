@@ -38,6 +38,7 @@ MAX_RUN_SECONDS = 120          # hard cap on how long any single run may last
 MAX_PPS = 2000                 # most packets per second any run may be asked to send
 MAX_PACKETS = 20000            # most packets any one run may send
 MAX_PAYLOAD_BYTES = 1400       # largest payload any run may use
+RACK_STATUS_MAX_AGE_MS = 180_000  # the bridge re-reads the table every 60 s; older than this means it has stopped
 SETTLE_SECONDS = 3             # quiet time before and after each run inside the capture
 CAPTURE_FILTER = "ip or arp"
 
@@ -94,6 +95,7 @@ TCP_STREAM_SCRIPT = (
     " if w>0: time.sleep(w)\n"
     "k.close()\n"
 )
+HTTP_LOOP_SCRIPT = 'end=$(( $(date +%s) + $3 )); while [ $(date +%s) -lt $end ]; do curl -s -m 2 --interface eth0 -o /dev/null "$1"; sleep "$2"; done'
 # A fixed script: sends small UDP datagrams at a bounded rate for a bounded time. Arguments: target port pps seconds payload.
 UDP_SMALL_SCRIPT = (
     "import socket,sys,time;"
@@ -220,8 +222,8 @@ def remote_command(run):
         # Small GETs to the Pi 5's Hailo service at a bounded rate. Only validated integers and an allowlisted path are used.
         url = f"http://{tgt}:{HTTP_PORT}{run['path']}"
         gap = f"{1 / run['rps']:.3f}"
-        loop = f"end=$(( $(date +%s) + {secs} )); while [ $(date +%s) -lt $end ]; do curl -s -m 2 --interface eth0 -o /dev/null {url}; sleep {gap}; done"
-        return ["timeout", str(secs + 5), "sh", "-c", loop]
+        # The loop text is a constant; the url, gap and duration are passed as arguments ($1, $2, $3), never spliced into it.
+        return ["timeout", str(secs + 5), "sh", "-c", HTTP_LOOP_SCRIPT, "sh", url, gap, str(secs)]
     elif tool == "udp-small":
         return ["timeout", str(secs + 5), "python3", "-c", UDP_SMALL_SCRIPT, tgt, str(run.get("port", 53)), str(run["pps"]), str(secs),
                 str(run.get("payload_bytes", 60)), HOSTS[run["sender"]]]
@@ -293,7 +295,8 @@ def _idle(id_, seconds):
 
 def repeats(run, n):
     """The run and n-1 repeats: the first keeps its id (so earlier recordings still match), the others get -r2, -r3, ..."""
-    return [run] + [{**run, "id": f"{run['id']}-r{i}"} for i in range(2, n + 1)]
+    pattern = run["id"]
+    return [{**run, "pattern": pattern}] + [{**run, "id": f"{pattern}-r{i}", "pattern": pattern} for i in range(2, n + 1)]
 
 
 CATALOG = (
@@ -318,6 +321,10 @@ CATALOG = (
 )
 
 
+for _run in CATALOG:
+    _run.setdefault("pattern", _run["id"])  # a run with no repeats is its own pattern
+
+
 def wait_listening(host, port, proc, seconds=8):
     """Wait until host:port accepts a TCP connection, or fail: a sender must not start against a receiver that is not up."""
     deadline = time.monotonic() + seconds
@@ -333,6 +340,9 @@ def wait_listening(host, port, proc, seconds=8):
 
 
 def execute(run, outdir):
+    ok, why = rack_healthy()
+    if not ok:
+        raise SystemExit(f"stopping before {run['id']}: {why}")
     rid = run["id"]
     who = f"from {run['sender']} -> {run['target']}" if run["tool"] != "idle" else "nothing sent"
     print(f"[run] {rid}: {run['class']} {who} for up to {run['seconds']} s", flush=True)
@@ -388,7 +398,8 @@ def execute(run, outdir):
     label = {
         "id": rid, "class": run["class"], "tool": run["tool"], "sender": run["sender"],
         "senderIp": HOSTS.get(run["sender"]) if run["sender"] else None,
-        "target": run["target"], "params": {k: v for k, v in run.items() if k not in ("id", "class", "tool", "sender", "target")},
+        "target": run["target"], "pattern": run.get("pattern", rid),
+        "params": {k: v for k, v in run.items() if k not in ("id", "class", "tool", "sender", "target", "pattern")},
         "command": remote_command(run), "commandExit": returncode, "commandSeconds": round(t1 - t0, 1),
         "pcap": os.path.basename(pcap), "commandStderrTail": stderr_tail,
     }
@@ -396,6 +407,25 @@ def execute(run, outdir):
         json.dump(label, f, indent=2)
     print(f"[run] {rid}: done, command exit {returncode}, {label['commandSeconds']} s, {os.path.getsize(pcap)} bytes captured", flush=True)
     time.sleep(SPACING_SECONDS)
+
+
+def rack_healthy():
+    """
+    (ok, why). The Zodiac's isolation policy must read back verified from the switch, freshly, before any traffic is sent:
+    a run against a switch whose control plane is down tests nothing and may be making things worse. Read through the bridge on
+    the Jetson. The check runs before every run, and a failure stops the whole batch.
+    """
+    r = subprocess.run(["ssh", JETSON, "curl -s -m 8 localhost:3003/api/zodiac/flows"], capture_output=True, text=True, timeout=30)
+    try:
+        iso = json.loads(r.stdout)["port1Isolation"]
+    except (ValueError, KeyError, TypeError):
+        return False, "the bridge on the Jetson did not return an isolation status"
+    if iso.get("state") != "verified":
+        return False, f"the isolation policy reads {iso.get('state')!r}, not 'verified' (the switch's control plane may be down)"
+    age = iso.get("checkedAgeMs")
+    if not isinstance(age, int) or age > RACK_STATUS_MAX_AGE_MS:
+        return False, f"the isolation readback is {age!r} ms old (limit {RACK_STATUS_MAX_AGE_MS})"
+    return True, "isolation verified"
 
 
 def preflight(runs):

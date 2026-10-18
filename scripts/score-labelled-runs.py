@@ -25,6 +25,7 @@ import glob
 import importlib.util
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -100,6 +101,13 @@ def load_runs(datadir):
     return runs
 
 
+def pattern_of(label):
+    """The run's pattern: the label's own field, or for earlier labels the id without a trailing repeat suffix (-r2, -r3, ...)."""
+    if label.get("pattern"):
+        return label["pattern"]
+    return re.sub(r"-r\d+$", "", label["id"])
+
+
 def seconds_text(delta_ns):
     """Integer nanoseconds as seconds with two decimals, by integer arithmetic."""
     return f"{delta_ns // 1_000_000_000}.{(delta_ns % 1_000_000_000) // 10_000_000:02d}"
@@ -109,7 +117,7 @@ def score(label, frames):
     sender = label["senderIp"]  # None for an idle run: nothing was sent, so any alert in it is a false positive
     sender_frames = [f for f in frames if sender is not None and f[6] == sender]
     t0 = sender_frames[0][7] if sender_frames else None
-    res = {"id": label["id"], "class": label["class"], "tool": label.get("tool"), "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames),
+    res = {"id": label["id"], "class": label["class"], "tool": label.get("tool"), "pattern": pattern_of(label), "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames),
            "valid": sender is None or len(sender_frames) >= MIN_SENDER_FRAMES}
     for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
         named_sender = [a for a in alerts if a[1] == sender]
@@ -154,9 +162,9 @@ def main():
         group = [r for r in results if r["class"] == "benign" and r["tool"] == tool]
         print(f"  {tool:12s} rate rule {sum(1 for r in group if r['rate']['alerts'] > 0)}/{len(group)}   sentinel {sum(1 for r in group if r['sentinel']['alerts'] > 0)}/{len(group)}")
     print("attack detection by pattern (runs detected with the right sender / runs):")
-    pats = sorted({r["id"].rsplit("-r", 1)[0] if r["id"].rsplit("-r", 1)[-1].isdigit() else r["id"] for r in results if r["class"] == "attack"})
+    pats = sorted({r["pattern"] for r in results if r["class"] == "attack"})
     for pat in pats:
-        group = [r for r in results if r["class"] == "attack" and (r["id"] == pat or r["id"].startswith(pat + "-r"))]
+        group = [r for r in results if r["class"] == "attack" and r["pattern"] == pat]
         print(f"  {pat:34s} rate rule {sum(1 for r in group if r['rate']['namedSender'])}/{len(group)}   sentinel {sum(1 for r in group if r['sentinel']['namedSender'])}/{len(group)}")
     print()
     for name in ("rate", "sentinel"):
