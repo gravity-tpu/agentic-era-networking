@@ -78,6 +78,7 @@ print(child.returncode); print(child.stderr.strip()[:160])
     const [code, msg] = r.stdout.trim().split('\n');
     expect(code).toBe('3');
     expect(msg).toMatch(/refusing to restart: process\(es\) \[\d+\] still have/);
+    expect(msg).toMatch(/after 1 s/); // and it really waited that long: see the timing test below
   });
 
   it('refuses to restart from any user but the bridge\'s, before it looks at the port at all (exit 4)', () => {
@@ -125,5 +126,21 @@ print(json.dumps([zsc.runs_as_bridge_user(1000, lookup), zsc.runs_as_bridge_user
   it('every command read is capped in total time, not only by a quiet gap', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     expect(src).toContain('time.monotonic() - started < MAX_SECONDS_PER_COMMAND');
+  });
+
+  it.skipIf(process.platform !== 'linux')('the opener wait uses the module setting at call time, not a value frozen at definition', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, os, sys, tempfile, time
+spec = importlib.util.spec_from_file_location('zsc', sys.argv[1]); zsc = importlib.util.module_from_spec(spec); spec.loader.exec_module(zsc)
+dev = os.path.join(tempfile.mkdtemp(), 'ttyACM0'); open(dev, 'w').write('')
+holder = open(dev)
+# This process holds the device, so scan from a fake /proc where another pid holds it.
+root = tempfile.mkdtemp(); os.makedirs(os.path.join(root, '4242', 'fd')); os.symlink(dev, os.path.join(root, '4242', 'fd', '3'))
+zsc.OPENER_WAIT_SECONDS = 1
+t = time.monotonic(); holders = zsc.wait_for_exclusive_use(dev, proc_root=root); took = time.monotonic() - t
+print(holders, 0.8 < took < 3)
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toBe('[4242] True');
   });
 });

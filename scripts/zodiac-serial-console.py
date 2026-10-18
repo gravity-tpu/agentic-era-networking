@@ -76,9 +76,10 @@ def find_openers(dev, proc_root="/proc"):
     return sorted(pids)
 
 
-def wait_for_exclusive_use(dev, seconds=OPENER_WAIT_SECONDS, proc_root="/proc"):
+def wait_for_exclusive_use(dev, seconds=None, proc_root="/proc"):
     """Wait until no other process has the device open (the bridge opens it only briefly to poll); return the PIDs still holding it."""
-    deadline = time.monotonic() + seconds
+    # Read the module setting at call time (a default argument would freeze it when the function is defined).
+    deadline = time.monotonic() + (OPENER_WAIT_SECONDS if seconds is None else seconds)
     holders = find_openers(dev, proc_root)
     while holders and time.monotonic() < deadline:
         time.sleep(0.5)
