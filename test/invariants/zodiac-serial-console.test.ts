@@ -74,6 +74,10 @@ print(child.returncode); print(child.stderr.strip()[:140])
     if (process.platform === 'linux') expect(msg).toMatch(/refusing to restart: process\(es\) \[\d+\] still have/);
   });
 
+  it('opens the port exclusively, so another opener cannot interleave with a session', () => {
+    expect(readFileSync(SCRIPT, 'utf-8')).toContain('dsrdtr=False, exclusive=True)');
+  });
+
   it('every command read is capped in total time, not only by a quiet gap', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     expect(src).toContain('time.monotonic() - started < MAX_SECONDS_PER_COMMAND');

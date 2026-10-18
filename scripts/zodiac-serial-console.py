@@ -13,8 +13,9 @@ back verified by the bridge).
 
 A restart empties the switch's flow table; the bridge reinstalls the isolation policy when the controller reconnects. Check
 `curl localhost:3003/api/zodiac/flows` shows port1Isolation verified before sending any traffic through the rack.
-The bridge also uses this port (it opens it briefly to poll); two openers at once can see garbled or lagging replies, so read
-the output with that in mind. Needs pyserial and membership of the dialout group.
+The bridge also uses this port (it opens it briefly to poll); two openers at once can see garbled or lagging replies, so this tool
+opens the port exclusively (an opener that arrives while it is running fails with `busy` and retries on its next poll), and
+`--restart` first waits for any existing opener to let go. Needs pyserial and membership of the dialout group.
 """
 
 import argparse
@@ -77,7 +78,9 @@ def wait_for_exclusive_use(dev, seconds=OPENER_WAIT_SECONDS, proc_root="/proc"):
 def run(dev, commands):
     import serial  # imported late so --dry-run and the tests need no pyserial
 
-    ser = serial.Serial(dev, BAUD, timeout=0.3, write_timeout=2.0, rtscts=False, dsrdtr=False)
+    # exclusive=True takes the port with TIOCEXCL: from the moment it is open, any other process that tries to open it (the bridge's
+    # poll) gets EBUSY instead of interleaving with this session, which closes the gap between the check above and the use.
+    ser = serial.Serial(dev, BAUD, timeout=0.3, write_timeout=2.0, rtscts=False, dsrdtr=False, exclusive=True)
     try:
         for cmd in commands:
             ser.reset_input_buffer()
