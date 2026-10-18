@@ -74,6 +74,11 @@ print(child.returncode); print(child.stderr.strip()[:140])
     if (process.platform === 'linux') expect(msg).toMatch(/refusing to restart: process\(es\) \[\d+\] still have/);
   });
 
+  it('looks for other openers once more just before the restart goes out, and declines if any appeared', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src).toMatch(/if cmd == RESTART:\n\s+# One more look[\s\S]*?holders = find_openers\(dev\)\n\s+if holders:\n\s+raise SystemExit\(f"not restarting/);
+  });
+
   it('opens the port exclusively, so another opener cannot interleave with a session', () => {
     expect(readFileSync(SCRIPT, 'utf-8')).toContain('dsrdtr=False, exclusive=True)');
   });

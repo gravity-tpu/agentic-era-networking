@@ -83,6 +83,12 @@ def run(dev, commands):
     ser = serial.Serial(dev, BAUD, timeout=0.3, write_timeout=2.0, rtscts=False, dsrdtr=False, exclusive=True)
     try:
         for cmd in commands:
+            if cmd == RESTART:
+                # One more look, with the port already held exclusively and just before the restart goes out: anyone who opened it
+                # in the meantime is visible now. (A process of another user, root for instance, is never visible to this scan.)
+                holders = find_openers(dev)
+                if holders:
+                    raise SystemExit(f"not restarting: process(es) {holders} opened {dev} while the diagnostics ran")
             ser.reset_input_buffer()
             ser.write((cmd + "\r\n").encode("ascii"))
             buf = b""
