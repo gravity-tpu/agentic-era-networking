@@ -2,9 +2,11 @@
   {
     "id": "attack-portscan-fast",
     "class": "attack",
+    "tool": "nmap",
     "sender": "10.0.2.50",
     "frames": 988,
     "senderFrames": 987,
+    "valid": true,
     "rate": {
       "alerts": 0,
       "namedSender": 0,
@@ -21,9 +23,11 @@
   {
     "id": "attack-portscan-slow",
     "class": "attack",
+    "tool": "nmap",
     "sender": "10.0.2.50",
     "frames": 205,
     "senderFrames": 200,
+    "valid": true,
     "rate": {
       "alerts": 0,
       "namedSender": 0,
@@ -40,9 +44,11 @@
   {
     "id": "attack-synflood-1000pps",
     "class": "attack",
+    "tool": "hping3",
     "sender": "10.0.2.50",
     "frames": 9945,
     "senderFrames": 9943,
+    "valid": true,
     "rate": {
       "alerts": 1,
       "namedSender": 1,
@@ -59,9 +65,11 @@
   {
     "id": "attack-synflood-200pps",
     "class": "attack",
+    "tool": "hping3",
     "sender": "10.0.2.50",
     "frames": 6007,
     "senderFrames": 6000,
+    "valid": true,
     "rate": {
       "alerts": 1,
       "namedSender": 1,
@@ -78,9 +86,11 @@
   {
     "id": "attack-udpflood-500pps-1400b",
     "class": "attack",
+    "tool": "hping3",
     "sender": "10.0.2.50",
     "frames": 4937,
     "senderFrames": 4935,
+    "valid": true,
     "rate": {
       "alerts": 1,
       "namedSender": 1,
@@ -95,11 +105,181 @@
     }
   },
   {
-    "id": "benign-ping-20pps",
+    "id": "benign-http-20rps-r2",
     "class": "benign",
+    "tool": "http-get",
+    "sender": "10.0.2.52",
+    "frames": 1310,
+    "senderFrames": 1305,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 559341000
+    },
+    "sentinel": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 19589144000
+    }
+  },
+  {
+    "id": "benign-http-20rps",
+    "class": "benign",
+    "tool": "http-get",
+    "sender": "10.0.2.52",
+    "frames": 1332,
+    "senderFrames": 1325,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 553082000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-http-5rps-r2",
+    "class": "benign",
+    "tool": "http-get",
+    "sender": "10.0.2.52",
+    "frames": 540,
+    "senderFrames": 535,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 677313000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-http-5rps-r3",
+    "class": "benign",
+    "tool": "http-get",
+    "sender": "10.0.2.52",
+    "frames": 531,
+    "senderFrames": 530,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 546435000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-http-5rps",
+    "class": "benign",
+    "tool": "http-get",
+    "sender": "10.0.2.52",
+    "frames": 537,
+    "senderFrames": 535,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 561460000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-idle-60s-r2",
+    "class": "benign",
+    "tool": "idle",
+    "sender": null,
+    "frames": 2,
+    "senderFrames": 0,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-idle-60s",
+    "class": "benign",
+    "tool": "idle",
+    "sender": null,
+    "frames": 3,
+    "senderFrames": 0,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-ping-20pps-r2",
+    "class": "benign",
+    "tool": "ping",
     "sender": "10.0.2.52",
     "frames": 609,
     "senderFrames": 600,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 528842000
+    },
+    "sentinel": {
+      "alerts": 411,
+      "namedSender": 411,
+      "namedOthers": [],
+      "firstSenderAlertNs": 3115176000
+    }
+  },
+  {
+    "id": "benign-ping-20pps",
+    "class": "benign",
+    "tool": "ping",
+    "sender": "10.0.2.52",
+    "frames": 609,
+    "senderFrames": 600,
+    "valid": true,
     "rate": {
       "alerts": 1,
       "namedSender": 1,
@@ -116,9 +296,11 @@
   {
     "id": "benign-ping-5pps-node01",
     "class": "benign",
+    "tool": "ping",
     "sender": "10.0.2.50",
     "frames": 305,
     "senderFrames": 300,
+    "valid": true,
     "rate": {
       "alerts": 0,
       "namedSender": 0,
@@ -133,11 +315,55 @@
     }
   },
   {
+    "id": "benign-ping-5pps-r2",
+    "class": "benign",
+    "tool": "ping",
+    "sender": "10.0.2.52",
+    "frames": 341,
+    "senderFrames": 300,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 278,
+      "namedSender": 278,
+      "namedOthers": [],
+      "firstSenderAlertNs": 10028614000
+    }
+  },
+  {
+    "id": "benign-ping-5pps-r3",
+    "class": "benign",
+    "tool": "ping",
+    "sender": "10.0.2.52",
+    "frames": 304,
+    "senderFrames": 300,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 241,
+      "namedSender": 241,
+      "namedOthers": [],
+      "firstSenderAlertNs": 12641212000
+    }
+  },
+  {
     "id": "benign-ping-5pps",
     "class": "benign",
+    "tool": "ping",
     "sender": "10.0.2.52",
     "frames": 306,
     "senderFrames": 300,
+    "valid": true,
     "rate": {
       "alerts": 0,
       "namedSender": 0,
@@ -149,6 +375,111 @@
       "namedSender": 243,
       "namedOthers": [],
       "firstSenderAlertNs": 12037727000
+    }
+  },
+  {
+    "id": "benign-udp-small-10pps-r2",
+    "class": "benign",
+    "tool": "udp-small",
+    "sender": "10.0.2.52",
+    "frames": 302,
+    "senderFrames": 300,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 590927000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-udp-small-10pps-r3",
+    "class": "benign",
+    "tool": "udp-small",
+    "sender": "10.0.2.52",
+    "frames": 301,
+    "senderFrames": 300,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 686459000
+    },
+    "sentinel": {
+      "alerts": 238,
+      "namedSender": 238,
+      "namedOthers": [],
+      "firstSenderAlertNs": 6219297000
+    }
+  },
+  {
+    "id": "benign-udp-small-10pps",
+    "class": "benign",
+    "tool": "udp-small",
+    "sender": "10.0.2.52",
+    "frames": 302,
+    "senderFrames": 300,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 784199000
+    },
+    "sentinel": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 6084235000
+    }
+  },
+  {
+    "id": "benign-udp-small-50pps-r2",
+    "class": "benign",
+    "tool": "udp-small",
+    "sender": "10.0.2.52",
+    "frames": 1508,
+    "senderFrames": 1500,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 503237000
+    },
+    "sentinel": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 17723324000
+    }
+  },
+  {
+    "id": "benign-udp-small-50pps",
+    "class": "benign",
+    "tool": "udp-small",
+    "sender": "10.0.2.52",
+    "frames": 1503,
+    "senderFrames": 1500,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 518519000
+    },
+    "sentinel": {
+      "alerts": 2,
+      "namedSender": 2,
+      "namedOthers": [],
+      "firstSenderAlertNs": 16367344000
     }
   }
 ]

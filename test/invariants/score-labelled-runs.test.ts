@@ -91,12 +91,30 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
   it('reproduces the recorded scores', () => {
     const r = spawnSync('python3', [SCRIPT, DATA], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 1/3');
-    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 3/3');
+    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 12/18');
+    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/18');
+    // By workload: the rate rule flags every HTTP and small-UDP run; neither detector flags the idle runs.
+    expect(r.stdout).toMatch(/http-get\s+rate rule 5\/5\s+sentinel 1\/5/);
+    expect(r.stdout).toMatch(/udp-small\s+rate rule 5\/5\s+sentinel 4\/5/);
+    expect(r.stdout).toMatch(/idle\s+rate rule 0\/2\s+sentinel 0\/2/);
     const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
     expect(row('attack-portscan-fast')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
     expect(row('attack-portscan-slow')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
     expect(row('attack-synflood-1000pps')).toMatch(/\| names sender, first at 0\.50 s/);
     expect(row('benign-ping-5pps ')).toMatch(/\| no alert\s+\|/);
+    expect(row('benign-http-5rps ')).toMatch(/\| names sender/); // ordinary web polling exceeds 10 pps per source
+  });
+});
+
+describe.skipIf(!hasNumpy)('score-labelled-runs invalid runs', () => {
+  it('leaves a run out of every rate when the sender is barely seen at the tap, and says so', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('sc', sys.argv[1]); sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
+frames = [(1.0, 60, 6, 2, 1, 2, '10.0.2.52', 1000)] * 5
+print(json.dumps([sc.score({'id': 'x', 'class': 'benign', 'tool': 'http-get', 'senderIp': '10.0.2.52'}, frames)['valid'], sc.MIN_SENDER_FRAMES]))
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([false, 20]);
   });
 });

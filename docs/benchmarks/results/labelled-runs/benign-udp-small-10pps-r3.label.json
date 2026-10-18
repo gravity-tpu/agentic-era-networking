@@ -1,0 +1,31 @@
+{
+  "id": "benign-udp-small-10pps-r3",
+  "class": "benign",
+  "tool": "udp-small",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "params": {
+    "seconds": 30,
+    "pps": 10,
+    "payload_bytes": 60,
+    "port": 53
+  },
+  "command": [
+    "timeout",
+    "35",
+    "python3",
+    "-c",
+    "import socket,sys,time;t,p,r,s,n=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]);k=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);k.bind((sys.argv[6],0));d=b'x'*n;g=1.0/r;e=time.monotonic()+s;nxt=time.monotonic()\nwhile time.monotonic()<e:\n k.sendto(d,(t,p));nxt+=g;w=nxt-time.monotonic()\n if w>0: time.sleep(w)\n",
+    "10.0.2.119",
+    "53",
+    "10",
+    "30",
+    "60",
+    "10.0.2.52"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 30.8,
+  "pcap": "benign-udp-small-10pps-r3.pcap",
+  "commandStderrTail": ""
+}

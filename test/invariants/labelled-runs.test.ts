@@ -20,7 +20,7 @@ cases = json.loads(sys.argv[2])
 out = []
 for c in cases:
     try:
-        lr.validate(c); out.append({'ok': True, 'cmd': lr.remote_command(c)})
+        lr.validate(c); out.append({'ok': True, 'cmd': lr.remote_command(c), 'recv': lr.receiver_command(c)})
     except lr.RunRejected as e:
         out.append({'ok': False, 'why': str(e)})
 print(json.dumps(out))
@@ -29,7 +29,8 @@ print(json.dumps(out))
 interface Verdict {
   ok: boolean;
   why?: string;
-  cmd?: string[];
+  cmd?: string[] | null;
+  recv?: string[] | null;
 }
 
 const base = { id: 'x-run', class: 'attack', tool: 'hping3', sender: 'agentic-node-01', target: '10.0.2.119', seconds: 10, pps: 1000, count: 10000, flags_or_proto: 'syn' };
@@ -131,5 +132,107 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
     const noOut = spawnSync('python3', [SCRIPT, '--execute'], { encoding: 'utf-8' });
     expect(noOut.status).not.toBe(0);
     expect(noOut.stderr).toMatch(/--out/);
+  });
+});
+
+const benign = { id: 'b-run', class: 'benign', sender: 'agentic-node-02', target: '10.0.2.119', seconds: 30 };
+
+describe.skipIf(!hasPython)('labelled-runs.py benign workloads', () => {
+  it('builds the HTTP poll from validated numbers and an allowlisted path only', () => {
+    const [v] = check([{ ...benign, tool: 'http-get', rps: 5, path: '/health' }]);
+    expect(v?.ok).toBe(true);
+    expect(v?.cmd?.slice(0, 3)).toEqual(['timeout', '35', 'sh']);
+    expect(v?.cmd?.[4]).toContain('http://10.0.2.119:8000/health');
+    expect(v?.cmd?.[4]).toContain('sleep 0.200');
+    // The receiver is a local web server on the Mac's uplink-side alias (traffic to the Pi 5 never crosses the Zodiac).
+    expect(v?.recv?.slice(0, 5)).toEqual(['python3', '-m', 'http.server', '8000', '--bind']);
+    expect(v?.recv?.[5]).toBe('10.0.2.119');
+  });
+
+  it.each([
+    ['a path outside the allowlist', { path: '/admin' }, /http-get path must be/],
+    ['a path that tries to inject a command', { path: '/health; reboot' }, /http-get path must be/],
+    ['a rate above the limit', { rps: 500 }, /http-get rps must be 1 to 20/],
+    ['a target other than the local web server', { target: '10.0.2.51' }, /http-get only targets 10\.0\.2\.119/],
+  ])('refuses an HTTP poll with %s', (_n, patch, why) => {
+    const [v] = check([{ ...benign, tool: 'http-get', rps: 5, path: '/health', ...patch }]);
+    expect(v?.ok).toBe(false);
+    expect(v?.why).toMatch(why);
+  });
+
+  it('builds small UDP from one fixed script, bounded in rate and size', () => {
+    const [v] = check([{ ...benign, tool: 'udp-small', pps: 10, payload_bytes: 60, port: 53 }]);
+    expect(v?.ok).toBe(true);
+    expect(v?.cmd?.slice(0, 4)).toEqual(['timeout', '35', 'python3', '-c']);
+    expect(v?.cmd?.slice(5)).toEqual(['10.0.2.119', '53', '10', '30', '60', '10.0.2.52']);
+    const [hi, big, badPort] = check([
+      { ...benign, target: '10.0.2.119', tool: 'udp-small', pps: 500, payload_bytes: 60 },
+      { ...benign, target: '10.0.2.119', tool: 'udp-small', pps: 10, payload_bytes: 5000 },
+      { ...benign, target: '10.0.2.119', tool: 'udp-small', pps: 10, payload_bytes: 60, port: 70000 },
+    ]);
+    expect(hi?.why).toMatch(/pps must be a positive integer of at most 50/);
+    expect(big?.why).toMatch(/payload_bytes must be 20 to 200/);
+    expect(badPort?.why).toMatch(/port must be 1 to 65535/);
+  });
+
+  it('starts a TCP sink on this machine, bound to the uplink-side alias, before the sender', () => {
+    const [v] = check([{ ...benign, tool: 'tcp-stream', seconds: 20, bandwidth_mbit: 10 }]);
+    expect(v?.ok).toBe(true);
+    expect(v?.recv?.slice(0, 2)).toEqual(['python3', '-c']);
+    expect(v?.recv?.slice(3)).toEqual(['10.0.2.119', '5201', '35']); // bound to the alias, with its own time limit
+    expect(v?.cmd?.slice(0, 4)).toEqual(['timeout', '30', 'python3', '-c']);
+    expect(v?.cmd?.slice(5)).toEqual(['10.0.2.119', '5201', '10', '20', '10.0.2.52']);
+  });
+
+  it('refuses bulk TCP above the bandwidth limit or to a receiver it cannot start', () => {
+    const [fast, mac] = check([
+      { ...benign, tool: 'tcp-stream', seconds: 20, bandwidth_mbit: 500 },
+      { ...benign, tool: 'tcp-stream', seconds: 20, bandwidth_mbit: 10, target: '10.0.2.51' },
+    ]);
+    expect(fast?.why).toMatch(/bandwidth_mbit must be 1 to 20/);
+    expect(mac?.why).toMatch(/needs a receiver this harness can start/); // only the local receiver is supported
+  });
+
+  it('an idle run sends nothing and takes no sender or target', () => {
+    const [ok, withSender, withTarget] = check([
+      { id: 'idle', class: 'benign', tool: 'idle', sender: null, target: null, seconds: 60 },
+      { id: 'idle', class: 'benign', tool: 'idle', sender: 'agentic-node-02', target: null, seconds: 60 },
+      { id: 'idle', class: 'benign', tool: 'idle', sender: null, target: '10.0.2.119', seconds: 60 },
+    ]);
+    expect(ok?.ok).toBe(true);
+    expect(ok?.cmd).toBeNull();
+    expect(withSender?.why).toMatch(/idle run has no sender and no target/);
+    expect(withTarget?.why).toMatch(/idle run has no sender and no target/);
+  });
+
+  it('keeps attack tools out of benign runs and benign tools out of attack runs', () => {
+    const [a, b] = check([
+      { ...benign, tool: 'hping3', target: '10.0.2.119', pps: 100, count: 100, flags_or_proto: 'syn' },
+      { id: 'x', class: 'attack', tool: 'http-get', sender: 'agentic-node-01', target: '10.0.2.119', seconds: 10, rps: 5, path: '/health' },
+    ]);
+    expect(a?.why).toMatch(/attack tool and cannot be a benign run/);
+    expect(b?.why).toMatch(/benign tool and cannot be an attack run/);
+  });
+});
+
+describe.skipIf(!hasPython)('labelled-runs.py catalog shape', () => {
+  it('has unique ids, repeats of every class, and covers the benign workloads the scoring needs', () => {
+    const r = spawnSync('python3', [SCRIPT, '--list'], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    const rows = r.stdout.trim().split('\n').map((l) => l.trim().split(/\s+/));
+    const ids = rows.map((x) => x[0] ?? '');
+    expect(new Set(ids).size).toBe(ids.length);
+    const tools = new Set(rows.filter((x) => x[1] === 'benign').map((x) => x[2]));
+    for (const t of ['ping', 'http-get', 'udp-small', 'tcp-stream', 'idle']) expect(tools.has(t), t).toBe(true);
+    for (const base of ['benign-http-5rps', 'benign-udp-small-10pps', 'attack-synflood-1000pps', 'attack-portscan-fast']) {
+      expect(ids.filter((i) => i === base || i.startsWith(`${base}-r`)).length, base).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('--class selects only that class', () => {
+    const all = spawnSync('python3', [SCRIPT, '--list', '--class', 'benign'], { encoding: 'utf-8' });
+    expect(all.status, all.stderr).toBe(0);
+    expect(all.stdout).not.toMatch(/\sattack\s/);
+    expect(all.stdout).toMatch(/\sbenign\s/);
   });
 });
