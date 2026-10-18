@@ -9,13 +9,13 @@
       "alerts": 0,
       "namedSender": 0,
       "namedOthers": [],
-      "firstSenderAlertSeconds": null
+      "firstSenderAlertNs": null
     },
     "sentinel": {
       "alerts": 925,
       "namedSender": 925,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.03"
+      "firstSenderAlertNs": 38155000
     }
   },
   {
@@ -28,13 +28,13 @@
       "alerts": 0,
       "namedSender": 0,
       "namedOthers": [],
-      "firstSenderAlertSeconds": null
+      "firstSenderAlertNs": null
     },
     "sentinel": {
       "alerts": 142,
       "namedSender": 142,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "24.42"
+      "firstSenderAlertNs": 24427279000
     }
   },
   {
@@ -47,13 +47,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.50"
+      "firstSenderAlertNs": 500837000
     },
     "sentinel": {
       "alerts": 532,
       "namedSender": 532,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.06"
+      "firstSenderAlertNs": 66598000
     }
   },
   {
@@ -66,13 +66,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.50"
+      "firstSenderAlertNs": 501962000
     },
     "sentinel": {
       "alerts": 4888,
       "namedSender": 4888,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.31"
+      "firstSenderAlertNs": 319313000
     }
   },
   {
@@ -85,13 +85,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.50"
+      "firstSenderAlertNs": 501115000
     },
     "sentinel": {
       "alerts": 4874,
       "namedSender": 4874,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.13"
+      "firstSenderAlertNs": 130146000
     }
   },
   {
@@ -104,13 +104,13 @@
       "alerts": 1,
       "namedSender": 1,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "0.55"
+      "firstSenderAlertNs": 550392000
     },
     "sentinel": {
       "alerts": 546,
       "namedSender": 546,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "3.18"
+      "firstSenderAlertNs": 3189945000
     }
   },
   {
@@ -123,13 +123,13 @@
       "alerts": 0,
       "namedSender": 0,
       "namedOthers": [],
-      "firstSenderAlertSeconds": null
+      "firstSenderAlertNs": null
     },
     "sentinel": {
       "alerts": 242,
       "namedSender": 242,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "12.25"
+      "firstSenderAlertNs": 12257272000
     }
   },
   {
@@ -142,13 +142,13 @@
       "alerts": 0,
       "namedSender": 0,
       "namedOthers": [],
-      "firstSenderAlertSeconds": null
+      "firstSenderAlertNs": null
     },
     "sentinel": {
       "alerts": 243,
       "namedSender": 243,
       "namedOthers": [],
-      "firstSenderAlertSeconds": "12.03"
+      "firstSenderAlertNs": 12037727000
     }
   }
 ]

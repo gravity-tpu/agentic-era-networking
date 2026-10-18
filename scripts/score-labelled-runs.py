@@ -114,7 +114,7 @@ def score(label, frames):
             "alerts": len(alerts),
             "namedSender": len(named_sender),
             "namedOthers": sorted({a[1] for a in other}),
-            "firstSenderAlertSeconds": seconds_text(named_sender[0][0] - t0) if named_sender and t0 is not None else None,
+            "firstSenderAlertNs": (named_sender[0][0] - t0) if named_sender and t0 is not None else None,
         }
     return res
 
@@ -134,7 +134,7 @@ def main():
             if d["alerts"] == 0:
                 return "no alert"
             who = "names sender" if d["namedSender"] else "names " + ",".join(d["namedOthers"])
-            extra = f", first at {d['firstSenderAlertSeconds']} s" if d["firstSenderAlertSeconds"] is not None else ""
+            extra = f", first at {seconds_text(d['firstSenderAlertNs'])} s" if d["firstSenderAlertNs"] is not None else ""
             return f"{who}{extra}" + (f" ({d['alerts']} alerts)" if adaptive_windows else "")
         print(f"{r['id']:32s} {r['class']:7s} {r['frames']:6d} | {cell(r['rate']):30s} | {cell(r['sentinel'], True):44s}")
     print()

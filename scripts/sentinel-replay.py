@@ -75,7 +75,7 @@ def parse_pcap(path, with_src=False):
         sec, frac, cl, ol = struct.unpack('<IIII', d[off:off+16]); off += 16
         fr = d[off:off+cl]; off += cl
         t_us = sec * 1e6 + (frac / 1000.0 if ns else frac)  # float microseconds: the sentinel's own feature math is float
-        t_ns = sec * 1_000_000_000 + (frac if ns else frac * 1000)  # exact integer nanoseconds, for counting and timing
+        t_ns = sec * 1_000_000_000 + (frac if ns else frac * 1000)  # sec and frac are ints from struct.unpack: exact integer nanoseconds
         ln = ol
         proto = flags = sp = dp = 0
         src_ip = None

@@ -96,7 +96,7 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
     const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
     expect(row('attack-portscan-fast')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
     expect(row('attack-portscan-slow')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
-    expect(row('attack-synflood-1000pps')).toMatch(/\| names sender, first at 0\.5 s/);
+    expect(row('attack-synflood-1000pps')).toMatch(/\| names sender, first at 0\.50 s/);
     expect(row('benign-ping-5pps ')).toMatch(/\| no alert\s+\|/);
   });
 });
