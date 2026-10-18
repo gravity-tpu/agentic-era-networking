@@ -19,9 +19,9 @@ recorded here.
 | `attack-udpflood-500pps-1400b` (and `-r3`) | attack | `hping3` UDP flood, 1400-byte payloads, 500 pps, 10 s |
 | `attack-portscan-fast`, `attack-portscan-slow` (x3 each) | attack | `nmap -sS -T4` ports 1 to 1000 (all sent in 0.36 s); `-T2` ports 1 to 200 (80 s) |
 | `attack-portscan-1pps` (x2), `attack-portscan-half-pps` (x2) | attack | `nmap` paced at 1 and 0.5 probes per second, 70 s |
-| `attack-arpflood-200pps` (x3) | attack | `nping` ARP flood, 200 per second, 12 s. **Not scored**: ARP frames carry no IPv4 source, so the scorer sees the sender 0 times and lists these as INVALID. The frames did reach the tap (about 150 KB each). Both detectors key on IPv4 sources, so neither can see this attack |
+| `attack-arpflood-200pps` (x3) | attack | `nping` ARP request flood, 200 per second, 12 s. ARP has no IPv4 header. **Not scored by the two replicas**: the deployed trt daemon keys on IPv4 sources and ignores ARP, so the replicas see 0 frames from the sender and list these as INVALID. The baseline prototype attributes ARP frames to their sender protocol address (forgeable) and scores them |
 
-## Scores (45 scored runs: 27 benign, 18 attack; 6 recorded runs are left out: 3 ARP floods with no IPv4 sender, 3 UDP bursts during a switch drop)
+## Scores (45 scored runs by the two replicas: 27 benign, 18 attack; 6 recorded runs are left out: 3 ARP floods the daemon cannot see, 3 UDP bursts during a switch drop)
 
 | Detector | Attacks detected with the right sender | Benign runs with an alert (false positives) |
 | :--- | :--- | :--- |
@@ -53,7 +53,7 @@ Benign false positives by workload (runs with any alert / runs):
   none of the 10 scan runs (the fast scan finishes in 0.36 s, before the rule's 0.5 s minimum; the slower scans run at 2.5
   pps or less, below 10 pps). The sentinel detects 15 of 18 attacks, but it also flags 12 of 27 benign runs, so its
   detections are not evidence that it detects attacks. It misses `attack-portscan-fast-r3` and both half-pps scans.
-- **ARP flood is invisible to both.** Three runs, about 150 KB each at the tap, 0 frames attributed to the sender.
+- **ARP flood is invisible to the deployed rate rule and to the sentinel replica.** Three runs, about 150 KB each at the tap, 0 frames attributed to the sender by the daemon's rules. Attributing ARP frames to their sender protocol address (an option of the parser, used only by the baseline prototype) shows the flood is separable: 195 non-TCP frames a second against a floor of 100.
 
 ## Correction to the earlier sentinel finding
 
@@ -65,7 +65,7 @@ run, and it was never trained.
 
 ## Caveats
 
-- 51 runs recorded (45 scored; 3 ARP-flood runs have no IPv4 sender, 3 UDP-burst runs coincided with a switch drop), up to three repeats of each workload, one host pair, short durations: a
+- 51 runs recorded (45 scored by the replicas; 3 ARP-flood runs are invisible to the daemon, 3 UDP-burst runs coincided with a switch drop), up to three repeats of each workload, one host pair, short durations: a
   scored comparison, not a distribution. Still missing: bulk TCP above 2 Mbit, real ssh sessions, real Tailscale traffic, a
   browser-like mix, address-spoofing attacks, and valid UDP-burst repeats: the UDP-burst workload has **one** valid run, and is the workload that hung the switch three times in four recordings (see the incident log). A 100 Mbit lab segment limits rates.
 - **Bulk TCP was recorded only at 2 Mbit per second.** Attempts at 5 Mbit and above coincided with switch outages (see

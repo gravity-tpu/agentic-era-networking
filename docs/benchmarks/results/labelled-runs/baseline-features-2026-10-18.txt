@@ -1,51 +1,54 @@
 run                              class   frames  maxPps    maxB/s  maxSYN/s ports/10s  ports
-attack-portscan-1pps             attack      60       1        60         1        10     60
-attack-portscan-1pps-r2          attack      60       1        60         1        10     60
-attack-portscan-fast             attack     987     987     59220       987       987    987
-attack-portscan-fast-r2          attack     998     998     59880       998       998    998
-attack-portscan-fast-r3          attack     948     948     56880       948       948    948
-attack-portscan-half-pps         attack      32       1        60         1         5     30
-attack-portscan-half-pps-r2      attack      32       1        60         1         5     30
-attack-portscan-slow             attack     200       3       180         3        25    200
-attack-portscan-slow-r2          attack     200       3       180         3        25    200
-attack-portscan-slow-r3          attack     200       3       180         3        25    200
-attack-synflood-1000pps          attack    9943     936     56160       936         1      1
-attack-synflood-1000pps-r2       attack    9958     946     56760       946         1      1
-attack-synflood-1000pps-r3       attack    9955     946     56760       946         1      1
+attack-arpflood-200pps           attack    2000     195     11700         0         0      0
+attack-arpflood-200pps-r2        attack    2000     195     11700         0         0      0
+attack-arpflood-200pps-r3        attack    1998     195     11700         0         0      0
+attack-portscan-1pps             attack      63       2       120         1        10     60
+attack-portscan-1pps-r2          attack      63       2       120         1        10     60
+attack-portscan-fast             attack     988     988     59280       987       987    987
+attack-portscan-fast-r2          attack     999     999     59940       998       998    998
+attack-portscan-fast-r3          attack     949     949     56940       948       948    948
+attack-portscan-half-pps         attack      35       1        60         1         5     30
+attack-portscan-half-pps-r2      attack      35       1        60         1         5     30
+attack-portscan-slow             attack     202       3       180         3        25    200
+attack-portscan-slow-r2          attack     204       4       240         3        25    200
+attack-portscan-slow-r3          attack     204       4       240         3        25    200
+attack-synflood-1000pps          attack    9944     936     56160       936         1      1
+attack-synflood-1000pps-r2       attack    9959     946     56760       946         1      1
+attack-synflood-1000pps-r3       attack    9956     946     56760       946         1      1
 attack-synflood-200pps           attack    6000     198     11880       198         1      1
-attack-synflood-200pps-r2        attack    6000     198     11880       198         1      1
-attack-synflood-200pps-r3        attack    6000     198     11880       198         1      1
-attack-udpflood-500pps-1400b     attack    4935     484    697928         0         1      1
-attack-udpflood-500pps-1400b-r3  attack    4938     484    697928         0         1      1
-benign-bulk-tcp-2mbit            benign    3458     175    262062         1         1      1
+attack-synflood-200pps-r2        attack    6002     198     11880       198         1      1
+attack-synflood-200pps-r3        attack    6002     198     11880       198         1      1
+attack-udpflood-500pps-1400b     attack    4936     484    697928         0         1      1
+attack-udpflood-500pps-1400b-r3  attack    4939     484    697928         0         1      1
+benign-bulk-tcp-2mbit            benign    3459     173    261922         1         1      1
 benign-bulk-tcp-2mbit-r2         benign    3463     181    274034         1         1      1
 benign-http-20rps                benign    1325      50      4230        10         1      1
-benign-http-20rps-r2             benign    1305      50      4230        10         1      1
+benign-http-20rps-r2             benign    1309      52      4338        10         1      1
 benign-http-5rps                 benign     535      20      1692         4         1      1
-benign-http-5rps-r2              benign     535      20      1692         4         1      1
+benign-http-5rps-r2              benign     539      20      1692         4         1      1
 benign-http-5rps-r3              benign     530      20      1692         4         1      1
-benign-http-burst-8conns         benign     776     103      7791         9         1      1
+benign-http-burst-8conns         benign     777     103      7791         9         1      1
 benign-http-burst-8conns-r2      benign     884     108      8543         9         1      1
-benign-http-burst-8conns-r3      benign     821     103      7907         9         1      1
-benign-interactive-8eps          benign     245      10      1608         1         1      1
-benign-interactive-8eps-r2       benign     246      12      1905         1         1      1
-benign-interactive-8eps-r3       benign     247      11      1918         1         1      1
-benign-ping-20pps                benign     600      20      1960         0         0      0
-benign-ping-20pps-r2             benign     600      21      2058         0         0      0
-benign-ping-5pps                 benign     300       6       588         0         0      0
-benign-ping-5pps-node01          benign     300       6       588         0         0      0
-benign-ping-5pps-r2              benign     300       6       588         0         0      0
-benign-ping-5pps-r3              benign     300       6       588         0         0      0
-benign-udp-burst-tailscale-like-ok benign     105      19     24346         0         1      1
-benign-udp-small-10pps           benign     300      11      1122         0         1      1
-benign-udp-small-10pps-r2        benign     300      12      1224         0         1      1
-benign-udp-small-10pps-r3        benign     300      11      1122         0         1      1
-benign-udp-small-50pps           benign    1500      51      7242         0         1      1
-benign-udp-small-50pps-r2        benign    1500      51      7242         0         1      1
+benign-http-burst-8conns-r3      benign     823     103      7907         9         1      1
+benign-interactive-8eps          benign     246       9      1467         1         1      1
+benign-interactive-8eps-r2       benign     247      12      1905         1         1      1
+benign-interactive-8eps-r3       benign     248      11      1918         1         1      1
+benign-ping-20pps                benign     602      21      2020         0         0      0
+benign-ping-20pps-r2             benign     601      21      2058         0         0      0
+benign-ping-5pps                 benign     304       6       588         0         0      0
+benign-ping-5pps-node01          benign     302       6       588         0         0      0
+benign-ping-5pps-r2              benign     303       6       588         0         0      0
+benign-ping-5pps-r3              benign     302       6       588         0         0      0
+benign-udp-burst-tailscale-like-ok benign     108      19     24346         0         1      1
+benign-udp-small-10pps           benign     301      11      1122         0         1      1
+benign-udp-small-10pps-r2        benign     301      12      1224         0         1      1
+benign-udp-small-10pps-r3        benign     301      11      1122         0         1      1
+benign-udp-small-50pps           benign    1502      51      7242         0         1      1
+benign-udp-small-50pps-r2        benign    1501      52      7302         0         1      1
 
 Separation per feature (largest benign value vs smallest attack value; a margin > 1 means one threshold separates them on this data):
-  pps                        largest benign       181   smallest attack         1 (attack-portscan-1pps-r2)   attack/benign 0.0x
-  bytes/s                    largest benign    274034   smallest attack        60 (attack-portscan-1pps-r2)   attack/benign 0.0x
-  SYN/s                      largest benign        10   smallest attack         0 (attack-udpflood-500pps-1400b-r3)   attack/benign 0.0x
-  distinct ports per 10 s    largest benign         1   smallest attack         1 (attack-synflood-1000pps-r2)   attack/benign 1.0x
-  distinct ports per run     largest benign         1   smallest attack         1 (attack-synflood-1000pps-r2)   attack/benign 1.0x
+  pps                        largest benign       181   smallest attack         1 (attack-portscan-half-pps-r2)   attack/benign 0.0x
+  bytes/s                    largest benign    274034   smallest attack        60 (attack-portscan-half-pps-r2)   attack/benign 0.0x
+  SYN/s                      largest benign        10   smallest attack         0 (attack-arpflood-200pps-r2)   attack/benign 0.0x
+  distinct ports per 10 s    largest benign         1   smallest attack         0 (attack-arpflood-200pps-r2)   attack/benign 0.0x
+  distinct ports per run     largest benign         1   smallest attack         0 (attack-arpflood-200pps-r2)   attack/benign 0.0x

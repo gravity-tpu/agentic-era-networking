@@ -150,7 +150,7 @@ def load(datadir):
         pcap = os.path.join(datadir, label["pcap"])
         if not os.path.exists(pcap) and os.path.exists(pcap + ".gz"):
             pcap += ".gz"
-        frames = sr.parse_pcap(pcap, with_src=True)
+        frames = sr.parse_pcap(pcap, with_src=True, arp_src=True)
         sender_ip = label.get("senderIp")
         if not _score.rack_ok(label) or (sender_ip is not None and sender_frame_count(frames, sender_ip) < _score.MIN_SENDER_FRAMES):
             print(f"INVALID (left out): {label['id']}")

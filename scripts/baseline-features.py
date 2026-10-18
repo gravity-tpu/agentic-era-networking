@@ -79,7 +79,7 @@ def load(datadir):
         pcap = os.path.join(datadir, label["pcap"])
         if not os.path.exists(pcap) and os.path.exists(pcap + ".gz"):
             pcap += ".gz"
-        feats = run_features(sr.parse_pcap(pcap, with_src=True), label["senderIp"])
+        feats = run_features(sr.parse_pcap(pcap, with_src=True, arp_src=True), label["senderIp"])
         if not _score.rack_ok(label):
             continue  # recorded on an unhealthy rack: left out, as in the scorer
         if feats is not None and feats["frames"] >= _score.MIN_SENDER_FRAMES:

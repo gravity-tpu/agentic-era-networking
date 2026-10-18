@@ -102,7 +102,7 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
     // ssh-like and browsing-like traffic: the rate rule flags all of it, the sentinel none.
     expect(r.stdout).toMatch(/tcp-interactive\s+rate rule 3\/3\s+sentinel 0\/3/);
     expect(r.stdout).toMatch(/http-burst\s+rate rule 3\/3\s+sentinel 0\/3/);
-    // ARP frames carry no IPv4 source, so the sender is never seen and those runs are reported invalid and counted nowhere.
+    // The deployed daemon keys on IPv4 sources and ignores ARP, so its replica sees 0 frames from an ARP flooder: reported invalid.
     expect(r.stdout).toContain('INVALID (left out of every rate): attack-arpflood-200pps');
     // drop-1 had enough frames, so only the health clause can have excluded it; the others fail both clauses or the frame clause.
     expect(r.stdout).toMatch(/INVALID \(left out of every rate\): benign-udp-burst-tailscale-like-drop-1 - the rack was not recorded healthy/);
@@ -112,9 +112,9 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
     expect(r.stdout).toMatch(/\nbenign-udp-burst-tailscale-like-ok /);
     expect(r.stdout).toMatch(/udp-burst\s+rate rule 1\/1\s+sentinel 1\/1/);
     const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
-    expect(row('attack-portscan-fast')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
-    expect(row('attack-portscan-slow')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
-    expect(row('attack-synflood-1000pps')).toMatch(/\| names sender, first at 0\.50 s/);
+    expect(row('attack-portscan-fast ')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
+    expect(row('attack-portscan-slow ')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
+    expect(row('attack-synflood-1000pps ')).toMatch(/\| names sender, first at 0\.50 s/);
     expect(row('benign-ping-5pps ')).toMatch(/\| no alert\s+\|/);
     expect(row('benign-http-5rps ')).toMatch(/\| names sender/); // ordinary web polling exceeds 10 pps per source
   });

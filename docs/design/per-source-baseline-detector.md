@@ -53,13 +53,13 @@ false-alerted on it. Bulk TCP above 2 Mbit is not recorded (the attempts coincid
 All of these are named constants, bounded and configurable (Invariant 5). The thresholds live in a committed, versioned
 file produced by an offline script from the labelled benign runs, not computed online.
 
-### Offline result (prototype `scripts/baseline-detector.py`, 45 scored runs)
+### Offline result (prototype `scripts/baseline-detector.py`, 48 runs, 45 for the replicas plus the 3 ARP floods only the prototype attributes)
 
 | Scoring | Attacks detected with the right sender | Benign runs with an alert |
 | :--- | :--- | :--- |
-| In sample (thresholds from all benign runs) | 14 of 18 | 0 of 27 |
-| Leave one benign workload group out (ping, idle, HTTP, UDP, TCP), with floors | 14 of 18 in every fold | 0 of 27 |
-| The same, thresholds from data only (no floors) | 14 of 18 | **8 of 27** |
+| In sample (thresholds from all benign runs) | 17 of 21 | 0 of 27 |
+| Leave one benign workload group out (ping, idle, HTTP, UDP, TCP), with floors | 17 of 21 in every fold | 0 of 27 |
+| The same, thresholds from data only (no floors) | 17 of 21 | **8 of 27** |
 
 Read the last row carefully. Thresholds learned only from the other workload groups **false-alert on all 8 held-out HTTP
 runs**, because no other group ever sent a SYN. A baseline learned from a few workloads cannot know a *kind* of workload it
@@ -68,8 +68,7 @@ does not show this: with both `http-get` and `http-burst` present, data-only thr
 groups exist so the test removes the twin too.) The floors are **judgment, not measurement**: the data only show the benign
 runs sit far below them and the attacks far above. Every number in this table is on up to three repeats of each attack pattern by
 two tools (`hping3`, `nmap`), so it is a feasibility result, not a performance claim. **The 4 misses are the 1 pps and 0.5 pps scans
-(4 runs), which are below every floor by design; the ARP-flood runs are not in the count at all because the prototype, like both
-existing detectors, keys on IPv4 sources.**
+(4 runs), which are below every floor by design. The 3 ARP-flood runs are caught through `nontcp_pps` (195 pps against a floor of 100) because the parser attributes an ARP frame to its sender protocol address; that is one rate (200 per second), and an ARP flood under 100 per second would not alert.**
 
 Time to alert: floods 0 to 1 s after the first frame, the fast scan 0 s (through the severe path), the slow scan 5 s.
 
@@ -119,7 +118,7 @@ Every change is scored on the labelled runs by the same code path the live detec
 share one module, with a test that replaying a capture gives the live detector's alerts exactly). Required before any claim:
 
 1. Record what is missing: bulk TCP at several rates, ssh sessions, a browser-like mix, Tailscale-style traffic, an idle
-   baseline over hours, at least three repeats of every attack pattern, slow scans at several rates, ARP and address-spoofing
+   baseline over hours, at least three repeats of every attack pattern, slow scans at several rates, ARP at several rates, and address-spoofing
    attacks.
 2. Re-derive and freeze the thresholds, then score on **runs recorded after** the freeze (not on the data they came from).
 3. Report recall, benign false-positive rate with its upper bound, time to alert and the evasion boundaries found.
