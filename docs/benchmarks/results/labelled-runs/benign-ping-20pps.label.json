@@ -1,0 +1,29 @@
+{
+  "id": "benign-ping-20pps",
+  "class": "benign",
+  "tool": "ping",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "params": {
+    "seconds": 30,
+    "pps": 20
+  },
+  "command": [
+    "timeout",
+    "35",
+    "ping",
+    "-I",
+    "eth0",
+    "-c",
+    "600",
+    "-i",
+    "0.050",
+    "-q",
+    "10.0.2.119"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 30.9,
+  "pcap": "benign-ping-20pps.pcap",
+  "commandStderrTail": ""
+}

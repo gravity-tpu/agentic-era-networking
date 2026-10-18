@@ -1,0 +1,12 @@
+run                              class   frames | rate rule                      | sentinel                                    
+attack-portscan-fast             attack     988 | no alert                       | names sender, first at 0.04 s (925 alerts)  
+attack-portscan-slow             attack     205 | no alert                       | names sender, first at 24.43 s (142 alerts) 
+attack-synflood-1000pps          attack    9945 | names sender, first at 0.5 s   | names sender, first at 0.07 s (532 alerts)  
+attack-synflood-200pps           attack    6007 | names sender, first at 0.5 s   | names sender, first at 0.32 s (4888 alerts) 
+attack-udpflood-500pps-1400b     attack    4937 | names sender, first at 0.5 s   | names sender, first at 0.13 s (4874 alerts) 
+benign-ping-20pps                benign     609 | names sender, first at 0.55 s  | names sender, first at 3.19 s (546 alerts)  
+benign-ping-5pps-node01          benign     305 | no alert                       | names sender, first at 12.26 s (242 alerts) 
+benign-ping-5pps                 benign     306 | no alert                       | names sender, first at 12.04 s (243 alerts) 
+
+rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 1/3   runs naming a non-sender: 0/8
+sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 3/3   runs naming a non-sender: 0/8

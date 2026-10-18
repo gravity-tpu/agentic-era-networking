@@ -1,0 +1,40 @@
+{
+  "id": "attack-udpflood-500pps-1400b",
+  "class": "attack",
+  "tool": "hping3",
+  "sender": "agentic-node-01",
+  "senderIp": "10.0.2.50",
+  "target": "10.0.2.119",
+  "params": {
+    "seconds": 10,
+    "pps": 500,
+    "count": 5000,
+    "flags_or_proto": "udp",
+    "payload_bytes": 1400,
+    "port": 5001
+  },
+  "command": [
+    "sudo",
+    "-n",
+    "timeout",
+    "15",
+    "hping3",
+    "-c",
+    "5000",
+    "-i",
+    "u2000",
+    "-I",
+    "eth0",
+    "-d",
+    "1400",
+    "-q",
+    "--udp",
+    "-p",
+    "5001",
+    "10.0.2.119"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 12.1,
+  "pcap": "attack-udpflood-500pps-1400b.pcap",
+  "commandStderrTail": "\n--- 10.0.2.119 hping statistic ---\n5000 packets transmitted, 4913 packets received, 2% packet loss\nround-trip min/avg/max = 4.8/16.1/1014.6 ms\n"
+}
