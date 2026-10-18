@@ -107,6 +107,8 @@ def main():
         margin = f"{atk / ben:.1f}x" if ben > 0 else "benign is 0"
         weakest = min((r for r in rows if r["class"] == "attack"), key=lambda r: r[key])["id"]
         print(f"  {name:26s} largest benign {ben:>9d}   smallest attack {atk:>9d} ({weakest})   attack/benign {margin}")
+    print("  Each feature is separated only by the attacks that exercise it: floods send to one port, ARP has no ports, scans send few non-TCP frames.")
+    print("  A margin under 1.0x on one feature is expected; the detector is a union of per-feature rules (docs/design/per-source-baseline-detector.md).")
     if out:
         with open(out, "w") as f:
             json.dump(rows, f, indent=2)

@@ -52,3 +52,5 @@ Separation per feature (largest benign value vs smallest attack value; a margin 
   SYN/s                      largest benign        10   smallest attack         0 (attack-arpflood-200pps-r2)   attack/benign 0.0x
   distinct ports per 10 s    largest benign         1   smallest attack         0 (attack-arpflood-200pps-r2)   attack/benign 0.0x
   distinct ports per run     largest benign         1   smallest attack         0 (attack-arpflood-200pps-r2)   attack/benign 0.0x
+  Each feature is separated only by the attacks that exercise it: floods send to one port, ARP has no ports, scans send few non-TCP frames.
+  A margin under 1.0x on one feature is expected; the detector is a union of per-feature rules (docs/design/per-source-baseline-detector.md).
