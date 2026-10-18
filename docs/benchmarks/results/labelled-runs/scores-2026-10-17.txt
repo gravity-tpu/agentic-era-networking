@@ -1,10 +1,25 @@
-INVALID (left out of every rate): benign-udp-burst-tailscale-like - the sender was seen 66 times at the tap (needs 20) or the rack was unhealthy after the run
+INVALID (left out of every rate): attack-arpflood-200pps-r2 - the sender was seen 0 times at the tap (needs 20) or the rack was unhealthy after the run
+INVALID (left out of every rate): attack-arpflood-200pps-r3 - the sender was seen 0 times at the tap (needs 20) or the rack was unhealthy after the run
+INVALID (left out of every rate): attack-arpflood-200pps - the sender was seen 0 times at the tap (needs 20) or the rack was unhealthy after the run
 
 run                              class   frames | rate rule                      | sentinel                                    
+attack-portscan-1pps-r2          attack      69 | no alert                       | names sender, first at 75.35 s (6 alerts)   
+attack-portscan-1pps             attack      69 | no alert                       | names sender, first at 54.05 s (6 alerts)   
+attack-portscan-fast-r2          attack     999 | no alert                       | names sender, first at 0.07 s (936 alerts)  
+attack-portscan-fast-r3          attack     950 | no alert                       | no alert                                    
 attack-portscan-fast             attack     988 | no alert                       | names sender, first at 0.03 s (925 alerts)  
+attack-portscan-half-pps-r2      attack      42 | no alert                       | no alert                                    
+attack-portscan-half-pps         attack      36 | no alert                       | no alert                                    
+attack-portscan-slow-r2          attack     211 | no alert                       | names sender, first at 24.02 s (148 alerts) 
+attack-portscan-slow-r3          attack     206 | no alert                       | names sender, first at 24.02 s (143 alerts) 
 attack-portscan-slow             attack     205 | no alert                       | names sender, first at 24.42 s (142 alerts) 
+attack-synflood-1000pps-r2       attack    9959 | names sender, first at 0.50 s  | names sender, first at 0.06 s (1059 alerts) 
+attack-synflood-1000pps-r3       attack    9956 | names sender, first at 0.50 s  | names sender, first at 0.06 s (1340 alerts) 
 attack-synflood-1000pps          attack    9945 | names sender, first at 0.50 s  | names sender, first at 0.06 s (532 alerts)  
+attack-synflood-200pps-r2        attack    6002 | names sender, first at 0.50 s  | names sender, first at 0.32 s (4072 alerts) 
+attack-synflood-200pps-r3        attack    6002 | names sender, first at 0.50 s  | names sender, first at 0.31 s (4986 alerts) 
 attack-synflood-200pps           attack    6007 | names sender, first at 0.50 s  | names sender, first at 0.31 s (4888 alerts) 
+attack-udpflood-500pps-1400b-r3  attack    4940 | names sender, first at 0.50 s  | names sender, first at 0.12 s (4877 alerts) 
 attack-udpflood-500pps-1400b     attack    4937 | names sender, first at 0.50 s  | names sender, first at 0.13 s (4874 alerts) 
 benign-bulk-tcp-2mbit-r2         benign    3463 | names sender, first at 0.50 s  | no alert                                    
 benign-bulk-tcp-2mbit            benign    3459 | names sender, first at 0.50 s  | no alert                                    
@@ -27,6 +42,7 @@ benign-ping-5pps-node01          benign     305 | no alert                      
 benign-ping-5pps-r2              benign     341 | no alert                       | names sender, first at 10.02 s (278 alerts) 
 benign-ping-5pps-r3              benign     304 | no alert                       | names sender, first at 12.64 s (241 alerts) 
 benign-ping-5pps                 benign     306 | no alert                       | names sender, first at 12.03 s (243 alerts) 
+benign-udp-burst-tailscale-like  benign     114 | names sender, first at 1.08 s  | names sender, first at 18.00 s (51 alerts)  
 benign-udp-small-10pps-r2        benign     302 | names sender, first at 0.59 s  | no alert                                    
 benign-udp-small-10pps-r3        benign     301 | names sender, first at 0.68 s  | names sender, first at 6.21 s (238 alerts)  
 benign-udp-small-10pps           benign     302 | names sender, first at 0.78 s  | names sender, first at 6.08 s (1 alerts)    
@@ -40,13 +56,16 @@ benign false positives by workload (runs with any alert / runs):
   ping         rate rule 2/6   sentinel 6/6
   tcp-interactive rate rule 3/3   sentinel 0/3
   tcp-stream   rate rule 2/2   sentinel 0/2
+  udp-burst    rate rule 1/1   sentinel 1/1
   udp-small    rate rule 5/5   sentinel 4/5
 attack detection by pattern (runs detected with the right sender / runs):
-  attack-portscan-fast               rate rule 0/1   sentinel 1/1
-  attack-portscan-slow               rate rule 0/1   sentinel 1/1
-  attack-synflood-1000pps            rate rule 1/1   sentinel 1/1
-  attack-synflood-200pps             rate rule 1/1   sentinel 1/1
-  attack-udpflood-500pps-1400b       rate rule 1/1   sentinel 1/1
+  attack-portscan-1pps               rate rule 0/2   sentinel 2/2
+  attack-portscan-fast               rate rule 0/3   sentinel 2/3
+  attack-portscan-half-pps           rate rule 0/2   sentinel 0/2
+  attack-portscan-slow               rate rule 0/3   sentinel 3/3
+  attack-synflood-1000pps            rate rule 3/3   sentinel 3/3
+  attack-synflood-200pps             rate rule 3/3   sentinel 3/3
+  attack-udpflood-500pps-1400b       rate rule 2/2   sentinel 2/2
 
-rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 20/26   runs naming a non-sender: 0/31
-sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/26   runs naming a non-sender: 0/31
+rate      attack runs detected with the right sender: 8/18   benign runs with any alert (false positives): 21/27   runs naming a non-sender: 0/45
+sentinel  attack runs detected with the right sender: 15/18   benign runs with any alert (false positives): 12/27   runs naming a non-sender: 0/45

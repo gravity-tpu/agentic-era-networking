@@ -1,0 +1,40 @@
+{
+  "id": "attack-arpflood-200pps",
+  "class": "attack",
+  "tool": "arp-flood",
+  "sender": "agentic-node-01",
+  "senderIp": "10.0.2.50",
+  "target": "10.0.2.119",
+  "pattern": "attack-arpflood-200pps",
+  "params": {
+    "seconds": 12,
+    "pps": 200,
+    "count": 2000
+  },
+  "command": [
+    "sudo",
+    "-n",
+    "timeout",
+    "17",
+    "nping",
+    "--arp",
+    "--arp-type",
+    "arp-request",
+    "--arp-target-ip",
+    "10.0.2.119",
+    "--rate",
+    "200",
+    "-c",
+    "2000",
+    "-e",
+    "eth0",
+    "10.0.2.119"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 10.9,
+  "pcap": "attack-arpflood-200pps.pcap",
+  "commandStderrTail": "",
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
+}

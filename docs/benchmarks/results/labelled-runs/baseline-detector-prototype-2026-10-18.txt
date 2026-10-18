@@ -1,13 +1,28 @@
-INVALID (left out): benign-udp-burst-tailscale-like
+INVALID (left out): attack-arpflood-200pps-r2
+INVALID (left out): attack-arpflood-200pps-r3
+INVALID (left out): attack-arpflood-200pps
 margin 3x, damping 2 of the last 3 one-second buckets, re-arm after 5 quiet buckets
 thresholds from all benign runs: {'nontcp_pps': 153, 'nontcp_bytes': 100000, 'syn_per_s': 30, 'ports_10s': 10} (floors {'nontcp_pps': 100, 'nontcp_bytes': 100000, 'syn_per_s': 30, 'ports_10s': 10} )
 
 run                              class   alerts  sender?  first alert (s)  features
+attack-portscan-1pps             attack       0  no                     -  
+attack-portscan-1pps-r2          attack       0  no                     -  
 attack-portscan-fast             attack       1  yes                    0  ports_10s,syn_per_s
+attack-portscan-fast-r2          attack       1  yes                    0  ports_10s,syn_per_s
+attack-portscan-fast-r3          attack       1  yes                    0  ports_10s,syn_per_s
+attack-portscan-half-pps         attack       0  no                     -  
+attack-portscan-half-pps-r2      attack       0  no                     -  
 attack-portscan-slow             attack       1  yes                    5  ports_10s
+attack-portscan-slow-r2          attack       1  yes                    5  ports_10s
+attack-portscan-slow-r3          attack       1  yes                    5  ports_10s
 attack-synflood-1000pps          attack       1  yes                    0  syn_per_s
+attack-synflood-1000pps-r2       attack       1  yes                    0  syn_per_s
+attack-synflood-1000pps-r3       attack       1  yes                    0  syn_per_s
 attack-synflood-200pps           attack       1  yes                    1  syn_per_s
+attack-synflood-200pps-r2        attack       1  yes                    1  syn_per_s
+attack-synflood-200pps-r3        attack       1  yes                    1  syn_per_s
 attack-udpflood-500pps-1400b     attack       1  yes                    1  nontcp_bytes,nontcp_pps
+attack-udpflood-500pps-1400b-r3  attack       1  yes                    1  nontcp_bytes,nontcp_pps
 benign-bulk-tcp-2mbit            benign       0  no                     -  
 benign-bulk-tcp-2mbit-r2         benign       0  no                     -  
 benign-http-20rps                benign       0  no                     -  
@@ -29,18 +44,19 @@ benign-ping-5pps                 benign       0  no                     -
 benign-ping-5pps-node01          benign       0  no                     -  
 benign-ping-5pps-r2              benign       0  no                     -  
 benign-ping-5pps-r3              benign       0  no                     -  
+benign-udp-burst-tailscale-like  benign       0  no                     -  
 benign-udp-small-10pps           benign       0  no                     -  
 benign-udp-small-10pps-r2        benign       0  no                     -  
 benign-udp-small-10pps-r3        benign       0  no                     -  
 benign-udp-small-50pps           benign       0  no                     -  
 benign-udp-small-50pps-r2        benign       0  no                     -  
 
-in-sample (thresholds from all benign runs)    attacks detected with the right sender 5/5   benign runs with any alert 0/26   runs naming a non-sender 0/31
+in-sample (thresholds from all benign runs)    attacks detected with the right sender 14/18   benign runs with any alert 0/27   runs naming a non-sender 0/45
 
 leave one benign workload GROUP out (ping, idle, http = polls and bursts, udp = small and bursty, tcp = bulk and interactive: thresholds from the other groups; the held-out group and all attacks are scored):
-  hold out http         (8 runs)  alerts 0/8  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 8/8
-  hold out idle         (2 runs)  alerts 0/2  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 0/2
-  hold out ping         (6 runs)  alerts 0/6  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 0/6
-  hold out tcp          (5 runs)  alerts 0/5  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 0/5
-  hold out udp          (5 runs)  alerts 0/5  attacks detected 5/5  thresholds that moved: {'nontcp_pps': 100}   | WITHOUT floors: alerts 0/5
-  held-out benign runs with any alert, all folds: 0/26   (without the floors, data-derived thresholds only: 8/26)
+  hold out http         (8 runs)  alerts 0/8  attacks detected 14/18  thresholds that moved: none   | WITHOUT floors: alerts 8/8
+  hold out idle         (2 runs)  alerts 0/2  attacks detected 14/18  thresholds that moved: none   | WITHOUT floors: alerts 0/2
+  hold out ping         (6 runs)  alerts 0/6  attacks detected 14/18  thresholds that moved: none   | WITHOUT floors: alerts 0/6
+  hold out tcp          (5 runs)  alerts 0/5  attacks detected 14/18  thresholds that moved: none   | WITHOUT floors: alerts 0/5
+  hold out udp          (6 runs)  alerts 0/6  attacks detected 14/18  thresholds that moved: {'nontcp_pps': 100}   | WITHOUT floors: alerts 0/6
+  held-out benign runs with any alert, all folds: 0/27   (without the floors, data-derived thresholds only: 8/27)

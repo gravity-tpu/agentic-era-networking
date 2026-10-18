@@ -30,7 +30,7 @@
   "commandSeconds": 36.7,
   "pcap": "benign-udp-burst-tailscale-like.pcap",
   "commandStderrTail": "",
-  "rackHealthyAfter": false,
-  "rackNoteAfter": "the bridge logged 1 dead-peer event(s) during the run window",
-  "controllerDropsDuringRun": 1
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
 }

@@ -1,0 +1,37 @@
+{
+  "id": "attack-portscan-fast-r2",
+  "class": "attack",
+  "tool": "nmap",
+  "sender": "agentic-node-01",
+  "senderIp": "10.0.2.50",
+  "target": "10.0.2.119",
+  "pattern": "attack-portscan-fast",
+  "params": {
+    "seconds": 20,
+    "timing": 4,
+    "ports": "1-1000"
+  },
+  "command": [
+    "sudo",
+    "-n",
+    "timeout",
+    "25",
+    "nmap",
+    "-sS",
+    "-T4",
+    "-p",
+    "1-1000",
+    "-n",
+    "-Pn",
+    "--max-retries",
+    "0",
+    "10.0.2.119"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 1.6,
+  "pcap": "attack-portscan-fast-r2.pcap",
+  "commandStderrTail": "",
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
+}

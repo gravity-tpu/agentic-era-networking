@@ -110,16 +110,18 @@ describe.skipIf(!hasNumpy)('baseline detector on the committed labelled runs', (
     return cached;
   };
 
-  it('detects all five attacks with the right sender and alerts on none of the 26 valid benign runs, in sample (the run recorded during a switch drop is left out)', () => {
-    expect(out()).toContain('in-sample (thresholds from all benign runs)    attacks detected with the right sender 5/5   benign runs with any alert 0/26   runs naming a non-sender 0/31');
+  it('detects 14 of 18 attacks with the right sender (not the 1 pps and 0.5 pps scans) and alerts on none of the 27 benign runs, in sample (the ARP-flood runs have no IPv4 sender and are left out)', () => {
+    expect(out()).toContain('in-sample (thresholds from all benign runs)    attacks detected with the right sender 14/18   benign runs with any alert 0/27   runs naming a non-sender 0/45');
   });
 
   it('holds up leaving each kind of benign workload out, and shows the floors matter for a kind with no near twin', () => {
     const o = out();
-    expect(o).toContain('INVALID (left out): benign-udp-burst-tailscale-like');
-    expect(o).toContain('held-out benign runs with any alert, all folds: 0/26   (without the floors, data-derived thresholds only: 8/26)');
+    expect(o).toContain('INVALID (left out): attack-arpflood-200pps');
+    expect(o).toMatch(/attack-portscan-1pps\s+attack\s+0\s+no/);
+    expect(o).toMatch(/attack-portscan-half-pps\s+attack\s+0\s+no/);
+    expect(o).toContain('held-out benign runs with any alert, all folds: 0/27   (without the floors, data-derived thresholds only: 8/27)');
     // Holding out only one HTTP tool leaves its twin in the data; holding out the whole http group does not.
-    expect(o).toMatch(/hold out http\s+\(8 runs\)\s+alerts 0\/8\s+attacks detected 5\/5.*WITHOUT floors: alerts 8\/8/);
+    expect(o).toMatch(/hold out http\s+\(8 runs\)\s+alerts 0\/8\s+attacks detected 14\/18.*WITHOUT floors: alerts 8\/8/);
   });
 
   it('catches the fast scan only through the severe path, and the slow scan late', () => {

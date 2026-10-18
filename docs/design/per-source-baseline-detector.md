@@ -5,9 +5,9 @@ Status: design with an offline prototype. Nothing here runs on the rack. Measure
 
 ## Why
 
-On the 23 labelled runs neither existing detector can drive anything automatic: the trt daemon's rate rule (10 packets per
-second per source) flags 12 of 18 benign runs, and the GPU sentinel (untrained, hand-set constants) flags 11 of 18. The rate
-rule also misses a scan that finishes in 0.36 s and one that runs at 2.5 pps. The task is a detector whose behaviour on
+On the 45 scored labelled runs neither existing detector can drive anything automatic: the trt daemon's rate rule (10 packets per
+second per source) flags 21 of 27 benign runs, and the GPU sentinel (untrained, hand-set constants) flags 12 of 27. The rate
+rule also misses every scan run (10 of 10), including one that finishes in 0.36 s. The task is a detector whose behaviour on
 ordinary traffic and on attacks is measured, explainable feature by feature, and gated before it may act.
 
 ## What the data say
@@ -53,22 +53,23 @@ false-alerted on it. Bulk TCP above 2 Mbit is not recorded (the attempts coincid
 All of these are named constants, bounded and configurable (Invariant 5). The thresholds live in a committed, versioned
 file produced by an offline script from the labelled benign runs, not computed online.
 
-### Offline result (prototype `scripts/baseline-detector.py`, 23 runs)
+### Offline result (prototype `scripts/baseline-detector.py`, 45 scored runs)
 
 | Scoring | Attacks detected with the right sender | Benign runs with an alert |
 | :--- | :--- | :--- |
-| In sample (thresholds from all benign runs) | 5 of 5 | 0 of 18 |
-| Leave one benign workload group out (ping, idle, HTTP, UDP, TCP), with floors | 5 of 5 in every fold | 0 of 26 |
-| The same, thresholds from data only (no floors) | 5 of 5 | **8 of 26** |
+| In sample (thresholds from all benign runs) | 14 of 18 | 0 of 27 |
+| Leave one benign workload group out (ping, idle, HTTP, UDP, TCP), with floors | 14 of 18 in every fold | 0 of 27 |
+| The same, thresholds from data only (no floors) | 14 of 18 | **8 of 27** |
 
 Read the last row carefully. Thresholds learned only from the other workload groups **false-alert on all 8 held-out HTTP
 runs**, because no other group ever sent a SYN. A baseline learned from a few workloads cannot know a *kind* of workload it
 has not seen, and a floor is what prevents that. (Holding out only one HTTP tool, while its near twin stays in the data,
 does not show this: with both `http-get` and `http-burst` present, data-only thresholds already passed each of them. The
 groups exist so the test removes the twin too.) The floors are **judgment, not measurement**: the data only show the benign
-runs sit far below them and the attacks far above. Every number in this table is on one repeat of each attack pattern by
-two tools (`hping3`, `nmap`), so it is a feasibility result, not a performance claim. The run recorded while the switch
-dropped its controller session (a Tailscale-like UDP burst) is left out of every figure.
+runs sit far below them and the attacks far above. Every number in this table is on up to three repeats of each attack pattern by
+two tools (`hping3`, `nmap`), so it is a feasibility result, not a performance claim. **The 4 misses are the 1 pps and 0.5 pps scans
+(4 runs), which are below every floor by design; the ARP-flood runs are not in the count at all because the prototype, like both
+existing detectors, keys on IPv4 sources.**
 
 Time to alert: floods 0 to 1 s after the first frame, the fast scan 0 s (through the severe path), the slow scan 5 s.
 

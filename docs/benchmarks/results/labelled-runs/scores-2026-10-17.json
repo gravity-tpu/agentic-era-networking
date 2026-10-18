@@ -1,5 +1,93 @@
 [
   {
+    "id": "attack-portscan-1pps-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-1pps",
+    "sender": "10.0.2.50",
+    "frames": 69,
+    "senderFrames": 60,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 6,
+      "namedSender": 6,
+      "namedOthers": [],
+      "firstSenderAlertNs": 75358635000
+    }
+  },
+  {
+    "id": "attack-portscan-1pps",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-1pps",
+    "sender": "10.0.2.50",
+    "frames": 69,
+    "senderFrames": 60,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 6,
+      "namedSender": 6,
+      "namedOthers": [],
+      "firstSenderAlertNs": 54053949000
+    }
+  },
+  {
+    "id": "attack-portscan-fast-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-fast",
+    "sender": "10.0.2.50",
+    "frames": 999,
+    "senderFrames": 998,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 936,
+      "namedSender": 936,
+      "namedOthers": [],
+      "firstSenderAlertNs": 74045000
+    }
+  },
+  {
+    "id": "attack-portscan-fast-r3",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-fast",
+    "sender": "10.0.2.50",
+    "frames": 950,
+    "senderFrames": 948,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
     "id": "attack-portscan-fast",
     "class": "attack",
     "tool": "nmap",
@@ -19,6 +107,94 @@
       "namedSender": 925,
       "namedOthers": [],
       "firstSenderAlertNs": 38155000
+    }
+  },
+  {
+    "id": "attack-portscan-half-pps-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-half-pps",
+    "sender": "10.0.2.50",
+    "frames": 42,
+    "senderFrames": 32,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "attack-portscan-half-pps",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-half-pps",
+    "sender": "10.0.2.50",
+    "frames": 36,
+    "senderFrames": 32,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "attack-portscan-slow-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-slow",
+    "sender": "10.0.2.50",
+    "frames": 211,
+    "senderFrames": 200,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 148,
+      "namedSender": 148,
+      "namedOthers": [],
+      "firstSenderAlertNs": 24025435000
+    }
+  },
+  {
+    "id": "attack-portscan-slow-r3",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-slow",
+    "sender": "10.0.2.50",
+    "frames": 206,
+    "senderFrames": 200,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 143,
+      "namedSender": 143,
+      "namedOthers": [],
+      "firstSenderAlertNs": 24025464000
     }
   },
   {
@@ -44,6 +220,50 @@
     }
   },
   {
+    "id": "attack-synflood-1000pps-r2",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-1000pps",
+    "sender": "10.0.2.50",
+    "frames": 9959,
+    "senderFrames": 9958,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 500983000
+    },
+    "sentinel": {
+      "alerts": 1059,
+      "namedSender": 1059,
+      "namedOthers": [],
+      "firstSenderAlertNs": 67958000
+    }
+  },
+  {
+    "id": "attack-synflood-1000pps-r3",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-1000pps",
+    "sender": "10.0.2.50",
+    "frames": 9956,
+    "senderFrames": 9955,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 500353000
+    },
+    "sentinel": {
+      "alerts": 1340,
+      "namedSender": 1340,
+      "namedOthers": [],
+      "firstSenderAlertNs": 66815000
+    }
+  },
+  {
     "id": "attack-synflood-1000pps",
     "class": "attack",
     "tool": "hping3",
@@ -66,6 +286,50 @@
     }
   },
   {
+    "id": "attack-synflood-200pps-r2",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-200pps",
+    "sender": "10.0.2.50",
+    "frames": 6002,
+    "senderFrames": 6000,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 503155000
+    },
+    "sentinel": {
+      "alerts": 4072,
+      "namedSender": 4072,
+      "namedOthers": [],
+      "firstSenderAlertNs": 320482000
+    }
+  },
+  {
+    "id": "attack-synflood-200pps-r3",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-200pps",
+    "sender": "10.0.2.50",
+    "frames": 6002,
+    "senderFrames": 6000,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 501251000
+    },
+    "sentinel": {
+      "alerts": 4986,
+      "namedSender": 4986,
+      "namedOthers": [],
+      "firstSenderAlertNs": 318697000
+    }
+  },
+  {
     "id": "attack-synflood-200pps",
     "class": "attack",
     "tool": "hping3",
@@ -85,6 +349,28 @@
       "namedSender": 4888,
       "namedOthers": [],
       "firstSenderAlertNs": 319313000
+    }
+  },
+  {
+    "id": "attack-udpflood-500pps-1400b-r3",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-udpflood-500pps-1400b",
+    "sender": "10.0.2.50",
+    "frames": 4940,
+    "senderFrames": 4938,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 501743000
+    },
+    "sentinel": {
+      "alerts": 4877,
+      "namedSender": 4877,
+      "namedOthers": [],
+      "firstSenderAlertNs": 129940000
     }
   },
   {
@@ -569,6 +855,28 @@
       "namedSender": 243,
       "namedOthers": [],
       "firstSenderAlertNs": 12037727000
+    }
+  },
+  {
+    "id": "benign-udp-burst-tailscale-like",
+    "class": "benign",
+    "tool": "udp-burst",
+    "pattern": "benign-udp-burst-tailscale-like",
+    "sender": "10.0.2.52",
+    "frames": 114,
+    "senderFrames": 105,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 1080529000
+    },
+    "sentinel": {
+      "alerts": 51,
+      "namedSender": 51,
+      "namedOthers": [],
+      "firstSenderAlertNs": 18008782000
     }
   },
   {
