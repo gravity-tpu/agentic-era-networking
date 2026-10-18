@@ -1,6 +1,9 @@
 INVALID (left out of every rate): attack-arpflood-200pps-r2 - the sender was seen 0 times at the tap (needs 20) or the rack was unhealthy after the run
 INVALID (left out of every rate): attack-arpflood-200pps-r3 - the sender was seen 0 times at the tap (needs 20) or the rack was unhealthy after the run
 INVALID (left out of every rate): attack-arpflood-200pps - the sender was seen 0 times at the tap (needs 20) or the rack was unhealthy after the run
+INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-1 - the sender was seen 66 times at the tap (needs 20) or the rack was unhealthy after the run
+INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-2 - the sender was seen 18 times at the tap (needs 20) or the rack was unhealthy after the run
+INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-3 - the sender was seen 18 times at the tap (needs 20) or the rack was unhealthy after the run
 
 run                              class   frames | rate rule                      | sentinel                                    
 attack-portscan-1pps-r2          attack      69 | no alert                       | names sender, first at 75.35 s (6 alerts)   
@@ -42,7 +45,7 @@ benign-ping-5pps-node01          benign     305 | no alert                      
 benign-ping-5pps-r2              benign     341 | no alert                       | names sender, first at 10.02 s (278 alerts) 
 benign-ping-5pps-r3              benign     304 | no alert                       | names sender, first at 12.64 s (241 alerts) 
 benign-ping-5pps                 benign     306 | no alert                       | names sender, first at 12.03 s (243 alerts) 
-benign-udp-burst-tailscale-like  benign     114 | names sender, first at 1.08 s  | names sender, first at 18.00 s (51 alerts)  
+benign-udp-burst-tailscale-like-ok benign     114 | names sender, first at 1.08 s  | names sender, first at 18.00 s (51 alerts)  
 benign-udp-small-10pps-r2        benign     302 | names sender, first at 0.59 s  | no alert                                    
 benign-udp-small-10pps-r3        benign     301 | names sender, first at 0.68 s  | names sender, first at 6.21 s (238 alerts)  
 benign-udp-small-10pps           benign     302 | names sender, first at 0.78 s  | names sender, first at 6.08 s (1 alerts)    

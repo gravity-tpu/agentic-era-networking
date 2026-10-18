@@ -858,7 +858,7 @@
     }
   },
   {
-    "id": "benign-udp-burst-tailscale-like",
+    "id": "benign-udp-burst-tailscale-like-ok",
     "class": "benign",
     "tool": "udp-burst",
     "pattern": "benign-udp-burst-tailscale-like",

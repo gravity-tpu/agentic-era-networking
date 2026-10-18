@@ -1,6 +1,9 @@
 INVALID (left out): attack-arpflood-200pps-r2
 INVALID (left out): attack-arpflood-200pps-r3
 INVALID (left out): attack-arpflood-200pps
+INVALID (left out): benign-udp-burst-tailscale-like-drop-1
+INVALID (left out): benign-udp-burst-tailscale-like-drop-2
+INVALID (left out): benign-udp-burst-tailscale-like-drop-3
 margin 3x, damping 2 of the last 3 one-second buckets, re-arm after 5 quiet buckets
 thresholds from all benign runs: {'nontcp_pps': 153, 'nontcp_bytes': 100000, 'syn_per_s': 30, 'ports_10s': 10} (floors {'nontcp_pps': 100, 'nontcp_bytes': 100000, 'syn_per_s': 30, 'ports_10s': 10} )
 
@@ -44,7 +47,7 @@ benign-ping-5pps                 benign       0  no                     -
 benign-ping-5pps-node01          benign       0  no                     -  
 benign-ping-5pps-r2              benign       0  no                     -  
 benign-ping-5pps-r3              benign       0  no                     -  
-benign-udp-burst-tailscale-like  benign       0  no                     -  
+benign-udp-burst-tailscale-like-ok benign       0  no                     -  
 benign-udp-small-10pps           benign       0  no                     -  
 benign-udp-small-10pps-r2        benign       0  no                     -  
 benign-udp-small-10pps-r3        benign       0  no                     -  

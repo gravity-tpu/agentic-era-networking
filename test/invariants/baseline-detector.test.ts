@@ -117,6 +117,7 @@ describe.skipIf(!hasNumpy)('baseline detector on the committed labelled runs', (
   it('holds up leaving each kind of benign workload out, and shows the floors matter for a kind with no near twin', () => {
     const o = out();
     expect(o).toContain('INVALID (left out): attack-arpflood-200pps');
+    expect(o).toContain('INVALID (left out): benign-udp-burst-tailscale-like-drop-1');
     expect(o).toMatch(/attack-portscan-1pps\s+attack\s+0\s+no/);
     expect(o).toMatch(/attack-portscan-half-pps\s+attack\s+0\s+no/);
     expect(o).toContain('held-out benign runs with any alert, all folds: 0/27   (without the floors, data-derived thresholds only: 8/27)');

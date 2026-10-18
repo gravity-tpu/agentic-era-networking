@@ -1,5 +1,5 @@
 {
-  "id": "benign-udp-burst-tailscale-like",
+  "id": "benign-udp-burst-tailscale-like-drop-2",
   "class": "benign",
   "tool": "udp-burst",
   "sender": "agentic-node-02",
@@ -27,10 +27,10 @@
     "10.0.2.52"
   ],
   "commandExit": 0,
-  "commandSeconds": 36.7,
-  "pcap": "benign-udp-burst-tailscale-like.pcap",
+  "commandSeconds": 36.6,
+  "pcap": "benign-udp-burst-tailscale-like-drop-2.pcap",
   "commandStderrTail": "",
-  "rackHealthyAfter": true,
-  "rackNoteAfter": "OpenFlow connected, isolation verified",
-  "controllerDropsDuringRun": 0
+  "rackHealthyAfter": false,
+  "rackNoteAfter": "the bridge logged 1 dead-peer event(s) during the run window",
+  "controllerDropsDuringRun": 1
 }

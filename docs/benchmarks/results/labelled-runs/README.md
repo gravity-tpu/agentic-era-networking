@@ -11,7 +11,7 @@ recorded here.
 | `benign-idle-60s` (x2) | benign | nothing sent for 60 s: the capture alone |
 | `benign-interactive-8eps` (x3) | benign | ssh-like (**modelled**, not ssh): 40 to 120 byte writes at irregular gaps averaging 8 per second, 30 s |
 | `benign-http-burst-8conns` (x3) | benign | browsing-like: every 3 s, 8 parallel fetches of a 20 KB page plus a small request, 30 s |
-| `benign-udp-burst-tailscale-like` | benign | **modelled** from the 2026-10-16 capture (a burst of 25 full-size UDP datagrams, then a small keepalive a second). The first recording was invalid (switch dropped its controller session) and was replaced; one healthy recording is kept. Two repeats (`-r2`, twice) dropped the controller session again and are not kept |
+| `benign-udp-burst-tailscale-like-ok` (valid) and `-drop-1`, `-drop-2`, `-drop-3` (**invalid**) | benign | **modelled** from the 2026-10-16 capture (a burst of 25 full-size UDP datagrams, then a small keepalive a second). Four recordings: one healthy (`-ok`, scored) and three during which the switch dropped its controller session (`-drop-1` from 2026-10-17, `-drop-2` and `-drop-3` the two 2026-10-18 repeats). The three are kept as evidence, labelled `rackHealthyAfter=false`, and left out of every rate. `-drop-1` was recorded under the id `benign-udp-burst-tailscale-like` until 2026-10-18 and renamed; the id was not reused for a different recording |
 | `benign-bulk-tcp-2mbit` (x2) | benign | a rate-limited TCP stream to a sink on the Mac, 2 Mbit per second, 20 s (about 175 frames a second) |
 | `benign-http-5rps` (x3), `benign-http-20rps` (x2) | benign | small HTTP GETs to a local web server on the Mac, 30 s |
 | `benign-udp-small-10pps` (x3), `benign-udp-small-50pps` (x2) | benign | 60 to 100 byte UDP datagrams to port 53 on the Mac, 30 s |
@@ -21,7 +21,7 @@ recorded here.
 | `attack-portscan-1pps` (x2), `attack-portscan-half-pps` (x2) | attack | `nmap` paced at 1 and 0.5 probes per second, 70 s |
 | `attack-arpflood-200pps` (x3) | attack | `nping` ARP flood, 200 per second, 12 s. **Not scored**: ARP frames carry no IPv4 source, so the scorer sees the sender 0 times and lists these as INVALID. The frames did reach the tap (about 150 KB each). Both detectors key on IPv4 sources, so neither can see this attack |
 
-## Scores (45 scored runs: 27 benign, 18 attack; the 3 ARP-flood runs are listed but not scoreable, see above)
+## Scores (45 scored runs: 27 benign, 18 attack; 6 recorded runs are left out: 3 ARP floods with no IPv4 sender, 3 UDP bursts during a switch drop)
 
 | Detector | Attacks detected with the right sender | Benign runs with an alert (false positives) |
 | :--- | :--- | :--- |
@@ -65,9 +65,9 @@ run, and it was never trained.
 
 ## Caveats
 
-- 48 runs recorded (45 scored, 3 ARP-flood runs not scoreable), up to three repeats of each workload, one host pair, short durations: a
+- 51 runs recorded (45 scored; 3 ARP-flood runs have no IPv4 sender, 3 UDP-burst runs coincided with a switch drop), up to three repeats of each workload, one host pair, short durations: a
   scored comparison, not a distribution. Still missing: bulk TCP above 2 Mbit, real ssh sessions, real Tailscale traffic, a
-  browser-like mix, address-spoofing attacks, and any UDP-burst repeats (see the incident log). A 100 Mbit lab segment limits rates.
+  browser-like mix, address-spoofing attacks, and valid UDP-burst repeats: the UDP-burst workload has **one** valid run, and is the workload that hung the switch three times in four recordings (see the incident log). A 100 Mbit lab segment limits rates.
 - **Bulk TCP was recorded only at 2 Mbit per second.** Attempts at 5 Mbit and above coincided with switch outages (see
   below), and 5, 10 and 20 Mbit are not in the data. The sentinel is silent on the 2 Mbit streams (large frames score low); the rate rule flags them.
 - **Traffic that does not cross the Zodiac is invisible to the tap.** `node-01`, `node-02` and the Pi 5 are behind the
@@ -136,8 +136,8 @@ while the switch is hung also tests whether a link renegotiation alone recovers 
 
 ### 2026-10-18 15:00 to 15:35: the Tailscale-like UDP burst hung the controller session twice
 
-After a serial restart at 15:02, `benign-udp-burst-tailscale-like-r2` (30 s from `node-02`) was followed by a dead-peer
+After a serial restart at 15:02, `benign-udp-burst-tailscale-like-r2` (30 s from `node-02`; recorded as `-drop-2`) was followed by a dead-peer
 event at about 15:21; after another serial restart, a second attempt at the same run was followed by one at 15:30. The
 first run of the same pattern passed (recorded). With EEE off since 14:59 and no link event in the kernel log, this is
 another type B hang; two in a row on the same run suggests this traffic as a trigger, but that is two observations of one
-workload. The cause is unknown. The two repeats were dropped and the 16 remaining runs recorded without further drops.
+workload. The cause is unknown. The pattern was not tried again and the 16 remaining runs recorded without further drops.

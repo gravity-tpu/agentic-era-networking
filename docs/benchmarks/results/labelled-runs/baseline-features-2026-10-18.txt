@@ -36,7 +36,7 @@ benign-ping-5pps                 benign     300       6       588         0     
 benign-ping-5pps-node01          benign     300       6       588         0         0      0
 benign-ping-5pps-r2              benign     300       6       588         0         0      0
 benign-ping-5pps-r3              benign     300       6       588         0         0      0
-benign-udp-burst-tailscale-like  benign     105      19     24346         0         1      1
+benign-udp-burst-tailscale-like-ok benign     105      19     24346         0         1      1
 benign-udp-small-10pps           benign     300      11      1122         0         1      1
 benign-udp-small-10pps-r2        benign     300      12      1224         0         1      1
 benign-udp-small-10pps-r3        benign     300      11      1122         0         1      1
