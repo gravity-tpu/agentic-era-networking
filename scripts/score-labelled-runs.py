@@ -155,7 +155,12 @@ def main():
     invalid = [r for r in scored if not r["valid"]]
     results = [r for r in scored if r["valid"]]
     for r in invalid:
-        print(f"INVALID (left out of every rate): {r['id']} - the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES}) or the rack was unhealthy after the run")
+        why = []
+        if r["senderFrames"] < MIN_SENDER_FRAMES:
+            why.append(f"the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES})")
+        if r["senderFrames"] >= MIN_SENDER_FRAMES or not why:
+            why.append("the rack was not recorded healthy after the run")
+        print(f"INVALID (left out of every rate): {r['id']} - " + "; ".join(why))
     if invalid:
         print()
     print(f"{'run':32s} {'class':7s} {'frames':>6s} | {'rate rule':30s} | {'sentinel':44s}")
