@@ -91,12 +91,14 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
   it('reproduces the recorded scores', () => {
     const r = spawnSync('python3', [SCRIPT, DATA], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 12/18');
-    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/18');
+    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 14/20');
+    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/20');
     // By workload: the rate rule flags every HTTP and small-UDP run; neither detector flags the idle runs.
     expect(r.stdout).toMatch(/http-get\s+rate rule 5\/5\s+sentinel 1\/5/);
     expect(r.stdout).toMatch(/udp-small\s+rate rule 5\/5\s+sentinel 4\/5/);
     expect(r.stdout).toMatch(/idle\s+rate rule 0\/2\s+sentinel 0\/2/);
+    // Bulk TCP at 2 Mbit: the rate rule flags it (about 175 frames a second), the sentinel does not (large frames score low).
+    expect(r.stdout).toMatch(/tcp-stream\s+rate rule 2\/2\s+sentinel 0\/2/);
     const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
     expect(row('attack-portscan-fast')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
     expect(row('attack-portscan-slow')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold
@@ -116,5 +118,20 @@ print(json.dumps([sc.score({'id': 'x', 'class': 'benign', 'tool': 'http-get', 's
 `, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
     expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([false, 20]);
+  });
+
+  it('a run recorded on an unhealthy rack is invalid even when the sender was seen plenty', () => {
+    const r = spawnSync('python3', ['-c', `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('sc', sys.argv[1]); sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
+frames = [(1.0, 60, 6, 2, 1, 2, '10.0.2.52', 1000 + i) for i in range(50)]
+ok = sc.score({'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52'}, frames)['valid']
+bad = sc.score({'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52', 'rackHealthyAfter': False}, frames)['valid']
+old = sc.score({'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52', 'rackHealthyAfter': True}, frames)['valid']
+print(json.dumps([ok, bad, old]))
+`, SCRIPT], { encoding: 'utf-8' });
+    expect(r.status, r.stderr).toBe(0);
+    // Labels recorded before the check existed carry no field and stay valid; an explicit false is invalid.
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, false, true]);
   });
 });

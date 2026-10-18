@@ -36,9 +36,9 @@ Per source IPv4, per one-second bucket, all integer counts on kernel arrival tim
 | `syn_per_s` | TCP SYN without ACK | SYN floods, fast scans |
 | `ports_10s` | distinct TCP/UDP destination ports in the last 10 s | scans, fast or slow |
 
-TCP data volume is deliberately **not** a feature: a bulk transfer is benign and is not yet recorded, so any rule on it would
-be a guess (modelled, not measured: a 10 Mbit per second TCP stream is about 1.25 MB per second, which would exceed a
-100,000 byte floor if TCP bytes were counted).
+TCP data volume is deliberately **not** a feature: a bulk transfer is benign. **Measured:** a 2 Mbit per second TCP stream (two runs) is 175 to 181 frames and 262 to 274
+thousand bytes a second, above the non-TCP floors of 100 frames and 100,000 bytes, so counting TCP data would have
+false-alerted on it. Bulk TCP above 2 Mbit is not recorded (the attempts coincided with switch outages).
 
 - **Threshold per feature** = `max(FLOOR, MARGIN x the largest value that feature took in the benign training runs)`, with
   `MARGIN = 3` and floors of 100 frames, 100,000 bytes, 30 SYN and 10 ports.
@@ -58,8 +58,8 @@ file produced by an offline script from the labelled benign runs, not computed o
 | Scoring | Attacks detected with the right sender | Benign runs with an alert |
 | :--- | :--- | :--- |
 | In sample (thresholds from all benign runs) | 5 of 5 | 0 of 18 |
-| Leave one benign family out (ping, idle, HTTP, small UDP), with floors | 5 of 5 in every fold | 0 of 18 |
-| The same, thresholds from data only (no floors) | 5 of 5 | **5 of 18** |
+| Leave one benign family out (ping, idle, HTTP, small UDP, bulk TCP), with floors | 5 of 5 in every fold | 0 of 20 |
+| The same, thresholds from data only (no floors) | 5 of 5 | **5 of 20** |
 
 Read the last row carefully. Thresholds learned only from the other workload families **false-alert on every held-out HTTP
 run**, because no other family ever sent a SYN. A baseline learned from a few workloads cannot know a workload it has not seen,

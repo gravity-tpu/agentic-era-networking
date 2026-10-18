@@ -95,6 +95,16 @@ describe.skipIf(!hasPython)('labelled-runs.py bounds', () => {
 });
 
 describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
+  it('checks the rack after every run too, records the verdict in the label, and stops the batch if the switch dropped', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src).toContain('healthy_after, why_after = rack_healthy()');
+    expect(src).toContain('"rackHealthyAfter": healthy_after');
+    expect(src).toMatch(/if not healthy_after:\n\s+# Stop the batch/);
+    expect(src).toContain('raise SystemExit(f"STOPPED: the rack is unhealthy after');
+    // A session that is not Connected is unhealthy even when an old readback still says verified.
+    expect(src).toContain('of_status != "Connected"');
+  });
+
   it('checks the rack is healthy before every run, and stops the batch if not', () => {
     const src = readFileSync(SCRIPT, 'utf-8');
     expect(src).toMatch(/def execute\(run, outdir\):\n    ok, why = rack_healthy\(\)\n    if not ok:\n        raise SystemExit/);
@@ -360,8 +370,22 @@ describe.skipIf(!hasPython)('labelled-runs.py second-recording workloads', () =>
     const benignTools = new Set(rows.filter((x) => x[1] === 'benign').map((x) => x[2]));
     for (const t of ['ping', 'idle', 'http-get', 'http-burst', 'udp-small', 'udp-burst', 'tcp-stream', 'tcp-interactive']) expect(benignTools.has(t), t).toBe(true);
     const ids = rows.map((x) => x[0] ?? '');
-    for (const base of ['attack-portscan-1pps', 'attack-portscan-half-pps', 'attack-arpflood-200pps', 'benign-bulk-tcp-2mbit', 'benign-bulk-tcp-20mbit']) {
+    // (The 5, 10 and 20 Mbit bulk runs are marked risky and so are not in this default listing: see the test below.)
+    for (const base of ['attack-portscan-1pps', 'attack-portscan-half-pps', 'attack-arpflood-200pps', 'benign-bulk-tcp-2mbit']) {
       expect(ids.some((i) => i === base || i.startsWith(`${base}-r`)), base).toBe(true);
     }
+  });
+
+  it('bulk TCP at 5 Mbit and above is marked risky: left out of a whole-catalog run, refused by name without the flag', () => {
+    const all = spawnSync('python3', [SCRIPT, '--list'], { encoding: 'utf-8' });
+    expect(all.status, all.stderr).toBe(0);
+    expect(all.stdout).toContain('benign-bulk-tcp-2mbit');
+    for (const risky of ['benign-bulk-tcp-5mbit', 'benign-bulk-tcp-10mbit', 'benign-bulk-tcp-20mbit', 'benign-bulk-tcp-node01-10mbit']) expect(all.stdout, risky).not.toContain(risky);
+    const named = spawnSync('python3', [SCRIPT, '--list', '--only', 'benign-bulk-tcp-5mbit'], { encoding: 'utf-8' });
+    expect(named.status).not.toBe(0);
+    expect(named.stderr).toMatch(/marked risky/);
+    const allowed = spawnSync('python3', [SCRIPT, '--list', '--only', 'benign-bulk-tcp-5mbit', '--include-risky'], { encoding: 'utf-8' });
+    expect(allowed.status, allowed.stderr).toBe(0);
+    expect(allowed.stdout).toContain('benign-bulk-tcp-5mbit');
   });
 });

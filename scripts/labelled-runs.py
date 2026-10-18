@@ -39,6 +39,7 @@ MAX_PPS = 2000                 # most packets per second any run may be asked to
 MAX_PACKETS = 20000            # most packets any one run may send
 MAX_PAYLOAD_BYTES = 1400       # largest payload any run may use
 RACK_STATUS_MAX_AGE_MS = 180_000  # three of the bridge's 60 s re-read intervals: an older readback means it has stopped reading
+POST_RUN_GRACE_SECONDS = 20   # the bridge declares a silent switch dead after about 15 s without an echo reply
 SETTLE_SECONDS = 3             # quiet time before and after each run inside the capture
 CAPTURE_FILTER = "ip or arp"
 
@@ -397,12 +398,12 @@ CATALOG = (
     + repeats(_benign("benign-http-20rps", "http-get", "agentic-node-02", "10.0.2.119", 30, rps=20, path="/models"), 2)
     + repeats(_benign("benign-udp-small-10pps", "udp-small", "agentic-node-02", "10.0.2.119", 30, pps=10, payload_bytes=60, port=53), 3)
     + repeats(_benign("benign-udp-small-50pps", "udp-small", "agentic-node-02", "10.0.2.119", 30, pps=50, payload_bytes=100, port=53), 2)
-    + repeats(_benign("benign-bulk-tcp-10mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=10), 2)
-    + repeats(_benign("benign-bulk-tcp-node01-10mbit", "tcp-stream", "agentic-node-01", "10.0.2.119", 20, bandwidth_mbit=10), 2)
+    + repeats(_benign("benign-bulk-tcp-10mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=10, risky=True), 2)
+    + repeats(_benign("benign-bulk-tcp-node01-10mbit", "tcp-stream", "agentic-node-01", "10.0.2.119", 20, bandwidth_mbit=10, risky=True), 2)
     # --- benign workloads added for the second recording (modelled where stated)
     + repeats(_benign("benign-bulk-tcp-2mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=2), 2)
-    + repeats(_benign("benign-bulk-tcp-5mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=5), 2)
-    + repeats(_benign("benign-bulk-tcp-20mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=20), 2)
+    + repeats(_benign("benign-bulk-tcp-5mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=5, risky=True), 2)
+    + repeats(_benign("benign-bulk-tcp-20mbit", "tcp-stream", "agentic-node-02", "10.0.2.119", 20, bandwidth_mbit=20, risky=True), 2)
     + repeats(_benign("benign-interactive-8eps", "tcp-interactive", "agentic-node-02", "10.0.2.119", 30, events_per_s=8), 3)  # ssh-like, modelled
     + repeats(_benign("benign-http-burst-8conns", "http-burst", "agentic-node-02", "10.0.2.119", 30, conns=8, period_s=3), 3)  # browsing-like
     + repeats(_benign("benign-udp-burst-tailscale-like", "udp-burst", "agentic-node-02", "10.0.2.119", 30, burst=25, payload_bytes=1300, period_s=10), 3)  # modelled
@@ -452,6 +453,7 @@ def execute(run, outdir):
             with open(os.path.join(docroot, name), "w") as fh:
                 fh.write(body)
     returncode, stderr_tail, t0, t1 = None, "", time.monotonic(), time.monotonic()
+    healthy_after, why_after = False, "the run did not finish"
     try:
         time.sleep(SETTLE_SECONDS)
         if cap.poll() is not None:
@@ -474,6 +476,9 @@ def execute(run, outdir):
             returncode, stderr_tail = res.returncode, res.stderr[-300:]
         t1 = time.monotonic()
         time.sleep(SETTLE_SECONDS)
+        # Did the switch survive the run? Give the bridge's dead-peer detection time to notice a hung control plane first.
+        time.sleep(POST_RUN_GRACE_SECONDS)
+        healthy_after, why_after = rack_healthy()
     finally:
         pidfile = capture_pidfile(rid)
         subprocess.run(["ssh", JETSON, f"kill -INT $(cat {pidfile}) 2>/dev/null; rm -f {pidfile}"], capture_output=True)
@@ -499,27 +504,38 @@ def execute(run, outdir):
         "params": {k: v for k, v in run.items() if k not in ("id", "class", "tool", "sender", "target", "pattern")},
         "command": remote_command(run), "commandExit": returncode, "commandSeconds": round(t1 - t0, 1),
         "pcap": os.path.basename(pcap), "commandStderrTail": stderr_tail,
+        "rackHealthyAfter": healthy_after, "rackNoteAfter": why_after,
     }
     with open(os.path.join(outdir, f"{rid}.label.json"), "w") as f:
         json.dump(label, f, indent=2)
     print(f"[run] {rid}: done, command exit {returncode}, {label['commandSeconds']} s, {os.path.getsize(pcap)} bytes captured", flush=True)
+    if not healthy_after:
+        # Stop the batch: this run is marked, nothing more is sent, and a person needs to look at the switch.
+        raise SystemExit(f"STOPPED: the rack is unhealthy after {rid}: {why_after}. The run is recorded but marked rackHealthyAfter=false; it will not be scored.")
     time.sleep(SPACING_SECONDS)
 
 
 def rack_healthy():
     """
-    (ok, why). The Zodiac's isolation policy must read back verified from the switch, freshly, before any traffic is sent:
-    a run against a switch whose control plane is down tests nothing and may be making things worse. Read through the bridge on
-    the Jetson. The check runs before every run, and a failure stops the whole batch.
+    (ok, why). Before and after every run: the switch's OpenFlow session must be Connected and the isolation policy must read
+    back verified, freshly. A run against a switch whose control plane is down tests nothing, and a switch that dropped
+    during a run makes that run's capture meaningless. Read through the bridge on the Jetson. Fails closed: no answer, or an
+    answer that is not exactly as expected, is unhealthy.
     """
     try:
-        r = subprocess.run(["ssh", JETSON, "curl -s -m 8 localhost:3003/api/zodiac/flows"], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["ssh", JETSON, "curl -s -m 8 localhost:3003/api/zodiac; echo; echo ---; curl -s -m 8 localhost:3003/api/zodiac/flows"],
+                           capture_output=True, text=True, timeout=40)
     except subprocess.TimeoutExpired:
-        return False, "the Jetson did not answer within 30 s"  # fail closed: no answer is not "healthy"
+        return False, "the Jetson did not answer within 40 s"
     try:
-        iso = json.loads(r.stdout)["port1Isolation"]
+        snap_text, flows_text = r.stdout.split("\n---\n", 1)
+        snap = json.loads(snap_text)
+        iso = json.loads(flows_text)["port1Isolation"]
+        of_status = snap["openflow"]["status"]
     except (ValueError, KeyError, TypeError):
-        return False, "the bridge on the Jetson did not return an isolation status"
+        return False, "the bridge on the Jetson did not return a usable status"
+    if of_status != "Connected":
+        return False, f"the switch's OpenFlow session is {of_status!r}, not 'Connected'"
     if not isinstance(iso, dict):
         return False, "the isolation status is not an object"
     if iso.get("state") != "verified":
@@ -527,7 +543,7 @@ def rack_healthy():
     age = iso.get("checkedAgeMs")
     if not isinstance(age, int) or age > RACK_STATUS_MAX_AGE_MS:
         return False, f"the isolation readback is {age!r} ms old (limit {RACK_STATUS_MAX_AGE_MS})"
-    return True, "isolation verified"
+    return True, "OpenFlow connected, isolation verified"
 
 
 def preflight(runs):
@@ -551,11 +567,18 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--class", dest="klass", choices=(BENIGN, ATTACK))
+    ap.add_argument("--include-risky", action="store_true",
+                    help="also run the runs marked risky (bulk TCP at 5 Mbit and above, which coincided with switch outages)")
     a = ap.parse_args()
     if sum([a.list, a.dry_run, a.execute]) != 1:
         ap.error("choose exactly one of --list, --dry-run, --execute")
     runs = [r for r in CATALOG if (not a.only or r["id"] in a.only) and (a.klass is None or r["class"] == a.klass)]
-    if a.only and len(runs) != len(a.only):
+    risky = [r["id"] for r in runs if r.get("risky")]
+    if risky and not a.include_risky:
+        if a.only:
+            ap.error(f"{', '.join(risky)} are marked risky (bulk TCP at 5 Mbit and above coincided with switch outages); add --include-risky to run them")
+        runs = [r for r in runs if not r.get("risky")]  # a class or whole-catalog selection quietly leaves them out
+    if a.only and len(runs) != len(a.only) and not risky:
         ap.error("unknown run id in --only")
     bad = 0
     for r in CATALOG:

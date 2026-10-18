@@ -4,6 +4,8 @@ attack-portscan-slow             attack     205 | no alert                      
 attack-synflood-1000pps          attack    9945 | names sender, first at 0.50 s  | names sender, first at 0.06 s (532 alerts)  
 attack-synflood-200pps           attack    6007 | names sender, first at 0.50 s  | names sender, first at 0.31 s (4888 alerts) 
 attack-udpflood-500pps-1400b     attack    4937 | names sender, first at 0.50 s  | names sender, first at 0.13 s (4874 alerts) 
+benign-bulk-tcp-2mbit-r2         benign    3463 | names sender, first at 0.50 s  | no alert                                    
+benign-bulk-tcp-2mbit            benign    3459 | names sender, first at 0.50 s  | no alert                                    
 benign-http-20rps-r2             benign    1310 | names sender, first at 0.55 s  | names sender, first at 19.58 s (1 alerts)   
 benign-http-20rps                benign    1332 | names sender, first at 0.55 s  | no alert                                    
 benign-http-5rps-r2              benign     540 | names sender, first at 0.67 s  | no alert                                    
@@ -27,6 +29,7 @@ benign false positives by workload (runs with any alert / runs):
   http-get     rate rule 5/5   sentinel 1/5
   idle         rate rule 0/2   sentinel 0/2
   ping         rate rule 2/6   sentinel 6/6
+  tcp-stream   rate rule 2/2   sentinel 0/2
   udp-small    rate rule 5/5   sentinel 4/5
 attack detection by pattern (runs detected with the right sender / runs):
   attack-portscan-fast               rate rule 0/1   sentinel 1/1
@@ -35,5 +38,5 @@ attack detection by pattern (runs detected with the right sender / runs):
   attack-synflood-200pps             rate rule 1/1   sentinel 1/1
   attack-udpflood-500pps-1400b       rate rule 1/1   sentinel 1/1
 
-rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 12/18   runs naming a non-sender: 0/23
-sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/18   runs naming a non-sender: 0/23
+rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 14/20   runs naming a non-sender: 0/25
+sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/20   runs naming a non-sender: 0/25

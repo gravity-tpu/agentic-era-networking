@@ -9,18 +9,19 @@ recorded here.
 | :--- | :--- | :--- |
 | `benign-ping-5pps` (x3), `benign-ping-5pps-node01`, `benign-ping-20pps` (x2) | benign | ping from `node-02` (and once `node-01`) at 5 or 20 per second |
 | `benign-idle-60s` (x2) | benign | nothing sent for 60 s: the capture alone |
+| `benign-bulk-tcp-2mbit` (x2) | benign | a rate-limited TCP stream to a sink on the Mac, 2 Mbit per second, 20 s (about 175 frames a second) |
 | `benign-http-5rps` (x3), `benign-http-20rps` (x2) | benign | small HTTP GETs to a local web server on the Mac, 30 s |
 | `benign-udp-small-10pps` (x3), `benign-udp-small-50pps` (x2) | benign | 60 to 100 byte UDP datagrams to port 53 on the Mac, 30 s |
 | `attack-synflood-200pps`, `attack-synflood-1000pps` | attack | `hping3` SYN flood from `node-01`, 30 s and 10 s |
 | `attack-udpflood-500pps-1400b` | attack | `hping3` UDP flood, 1400-byte payloads, 500 pps, 10 s |
 | `attack-portscan-fast`, `attack-portscan-slow` | attack | `nmap -sS -T4` ports 1 to 1000 (all sent in 0.36 s); `-T2` ports 1 to 200 (80 s) |
 
-## Scores (23 runs: 18 benign, 5 attack)
+## Scores (25 runs: 20 benign, 5 attack)
 
 | Detector | Attacks detected with the right sender | Benign runs with an alert (false positives) |
 | :--- | :--- | :--- |
-| Rate rule (the trt daemon: 10 pps per source, 5 s window, judged after 0.5 s) | 3 of 5 | **12 of 18** |
-| GPU sentinel (the arithmetic of the deployed kernel, 0.15 base threshold with an adaptive baseline) | 5 of 5 | **11 of 18** |
+| Rate rule (the trt daemon: 10 pps per source, 5 s window, judged after 0.5 s) | 3 of 5 | **14 of 20** |
+| GPU sentinel (the arithmetic of the deployed kernel, 0.15 base threshold with an adaptive baseline) | 5 of 5 | **11 of 20** |
 
 Benign false positives by workload (runs with any alert / runs):
 
@@ -30,6 +31,7 @@ Benign false positives by workload (runs with any alert / runs):
 | Small UDP datagrams, 10 and 50 per second | 5 of 5 | 4 of 5 |
 | Ping, 5 and 20 per second | 2 of 6 | 6 of 6 |
 | Idle (nothing sent) | 0 of 2 | 0 of 2 |
+| Bulk TCP stream, 2 Mbit per second | 2 of 2 | 0 of 2 |
 
 - **The rate rule's threshold is far below ordinary traffic.** One host making a few web requests a second sends more than
   10 frames per second (each request is about five frames), so every HTTP run, every UDP run and the 20 pps pings were
@@ -53,8 +55,8 @@ run, and it was never trained.
 - 23 runs, up to three repeats of each benign workload and **one** of each attack, one host pair, short durations: a
   scored comparison, not a distribution. The attack runs were not repeated. Still missing: bulk TCP, ssh sessions, a
   browser-like mix, Tailscale-style traffic, ARP and address-spoofing attacks. A 100 Mbit lab segment limits rates.
-- **Bulk TCP was not recorded.** The runs were attempted (iperf3, then a Python sender) and failed, and the rack's
-  control plane died during the first attempt (see below), so they are not in the data. They must be re-recorded.
+- **Bulk TCP was recorded only at 2 Mbit per second.** Attempts at 5 Mbit and above coincided with switch outages (see
+  below), and 5, 10 and 20 Mbit are not in the data. The sentinel is silent on the 2 Mbit streams (large frames score low); the rate rule flags them.
 - **Traffic that does not cross the Zodiac is invisible to the tap.** `node-01`, `node-02` and the Pi 5 are behind the
   same switch; HTTP and iperf3 runs between them left 0 frames at the tap (measured), so the receivers run on the Mac,
   on the uplink side. The scorer marks a run INVALID and leaves it out of every rate if the sender is seen fewer than
@@ -80,3 +82,17 @@ the table-miss entry (priority 0) has no actions, so unmatched frames are droppe
 isolation policy's rules output only to ports. That is evidence against one mechanism, not an explanation; the cause is
 still unknown. The bulk sender also paces with the operating system's sleep, which is coarse, so it may send in small
 bursts; it has not run successfully, so that is untested.
+
+### 2026-10-18: two more drops of the controller session
+
+After the owner power cycled the switch (2026-10-17 evening, uptime then counted from about 00:26), the controller logged
+`Dead peer detected (10.0.1.99)` at **12:28:15** and again at **12:31:34**. The first occurred while **nothing of mine was
+running** (the batch started two minutes later); the second during the first 5 Mbit bulk-TCP run, whose sender's connection
+timed out after 19 s, and the next run got no frames at all. The two 2 Mbit runs before it (12:30 to 12:31) completed
+normally (3,458 and 3,463 sender frames). The switch's serial-reported uptime kept advancing, so it had not rebooted.
+
+So there have been three drops in 14 hours of use after six quiet days: 2026-10-17 22:20:25 (13 s after an HTTP run), 12:28:15
+(idle) and 12:31:34 (during a 5 Mbit stream). Two coincide with recorded traffic and one does not, so **the cause is
+unknown and it may be intrinsic to the device**, not caused by the tests. The harness now also checks OpenFlow `Connected`
+and a verified isolation readback **after** every run, records the verdict in the label (`rackHealthyAfter`), stops the batch
+when it is false, and the scorer excludes such runs.

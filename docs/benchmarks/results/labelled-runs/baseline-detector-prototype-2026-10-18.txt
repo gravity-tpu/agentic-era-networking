@@ -7,6 +7,8 @@ attack-portscan-slow             attack       1  yes                    5  ports
 attack-synflood-1000pps          attack       1  yes                    0  syn_per_s
 attack-synflood-200pps           attack       1  yes                    1  syn_per_s
 attack-udpflood-500pps-1400b     attack       1  yes                    1  nontcp_bytes,nontcp_pps
+benign-bulk-tcp-2mbit            benign       0  no                     -  
+benign-bulk-tcp-2mbit-r2         benign       0  no                     -  
 benign-http-20rps                benign       0  no                     -  
 benign-http-20rps-r2             benign       0  no                     -  
 benign-http-5rps                 benign       0  no                     -  
@@ -26,11 +28,12 @@ benign-udp-small-10pps-r3        benign       0  no                     -
 benign-udp-small-50pps           benign       0  no                     -  
 benign-udp-small-50pps-r2        benign       0  no                     -  
 
-in-sample (thresholds from all benign runs)    attacks detected with the right sender 5/5   benign runs with any alert 0/18   runs naming a non-sender 0/23
+in-sample (thresholds from all benign runs)    attacks detected with the right sender 5/5   benign runs with any alert 0/20   runs naming a non-sender 0/25
 
 leave one benign workload FAMILY out (ping, idle, HTTP, small UDP: thresholds from the other families; the held-out family and all attacks are scored):
   hold out http-get     (5 runs)  alerts 0/5  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 5/5
   hold out idle         (2 runs)  alerts 0/2  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 0/2
   hold out ping         (6 runs)  alerts 0/6  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 0/6
+  hold out tcp-stream   (2 runs)  alerts 0/2  attacks detected 5/5  thresholds that moved: none   | WITHOUT floors: alerts 0/2
   hold out udp-small    (5 runs)  alerts 0/5  attacks detected 5/5  thresholds that moved: {'nontcp_pps': 100}   | WITHOUT floors: alerts 0/5
-  held-out benign runs with any alert, all folds: 0/18   (without the floors, data-derived thresholds only: 5/18)
+  held-out benign runs with any alert, all folds: 0/20   (without the floors, data-derived thresholds only: 5/20)

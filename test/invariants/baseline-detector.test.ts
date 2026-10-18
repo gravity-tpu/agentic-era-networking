@@ -110,13 +110,13 @@ describe.skipIf(!hasNumpy)('baseline detector on the committed labelled runs', (
     return cached;
   };
 
-  it('detects all five attacks with the right sender and alerts on none of the 18 benign runs, in sample', () => {
-    expect(out()).toContain('in-sample (thresholds from all benign runs)    attacks detected with the right sender 5/5   benign runs with any alert 0/18   runs naming a non-sender 0/23');
+  it('detects all five attacks with the right sender and alerts on none of the 20 benign runs, in sample (bulk TCP included)', () => {
+    expect(out()).toContain('in-sample (thresholds from all benign runs)    attacks detected with the right sender 5/5   benign runs with any alert 0/20   runs naming a non-sender 0/25');
   });
 
   it('holds up leaving each benign family out, and shows the floors are what carries it', () => {
     const o = out();
-    expect(o).toContain('held-out benign runs with any alert, all folds: 0/18   (without the floors, data-derived thresholds only: 5/18)');
+    expect(o).toContain('held-out benign runs with any alert, all folds: 0/20   (without the floors, data-derived thresholds only: 5/20)');
     expect(o).toMatch(/hold out http-get\s+\(5 runs\)\s+alerts 0\/5\s+attacks detected 5\/5.*WITHOUT floors: alerts 5\/5/);
   });
 
