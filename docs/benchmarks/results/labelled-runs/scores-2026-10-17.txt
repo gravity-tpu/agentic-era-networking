@@ -2,8 +2,8 @@ INVALID (left out of every rate): attack-arpflood-200pps-r2 - the sender was see
 INVALID (left out of every rate): attack-arpflood-200pps-r3 - the sender was seen 0 times at the tap (needs 20)
 INVALID (left out of every rate): attack-arpflood-200pps - the sender was seen 0 times at the tap (needs 20)
 INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-1 - the rack was not recorded healthy after the run
-INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-2 - the sender was seen 18 times at the tap (needs 20)
-INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-3 - the sender was seen 18 times at the tap (needs 20)
+INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-2 - the sender was seen 18 times at the tap (needs 20); the rack was not recorded healthy after the run
+INVALID (left out of every rate): benign-udp-burst-tailscale-like-drop-3 - the sender was seen 18 times at the tap (needs 20); the rack was not recorded healthy after the run
 
 run                              class   frames | rate rule                      | sentinel                                    
 attack-portscan-1pps-r2          attack      69 | no alert                       | names sender, first at 75.35 s (6 alerts)   
