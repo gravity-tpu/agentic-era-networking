@@ -14,7 +14,7 @@ the workload segment; commands are built from fixed templates, never from free t
 Usage:
   python3 scripts/labelled-runs.py --list                  show the catalog and the validation verdict for each run
   python3 scripts/labelled-runs.py --dry-run               print every command that would run, run nothing
-  python3 scripts/labelled-runs.py --execute --out DIR [--only ID ...] [--class benign|attack]   run (needs the one-time capture setup below)
+  python3 scripts/labelled-runs.py --execute --out DIR (--only ID [ID ...] | --all) [--class benign|attack]   run (needs the one-time capture setup below)
 
 One-time setup on the Jetson (needs root; lets the zodiac user capture the tap without root):
   sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump
@@ -599,18 +599,25 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--class", dest="klass", choices=(BENIGN, ATTACK))
+    ap.add_argument("--all", action="store_true", help="with --execute and no --only: run every non-risky run in the catalog")
     ap.add_argument("--include-risky", action="store_true",
                     help="also run the runs marked risky (bulk TCP at 5 Mbit and above, which coincided with switch outages)")
     a = ap.parse_args()
     if sum([a.list, a.dry_run, a.execute]) != 1:
         ap.error("choose exactly one of --list, --dry-run, --execute")
-    runs = [r for r in CATALOG if (not a.only or r["id"] in a.only) and (a.klass is None or r["class"] == a.klass)]
+    # `--only` with no ids is a mistake (an empty shell expansion), not "everything": refuse it. A whole-catalog run is asked for by
+    # leaving --only out, and --execute then needs --all as well, so a run of the catalog is never an accident.
+    if a.only is not None and not a.only:
+        ap.error("--only was given no run ids (an empty list is not 'all runs'; leave --only out and use --all for that)")
+    if a.execute and a.only is None and not a.all:
+        ap.error("--execute needs --only ID [ID ...] or --all (it will not default to running the whole catalog)")
+    runs = [r for r in CATALOG if (a.only is None or r["id"] in a.only) and (a.klass is None or r["class"] == a.klass)]
     risky = [r["id"] for r in runs if r.get("risky")]
     if risky and not a.include_risky:
-        if a.only:
+        if a.only is not None:
             ap.error(f"{', '.join(risky)} are marked risky (bulk TCP at 5 Mbit and above coincided with switch outages); add --include-risky to run them")
         runs = [r for r in runs if not r.get("risky")]  # a class or whole-catalog selection quietly leaves them out
-    if a.only and len(runs) != len(a.only) and not risky:
+    if a.only is not None and len(runs) != len(a.only) and not risky:
         ap.error("unknown run id in --only")
     bad = 0
     for r in CATALOG:

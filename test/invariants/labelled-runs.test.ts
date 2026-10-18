@@ -394,4 +394,26 @@ describe.skipIf(!hasPython)('labelled-runs.py second-recording workloads', () =>
     expect(allowed.status, allowed.stderr).toBe(0);
     expect(allowed.stdout).toContain('benign-bulk-tcp-5mbit');
   });
+
+  it('--only with no ids is refused, not read as "every run" (an empty shell expansion once started the whole catalog)', () => {
+    for (const mode of ['--execute', '--list', '--dry-run']) {
+      const r = spawnSync('python3', [SCRIPT, mode, '--out', '/tmp/should-not-exist', '--only'], { encoding: 'utf-8' });
+      expect(r.status, mode).not.toBe(0);
+      expect(r.stderr, mode).toMatch(/--only was given no run ids/);
+    }
+  });
+
+  it('--execute will not default to the whole catalog: it needs --only ids or an explicit --all', () => {
+    const r = spawnSync('python3', [SCRIPT, '--execute', '--out', '/tmp/should-not-exist'], { encoding: 'utf-8' });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/--execute needs --only ID \[ID \.\.\.\] or --all/);
+    // --list and --dry-run still show the whole catalog without it.
+    expect(spawnSync('python3', [SCRIPT, '--list'], { encoding: 'utf-8' }).status).toBe(0);
+  });
+
+  it('the harness source shows the guard before any run is selected', () => {
+    const src = readFileSync(SCRIPT, 'utf-8');
+    expect(src.indexOf('--only was given no run ids')).toBeGreaterThan(-1);
+    expect(src.indexOf('--only was given no run ids')).toBeLessThan(src.indexOf('runs = [r for r in CATALOG'));
+  });
 });
