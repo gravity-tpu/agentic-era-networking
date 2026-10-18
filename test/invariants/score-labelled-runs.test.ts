@@ -120,18 +120,18 @@ print(json.dumps([sc.score({'id': 'x', 'class': 'benign', 'tool': 'http-get', 's
     expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([false, 20]);
   });
 
-  it('a run recorded on an unhealthy rack is invalid even when the sender was seen plenty', () => {
+  it('only an explicit True counts as a healthy rack: a legacy label without the field is accepted, anything else is not', () => {
     const r = spawnSync('python3', ['-c', `
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location('sc', sys.argv[1]); sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
 frames = [(1.0, 60, 6, 2, 1, 2, '10.0.2.52', 1000 + i) for i in range(50)]
-ok = sc.score({'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52'}, frames)['valid']
-bad = sc.score({'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52', 'rackHealthyAfter': False}, frames)['valid']
-old = sc.score({'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52', 'rackHealthyAfter': True}, frames)['valid']
-print(json.dumps([ok, bad, old]))
+base = {'id': 'x', 'class': 'benign', 'tool': 'tcp-stream', 'senderIp': '10.0.2.52'}
+def valid(extra): return sc.score({**base, **extra}, frames)['valid']
+print(json.dumps([valid({}), valid({'rackHealthyAfter': True}), valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 0}),
+                  valid({'rackHealthyAfter': False}), valid({'rackHealthyAfter': None}), valid({'rackHealthyAfter': 'true'}), valid({'rackHealthyAfter': 1}),
+                  valid({'rackHealthyAfter': True, 'controllerDropsDuringRun': 1})]))
 `, SCRIPT], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    // Labels recorded before the check existed carry no field and stay valid; an explicit false is invalid.
-    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, false, true]);
+    expect(JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]')).toEqual([true, true, true, false, false, false, false, false]);
   });
 });

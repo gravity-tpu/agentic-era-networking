@@ -113,12 +113,22 @@ def seconds_text(delta_ns):
     return f"{delta_ns // 1_000_000_000}.{(delta_ns % 1_000_000_000) // 10_000_000:02d}"
 
 
+def rack_ok(label):
+    """
+    A label recorded before the post-run check existed has no field and is accepted as it was. A label that has the field must
+    say exactly True: false, null, a string or a number is not evidence of a healthy rack, and neither is a recorded drop count.
+    """
+    if "rackHealthyAfter" not in label:
+        return True
+    return label["rackHealthyAfter"] is True and label.get("controllerDropsDuringRun", 0) in (0, None)
+
+
 def score(label, frames):
     sender = label["senderIp"]  # None for an idle run: nothing was sent, so any alert in it is a false positive
     sender_frames = [f for f in frames if sender is not None and f[6] == sender]
     t0 = sender_frames[0][7] if sender_frames else None
     res = {"id": label["id"], "class": label["class"], "tool": label.get("tool"), "pattern": pattern_of(label), "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames),
-           "valid": (sender is None or len(sender_frames) >= MIN_SENDER_FRAMES) and label.get("rackHealthyAfter", True) is not False}
+           "valid": (sender is None or len(sender_frames) >= MIN_SENDER_FRAMES) and rack_ok(label)}
     for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
         named_sender = [a for a in alerts if a[1] == sender]
         other = [a for a in alerts if a[1] != sender]

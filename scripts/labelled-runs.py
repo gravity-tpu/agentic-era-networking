@@ -444,6 +444,7 @@ def execute(run, outdir):
     rid = run["id"]
     who = f"from {run['sender']} -> {run['target']}" if run["tool"] != "idle" else "nothing sent"
     print(f"[run] {rid}: {run['class']} {who} for up to {run['seconds']} s", flush=True)
+    window_start = jetson_epoch()
     cap = subprocess.Popen(["ssh", JETSON, shlex.join(capture_command(rid))], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     srv = None
     docroot = None
@@ -453,7 +454,7 @@ def execute(run, outdir):
             with open(os.path.join(docroot, name), "w") as fh:
                 fh.write(body)
     returncode, stderr_tail, t0, t1 = None, "", time.monotonic(), time.monotonic()
-    healthy_after, why_after = False, "the run did not finish"
+    healthy_after, why_after, drops = False, "the run did not finish", None
     try:
         time.sleep(SETTLE_SECONDS)
         if cap.poll() is not None:
@@ -479,6 +480,9 @@ def execute(run, outdir):
         # Did the switch survive the run? Give the bridge's dead-peer detection time to notice a hung control plane first.
         time.sleep(POST_RUN_GRACE_SECONDS)
         healthy_after, why_after = rack_healthy()
+        drops = controller_drops_since(window_start)
+        if drops:
+            healthy_after, why_after = False, f"the bridge logged {drops} dead-peer event(s) during the run window"
     finally:
         pidfile = capture_pidfile(rid)
         subprocess.run(["ssh", JETSON, f"kill -INT $(cat {pidfile}) 2>/dev/null; rm -f {pidfile}"], capture_output=True)
@@ -504,7 +508,7 @@ def execute(run, outdir):
         "params": {k: v for k, v in run.items() if k not in ("id", "class", "tool", "sender", "target", "pattern")},
         "command": remote_command(run), "commandExit": returncode, "commandSeconds": round(t1 - t0, 1),
         "pcap": os.path.basename(pcap), "commandStderrTail": stderr_tail,
-        "rackHealthyAfter": healthy_after, "rackNoteAfter": why_after,
+        "rackHealthyAfter": healthy_after, "rackNoteAfter": why_after, "controllerDropsDuringRun": drops,
     }
     with open(os.path.join(outdir, f"{rid}.label.json"), "w") as f:
         json.dump(label, f, indent=2)
@@ -544,6 +548,22 @@ def rack_healthy():
     if not isinstance(age, int) or age > RACK_STATUS_MAX_AGE_MS:
         return False, f"the isolation readback is {age!r} ms old (limit {RACK_STATUS_MAX_AGE_MS})"
     return True, "OpenFlow connected, isolation verified"
+
+
+def jetson_epoch():
+    """Whole seconds since the epoch on the Jetson's own clock, so a journal window is not skewed by this machine's clock."""
+    r = subprocess.run(["ssh", JETSON, "date +%s"], capture_output=True, text=True, timeout=30)
+    return int(r.stdout.strip())
+
+
+def controller_drops_since(epoch):
+    """
+    How many times the bridge logged a dead OpenFlow peer since `epoch` (Jetson clock). A drop that recovered before the post-run
+    health check still counts: the check of the current state cannot see it, the journal can.
+    """
+    r = subprocess.run(["ssh", JETSON, f"journalctl -u zodiac-bridge --no-pager --since @{int(epoch)} | grep -c 'Dead peer detected'"],
+                       capture_output=True, text=True, timeout=40)
+    return int(r.stdout.strip() or 0)
 
 
 def preflight(runs):

@@ -103,6 +103,10 @@ describe.skipIf(!hasPython)('labelled-runs.py catalog', () => {
     expect(src).toContain('raise SystemExit(f"STOPPED: the rack is unhealthy after');
     // A session that is not Connected is unhealthy even when an old readback still says verified.
     expect(src).toContain('of_status != "Connected"');
+    // A drop that recovered before the check is still caught: the bridge's own dead-peer log lines are counted across the run window.
+    expect(src).toContain("grep -c 'Dead peer detected'");
+    expect(src).toContain('controller_drops_since(window_start)');
+    expect(src).toContain('"controllerDropsDuringRun": drops');
   });
 
   it('checks the rack is healthy before every run, and stops the batch if not', () => {
