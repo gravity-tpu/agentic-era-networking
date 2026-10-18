@@ -84,6 +84,18 @@ Time to alert: floods 0 to 1 s after the first frame, the fast scan 0 s (through
 3. **Memory and time are bounded**: at most 1,024 tracked sources (oldest evicted), 10 buckets of ports per source, and a
    per-source set of at most 1,024 ports (past that the count is reported as "at least").
 
+## What consumers may and may not infer
+
+- **"No new report" never means "cleared".** A source is reported once per episode, so a sustained attack produces one
+  report. Nothing downstream may treat silence as the end of an attack: a quarantine ends only by the bridge's time limit
+  (or a person), never by a detector signal, and the detector has no "all clear" message. The report carries the episode's
+  first bucket, so a consumer can see when it began, not whether it continues.
+- **The count of reports is not a severity.** Reports are one per episode by design. If severity is wanted, the report's
+  evidence already holds each feature's value and threshold; the ratio of the two is the measure, to be defined with the
+  consumer rather than inferred from how many reports arrived.
+- **The thresholds' floors are scored in sample.** The prototype's headline numbers use thresholds derived from the same
+  runs they are scored on; the leave-one-family-out rows are the nearest thing to out-of-sample, and they depend on the floors.
+
 ## What it does not do
 
 - **Low and slow.** A scan below about 1 port per second (10 ports in 10 s) is invisible. A second, 60-second port window
