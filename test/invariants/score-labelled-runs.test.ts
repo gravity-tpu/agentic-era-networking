@@ -91,14 +91,19 @@ describe.skipIf(!hasNumpy)('score-labelled-runs on the committed runs', () => {
   it('reproduces the recorded scores', () => {
     const r = spawnSync('python3', [SCRIPT, DATA], { encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 14/20');
-    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/20');
+    expect(r.stdout).toContain('rate      attack runs detected with the right sender: 3/5   benign runs with any alert (false positives): 20/26');
+    expect(r.stdout).toContain('sentinel  attack runs detected with the right sender: 5/5   benign runs with any alert (false positives): 11/26');
     // By workload: the rate rule flags every HTTP and small-UDP run; neither detector flags the idle runs.
     expect(r.stdout).toMatch(/http-get\s+rate rule 5\/5\s+sentinel 1\/5/);
     expect(r.stdout).toMatch(/udp-small\s+rate rule 5\/5\s+sentinel 4\/5/);
     expect(r.stdout).toMatch(/idle\s+rate rule 0\/2\s+sentinel 0\/2/);
     // Bulk TCP at 2 Mbit: the rate rule flags it (about 175 frames a second), the sentinel does not (large frames score low).
     expect(r.stdout).toMatch(/tcp-stream\s+rate rule 2\/2\s+sentinel 0\/2/);
+    // ssh-like and browsing-like traffic: the rate rule flags all of it, the sentinel none.
+    expect(r.stdout).toMatch(/tcp-interactive\s+rate rule 3\/3\s+sentinel 0\/3/);
+    expect(r.stdout).toMatch(/http-burst\s+rate rule 3\/3\s+sentinel 0\/3/);
+    // The run recorded while the switch dropped its controller session is reported invalid and counted nowhere.
+    expect(r.stdout).toContain('INVALID (left out of every rate): benign-udp-burst-tailscale-like');
     const row = (id: string) => r.stdout.split('\n').find((l) => l.startsWith(id)) ?? '';
     expect(row('attack-portscan-fast')).toMatch(/\| no alert\s+\|/); // the rate rule never rules on a 0.36 s scan
     expect(row('attack-portscan-slow')).toMatch(/\| no alert\s+\|/); // 2.5 pps is under the threshold

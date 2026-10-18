@@ -264,6 +264,72 @@
     }
   },
   {
+    "id": "benign-http-burst-8conns-r2",
+    "class": "benign",
+    "tool": "http-burst",
+    "pattern": "benign-http-burst-8conns",
+    "sender": "10.0.2.52",
+    "frames": 885,
+    "senderFrames": 884,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 3392801000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-http-burst-8conns-r3",
+    "class": "benign",
+    "tool": "http-burst",
+    "pattern": "benign-http-burst-8conns",
+    "sender": "10.0.2.52",
+    "frames": 829,
+    "senderFrames": 821,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 3438344000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-http-burst-8conns",
+    "class": "benign",
+    "tool": "http-burst",
+    "pattern": "benign-http-burst-8conns",
+    "sender": "10.0.2.52",
+    "frames": 777,
+    "senderFrames": 776,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 3305126000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
     "id": "benign-idle-60s-r2",
     "class": "benign",
     "tool": "idle",
@@ -299,6 +365,72 @@
       "namedSender": 0,
       "namedOthers": [],
       "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-interactive-8eps-r2",
+    "class": "benign",
+    "tool": "tcp-interactive",
+    "pattern": "benign-interactive-8eps",
+    "sender": "10.0.2.52",
+    "frames": 247,
+    "senderFrames": 246,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 578488000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-interactive-8eps-r3",
+    "class": "benign",
+    "tool": "tcp-interactive",
+    "pattern": "benign-interactive-8eps",
+    "sender": "10.0.2.52",
+    "frames": 248,
+    "senderFrames": 247,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 602378000
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "benign-interactive-8eps",
+    "class": "benign",
+    "tool": "tcp-interactive",
+    "pattern": "benign-interactive-8eps",
+    "sender": "10.0.2.52",
+    "frames": 252,
+    "senderFrames": 245,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 601476000
     },
     "sentinel": {
       "alerts": 0,

@@ -11,6 +11,12 @@ benign-http-20rps-r2             benign    1305      50      4230        10     
 benign-http-5rps                 benign     535      20      1692         4         1      1
 benign-http-5rps-r2              benign     535      20      1692         4         1      1
 benign-http-5rps-r3              benign     530      20      1692         4         1      1
+benign-http-burst-8conns         benign     776     103      7791         9         1      1
+benign-http-burst-8conns-r2      benign     884     108      8543         9         1      1
+benign-http-burst-8conns-r3      benign     821     103      7907         9         1      1
+benign-interactive-8eps          benign     245      10      1608         1         1      1
+benign-interactive-8eps-r2       benign     246      12      1905         1         1      1
+benign-interactive-8eps-r3       benign     247      11      1918         1         1      1
 benign-ping-20pps                benign     600      20      1960         0         0      0
 benign-ping-20pps-r2             benign     600      21      2058         0         0      0
 benign-ping-5pps                 benign     300       6       588         0         0      0
