@@ -407,6 +407,12 @@ CATALOG = (
     + repeats(_benign("benign-interactive-8eps", "tcp-interactive", "agentic-node-02", "10.0.2.119", 30, events_per_s=8), 3)  # ssh-like, modelled
     + repeats(_benign("benign-http-burst-8conns", "http-burst", "agentic-node-02", "10.0.2.119", 30, conns=8, period_s=3), 3)  # browsing-like
     + repeats(_benign("benign-udp-burst-tailscale-like", "udp-burst", "agentic-node-02", "10.0.2.119", 30, burst=25, payload_bytes=1300, period_s=10), 3)  # modelled
+    # --- UDP-burst hang repro (2026-10-18): one factor at a time from the base pattern; risky (the base coincided with switch
+    # drops in 3 of 4 recordings), so gated by --include-risky and kept out of the scored data
+    + repeats(_benign("repro-udp-burst-base", "udp-burst", "agentic-node-02", "10.0.2.119", 30, burst=25, payload_bytes=1300, period_s=10, risky=True), 2)
+    + [_benign("repro-udp-burst-600b", "udp-burst", "agentic-node-02", "10.0.2.119", 30, burst=25, payload_bytes=600, period_s=10, risky=True)]
+    + [_benign("repro-udp-burst-5x", "udp-burst", "agentic-node-02", "10.0.2.119", 30, burst=5, payload_bytes=1300, period_s=10, risky=True)]
+    + [_benign("repro-udp-burst-node01", "udp-burst", "agentic-node-01", "10.0.2.119", 30, burst=25, payload_bytes=1300, period_s=10, risky=True)]
     # --- attacks (first recorded 2026-10-17), repeated for the next round
     + repeats(_attack("attack-synflood-1000pps", "hping3", "10.0.2.119", 10, pps=1000, count=10000, flags_or_proto="syn", port=80), 3)
     + repeats(_attack("attack-synflood-200pps", "hping3", "10.0.2.119", 30, pps=200, count=6000, flags_or_proto="syn", port=80), 3)
