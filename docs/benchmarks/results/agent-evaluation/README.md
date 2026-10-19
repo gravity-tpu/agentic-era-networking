@@ -69,6 +69,36 @@ reasoning off did move with it on.
 - Cost, from the recorded timings: reasoning on used 5,900 to 16,500 output tokens per turn and took about 2.1 hours for 50 zero-shot
   trials, against about 5 seconds a trial with it off.
 
+## INTENT-2 to 4, reasoning off (2026-10-19)
+
+`gemma4:26b`, reasoning off, same sampling; each intent has its own prompt (the intent description in `src/sdn/intents.ts`), so the
+rows are **not** a difficulty ranking: an intent whose text spells out the policy is easier to transcribe.
+
+| Intent | Zero-shot, N = 50 | With verifier feedback, N = 20 |
+| :--- | :--- | :--- |
+| INTENT-2 `dns-confinement/v1` (host level) | **50 admissible**; 9 distinct outputs, all 7 rules | **20 admissible**, all at turn 1; 7 distinct outputs |
+| INTENT-3 `quarantine-precedence/v1` | 0 admissible: `ERR_HAIRPIN` 33, `ERR_PREREQUISITE` 17; 13 distinct outputs | **3 admissible** (turn 4: 2, turn 5: 1); the other 17 end in `ERR_INTENT_LEAK` 7 or `ERR_SHADOWED` 10 |
+| INTENT-4 `tap-return-isolation/v1` | 0 admissible: `ERR_INTENT_LEAK` 26, `ERR_INTENT_MISSING` 24; 10 distinct outputs | **16 admissible** (turn 2: 8, turn 3: 1, turn 4: 7); the other 4 end in leak 1, missing 1, shadowed 2 |
+
+- **INTENT-2's 50 of 50 is transcription, not synthesis.** Its text names the resolver, the allowed paths and "everything else is dropped";
+  the admissible outputs are correct policies (one example: intra-segment ARP and resolver IPv4 to the uplink, a tap default, resolver replies
+  and ARP back, a drop-all on P2, a tap return). Re-judged under the other intents (no model run), those 50 fail INTENT-1, INTENT-3 and
+  INTENT-4, so the check does discriminate; they fail only on content the other intents ask for and this one does not.
+- **INTENT-3 fails before it reaches precedence.** Zero-shot proposals die on the hairpin and the missing EtherType, the same slips as
+  INTENT-1; with feedback only 3 of 20 produce a quarantine DROP that outranks forwarding and satisfies the whole intent.
+- **INTENT-4 needs the tap return that INTENT-1 does not ask for**, and feedback gets 16 of 20 there; the 16 also pass INTENT-1 but fail INTENT-2 and
+  INTENT-3 (checked the same way).
+- **`ERR_SHADOWED` is a hygiene failure, not necessarily a safety one** (a rule fully covered by higher-priority rules: a dead rule). It is in the
+  pre-registered structural list (A5), so it counts as non-admissible, but only 3 trials across these runs fail on it alone; the rest also leak or omit something.
+
+### The Jetson model on INTENT-2 (`qwen2.5:3b`, reasoning off, zero-shot, N = 50)
+
+**0 admissible: all 50 are `ERR_SYNTAX`.** 44 write `srcIp` as a CIDR string (`"10.0.2.0/24"`) although the prompt says a dotted address plus a separate
+prefix length, 5 do the same with `dstIp`, 1 returned no JSON. 35 distinct outputs. The strict parser is the pre-registered "malformed field types"
+category; a lenient parser that accepted CIDR strings would have scored these differently, and the choice is mine, not the plan's. The model also copies the
+schema's placeholder MAC address (`aa:bb:cc:dd:ee:ff`) into rules: a possible prompt effect (the prompt's example format is being echoed), not
+tested.
+
 ## What this does and does not show
 
 - For this model, this prompt and this intent: zero-shot was never admissible with reasoning off and 5 of 50 with it on; feedback rescued
@@ -82,4 +112,5 @@ reasoning off did move with it on.
 - Protocol A was run with an earlier version of the runner (record shape `agent-eval/v1`, one response per trial); Protocol B
   uses `agent-eval/v2` (a `turns` array). The check and the prompt are the same.
 - Baselines (reference policy and single-point mutations) for all four intents are in `baselines/`.
-- Not done in this file: INTENT-2 to 4 model runs (queued, in their own directories), frontier-API models, re-running the timed-out seeds, and RQ4.
+- Not done in this file: INTENT-2 to 4 with reasoning on (queued) and the Jetson model on INTENT-3 and 4 (running), frontier-API models,
+  re-running the timed-out INTENT-1 seeds, and RQ4.
