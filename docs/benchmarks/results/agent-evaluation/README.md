@@ -91,6 +91,24 @@ rows are **not** a difficulty ranking: an intent whose text spells out the polic
 - **`ERR_SHADOWED` is a hygiene failure, not necessarily a safety one** (a rule fully covered by higher-priority rules: a dead rule). It is in the
   pre-registered structural list (A5), so it counts as non-admissible, but only 3 trials across these runs fail on it alone; the rest also leak or omit something.
 
+## INTENT-2 to 4, reasoning on (2026-10-19, in progress)
+
+`gemma4:26b`, reasoning on, 32768-token budget per turn, streamed runner. Results are added here as each run finishes; the queue (Protocol B for the three
+intents, then Protocol A) is still running when this is written.
+
+| Intent | Zero-shot, N = 50 | With verifier feedback, N = 20 |
+| :--- | :--- | :--- |
+| INTENT-2 `dns-confinement/v1` | not yet run | **18 admissible** (turn 1: 14, turn 2: 2, turn 4: 1, turn 5: 1); 2 `ERR_SYNTAX`, both **truncated** (below) |
+| INTENT-3 `quarantine-precedence/v1` | not yet run | not yet finished |
+| INTENT-4 `tap-return-isolation/v1` | not yet run | not yet finished |
+
+- **Truncation is a limit of this condition.** The 2 non-admissible INTENT-2 trials are not format errors: on all five turns each stopped at the 32768-token cap
+  (`done_reason` `length`) with no answer, so the triage saw empty text and labelled it `ERR_SYNTAX`. Across the 20 trials, **16 of 37 turns hit the cap**
+  (10 of those are the two failing trials; the other 6 were in trials that recovered after the feedback message said no JSON was found). The INTENT-1
+  reasoning-on runs had none (0 of 89 turns). So on INTENT-2 the model sometimes spends its whole budget reasoning; a larger budget might change the 2
+  failures and was not tried.
+- 14 of 20 trials were admissible on turn 1 with no feedback at all, and the 18 admissible final outputs are all distinct.
+
 ### The Jetson model on INTENT-2 to 4 (`qwen2.5:3b`, reasoning off, zero-shot, N = 50 each)
 
 **0 admissible in all three (and 0 of 200 across the four intents).**
