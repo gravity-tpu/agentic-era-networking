@@ -31,7 +31,8 @@ const INTENTS = {
 const MAX_N = 200;
 const MAX_TURNS = 5; // Protocol B: the plan's iteration cap
 const MAX_FEEDBACK_LINES = 12; // verifier detail lines returned to the model per turn
-const REQUEST_TIMEOUT_MS = 600_000;
+const REQUEST_TIMEOUT_MS = 600_000; // model-list and other short requests
+const TURN_TIMEOUT_MS = 1_800_000; // one whole streamed chat turn (30 min), bounded
 const DEFAULT_NUM_PREDICT = 8192;
 const MAX_NUM_PREDICT = 65536;
 const TEMPERATURE = 0.2;
@@ -84,6 +85,42 @@ async function ollama(host: string, route: string, body?: unknown): Promise<Reco
   return (await res.json()) as Record<string, unknown>;
 }
 
+/**
+ * One chat turn, streamed. A non-streamed request sends no response header until generation ends, and Node's fetch gives up
+ * on a missing header after 300 s, which dropped the longest-thinking trials of the 2026-10-19 reasoning-on and Jetson runs
+ * (recorded as TRANSPORT_FAILURE, a bias against long generations). Streaming returns the header at once; the whole turn
+ * is still bounded by TURN_TIMEOUT_MS. Returns the same fields the non-streamed reply had that the runner reads.
+ */
+async function ollamaChat(host: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const res = await fetch(`${host}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal: AbortSignal.timeout(TURN_TIMEOUT_MS),
+  });
+  if (!res.ok || res.body === null) throw new Error(`/api/chat answered ${res.status}`);
+  const decoder = new TextDecoder();
+  let pending = '';
+  let content = '';
+  let last: Record<string, unknown> = {};
+  let finished = false;
+  const take = (line: string): void => {
+    if (line.trim() === '') return;
+    const chunk = JSON.parse(line) as Record<string, unknown>;
+    content += String((chunk['message'] as { content?: unknown } | undefined)?.content ?? '');
+    if (chunk['done'] === true) { last = chunk; finished = true; }
+  };
+  for await (const part of res.body as unknown as AsyncIterable<Uint8Array>) {
+    pending += decoder.decode(part, { stream: true });
+    const lines = pending.split('\n');
+    pending = lines.pop() ?? '';
+    for (const line of lines) take(line);
+  }
+  take(pending);
+  if (!finished) throw new Error('stream ended before the final chunk');
+  return { message: { content }, eval_count: last['eval_count'], done_reason: last['done_reason'] };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (git('status', '--porcelain', '--untracked-files=no') !== '') throw new Error('working tree has uncommitted changes to tracked files; commit first (plan section 8)');
@@ -106,8 +143,8 @@ async function main(): Promise<void> {
     const maxTurns = args.protocol === 'B' ? MAX_TURNS : 1;
     try {
       for (let turn = 1; turn <= maxTurns; turn++) {
-        const r = await ollama(args.host, '/api/chat', {
-          model: args.model, stream: false, think: args.think, messages,
+        const r = await ollamaChat(args.host, {
+          model: args.model, think: args.think, messages,
           options: { temperature: TEMPERATURE, top_p: TOP_P, seed, num_predict: args.numPredict },
         });
         const content = String((r['message'] as { content?: unknown } | undefined)?.content ?? '');
