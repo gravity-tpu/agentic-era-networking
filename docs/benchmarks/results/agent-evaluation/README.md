@@ -99,7 +99,7 @@ intents, then Protocol A) is still running when this is written.
 | Intent | Zero-shot, N = 50 | With verifier feedback, N = 20 |
 | :--- | :--- | :--- |
 | INTENT-2 `dns-confinement/v1` | not yet run | **18 admissible** (turn 1: 14, turn 2: 2, turn 4: 1, turn 5: 1); 2 `ERR_SYNTAX`, both **truncated** (below) |
-| INTENT-3 `quarantine-precedence/v1` | not yet run | not yet finished |
+| INTENT-3 `quarantine-precedence/v1` | not yet run | **18 admissible** (turn 1: 1, turn 2: 12, turn 3: 5); 2 `TRANSPORT_FAILURE`, both the runner's 30-minute turn timeout on the first turn (seeds 10 and 11) |
 | INTENT-4 `tap-return-isolation/v1` | not yet run | not yet finished |
 
 - **Truncation is a limit of this condition.** The 2 non-admissible INTENT-2 trials are not format errors: on all five turns each stopped at the 32768-token cap
@@ -108,6 +108,12 @@ intents, then Protocol A) is still running when this is written.
   reasoning-on runs had none (0 of 89 turns). So on INTENT-2 the model sometimes spends its whole budget reasoning; a larger budget might change the 2
   failures and was not tried.
 - 14 of 20 trials were admissible on turn 1 with no feedback at all, and the 18 admissible final outputs are all distinct.
+- **INTENT-3 against reasoning off.** With feedback and reasoning on, 18 of 20 reach a quarantine DROP that outranks forwarding and satisfies the intent, against 3 of 20
+  with reasoning off. Only one trial was right on turn 1 (the first-turn failures were mostly the hairpin, 11, and a leak, 4), so for this intent the gain comes
+  from the feedback loop with reasoning, not from a better first answer. The 18 admissible sets use 7 or 8 rules and are 18 distinct rule-id sets. One turn in 40
+  hit the token cap, none of them last turns.
+- **The 2 INTENT-3 failures are time, not content.** Seeds 10 and 11 produced no answer within the runner's 30-minute turn limit (`TURN_TIMEOUT_MS`, one first turn each), so they
+  count as transport failures; the run is 18 of 20 admissible, 2 not scored, not 18 of 18.
 
 ### The Jetson model on INTENT-2 to 4 (`qwen2.5:3b`, reasoning off, zero-shot, N = 50 each)
 
