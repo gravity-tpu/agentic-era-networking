@@ -11,7 +11,8 @@
  *
  * Usage (after `npx tsc`):
  *   node --experimental-strip-types scripts/agent-eval.ts --intent port1-isolation/v1 --model gemma4:26b \
- *     --host http://100.112.223.16:11434 --n 5 --out docs/benchmarks/results/agent-evaluation/pilot
+ *     --host http://100.112.223.16:11434 --n 5 --think false --out docs/benchmarks/results/agent-evaluation/pilot
+ * --think sets the model's reasoning mode (a recorded methodology choice: the plan does not specify it).
  */
 
 import fs from 'node:fs/promises';
@@ -24,7 +25,8 @@ import { PORT1_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 const INTENTS = { [PORT1_ISOLATION_INTENT.id]: PORT1_ISOLATION_INTENT } as const;
 const MAX_N = 200;
 const REQUEST_TIMEOUT_MS = 600_000;
-const NUM_PREDICT = 8192;
+const DEFAULT_NUM_PREDICT = 8192;
+const MAX_NUM_PREDICT = 65536;
 const TEMPERATURE = 0.2;
 const TOP_P = 0.95;
 
@@ -44,7 +46,7 @@ Rules:
   - The table holds at most 127 rules.
   - Port layout: port 1 = the untrusted workload segment, port 2 = the uplink to the rest of the network, port 3 = a monitoring tap, port 4 = the controller link (do not use it).`;
 
-interface Args { intent: string; model: string; host: string; n: number; out: string }
+interface Args { intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number }
 
 function parseArgs(argv: readonly string[]): Args {
   const get = (k: string): string | undefined => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
@@ -53,7 +55,11 @@ function parseArgs(argv: readonly string[]): Args {
   if (!Number.isInteger(n) || n < 1 || n > MAX_N) throw new Error(`--n must be an integer 1 to ${MAX_N}`);
   const intent = need('--intent');
   if (!(intent in INTENTS)) throw new Error(`unknown intent ${intent}; known: ${Object.keys(INTENTS).join(', ')}`);
-  return { intent, model: need('--model'), host: need('--host'), n, out: need('--out') };
+  const thinkArg = get('--think') ?? 'false';
+  if (thinkArg !== 'true' && thinkArg !== 'false') throw new Error('--think must be true or false');
+  const numPredict = Number(get('--num-predict') ?? DEFAULT_NUM_PREDICT);
+  if (!Number.isInteger(numPredict) || numPredict < 256 || numPredict > MAX_NUM_PREDICT) throw new Error(`--num-predict must be an integer 256 to ${MAX_NUM_PREDICT}`);
+  return { intent, model: need('--model'), host: need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -88,9 +94,9 @@ async function main(): Promise<void> {
     let record: Record<string, unknown>;
     try {
       const r = await ollama(args.host, '/api/chat', {
-        model: args.model, stream: false,
+        model: args.model, stream: false, think: args.think,
         messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }],
-        options: { temperature: TEMPERATURE, top_p: TOP_P, seed, num_predict: NUM_PREDICT },
+        options: { temperature: TEMPERATURE, top_p: TOP_P, seed, num_predict: args.numPredict },
       });
       const content = String((r['message'] as { content?: unknown } | undefined)?.content ?? '');
       const p = parseProposal(content);
@@ -107,7 +113,7 @@ async function main(): Promise<void> {
   }
   const summary = {
     schema: 'agent-eval/v1', protocol: 'A (zero-shot)', intent: args.intent, model: args.model, modelDigest: model.digest, host: args.host,
-    trials: args.n, temperature: TEMPERATURE, topP: TOP_P, seeds: `1..${args.n}`, numPredict: NUM_PREDICT,
+    trials: args.n, temperature: TEMPERATURE, topP: TOP_P, seeds: `1..${args.n}`, numPredict: args.numPredict, think: args.think,
     promptSha256: promptHash, gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
     note: 'abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour',
