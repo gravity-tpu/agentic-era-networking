@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { neonConfig, neon } from '@neondatabase/serverless';
 import ws from 'ws';
+import { resolveDatabaseUrl } from './telemetry-db.js';
 
 neonConfig.webSocketConstructor = ws;
 
@@ -186,13 +187,7 @@ let neonTableReady = false;
 let neonTableInitPromise: Promise<boolean> | null = null;
 
 function getNeonUrl(): string | null {
-  return (
-    process.env['DATABASE_URL'] ??
-    process.env['agentic_POSTGRES_PRISMA_URL'] ??
-    process.env['agentic_DATABASE_URL'] ??
-    process.env['POSTGRES_PRISMA_URL'] ??
-    null
-  );
+  return resolveDatabaseUrl();
 }
 
 function ensureNeonTable(): Promise<boolean> {

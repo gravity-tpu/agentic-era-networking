@@ -95,14 +95,32 @@ async function raceDeadline<T>(read: PromiseLike<T>, label: string): Promise<T> 
   }
 }
 
+export function resolveDatabaseUrl(): string | null {
+  return (
+    process.env['ZODIAC_DATABASE_URL'] ||
+    process.env['DATABASE_URL'] ||
+    process.env['POSTGRES_PRISMA_URL'] ||
+    process.env['POSTGRES_URL'] ||
+    process.env['agentic_POSTGRES_PRISMA_URL'] ||
+    process.env['agentic_DATABASE_URL'] ||
+    null
+  );
+}
+
 export function getPrismaClient(): PrismaClient | null {
-  const dbUrl = process.env['DATABASE_URL'] || process.env['agentic_POSTGRES_PRISMA_URL'] || process.env['agentic_DATABASE_URL'] || process.env['POSTGRES_PRISMA_URL'];
+  const dbUrl = resolveDatabaseUrl();
   if (!dbUrl) {
     return null;
   }
 
   if (!globalPrisma) {
     try {
+      try {
+        const host = new URL(dbUrl).host;
+        console.log(`[*] [Telemetry DB] Initializing PrismaNeon adapter for host: ${host}`);
+      } catch (err: unknown) {
+        console.warn('[!] [Telemetry DB] Non-standard connection string format, skipping host log:', err instanceof Error ? err.message : String(err));
+      }
       const adapter = new PrismaNeon({ connectionString: dbUrl });
       globalPrisma = new PrismaClient({
         adapter,
