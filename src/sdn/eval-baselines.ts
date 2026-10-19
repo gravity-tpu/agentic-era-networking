@@ -8,7 +8,15 @@
 
 import { buildPort1IsolationPolicy, ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP } from './port1-isolation.js';
 import { generateMutants, MUTATION_OPERATORS } from './rule-mutations.js';
-import { PORT1_ISOLATION_INTENT } from './intents.js';
+import {
+  PORT1_ISOLATION_INTENT,
+  DNS_CONFINEMENT_INTENT,
+  QUARANTINE_PRECEDENCE_INTENT,
+  TAP_RETURN_ISOLATION_INTENT,
+} from './intents.js';
+import { buildDnsConfinementPolicy, buildQuarantinePolicy, buildTapReturnPolicy } from './intent-references.js';
+import type { IntentSpec } from './intent-spec.js';
+import type { IsolationRule } from './port1-isolation.js';
 import { triageProposal } from './proposal-triage.js';
 
 export interface BaselinesResult {
@@ -26,16 +34,27 @@ export interface BaselinesResult {
   readonly note: string;
 }
 
+/** Every intent of the evaluation with its hand-written reference policy. INTENT-1 is the original baselines file. */
+export const BASELINE_TARGETS: ReadonlyArray<{ readonly intent: IntentSpec; readonly reference: () => readonly IsolationRule[] }> = [
+  { intent: PORT1_ISOLATION_INTENT, reference: buildPort1IsolationPolicy },
+  { intent: DNS_CONFINEMENT_INTENT, reference: buildDnsConfinementPolicy },
+  { intent: QUARANTINE_PRECEDENCE_INTENT, reference: buildQuarantinePolicy },
+  { intent: TAP_RETURN_ISOLATION_INTENT, reference: buildTapReturnPolicy },
+];
+
 export function computeBaselines(): BaselinesResult {
-  const reference = buildPort1IsolationPolicy();
-  const refVerdict = triageProposal(reference, PORT1_ISOLATION_INTENT);
+  return computeBaselinesFor(PORT1_ISOLATION_INTENT, buildPort1IsolationPolicy());
+}
+
+export function computeBaselinesFor(intent: IntentSpec, reference: readonly IsolationRule[]): BaselinesResult {
+  const refVerdict = triageProposal(reference, intent);
   if (refVerdict.category !== 'ADMISSIBLE') {
-    throw new Error(`the reference policy is not admissible under its own intent: ${refVerdict.details.join('; ')}`);
+    throw new Error(`the reference policy is not admissible under its own intent (${intent.id}): ${refVerdict.details.join('; ')}`);
   }
   const mutants = generateMutants(reference, [ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP]);
   if (new Set(mutants.map((m) => m.id)).size !== mutants.length) throw new Error('mutant ids are not unique; the per-mutant verdicts would collide');
   // One triage per mutant, one source of truth for killed, survived, the per-operator counts and the category counts.
-  const judged = mutants.map((m) => ({ m, category: triageProposal(m.rules, PORT1_ISOLATION_INTENT).category }));
+  const judged = mutants.map((m) => ({ m, category: triageProposal(m.rules, intent).category }));
   const killed = judged.filter((j) => j.category !== 'ADMISSIBLE');
   const survived = judged.filter((j) => j.category === 'ADMISSIBLE');
   const byOperator: Record<string, { total: number; killed: number; survived: number }> = {};
@@ -48,7 +67,7 @@ export function computeBaselines(): BaselinesResult {
   for (const j of killed) killedByPrimaryCategory[j.category] = (killedByPrimaryCategory[j.category] ?? 0) + 1;
   return {
     schema: 'eval-baselines/v1',
-    intent: PORT1_ISOLATION_INTENT.id,
+    intent: intent.id,
     reference: { rules: reference.length, category: refVerdict.category },
     mutants: { total: judged.length, killed: killed.length, survived: survived.length, byOperator, killedByPrimaryCategory },
     survivedMutants: survived.map((j) => j.m.id),
