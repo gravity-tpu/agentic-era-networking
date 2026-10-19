@@ -32,4 +32,28 @@ require the tap copy, so the checks cannot call its loss a fault. If the tap cop
 for it. Until then, 29 of 40 is a lower bound on what the checks can catch, and "all 29 non-equivalent mutants caught" is
 a claim this file supports only through that reading.
 
+## INTENT-2 to 4 (2026-10-19)
+
+The same procedure for the other three intents, each with its own hand-written reference policy
+(`src/sdn/intent-references.ts`); files in `dns-confinement_v1/`, `quarantine-precedence_v1/` and `tap-return-isolation_v1/`.
+Every reference is admissible under its intent. `test/invariants/eval-baselines.test.ts` regenerates all four files and compares them.
+
+| Intent | Mutants | Rejected | Accepted |
+| :--- | ---: | ---: | ---: |
+| `port1-isolation/v1` (INTENT-1) | 40 | 29 | 11 |
+| `dns-confinement/v1` (INTENT-2) | 42 | 31 | 11 |
+| `quarantine-precedence/v1` (INTENT-3) | 56 | 45 | 11 |
+| `tap-return-isolation/v1` (INTENT-4) | 40 | 35 | 5 |
+
+- **INTENT-4 confirms the tap gap named above.** It requires the tap copy and the return path that INTENT-1 only permits, and
+  it rejects 35 of 40 mutants against 29 of 40. The 5 it accepts are all `raise-priority` mutants of rules that overlap nothing they
+  could newly shadow (same reading as before: by hand, not a proof).
+- **INTENT-2 and INTENT-3 inherit INTENT-1's permissive tap clauses**, so they accept the same kind of mutant (a lost tap copy or
+  tap return). INTENT-3's accepted list also includes raising the priority of the two quarantine rules, which are already the
+  highest-priority rules, so those cannot change behaviour.
+- **INTENT-2 is weaker than the plan's text.** The match model has no layer-4 fields, so "UDP port 53 only" cannot be written or
+  checked; the intent confines the workload to the resolver host `10.0.2.1`. It does not prove that only DNS reaches that host.
+- **INTENT-3 does not cover ARP from the quarantined host**: ARP carries no IPv4 source in the match model, so it is still permitted.
+- The reference for INTENT-4 is the same six rules as INTENT-1's: only the intent differs.
+
 Model results against these baselines: [`../README.md`](../README.md).
