@@ -98,7 +98,7 @@ intents, then Protocol A) is still running when this is written.
 
 | Intent | Zero-shot, N = 50 | With verifier feedback, N = 20 |
 | :--- | :--- | :--- |
-| INTENT-2 `dns-confinement/v1` | not yet run | **18 admissible** (turn 1: 14, turn 2: 2, turn 4: 1, turn 5: 1); 2 `ERR_SYNTAX`, both **truncated** (below) |
+| INTENT-2 `dns-confinement/v1` | **29 admissible**; 16 truncated (no answer), 4 `ERR_INTENT_LEAK`, 1 `ERR_PREREQUISITE` | **18 admissible** (turn 1: 14, turn 2: 2, turn 4: 1, turn 5: 1); 2 `ERR_SYNTAX`, both **truncated** (below) |
 | INTENT-3 `quarantine-precedence/v1` | not yet run | **18 admissible** (turn 1: 1, turn 2: 12, turn 3: 5); 2 `TRANSPORT_FAILURE`, both the runner's 30-minute turn timeout on the first turn (seeds 10 and 11) |
 | INTENT-4 `tap-return-isolation/v1` | not yet run | **19 admissible** (turn 1: 11, turn 2: 4, turn 3: 3, turn 5: 1); 1 `ERR_SYNTAX`, a **truncation** on all five turns (seed 8) |
 
@@ -108,6 +108,11 @@ intents, then Protocol A) is still running when this is written.
   reasoning-on runs had none (0 of 89 turns). So on INTENT-2 the model sometimes spends its whole budget reasoning; a larger budget might change the 2
   failures and was not tried.
 - 14 of 20 trials were admissible on turn 1 with no feedback at all, and the 18 admissible final outputs are all distinct.
+- **INTENT-2 zero-shot: reasoning on is worse than off here, because of truncation.** 29 of 50 are admissible with reasoning on, against 50 of 50 with it off. The
+  16 trials that are not admissible and not wrong are the 16 that hit the 32768-token cap on their only turn and returned nothing (the triage labels them
+  `ERR_SYNTAX`; none is a malformed answer). Of the 34 trials that did answer, 29 are admissible and 5 are not (4 leaks, 1 missing EtherType). So the model reasons itself out of
+  an answer in about a third of the trials, which reasoning off never does on this intent. It is a budget effect: a larger cap was not tried, and "29 of 50" would
+  change with it. The 29 admissible sets are 27 distinct rule-id sets.
 - **INTENT-3 against reasoning off.** With feedback and reasoning on, 18 of 20 reach a quarantine DROP that outranks forwarding and satisfies the intent, against 3 of 20
   with reasoning off. Only one trial was right on turn 1 (the first-turn failures were mostly the hairpin, 11, and a leak, 4), so for this intent the gain comes
   from the feedback loop with reasoning, not from a better first answer. The 18 admissible sets use 7 or 8 rules and are 18 distinct rule-id sets. One turn in 40
