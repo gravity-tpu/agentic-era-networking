@@ -1,0 +1,76 @@
+{
+  "schema": "rescore-lenient/v1",
+  "transforms": [
+    "cidr-split",
+    "numeric-string"
+  ],
+  "gitCommit": "957ecffee30e1f5977a49638264c4895c9868cf4",
+  "note": "post-hoc re-parse of saved responses; the strict parse remains the pre-registered scoring, this only shows how much of a failure was format",
+  "runs": [
+    {
+      "dir": "protocol-a-port1-isolation-v1-qwen2.5-3b-jetson-think-false",
+      "intent": "port1-isolation/v1",
+      "trials": 50,
+      "strict": {
+        "ERR_SYNTAX": 18,
+        "ERR_SHADOWED": 25,
+        "TRANSPORT_FAILURE": 6,
+        "ERR_PREREQUISITE": 1
+      },
+      "lenient": {
+        "ERR_SHADOWED": 38,
+        "TRANSPORT_FAILURE": 6,
+        "ERR_HAIRPIN": 2,
+        "ERR_SYNTAX": 3,
+        "ERR_PREREQUISITE": 1
+      },
+      "trialsWhoseCategoryChanged": 15
+    },
+    {
+      "dir": "protocol-a-dns-confinement_v1-qwen2.5-3b-jetson-think-false",
+      "intent": "dns-confinement/v1",
+      "trials": 50,
+      "strict": {
+        "ERR_SYNTAX": 50
+      },
+      "lenient": {
+        "ERR_SHADOWED": 25,
+        "ERR_PREREQUISITE": 21,
+        "ERR_HAIRPIN": 2,
+        "ERR_SYNTAX": 2
+      },
+      "trialsWhoseCategoryChanged": 48
+    },
+    {
+      "dir": "protocol-a-quarantine-precedence_v1-qwen2.5-3b-jetson-think-false",
+      "intent": "quarantine-precedence/v1",
+      "trials": 50,
+      "strict": {
+        "ERR_SYNTAX": 38,
+        "ERR_SHADOWED": 11,
+        "ERR_PREREQUISITE": 1
+      },
+      "lenient": {
+        "ERR_SYNTAX": 6,
+        "ERR_SHADOWED": 32,
+        "ERR_HAIRPIN": 10,
+        "ERR_PREREQUISITE": 2
+      },
+      "trialsWhoseCategoryChanged": 32
+    },
+    {
+      "dir": "protocol-a-tap-return-isolation_v1-qwen2.5-3b-jetson-think-false",
+      "intent": "tap-return-isolation/v1",
+      "trials": 50,
+      "strict": {
+        "ERR_SYNTAX": 50
+      },
+      "lenient": {
+        "ERR_SYNTAX": 45,
+        "ERR_PREREQUISITE": 4,
+        "ERR_SHADOWED": 1
+      },
+      "trialsWhoseCategoryChanged": 5
+    }
+  ]
+}

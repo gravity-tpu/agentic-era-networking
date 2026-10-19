@@ -78,8 +78,48 @@ function extractJson(text: string): unknown {
   return undefined;
 }
 
+/** The only two format slips the lenient parse forgives. Everything else stays a syntax error. */
+export const LENIENT_TRANSFORMS = ['cidr-split', 'numeric-string'] as const;
+
+export interface ParseOptions {
+  /** Off by default. Used only to re-score a model's format slips (docs/benchmarks/results/agent-evaluation/README.md). */
+  readonly lenient?: boolean;
+}
+
+const NUMERIC = /^\d{1,6}$/;
+const CIDR = /^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/;
+const asNumber = (v: unknown): unknown => (typeof v === 'string' && NUMERIC.test(v) ? Number(v) : v);
+
+/** Apply the two named transforms to one rule, without touching anything else. */
+function leniently(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const r: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  r['priority'] = asNumber(r['priority']);
+  if (Array.isArray(r['outputPorts'])) r['outputPorts'] = r['outputPorts'].map(asNumber);
+  const m = r['match'];
+  if (m !== null && typeof m === 'object' && !Array.isArray(m)) {
+    const mm: Record<string, unknown> = { ...(m as Record<string, unknown>) };
+    for (const k of ['inPort', 'etherType', 'srcIpPrefixLen', 'dstIpPrefixLen']) mm[k] = asNumber(mm[k]);
+    for (const [ipKey, lenKey] of [['srcIp', 'srcIpPrefixLen'], ['dstIp', 'dstIpPrefixLen']] as const) {
+      const v = mm[ipKey];
+      const hit = typeof v === 'string' ? CIDR.exec(v) : null;
+      if (hit === null) continue;
+      const len = Number(hit[2]);
+      const existing = mm[lenKey];
+      // A conflicting explicit prefix length is not a slip to forgive: leave the string, which then fails the strict address check.
+      if (len < 1 || len > 32 || (existing !== undefined && existing !== len)) continue;
+      mm[ipKey] = hit[1];
+      mm[lenKey] = len;
+    }
+    for (const k of Object.keys(mm)) if (mm[k] === undefined) delete mm[k];
+    r['match'] = mm;
+  }
+  for (const k of Object.keys(r)) if (r[k] === undefined) delete r[k];
+  return r;
+}
+
 /** Strict schema check. Anything the verifiers would have to guess about is ERR_SYNTAX. */
-export function parseProposal(text: string): ParsedProposal {
+export function parseProposal(text: string, options: ParseOptions = {}): ParsedProposal {
   if (text.length > MAX_PROPOSAL_CHARS) return syntax(`proposal longer than ${MAX_PROPOSAL_CHARS} characters`);
   const json = extractJson(text);
   if (json === undefined) return syntax('no JSON found');
@@ -87,7 +127,8 @@ export function parseProposal(text: string): ParsedProposal {
   if (!Array.isArray(list) || list.length === 0) return syntax('expected a non-empty array of rules');
   const rules: IsolationRule[] = [];
   const seen = new Set<string>();
-  for (const [i, raw] of list.entries()) {
+  for (const [i, original] of list.entries()) {
+    const raw: unknown = options.lenient === true ? leniently(original) : original;
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return syntax(`rule ${i} is not an object`);
     const r = raw as Record<string, unknown>;
     for (const k of Object.keys(r)) if (!RULE_KEYS.has(k)) return syntax(`rule ${i}: unknown field ${k}`);
