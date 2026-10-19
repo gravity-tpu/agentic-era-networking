@@ -1,0 +1,32 @@
+{
+  "started_et": "2026-10-19 13:28:48 EDT",
+  "model": "yolov8s_h8.hef",
+  "run_seconds": 720,
+  "burst_seconds": 4,
+  "start_c": 66.0,
+  "hard_c": 80.0,
+  "poll_seconds": 2.0,
+  "health_before": {
+    "status": "HEALTHY",
+    "hailo_device": "CONNECTED",
+    "chip_ts0_c": 39.94661331176758,
+    "chip_ts1_c": 39.84543991088867,
+    "active_model": "yolov8s_h8.hef"
+  },
+  "finished_et": "2026-10-19 13:40:49 EDT",
+  "stop_reason": null,
+  "bursts": 103,
+  "frames": 126832,
+  "busy_ns": 433300497678,
+  "wall_ns": 721696382667,
+  "duty_permille": 600,
+  "sustained_fps_milli": 175741,
+  "peak_burst_chip_c": 71.0066,
+  "health_after": {
+    "status": "HEALTHY",
+    "hailo_device": "CONNECTED",
+    "chip_ts0_c": 65.79617309570312,
+    "chip_ts1_c": 65.54324340820312,
+    "active_model": "yolov8s_h8.hef"
+  }
+}

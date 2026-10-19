@@ -1,0 +1,19 @@
+{
+  "started_et": "2026-10-19 12:49:44 EDT",
+  "host": "rpi-hailo (Raspberry Pi 5)",
+  "model": "yolov8s_h8.hef",
+  "soak_seconds_requested": 900,
+  "abort_chip_c": 100.0,
+  "health_before": {
+    "status": "HEALTHY",
+    "hailo_device": "CONNECTED",
+    "chip_ts0_c": 46.67458724975586,
+    "chip_ts1_c": 46.57341384887695,
+    "active_model": "yolov8s_h8.hef"
+  },
+  "hailortcli": "Executing on device: 0001:01:00.0\nIdentifying board\nControl Protocol Version: 2\nFirmware Version: 4.20.0 (release,app,extended context switch buffer)\nLogger Version: 0\nBoard Name: Hailo-8\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\nDevice Architecture: HAILO8\nSerial Number: <N/A>",
+  "hailort_version": "HailoRT-CLI version 4.20.0",
+  "kernel": "6.12.109+rpt-rpi-2712",
+  "pcie_link": "",
+  "pi_vcgencmd_before": "temp=47.7'C\nthrottled=0x0\nfrequency(0)=1500019456"
+}

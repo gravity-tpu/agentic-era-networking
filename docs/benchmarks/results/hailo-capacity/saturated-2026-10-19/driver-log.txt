@@ -1,0 +1,19 @@
+2026-10-19 12:50:01 EDT short passes done
+2026-10-19 12:50:31 EDT call 1 fps 305.642 chip avg/max 70.0726 75.4328
+2026-10-19 12:51:02 EDT call 2 fps 306.72 chip avg/max 79.4068 82.692
+2026-10-19 12:51:32 EDT call 3 fps 304.183 chip avg/max 83.4881 85.7019
+2026-10-19 12:52:03 EDT call 4 fps 304.493 chip avg/max 86.8248 87.9277
+2026-10-19 12:52:33 EDT call 5 fps 306.012 chip avg/max 88.8695 90.0776
+2026-10-19 12:53:04 EDT call 6 fps 302.591 chip avg/max 89.9042 91.8481
+2026-10-19 12:53:34 EDT call 7 fps 305.333 chip avg/max 92.6382 93.3657
+2026-10-19 12:54:05 EDT call 8 fps 305.471 chip avg/max 93.2341 93.8968
+2026-10-19 12:54:35 EDT call 9 fps 306.005 chip avg/max 93.8682 95.3638
+2026-10-19 12:55:05 EDT call 10 fps 305.147 chip avg/max 94.5285 94.858
+2026-10-19 12:55:36 EDT call 11 fps 305.649 chip avg/max 94.3927 94.5545
+2026-10-19 12:56:06 EDT call 12 fps 304.72 chip avg/max 93.8352 94.0486
+2026-10-19 12:56:37 EDT call 13 fps 305.072 chip avg/max 93.4204 93.6186
+2026-10-19 12:57:07 EDT call 14 fps 305.209 chip avg/max 92.9083 93.0369
+2026-10-19 12:57:38 EDT call 15 fps 304.706 chip avg/max 92.2276 92.6322
+2026-10-19 12:58:08 EDT call 16 fps 306.087 chip avg/max 92.0671 92.354
+2026-10-19 12:58:39 EDT call 17 fps 305.049 chip avg/max 91.8428 92.0251
+2026-10-19 12:59:09 EDT call 18 fps 305.492 chip avg/max 91.0802 91.4434
