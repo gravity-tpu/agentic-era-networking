@@ -100,7 +100,7 @@ intents, then Protocol A) is still running when this is written.
 | :--- | :--- | :--- |
 | INTENT-2 `dns-confinement/v1` | not yet run | **18 admissible** (turn 1: 14, turn 2: 2, turn 4: 1, turn 5: 1); 2 `ERR_SYNTAX`, both **truncated** (below) |
 | INTENT-3 `quarantine-precedence/v1` | not yet run | **18 admissible** (turn 1: 1, turn 2: 12, turn 3: 5); 2 `TRANSPORT_FAILURE`, both the runner's 30-minute turn timeout on the first turn (seeds 10 and 11) |
-| INTENT-4 `tap-return-isolation/v1` | not yet run | not yet finished |
+| INTENT-4 `tap-return-isolation/v1` | not yet run | **19 admissible** (turn 1: 11, turn 2: 4, turn 3: 3, turn 5: 1); 1 `ERR_SYNTAX`, a **truncation** on all five turns (seed 8) |
 
 - **Truncation is a limit of this condition.** The 2 non-admissible INTENT-2 trials are not format errors: on all five turns each stopped at the 32768-token cap
   (`done_reason` `length`) with no answer, so the triage saw empty text and labelled it `ERR_SYNTAX`. Across the 20 trials, **16 of 37 turns hit the cap**
@@ -112,6 +112,12 @@ intents, then Protocol A) is still running when this is written.
   with reasoning off. Only one trial was right on turn 1 (the first-turn failures were mostly the hairpin, 11, and a leak, 4), so for this intent the gain comes
   from the feedback loop with reasoning, not from a better first answer. The 18 admissible sets use 7 or 8 rules and are 18 distinct rule-id sets. One turn in 40
   hit the token cap, none of them last turns.
+- **INTENT-4 against reasoning off.** 19 of 20 with reasoning on, against 16 of 20 with it off. Here, unlike INTENT-3, reasoning also helps the first answer:
+  11 of 20 are admissible on turn 1 with no feedback, against 0 of 20 with reasoning off. All 7 first-turn `ERR_SYNTAX` results are truncations (token cap, no answer), and
+  16 of 38 turns hit the cap; the one non-admissible trial (seed 8) was truncated on every turn. In the INTENT-2 and INTENT-4 reasoning-on runs every
+  `ERR_SYNTAX` turn is a truncation (16 of 16 in each), not a malformed answer; in INTENT-3 only 1 of its 3 is (the other 2 are malformed answers). The INTENT-1
+  reasoning-on runs had no truncations. The 19 admissible sets use 6 or 7 rules but only 9 distinct rule-id
+  sets: many converge on the same six-rule shape as the hand-written reference.
 - **The 2 INTENT-3 failures are time, not content.** Seeds 10 and 11 produced no answer within the runner's 30-minute turn limit (`TURN_TIMEOUT_MS`, one first turn each), so they
   count as transport failures; the run is 18 of 20 admissible, 2 not scored, not 18 of 18.
 
