@@ -24,6 +24,8 @@ import { PORT1_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 
 const INTENTS = { [PORT1_ISOLATION_INTENT.id]: PORT1_ISOLATION_INTENT } as const;
 const MAX_N = 200;
+const MAX_TURNS = 5; // Protocol B: the plan's iteration cap
+const MAX_FEEDBACK_LINES = 12; // verifier detail lines returned to the model per turn
 const REQUEST_TIMEOUT_MS = 600_000;
 const DEFAULT_NUM_PREDICT = 8192;
 const MAX_NUM_PREDICT = 65536;
@@ -46,7 +48,7 @@ Rules:
   - The table holds at most 127 rules.
   - Port layout: port 1 = the untrusted workload segment, port 2 = the uplink to the rest of the network, port 3 = a monitoring tap, port 4 = the controller link (do not use it).`;
 
-interface Args { intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number }
+interface Args { intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number; protocol: 'A' | 'B' }
 
 function parseArgs(argv: readonly string[]): Args {
   const get = (k: string): string | undefined => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
@@ -59,7 +61,9 @@ function parseArgs(argv: readonly string[]): Args {
   if (thinkArg !== 'true' && thinkArg !== 'false') throw new Error('--think must be true or false');
   const numPredict = Number(get('--num-predict') ?? DEFAULT_NUM_PREDICT);
   if (!Number.isInteger(numPredict) || numPredict < 256 || numPredict > MAX_NUM_PREDICT) throw new Error(`--num-predict must be an integer 256 to ${MAX_NUM_PREDICT}`);
-  return { intent, model: need('--model'), host: need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict };
+  const protocol = get('--protocol') ?? 'A';
+  if (protocol !== 'A' && protocol !== 'B') throw new Error('--protocol must be A or B');
+  return { protocol, intent, model: need('--model'), host: need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -92,19 +96,29 @@ async function main(): Promise<void> {
   for (let seed = 1; seed <= args.n; seed++) {
     const t0 = process.hrtime.bigint();
     let record: Record<string, unknown>;
+    const messages: Array<{ role: string; content: string }> = [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }];
+    const turns: Array<Record<string, unknown>> = [];
+    const maxTurns = args.protocol === 'B' ? MAX_TURNS : 1;
     try {
-      const r = await ollama(args.host, '/api/chat', {
-        model: args.model, stream: false, think: args.think,
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }],
-        options: { temperature: TEMPERATURE, top_p: TOP_P, seed, num_predict: args.numPredict },
-      });
-      const content = String((r['message'] as { content?: unknown } | undefined)?.content ?? '');
-      const p = parseProposal(content);
-      const verdict = p.ok ? triageProposal(p.rules, spec) : { category: p.category, categories: [p.category], details: [p.detail] };
-      record = { seed, ok: true, category: verdict.category, categories: verdict.categories, details: verdict.details, ruleCount: p.ok ? p.rules.length : null,
-        evalCount: r['eval_count'] ?? null, doneReason: r['done_reason'] ?? null, response: content };
+      for (let turn = 1; turn <= maxTurns; turn++) {
+        const r = await ollama(args.host, '/api/chat', {
+          model: args.model, stream: false, think: args.think, messages,
+          options: { temperature: TEMPERATURE, top_p: TOP_P, seed, num_predict: args.numPredict },
+        });
+        const content = String((r['message'] as { content?: unknown } | undefined)?.content ?? '');
+        const p = parseProposal(content);
+        const verdict = p.ok ? triageProposal(p.rules, spec) : { category: p.category, categories: [p.category], details: [p.detail] };
+        turns.push({ turn, category: verdict.category, categories: verdict.categories, details: verdict.details, ruleCount: p.ok ? p.rules.length : null,
+          evalCount: r['eval_count'] ?? null, doneReason: r['done_reason'] ?? null, response: content });
+        if (verdict.category === 'ADMISSIBLE') break;
+        messages.push({ role: 'assistant', content });
+        messages.push({ role: 'user', content: `The verifier rejected that rule set.\n${verdict.details.slice(0, MAX_FEEDBACK_LINES).join('\n')}\nFix every problem and reply with the complete corrected JSON array only.` });
+      }
+      const last = turns[turns.length - 1]!;
+      record = { seed, ok: true, category: last['category'], firstCategory: turns[0]!['category'], turnsUsed: turns.length,
+        admissibleAtTurn: last['category'] === 'ADMISSIBLE' ? turns.length : null, turns };
     } catch (e) {
-      record = { seed, ok: false, category: 'TRANSPORT_FAILURE', categories: [], details: [e instanceof Error ? e.message : String(e)], response: null };
+      record = { seed, ok: false, category: 'TRANSPORT_FAILURE', turnsUsed: turns.length, turns, details: [e instanceof Error ? e.message : String(e)] };
     }
     record['wallNs'] = (process.hrtime.bigint() - t0).toString();
     counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
@@ -112,7 +126,7 @@ async function main(): Promise<void> {
     process.stderr.write(`seed ${seed}/${args.n}: ${String(record['category'])}\n`);
   }
   const summary = {
-    schema: 'agent-eval/v1', protocol: 'A (zero-shot)', intent: args.intent, model: args.model, modelDigest: model.digest, host: args.host,
+    schema: 'agent-eval/v2', protocol: args.protocol === 'A' ? 'A (zero-shot)' : `B (verifier feedback, up to ${MAX_TURNS} turns)`, intent: args.intent, model: args.model, modelDigest: model.digest, host: args.host,
     trials: args.n, temperature: TEMPERATURE, topP: TOP_P, seeds: `1..${args.n}`, numPredict: args.numPredict, think: args.think,
     promptSha256: promptHash, gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
