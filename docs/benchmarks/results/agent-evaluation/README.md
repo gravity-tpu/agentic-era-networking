@@ -91,13 +91,22 @@ rows are **not** a difficulty ranking: an intent whose text spells out the polic
 - **`ERR_SHADOWED` is a hygiene failure, not necessarily a safety one** (a rule fully covered by higher-priority rules: a dead rule). It is in the
   pre-registered structural list (A5), so it counts as non-admissible, but only 3 trials across these runs fail on it alone; the rest also leak or omit something.
 
-### The Jetson model on INTENT-2 (`qwen2.5:3b`, reasoning off, zero-shot, N = 50)
+### The Jetson model on INTENT-2 to 4 (`qwen2.5:3b`, reasoning off, zero-shot, N = 50 each)
 
-**0 admissible: all 50 are `ERR_SYNTAX`.** 44 write `srcIp` as a CIDR string (`"10.0.2.0/24"`) although the prompt says a dotted address plus a separate
-prefix length, 5 do the same with `dstIp`, 1 returned no JSON. 35 distinct outputs. The strict parser is the pre-registered "malformed field types"
-category; a lenient parser that accepted CIDR strings would have scored these differently, and the choice is mine, not the plan's. The model also copies the
-schema's placeholder MAC address (`aa:bb:cc:dd:ee:ff`) into rules: a possible prompt effect (the prompt's example format is being echoed), not
-tested.
+**0 admissible in all three (and 0 of 200 across the four intents).**
+
+| Intent | Result (50 trials) | Distinct outputs |
+| :--- | :--- | ---: |
+| INTENT-2 | `ERR_SYNTAX` 50 | 35 |
+| INTENT-3 | `ERR_SYNTAX` 38, `ERR_SHADOWED` 11, `ERR_PREREQUISITE` 1 | 35 |
+| INTENT-4 | `ERR_SYNTAX` 50 | 42 |
+
+The syntax errors are mostly one habit: writing `srcIp` as a CIDR string (`"10.0.2.0/24"`) although the prompt says a dotted address plus a separate
+prefix length (INTENT-2: 44 of 50 first errors; INTENT-3: 18 of the 38 syntax errors; INTENT-4: 40 of 50), then `outputPorts` that are not a list
+of ports 1 to 4 (INTENT-3: 13, INTENT-4: 10), and a few `dstIp` strings. The strict parser is the pre-registered "malformed field types" category; a lenient parser that accepted
+CIDR strings would have scored these differently, and the choice is mine, not the plan's. The model also copies the schema's placeholder MAC
+address (`aa:bb:cc:dd:ee:ff`) into rules: a possible prompt effect (the prompt's example format is being echoed), not tested. These three runs had no
+transport failures (they ran after the INTENT-1 run, on a model that stayed loaded).
 
 ## What this does and does not show
 
@@ -112,5 +121,5 @@ tested.
 - Protocol A was run with an earlier version of the runner (record shape `agent-eval/v1`, one response per trial); Protocol B
   uses `agent-eval/v2` (a `turns` array). The check and the prompt are the same.
 - Baselines (reference policy and single-point mutations) for all four intents are in `baselines/`.
-- Not done in this file: INTENT-2 to 4 with reasoning on (queued) and the Jetson model on INTENT-3 and 4 (running), frontier-API models,
-  re-running the timed-out INTENT-1 seeds, and RQ4.
+- Not done in this file: INTENT-2 to 4 with reasoning on (queued, running), frontier-API models, re-running the timed-out INTENT-1 seeds,
+  a lenient-parser re-score of the small model's syntax failures, and RQ4.
