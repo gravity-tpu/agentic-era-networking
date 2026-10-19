@@ -116,6 +116,26 @@ INTENT-3 `ERR_SHADOWED` 32, `ERR_HAIRPIN` 10, `ERR_SYNTAX` 6, `ERR_PREREQUISITE`
 forms the two transforms do not cover in 11). So the small model's failure is not only format: once the format slips are forgiven the rule sets are still
 wrong (dead rules, a missing EtherType, hairpins). The lenient parse is a diagnostic, not a scoring rule.
 
+### The small model with verifier feedback (`qwen2.5:3b`, up to 5 turns, N = 20 per intent)
+
+Run on the **Mac**, not the Jetson: the Jetson queue was stopped by its memory guard at 05:15 (available memory 304 MB with the longer feedback
+conversations; the Jetson recovered with no out-of-memory kill and the interrupted run wrote nothing). It is the same model file (digest `357c53fb659c`), so the
+verdicts do not depend on the hardware, though the run is not on the embedded device. `rescore-lenient-mac-b.json` is the lenient re-score.
+
+| Intent | Strict, after 5 turns | Lenient re-score of the last turn |
+| :--- | :--- | :--- |
+| INTENT-1 | **0 admissible**: `ERR_SYNTAX` 13, `ERR_HAIRPIN` 5, `ERR_SHADOWED` 2 | `ERR_HAIRPIN` 8, `ERR_SYNTAX` 5, `ERR_SHADOWED` 4, `ERR_PREREQUISITE` 3 |
+| INTENT-2 | **0 admissible**: `ERR_SYNTAX` 19, `ERR_PREREQUISITE` 1 | `ERR_PREREQUISITE` 12, `ERR_SYNTAX` 5, `ERR_SHADOWED` 3 |
+| INTENT-3 | **0 admissible**: `ERR_SYNTAX` 17, `ERR_SHADOWED` 2, `ERR_HAIRPIN` 1 | `ERR_SYNTAX` 9, `ERR_SHADOWED` 8, `ERR_HAIRPIN` 2, `ERR_INTENT_LEAK` 1 |
+| INTENT-4 | **0 admissible**: `ERR_SYNTAX` 20 | `ERR_SYNTAX` 16, `ERR_SHADOWED` 3, `ERR_PREREQUISITE` 1 |
+
+- Every trial used all 5 turns (none stopped early), with 19, 17, 19 and 20 distinct final outputs. The first-turn category was already mostly syntax
+  (12, 19, 16 and 20 of 20), and it stays mostly syntax at turn 5: the feedback message (up to 12 lines of verifier detail) does not make this model
+  change its output format. In INTENT-1 a few trials moved from syntax errors to hairpins, which is a different failure, not a fix.
+- Forgiving the two format slips still gives 0 admissible: the rule sets are wrong as well as badly formatted.
+- For comparison on INTENT-1 with feedback: `gemma4:26b` reasoning off 2 of 20, reasoning on 20 of 20. This model is a much smaller model with no reasoning
+  mode; the comparison is across model size and reasoning together, not either alone.
+
 ## What this does and does not show
 
 - For this model, this prompt and this intent: zero-shot was never admissible with reasoning off and 5 of 50 with it on; feedback rescued
@@ -129,5 +149,5 @@ wrong (dead rules, a missing EtherType, hairpins). The lenient parse is a diagno
 - Protocol A was run with an earlier version of the runner (record shape `agent-eval/v1`, one response per trial); Protocol B
   uses `agent-eval/v2` (a `turns` array). The check and the prompt are the same.
 - Baselines (reference policy and single-point mutations) for all four intents are in `baselines/`.
-- Not done in this file: INTENT-2 to 4 with reasoning on (queued, running), frontier-API models, re-running the timed-out INTENT-1 seeds,
-  a lenient-parser re-score of the small model's syntax failures, and RQ4.
+- Not done in this file: INTENT-2 to 4 with reasoning on (queued, running; no results yet), frontier-API models, re-running the timed-out
+  INTENT-1 seeds, the small model with reasoning (it has none) or at other sizes, and RQ4.

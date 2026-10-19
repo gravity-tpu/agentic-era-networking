@@ -1,0 +1,31 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "B (verifier feedback, up to 5 turns)",
+  "intent": "quarantine-precedence/v1",
+  "model": "qwen2.5:3b",
+  "modelDigest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+  "host": "http://100.112.223.16:11434",
+  "trials": 20,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..20",
+  "numPredict": 8192,
+  "think": false,
+  "promptSha256": "ac55dcb6772610a956b722f6fb10510ec9d8fa734185bed871013f2441bb0a22",
+  "gitCommit": "aac36f30a824b1f920ea14a9416bda6121e22238",
+  "startedAt": "2026-10-19T10:09:36.974Z",
+  "counts": {
+    "ERR_SYNTAX": 17,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 1,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 2,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 0,
+    "TRANSPORT_FAILURE": 0
+  },
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}
