@@ -1,7 +1,6 @@
 {
   "schema": "eval-baselines/v1",
   "intent": "port1-isolation/v1",
-  "gitCommit": "a33a373b790267ec98644020f20591e2c79b402b",
   "reference": {
     "rules": 6,
     "category": "ADMISSIBLE"
@@ -63,5 +62,6 @@
     "remove-output:p3-tap-return:1",
     "raise-priority:p3-tap-return"
   ],
-  "note": "a survived mutant is either an equivalent mutant (same behaviour under the intent) or a gap in the checks; this file does not say which"
+  "note": "a survived mutant is either an equivalent mutant (same behaviour under the intent) or a gap in the checks; this file does not say which",
+  "gitCommit": "e4c1380cea60067133c3093003420e359adb3f25"
 }
