@@ -78,8 +78,8 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
-    "@prisma/adapter-neon": "^7.10.0",
-    "@prisma/client": "^7.10.0",
+    "@prisma/adapter-neon": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "ws": "^8.22.0"
