@@ -108,6 +108,14 @@ CIDR strings would have scored these differently, and the choice is mine, not th
 address (`aa:bb:cc:dd:ee:ff`) into rules: a possible prompt effect (the prompt's example format is being echoed), not tested. These three runs had no
 transport failures (they ran after the INTENT-1 run, on a model that stayed loaded).
 
+**Lenient re-score** (`scripts/rescore-lenient.ts`, `rescore-lenient-jetson.json`; no model call, the strict scoring above is unchanged). Re-parsing the saved
+responses with two named, opt-in transforms (a CIDR string is split into address and prefix length; a numeric string is read as an integer) still gives
+**0 admissible in all four intents**. The failures move: INTENT-2 becomes `ERR_SHADOWED` 25, `ERR_PREREQUISITE` 21, `ERR_HAIRPIN` 2, `ERR_SYNTAX` 2;
+INTENT-3 `ERR_SHADOWED` 32, `ERR_HAIRPIN` 10, `ERR_SYNTAX` 6, `ERR_PREREQUISITE` 2; INTENT-1 `ERR_SHADOWED` 38, `ERR_HAIRPIN` 2, `ERR_SYNTAX` 3,
+`ERR_PREREQUISITE` 1 (6 transport failures unchanged); INTENT-4 stays mostly syntax (45 of 50: a `srcMac` that is not a MAC address in 31 trials, and IP
+forms the two transforms do not cover in 11). So the small model's failure is not only format: once the format slips are forgiven the rule sets are still
+wrong (dead rules, a missing EtherType, hairpins). The lenient parse is a diagnostic, not a scoring rule.
+
 ## What this does and does not show
 
 - For this model, this prompt and this intent: zero-shot was never admissible with reasoning off and 5 of 50 with it on; feedback rescued
