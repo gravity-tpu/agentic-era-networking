@@ -7,7 +7,7 @@
  */
 
 import { buildPort1IsolationPolicy, ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP } from './port1-isolation.js';
-import { generateMutants, scoreMutants, MUTATION_OPERATORS } from './rule-mutations.js';
+import { generateMutants, MUTATION_OPERATORS } from './rule-mutations.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { triageProposal } from './proposal-triage.js';
 
@@ -33,25 +33,25 @@ export function computeBaselines(): BaselinesResult {
     throw new Error(`the reference policy is not admissible under its own intent: ${refVerdict.details.join('; ')}`);
   }
   const mutants = generateMutants(reference, [ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP]);
-  const verdicts = new Map(mutants.map((m) => [m.id, triageProposal(m.rules, PORT1_ISOLATION_INTENT)]));
-  const score = scoreMutants(mutants, (rules) => triageProposal(rules, PORT1_ISOLATION_INTENT).category !== 'ADMISSIBLE');
+  if (new Set(mutants.map((m) => m.id)).size !== mutants.length) throw new Error('mutant ids are not unique; the per-mutant verdicts would collide');
+  // One triage per mutant, one source of truth for killed, survived, the per-operator counts and the category counts.
+  const judged = mutants.map((m) => ({ m, category: triageProposal(m.rules, PORT1_ISOLATION_INTENT).category }));
+  const killed = judged.filter((j) => j.category !== 'ADMISSIBLE');
+  const survived = judged.filter((j) => j.category === 'ADMISSIBLE');
   const byOperator: Record<string, { total: number; killed: number; survived: number }> = {};
   for (const op of MUTATION_OPERATORS) {
-    const of = mutants.filter((m) => m.operator === op);
-    const killed = of.filter((m) => score.killed.includes(m)).length;
-    byOperator[op] = { total: of.length, killed, survived: of.length - killed };
+    const of = judged.filter((j) => j.m.operator === op);
+    const k = of.filter((j) => j.category !== 'ADMISSIBLE').length;
+    byOperator[op] = { total: of.length, killed: k, survived: of.length - k };
   }
   const killedByPrimaryCategory: Record<string, number> = {};
-  for (const m of score.killed) {
-    const c = verdicts.get(m.id)?.category ?? 'ERR_UNCHECKABLE';
-    killedByPrimaryCategory[c] = (killedByPrimaryCategory[c] ?? 0) + 1;
-  }
+  for (const j of killed) killedByPrimaryCategory[j.category] = (killedByPrimaryCategory[j.category] ?? 0) + 1;
   return {
     schema: 'eval-baselines/v1',
     intent: PORT1_ISOLATION_INTENT.id,
     reference: { rules: reference.length, category: refVerdict.category },
-    mutants: { total: score.total, killed: score.killed.length, survived: score.survived.length, byOperator, killedByPrimaryCategory },
-    survivedMutants: score.survived.map((m) => m.id),
+    mutants: { total: judged.length, killed: killed.length, survived: survived.length, byOperator, killedByPrimaryCategory },
+    survivedMutants: survived.map((j) => j.m.id),
     note: 'a survived mutant is either an equivalent mutant (same behaviour under the intent) or a gap in the checks; this file does not say which',
   };
 }
