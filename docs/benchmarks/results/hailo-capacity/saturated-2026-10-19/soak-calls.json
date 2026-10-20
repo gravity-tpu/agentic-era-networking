@@ -1,0 +1,362 @@
+[
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9235,
+    "duration_ns": 30215000486,
+    "fps_milli": 305642,
+    "hw_latency_ns": null,
+    "temp_min_c": 57.6518,
+    "temp_avg_c": 70.0726,
+    "temp_max_c": 75.4328,
+    "t_et": "2026-10-19 12:50:31 EDT",
+    "elapsed_s": 30.4,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 73.99114227294922,
+      "chip_ts1_c": 73.88996887207031,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9263,
+    "duration_ns": 30200156350,
+    "fps_milli": 306720,
+    "hw_latency_ns": null,
+    "temp_min_c": 73.3841,
+    "temp_avg_c": 79.4068,
+    "temp_max_c": 82.692,
+    "t_et": "2026-10-19 12:51:02 EDT",
+    "elapsed_s": 60.9,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 81.27555847167969,
+      "chip_ts1_c": 81.07321166992188,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9179,
+    "duration_ns": 30175885900,
+    "fps_milli": 304183,
+    "hw_latency_ns": null,
+    "temp_min_c": 80.8203,
+    "temp_avg_c": 83.4881,
+    "temp_max_c": 85.7019,
+    "t_et": "2026-10-19 12:51:32 EDT",
+    "elapsed_s": 91.2,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 84.10838317871094,
+      "chip_ts1_c": 84.00720977783203,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9188,
+    "duration_ns": 30174711051,
+    "fps_milli": 304493,
+    "hw_latency_ns": null,
+    "temp_min_c": 83.5013,
+    "temp_avg_c": 86.8248,
+    "temp_max_c": 87.9277,
+    "t_et": "2026-10-19 12:52:03 EDT",
+    "elapsed_s": 121.7,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 86.53653717041016,
+      "chip_ts1_c": 86.48594665527344,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9238,
+    "duration_ns": 30188297139,
+    "fps_milli": 306012,
+    "hw_latency_ns": null,
+    "temp_min_c": 85.9801,
+    "temp_avg_c": 88.8695,
+    "temp_max_c": 90.0776,
+    "t_et": "2026-10-19 12:52:33 EDT",
+    "elapsed_s": 152.2,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 88.25646209716797,
+      "chip_ts1_c": 88.20587921142578,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9171,
+    "duration_ns": 30308179518,
+    "fps_milli": 302591,
+    "hw_latency_ns": null,
+    "temp_min_c": 87.7506,
+    "temp_avg_c": 89.9042,
+    "temp_max_c": 91.8481,
+    "t_et": "2026-10-19 12:53:04 EDT",
+    "elapsed_s": 182.7,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 90.73519134521484,
+      "chip_ts1_c": 90.68460083007812,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9227,
+    "duration_ns": 30219432547,
+    "fps_milli": 305333,
+    "hw_latency_ns": null,
+    "temp_min_c": 89.7993,
+    "temp_avg_c": 92.6382,
+    "temp_max_c": 93.3657,
+    "t_et": "2026-10-19 12:53:34 EDT",
+    "elapsed_s": 213.2,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 91.74691009521484,
+      "chip_ts1_c": 91.69632720947266,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9231,
+    "duration_ns": 30218825465,
+    "fps_milli": 305471,
+    "hw_latency_ns": null,
+    "temp_min_c": 90.8617,
+    "temp_avg_c": 93.2341,
+    "temp_max_c": 93.8968,
+    "t_et": "2026-10-19 12:54:05 EDT",
+    "elapsed_s": 243.6,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 93.97270965576172,
+      "chip_ts1_c": 93.7703628540039,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9241,
+    "duration_ns": 30198772936,
+    "fps_milli": 306005,
+    "hw_latency_ns": null,
+    "temp_min_c": 91.7975,
+    "temp_avg_c": 93.8682,
+    "temp_max_c": 95.3638,
+    "t_et": "2026-10-19 12:54:35 EDT",
+    "elapsed_s": 274.0,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 93.71977233886719,
+      "chip_ts1_c": 93.669189453125,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9214,
+    "duration_ns": 30195263772,
+    "fps_milli": 305147,
+    "hw_latency_ns": null,
+    "temp_min_c": 93.1127,
+    "temp_avg_c": 94.5285,
+    "temp_max_c": 94.858,
+    "t_et": "2026-10-19 12:55:05 EDT",
+    "elapsed_s": 304.4,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 93.416259765625,
+      "chip_ts1_c": 93.2645034790039,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9228,
+    "duration_ns": 30191446819,
+    "fps_milli": 305649,
+    "hw_latency_ns": null,
+    "temp_min_c": 92.7586,
+    "temp_avg_c": 94.3927,
+    "temp_max_c": 94.5545,
+    "t_et": "2026-10-19 12:55:36 EDT",
+    "elapsed_s": 334.9,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 93.01156616210938,
+      "chip_ts1_c": 92.85980987548828,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9212,
+    "duration_ns": 30230939111,
+    "fps_milli": 304720,
+    "hw_latency_ns": null,
+    "temp_min_c": 92.4298,
+    "temp_avg_c": 93.8352,
+    "temp_max_c": 94.0486,
+    "t_et": "2026-10-19 12:56:06 EDT",
+    "elapsed_s": 365.3,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 92.25277709960938,
+      "chip_ts1_c": 92.10102081298828,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9219,
+    "duration_ns": 30219036180,
+    "fps_milli": 305072,
+    "hw_latency_ns": null,
+    "temp_min_c": 91.5952,
+    "temp_avg_c": 93.4204,
+    "temp_max_c": 93.6186,
+    "t_et": "2026-10-19 12:56:37 EDT",
+    "elapsed_s": 395.8,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 93.71977233886719,
+      "chip_ts1_c": 93.36566925048828,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9239,
+    "duration_ns": 30271030182,
+    "fps_milli": 305209,
+    "hw_latency_ns": null,
+    "temp_min_c": 91.4181,
+    "temp_avg_c": 92.9083,
+    "temp_max_c": 93.0369,
+    "t_et": "2026-10-19 12:57:07 EDT",
+    "elapsed_s": 426.3,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 92.65746307373047,
+      "chip_ts1_c": 92.40453338623047,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9225,
+    "duration_ns": 30275083607,
+    "fps_milli": 304706,
+    "hw_latency_ns": null,
+    "temp_min_c": 90.7099,
+    "temp_avg_c": 92.2276,
+    "temp_max_c": 92.6322,
+    "t_et": "2026-10-19 12:57:38 EDT",
+    "elapsed_s": 456.7,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 90.73519134521484,
+      "chip_ts1_c": 90.73519134521484,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9241,
+    "duration_ns": 30190715048,
+    "fps_milli": 306087,
+    "hw_latency_ns": null,
+    "temp_min_c": 90.3305,
+    "temp_avg_c": 92.0671,
+    "temp_max_c": 92.354,
+    "t_et": "2026-10-19 12:58:08 EDT",
+    "elapsed_s": 487.2,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 90.73519134521484,
+      "chip_ts1_c": 90.73519134521484,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9239,
+    "duration_ns": 30286892299,
+    "fps_milli": 305049,
+    "hw_latency_ns": null,
+    "temp_min_c": 90.4317,
+    "temp_avg_c": 91.8428,
+    "temp_max_c": 92.0251,
+    "t_et": "2026-10-19 12:58:39 EDT",
+    "elapsed_s": 517.8,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 90.02698516845703,
+      "chip_ts1_c": 89.92581176757812,
+      "active_model": "yolov8s_h8.hef"
+    }
+  },
+  {
+    "source": "rpi5_hailo8_npu",
+    "model_name": "yolov8s_h8.hef",
+    "frames_count": 9243,
+    "duration_ns": 30256108695,
+    "fps_milli": 305492,
+    "hw_latency_ns": null,
+    "temp_min_c": 89.5211,
+    "temp_avg_c": 91.0802,
+    "temp_max_c": 91.4434,
+    "t_et": "2026-10-19 12:59:09 EDT",
+    "elapsed_s": 548.2,
+    "health_after": {
+      "status": "HEALTHY",
+      "hailo_device": "CONNECTED",
+      "chip_ts0_c": 90.63401794433594,
+      "chip_ts1_c": 90.43167114257812,
+      "active_model": "yolov8s_h8.hef"
+    }
+  }
+]

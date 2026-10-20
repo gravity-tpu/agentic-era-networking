@@ -1,0 +1,12 @@
+{
+  "source": "rpi5_hailo8_npu",
+  "model_name": "yolov8s_h8.hef",
+  "frames_count": 3084,
+  "duration_ns": 10227466324,
+  "fps_milli": 301540,
+  "hw_latency_ns": null,
+  "temp_min_c": 46.4469,
+  "temp_avg_c": 56.5243,
+  "temp_max_c": 61.2181,
+  "raw_output": "Running streaming inference (/usr/share/hailo-models/yolov8s_h8.hef):\n  Transform data: true\n    Type:      auto\n    Quantized: true\nNetwork yolov8s/yolov8s: 10% | 303 | FPS: 302.70 | ETA: 00:00:09\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 20% | 613 | FPS: 306.11 | ETA: 00:00:08\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 30% | 923 | FPS: 307.29 | ETA: 00:00:07\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 40% | 1233 | FPS: 307.86 | ETA: 00:00:06\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 50% | 1537 | FPS: 307.08 | ETA: 00:00:05\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 60% | 1847 | FPS: 307.51 | ETA: 00:00:04\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 70% | 2157 | FPS: 307.82 | ETA: 00:00:03\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 80% | 2467 | FPS: 308.05 | ETA: 00:00:02\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 90% | 2777 | FPS: 308.24 | ETA: 00:00:01\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 100% | 3084 | FPS: 308.21 | ETA: 00:00:00\n\u001b[2K\n> Inference result:\n Network group: yolov8s\n    Frames count: 3084\n    FPS: 308.21\n    Send Rate: 3029.86 Mbit/s\n    Recv Rate: 3010.93 Mbit/s\n\n  Device: 0001:01:00.0\n    Minimum chip temperature: 46.4469C\n    Average chip temperature: 56.5243C\n    Maximum chip temperature: 61.2181C\n"
+}
