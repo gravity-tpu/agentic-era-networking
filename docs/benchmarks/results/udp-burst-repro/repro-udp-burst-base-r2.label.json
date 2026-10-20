@@ -1,16 +1,17 @@
 {
-  "id": "benign-udp-burst-tailscale-like",
+  "id": "repro-udp-burst-base-r2",
   "class": "benign",
   "tool": "udp-burst",
   "sender": "agentic-node-02",
   "senderIp": "10.0.2.52",
   "target": "10.0.2.119",
-  "pattern": "benign-udp-burst-tailscale-like",
+  "pattern": "repro-udp-burst-base",
   "params": {
     "seconds": 30,
     "burst": 25,
     "payload_bytes": 1300,
-    "period_s": 10
+    "period_s": 10,
+    "risky": true
   },
   "command": [
     "timeout",
@@ -28,7 +29,7 @@
   ],
   "commandExit": 0,
   "commandSeconds": 36.7,
-  "pcap": "benign-udp-burst-tailscale-like.pcap",
+  "pcap": "repro-udp-burst-base-r2.pcap",
   "commandStderrTail": "",
   "rackHealthyAfter": false,
   "rackNoteAfter": "the bridge logged 1 dead-peer event(s) during the run window",

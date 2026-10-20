@@ -130,6 +130,8 @@ def score(label, frames):
     sender_frames = [f for f in frames if sender is not None and f[6] == sender]
     t0 = sender_frames[0][7] if sender_frames else None
     res = {"id": label["id"], "class": label["class"], "tool": label.get("tool"), "pattern": pattern_of(label), "sender": sender, "frames": len(frames), "senderFrames": len(sender_frames),
+           "framesOk": sender is None or len(sender_frames) >= MIN_SENDER_FRAMES,
+           "rackOk": rack_ok(label),
            "valid": (sender is None or len(sender_frames) >= MIN_SENDER_FRAMES) and rack_ok(label)}
     for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
         named_sender = [a for a in alerts if a[1] == sender]
@@ -155,7 +157,12 @@ def main():
     invalid = [r for r in scored if not r["valid"]]
     results = [r for r in scored if r["valid"]]
     for r in invalid:
-        print(f"INVALID (left out of every rate): {r['id']} - the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES}) or the rack was unhealthy after the run")
+        why = []
+        if not r["framesOk"]:
+            why.append(f"the sender was seen {r['senderFrames']} times at the tap (needs {MIN_SENDER_FRAMES})")
+        if not r["rackOk"]:
+            why.append("the rack was not recorded healthy after the run")
+        print(f"INVALID (left out of every rate): {r['id']} - " + "; ".join(why))
     if invalid:
         print()
     print(f"{'run':32s} {'class':7s} {'frames':>6s} | {'rate rule':30s} | {'sentinel':44s}")

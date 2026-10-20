@@ -1,0 +1,36 @@
+{
+  "id": "benign-udp-burst-tailscale-like-ok",
+  "class": "benign",
+  "tool": "udp-burst",
+  "sender": "agentic-node-02",
+  "senderIp": "10.0.2.52",
+  "target": "10.0.2.119",
+  "pattern": "benign-udp-burst-tailscale-like",
+  "params": {
+    "seconds": 30,
+    "burst": 25,
+    "payload_bytes": 1300,
+    "period_s": 10
+  },
+  "command": [
+    "timeout",
+    "40",
+    "python3",
+    "-c",
+    "import socket,sys,time;t,p,bu,n,pe,s,b=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]),int(sys.argv[6]),sys.argv[7];k=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);k.bind((b,0));d=b'x'*n;ka=b'k'*148;end=time.monotonic_ns()+s*1_000_000_000\nwhile time.monotonic_ns()<end:\n for _ in range(bu): k.sendto(d,(t,p))\n for _ in range(pe-1):\n  time.sleep(1);k.sendto(ka,(t,p))\n",
+    "10.0.2.119",
+    "51820",
+    "25",
+    "1300",
+    "10",
+    "30",
+    "10.0.2.52"
+  ],
+  "commandExit": 0,
+  "commandSeconds": 36.7,
+  "pcap": "benign-udp-burst-tailscale-like-ok.pcap",
+  "commandStderrTail": "",
+  "rackHealthyAfter": true,
+  "rackNoteAfter": "OpenFlow connected, isolation verified",
+  "controllerDropsDuringRun": 0
+}

@@ -11,20 +11,22 @@ recorded here.
 | `benign-idle-60s` (x2) | benign | nothing sent for 60 s: the capture alone |
 | `benign-interactive-8eps` (x3) | benign | ssh-like (**modelled**, not ssh): 40 to 120 byte writes at irregular gaps averaging 8 per second, 30 s |
 | `benign-http-burst-8conns` (x3) | benign | browsing-like: every 3 s, 8 parallel fetches of a 20 KB page plus a small request, 30 s |
-| `benign-udp-burst-tailscale-like` | benign | **modelled** from the 2026-10-16 capture (a burst of 25 full-size UDP datagrams, then a small keepalive a second); **invalid**: the switch dropped its controller session during this run, so it is recorded but left out of every rate |
+| `benign-udp-burst-tailscale-like-ok` (valid) and `-drop-1`, `-drop-2`, `-drop-3` (**invalid**) | benign | **modelled** from the 2026-10-16 capture (a burst of 25 full-size UDP datagrams, then a small keepalive a second). Four recordings: one healthy (`-ok`, scored) and three during which the switch dropped its controller session (`-drop-1` from 2026-10-17, `-drop-2` and `-drop-3` the two 2026-10-18 repeats). The three are kept as evidence, labelled `rackHealthyAfter=false`, and left out of every rate. `-drop-1` was recorded under the id `benign-udp-burst-tailscale-like` until 2026-10-18 and renamed; the id was not reused for a different recording |
 | `benign-bulk-tcp-2mbit` (x2) | benign | a rate-limited TCP stream to a sink on the Mac, 2 Mbit per second, 20 s (about 175 frames a second) |
 | `benign-http-5rps` (x3), `benign-http-20rps` (x2) | benign | small HTTP GETs to a local web server on the Mac, 30 s |
 | `benign-udp-small-10pps` (x3), `benign-udp-small-50pps` (x2) | benign | 60 to 100 byte UDP datagrams to port 53 on the Mac, 30 s |
-| `attack-synflood-200pps`, `attack-synflood-1000pps` | attack | `hping3` SYN flood from `node-01`, 30 s and 10 s |
-| `attack-udpflood-500pps-1400b` | attack | `hping3` UDP flood, 1400-byte payloads, 500 pps, 10 s |
-| `attack-portscan-fast`, `attack-portscan-slow` | attack | `nmap -sS -T4` ports 1 to 1000 (all sent in 0.36 s); `-T2` ports 1 to 200 (80 s) |
+| `attack-synflood-200pps`, `attack-synflood-1000pps` (x3 each) | attack | `hping3` SYN flood from `node-01`, 30 s and 10 s |
+| `attack-udpflood-500pps-1400b` (and `-r3`) | attack | `hping3` UDP flood, 1400-byte payloads, 500 pps, 10 s |
+| `attack-portscan-fast`, `attack-portscan-slow` (x3 each) | attack | `nmap -sS -T4` ports 1 to 1000 (all sent in 0.36 s); `-T2` ports 1 to 200 (80 s) |
+| `attack-portscan-1pps` (x2), `attack-portscan-half-pps` (x2) | attack | `nmap` paced at 1 and 0.5 probes per second, 70 s |
+| `attack-arpflood-200pps` (x3) | attack | `nping` ARP request flood, 200 per second, 12 s. ARP has no IPv4 header. **Not scored by the two replicas**: the deployed trt daemon keys on IPv4 sources and ignores ARP, so the replicas see 0 frames from the sender and list these as INVALID. The baseline prototype attributes ARP frames to their sender protocol address (forgeable) and scores them |
 
-## Scores (31 valid runs: 26 benign, 5 attack; one more run is recorded but invalid)
+## Scores (45 scored runs by the two replicas: 27 benign, 18 attack; 6 recorded runs are left out: 3 ARP floods the daemon cannot see, 3 UDP bursts during a switch drop)
 
 | Detector | Attacks detected with the right sender | Benign runs with an alert (false positives) |
 | :--- | :--- | :--- |
-| Rate rule (the trt daemon: 10 pps per source, 5 s window, judged after 0.5 s) | 3 of 5 | **20 of 26** |
-| GPU sentinel (the arithmetic of the deployed kernel, 0.15 base threshold with an adaptive baseline) | 5 of 5 | **11 of 26** |
+| Rate rule (the trt daemon: 10 pps per source, 5 s window, judged after 0.5 s) | 8 of 18 | **21 of 27** |
+| GPU sentinel (the arithmetic of the deployed kernel, 0.15 base threshold with an adaptive baseline) | 15 of 18 | **12 of 27** |
 
 Benign false positives by workload (runs with any alert / runs):
 
@@ -37,6 +39,7 @@ Benign false positives by workload (runs with any alert / runs):
 | Bulk TCP stream, 2 Mbit per second | 2 of 2 | 0 of 2 |
 | ssh-like interactive TCP (modelled), 8 writes per second | 3 of 3 | 0 of 3 |
 | Browsing-like HTTP bursts (8 parallel connections every 3 s) | 3 of 3 | 0 of 3 |
+| Tailscale-like UDP burst (modelled, 1 run) | 1 of 1 | 1 of 1 |
 
 - **The rate rule's threshold is far below ordinary traffic.** One host making a few web requests a second sends more than
   10 frames per second (each request is about five frames), so every HTTP run, every UDP run and the 20 pps pings were
@@ -46,9 +49,11 @@ Benign false positives by workload (runs with any alert / runs):
 - **Ssh-like and browsing-like traffic is flagged by the rate rule in every run (6 of 6)** and by the sentinel in none: the
   sentinel's silences on bulk, interactive and browsing traffic and its alerts on ping and small UDP follow frame size and
   protocol, not behaviour.
-- **Neither detector separates attack from ordinary use on this data.** The two attack misses of the rate rule are
-  structural (the fast scan finished in 0.36 s, before the rule's 0.5 s minimum; the slow scan ran at 2.5 pps), and the
-  sentinel's five detections come with a high false-positive rate, so they are not evidence that it detects attacks.
+- **Neither detector separates attack from ordinary use on this data.** The rate rule's misses are structural: it detects
+  none of the 10 scan runs (the fast scan finishes in 0.36 s, before the rule's 0.5 s minimum; the slower scans run at 2.5
+  pps or less, below 10 pps). The sentinel detects 15 of 18 attacks, but it also flags 12 of 27 benign runs, so its
+  detections are not evidence that it detects attacks. It misses `attack-portscan-fast-r3` and both half-pps scans.
+- **ARP flood is invisible to the deployed rate rule and to the sentinel replica.** Three runs, about 150 KB each at the tap, 0 frames attributed to the sender by the daemon's rules. Attributing ARP frames to their sender protocol address (an option of the parser, used only by the baseline prototype) shows the flood is separable: 195 non-TCP frames a second against a floor of 100.
 
 ## Correction to the earlier sentinel finding
 
@@ -60,9 +65,9 @@ run, and it was never trained.
 
 ## Caveats
 
-- 32 runs recorded (31 valid), up to three repeats of each benign workload and **one** of each attack, one host pair, short durations: a
-  scored comparison, not a distribution. The attack runs were not repeated. Still missing: bulk TCP, ssh sessions, a
-  browser-like mix, Tailscale-style traffic, ARP and address-spoofing attacks. A 100 Mbit lab segment limits rates.
+- 51 runs recorded (45 scored by the replicas; 3 ARP-flood runs are invisible to the daemon, 3 UDP-burst runs coincided with a switch drop), up to three repeats of each workload, one host pair, short durations: a
+  scored comparison, not a distribution. Still missing: bulk TCP above 2 Mbit, real ssh sessions, real Tailscale traffic, a
+  browser-like mix, address-spoofing attacks, and valid UDP-burst repeats: the UDP-burst workload has **one** valid run, and is the workload that hung the switch three times in four recordings (see the incident log). A 100 Mbit lab segment limits rates.
 - **Bulk TCP was recorded only at 2 Mbit per second.** Attempts at 5 Mbit and above coincided with switch outages (see
   below), and 5, 10 and 20 Mbit are not in the data. The sentinel is silent on the 2 Mbit streams (large frames score low); the rate rule flags them.
 - **Traffic that does not cross the Zodiac is invisible to the tap.** `node-01`, `node-02` and the Pi 5 are behind the
@@ -128,3 +133,11 @@ a small embedded PHY. EEE low-power-idle wake problems are a known cause of shor
 carrying frames, so it is the leading **hypothesis**, not a finding: nothing here shows that EEE is the cause. Cheap test: turn
 EEE off on the Jetson's NIC (`sudo ethtool --set-eee enP8p1s0 eee off`) and see whether the flaps and hangs stop; doing it
 while the switch is hung also tests whether a link renegotiation alone recovers it without restarting the switch.
+
+### 2026-10-18 15:00 to 15:35: the Tailscale-like UDP burst hung the controller session twice
+
+After a serial restart at 15:02, `benign-udp-burst-tailscale-like-r2` (30 s from `node-02`; recorded as `-drop-2`) was followed by a dead-peer
+event at about 15:21; after another serial restart, a second attempt at the same run was followed by one at 15:30. The
+first run of the same pattern passed (recorded). With EEE off since 14:59 and no link event in the kernel log, this is
+another type B hang; two in a row on the same run suggests this traffic as a trigger, but that is two observations of one
+workload. The cause is unknown. The pattern was not tried again and the 16 remaining runs recorded without further drops.

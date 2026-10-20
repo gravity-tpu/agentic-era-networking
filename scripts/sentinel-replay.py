@@ -55,9 +55,11 @@ def losses(frames):
 FRAME_SRC_IP, FRAME_T_NS = 6, 7
 MAX_PCAP_BYTES = 64 * 1024 * 1024  # offline analysis of small lab captures; refuse anything larger rather than load it
 
-def parse_pcap(path, with_src=False):
+def parse_pcap(path, with_src=False, arp_src=False):
     """Frames as (t_us, wire_len, proto, tcp_flags, src_port, dst_port); with_src adds the IPv4 source (or None) and the exact
     integer-nanosecond timestamp as items 7 and 8.
+    arp_src also attributes a well-formed Ethernet/IPv4 ARP frame to its sender protocol address. It is off by default because the
+    deployed trt daemon keys on IPv4 sources and ignores ARP: the replicas of the daemon and the sentinel must see what they see.
     A path ending in .gz is decompressed in memory, with the same cap applied to the decompressed size."""
     if path.endswith('.gz'):
         import gzip
@@ -84,6 +86,13 @@ def parse_pcap(path, with_src=False):
         if len(fr) >= 14:
             et = struct.unpack('!H', fr[12:14])[0]; l3 = 14
             if et == 0x8100 and len(fr) >= 18: et = struct.unpack('!H', fr[16:18])[0]; l3 = 18
+            if arp_src and et == 0x0806 and len(fr) >= l3 + 28:
+                # ARP has no IPv4 header. Attribute a well-formed Ethernet/IPv4 request or reply to its sender protocol address
+                # (forgeable, like any source); a 0.0.0.0 probe, another hardware type or a short frame has no source.
+                htype, ptype, hlen, plen = struct.unpack('!HHBB', fr[l3:l3 + 6])
+                spa = fr[l3 + 14:l3 + 18]
+                if htype == 1 and ptype == 0x0800 and hlen == 6 and plen == 4 and spa != bytes(4):
+                    src_ip = '.'.join(str(b) for b in spa)
             if et == 0x0800 and len(fr) >= l3 + 20:
                 ihl = (fr[l3] & 0x0F) * 4
                 if ihl >= 20 and len(fr) >= l3 + ihl:

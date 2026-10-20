@@ -1,5 +1,101 @@
 [
   {
+    "id": "attack-portscan-1pps-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-1pps",
+    "sender": "10.0.2.50",
+    "frames": 69,
+    "senderFrames": 60,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 6,
+      "namedSender": 6,
+      "namedOthers": [],
+      "firstSenderAlertNs": 75358635000
+    }
+  },
+  {
+    "id": "attack-portscan-1pps",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-1pps",
+    "sender": "10.0.2.50",
+    "frames": 69,
+    "senderFrames": 60,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 6,
+      "namedSender": 6,
+      "namedOthers": [],
+      "firstSenderAlertNs": 54053949000
+    }
+  },
+  {
+    "id": "attack-portscan-fast-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-fast",
+    "sender": "10.0.2.50",
+    "frames": 999,
+    "senderFrames": 998,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 936,
+      "namedSender": 936,
+      "namedOthers": [],
+      "firstSenderAlertNs": 74045000
+    }
+  },
+  {
+    "id": "attack-portscan-fast-r3",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-fast",
+    "sender": "10.0.2.50",
+    "frames": 950,
+    "senderFrames": 948,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
     "id": "attack-portscan-fast",
     "class": "attack",
     "tool": "nmap",
@@ -7,6 +103,8 @@
     "sender": "10.0.2.50",
     "frames": 988,
     "senderFrames": 987,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -22,6 +120,102 @@
     }
   },
   {
+    "id": "attack-portscan-half-pps-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-half-pps",
+    "sender": "10.0.2.50",
+    "frames": 42,
+    "senderFrames": 32,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "attack-portscan-half-pps",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-half-pps",
+    "sender": "10.0.2.50",
+    "frames": 36,
+    "senderFrames": 32,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    }
+  },
+  {
+    "id": "attack-portscan-slow-r2",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-slow",
+    "sender": "10.0.2.50",
+    "frames": 211,
+    "senderFrames": 200,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 148,
+      "namedSender": 148,
+      "namedOthers": [],
+      "firstSenderAlertNs": 24025435000
+    }
+  },
+  {
+    "id": "attack-portscan-slow-r3",
+    "class": "attack",
+    "tool": "nmap",
+    "pattern": "attack-portscan-slow",
+    "sender": "10.0.2.50",
+    "frames": 206,
+    "senderFrames": 200,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 0,
+      "namedSender": 0,
+      "namedOthers": [],
+      "firstSenderAlertNs": null
+    },
+    "sentinel": {
+      "alerts": 143,
+      "namedSender": 143,
+      "namedOthers": [],
+      "firstSenderAlertNs": 24025464000
+    }
+  },
+  {
     "id": "attack-portscan-slow",
     "class": "attack",
     "tool": "nmap",
@@ -29,6 +223,8 @@
     "sender": "10.0.2.50",
     "frames": 205,
     "senderFrames": 200,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -44,6 +240,54 @@
     }
   },
   {
+    "id": "attack-synflood-1000pps-r2",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-1000pps",
+    "sender": "10.0.2.50",
+    "frames": 9959,
+    "senderFrames": 9958,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 500983000
+    },
+    "sentinel": {
+      "alerts": 1059,
+      "namedSender": 1059,
+      "namedOthers": [],
+      "firstSenderAlertNs": 67958000
+    }
+  },
+  {
+    "id": "attack-synflood-1000pps-r3",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-1000pps",
+    "sender": "10.0.2.50",
+    "frames": 9956,
+    "senderFrames": 9955,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 500353000
+    },
+    "sentinel": {
+      "alerts": 1340,
+      "namedSender": 1340,
+      "namedOthers": [],
+      "firstSenderAlertNs": 66815000
+    }
+  },
+  {
     "id": "attack-synflood-1000pps",
     "class": "attack",
     "tool": "hping3",
@@ -51,6 +295,8 @@
     "sender": "10.0.2.50",
     "frames": 9945,
     "senderFrames": 9943,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -66,6 +312,54 @@
     }
   },
   {
+    "id": "attack-synflood-200pps-r2",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-200pps",
+    "sender": "10.0.2.50",
+    "frames": 6002,
+    "senderFrames": 6000,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 503155000
+    },
+    "sentinel": {
+      "alerts": 4072,
+      "namedSender": 4072,
+      "namedOthers": [],
+      "firstSenderAlertNs": 320482000
+    }
+  },
+  {
+    "id": "attack-synflood-200pps-r3",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-synflood-200pps",
+    "sender": "10.0.2.50",
+    "frames": 6002,
+    "senderFrames": 6000,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 501251000
+    },
+    "sentinel": {
+      "alerts": 4986,
+      "namedSender": 4986,
+      "namedOthers": [],
+      "firstSenderAlertNs": 318697000
+    }
+  },
+  {
     "id": "attack-synflood-200pps",
     "class": "attack",
     "tool": "hping3",
@@ -73,6 +367,8 @@
     "sender": "10.0.2.50",
     "frames": 6007,
     "senderFrames": 6000,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -88,6 +384,30 @@
     }
   },
   {
+    "id": "attack-udpflood-500pps-1400b-r3",
+    "class": "attack",
+    "tool": "hping3",
+    "pattern": "attack-udpflood-500pps-1400b",
+    "sender": "10.0.2.50",
+    "frames": 4940,
+    "senderFrames": 4938,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 501743000
+    },
+    "sentinel": {
+      "alerts": 4877,
+      "namedSender": 4877,
+      "namedOthers": [],
+      "firstSenderAlertNs": 129940000
+    }
+  },
+  {
     "id": "attack-udpflood-500pps-1400b",
     "class": "attack",
     "tool": "hping3",
@@ -95,6 +415,8 @@
     "sender": "10.0.2.50",
     "frames": 4937,
     "senderFrames": 4935,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -117,6 +439,8 @@
     "sender": "10.0.2.52",
     "frames": 3463,
     "senderFrames": 3463,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -139,6 +463,8 @@
     "sender": "10.0.2.52",
     "frames": 3459,
     "senderFrames": 3458,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -161,6 +487,8 @@
     "sender": "10.0.2.52",
     "frames": 1310,
     "senderFrames": 1305,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -183,6 +511,8 @@
     "sender": "10.0.2.52",
     "frames": 1332,
     "senderFrames": 1325,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -205,6 +535,8 @@
     "sender": "10.0.2.52",
     "frames": 540,
     "senderFrames": 535,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -227,6 +559,8 @@
     "sender": "10.0.2.52",
     "frames": 531,
     "senderFrames": 530,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -249,6 +583,8 @@
     "sender": "10.0.2.52",
     "frames": 537,
     "senderFrames": 535,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -271,6 +607,8 @@
     "sender": "10.0.2.52",
     "frames": 885,
     "senderFrames": 884,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -293,6 +631,8 @@
     "sender": "10.0.2.52",
     "frames": 829,
     "senderFrames": 821,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -315,6 +655,8 @@
     "sender": "10.0.2.52",
     "frames": 777,
     "senderFrames": 776,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -337,6 +679,8 @@
     "sender": null,
     "frames": 2,
     "senderFrames": 0,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -359,6 +703,8 @@
     "sender": null,
     "frames": 3,
     "senderFrames": 0,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -381,6 +727,8 @@
     "sender": "10.0.2.52",
     "frames": 247,
     "senderFrames": 246,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -403,6 +751,8 @@
     "sender": "10.0.2.52",
     "frames": 248,
     "senderFrames": 247,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -425,6 +775,8 @@
     "sender": "10.0.2.52",
     "frames": 252,
     "senderFrames": 245,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -447,6 +799,8 @@
     "sender": "10.0.2.52",
     "frames": 609,
     "senderFrames": 600,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -469,6 +823,8 @@
     "sender": "10.0.2.52",
     "frames": 609,
     "senderFrames": 600,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -491,6 +847,8 @@
     "sender": "10.0.2.50",
     "frames": 305,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -513,6 +871,8 @@
     "sender": "10.0.2.52",
     "frames": 341,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -535,6 +895,8 @@
     "sender": "10.0.2.52",
     "frames": 304,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -557,6 +919,8 @@
     "sender": "10.0.2.52",
     "frames": 306,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 0,
@@ -572,6 +936,30 @@
     }
   },
   {
+    "id": "benign-udp-burst-tailscale-like-ok",
+    "class": "benign",
+    "tool": "udp-burst",
+    "pattern": "benign-udp-burst-tailscale-like",
+    "sender": "10.0.2.52",
+    "frames": 114,
+    "senderFrames": 105,
+    "framesOk": true,
+    "rackOk": true,
+    "valid": true,
+    "rate": {
+      "alerts": 1,
+      "namedSender": 1,
+      "namedOthers": [],
+      "firstSenderAlertNs": 1080529000
+    },
+    "sentinel": {
+      "alerts": 51,
+      "namedSender": 51,
+      "namedOthers": [],
+      "firstSenderAlertNs": 18008782000
+    }
+  },
+  {
     "id": "benign-udp-small-10pps-r2",
     "class": "benign",
     "tool": "udp-small",
@@ -579,6 +967,8 @@
     "sender": "10.0.2.52",
     "frames": 302,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -601,6 +991,8 @@
     "sender": "10.0.2.52",
     "frames": 301,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -623,6 +1015,8 @@
     "sender": "10.0.2.52",
     "frames": 302,
     "senderFrames": 300,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -645,6 +1039,8 @@
     "sender": "10.0.2.52",
     "frames": 1508,
     "senderFrames": 1500,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
@@ -667,6 +1063,8 @@
     "sender": "10.0.2.52",
     "frames": 1503,
     "senderFrames": 1500,
+    "framesOk": true,
+    "rackOk": true,
     "valid": true,
     "rate": {
       "alerts": 1,
