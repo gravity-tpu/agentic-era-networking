@@ -87,7 +87,7 @@ import {
   type IsolationStatus,
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
-import { ExperimentInstaller, parseExperimentRequest, EXPERIMENT_TOKEN_MIN_LENGTH, EXPERIMENT_MAX_BODY_BYTES } from './experiment-install.js';
+import { ExperimentInstaller, parseExperimentRequest, parseExperimentSettleMs, EXPERIMENT_TOKEN_MIN_LENGTH, EXPERIMENT_MAX_BODY_BYTES } from './experiment-install.js';
 import { timingSafeEqual } from 'node:crypto';
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
 import {
@@ -845,6 +845,7 @@ export class ZodiacBridgeServer {
         readFlowStats: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
         isSessionEstablished: () => this.controller.openFlow.metrics.state === 'ESTABLISHED',
         gate: this.flowReadLock,
+        settleMs: parseExperimentSettleMs(process.env['ZODIAC_EXPERIMENT_SETTLE_MS']),
         isolationPolicy: () => buildPort1IsolationPolicy(),
         nowMs: () => Date.now(),
         sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),

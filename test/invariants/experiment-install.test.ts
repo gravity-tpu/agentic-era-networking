@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  parseExperimentRequest, ExperimentInstaller, EXPERIMENT_MAX_RULES, EXPERIMENT_TTL_DEFAULT_SECONDS, EXPERIMENT_SWITCH_EXPIRY_MARGIN_SECONDS,
+  parseExperimentRequest, parseExperimentSettleMs, ExperimentInstaller, EXPERIMENT_MAX_RULES, EXPERIMENT_SETTLE_MS, EXPERIMENT_TTL_DEFAULT_SECONDS, EXPERIMENT_SWITCH_EXPIRY_MARGIN_SECONDS,
   type InstallerDeps, type ExperimentRequest,
 } from '../../src/sdn/experiment-install.js';
 import { FlowModCommand, type FlowModOptions } from '../../src/sdn/openflow-types.js';
@@ -93,12 +93,15 @@ describe('parseExperimentRequest', () => {
 // ─── A fake switch ───────────────────────────────────────────────────────────
 
 interface FakeOptions {
-  /** ids (by index into the last install) the switch silently ignores, to model a rejected or lost FlowMod */
-  dropAdds?: ReadonlySet<number>;
+  /** indices (counting every ADD the fake receives, installs and restores alike) the switch silently ignores, to model a lost FlowMod */
+  dropAdds?: Set<number>;
   established?: boolean;
   gateBusy?: boolean;
   /** if true the wildcard delete does nothing (models firmware that ignores it) */
   ignoreWipe?: boolean;
+  /** the first N flow-table reads throw (models a readback that fails after the FlowMods were written) */
+  failReads?: number;
+  settleMs?: number;
 }
 
 function maskFor(len: number | undefined): string | undefined {
@@ -110,38 +113,59 @@ function maskFor(len: number | undefined): string | undefined {
 function makeFake(opts: FakeOptions = {}) {
   let table: FlowStatsEntry[] = [];
   const sent: FlowModOptions[] = [];
+  const phasesAtSend: string[] = [];
+  const sleeps: number[] = [];
+  const logs: string[] = [];
   const timers: Array<{ fn: () => void; ms: number; live: boolean }> = [];
   let addIndex = 0;
   let restores = 0;
+  let readsLeftToFail = opts.failReads ?? 0;
   let gateHeld = opts.gateBusy === true;
+  let phaseProbe: () => string = () => 'unknown';
   const missEntry: FlowStatsEntry = { tableId: 0, priority: 0, packetCount: 0n, byteCount: 0n };
+  const entryOf = (o: FlowModOptions): FlowStatsEntry => {
+    const m = o.match ?? {};
+    return {
+      tableId: 0, priority: o.priority, packetCount: 0n, byteCount: 0n,
+      ...(m.inPort !== undefined ? { inPort: m.inPort } : {}),
+      ...(m.etherType !== undefined ? { ethType: m.etherType } : {}),
+      ...(m.srcIp !== undefined ? { srcIp: m.srcIp, ...(maskFor(m.srcIpPrefixLen) ? { srcMask: maskFor(m.srcIpPrefixLen) as string } : {}) } : {}),
+      ...(m.dstIp !== undefined ? { dstIp: m.dstIp, ...(maskFor(m.dstIpPrefixLen) ? { dstMask: maskFor(m.dstIpPrefixLen) as string } : {}) } : {}),
+    };
+  };
   const deps: InstallerDeps = {
     sendFlowMod(o) {
       sent.push(o);
+      phasesAtSend.push(phaseProbe());
       if (o.command === FlowModCommand.OFPFC_DELETE) { if (opts.ignoreWipe !== true) table = []; return sent.length; }
       const idx = addIndex++;
       if (opts.dropAdds?.has(idx)) return sent.length;
-      const m = o.match ?? {};
-      const e: Record<string, unknown> = { tableId: 0, priority: o.priority, packetCount: 0n, byteCount: 0n };
-      if (m.inPort !== undefined) e['inPort'] = m.inPort;
-      if (m.etherType !== undefined) e['ethType'] = m.etherType;
-      if (m.srcIp !== undefined) { e['srcIp'] = m.srcIp; const k = maskFor(m.srcIpPrefixLen); if (k) e['srcMask'] = k; }
-      if (m.dstIp !== undefined) { e['dstIp'] = m.dstIp; const k = maskFor(m.dstIpPrefixLen); if (k) e['dstMask'] = k; }
-      table.push(e as unknown as FlowStatsEntry);
+      table.push(entryOf(o));
       return sent.length;
     },
-    sendTableMissDrop() { sent.push({ command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} }); table.push(missEntry); },
-    async readFlowStats() { return [...table]; },
+    sendTableMissDrop() { sent.push({ command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} }); phasesAtSend.push(phaseProbe()); table.push(missEntry); },
+    async readFlowStats() {
+      if (readsLeftToFail > 0) { readsLeftToFail--; throw new Error('flow-stats read failed'); }
+      return [...table];
+    },
     isSessionEstablished: () => opts.established !== false,
     gate: { tryAcquire: () => { if (gateHeld) return false; gateHeld = true; return true; }, release: () => { gateHeld = opts.gateBusy === true; }, get isHeld() { return gateHeld; } },
     isolationPolicy: () => buildPort1IsolationPolicy(),
     nowMs: () => 1_000_000,
-    sleep: async () => undefined,
+    sleep: async (ms) => { sleeps.push(ms); },
+    ...(opts.settleMs !== undefined ? { settleMs: opts.settleMs } : {}),
     setTimer(fn, ms) { const t = { fn, ms, live: true }; timers.push(t); return t; },
     clearTimer(h) { (h as { live: boolean }).live = false; },
     onRestored() { restores++; },
+    log: (l) => { logs.push(l); },
   };
-  return { deps, sent, timers, get table() { return table; }, get restores() { return restores; } };
+  return {
+    deps, sent, timers, sleeps, logs, phasesAtSend,
+    attach(inst: ExperimentInstaller) { phaseProbe = () => inst.state().phase; },
+    get table() { return table; },
+    get restores() { return restores; },
+    isolationOnly() { return table.filter((e) => e.priority !== 0).length === buildPort1IsolationPolicy().length; },
+  };
 }
 
 function request(): ExperimentRequest {
@@ -150,71 +174,139 @@ function request(): ExperimentRequest {
   return r.request;
 }
 
+function installer(f: ReturnType<typeof makeFake>): ExperimentInstaller {
+  const inst = new ExperimentInstaller(f.deps);
+  f.attach(inst);
+  return inst;
+}
+
 describe('ExperimentInstaller', () => {
   it('wipes, re-installs the table-miss drop, adds the rules in order, and reports a verified install', async () => {
     const f = makeFake();
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     const report = await inst.install(request());
     expect(report.ok).toBe(true);
     expect(report.confirmed).toEqual(['arp', 'ip']);
     expect(report.extraEntries).toBe(0);
+    expect(report.tableMissEntries).toBe(1);
     expect(f.sent[0]!.command).toBe(FlowModCommand.OFPFC_DELETE);
     expect(f.sent[0]!.match).toEqual({});
     expect(f.sent[1]!.priority).toBe(0); // the table-miss, straight after the wipe
     expect(f.sent.slice(2).map((s) => s.priority)).toEqual([100, 100]);
     expect(inst.state().phase).toBe('active');
     expect(inst.state().activeRuleIds).toEqual(['arp', 'ip']);
+    expect(inst.state().attention).toBeNull();
     expect(f.timers).toHaveLength(1);
     expect(f.timers[0]!.ms).toBe(EXPERIMENT_TTL_DEFAULT_SECONDS * 1000);
   });
 
+  it('waits the configured settle time before reading back, and the default when none is set', async () => {
+    const f = makeFake({ settleMs: 321 });
+    await installer(f).install(request());
+    expect(f.sleeps).toContain(321);
+    const g = makeFake();
+    await installer(g).install(request());
+    expect(g.sleeps).toContain(EXPERIMENT_SETTLE_MS);
+  });
+
   it('puts the isolation policy back when the time limit expires', async () => {
     const f = makeFake();
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     await inst.install(request());
     f.timers[0]!.fn();
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
     expect(inst.state().phase).toBe('idle');
     expect(f.restores).toBe(1);
-    expect(f.table.filter((e) => e.priority !== 0)).toHaveLength(buildPort1IsolationPolicy().length);
+    expect(f.isolationOnly()).toBe(true);
     expect(inst.state().last?.action).toBe('restore');
     expect(inst.state().last?.ok).toBe(true);
+    expect(inst.state().attention).toBeNull();
   });
 
-  it('restores at once and reports failure when a rule is missing from the readback', async () => {
+  it('raises an alert (attention) when the automatic restore at the time limit does not verify', async () => {
+    const f = makeFake({ dropAdds: new Set([2, 3, 4, 5, 6, 7]) }); // the install (adds 0 and 1) lands; the restore's six adds are lost
+    const inst = installer(f);
+    await inst.install(request());
+    f.timers[0]!.fn();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(inst.state().phase).toBe('idle');
+    expect(inst.state().last?.ok).toBe(false);
+    expect(inst.state().attention).toMatch(/NOT verified/);
+    expect(f.logs.join('\n')).toMatch(/ALERT restore NOT VERIFIED/);
+  });
+
+  it('restores at once when a rule is missing from the readback, and reports that the restore verified', async () => {
     const f = makeFake({ dropAdds: new Set([1]) }); // the second experimental ADD is lost
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     const report = await inst.install(request());
     expect(report.ok).toBe(false);
     expect(report.action).toBe('install');
     expect(report.confirmed).toEqual(['arp']);
+    expect(report.restoreAfterFailure?.ok).toBe(true);
     expect(inst.state().phase).toBe('idle');
-    // after the failed install the isolation policy is what the switch holds (the restore's adds are indices 2..7, none dropped)
-    expect(f.table.filter((e) => e.priority !== 0)).toHaveLength(buildPort1IsolationPolicy().length);
+    expect(f.isolationOnly()).toBe(true);
     expect(f.restores).toBe(1);
   });
 
-  it('treats leftover entries the wipe did not remove as a failed install', async () => {
+  it('never passes through idle between a failed install and its restore', async () => {
+    const f = makeFake({ dropAdds: new Set([1]) });
+    const inst = installer(f);
+    await inst.install(request());
+    expect(f.phasesAtSend.length).toBeGreaterThan(0);
+    expect(f.phasesAtSend.every((p) => p === 'installing' || p === 'restoring')).toBe(true);
+  });
+
+  it('says so when the install failed AND the restore after it did not verify', async () => {
+    const f = makeFake({ dropAdds: new Set([1, 2, 3, 4, 5, 6, 7]) }); // one experimental add lost, then all six restore adds lost
+    const inst = installer(f);
+    const report = await inst.install(request());
+    expect(report.ok).toBe(false);
+    expect(report.restoreAfterFailure?.ok).toBe(false);
+    expect(inst.state().attention).toMatch(/NOT verified/);
+    expect(inst.state().phase).toBe('idle');
+  });
+
+  it('treats leftover entries the wipe did not remove as a failed install, and counts the extra table-miss', async () => {
     const f = makeFake({ ignoreWipe: true });
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     await inst.restore(); // the table now holds the isolation policy and cannot be wiped
     const report = await inst.install(request());
     expect(report.ok).toBe(false);
     expect(report.extraEntries).toBeGreaterThan(0);
+    expect(report.tableMissEntries).toBeGreaterThan(1);
   });
 
   it('refuses to start without a session, and leaves nothing stuck', async () => {
     const f = makeFake({ established: false });
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     await expect(inst.install(request())).rejects.toThrow(/no OpenFlow session/);
     expect(inst.state().phase).toBe('idle');
     expect(f.sent).toHaveLength(0);
   });
 
+  it('when the readback throws after the FlowMods were written, restores and surfaces the original error', async () => {
+    const f = makeFake({ failReads: 1 }); // the install's read fails; the restore's read works
+    const inst = installer(f);
+    await expect(inst.install(request())).rejects.toThrow(/flow-stats read failed/);
+    expect(inst.state().phase).toBe('idle');
+    expect(f.isolationOnly()).toBe(true);
+    expect(inst.state().attention).toBeNull();
+    expect(f.phasesAtSend.every((p) => p === 'installing' || p === 'restoring')).toBe(true);
+  });
+
+  it('when the readback throws and the restore cannot verify either, the thrown error says so and attention is set', async () => {
+    const f = makeFake({ failReads: 2 }); // both the install read and the restore read fail
+    const inst = installer(f);
+    await expect(inst.install(request())).rejects.toThrow(/restore did not verify/);
+    expect(inst.state().attention).toMatch(/could not run/);
+    expect(inst.state().phase).toBe('idle');
+  });
+
   it('refuses a second install while one is active, and allows it after a restore', async () => {
     const f = makeFake();
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     await inst.install(request());
     await expect(inst.install(request())).rejects.toThrow(/already active/);
     const back = await inst.restore();
@@ -224,20 +316,32 @@ describe('ExperimentInstaller', () => {
     expect(again.ok).toBe(true);
   });
 
-  it('forgets an active experiment and cancels its timer when the switch session is re-established', async () => {
+  it('forgets an active experiment and cancels its timer when the switch session is re-established, and logs it', async () => {
     const f = makeFake();
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     await inst.install(request());
     inst.sessionReset();
     expect(inst.state().phase).toBe('idle');
     expect(inst.state().activeRuleIds).toEqual([]);
     expect(f.timers[0]!.live).toBe(false);
+    expect(f.logs.join('\n')).toMatch(/session reset while active/);
   });
 
   it('fails closed when the readback lock never frees: no verdict is invented', async () => {
     const f = makeFake({ gateBusy: true });
-    const inst = new ExperimentInstaller(f.deps);
+    const inst = installer(f);
     await expect(inst.install(request())).rejects.toThrow(/read lock/);
     expect(inst.state().phase).toBe('idle');
+  });
+});
+
+describe('parseExperimentSettleMs', () => {
+  it('uses the default when unset or empty, accepts a value in bounds, and refuses one outside them', () => {
+    expect(parseExperimentSettleMs(undefined)).toBe(EXPERIMENT_SETTLE_MS);
+    expect(parseExperimentSettleMs('')).toBe(EXPERIMENT_SETTLE_MS);
+    expect(parseExperimentSettleMs('2500')).toBe(2500);
+    expect(() => parseExperimentSettleMs('10')).toThrow(/250 to 10000/);
+    expect(() => parseExperimentSettleMs('99999')).toThrow(/250 to 10000/);
+    expect(() => parseExperimentSettleMs('abc')).toThrow(/250 to 10000/);
   });
 });

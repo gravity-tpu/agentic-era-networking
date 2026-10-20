@@ -36,6 +36,18 @@ export const EXPERIMENT_TTL_MAX_SECONDS = 300;
 export const EXPERIMENT_SWITCH_EXPIRY_MARGIN_SECONDS = 30;
 /** Wait after sending FlowMods before reading the table back (the MCU processes them in software). */
 export const EXPERIMENT_SETTLE_MS = 1500;
+export const EXPERIMENT_SETTLE_MIN_MS = 250;
+export const EXPERIMENT_SETTLE_MAX_MS = 10_000;
+
+/** Reads ZODIAC_EXPERIMENT_SETTLE_MS: an integer within the bounds, else the default (a value outside them is refused, not clamped). */
+export function parseExperimentSettleMs(raw: string | undefined): number {
+  if (raw === undefined || raw === '') return EXPERIMENT_SETTLE_MS;
+  const v = Number(raw);
+  if (!Number.isInteger(v) || v < EXPERIMENT_SETTLE_MIN_MS || v > EXPERIMENT_SETTLE_MAX_MS) {
+    throw new Error(`ZODIAC_EXPERIMENT_SETTLE_MS must be an integer ${EXPERIMENT_SETTLE_MIN_MS} to ${EXPERIMENT_SETTLE_MAX_MS}, got ${raw}`);
+  }
+  return v;
+}
 /** The shared secret that the install endpoints require in the x-experiment-token header must be at least this long. */
 export const EXPERIMENT_TOKEN_MIN_LENGTH = 32;
 export const EXPERIMENT_MAX_BODY_BYTES = 64 * 1024;
@@ -157,6 +169,10 @@ export interface ExperimentReport {
   readonly provenForwarding: boolean;
   readonly detail: string;
   readonly atMs: number;
+  /** Entries with priority 0 (the table-miss); exactly one is expected. */
+  readonly tableMissEntries: number;
+  /** Set on a failed install: what the automatic restore that followed did, so "isolation is back" is never assumed. */
+  readonly restoreAfterFailure?: ExperimentReport;
 }
 
 export interface ExperimentState {
@@ -165,6 +181,11 @@ export interface ExperimentState {
   readonly activeRuleIds: readonly string[];
   readonly expiresAtMs: number | null;
   readonly last: ExperimentReport | null;
+  /**
+   * Non-null while the data plane may NOT be back on the isolation policy: the last restore did not verify or could not run. It is
+   * cleared by the next restore that verifies. An operator or a watcher should treat a non-null value as an alarm.
+   */
+  readonly attention: string | null;
 }
 
 export interface FlowReadGate {
@@ -185,6 +206,8 @@ export interface InstallerDeps {
   sleep(ms: number): Promise<void>;
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(handle: unknown): void;
+  /** Wait between sending FlowMods and reading the table back. Default EXPERIMENT_SETTLE_MS; the bridge sets it from the environment. */
+  readonly settleMs?: number;
   /** Called after a restore whose readback verified, so the bridge can refresh its isolation status. */
   onRestored?(report: ExperimentReport): void;
   log?(line: string): void;
@@ -192,19 +215,20 @@ export interface InstallerDeps {
 
 const WIPE_ALL: FlowModOptions = { command: FlowModCommand.OFPFC_DELETE, priority: 0, match: {} };
 
-/** Serializes installs: at most one experiment at a time, always ended by a restore (explicit or on the time limit). */
+/** Serializes installs: at most one experiment at a time, always ended by a restore (explicit, after a failed install, or on the time limit). */
 export class ExperimentInstaller {
   private phase: ExperimentPhase = 'idle';
   private label = '';
   private activeIds: readonly string[] = [];
   private expiresAtMs: number | null = null;
   private last: ExperimentReport | null = null;
+  private attention: string | null = null;
   private timer: unknown = null;
 
   public constructor(private readonly deps: InstallerDeps) {}
 
   public state(): ExperimentState {
-    return { phase: this.phase, label: this.label, activeRuleIds: this.activeIds, expiresAtMs: this.expiresAtMs, last: this.last };
+    return { phase: this.phase, label: this.label, activeRuleIds: this.activeIds, expiresAtMs: this.expiresAtMs, last: this.last, attention: this.attention };
   }
 
   private log(line: string): void { this.deps.log?.(line); }
@@ -225,18 +249,21 @@ export class ExperimentInstaller {
     this.deps.sendFlowMod(WIPE_ALL);
     this.deps.sendTableMissDrop();
     for (const rule of rules) this.deps.sendFlowMod(rule.flowMod);
-    await this.deps.sleep(EXPERIMENT_SETTLE_MS);
+    await this.deps.sleep(this.deps.settleMs ?? EXPERIMENT_SETTLE_MS);
     const entries = await this.readback();
     const verdict = verifyIsolationReadback(rules, entries);
-    // The table-miss is one entry with priority 0 and no match fields; every other entry must be one of the requested rules.
-    const nonMiss = entries.filter((e) => e.priority !== 0).length;
+    // The table-miss is the priority-0 entry and there must be exactly one; every other entry must be one of the requested rules.
+    const missEntries = entries.filter((e) => e.priority === 0).length;
+    const nonMiss = entries.length - missEntries;
     const extra = Math.max(0, nonMiss - verdict.confirmed.length);
-    const ok = verdict.mismatches.length === 0 && verdict.confirmed.length === rules.length && extra === 0;
+    const ok = verdict.mismatches.length === 0 && verdict.confirmed.length === rules.length && extra === 0 && missEntries === 1;
+    const detail = ok
+      ? `${rules.length}/${rules.length} rules confirmed, ${entries.length} entries including the table-miss`
+      : `confirmed ${verdict.confirmed.length}/${rules.length}, ${verdict.mismatches.length} mismatches, ${extra} extra entries, ${missEntries} priority-0 entries (expected 1)`;
     return {
-      ok, action, label, rulesRequested: rules.length, entriesSeen: entries.length, extraEntries: extra,
+      ok, action, label, rulesRequested: rules.length, entriesSeen: entries.length, extraEntries: extra, tableMissEntries: missEntries,
       confirmed: verdict.confirmed, mismatches: verdict.mismatches, actionsStatus: verdict.actions.status, provenForwarding: verdict.provenForwarding,
-      detail: ok ? `${rules.length}/${rules.length} rules confirmed, ${entries.length} entries including the table-miss` : `confirmed ${verdict.confirmed.length}/${rules.length}, ${verdict.mismatches.length} mismatches, ${extra} extra entries`,
-      atMs: this.deps.nowMs(),
+      detail, atMs: this.deps.nowMs(),
     };
   }
 
@@ -244,62 +271,97 @@ export class ExperimentInstaller {
     if (this.timer !== null) { this.deps.clearTimer(this.timer); this.timer = null; }
   }
 
-  /** Put the isolation policy back. Safe to call at any time; the result says whether the readback verified. */
-  public async restore(): Promise<ExperimentReport> {
-    if (this.phase === 'installing' || this.phase === 'restoring') throw new Error(`cannot restore while ${this.phase}`);
-    this.cancelTimer();
-    const wasLabel = this.label;
-    this.phase = 'restoring';
-    try {
-      const report = await this.writeAndVerify(this.deps.isolationPolicy(), 'restore', wasLabel);
-      this.last = report;
-      this.log(`[experiment] restore ${report.ok ? 'VERIFIED' : 'NOT VERIFIED'}: ${report.detail}`);
-      if (report.ok) this.deps.onRestored?.(report);
-      return report;
-    } finally {
-      this.phase = 'idle';
-      this.label = '';
-      this.activeIds = [];
-      this.expiresAtMs = null;
-    }
+  private clearActive(): void {
+    this.label = '';
+    this.activeIds = [];
+    this.expiresAtMs = null;
   }
 
   /**
-   * Install a parsed request. On a failed readback the isolation policy is restored at once and the failing report returned.
-   * Throws if an experiment is already running or the session is down.
+   * Put the isolation policy back. Assumes the caller has already moved the phase to 'restoring', so there is no window in which another
+   * install could start. Never throws: a restore that cannot run or does not verify is returned as a failing report and sets `attention`.
+   */
+  private async restoreNow(label: string): Promise<ExperimentReport> {
+    try {
+      const report = await this.writeAndVerify(this.deps.isolationPolicy(), 'restore', label);
+      this.last = report;
+      if (report.ok) {
+        this.attention = null;
+        this.log(`[experiment] restore VERIFIED: ${report.detail}`);
+        this.deps.onRestored?.(report);
+      } else {
+        this.attention = `isolation policy NOT verified after restore: ${report.detail}`;
+        this.log(`[experiment] ALERT restore NOT VERIFIED: ${report.detail}`);
+      }
+      return report;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.attention = `restore could not run: ${msg}`;
+      this.log(`[experiment] ALERT restore FAILED to run: ${msg}`);
+      const failed: ExperimentReport = {
+        ok: false, action: 'restore', label, rulesRequested: this.deps.isolationPolicy().length, entriesSeen: 0, extraEntries: 0, tableMissEntries: 0,
+        confirmed: [], mismatches: [], actionsStatus: 'unobservable', provenForwarding: false, detail: `restore could not run: ${msg}`, atMs: this.deps.nowMs(),
+      };
+      this.last = failed;
+      return failed;
+    } finally {
+      this.phase = 'idle';
+      this.clearActive();
+    }
+  }
+
+  /** Put the isolation policy back. Safe to call at any time except mid-install or mid-restore; the report says whether the readback verified. */
+  public async restore(): Promise<ExperimentReport> {
+    if (this.phase === 'installing' || this.phase === 'restoring') throw new Error(`cannot restore while ${this.phase}`);
+    this.cancelTimer();
+    const label = this.label;
+    this.phase = 'restoring';
+    const report = await this.restoreNow(label);
+    // An explicit restore that cannot run is an error to the caller (HTTP 409); one that ran but did not verify is a failing report (502).
+    if (!report.ok && report.entriesSeen === 0 && report.detail.startsWith('restore could not run')) throw new Error(report.detail);
+    return report;
+  }
+
+  /**
+   * Install a parsed request. On a failed readback, or on an error after FlowMods were sent, the isolation policy is restored at once and
+   * the result carries that restore's outcome (`restoreAfterFailure`), so a caller can tell "install failed, isolation back" from "install
+   * failed, isolation NOT back". Throws if an experiment is already running or the session is down.
    */
   public async install(request: ExperimentRequest): Promise<ExperimentReport> {
     if (this.phase !== 'idle') throw new Error(`an experiment is already ${this.phase}; restore first`);
     this.phase = 'installing';
     this.label = request.label;
+    let report: ExperimentReport;
     try {
-      const report = await this.writeAndVerify(request.rules, 'install', request.label);
-      this.last = report;
-      if (!report.ok) {
-        this.log(`[experiment] install NOT VERIFIED (${report.detail}); restoring the isolation policy`);
-        this.phase = 'idle';
-        await this.restore();
-        return report;
-      }
-      this.phase = 'active';
-      this.activeIds = request.rules.map((r) => r.id);
-      this.expiresAtMs = this.deps.nowMs() + request.ttlSeconds * 1000;
-      this.log(`[experiment] install VERIFIED (${request.label || 'unlabelled'}): ${report.detail}; restores in ${request.ttlSeconds} s`);
-      this.timer = this.deps.setTimer(() => {
-        this.timer = null;
-        this.restore().catch((err: unknown) => {
-          this.log(`[experiment] automatic restore FAILED: ${err instanceof Error ? err.message : String(err)}`);
-        });
-      }, request.ttlSeconds * 1000);
-      return report;
-    } catch (err) {
-      // A failure to write or read at all: do not leave the phase stuck, and try to put the policy back.
-      this.phase = 'idle';
-      this.label = '';
+      report = await this.writeAndVerify(request.rules, 'install', request.label);
+    } catch (err: unknown) {
+      // Nothing verified. If any FlowMod may have gone out, put the policy back; either way surface the original error.
+      this.phase = 'restoring';
       this.cancelTimer();
-      try { await this.restore(); } catch { /* the original error is the one to surface; the switch-side hard timeouts still apply */ }
-      throw err;
+      const restored = await this.restoreNow(request.label);
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`${msg}${restored.ok ? '' : ` (and the restore did not verify: ${restored.detail})`}`);
     }
+    this.last = report;
+    if (!report.ok) {
+      this.log(`[experiment] install NOT VERIFIED (${report.detail}); restoring the isolation policy`);
+      this.phase = 'restoring'; // straight to restoring: no idle window between the failed install and its restore
+      const restored = await this.restoreNow(request.label);
+      return { ...report, restoreAfterFailure: restored };
+    }
+    this.phase = 'active';
+    this.activeIds = request.rules.map((r) => r.id);
+    this.expiresAtMs = this.deps.nowMs() + request.ttlSeconds * 1000;
+    this.log(`[experiment] install VERIFIED (${request.label || 'unlabelled'}): ${report.detail}; restores in ${request.ttlSeconds} s`);
+    this.timer = this.deps.setTimer(() => {
+      this.timer = null;
+      if (this.phase !== 'active') return; // an explicit restore or a session reset got there first
+      this.phase = 'restoring';
+      this.restoreNow(request.label).catch((err: unknown) => {
+        this.log(`[experiment] ALERT automatic restore threw: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, request.ttlSeconds * 1000);
+    return report;
   }
 
   /**
@@ -308,11 +370,10 @@ export class ExperimentInstaller {
    * their switch-side hard timeout; the readback of the next install or restore will show any that remain.
    */
   public sessionReset(): void {
+    if (this.phase !== 'idle') this.log(`[experiment] session reset while ${this.phase}${this.label ? ` (${this.label})` : ''}: the experiment is forgotten and the bridge reinstalls the isolation policy`);
     this.cancelTimer();
     this.phase = 'idle';
-    this.label = '';
-    this.activeIds = [];
-    this.expiresAtMs = null;
+    this.clearActive();
   }
 
   public dispose(): void { this.cancelTimer(); }
