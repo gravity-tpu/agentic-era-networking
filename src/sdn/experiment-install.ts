@@ -212,6 +212,10 @@ export interface InstallerDeps {
   readonly settleMs?: number;
   /** Called after a restore whose readback verified, so the bridge can refresh its isolation status. */
   onRestored?(report: ExperimentReport): void;
+  /** How many quarantine DROPs are active. An install wipes the whole table, so it is refused while any are (they would be lifted for the experiment's duration). */
+  activeQuarantines?(): number;
+  /** Called after every restore that ran, verified or not, once its readback is done: the wipe also removed any quarantine added during the experiment, so the bridge re-sends them. */
+  afterRestore?(): void;
   log?(line: string): void;
 }
 
@@ -235,24 +239,33 @@ export class ExperimentInstaller {
 
   private log(line: string): void { this.deps.log?.(line); }
 
-  private async readback(): Promise<readonly FlowStatsEntry[]> {
+  /**
+   * Take the flow-table lock before the first FlowMod and keep it through the settle wait and the readback. The periodic isolation
+   * re-check shares this lock and skips a tick while it is held, so it can never read a half-written table (wipe sent, rules not yet
+   * landed) and raise a false alarm. Throws, with nothing sent, if the lock stays busy.
+   */
+  private async acquireTableLock(): Promise<void> {
     for (let i = 0; i < EXPERIMENT_READBACK_LOCK_RETRIES; i++) {
-      if (this.deps.gate.tryAcquire()) {
-        try { return await this.deps.readFlowStats(); } finally { this.deps.gate.release(); }
-      }
+      if (this.deps.gate.tryAcquire()) return;
       await this.deps.sleep(EXPERIMENT_READBACK_LOCK_WAIT_MS);
     }
-    throw new Error('the flow-table read lock stayed busy; refusing to continue without a readback');
+    throw new Error('the flow-table lock stayed busy; refusing to rewrite the table without being able to read it back');
   }
 
   /** Wipe the table, re-install the table-miss DROP, add `rules`, then read back and judge. Throws only on no session or a failed read. */
   private async writeAndVerify(rules: readonly IsolationRule[], action: 'install' | 'restore', label: string): Promise<ExperimentReport> {
     if (!this.deps.isSessionEstablished()) throw new Error('no OpenFlow session with the switch');
-    this.deps.sendFlowMod(WIPE_ALL);
-    this.deps.sendTableMissDrop();
-    for (const rule of rules) this.deps.sendFlowMod(rule.flowMod);
-    await this.deps.sleep(this.deps.settleMs ?? EXPERIMENT_SETTLE_MS);
-    const entries = await this.readback();
+    await this.acquireTableLock();
+    let entries: readonly FlowStatsEntry[];
+    try {
+      this.deps.sendFlowMod(WIPE_ALL);
+      this.deps.sendTableMissDrop();
+      for (const rule of rules) this.deps.sendFlowMod(rule.flowMod);
+      await this.deps.sleep(this.deps.settleMs ?? EXPERIMENT_SETTLE_MS);
+      entries = await this.deps.readFlowStats();
+    } finally {
+      this.deps.gate.release();
+    }
     const verdict = verifyIsolationReadback(rules, entries);
     // The table-miss is the priority-0 entry and there must be exactly one; every other entry must be one of the requested rules.
     const missEntries = entries.filter((e) => e.priority === 0).length;
@@ -287,6 +300,7 @@ export class ExperimentInstaller {
   private async restoreNow(label: string): Promise<ExperimentReport> {
     try {
       const report = await this.writeAndVerify(this.deps.isolationPolicy(), 'restore', label);
+      this.deps.afterRestore?.();
       this.last = report;
       if (report.ok) {
         this.attention = null;
@@ -332,6 +346,8 @@ export class ExperimentInstaller {
    */
   public async install(request: ExperimentRequest): Promise<ExperimentReport> {
     if (this.phase !== 'idle') throw new Error(`an experiment is already ${this.phase}; restore first`);
+    const quarantined = this.deps.activeQuarantines?.() ?? 0;
+    if (quarantined > 0) throw new Error(`${quarantined} quarantine DROP rule(s) are active and an install wipes the table; release them or wait for their time limit first`);
     this.phase = 'installing';
     this.label = request.label;
     let report: ExperimentReport;

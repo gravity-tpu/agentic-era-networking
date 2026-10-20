@@ -9,6 +9,21 @@ import collections, glob, json, math, os, re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+
+def _jload(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _jsonl(path):
+    with open(path) as fh:
+        return [json.loads(line) for line in fh]
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
+
 ROOT = 'docs/benchmarks/results/agent-evaluation'
 OUT = f'{ROOT}/frontier-selection/README.md'
 INTENTS = [('port1-isolation_v1', 'INTENT-1 port-1 isolation'), ('dns-confinement_v1', 'INTENT-2 DNS confinement'),
@@ -57,8 +72,8 @@ def load_dirs(stage, proto, suffix_re):
         m = re.match(rf'.*/protocol-{proto}-(.+?)-((?:gemini|claude)-[a-z0-9.\-]+?){suffix_re}$', d)
         if not m or not os.path.exists(f'{d}/summary.json'):
             continue
-        s = json.load(open(f'{d}/summary.json'))
-        s['_trials'] = [json.loads(l) for l in open(f'{d}/trials.jsonl')]
+        s = _jload(f'{d}/summary.json')
+        s['_trials'] = _jsonl(f'{d}/trials.jsonl')
         out[m.group(2)][m.group(1)] = s
     return out
 
@@ -86,8 +101,8 @@ def main():
         if m is None:
             continue
         model = m.group(1)
-        s = json.load(open(f'{d}/summary.json'))
-        t = [json.loads(l) for l in open(f'{d}/trials.jsonl')]
+        s = _jload(f'{d}/summary.json')
+        t = _jsonl(f'{d}/trials.jsonl')
         probe[model][0] += s['trialsRun']
         probe[model][1] += sum(1 for r in t for x in r['turns'] if str(x.get('doneReason', '')).startswith('refusal'))
         probe[model][2] += int(s.get('costMicroUsd', '0'))
@@ -226,15 +241,15 @@ def main():
     for d in sorted(glob.glob(f'{ROOT}/frontier-expanded/protocol-a-*-claude-haiku-5-5-n200-r*')):
         m_ = re.match(r'.*/protocol-a-(.+?)-claude-haiku-5-5-n200-r\d+$', d)
         if m_ and os.path.exists(f'{d}/summary.json'):
-            sm = json.load(open(f'{d}/summary.json'))
-            sm['_trials'] = [json.loads(l) for l in open(f'{d}/trials.jsonl')]
+            sm = _jload(f'{d}/summary.json')
+            sm['_trials'] = _jsonl(f'{d}/trials.jsonl')
             exp_a[m_.group(1)].append(sm)
     exp_b = {}
     for d in sorted(glob.glob(f'{ROOT}/frontier-expanded/protocol-b-*-claude-haiku-5-5-n100')):
         m_ = re.match(r'.*/protocol-b-(.+?)-claude-haiku-5-5-n100$', d)
         if m_ and os.path.exists(f'{d}/summary.json'):
-            sm = json.load(open(f'{d}/summary.json'))
-            sm['_trials'] = [json.loads(l) for l in open(f'{d}/trials.jsonl')]
+            sm = _jload(f'{d}/summary.json')
+            sm['_trials'] = _jsonl(f'{d}/trials.jsonl')
             exp_b[m_.group(1)] = sm
     if exp_a:
         w('## The accuracy claim: fresh trials taken after the choice')
@@ -286,7 +301,7 @@ def main():
             w('')
         xp = f'{ROOT}/frontier-expanded/cross-intent-rejudge.json'
         if os.path.exists(xp):
-            xj = json.load(open(xp))
+            xj = _jload(xp)
             w('### Does "admissible under one intent" carry to the others?')
             w('')
             w('Each admissible set from the Protocol A trials above was judged again under all four intents (`scripts/rejudge-cross-intent.ts`; no model call). Rows: the intent the set was written for; '
@@ -336,7 +351,7 @@ def main():
     w('- **Spend.** Recorded spend is the sum of `costMicroUsd` over every frontier run directory; a run that was started and stopped before writing its summary is not in it.')
     w('')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    open(OUT, 'w').write('\n'.join(L).rstrip('\n') + '\n')
+    _write(OUT, '\n'.join(L).rstrip('\n') + '\n')
     print('wrote', OUT, len(L), 'lines')
 
 

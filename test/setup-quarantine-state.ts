@@ -1,0 +1,16 @@
+/**
+ * Every test worker gets its own quarantine state file, so no test reads quarantines saved by another test (or by a real bridge
+ * on the same machine) and no test writes into /var/lib/zodiac. Tests of the persistence itself set their own path.
+ */
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+
+process.env['ZODIAC_QUARANTINE_STATE_FILE'] = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zodiac-test-qstate-')), 'quarantine-state.json');
+
+// A fresh bridge in the next test must not restore what the previous test's bridge saved.
+beforeEach(() => {
+  const file = process.env['ZODIAC_QUARANTINE_STATE_FILE'];
+  if (file !== undefined && !file.startsWith(os.tmpdir())) return; // a test that points at its own path manages it itself
+  if (file !== undefined) fs.rmSync(file, { force: true });
+});
