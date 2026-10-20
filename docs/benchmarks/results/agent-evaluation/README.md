@@ -91,16 +91,32 @@ rows are **not** a difficulty ranking: an intent whose text spells out the polic
 - **`ERR_SHADOWED` is a hygiene failure, not necessarily a safety one** (a rule fully covered by higher-priority rules: a dead rule). It is in the
   pre-registered structural list (A5), so it counts as non-admissible, but only 3 trials across these runs fail on it alone; the rest also leak or omit something.
 
-## INTENT-2 to 4, reasoning on (2026-10-19, in progress)
+## All four intents, reasoning off against on (`gemma4:26b`, 2026-10-19)
 
-`gemma4:26b`, reasoning on, 32768-token budget per turn, streamed runner. Results are added here as each run finishes; the queue (Protocol B for the three
-intents, then Protocol A) is still running when this is written.
+Admissible out of trials, same prompt per intent, strict parse. "Truncated" means the 32768-token cap was hit with no answer (the triage labels it `ERR_SYNTAX`);
+"timeout" is the runner's 30-minute turn limit; both are counted as not admissible, not dropped.
+
+| Intent | Zero-shot, reasoning off | Zero-shot, reasoning on | Feedback, reasoning off | Feedback, reasoning on |
+| :--- | :--- | :--- | :--- | :--- |
+| INTENT-1 `port1-isolation/v1` | 0 of 50 | 5 of 50 (2 timeouts at 301 s, old runner) | 2 of 20 | **20 of 20** |
+| INTENT-2 `dns-confinement/v1` | **50 of 50** | 29 of 50 (16 truncated) | 20 of 20 | 18 of 20 (2 truncated) |
+| INTENT-3 `quarantine-precedence/v1` | 0 of 50 | 4 of 50 | 3 of 20 | **18 of 20** (2 timeouts) |
+| INTENT-4 `tap-return-isolation/v1` | 0 of 50 | **32 of 50** (16 truncated) | 16 of 20 | 19 of 20 (1 truncated) |
+
+Reading it: reasoning makes the biggest difference where the policy has to be derived (INTENT-1, INTENT-4 zero-shot; INTENT-3 and INTENT-1 with feedback) and none or a
+negative one where the intent text already states the policy (INTENT-2, where reasoning off scores 50 of 50 and reasoning on loses a third of its trials to truncation).
+Each intent has its own wording, so the rows are not a ranking of intent difficulty; the columns are comparable within a row. Every cell is one model, one quantization,
+one prompt wording and a single run of N trials, and the reasoning-on cells have the truncation and timeout limits above.
+
+## INTENT-2 to 4, reasoning on: detail (2026-10-19)
+
+`gemma4:26b`, reasoning on, 32768-token budget per turn, streamed runner. All six runs (Protocol A and B for each intent) finished.
 
 | Intent | Zero-shot, N = 50 | With verifier feedback, N = 20 |
 | :--- | :--- | :--- |
 | INTENT-2 `dns-confinement/v1` | **29 admissible**; 16 truncated (no answer), 4 `ERR_INTENT_LEAK`, 1 `ERR_PREREQUISITE` | **18 admissible** (turn 1: 14, turn 2: 2, turn 4: 1, turn 5: 1); 2 `ERR_SYNTAX`, both **truncated** (below) |
 | INTENT-3 `quarantine-precedence/v1` | **4 admissible**; `ERR_HAIRPIN` 37, `ERR_SYNTAX` 4 (3 truncated, 1 malformed), `ERR_INTENT_LEAK` 4, `ERR_PREREQUISITE` 1 | **18 admissible** (turn 1: 1, turn 2: 12, turn 3: 5); 2 `TRANSPORT_FAILURE`, both the runner's 30-minute turn timeout on the first turn (seeds 10 and 11) |
-| INTENT-4 `tap-return-isolation/v1` | not yet run | **19 admissible** (turn 1: 11, turn 2: 4, turn 3: 3, turn 5: 1); 1 `ERR_SYNTAX`, a **truncation** on all five turns (seed 8) |
+| INTENT-4 `tap-return-isolation/v1` | **32 admissible**; 16 truncated (no answer), 1 `ERR_INTENT_LEAK`, 1 `ERR_HAIRPIN` | **19 admissible** (turn 1: 11, turn 2: 4, turn 3: 3, turn 5: 1); 1 `ERR_SYNTAX`, a **truncation** on all five turns (seed 8) |
 
 - **Truncation is a limit of this condition.** The 2 non-admissible INTENT-2 trials are not format errors: on all five turns each stopped at the 32768-token cap
   (`done_reason` `length`) with no answer, so the triage saw empty text and labelled it `ERR_SYNTAX`. Across the 20 trials, **16 of 37 turns hit the cap**
@@ -113,6 +129,9 @@ intents, then Protocol A) is still running when this is written.
   `ERR_SYNTAX`; none is a malformed answer). Of the 34 trials that did answer, 29 are admissible and 5 are not (4 leaks, 1 missing EtherType). So the model reasons itself out of
   an answer in about a third of the trials, which reasoning off never does on this intent. It is a budget effect: a larger cap was not tried, and "29 of 50" would
   change with it. The 29 admissible sets are 27 distinct rule-id sets.
+- **INTENT-4 zero-shot: reasoning on turns 0 of 50 into 32 of 50.** The intent asks for the tap copy and return that INTENT-1 only permits; with reasoning off every trial
+  leaks or omits something (26 and 24). With it on, 32 are admissible, 16 are truncated (all 16 `ERR_SYNTAX` turns are truncations), and only 2 of the 34 that answered fail (1 leak, 1
+  hairpin). The admissible sets are 6 rules (31 of 32) and converge on 17 distinct rule-id sets: many are the hand-written six-rule reference's shape.
 - **INTENT-3 zero-shot: reasoning barely moves it.** 4 of 50 admissible with reasoning on, against 0 of 50 with it off; 37 of the 50 are still the hairpin (intra-segment
   traffic sent back out its ingress port), the same slip as INTENT-1. 48 distinct outputs in 50 trials, so this is not one answer repeated; the 4 admissible sets are 4
   distinct rule-id sets of 7 rules. Only 3 trials hit the token cap. A model that reasons for 9,000 to 32,000 tokens still does not get the hairpin right on its own.
@@ -187,5 +206,6 @@ verdicts do not depend on the hardware, though the run is not on the embedded de
 - Protocol A was run with an earlier version of the runner (record shape `agent-eval/v1`, one response per trial); Protocol B
   uses `agent-eval/v2` (a `turns` array). The check and the prompt are the same.
 - Baselines (reference policy and single-point mutations) for all four intents are in `baselines/`.
-- Not done in this file: INTENT-2 to 4 with reasoning on (queued, running; no results yet), frontier-API models, re-running the timed-out
-  INTENT-1 seeds, the small model with reasoning (it has none) or at other sizes, and RQ4.
+- Not done in this file: frontier-API models, a larger token budget for the truncated reasoning-on trials, re-running the timed-out INTENT-1 seeds with
+  the streaming runner, other prompt wordings (so the intents' wording effects cannot be separated from their difficulty), the small model at other sizes, repeated runs of any
+  cell (every cell is one run), and RQ4 (nothing here was installed on the switch).
