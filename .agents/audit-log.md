@@ -72,3 +72,12 @@
 | 2026-09-12T19:55:45Z | main | 9013f67 | PASSED | Pinned Node engine to 22.x (18 tests passed). |
 | 2026-09-12T19:59:24Z | main | 079ad1f | PASSED | Adopted .nvmrc as single source of truth (18 tests passed). |
 | 2026-09-12T20:26:42Z | main | pending | PASSED | Added Security Scanner, Prisma Neon DB, Prometheus, DNS UDP Server, SDN Flow Table (25 tests passed). |
+
+## 4. Pushes that bypassed the AI review gate (cleanup owed)
+
+Each `git push --no-verify` is listed here with who approved it. **Cleanup owed:** for every row, re-run `npm run review` on the range, then fix the warnings or record why each is not a defect, and confirm CI is green. Remove the row once done.
+
+| Date | Branch | Range pushed | Approved by | Gates 1 to 5 | What the review blocked on | Cleanup |
+| ---- | ------ | ------------ | ----------- | ------------ | -------------------------- | ------- |
+| 2026-10-18 | fix/only-requires-ids (PR #69) | f772fee..55e6267 | owner, one-time | passed locally (tsc, tests, banned patterns, provenance) | restated, already-disclosed caveats (forgeable ARP source, one flood rate, unknown switch-hang cause) | open |
+| 2026-10-19 | feat/eval-baselines-intents | 289032f..HEAD | owner, "bypass as long as we set a reminder to clean it up" (12-hour window) | passed | fresh nit-level warnings on each attempt after the real ones were fixed (identity comparison in `scoreMutants`, fallback category, no CI regeneration check): the last two were addressed, the gate kept finding new ones | open |

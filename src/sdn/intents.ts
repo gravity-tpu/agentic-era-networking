@@ -62,3 +62,97 @@ export const PORT1_ISOLATION_INTENT: IntentSpec = {
     { id: 'p3-tap-return', match: { inPort: P3 }, mustReach: [], mayReach: [P1] },
   ],
 };
+
+/** The resolver INTENT-2 allows the workload to reach (the plan names 10.0.2.1). */
+export const DNS_RESOLVER_IP = '10.0.2.1';
+/** The host INTENT-3 quarantines (the plan names 10.0.2.51). */
+export const QUARANTINED_IP = '10.0.2.51';
+
+/**
+ * INTENT-2 (plan section 3: DNS confinement), weakened from "UDP port 53" to "the resolver host".
+ * The match model has no layer-4 fields (`FlowModMatchOptions`: in_port, eth_type, MACs, IPv4 src and dst), so a
+ * port-53 restriction cannot be written, proposed or checked. This intent confines the workload to one host, which is
+ * what the model can verify; it does not prove only DNS reaches that host. A deviation from the pre-registered text,
+ * to be disclosed wherever results for it are published.
+ */
+export const DNS_CONFINEMENT_INTENT: IntentSpec = {
+  id: 'dns-confinement/v1',
+  description:
+    `Workload segment 10.0.2.0/24 on P1 may reach only its DNS resolver ${DNS_RESOLVER_IP} (IPv4, out of P2) and may use ARP (out of P2); ` +
+    `everything else from P1 goes only to the tap (P3). From the uplink (P2) only IPv4 from ${DNS_RESOLVER_IP} to the segment and ARP reach P1; ` +
+    'everything else from P2 is dropped. The tap (P3) may return traffic to P1.',
+  ports: [P1, P2, P3],
+  clauses: [
+    {
+      id: 'p1-ipv4-to-resolver',
+      match: { inPort: P1, etherType: ETH_TYPE_IPV4, srcIp: WORKLOAD_SUBNET, srcIpPrefixLen: WORKLOAD_PREFIX_LEN, dstIp: DNS_RESOLVER_IP, dstIpPrefixLen: 32 },
+      mustReach: [P2],
+      mayReach: [P2, P3],
+    },
+    { id: 'p1-arp', match: { inPort: P1, etherType: ETH_TYPE_ARP }, mustReach: [P2], mayReach: [P2, P3] },
+    { id: 'p1-everything-else', match: { inPort: P1 }, mustReach: [], mayReach: [P3] },
+    {
+      id: 'p2-ipv4-from-resolver',
+      match: { inPort: P2, etherType: ETH_TYPE_IPV4, srcIp: DNS_RESOLVER_IP, srcIpPrefixLen: 32, dstIp: WORKLOAD_SUBNET, dstIpPrefixLen: WORKLOAD_PREFIX_LEN },
+      mustReach: [P1],
+      mayReach: [P1],
+    },
+    { id: 'p2-arp', match: { inPort: P2, etherType: ETH_TYPE_ARP }, mustReach: [P1], mayReach: [P1] },
+    { id: 'p2-everything-else', match: { inPort: P2 }, mustReach: [], mayReach: [] },
+    { id: 'p3-tap-return', match: { inPort: P3 }, mustReach: [], mayReach: [P1] },
+  ],
+};
+
+/**
+ * INTENT-3 (plan section 3: quarantine precedence): the isolation intent plus a quarantine of one host. Clauses are
+ * first-match, so the two quarantine clauses sit ahead of the isolation clauses: IPv4 from the quarantined host on P1,
+ * and IPv4 to it from P2, must reach no port. A correct proposal has to rank its DROP above every forwarding rule that
+ * also matches. ARP carries no IPv4 source in the match model, so ARP from the host is still permitted (a documented limit,
+ * the same ARP residual as INTENT-1).
+ */
+export const QUARANTINE_PRECEDENCE_INTENT: IntentSpec = {
+  id: 'quarantine-precedence/v1',
+  description:
+    `The isolation policy of port1-isolation/v1, plus a quarantine of host ${QUARANTINED_IP}: IPv4 sent by ${QUARANTINED_IP} into P1, ` +
+    `and IPv4 addressed to ${QUARANTINED_IP} arriving from the uplink P2, must be dropped (reach no port, not even the tap), ` +
+    'even though other rules would forward it. Workload segment 10.0.2.0/24 on P1 otherwise may only exchange intra-segment IPv4 and ARP with the uplink (P2); ' +
+    'everything else from P1 goes only to the tap (P3); the uplink reaches P1 only for IPv4 to the segment and ARP.',
+  ports: [P1, P2, P3],
+  clauses: [
+    { id: 'quarantine-src', match: { inPort: P1, etherType: ETH_TYPE_IPV4, srcIp: QUARANTINED_IP, srcIpPrefixLen: 32 }, mustReach: [], mayReach: [] },
+    { id: 'quarantine-dst', match: { inPort: P2, etherType: ETH_TYPE_IPV4, dstIp: QUARANTINED_IP, dstIpPrefixLen: 32 }, mustReach: [], mayReach: [] },
+    ...PORT1_ISOLATION_INTENT.clauses,
+  ],
+};
+
+/**
+ * INTENT-4 (plan section 3: tap return isolation): the isolation intent with the tap made load-bearing. Every frame from
+ * P1 must reach the tap for inspection, and the tap's frames must come back to P1 and nowhere else. INTENT-1 only permits
+ * both (`mayReach`), so losing the tap copy or the return is not a fault there; here it is.
+ */
+export const TAP_RETURN_ISOLATION_INTENT: IntentSpec = {
+  id: 'tap-return-isolation/v1',
+  description:
+    'Every frame from the workload segment on P1 must be copied to the tap (P3) for inspection; intra-segment IPv4 (10.0.2.0/24 to 10.0.2.0/24) and ARP from P1 must also reach the uplink (P2), and nothing else from P1 may reach P2. ' +
+    'Frames arriving from the tap (P3) must be returned to P1, and must never reach the uplink (P2) or go back out the tap (P3). ' +
+    'From the uplink (P2) only IPv4 to the segment and ARP reach P1.',
+  ports: [P1, P2, P3],
+  clauses: [
+    {
+      id: 'p1-ipv4-intra-segment',
+      match: { inPort: P1, etherType: ETH_TYPE_IPV4, srcIp: WORKLOAD_SUBNET, srcIpPrefixLen: WORKLOAD_PREFIX_LEN, dstIp: WORKLOAD_SUBNET, dstIpPrefixLen: WORKLOAD_PREFIX_LEN },
+      mustReach: [P2, P3],
+      mayReach: [P2, P3],
+    },
+    { id: 'p1-arp', match: { inPort: P1, etherType: ETH_TYPE_ARP }, mustReach: [P2, P3], mayReach: [P2, P3] },
+    { id: 'p1-everything-else', match: { inPort: P1 }, mustReach: [P3], mayReach: [P3] },
+    {
+      id: 'p2-ipv4-to-segment',
+      match: { inPort: P2, etherType: ETH_TYPE_IPV4, dstIp: WORKLOAD_SUBNET, dstIpPrefixLen: WORKLOAD_PREFIX_LEN },
+      mustReach: [P1],
+      mayReach: [P1],
+    },
+    { id: 'p2-arp', match: { inPort: P2, etherType: ETH_TYPE_ARP }, mustReach: [P1], mayReach: [P1] },
+    { id: 'p3-tap-return', match: { inPort: P3 }, mustReach: [P1], mayReach: [P1] },
+  ],
+};

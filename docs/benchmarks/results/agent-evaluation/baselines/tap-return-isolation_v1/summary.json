@@ -1,0 +1,61 @@
+{
+  "schema": "eval-baselines/v1",
+  "intent": "tap-return-isolation/v1",
+  "reference": {
+    "rules": 6,
+    "category": "ADMISSIBLE"
+  },
+  "mutants": {
+    "total": 40,
+    "killed": 35,
+    "survived": 5,
+    "byOperator": {
+      "drop-rule": {
+        "total": 6,
+        "killed": 6,
+        "survived": 0
+      },
+      "widen-prefix": {
+        "total": 3,
+        "killed": 3,
+        "survived": 0
+      },
+      "remove-match-field": {
+        "total": 13,
+        "killed": 13,
+        "survived": 0
+      },
+      "add-output": {
+        "total": 4,
+        "killed": 4,
+        "survived": 0
+      },
+      "remove-output": {
+        "total": 8,
+        "killed": 8,
+        "survived": 0
+      },
+      "raise-priority": {
+        "total": 6,
+        "killed": 1,
+        "survived": 5
+      }
+    },
+    "killedByPrimaryCategory": {
+      "ERR_INTENT_MISSING": 14,
+      "ERR_INTENT_LEAK": 12,
+      "ERR_AMBIGUITY": 4,
+      "ERR_PREREQUISITE": 2,
+      "ERR_SHADOWED": 3
+    }
+  },
+  "survivedMutants": [
+    "raise-priority:p1-ipv4-intra-segment",
+    "raise-priority:p1-arp",
+    "raise-priority:p2-ipv4-to-segment",
+    "raise-priority:p2-arp",
+    "raise-priority:p3-tap-return"
+  ],
+  "note": "a survived mutant is either an equivalent mutant (same behaviour under the intent) or a gap in the checks; this file does not say which",
+  "gitCommit": "e4c1380cea60067133c3093003420e359adb3f25"
+}

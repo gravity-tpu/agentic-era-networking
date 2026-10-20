@@ -20,9 +20,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { parseProposal, triageProposal, CATEGORY_PRECEDENCE } from '../dist/sdn/proposal-triage.js';
-import { PORT1_ISOLATION_INTENT } from '../dist/sdn/intents.js';
+import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 
-const INTENTS = { [PORT1_ISOLATION_INTENT.id]: PORT1_ISOLATION_INTENT } as const;
+const INTENTS = {
+  [PORT1_ISOLATION_INTENT.id]: PORT1_ISOLATION_INTENT,
+  [DNS_CONFINEMENT_INTENT.id]: DNS_CONFINEMENT_INTENT,
+  [QUARANTINE_PRECEDENCE_INTENT.id]: QUARANTINE_PRECEDENCE_INTENT,
+  [TAP_RETURN_ISOLATION_INTENT.id]: TAP_RETURN_ISOLATION_INTENT,
+} as const;
 const MAX_N = 200;
 const MAX_TURNS = 5; // Protocol B: the plan's iteration cap
 const MAX_FEEDBACK_LINES = 12; // verifier detail lines returned to the model per turn
