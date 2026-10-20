@@ -196,6 +196,31 @@ verdicts do not depend on the hardware, though the run is not on the embedded de
 - For comparison on INTENT-1 with feedback: `gemma4:26b` reasoning off 2 of 20, reasoning on 20 of 20. This model is a much smaller model with no reasoning
   mode; the comparison is across model size and reasoning together, not either alone.
 
+## Jetson small-model screens: attempted and excluded from the evaluation (2026-10-19 to 2026-10-20)
+
+**Decision (owner, 2026-10-19 evening): these runs are not part of the evaluation.** After four small models had been tried on the Jetson Orin Nano
+(8 GB shared memory, also the SDN control plane) with nothing admissible, the owner concluded the hardware cannot do the task and dropped the arm; the
+plan's "embedded edge model" slot stays empty (`docs/research/evaluation-plan.md` section 4). They are recorded here, not tabulated with the cohort, so the
+attempt is not lost. Nothing below is a comparison of model sizes.
+
+What was run: `qwen2.5:3b`, `qwen3:4b-instruct-2507`, `phi4-mini` (3.8B) and `llama3.2:3b`, all Q4_K_M, reasoning off, on a user-level Ollama server on the
+Jetson (keep-alive 0 so the model unloads after each request, flash attention on) with `--num-predict 1536`. Protocol A on INTENT-1 and INTENT-2 (N=20 each) as a screen,
+Protocol B on INTENT-2 for `qwen3` (N=20), `qwen2.5:3b` Protocol B on all four intents (N=20), and one control: `qwen3` on INTENT-2 with flash attention off (N=10).
+The earlier attempts to run Protocol B on the Jetson's system server stopped three times on a memory guard (available memory under 350 MB once and under 600 MB twice, with the Jetson
+healthy afterwards each time); the user-level server with unloading after each request completed. Two runs were stopped by decision and are not in the table because the runner
+writes results only at the end: `phi4-mini` Protocol B (stopped at seed 7 of 20, all seven syntax errors) and `llama3.2:3b` Protocol B (stopped at seed 1).
+
+| Model | Protocol | Intent | Admissible | How the failures split |\n| :--- | :--- | :--- | ---: | :--- |\n| llama3.2:3b-instruct-q4_K_M | A | dns-confinement | 0/20 | syntax 20 |\n| llama3.2:3b-instruct-q4_K_M | A | port1-isolation | 0/20 | syntax 20 |\n| phi4-mini:3.8b-q4_K_M | A | dns-confinement | 0/20 | syntax 20 |\n| phi4-mini:3.8b-q4_K_M | A | port1-isolation | 0/20 | syntax 7, hairpin 1, ambiguity 4, shadowed 8 |\n| qwen2.5:3b | A | dns-confinement | 0/20 | syntax 19, prerequisite 1 |\n| qwen2.5:3b | A | port1-isolation | 0/20 | syntax 8, hairpin 2, shadowed 10 |\n| qwen2.5:3b | B | dns-confinement | 0/20 | syntax 19, hairpin 1 |\n| qwen2.5:3b | B | port1-isolation | 0/20 | syntax 9, hairpin 5, shadowed 6 |\n| qwen2.5:3b | B | quarantine-precedence | 0/20 | syntax 15, shadowed 5 |\n| qwen2.5:3b | B | tap-return-isolation | 0/20 | syntax 19, shadowed 1 |\n| qwen3:4b-instruct-2507-q4_K_M | A | dns-confinement | 0/10 | syntax 10 |\n| qwen3:4b-instruct-2507-q4_K_M | A | dns-confinement | 0/20 | syntax 20 |\n| qwen3:4b-instruct-2507-q4_K_M | A | port1-isolation | 0/20 | syntax 10, prerequisite 10 |\n| qwen3:4b-instruct-2507-q4_K_M | B | dns-confinement | 0/20 | syntax 3, prerequisite 8, shadowed 2, intent_leak 6, intent_missing 1 |
+
+**Admissible in every one of the 14 completed runs: 0.** The failure styles differ and are all mechanical or structural: `llama3.2` writes a CIDR string such as `10.0.2.0/24` in an
+address field (every trial on INTENT-1, 17 of 20 on INTENT-2); `phi4-mini` runs to the token cap on most INTENT-2 trials without finishing its JSON; `qwen2.5:3b` mixes shadowed rules with
+the same CIDR slip; `qwen3` produces a stray quote inside the JSON for the ARP ether-type (`"etherType": 2",` where `2054` belongs), reproduced with flash attention off, so it is the model
+and not the server setting. With feedback, `qwen3` on INTENT-2 fixed its JSON (20 of 20 syntax errors on the first turn, 3 on the last) but not the policy (still 0 of 20 admissible).
+A lenient re-score that forgives the CIDR slip (`scripts/rescore-lenient.ts`) left every run at 0 admissible.
+
+Limits: small N (20, and 10 for the control), four small models, one prompt, reasoning off, one device, one capped generation length; this does not show that no small model can do the task,
+only that these four on this device did not.
+
 ## What this does and does not show
 
 - For this model, this prompt and this intent: zero-shot was never admissible with reasoning off and 5 of 50 with it on; feedback rescued
