@@ -95,6 +95,13 @@ describe('enabled', () => {
     }
   });
 
+  it('the flows endpoint carries experimentAttention (null when nothing is wrong)', async () => {
+    const r = await call('GET', '/api/zodiac/flows');
+    expect(r.status).toBe(200);
+    expect(Object.prototype.hasOwnProperty.call(r.json, 'experimentAttention')).toBe(true);
+    expect(r.json['experimentAttention']).toBeNull();
+  });
+
   it('shows an idle state with the right token', async () => {
     const r = await call('GET', '/api/experiment/state', undefined, { 'x-experiment-token': TOKEN });
     expect(r.status).toBe(200);

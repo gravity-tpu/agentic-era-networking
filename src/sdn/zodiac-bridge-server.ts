@@ -845,7 +845,13 @@ export class ZodiacBridgeServer {
         readFlowStats: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
         isSessionEstablished: () => this.controller.openFlow.metrics.state === 'ESTABLISHED',
         gate: this.flowReadLock,
-        settleMs: parseExperimentSettleMs(process.env['ZODIAC_EXPERIMENT_SETTLE_MS']),
+        settleMs: ((): number => {
+          try { return parseExperimentSettleMs(process.env['ZODIAC_EXPERIMENT_SETTLE_MS']); } catch (err: unknown) {
+            // A mistyped tuning knob must not stop the bridge from starting: say so loudly and use the default.
+            console.warn(`[!] [Bridge Server] ${err instanceof Error ? err.message : String(err)}; using the default settle time.`);
+            return parseExperimentSettleMs(undefined);
+          }
+        })(),
         isolationPolicy: () => buildPort1IsolationPolicy(),
         nowMs: () => Date.now(),
         sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -2073,6 +2079,8 @@ export class ZodiacBridgeServer {
         rules: Array.from(this.flowRuleRegistry.values()),
         totalRules: this.flowRuleRegistry.size,
         port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
+        // non-null when an experiment's restore did not verify: the isolation policy may not be back (see experiment-install.ts)
+        experimentAttention: this.experiment?.state().attention ?? null,
         timestamp: Date.now(),
       }));
       return;

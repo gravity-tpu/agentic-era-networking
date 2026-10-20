@@ -94,7 +94,7 @@ describe('parseExperimentRequest', () => {
 
 interface FakeOptions {
   /** indices (counting every ADD the fake receives, installs and restores alike) the switch silently ignores, to model a lost FlowMod */
-  dropAdds?: Set<number>;
+  dropAdds?: ReadonlySet<number>;
   established?: boolean;
   gateBusy?: boolean;
   /** if true the wildcard delete does nothing (models firmware that ignores it) */
@@ -123,6 +123,7 @@ function makeFake(opts: FakeOptions = {}) {
   let gateHeld = opts.gateBusy === true;
   let phaseProbe: () => string = () => 'unknown';
   const missEntry: FlowStatsEntry = { tableId: 0, priority: 0, packetCount: 0n, byteCount: 0n };
+  // Mirrors how the switch reports a match back (see parseFlowStatsReply in dataplane-benchmark.ts, the source of truth for the entry fields).
   const entryOf = (o: FlowModOptions): FlowStatsEntry => {
     const m = o.match ?? {};
     return {
@@ -302,6 +303,16 @@ describe('ExperimentInstaller', () => {
     await expect(inst.install(request())).rejects.toThrow(/restore did not verify/);
     expect(inst.state().attention).toMatch(/could not run/);
     expect(inst.state().phase).toBe('idle');
+    expect(inst.state().last?.ran).toBe(false);
+  });
+
+  it('an explicit restore that cannot run is an error (ran: false), one that ran but did not verify is a failing report', async () => {
+    const down = makeFake({ established: false });
+    await expect(installer(down).restore()).rejects.toThrow(/restore could not run/);
+    const lossy = makeFake({ dropAdds: new Set([0, 1, 2, 3, 4, 5]) }); // every isolation add is lost, but the read works
+    const report = await installer(lossy).restore();
+    expect(report.ok).toBe(false);
+    expect(report.ran).toBe(true);
   });
 
   it('refuses a second install while one is active, and allows it after a restore', async () => {
@@ -340,6 +351,10 @@ describe('parseExperimentSettleMs', () => {
     expect(parseExperimentSettleMs(undefined)).toBe(EXPERIMENT_SETTLE_MS);
     expect(parseExperimentSettleMs('')).toBe(EXPERIMENT_SETTLE_MS);
     expect(parseExperimentSettleMs('2500')).toBe(2500);
+    expect(parseExperimentSettleMs('250')).toBe(250);
+    expect(parseExperimentSettleMs('10000')).toBe(10000);
+    expect(() => parseExperimentSettleMs('249')).toThrow(/250 to 10000/);
+    expect(() => parseExperimentSettleMs('10001')).toThrow(/250 to 10000/);
     expect(() => parseExperimentSettleMs('10')).toThrow(/250 to 10000/);
     expect(() => parseExperimentSettleMs('99999')).toThrow(/250 to 10000/);
     expect(() => parseExperimentSettleMs('abc')).toThrow(/250 to 10000/);

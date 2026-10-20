@@ -171,6 +171,8 @@ export interface ExperimentReport {
   readonly atMs: number;
   /** Entries with priority 0 (the table-miss); exactly one is expected. */
   readonly tableMissEntries: number;
+  /** False only when the write and readback could not run at all (no session, failed read); then `ok` is false and nothing was judged. */
+  readonly ran: boolean;
   /** Set on a failed install: what the automatic restore that followed did, so "isolation is back" is never assumed. */
   readonly restoreAfterFailure?: ExperimentReport;
 }
@@ -255,13 +257,14 @@ export class ExperimentInstaller {
     // The table-miss is the priority-0 entry and there must be exactly one; every other entry must be one of the requested rules.
     const missEntries = entries.filter((e) => e.priority === 0).length;
     const nonMiss = entries.length - missEntries;
+    // confirmed rules are matched to distinct non-table-miss entries, so nonMiss >= confirmed.length; the floor only guards the arithmetic
     const extra = Math.max(0, nonMiss - verdict.confirmed.length);
     const ok = verdict.mismatches.length === 0 && verdict.confirmed.length === rules.length && extra === 0 && missEntries === 1;
     const detail = ok
       ? `${rules.length}/${rules.length} rules confirmed, ${entries.length} entries including the table-miss`
       : `confirmed ${verdict.confirmed.length}/${rules.length}, ${verdict.mismatches.length} mismatches, ${extra} extra entries, ${missEntries} priority-0 entries (expected 1)`;
     return {
-      ok, action, label, rulesRequested: rules.length, entriesSeen: entries.length, extraEntries: extra, tableMissEntries: missEntries,
+      ok, ran: true, action, label, rulesRequested: rules.length, entriesSeen: entries.length, extraEntries: extra, tableMissEntries: missEntries,
       confirmed: verdict.confirmed, mismatches: verdict.mismatches, actionsStatus: verdict.actions.status, provenForwarding: verdict.provenForwarding,
       detail, atMs: this.deps.nowMs(),
     };
@@ -299,7 +302,7 @@ export class ExperimentInstaller {
       this.attention = `restore could not run: ${msg}`;
       this.log(`[experiment] ALERT restore FAILED to run: ${msg}`);
       const failed: ExperimentReport = {
-        ok: false, action: 'restore', label, rulesRequested: this.deps.isolationPolicy().length, entriesSeen: 0, extraEntries: 0, tableMissEntries: 0,
+        ok: false, ran: false, action: 'restore', label, rulesRequested: this.deps.isolationPolicy().length, entriesSeen: 0, extraEntries: 0, tableMissEntries: 0,
         confirmed: [], mismatches: [], actionsStatus: 'unobservable', provenForwarding: false, detail: `restore could not run: ${msg}`, atMs: this.deps.nowMs(),
       };
       this.last = failed;
@@ -318,7 +321,7 @@ export class ExperimentInstaller {
     this.phase = 'restoring';
     const report = await this.restoreNow(label);
     // An explicit restore that cannot run is an error to the caller (HTTP 409); one that ran but did not verify is a failing report (502).
-    if (!report.ok && report.entriesSeen === 0 && report.detail.startsWith('restore could not run')) throw new Error(report.detail);
+    if (!report.ran) throw new Error(report.detail);
     return report;
   }
 
