@@ -54,3 +54,4 @@ vitest.log
 *.tsbuildinfo
 .vercel
 .env*
+scripts/local-relay.mjs
