@@ -62,7 +62,10 @@ reasoning off did move with it on.
 - **Transport failures are a bias, not noise.** The 2 reasoning-on failures and the Jetson run's 6 are all timeouts at about 301 s: Node's
   fetch gives up when no response header arrives within 300 s, and a non-streamed reply sends none until generation ends. They are the
   longest generations, so they are the trials most likely to be hardest or most elaborate. These runs were made before the runner streamed its
-  replies (`scripts/agent-eval.ts`, now streamed); later runs do not have this limit. The affected seeds were not re-run.
+  replies (`scripts/agent-eval.ts`, now streamed); later runs do not have this limit. **Re-run (2026-10-20):** INTENT-1 reasoning-on zero-shot was repeated in full
+  with the streaming runner, same prompt, settings and seeds 1 to 50 (`protocol-a-port1-isolation-v1-gemma4-26b-think-true-streaming-rerun`): **6 of 50 admissible**
+  (`ERR_HAIRPIN` 21, `ERR_INTENT_LEAK` 9, `ERR_PREREQUISITE` 9, `ERR_SYNTAX` 5), **0 transport failures**, 46 distinct outputs, 5 distinct rule-id sets among the
+  admissible ones. That is 6 of 50 against the earlier 5 of 50, so the timeouts did not hide a different rate; which seeds were admissible was not compared.
 - **The Jetson model** produced no admissible set: `ERR_SHADOWED` 25, `ERR_SYNTAX` 18 (in many of them an IPv4 field that is not a dotted address, for example a CIDR string),
   `ERR_PREREQUISITE` 1, `TRANSPORT_FAILURE` 6; 32 distinct outputs in the 44 answered trials. It is one 3B model with reasoning off on one
   intent: a cohort entry, not a comparison of sizes.
@@ -98,7 +101,7 @@ Admissible out of trials, same prompt per intent, strict parse. "Truncated" mean
 
 | Intent | Zero-shot, reasoning off | Zero-shot, reasoning on | Feedback, reasoning off | Feedback, reasoning on |
 | :--- | :--- | :--- | :--- | :--- |
-| INTENT-1 `port1-isolation/v1` | 0 of 50 | 5 of 50 (2 timeouts at 301 s, old runner) | 2 of 20 | **20 of 20** |
+| INTENT-1 `port1-isolation/v1` | 0 of 50 | 5 of 50 (2 timeouts at 301 s, old runner); re-run with the streaming runner 6 of 50, 0 timeouts | 2 of 20 | **20 of 20** |
 | INTENT-2 `dns-confinement/v1` | **50 of 50** | 29 of 50 (16 truncated) | 20 of 20 | 18 of 20 (2 truncated) |
 | INTENT-3 `quarantine-precedence/v1` | 0 of 50 | 4 of 50 | 3 of 20 | **18 of 20** (2 timeouts) |
 | INTENT-4 `tap-return-isolation/v1` | 0 of 50 | **32 of 50** (16 truncated) | 16 of 20 | 19 of 20 (1 truncated) |
