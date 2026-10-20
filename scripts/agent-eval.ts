@@ -56,6 +56,11 @@ const TEMPERATURE = 0.2;
 const TOP_P = 0.95;
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const MAX_SPEND_CENTS = 10_000; // upper bound on --max-cents so a typo cannot authorize a large run
+/** Thrown between paid turns when the spend cap is reached mid-trial. */
+class SpendCapReached extends Error {
+  public constructor() { super('spend cap reached'); this.name = 'SpendCapReached'; }
+}
+
 const COST_UNITS_PER_CENT = 1_000_000n; // cost is kept as (tokens x cents per 1M tokens); 1e6 units = 1 cent
 const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
@@ -308,8 +313,10 @@ async function main(): Promise<void> {
   let outputTotal = 0;
   let thoughtTotal = 0;
   let capHit = false;
+  const overCap = (): boolean => args.spend !== null && costUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT;
+  let abandoned: { seed: number; turnsUsed: number } | null = null; // a trial stopped mid-way by the spend cap: not scored, its spend is counted
   for (let seed = 1; seed <= args.n; seed++) {
-    if (args.spend !== null && costUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT) { capHit = true; break; }
+    if (overCap()) { capHit = true; break; }
     const t0 = process.hrtime.bigint();
     let record: Record<string, unknown>;
     const messages: Array<{ role: string; content: string }> = [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }];
@@ -317,6 +324,8 @@ async function main(): Promise<void> {
     const maxTurns = args.protocol === 'B' ? MAX_TURNS : 1;
     try {
       for (let turn = 1; turn <= maxTurns; turn++) {
+        // Protocol B pays for up to MAX_TURNS turns per trial, so the cap is checked before every paid turn, not once per trial.
+        if (turn > 1 && overCap()) throw new SpendCapReached();
         let content: string;
         let usageFields: Record<string, unknown>;
         if (args.provider === 'gemini' || args.provider === 'anthropic') {
@@ -351,6 +360,7 @@ async function main(): Promise<void> {
       record = { seed, ok: true, category: last['category'], firstCategory: turns[0]!['category'], turnsUsed: turns.length,
         admissibleAtTurn: last['category'] === 'ADMISSIBLE' ? turns.length : null, turns };
     } catch (e) {
+      if (e instanceof SpendCapReached) { capHit = true; abandoned = { seed, turnsUsed: turns.length }; break; }
       record = { seed, ok: false, category: 'TRANSPORT_FAILURE', turnsUsed: turns.length, turns, details: [e instanceof Error ? e.message : String(e)] };
     }
     record['wallNs'] = (process.hrtime.bigint() - t0).toString();
@@ -364,7 +374,7 @@ async function main(): Promise<void> {
     promptSha256: promptHash, gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
     ...((args.provider === 'gemini' || args.provider === 'anthropic') && args.spend !== null ? {
-      provider: args.provider, thinking: args.thinking, stoppedBySpendCap: capHit,
+      provider: args.provider, thinking: args.thinking, stoppedBySpendCap: capHit, abandonedTrial: abandoned,
       usage: { promptTokens: promptTotal, outputTokens: outputTotal, thoughtTokens: thoughtTotal },
       pricing: { inCentsPer1M: args.spend.priceInCents, outCentsPer1M: args.spend.priceOutCents, note: args.spend.note },
       costMicroUsd: (costUnits / 100n).toString(), // 1e6 cost units = 1 cent = 10,000 micro-USD, so micro-USD = units / 100

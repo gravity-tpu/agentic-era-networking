@@ -20,6 +20,7 @@ saved only their console output.
   unanswered and flushes its flow table when the session drops (fail-secure behaviour). That reading is **inferred from timing**: the firmware was not read for it.
 - So on this switch an experimental rule cannot outlive a dead or frozen bridge by more than about 5 seconds, and the data plane is dark (only whatever the
   switch holds after the flush) until the bridge reconnects and re-installs the isolation policy.
+- **Cross-reference:** the 2026-10-16 entry in [`.agents/network-context.md`](../../../../../.agents/network-context.md) ("Still unmeasured") already recorded that the firmware's own expiry was not separated from the bridge sweep; these tests did not separate it either. The firmware stores `hard_timeout` on the rule (it is read back), but self-expiry with no bridge running remains unmeasured.
 - **The switch-side hard timeout was not shown to work.** It never became the operative mechanism in these tests, so it remains a redundant backstop that has
   not been exercised. It would take a test that keeps the controller session alive and answering while the bridge's restore is blocked.
 
@@ -36,3 +37,16 @@ bridge's own readback verifies after a reconnect (never during an experiment), w
 - One switch, one firmware, one run of each test; timings are to about a second (one datagram per second).
 - Tests A to C have no raw capture; their figures are the console output.
 - "Fail-secure on controller silence" is an inference from when the rule vanished, not a read of the firmware.
+
+## Quarantine persistence, live check (2026-10-20, about 19:30 ET)
+
+The finding above (the switch loses its whole table when the bridge goes away) means a quarantine DROP does not survive a bridge restart unless the bridge puts it back. The bridge now saves active quarantines (`src/sdn/quarantine-persistence.ts`) and re-sends them, with their remaining time, on every switch session before the isolation allow-rules. Live check on the real switch, bridge at commit `dd31c00`:
+
+| Step | What was done | Datagrams seen on the P3 tap (O2), of 5 sent from node-01 `10.0.2.50` |
+| ---- | ------------- | ---------------------------------------------------------------------- |
+| Control | No quarantine | 5 |
+| A | Quarantine of `10.0.2.50` proposed and approved through the bridge | 0 |
+| B | Bridge process killed and restarted; the log shows the quarantine restored from the state file and "re-sent to the switch (277 s remaining)"; isolation readback verified with 8 entries (the 7 policy entries plus the DROP) | 0 |
+| C | Quarantine released through the bridge | 5 |
+
+What this shows: after a restart the DROP is back on the switch before the harness could observe a leak, and the traffic returns only when the quarantine is released. What it does not show: the length of the window between the switch flushing its table and the bridge re-sending (the table-miss DROP keeps everything dark in that window, so it is fail-closed, but it was not timed), the behaviour when the state file is unwritable (covered by unit tests only), and the firmware's own handling of the re-sent rule's remaining hard timeout (its expiry was not observed; the bridge sweep also lifts it).

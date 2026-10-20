@@ -367,11 +367,68 @@ describe('ExperimentInstaller', () => {
     expect(f.logs.join('\n')).toMatch(/session reset while active/);
   });
 
-  it('fails closed when the readback lock never frees: no verdict is invented', async () => {
+  it('fails closed when the table lock never frees: nothing is sent and no verdict is invented', async () => {
     const f = makeFake({ gateBusy: true });
     const inst = installer(f);
-    await expect(inst.install(request())).rejects.toThrow(/read lock/);
+    await expect(inst.install(request())).rejects.toThrow(/table lock/);
+    expect(f.sent).toHaveLength(0); // the lock is taken BEFORE the wipe, so a busy lock leaves the switch untouched
     expect(inst.state().phase).toBe('idle');
+  });
+
+  it('holds the flow-table lock from the wipe through the readback, so the periodic re-check cannot read a half-written table', async () => {
+    const f = makeFake();
+    const inst = installer(f);
+    // The periodic isolation re-check does exactly this at a random moment: tryAcquire, and skip the tick if it fails.
+    const breaches: string[] = [];
+    const probe = (where: string): void => {
+      if (f.deps.gate.tryAcquire()) { breaches.push(where); f.deps.gate.release(); }
+    };
+    const send = f.deps.sendFlowMod, miss = f.deps.sendTableMissDrop, sleep = f.deps.sleep, read = f.deps.readFlowStats;
+    f.deps.sendFlowMod = (o) => { probe('flowmod'); return send(o); };
+    f.deps.sendTableMissDrop = () => { probe('table-miss'); miss(); };
+    f.deps.sleep = async (ms) => { probe('settle'); await sleep(ms); };
+    f.deps.readFlowStats = async () => { probe('readback'); return read(); };
+    const report = await inst.install(request());
+    expect(report.ok).toBe(true);
+    expect(breaches).toEqual([]);
+    expect(f.deps.gate.isHeld).toBe(false); // and it is released afterwards
+    // The same holds for a restore.
+    breaches.length = 0;
+    await inst.restore();
+    expect(breaches).toEqual([]);
+    expect(f.deps.gate.isHeld).toBe(false);
+  });
+
+  it('releases the lock when the readback throws', async () => {
+    const f = makeFake({ failReads: 1 });
+    const inst = installer(f);
+    await expect(inst.install(request())).rejects.toThrow(/flow-stats read failed/);
+    expect(f.deps.gate.isHeld).toBe(false);
+  });
+
+  it('refuses an install while quarantine DROPs are active, and sends nothing (an install wipes the table)', async () => {
+    const f = makeFake();
+    f.deps.activeQuarantines = () => 2;
+    const inst = installer(f);
+    await expect(inst.install(request())).rejects.toThrow(/2 quarantine DROP/);
+    expect(f.sent).toHaveLength(0);
+    expect(inst.state().phase).toBe('idle');
+  });
+
+  it('calls afterRestore after every restore that ran, including the restore that follows a failed install', async () => {
+    let calls = 0;
+    const f = makeFake({ dropAdds: new Set([0]) }); // the first ADD is lost: the install does not verify and is rolled back
+    f.deps.afterRestore = () => { calls++; };
+    const inst = installer(f);
+    const report = await inst.install(request());
+    expect(report.ok).toBe(false);
+    expect(calls).toBe(1);
+    const g = makeFake();
+    g.deps.afterRestore = () => { calls++; };
+    const inst2 = installer(g);
+    await inst2.install(request());
+    await inst2.restore();
+    expect(calls).toBe(2);
   });
 });
 

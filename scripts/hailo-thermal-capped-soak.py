@@ -57,6 +57,7 @@ def main():
     bursts = []
     stop_reason = None
     start = time.monotonic()
+    start_ns = time.monotonic_ns()
     busy_ns = 0
 
     def log_temp(kind, temp):
@@ -94,7 +95,7 @@ def main():
             stop_reason = f"burst {len(bursts)} reached {r['temp_max_c']} C (hard limit {HARD_C} C)"
             break
 
-    wall_ns = int((time.monotonic() - start) * 1e9)
+    wall_ns = time.monotonic_ns() - start_ns
     frames = sum(b['frames_count'] for b in bursts)
     meta.update({'finished_et': now_et(), 'stop_reason': stop_reason, 'bursts': len(bursts), 'frames': frames,
                  'busy_ns': busy_ns, 'wall_ns': wall_ns,

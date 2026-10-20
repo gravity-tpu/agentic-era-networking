@@ -7,6 +7,21 @@ Usage: python3 scripts/conformance-report.py [run dir]   (default docs/benchmark
 """
 import collections, glob, hashlib, json, math, os, sys
 
+
+def _jload(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
+
+
+def _sha(path):
+    with open(path, 'rb') as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
 RUN = sys.argv[1] if len(sys.argv) > 1 else 'docs/benchmarks/results/conformance/run-2026-10-20'
 OUT = os.path.join(os.path.dirname(RUN.rstrip('/')), 'README.md')
 FLOW_NAMES = {
@@ -26,12 +41,12 @@ def wilson(k, n, z=1.96):
 
 
 def sha(path):
-    return hashlib.sha256(open(path, 'rb').read()).hexdigest()
+    return _sha(path)
 
 
 def main():
-    rows = json.load(open(f'{RUN}/summary.json'))['ruleSets']
-    prov = json.load(open(f'{RUN}/provenance.json'))
+    rows = _jload(f'{RUN}/summary.json')['ruleSets']
+    prov = _jload(f'{RUN}/provenance.json')
     flows = [(r, f) for r in rows for f in r['flows'] if 'agrees' in f]
     n, agree = len(flows), sum(1 for _, f in flows if f['agrees'])
     lo, hi = wilson(agree, n)
@@ -49,8 +64,8 @@ def main():
             if fv != rv:
                 separators[f['flow'][:2]] += 1
     blind = collections.Counter(r['id'].split(':')[0] + ' ' + r['id'].split(':')[1] for r in kinds['surviving-mutant'] if vec(r) == ref[r['intent']] and ':' in r['id'])
-    installs = [json.load(open(p)) for p in sorted(glob.glob(f'{RUN}/*/install.json'))]
-    restores = [json.load(open(p)) for p in sorted(glob.glob(f'{RUN}/*/restore.json'))]
+    installs = [_jload(p) for p in sorted(glob.glob(f'{RUN}/*/install.json'))]
+    restores = [_jload(p) for p in sorted(glob.glob(f'{RUN}/*/restore.json'))]
     inst_ok = sum(1 for i in installs if i.get('ok') is True and i.get('extraEntries') == 0 and i.get('tableMissEntries') == 1)
     rest_ok = sum(1 for i in restores if i.get('ok') is True and i.get('extraEntries') == 0 and i.get('tableMissEntries') == 1)
     sizes = sorted({i['rulesRequested'] for i in installs})
@@ -138,18 +153,21 @@ def main():
     w('- **The readback cannot distinguish rules that differ only by MAC** (the flow-stats parser carries no MAC fields), so any MAC-only difference between a rule set and what the switch holds would be invisible to the install verdict; the wire flows are the check there, and none of these sets match on MACs.')
     w('- **Port 1 egress is seen at the destination host, not on a wire tap**: the F4 and F5 listener counts were below the datagrams sent in some checks (the first packets wait while the lab router resolves the workload address); the check is "at least one arrived".')
     w('- **Admissible is the verifier\'s verdict over modelled fields.** This run tests that model against hardware; it does not make an admissible set correct for its intent.')
-    w('- **Not tested here:** the switch-side hard timeout of an experimental rule (the case where the bridge dies mid-experiment). The bridge-side time limit and explicit restore were exercised on every set.')
+    w('- **Not tested here** (see also the 2026-10-16 "Still unmeasured" note in `.agents/network-context.md`, which this does not resolve): the switch-side hard timeout of an experimental rule (the case where the bridge dies mid-experiment). The bridge-side time limit and explicit restore were exercised on every set.')
     w('')
     w('## Provenance')
     w('')
     w(f'- Evidence: `physical_capture`; raw tcpdump text for both taps and the HTTP install and restore reports are in each rule set\'s directory, with `evidence-sha256.json` hashes. Rule sets under test: `rulesets/` (`index.json`).')
     w(f'- Bridge: commit `{bridge.get("commit", "?")}` on `{bridge.get("branch", "?")}`, {bridge.get("dirty_files", "?")} uncommitted files, `dist/sdn/zodiac-bridge-server.js` sha256 `{bridge.get("dist_sha256", "?")[:16]}`, {bridge.get("tcpdump", "")}, kernel {bridge.get("kernel", "")}; the bridge process was started by hand with the unit\'s command line and environment (the systemd unit is inactive).')
     w(f'- Hosts: node-01 `eth0` {prov["hosts"]["macs"].get("agentic-node-01")} (10.0.2.50); rpi-hailo `eth0` {prov["hosts"]["macs"].get("rpi-hailo")} (10.0.2.51); the Mac {prov["hosts"]["macIp"]} ({prov["hosts"]["macMac"]}). Started {prov["startedAtEt"]}.')
-    w('- Harness: the three scripts were **untracked files** when the run started (the `harnessCommit` in `provenance.json` is the repository HEAD at that moment and does not contain them); they are committed unchanged afterwards, and their sha256 are: ' +
-      ', '.join(f'`{k}` `{v[:16]}`' for k, v in scripts.items()) + '. The report script itself was written after the run.')
+    # The run used the scripts as they were then; later edits change the current hashes, so the run-time ones are pinned here (taken from the first generated README).
+    at_run = {'conformance-run.ts': '0da938c618ee817d', 'export-conformance-rulesets.ts': 'fd1aa170af18a99d', 'conformance-report.py': '0d73a0fc9eaf18d8'}
+    w('- Harness: the three scripts were **untracked files** when the run started (the `harnessCommit` in `provenance.json` is the repository HEAD at that moment and does not contain them); they were committed unchanged afterwards. sha256 at the run: ' +
+      ', '.join(f'`{k}` `{v}`' for k, v in at_run.items()) + '. The report script itself was written after the run. Current sha256 (after later edits): ' +
+      ', '.join(f'`{k}` `{v[:16]}`' for k, v in scripts.items()) + '. Changes to `conformance-run.ts` since the run: `sameSet` sorts numerically (same result for port numbers 1 to 3); the capture start now waits until `tcpdump` reports it is listening on both taps (and refuses to send if it does not) instead of a fixed one-second sleep; UDP tags are unique within a run instead of wrapping at 500. The recorded captures were taken with the fixed wait, so those flows are only as reliable as that wait was; nothing in the recorded results changes. The later edits to the report script are the cross-reference text and closing its files.')
     w('- agentic-node-02 was not used (its Tailscale SSH timed out), so the legitimate-client role in the target topology is represented by node-01 here.')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    open(OUT, 'w').write('\n'.join(L).rstrip('\n') + '\n')
+    _write(OUT, '\n'.join(L).rstrip('\n') + '\n')
     print('wrote', OUT, len(L), 'lines')
 
 

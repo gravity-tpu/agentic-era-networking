@@ -99,6 +99,7 @@ import {
   type QuarantineEnvelopeConfig,
   type QuarantineRefusal,
 } from './quarantine-envelope.js';
+import { loadQuarantineState, resolveQuarantineStateFile, saveQuarantineState } from './quarantine-persistence.js';
 import { QuarantineProposals, type QuarantineProposal } from './quarantine-proposals.js';
 import { buildFlowProbeReport, FlowProbeRateLimitedError, probeErrorToHttp, type FlowProbeReport } from './flow-probe.js';
 import { parseOfpError } from './dataplane-benchmark.js';
@@ -569,7 +570,9 @@ export class ZodiacBridgeServer {
   public static readonly QUARANTINE_SWEEP_INTERVAL_MS = 5_000;
   private readonly quarantineEnvelope: QuarantineEnvelopeConfig;
   /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
-  private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint }> = new Map();
+  private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint; readonly expiresAtMs: number; readonly reason: string; readonly priority: number }> = new Map();
+  /** Where active quarantines are kept so a bridge restart puts them back (see quarantine-persistence.ts). */
+  private readonly quarantineStateFile: string;
   private quarantineSweepTimer: NodeJS.Timeout | null = null;
   /** Requests inside the envelope that are waiting for a person (mode `propose`). */
   private readonly quarantineProposals = new QuarantineProposals();
@@ -676,7 +679,11 @@ export class ZodiacBridgeServer {
       this.quarantineExpiry.set(qResult.ruleId, {
         ip: options.targetIp,
         expiresMonoNs: process.hrtime.bigint() + BigInt(decision.ttlMs) * 1_000_000n,
+        expiresAtMs: Date.now() + decision.ttlMs,
+        reason: options.reason,
+        priority: qResult.priority,
       });
+      this.persistQuarantines();
     }
     // Persist to local JSONL + Neon (fire-and-forget; appendQuarantineEvent never rejects).
     void appendQuarantineEvent(auditEntry);
@@ -736,6 +743,7 @@ export class ZodiacBridgeServer {
       const result = this.releaseQuarantineRule({ targetIp: entry.ip, reason: 'quarantine time limit reached' });
       if (result.releasedRules.includes(ruleId)) {
         this.quarantineExpiry.delete(ruleId);
+        this.persistQuarantines();
         lifted++;
         console.log(`[+] [Quarantine] ${entry.ip} released: time limit reached (${ruleId}).`);
       } else {
@@ -743,6 +751,57 @@ export class ZodiacBridgeServer {
       }
     }
     return lifted;
+  }
+
+  /** Writes the active quarantines to the state file. A failure is logged loudly: the quarantines still stand, but would not survive a restart. */
+  private persistQuarantines(): void {
+    const records = [...this.quarantineExpiry.values()].map((e) => ({ ip: e.ip, reason: e.reason, priority: e.priority, expiresAtMs: e.expiresAtMs }));
+    const err = saveQuarantineState(this.quarantineStateFile, records);
+    if (err !== null) console.error(`[!] [Quarantine] ${err}; active quarantines will NOT survive a bridge restart until this is fixed.`);
+  }
+
+  /** Loads quarantines saved by an earlier run into the registry; they are sent to the switch when a session is ready. */
+  private loadPersistedQuarantines(): void {
+    const loaded = loadQuarantineState(this.quarantineStateFile, Date.now(), this.quarantineEnvelope);
+    for (const n of loaded.notes) console.warn(`[!] [Quarantine] ${n}`);
+    let n = 0;
+    for (const r of loaded.records) {
+      const ruleId = `quarantine-restored-${Date.now()}-${++n}`;
+      this.flowRuleRegistry.set(ruleId, {
+        ruleId, priority: r.priority, action: 'DROP', srcCidr: `${r.ip}/32`, dstCidr: '0.0.0.0/0', protocol: 'ANY',
+        installedAtMs: Date.now(), openFlowInstalled: false,
+      });
+      this.quarantineExpiry.set(ruleId, {
+        ip: r.ip, expiresMonoNs: process.hrtime.bigint() + BigInt(r.expiresAtMs - Date.now()) * 1_000_000n,
+        expiresAtMs: r.expiresAtMs, reason: r.reason, priority: r.priority,
+      });
+    }
+    if (loaded.records.length > 0) console.log(`[+] [Quarantine] ${loaded.records.length} quarantine(s) restored from ${this.quarantineStateFile}; they are re-sent when the switch session is ready.`);
+    this.persistQuarantines(); // drops anything that was expired or outside the envelope from the file
+  }
+
+  /**
+   * Re-sends every still-active quarantine DROP to the switch with its REMAINING time. Called on every new switch session: the
+   * firmware flushes its table when the controller session drops, so rules sent before the drop are gone. Returns how many were sent.
+   */
+  public reinstallQuarantines(nowMonoNs: bigint = process.hrtime.bigint(), nowMs: number = Date.now(), onlyPending = false): number {
+    let sent = 0;
+    for (const [ruleId, e] of [...this.quarantineExpiry.entries()]) {
+      const reg = this.flowRuleRegistry.get(ruleId);
+      if (reg === undefined || nowMonoNs >= e.expiresMonoNs) continue; // released by hand, or due for the sweep
+      if (onlyPending && reg.openFlowInstalled) continue;
+      const remainingS = Number(((e.expiresMonoNs - nowMonoNs) + 999_999_999n) / 1_000_000_000n); // whole seconds, rounded up, integer arithmetic (always >= 1 here: the rule is not yet due)
+      try {
+        this.controller.pushRule({ id: ruleId, priority: e.priority, srcCidr: `${e.ip}/32`, dstCidr: '0.0.0.0/0', protocol: 'ANY', action: 'DROP' }, undefined, remainingS);
+        this.flowRuleRegistry.set(ruleId, { ...reg, openFlowInstalled: true, installedAtMs: nowMs });
+        sent++;
+        console.log(`[+] [Quarantine] ${e.ip} re-sent to the switch (${remainingS} s remaining, ${ruleId}).`);
+      } catch (err: unknown) {
+        this.flowRuleRegistry.set(ruleId, { ...reg, openFlowInstalled: false });
+        console.error(`[!] [Quarantine] ${e.ip} could NOT be re-sent: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    return sent;
   }
 
   /**
@@ -797,6 +856,11 @@ export class ZodiacBridgeServer {
       }
     }
 
+    if (releasedRules.length > 0) {
+      for (const id of releasedRules) this.quarantineExpiry.delete(id);
+      this.persistQuarantines();
+    }
+
     return {
       ok: true,
       released: releasedRules.length > 0,
@@ -818,6 +882,8 @@ export class ZodiacBridgeServer {
     const envelope = readQuarantineEnvelopeConfig(process.env);
     this.quarantineEnvelope = envelope.config;
     for (const w of envelope.warnings) console.warn(`[!] [Quarantine] ${w}`);
+    this.quarantineStateFile = resolveQuarantineStateFile(process.env);
+    this.loadPersistedQuarantines();
     this.isolationRechecker = new IsolationRechecker({
       policy: buildPort1IsolationPolicy(),
       read: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
@@ -853,6 +919,8 @@ export class ZodiacBridgeServer {
           }
         })(),
         isolationPolicy: () => buildPort1IsolationPolicy(),
+        activeQuarantines: () => this.quarantineExpiry.size,
+        afterRestore: () => { this.reinstallQuarantines(); },
         nowMs: () => Date.now(),
         sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
         setTimer: (fn, ms) => setTimeout(fn, ms),
@@ -937,6 +1005,8 @@ export class ZodiacBridgeServer {
       // the SAM4E8E MCU with packet-in interrupts under high-pps floods.
       this.controller.openFlow.sendTableMissRule(0, 'DROP');
       console.log('[+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).');
+      // Quarantine DROPs go out before the isolation allow-rules, on the same ordered connection, so a quarantined source never has an open window.
+      this.reinstallQuarantines();
 
       // Port 1 Isolation Policy (see src/sdn/port1-isolation.ts):
       // Port 2 is physically wired to the ISP Wi-Fi extender (lab LAN 10.0.0.0/24 → Internet).
@@ -1154,6 +1224,8 @@ export class ZodiacBridgeServer {
     this.quarantineSweepTimer = setInterval(() => {
       try {
         this.sweepExpiredQuarantines();
+        // A quarantine that could not be sent (no session yet, or a send that failed) is retried every sweep while a session is up, so a source is never left unblocked until the next reconnect.
+        if (this.controller.openFlow.metrics.state === 'ESTABLISHED') this.reinstallQuarantines(undefined, undefined, true);
       } catch (err: unknown) {
         console.warn('[!] [Quarantine] Expiry sweep failed:', err instanceof Error ? err.message : String(err));
       }

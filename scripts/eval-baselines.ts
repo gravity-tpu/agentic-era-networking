@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const gitCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
   for (const [i, target] of BASELINE_TARGETS.entries()) {
     const summary = { ...computeBaselinesFor(target.intent, target.reference()), gitCommit };
-    const dir = i === 0 ? outDir : path.join(outDir, target.intent.id.replace('/', '_'));
+    const dir = i === 0 ? outDir : path.join(outDir, target.intent.id.replaceAll('/', '_'));
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
     process.stdout.write(`${target.intent.id}: ${summary.mutants.killed} of ${summary.mutants.total} mutants rejected, reference ${summary.reference.category}\n`);
