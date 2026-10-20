@@ -1,0 +1,97 @@
+{
+ "label": "model-admissible quarantine-precedence/v1 protocol-a-quarantine-precedence_v1-claude-haiku-5-5 seed 3",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "quarantine-src-10.0.2.51",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51",
+    "srcIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quarantine-dst-10.0.2.51",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-segment-ipv4-to-uplink",
+   "priority": 900,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-to-uplink",
+   "priority": 900,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment-p1",
+   "priority": 900,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 900,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-to-tap",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  }
+ ],
+ "meta": {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "source": "docs/benchmarks/results/agent-evaluation/frontier-full/protocol-a-quarantine-precedence_v1-claude-haiku-5-5",
+  "seed": 3,
+  "verdict": "ADMISSIBLE",
+  "installable": true,
+  "priorityClamped": false
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible dns-confinement/v1 protocol-a-dns-confinement_v1-claude-haiku-5-5 seed 4",
+ "rulesRequested": 8,
+ "entriesSeen": 9,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-dns-ipv4",
+  "p1-arp-uplink",
+  "p1-else-tap",
+  "p2-dns-return-ipv4",
+  "p2-arp-to-segment",
+  "p2-else-drop",
+  "p3-return-ipv4",
+  "p3-return-arp"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "8/8 rules confirmed, 9 entries including the table-miss",
+ "atMs": 1792476310154
+}

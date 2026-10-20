@@ -1,0 +1,47 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "A (zero-shot)",
+  "intent": "port1-isolation/v1",
+  "model": "claude-fable-5-1",
+  "modelDigest": "Claude Fable 5.1 claude-fable-5-1",
+  "host": "https://api.anthropic.com",
+  "trials": 2,
+  "trialsRun": 2,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..2",
+  "numPredict": 16000,
+  "think": false,
+  "promptSha256": "5d5cf39ef7eddbd8f01d0dec57cafce48250bfa0720c97c6ceb01e83e0358405",
+  "gitCommit": "3fb0ec64527686bd361a6cc0612e45f86f452545",
+  "startedAt": "2026-10-20T04:32:22.802Z",
+  "counts": {
+    "ERR_SYNTAX": 2,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 0,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 0,
+    "TRANSPORT_FAILURE": 0
+  },
+  "provider": "anthropic",
+  "thinking": "low",
+  "stoppedBySpendCap": false,
+  "usage": {
+    "promptTokens": 1164,
+    "outputTokens": 0,
+    "thoughtTokens": 0
+  },
+  "pricing": {
+    "inCentsPer1M": 1000,
+    "outCentsPer1M": 5000,
+    "note": "claude-api reference 2026-10-06: Fable 5.1 10 USD in, 50 USD out per MTok"
+  },
+  "costMicroUsd": "11640",
+  "maxCents": 60,
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}

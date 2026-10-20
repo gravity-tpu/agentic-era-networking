@@ -1,0 +1,154 @@
+{
+ "schema": "cross-intent-rejudge/v1",
+ "note": "admissible sets from the run dirs, judged under every intent with the same triage; no model call",
+ "matrix": {
+  "dns-confinement/v1": {
+   "sets": 597,
+   "under": {
+    "port1-isolation/v1": {
+     "total": 597,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_MISSING": 597
+     }
+    },
+    "dns-confinement/v1": {
+     "total": 597,
+     "admissible": 597,
+     "byCategory": {}
+    },
+    "quarantine-precedence/v1": {
+     "total": 597,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_LEAK": 597
+     }
+    },
+    "tap-return-isolation/v1": {
+     "total": 597,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_MISSING": 597
+     }
+    }
+   }
+  },
+  "port1-isolation/v1": {
+   "sets": 548,
+   "under": {
+    "port1-isolation/v1": {
+     "total": 548,
+     "admissible": 548,
+     "byCategory": {}
+    },
+    "dns-confinement/v1": {
+     "total": 548,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_LEAK": 548
+     }
+    },
+    "quarantine-precedence/v1": {
+     "total": 548,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_LEAK": 548
+     }
+    },
+    "tap-return-isolation/v1": {
+     "total": 548,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_MISSING": 548
+     }
+    }
+   }
+  },
+  "quarantine-precedence/v1": {
+   "sets": 558,
+   "under": {
+    "port1-isolation/v1": {
+     "total": 558,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_MISSING": 558
+     }
+    },
+    "dns-confinement/v1": {
+     "total": 558,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_LEAK": 558
+     }
+    },
+    "quarantine-precedence/v1": {
+     "total": 558,
+     "admissible": 558,
+     "byCategory": {}
+    },
+    "tap-return-isolation/v1": {
+     "total": 558,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_MISSING": 558
+     }
+    }
+   }
+  },
+  "tap-return-isolation/v1": {
+   "sets": 600,
+   "under": {
+    "port1-isolation/v1": {
+     "total": 600,
+     "admissible": 600,
+     "byCategory": {}
+    },
+    "dns-confinement/v1": {
+     "total": 600,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_LEAK": 600
+     }
+    },
+    "quarantine-precedence/v1": {
+     "total": 600,
+     "admissible": 0,
+     "byCategory": {
+      "ERR_INTENT_LEAK": 600
+     }
+    },
+    "tap-return-isolation/v1": {
+     "total": 600,
+     "admissible": 600,
+     "byCategory": {}
+    }
+   }
+  }
+ },
+ "referenceVerdicts": {
+  "port1-isolation/v1": {
+   "port1-isolation/v1": "ADMISSIBLE",
+   "dns-confinement/v1": "ERR_INTENT_LEAK",
+   "quarantine-precedence/v1": "ERR_INTENT_LEAK",
+   "tap-return-isolation/v1": "ADMISSIBLE"
+  },
+  "dns-confinement/v1": {
+   "port1-isolation/v1": "ERR_INTENT_MISSING",
+   "dns-confinement/v1": "ADMISSIBLE",
+   "quarantine-precedence/v1": "ERR_INTENT_LEAK",
+   "tap-return-isolation/v1": "ERR_INTENT_MISSING"
+  },
+  "quarantine-precedence/v1": {
+   "port1-isolation/v1": "ERR_INTENT_MISSING",
+   "dns-confinement/v1": "ERR_INTENT_LEAK",
+   "quarantine-precedence/v1": "ADMISSIBLE",
+   "tap-return-isolation/v1": "ERR_INTENT_MISSING"
+  },
+  "tap-return-isolation/v1": {
+   "port1-isolation/v1": "ADMISSIBLE",
+   "dns-confinement/v1": "ERR_INTENT_LEAK",
+   "quarantine-precedence/v1": "ERR_INTENT_LEAK",
+   "tap-return-isolation/v1": "ADMISSIBLE"
+  }
+ }
+}

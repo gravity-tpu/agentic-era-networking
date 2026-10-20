@@ -1,0 +1,23 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "survivor port1-isolation/v1 drop-rule:p1-default-tap-only",
+ "rulesRequested": 5,
+ "entriesSeen": 6,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-intra-segment",
+  "p1-arp",
+  "p2-ipv4-to-segment",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "5/5 rules confirmed, 6 entries including the table-miss",
+ "atMs": 1792473693510
+}

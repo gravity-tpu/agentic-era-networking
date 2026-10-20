@@ -1,0 +1,123 @@
+{
+ "intent": "port1-isolation/v1",
+ "kind": "surviving-mutant",
+ "id": "raise-priority:p1-arp",
+ "installed": true,
+ "flows": [
+  {
+   "flow": "F1-p1-udp-from-node01-to-uplink-host",
+   "describe": "node-01 (10.0.2.50) sends UDP out eth0 to the Mac on the uplink side",
+   "predictedPorts": [
+    3
+   ],
+   "predictedObservable": [
+    3
+   ],
+   "predictedByRule": "p1-default-tap-only",
+   "tie": false,
+   "observedPorts": [
+    3
+   ],
+   "counts": {
+    "O2": 5,
+    "O3": 0,
+    "listener": 0
+   },
+   "sent": 5,
+   "agrees": true
+  },
+  {
+   "flow": "F2-p1-udp-from-quarantine-candidate",
+   "describe": "rpi-hailo (10.0.2.51) sends UDP out eth0 to the Mac on the uplink side",
+   "predictedPorts": [
+    3
+   ],
+   "predictedObservable": [
+    3
+   ],
+   "predictedByRule": "p1-default-tap-only",
+   "tie": false,
+   "observedPorts": [
+    3
+   ],
+   "counts": {
+    "O2": 5,
+    "O3": 0,
+    "listener": 0
+   },
+   "sent": 5,
+   "agrees": true
+  },
+  {
+   "flow": "F3-p1-arp-who-has",
+   "describe": "node-01 ARPs for an unused workload address",
+   "predictedPorts": [
+    2,
+    3
+   ],
+   "predictedObservable": [
+    2,
+    3
+   ],
+   "predictedByRule": "p1-arp",
+   "tie": false,
+   "observedPorts": [
+    2,
+    3
+   ],
+   "counts": {
+    "O2": 3,
+    "O3": 3,
+    "listener": 0
+   },
+   "sent": "arp-retries",
+   "agrees": true
+  },
+  {
+   "flow": "F4-p2-udp-to-node01",
+   "describe": "the Mac sends UDP to node-01 (10.0.2.50) from the uplink side",
+   "predictedPorts": [
+    1
+   ],
+   "predictedObservable": [
+    1
+   ],
+   "predictedByRule": "p2-ipv4-to-segment",
+   "tie": false,
+   "observedPorts": [
+    1
+   ],
+   "counts": {
+    "O2": 0,
+    "O3": 5,
+    "listener": 5
+   },
+   "sent": 5,
+   "agrees": true
+  },
+  {
+   "flow": "F5-p2-udp-to-quarantine-candidate",
+   "describe": "the Mac sends UDP to rpi-hailo (10.0.2.51) from the uplink side",
+   "predictedPorts": [
+    1
+   ],
+   "predictedObservable": [
+    1
+   ],
+   "predictedByRule": "p2-ipv4-to-segment",
+   "tie": false,
+   "observedPorts": [
+    1
+   ],
+   "counts": {
+    "O2": 0,
+    "O3": 5,
+    "listener": 5
+   },
+   "sent": 5,
+   "agrees": true
+  }
+ ],
+ "agree": 5,
+ "flowsRun": 5
+}

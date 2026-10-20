@@ -1,0 +1,47 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "A (zero-shot)",
+  "intent": "tap-return-isolation/v1",
+  "model": "claude-opus-5-5",
+  "modelDigest": "Claude Opus 5.5 claude-opus-5-5",
+  "host": "https://api.anthropic.com",
+  "trials": 1,
+  "trialsRun": 1,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..1",
+  "numPredict": 16000,
+  "think": false,
+  "promptSha256": "610ee2023413fa3c6862064768374df741164f31fd0f51a236b9d7c3b79cbf07",
+  "gitCommit": "3fb0ec64527686bd361a6cc0612e45f86f452545",
+  "startedAt": "2026-10-20T04:33:15.747Z",
+  "counts": {
+    "ERR_SYNTAX": 1,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 0,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 0,
+    "TRANSPORT_FAILURE": 0
+  },
+  "provider": "anthropic",
+  "thinking": "low",
+  "stoppedBySpendCap": false,
+  "usage": {
+    "promptTokens": 663,
+    "outputTokens": 0,
+    "thoughtTokens": 0
+  },
+  "pricing": {
+    "inCentsPer1M": 400,
+    "outCentsPer1M": 2000,
+    "note": "claude-api reference cached 2026-10-06"
+  },
+  "costMicroUsd": "2652",
+  "maxCents": 40,
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}

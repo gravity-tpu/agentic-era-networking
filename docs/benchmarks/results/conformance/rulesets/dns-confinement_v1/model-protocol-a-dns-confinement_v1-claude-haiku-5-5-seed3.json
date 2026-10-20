@@ -1,0 +1,93 @@
+{
+ "label": "model-admissible dns-confinement/v1 protocol-a-dns-confinement_v1-claude-haiku-5-5 seed 3",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-dns-ipv4",
+   "priority": 300,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1-arp-uplink",
+   "priority": 300,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-to-tap",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-dns-return",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-other-drop",
+   "priority": 50,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  },
+  {
+   "id": "p3-return-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "dns-confinement/v1",
+  "kind": "model-admissible",
+  "source": "docs/benchmarks/results/agent-evaluation/frontier-full/protocol-a-dns-confinement_v1-claude-haiku-5-5",
+  "seed": 3,
+  "verdict": "ADMISSIBLE",
+  "installable": true,
+  "priorityClamped": false
+ }
+}

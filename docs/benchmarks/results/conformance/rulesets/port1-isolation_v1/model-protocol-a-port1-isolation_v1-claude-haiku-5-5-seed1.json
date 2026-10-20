@@ -1,0 +1,75 @@
+{
+ "label": "model-admissible port1-isolation/v1 protocol-a-port1-isolation_v1-claude-haiku-5-5 seed 1",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-ipv4-intra-to-uplink",
+   "priority": 300,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-to-uplink",
+   "priority": 300,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-to-tap",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment-to-p1",
+   "priority": 300,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 300,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  }
+ ],
+ "meta": {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "source": "docs/benchmarks/results/agent-evaluation/frontier-full/protocol-a-port1-isolation_v1-claude-haiku-5-5",
+  "seed": 1,
+  "verdict": "ADMISSIBLE",
+  "installable": true,
+  "priorityClamped": false
+ }
+}
