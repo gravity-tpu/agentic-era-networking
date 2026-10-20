@@ -257,7 +257,7 @@ export class ExperimentInstaller {
     // The table-miss is the priority-0 entry and there must be exactly one; every other entry must be one of the requested rules.
     const missEntries = entries.filter((e) => e.priority === 0).length;
     const nonMiss = entries.length - missEntries;
-    // confirmed rules are matched to distinct non-table-miss entries, so nonMiss >= confirmed.length; the floor only guards the arithmetic
+    // Defensive: confirmed rules map to distinct non-table-miss entries, so this should never be negative; the floor keeps a surprise from going negative in the report.
     const extra = Math.max(0, nonMiss - verdict.confirmed.length);
     const ok = verdict.mismatches.length === 0 && verdict.confirmed.length === rules.length && extra === 0 && missEntries === 1;
     const detail = ok

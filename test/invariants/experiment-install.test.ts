@@ -190,6 +190,7 @@ describe('ExperimentInstaller', () => {
     expect(report.confirmed).toEqual(['arp', 'ip']);
     expect(report.extraEntries).toBe(0);
     expect(report.tableMissEntries).toBe(1);
+    expect(report.ran).toBe(true);
     expect(f.sent[0]!.command).toBe(FlowModCommand.OFPFC_DELETE);
     expect(f.sent[0]!.match).toEqual({});
     expect(f.sent[1]!.priority).toBe(0); // the table-miss, straight after the wipe
