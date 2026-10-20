@@ -379,5 +379,18 @@ export class ExperimentInstaller {
     this.clearActive();
   }
 
+  /**
+   * The bridge's own session handler re-installed the isolation policy after a reconnect and its readback verified, so a stale "isolation may
+   * not be back" alarm from before the reconnect is resolved by the thing it was about. Found in a live test: after the bridge was frozen
+   * mid-experiment its overdue restore could not run, the switch dropped the session and flushed its table, the reconnect re-installed and
+   * verified isolation, yet the alarm stayed set until a manual restore. Never clears while an experiment is running or being restored.
+   */
+  public isolationReestablished(): void {
+    if (this.phase === 'idle' && this.attention !== null) {
+      this.log(`[experiment] isolation re-established and verified by the session handler; clearing the alarm: ${this.attention}`);
+      this.attention = null;
+    }
+  }
+
   public dispose(): void { this.cancelTimer(); }
 }

@@ -971,6 +971,7 @@ export class ZodiacBridgeServer {
           const line = describeReadback(this.isolationStatus, isolationPolicy.length, entries.length);
           if (this.isolationStatus.state === 'verified') {
             console.log(`[+] [Bridge Server] ${line}`);
+            this.experiment?.isolationReestablished(); // a stale experiment alarm is resolved by a verified re-install
           } else {
             console.error(`[!] [Bridge Server] ${line}`);
           }

@@ -328,6 +328,34 @@ describe('ExperimentInstaller', () => {
     expect(again.ok).toBe(true);
   });
 
+  it('clears a stale attention when the session handler re-verifies isolation, but never during an experiment', async () => {
+    const f = makeFake({ dropAdds: new Set([2, 3, 4, 5, 6, 7]) }); // the restore at the time limit fails to verify, as in the frozen-bridge case
+    const inst = installer(f);
+    await inst.install(request());
+    f.timers[0]!.fn();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(inst.state().attention).toMatch(/NOT verified/);
+    inst.isolationReestablished();
+    expect(inst.state().attention).toBeNull();
+    expect(f.logs.join('\n')).toMatch(/clearing the alarm/);
+    // a second install succeeds (its adds are not the dropped ones) while a NEW alarm is raised by hand-built state: set it by repeating the failure first
+    const f2 = makeFake({ dropAdds: new Set([2, 3, 4, 5, 6, 7]) });
+    const inst2 = installer(f2);
+    await inst2.install(request());
+    f2.timers[0]!.fn();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(inst2.state().attention).not.toBeNull();
+    const second = await inst2.install(request()); // adds 8 and 9 are kept, so this install verifies and the experiment is active again
+    expect(second.ok).toBe(true);
+    expect(inst2.state().phase).toBe('active');
+    expect(inst2.state().attention).not.toBeNull(); // an install does not clear the alarm
+    inst2.isolationReestablished(); // must not clear it while an experiment is running
+    expect(inst2.state().attention).not.toBeNull();
+    expect(inst2.state().phase).toBe('active');
+  });
+
   it('forgets an active experiment and cancels its timer when the switch session is re-established, and logs it', async () => {
     const f = makeFake();
     const inst = installer(f);
