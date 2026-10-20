@@ -3018,6 +3018,15 @@
     return points;
   }
 
+  const HISTORICAL_GAP_THRESHOLDS_MS = Object.freeze({
+    '1h': 2 * 60 * 1000,         // 2 minutes
+    '6h': 15 * 60 * 1000,        // 15 minutes
+    '24h': 30 * 60 * 1000,       // 30 minutes
+    '7d': 2 * 60 * 60 * 1000,    // 2 hours
+    '30d': 8 * 60 * 60 * 1000,   // 8 hours
+  });
+  const DEFAULT_HISTORICAL_GAP_THRESHOLD_MS = 8 * 60 * 60 * 1000;
+
   /**
    * Adaptive gap detection threshold (Quoc Le - Invariant 5: Robustness Under Distribution Shift):
    * Calculates the threshold dynamically from the observed inter-arrival cadence,
@@ -3025,12 +3034,7 @@
    */
   function getGapThresholdMs(range, points) {
     if (range !== 'live') {
-      switch (range) {
-        case '1h':   return 120 * 1000;          // 2 minutes in 1h mode
-        case '6h':   return 10 * 60 * 1000;      // 10 minutes in 6h mode
-        case '24h':  return 30 * 60 * 1000;      // 30 minutes in 24h mode
-        default:     return 2 * 60 * 60 * 1000;  // 2 hours in multi-day modes
-      }
+      return HISTORICAL_GAP_THRESHOLDS_MS[range] ?? DEFAULT_HISTORICAL_GAP_THRESHOLD_MS;
     }
     // Live mode: adapt to observed telemetry polling cadence (typically 2.5s-3.5s)
     // with a 4x multiplier, bounded between 15s (floor) and 30s (ceiling).
