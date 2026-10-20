@@ -276,7 +276,10 @@ async function anthropicChat(model: string, messages: ReadonlyArray<{ role: stri
   let content = '';
   for (const block of final.content) if (block.type === 'text') content += block.text;
   // output_tokens includes the thinking tokens (billed as output); the split is not reported separately by the API
-  return { content, promptTokens: final.usage.input_tokens, outputTokens: final.usage.output_tokens, thoughtTokens: 0, finishReason: final.stop_reason };
+  // A refusal carries its category (cyber, bio, ...) in stop_details; keep it in the recorded finish reason, e.g. "refusal:cyber".
+  const category = final.stop_reason === 'refusal' ? (final.stop_details?.category ?? null) : null;
+  const finishReason = category === null ? final.stop_reason : `${final.stop_reason}:${category}`;
+  return { content, promptTokens: final.usage.input_tokens, outputTokens: final.usage.output_tokens, thoughtTokens: 0, finishReason };
 }
 
 async function main(): Promise<void> {
