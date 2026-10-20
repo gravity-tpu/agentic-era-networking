@@ -40,6 +40,11 @@ def pct(x):
     return f'{100 * x:.0f}%'
 
 
+def ci1(k, n, z=1.96):
+    lo, hi = wilson(k, n, z)
+    return f'{100 * lo:.1f}% to {100 * hi:.1f}%'
+
+
 def ci(k, n, z=1.96):
     lo, hi = wilson(k, n, z)
     return f'{pct(lo)} to {pct(hi)}'
@@ -208,6 +213,95 @@ def main():
     if full_b.get('claude-haiku-5-5'):
         w('Protocol B (verifier feedback) results for Haiku are in `frontier-full/`; they are not summarized here until all four intents finish.')
         w('')
+    # ---- fresh, post-selection trials (the accuracy claim) -------------------------------------------------------
+    exp_a = collections.defaultdict(list)
+    for d in sorted(glob.glob(f'{ROOT}/frontier-expanded/protocol-a-*-claude-haiku-5-5-n200-r*')):
+        m_ = re.match(r'.*/protocol-a-(.+?)-claude-haiku-5-5-n200-r\d+$', d)
+        if m_ and os.path.exists(f'{d}/summary.json'):
+            sm = json.load(open(f'{d}/summary.json'))
+            sm['_trials'] = [json.loads(l) for l in open(f'{d}/trials.jsonl')]
+            exp_a[m_.group(1)].append(sm)
+    exp_b = {}
+    for d in sorted(glob.glob(f'{ROOT}/frontier-expanded/protocol-b-*-claude-haiku-5-5-n100')):
+        m_ = re.match(r'.*/protocol-b-(.+?)-claude-haiku-5-5-n100$', d)
+        if m_ and os.path.exists(f'{d}/summary.json'):
+            sm = json.load(open(f'{d}/summary.json'))
+            sm['_trials'] = [json.loads(l) for l in open(f'{d}/trials.jsonl')]
+            exp_b[m_.group(1)] = sm
+    if exp_a:
+        w('## The accuracy claim: fresh trials taken after the choice')
+        w('')
+        w('The pilot and stage-2 trials above are what selected Haiku, so they are biased upward by the choosing. The numbers below are **new trials taken after the choice** '
+          '(`frontier-expanded/`), which carry no such bias. Protocol A is zero-shot at low effort; every trial is an independent sample (the API takes no seed).')
+        w('')
+        w('| Intent | Rounds of N=200 | Admissible | Rate | 95% interval | 99% interval | Distinct responses | Not admissible |')
+        w('| :--- | :--- | ---: | ---: | :--- | :--- | ---: | :--- |')
+        ta = tn = 0
+        for key, lbl in INTENTS:
+            rs = exp_a.get(key, [])
+            if not rs:
+                continue
+            adm_ = sum(r['counts']['ADMISSIBLE'] for r in rs)
+            n_ = sum(r['trialsRun'] for r in rs)
+            ta += adm_
+            tn += n_
+            resp = [x['turns'][0]['response'] for r in rs for x in r['_trials'] if x['turns']]
+            cats = collections.Counter()
+            for r in rs:
+                for c_, v_ in r['counts'].items():
+                    if v_ and c_ != 'ADMISSIBLE':
+                        cats[c_] += v_
+            w(f"| {lbl} | {', '.join(str(r['counts']['ADMISSIBLE']) + '/' + str(r['trialsRun']) for r in rs)} | {adm_}/{n_} | {100 * adm_ / n_:.1f}% | {ci1(adm_, n_)} | {ci1(adm_, n_, 2.576)} | {len(set(resp))}/{len(resp)} | "
+              + (', '.join(f'{k} {v}' for k, v in sorted(cats.items())) or 'none') + ' |')
+        w(f'| **All four intents** | | **{ta}/{tn}** | **{100 * ta / tn:.1f}%** | **{ci1(ta, tn)}** | **{ci1(ta, tn, 2.576)}** | | transport failures: {sum(r["counts"]["TRANSPORT_FAILURE"] for rs in exp_a.values() for r in rs)} |')
+        w('')
+        w('Distinct responses below the number of trials mean some answers repeated word for word (INTENT-1 and INTENT-4 most), so the effective number of independent samples is smaller than N there; '
+          'the intervals above treat every trial as independent and are therefore a little optimistic for those two intents. All non-admissible trials were intent leaks or missing deliveries: none was a syntax, prerequisite or transport failure.')
+        w('')
+        if exp_b:
+            w('Protocol B (the verifier\'s diagnostics are returned to the model, up to 5 turns), N=100 chains per intent:')
+            w('')
+            w('| Intent | Admissible | 95% interval | Right on the first turn | Fixed on turn 2 or later | Transport failures |')
+            w('| :--- | ---: | :--- | ---: | ---: | ---: |')
+            ba = bn = bf = 0
+            for key, lbl in INTENTS:
+                sm = exp_b.get(key)
+                if sm is None:
+                    continue
+                a_ = sm['counts']['ADMISSIBLE']
+                first = sum(1 for x in sm['_trials'] if x.get('firstCategory') == 'ADMISSIBLE')
+                ba += a_
+                bn += sm['trialsRun']
+                bf += first
+                w(f"| {lbl} | {a_}/{sm['trialsRun']} | {ci1(a_, sm['trialsRun'])} | {first} | {a_ - first} | {sm['counts']['TRANSPORT_FAILURE']} |")
+            w(f'| **All four intents** | **{ba}/{bn}** | **{ci1(ba, bn)}** | **{bf}** | **{ba - bf}** | |')
+            w('')
+        xp = f'{ROOT}/frontier-expanded/cross-intent-rejudge.json'
+        if os.path.exists(xp):
+            xj = json.load(open(xp))
+            w('### Does "admissible under one intent" carry to the others?')
+            w('')
+            w('Each admissible set from the Protocol A trials above was judged again under all four intents (`scripts/rejudge-cross-intent.ts`; no model call). Rows: the intent the set was written for; '
+              'columns: the intent it is judged under; cells: admissible sets out of the row\'s total. The last column gives the hand-written reference policy\'s verdict under that intent.')
+            w('')
+            hdr = [lbl.split(' ')[0] for _, lbl in INTENTS]
+            w('| Written for | Sets | ' + ' | '.join(f'under {h}' for h in hdr) + ' |')
+            w('| :--- | ---: | ' + ' | '.join('---:' for _ in hdr) + ' |')
+            for key, lbl in INTENTS:
+                iid = key.replace('_v1', '/v1')
+                row = xj['matrix'].get(iid)
+                if row is None:
+                    continue
+                cells = [f"{row['under'][k2.replace('_v1', '/v1')]['admissible']}" for k2, _ in INTENTS]
+                w(f"| {lbl} | {row['sets']} | " + ' | '.join(cells) + ' |')
+            w('')
+            w('Reference policy verdicts, for comparison (row: the policy written for that intent; column: the intent it is judged under): ' + '; '.join(
+                f"{k.split('/')[0]}: " + ', '.join(f"{j.split('/')[0]} {c.replace('ERR_INTENT_', '').lower() if c != 'ADMISSIBLE' else 'admissible'}" for j, c in v.items()) for k, v in xj['referenceVerdicts'].items()) + '.')
+            w('')
+            w('So a set is admissible only under the intent it was written for, except that INTENT-4\'s sets also satisfy INTENT-1. The reverse does not hold: **every one of Haiku\'s INTENT-1-admissible sets fails INTENT-4**, '
+              'because INTENT-1 only permits the tap-return rule that INTENT-4 requires and the model does not add it unprompted, while the hand-written INTENT-1 reference does include it. '
+              '"Admissible" is a statement about one intent\'s text; the sets are correct for what the intent says, not for what a neighbouring intent needs.')
+            w('')
     w('## How much a larger sample narrows the doubt')
     w('')
     w('The 95% Wilson interval for a true rate near 90% at different numbers of trials (the successes are set to 90% of the trials for illustration; this is the width '
