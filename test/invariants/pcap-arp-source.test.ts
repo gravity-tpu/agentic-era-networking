@@ -12,9 +12,16 @@ import { resolve } from 'node:path';
 
 const SCRIPT = resolve(__dirname, '../../scripts/sentinel-replay.py');
 
+// scripts/sentinel-replay.py imports numpy for its detector model; parse_pcap, which this test exercises, never calls it. CI has no numpy, so
+// when it is missing the driver stands in a stub just good enough for the module-level import (np.array and np.float32). With numpy present
+// (a developer machine) the real module is used and nothing is stubbed. If parse_pcap ever starts using numpy this test fails loudly, by design.
 const DRIVER = `
-import importlib.util, json, struct, sys, tempfile, os
-spec = importlib.util.spec_from_file_location('sr', sys.argv[1]); sr = importlib.util.module_from_spec(spec); spec.loader.exec_module(sr)
+import importlib.util, json, struct, sys, tempfile, os, types
+try:
+    import numpy
+except ImportError:
+    stub = types.ModuleType('numpy'); stub.array = lambda *a, **k: None; stub.float32 = float; sys.modules['numpy'] = stub
+spec =importlib.util.spec_from_file_location('sr', sys.argv[1]); sr = importlib.util.module_from_spec(spec); spec.loader.exec_module(sr)
 def arp(htype=1, ptype=0x0800, hlen=6, plen=4, spa=bytes([10,0,2,50]), trunc=0):
     eth = bytes.fromhex('ffffffffffff') + bytes.fromhex('b827eba2ecb0') + struct.pack('!H', 0x0806)
     body = struct.pack('!HHBBH', htype, ptype, hlen, plen, 1) + bytes.fromhex('b827eba2ecb0') + spa + bytes(6) + bytes([10,0,2,119])
