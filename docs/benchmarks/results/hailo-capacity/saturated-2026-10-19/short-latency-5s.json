@@ -1,0 +1,12 @@
+{
+  "source": "rpi5_hailo8_npu",
+  "model_name": "yolov8s_h8.hef",
+  "frames_count": 506,
+  "duration_ns": 5208275085,
+  "fps_milli": 97153,
+  "hw_latency_ns": 6660000,
+  "temp_min_c": 58.2588,
+  "temp_avg_c": 58.8595,
+  "temp_max_c": 59.827,
+  "raw_output": "Running streaming inference (/usr/share/hailo-models/yolov8s_h8.hef):\n  Transform data: true\n    Type:      auto\n    Quantized: true\nNetwork yolov8s/yolov8s: 20% | 102 | HW Latency: 6.66 ms | ETA: 00:00:04\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 40% | 201 | HW Latency: 6.66 ms | ETA: 00:00:03\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 60% | 303 | HW Latency: 6.66 ms | ETA: 00:00:02\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 80% | 406 | HW Latency: 6.66 ms | ETA: 00:00:01\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 100% | 506 | HW Latency: 6.66 ms | ETA: 00:00:00\n\u001b[F\u001b[2K\nNetwork yolov8s/yolov8s: 100% | 506 | HW Latency: 6.66 ms | ETA: 00:00:00\n\u001b[2K\n> Inference result:\n Network group: yolov8s\n    Frames count: 506\n    HW Latency: 6.66 ms\n\n  Device: 0001:01:00.0\n    Minimum chip temperature: 58.2588C\n    Average chip temperature: 58.8595C\n    Maximum chip temperature: 59.827C\n"
+}

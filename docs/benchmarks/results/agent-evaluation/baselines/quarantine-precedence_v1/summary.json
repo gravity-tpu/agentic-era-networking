@@ -1,0 +1,67 @@
+{
+  "schema": "eval-baselines/v1",
+  "intent": "quarantine-precedence/v1",
+  "reference": {
+    "rules": 8,
+    "category": "ADMISSIBLE"
+  },
+  "mutants": {
+    "total": 56,
+    "killed": 45,
+    "survived": 11,
+    "byOperator": {
+      "drop-rule": {
+        "total": 8,
+        "killed": 6,
+        "survived": 2
+      },
+      "widen-prefix": {
+        "total": 5,
+        "killed": 5,
+        "survived": 0
+      },
+      "remove-match-field": {
+        "total": 19,
+        "killed": 19,
+        "survived": 0
+      },
+      "add-output": {
+        "total": 8,
+        "killed": 8,
+        "survived": 0
+      },
+      "remove-output": {
+        "total": 8,
+        "killed": 4,
+        "survived": 4
+      },
+      "raise-priority": {
+        "total": 8,
+        "killed": 3,
+        "survived": 5
+      }
+    },
+    "killedByPrimaryCategory": {
+      "ERR_INTENT_LEAK": 19,
+      "ERR_SHADOWED": 8,
+      "ERR_INTENT_MISSING": 10,
+      "ERR_PREREQUISITE": 4,
+      "ERR_AMBIGUITY": 4
+    }
+  },
+  "survivedMutants": [
+    "raise-priority:quarantine-src",
+    "raise-priority:quarantine-dst",
+    "remove-output:p1-ipv4-intra-segment:3",
+    "remove-output:p1-arp:3",
+    "raise-priority:p1-arp",
+    "drop-rule:p1-default-tap-only",
+    "remove-output:p1-default-tap-only:3",
+    "raise-priority:p2-arp",
+    "drop-rule:p3-tap-return",
+    "remove-output:p3-tap-return:1",
+    "raise-priority:p3-tap-return"
+  ],
+  "note": "a survived mutant is either an equivalent mutant (same behaviour under the intent) or a gap in the checks; this file does not say which",
+  "gitCommit": "e4c1380cea60067133c3093003420e359adb3f25"
+}

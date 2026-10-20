@@ -1,0 +1,47 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "A (zero-shot)",
+  "intent": "tap-return-isolation/v1",
+  "model": "gemini-3.5-flash-lite",
+  "modelDigest": "Gemini 3.5 Flash Lite 3.5-flash-lite-07-2026",
+  "host": "https://generativelanguage.googleapis.com/v1beta",
+  "trials": 3,
+  "trialsRun": 3,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..3",
+  "numPredict": 16384,
+  "think": false,
+  "promptSha256": "610ee2023413fa3c6862064768374df741164f31fd0f51a236b9d7c3b79cbf07",
+  "gitCommit": "731f35b81d80c31c1e103facfb2c82e4f63e08c7",
+  "startedAt": "2026-10-20T03:51:38.037Z",
+  "counts": {
+    "ERR_SYNTAX": 2,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 0,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 1,
+    "TRANSPORT_FAILURE": 0
+  },
+  "provider": "gemini",
+  "thinking": "default",
+  "stoppedBySpendCap": false,
+  "usage": {
+    "promptTokens": 1455,
+    "outputTokens": 1546,
+    "thoughtTokens": 0
+  },
+  "pricing": {
+    "inCentsPer1M": 30,
+    "outCentsPer1M": 250,
+    "note": "ai.google.dev pricing page, fetched 2026-10-19, paid tier text standard"
+  },
+  "costMicroUsd": "4301",
+  "maxCents": 10,
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}

@@ -1,0 +1,108 @@
+{
+ "intent": "dns-confinement/v1",
+ "kind": "model-admissible",
+ "id": "model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed4",
+ "installed": true,
+ "flows": [
+  {
+   "flow": "F1-p1-udp-from-node01-to-uplink-host",
+   "describe": "node-01 (10.0.2.50) sends UDP out eth0 to the Mac on the uplink side",
+   "predictedPorts": [
+    3
+   ],
+   "predictedObservable": [
+    3
+   ],
+   "predictedByRule": "p1-else-tap",
+   "tie": false,
+   "observedPorts": [
+    3
+   ],
+   "counts": {
+    "O2": 5,
+    "O3": 0,
+    "listener": 0
+   },
+   "sent": 5,
+   "agrees": true
+  },
+  {
+   "flow": "F2-p1-udp-from-quarantine-candidate",
+   "describe": "rpi-hailo (10.0.2.51) sends UDP out eth0 to the Mac on the uplink side",
+   "predictedPorts": [
+    3
+   ],
+   "predictedObservable": [
+    3
+   ],
+   "predictedByRule": "p1-else-tap",
+   "tie": false,
+   "observedPorts": [
+    3
+   ],
+   "counts": {
+    "O2": 5,
+    "O3": 0,
+    "listener": 0
+   },
+   "sent": 5,
+   "agrees": true
+  },
+  {
+   "flow": "F3-p1-arp-who-has",
+   "describe": "node-01 ARPs for an unused workload address",
+   "predictedPorts": [
+    2
+   ],
+   "predictedObservable": [
+    2
+   ],
+   "predictedByRule": "p1-arp-uplink",
+   "tie": false,
+   "observedPorts": [
+    2
+   ],
+   "counts": {
+    "O2": 0,
+    "O3": 3,
+    "listener": 0
+   },
+   "sent": "arp-retries",
+   "agrees": true
+  },
+  {
+   "flow": "F4-p2-udp-to-node01",
+   "describe": "the Mac sends UDP to node-01 (10.0.2.50) from the uplink side",
+   "predictedPorts": [],
+   "predictedObservable": [],
+   "predictedByRule": "p2-else-drop",
+   "tie": false,
+   "observedPorts": [],
+   "counts": {
+    "O2": 0,
+    "O3": 5,
+    "listener": 0
+   },
+   "sent": 5,
+   "agrees": true
+  },
+  {
+   "flow": "F5-p2-udp-to-quarantine-candidate",
+   "describe": "the Mac sends UDP to rpi-hailo (10.0.2.51) from the uplink side",
+   "predictedPorts": [],
+   "predictedObservable": [],
+   "predictedByRule": "p2-else-drop",
+   "tie": false,
+   "observedPorts": [],
+   "counts": {
+    "O2": 0,
+    "O3": 5,
+    "listener": 0
+   },
+   "sent": 5,
+   "agrees": true
+  }
+ ],
+ "agree": 5,
+ "flowsRun": 5
+}

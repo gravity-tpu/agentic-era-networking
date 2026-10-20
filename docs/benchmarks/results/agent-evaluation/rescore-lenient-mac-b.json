@@ -1,0 +1,74 @@
+{
+  "schema": "rescore-lenient/v1",
+  "transforms": [
+    "cidr-split",
+    "numeric-string"
+  ],
+  "gitCommit": "486ce3945ca315f20ec9515c29f1fc6940892b44",
+  "note": "post-hoc re-parse of saved responses; the strict parse remains the pre-registered scoring, this only shows how much of a failure was format",
+  "runs": [
+    {
+      "dir": "protocol-b-port1-isolation-v1-qwen2.5-3b-mac-think-false",
+      "intent": "port1-isolation/v1",
+      "trials": 20,
+      "strict": {
+        "ERR_SYNTAX": 13,
+        "ERR_SHADOWED": 2,
+        "ERR_HAIRPIN": 5
+      },
+      "lenient": {
+        "ERR_SYNTAX": 5,
+        "ERR_SHADOWED": 4,
+        "ERR_PREREQUISITE": 3,
+        "ERR_HAIRPIN": 8
+      },
+      "trialsWhoseCategoryChanged": 8
+    },
+    {
+      "dir": "protocol-b-dns-confinement_v1-qwen2.5-3b-mac-think-false",
+      "intent": "dns-confinement/v1",
+      "trials": 20,
+      "strict": {
+        "ERR_SYNTAX": 19,
+        "ERR_PREREQUISITE": 1
+      },
+      "lenient": {
+        "ERR_SYNTAX": 5,
+        "ERR_SHADOWED": 3,
+        "ERR_PREREQUISITE": 12
+      },
+      "trialsWhoseCategoryChanged": 14
+    },
+    {
+      "dir": "protocol-b-quarantine-precedence_v1-qwen2.5-3b-mac-think-false",
+      "intent": "quarantine-precedence/v1",
+      "trials": 20,
+      "strict": {
+        "ERR_SYNTAX": 17,
+        "ERR_HAIRPIN": 1,
+        "ERR_SHADOWED": 2
+      },
+      "lenient": {
+        "ERR_SYNTAX": 9,
+        "ERR_SHADOWED": 8,
+        "ERR_HAIRPIN": 2,
+        "ERR_INTENT_LEAK": 1
+      },
+      "trialsWhoseCategoryChanged": 8
+    },
+    {
+      "dir": "protocol-b-tap-return-isolation_v1-qwen2.5-3b-mac-think-false",
+      "intent": "tap-return-isolation/v1",
+      "trials": 20,
+      "strict": {
+        "ERR_SYNTAX": 20
+      },
+      "lenient": {
+        "ERR_SYNTAX": 16,
+        "ERR_SHADOWED": 3,
+        "ERR_PREREQUISITE": 1
+      },
+      "trialsWhoseCategoryChanged": 4
+    }
+  ]
+}

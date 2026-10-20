@@ -1,0 +1,87 @@
+{
+ "label": "model-admissible tap-return-isolation/v1 protocol-a-tap-return-isolation_v1-claude-haiku-5-5 seed 2",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-intra-ipv4-to-uplink-and-tap",
+   "priority": 300,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-to-uplink-and-tap",
+   "priority": 300,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-to-tap-only",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "tap-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-segment",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  }
+ ],
+ "meta": {
+  "intent": "tap-return-isolation/v1",
+  "kind": "model-admissible",
+  "source": "docs/benchmarks/results/agent-evaluation/frontier-full/protocol-a-tap-return-isolation_v1-claude-haiku-5-5",
+  "seed": 2,
+  "verdict": "ADMISSIBLE",
+  "installable": true,
+  "priorityClamped": false
+ }
+}

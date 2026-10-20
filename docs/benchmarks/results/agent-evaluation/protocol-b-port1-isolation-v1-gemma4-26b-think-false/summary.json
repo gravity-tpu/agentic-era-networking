@@ -1,0 +1,31 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "B (verifier feedback, up to 5 turns)",
+  "intent": "port1-isolation/v1",
+  "model": "gemma4:26b",
+  "modelDigest": "08ae7ec1744bd7f451c4a530afb39d2673ad9d07a8369b8a33a3613b41212a68",
+  "host": "http://100.112.223.16:11434",
+  "trials": 20,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..20",
+  "numPredict": 8192,
+  "think": false,
+  "promptSha256": "5d5cf39ef7eddbd8f01d0dec57cafce48250bfa0720c97c6ceb01e83e0358405",
+  "gitCommit": "62339301e6b1ce80999a5dd92492c2d96ade383e",
+  "startedAt": "2026-10-19T03:20:40.298Z",
+  "counts": {
+    "ERR_SYNTAX": 2,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 1,
+    "ERR_INTENT_LEAK": 15,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 2,
+    "TRANSPORT_FAILURE": 0
+  },
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}

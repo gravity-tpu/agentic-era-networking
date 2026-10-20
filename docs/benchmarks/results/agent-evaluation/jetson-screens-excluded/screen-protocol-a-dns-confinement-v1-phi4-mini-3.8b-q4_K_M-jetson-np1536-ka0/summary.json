@@ -1,0 +1,31 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "A (zero-shot)",
+  "intent": "dns-confinement/v1",
+  "model": "phi4-mini:3.8b-q4_K_M",
+  "modelDigest": "78fad5d182a7c33065e153a5f8ba210754207ba9d91973f57dffa7f487363753",
+  "host": "http://10.0.0.16:11435",
+  "trials": 20,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..20",
+  "numPredict": 1536,
+  "think": false,
+  "promptSha256": "abd920cd4d9fddf14dcd60670f3565240e4d62c5bd50179194eb32b4dc407e74",
+  "gitCommit": "aac36f30a824b1f920ea14a9416bda6121e22238",
+  "startedAt": "2026-10-19T23:26:43.133Z",
+  "counts": {
+    "ERR_SYNTAX": 20,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 0,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 0,
+    "TRANSPORT_FAILURE": 0
+  },
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}

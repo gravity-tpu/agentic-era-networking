@@ -1,0 +1,47 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "B (verifier feedback, up to 5 turns)",
+  "intent": "dns-confinement/v1",
+  "model": "claude-haiku-5-5",
+  "modelDigest": "Claude Haiku 5.5 claude-haiku-5-5",
+  "host": "https://api.anthropic.com",
+  "trials": 20,
+  "trialsRun": 20,
+  "temperature": 0.2,
+  "topP": 0.95,
+  "seeds": "1..20",
+  "numPredict": 16384,
+  "think": false,
+  "promptSha256": "abd920cd4d9fddf14dcd60670f3565240e4d62c5bd50179194eb32b4dc407e74",
+  "gitCommit": "e132118fd0bd846e7a8c1cf47a1285d3b4ac1a26",
+  "startedAt": "2026-10-20T05:02:51.600Z",
+  "counts": {
+    "ERR_SYNTAX": 0,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 0,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 20,
+    "TRANSPORT_FAILURE": 0
+  },
+  "provider": "anthropic",
+  "thinking": "low",
+  "stoppedBySpendCap": false,
+  "usage": {
+    "promptTokens": 12740,
+    "outputTokens": 24744,
+    "thoughtTokens": 0
+  },
+  "pricing": {
+    "inCentsPer1M": 10,
+    "outCentsPer1M": 50,
+    "note": "Anthropic first-party API rates per the claude-api reference cached 2026-10-06"
+  },
+  "costMicroUsd": "13646",
+  "maxCents": 600,
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}

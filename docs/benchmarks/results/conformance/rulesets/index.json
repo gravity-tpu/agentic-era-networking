@@ -1,0 +1,554 @@
+[
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "reference",
+  "id": "reference",
+  "file": "port1-isolation_v1/reference.json",
+  "rules": 6
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-ipv4-intra-segment:3",
+  "operator": "remove-output",
+  "file": "port1-isolation_v1/mutant-remove-output_p1-ipv4-intra-segment_3.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-ipv4-intra-segment",
+  "operator": "raise-priority",
+  "file": "port1-isolation_v1/mutant-raise-priority_p1-ipv4-intra-segment.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-arp:3",
+  "operator": "remove-output",
+  "file": "port1-isolation_v1/mutant-remove-output_p1-arp_3.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-arp",
+  "operator": "raise-priority",
+  "file": "port1-isolation_v1/mutant-raise-priority_p1-arp.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p1-default-tap-only",
+  "operator": "drop-rule",
+  "file": "port1-isolation_v1/mutant-drop-rule_p1-default-tap-only.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-default-tap-only:3",
+  "operator": "remove-output",
+  "file": "port1-isolation_v1/mutant-remove-output_p1-default-tap-only_3.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-ipv4-to-segment",
+  "operator": "raise-priority",
+  "file": "port1-isolation_v1/mutant-raise-priority_p2-ipv4-to-segment.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-arp",
+  "operator": "raise-priority",
+  "file": "port1-isolation_v1/mutant-raise-priority_p2-arp.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p3-tap-return",
+  "operator": "drop-rule",
+  "file": "port1-isolation_v1/mutant-drop-rule_p3-tap-return.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p3-tap-return:1",
+  "operator": "remove-output",
+  "file": "port1-isolation_v1/mutant-remove-output_p3-tap-return_1.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p3-tap-return",
+  "operator": "raise-priority",
+  "file": "port1-isolation_v1/mutant-raise-priority_p3-tap-return.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "reference",
+  "id": "reference",
+  "file": "dns-confinement_v1/reference.json",
+  "rules": 6
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-ipv4-to-resolver:3",
+  "operator": "remove-output",
+  "file": "dns-confinement_v1/mutant-remove-output_p1-ipv4-to-resolver_3.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-ipv4-to-resolver",
+  "operator": "raise-priority",
+  "file": "dns-confinement_v1/mutant-raise-priority_p1-ipv4-to-resolver.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-arp:3",
+  "operator": "remove-output",
+  "file": "dns-confinement_v1/mutant-remove-output_p1-arp_3.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-arp",
+  "operator": "raise-priority",
+  "file": "dns-confinement_v1/mutant-raise-priority_p1-arp.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p1-default-tap-only",
+  "operator": "drop-rule",
+  "file": "dns-confinement_v1/mutant-drop-rule_p1-default-tap-only.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-default-tap-only:3",
+  "operator": "remove-output",
+  "file": "dns-confinement_v1/mutant-remove-output_p1-default-tap-only_3.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-ipv4-from-resolver",
+  "operator": "raise-priority",
+  "file": "dns-confinement_v1/mutant-raise-priority_p2-ipv4-from-resolver.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-arp",
+  "operator": "raise-priority",
+  "file": "dns-confinement_v1/mutant-raise-priority_p2-arp.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p3-tap-return",
+  "operator": "drop-rule",
+  "file": "dns-confinement_v1/mutant-drop-rule_p3-tap-return.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p3-tap-return:1",
+  "operator": "remove-output",
+  "file": "dns-confinement_v1/mutant-remove-output_p3-tap-return_1.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p3-tap-return",
+  "operator": "raise-priority",
+  "file": "dns-confinement_v1/mutant-raise-priority_p3-tap-return.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "reference",
+  "id": "reference",
+  "file": "quarantine-precedence_v1/reference.json",
+  "rules": 8
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:quarantine-src",
+  "operator": "raise-priority",
+  "file": "quarantine-precedence_v1/mutant-raise-priority_quarantine-src.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:quarantine-dst",
+  "operator": "raise-priority",
+  "file": "quarantine-precedence_v1/mutant-raise-priority_quarantine-dst.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-ipv4-intra-segment:3",
+  "operator": "remove-output",
+  "file": "quarantine-precedence_v1/mutant-remove-output_p1-ipv4-intra-segment_3.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-arp:3",
+  "operator": "remove-output",
+  "file": "quarantine-precedence_v1/mutant-remove-output_p1-arp_3.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-arp",
+  "operator": "raise-priority",
+  "file": "quarantine-precedence_v1/mutant-raise-priority_p1-arp.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p1-default-tap-only",
+  "operator": "drop-rule",
+  "file": "quarantine-precedence_v1/mutant-drop-rule_p1-default-tap-only.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p1-default-tap-only:3",
+  "operator": "remove-output",
+  "file": "quarantine-precedence_v1/mutant-remove-output_p1-default-tap-only_3.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-arp",
+  "operator": "raise-priority",
+  "file": "quarantine-precedence_v1/mutant-raise-priority_p2-arp.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p3-tap-return",
+  "operator": "drop-rule",
+  "file": "quarantine-precedence_v1/mutant-drop-rule_p3-tap-return.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "remove-output:p3-tap-return:1",
+  "operator": "remove-output",
+  "file": "quarantine-precedence_v1/mutant-remove-output_p3-tap-return_1.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p3-tap-return",
+  "operator": "raise-priority",
+  "file": "quarantine-precedence_v1/mutant-raise-priority_p3-tap-return.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "reference",
+  "id": "reference",
+  "file": "tap-return-isolation_v1/reference.json",
+  "rules": 6
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-ipv4-intra-segment",
+  "operator": "raise-priority",
+  "file": "tap-return-isolation_v1/mutant-raise-priority_p1-ipv4-intra-segment.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p1-arp",
+  "operator": "raise-priority",
+  "file": "tap-return-isolation_v1/mutant-raise-priority_p1-arp.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-ipv4-to-segment",
+  "operator": "raise-priority",
+  "file": "tap-return-isolation_v1/mutant-raise-priority_p2-ipv4-to-segment.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p2-arp",
+  "operator": "raise-priority",
+  "file": "tap-return-isolation_v1/mutant-raise-priority_p2-arp.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "surviving-mutant",
+  "id": "raise-priority:p3-tap-return",
+  "operator": "raise-priority",
+  "file": "tap-return-isolation_v1/mutant-raise-priority_p3-tap-return.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": true
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed1",
+  "file": "port1-isolation_v1/model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed1.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed6",
+  "file": "port1-isolation_v1/model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed6.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed9",
+  "file": "port1-isolation_v1/model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed9.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed11",
+  "file": "port1-isolation_v1/model-protocol-a-port1-isolation_v1-claude-haiku-5-5-seed11.json",
+  "rules": 5,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed1",
+  "file": "dns-confinement_v1/model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed1.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed2",
+  "file": "dns-confinement_v1/model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed2.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed3",
+  "file": "dns-confinement_v1/model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed3.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "dns-confinement/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed4",
+  "file": "dns-confinement_v1/model-protocol-a-dns-confinement_v1-claude-haiku-5-5-seed4.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed2",
+  "file": "quarantine-precedence_v1/model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed2.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed3",
+  "file": "quarantine-precedence_v1/model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed3.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed5",
+  "file": "quarantine-precedence_v1/model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed5.json",
+  "rules": 7,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed6",
+  "file": "quarantine-precedence_v1/model-protocol-a-quarantine-precedence_v1-claude-haiku-5-5-seed6.json",
+  "rules": 8,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed1",
+  "file": "tap-return-isolation_v1/model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed1.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed2",
+  "file": "tap-return-isolation_v1/model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed2.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed4",
+  "file": "tap-return-isolation_v1/model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed4.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ },
+ {
+  "intent": "tap-return-isolation/v1",
+  "kind": "model-admissible",
+  "id": "model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed9",
+  "file": "tap-return-isolation_v1/model-protocol-a-tap-return-isolation_v1-claude-haiku-5-5-seed9.json",
+  "rules": 6,
+  "installable": true,
+  "priorityClamped": false
+ }
+]
