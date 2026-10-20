@@ -87,6 +87,8 @@ import {
   type IsolationStatus,
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
+import { ExperimentInstaller, parseExperimentRequest, EXPERIMENT_TOKEN_MIN_LENGTH, EXPERIMENT_MAX_BODY_BYTES } from './experiment-install.js';
+import { timingSafeEqual } from 'node:crypto';
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
 import {
   decideQuarantine,
@@ -538,6 +540,13 @@ export class ZodiacBridgeServer {
   /** One flow-table read at a time: shared by the on-demand probe and the periodic isolation re-check. */
   private readonly flowReadLock = new FlowReadLock();
   private readonly isolationRechecker: IsolationRechecker;
+  /**
+   * The experiment install path (RQ4 conformance runs). null unless ZODIAC_EXPERIMENT_ENDPOINTS=1 AND ZODIAC_EXPERIMENT_TOKEN is set to
+   * at least EXPERIMENT_TOKEN_MIN_LENGTH characters: off by default, so a normal deployment has no way to install anything but the
+   * isolation policy. See experiment-install.ts for the bounds and the restore guarantees.
+   */
+  private readonly experiment: ExperimentInstaller | null;
+  private readonly experimentToken: Buffer | null;
   /** null until the first probe has finished, so the first probe is never refused for spacing. */
   private lastFlowProbeMonoNs: bigint | null = null;
   /** xid → isolation rule id for the current OpenFlow session; reset on every 'ready'. */
@@ -827,6 +836,27 @@ export class ZodiacBridgeServer {
       nowMonoNs: () => process.hrtime.bigint(),
       intervalMs: ISOLATION_RECHECK_INTERVAL_MS,
     });
+    const experimentToken = process.env['ZODIAC_EXPERIMENT_TOKEN'] ?? '';
+    if (process.env['ZODIAC_EXPERIMENT_ENDPOINTS'] === '1' && experimentToken.length >= EXPERIMENT_TOKEN_MIN_LENGTH) {
+      this.experimentToken = Buffer.from(experimentToken, 'utf-8');
+      this.experiment = new ExperimentInstaller({
+        sendFlowMod: (o) => this.controller.openFlow.sendFlowModOptions(o),
+        sendTableMissDrop: () => this.controller.openFlow.sendTableMissRule(0, 'DROP'),
+        readFlowStats: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
+        isSessionEstablished: () => this.controller.openFlow.metrics.state === 'ESTABLISHED',
+        gate: this.flowReadLock,
+        isolationPolicy: () => buildPort1IsolationPolicy(),
+        nowMs: () => Date.now(),
+        sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+        setTimer: (fn, ms) => setTimeout(fn, ms),
+        clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+        log: (line) => console.log(`[+] [Bridge Server] ${line}`),
+      });
+      console.warn('[!] [Bridge Server] Experiment install endpoints ENABLED (ZODIAC_EXPERIMENT_ENDPOINTS=1): arbitrary pre-verified rule sets can be installed for bounded periods.');
+    } else {
+      this.experimentToken = null;
+      this.experiment = null;
+    }
     this.switchIp = switchIp ?? process.env['ZODIAC_SWITCH_IP'] ?? '127.0.0.1';
     this.controllerIp = controllerIp ?? process.env['SDN_CONTROLLER_IP'] ?? '0.0.0.0';
     this.cloudRelayUrl = cloudRelayUrl ?? process.env['ZODIAC_CLOUD_RELAY_URL'];
@@ -893,6 +923,7 @@ export class ZodiacBridgeServer {
 
     // Auto-install baseline flow rules on switch connection
     this.controller.openFlow.on('ready', () => {
+      this.experiment?.sessionReset(); // a new session gets the isolation policy below; forget any experiment and its time limit
       // Council Invariant 3 (Fail-Closed) & CCIE Invariant NET-001 (CoPP):
       // Table-miss → DROP: Unmatched packets drop in switch hardware by default.
       // Punting unmatched traffic to CONTROLLER without rate limiting risks overwhelming
@@ -1298,6 +1329,7 @@ export class ZodiacBridgeServer {
 
   public async stop(): Promise<void> {
     this.isolationRechecker.stop();
+    this.experiment?.dispose();
     if (this.quarantineSweepTimer) {
       clearInterval(this.quarantineSweepTimer);
       this.quarantineSweepTimer = null;
@@ -2042,6 +2074,88 @@ export class ZodiacBridgeServer {
         port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
         timestamp: Date.now(),
       }));
+      return;
+    }
+
+    // API: /api/experiment/{install,restore,state} (RQ4 conformance runs; see experiment-install.ts).
+    // 404 unless ZODIAC_EXPERIMENT_ENDPOINTS=1 and ZODIAC_EXPERIMENT_TOKEN is set. Otherwise it needs BOTH a LAN operator peer and the
+    // token in the x-experiment-token header (constant-time compare): the LAN trust above is far too broad for a route that rewrites
+    // the data plane. The caller verifies the intent (A11) before it asks for an install; this layer re-checks bounds, hairpin, A5, A6, A7.
+    if (url.pathname.startsWith('/api/experiment/')) {
+      res.setHeader('Content-Type', 'application/json');
+      const experiment = this.experiment;
+      const token = this.experimentToken;
+      if (experiment === null || token === null) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Experiment endpoints are not enabled on this bridge.' }));
+        return;
+      }
+      const presented = req.headers['x-experiment-token'];
+      const presentedBuf = Buffer.from(typeof presented === 'string' ? presented : '', 'utf-8');
+      const tokenOk = presentedBuf.length === token.length && timingSafeEqual(presentedBuf, token);
+      if (!isLanOperator(req) || !tokenOk) {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: 'Unauthorized: operator access and the experiment token are required.' }));
+        return;
+      }
+      if (url.pathname === '/api/experiment/state' && req.method === 'GET') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(experiment.state()));
+        return;
+      }
+      if (url.pathname === '/api/experiment/restore' && req.method === 'POST') {
+        try {
+          const report = await experiment.restore();
+          res.statusCode = report.ok ? 200 : 502;
+          res.end(JSON.stringify(report));
+        } catch (err: unknown) {
+          res.statusCode = 409;
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+        return;
+      }
+      if (url.pathname === '/api/experiment/install' && req.method === 'POST') {
+        const chunks: Buffer[] = [];
+        let received = 0;
+        let tooLarge = false;
+        try {
+          await new Promise<void>((resolve, reject) => {
+            req.setTimeout(5000, () => reject(new Error('request body timed out')));
+            req.on('error', reject);
+            req.on('data', (c: Buffer) => {
+              received += c.length;
+              if (tooLarge) return; // keep draining without storing: the 413 below is sent first, then the socket is closed
+              if (received > EXPERIMENT_MAX_BODY_BYTES) { tooLarge = true; resolve(); return; }
+              chunks.push(c);
+            });
+            req.on('end', () => resolve());
+          });
+        } catch (err: unknown) {
+          if (!res.headersSent) { res.statusCode = 400; res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) })); }
+          return;
+        }
+        if (tooLarge) {
+          res.statusCode = 413;
+          res.setHeader('Connection', 'close');
+          res.end(JSON.stringify({ error: `body larger than ${EXPERIMENT_MAX_BODY_BYTES} bytes` }), () => req.destroy());
+          return;
+        }
+        let raw: unknown;
+        try { raw = JSON.parse(Buffer.concat(chunks).toString('utf-8')); } catch { res.statusCode = 400; res.end(JSON.stringify({ error: 'body is not valid JSON' })); return; }
+        const parsed = parseExperimentRequest(raw);
+        if (!parsed.ok) { res.statusCode = 422; res.end(JSON.stringify({ refused: true, errors: parsed.errors })); return; }
+        try {
+          const report = await experiment.install(parsed.request);
+          res.statusCode = report.ok ? 200 : 502;
+          res.end(JSON.stringify(report));
+        } catch (err: unknown) {
+          res.statusCode = 409;
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+        return;
+      }
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: 'Unknown experiment route.' }));
       return;
     }
 

@@ -1,0 +1,243 @@
+/**
+ * experiment-install.test.ts
+ * Invariant tests for the bounded experiment install path (src/sdn/experiment-install.ts).
+ *
+ * IMPORTANT (Invariant 6): these tests drive a FAKE switch that models wipe, table-miss and add. They show the installer's
+ * logic (bounds, ordering, readback judgement, restore on failure and on the time limit). They say nothing about how the
+ * Zodiac FX firmware treats a wildcard delete or hard timeouts: that is measured on the live switch, not here.
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  parseExperimentRequest, ExperimentInstaller, EXPERIMENT_MAX_RULES, EXPERIMENT_TTL_DEFAULT_SECONDS, EXPERIMENT_SWITCH_EXPIRY_MARGIN_SECONDS,
+  type InstallerDeps, type ExperimentRequest,
+} from '../../src/sdn/experiment-install.js';
+import { FlowModCommand, type FlowModOptions } from '../../src/sdn/openflow-types.js';
+import { buildPort1IsolationPolicy } from '../../src/sdn/port1-isolation.js';
+import type { FlowStatsEntry } from '../../src/sdn/dataplane-benchmark.js';
+
+const rule = (id: string, priority: number, outputPorts: number[], match: Record<string, unknown> = {}) => ({ id, priority, outputPorts, match });
+const valid = () => ({
+  label: 'fixture',
+  rules: [
+    rule('arp', 100, [2], { inPort: 1, etherType: 2054 }),
+    rule('ip', 100, [2], { inPort: 1, etherType: 2048, srcIp: '10.0.2.0', srcIpPrefixLen: 24, dstIp: '10.0.2.0', dstIpPrefixLen: 24 }),
+  ],
+});
+const errorsOf = (raw: unknown): string[] => {
+  const r = parseExperimentRequest(raw);
+  if (r.ok) throw new Error('expected a refusal');
+  return [...r.errors];
+};
+
+describe('parseExperimentRequest', () => {
+  it('accepts a small valid set and gives every rule a switch-side hard timeout of ttl + margin', () => {
+    const r = parseExperimentRequest(valid());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.request.rules).toHaveLength(2);
+    expect(r.request.ttlSeconds).toBe(EXPERIMENT_TTL_DEFAULT_SECONDS);
+    for (const x of r.request.rules) {
+      expect(x.flowMod.command).toBe(FlowModCommand.OFPFC_ADD);
+      expect(x.flowMod.hardTimeout).toBe(EXPERIMENT_TTL_DEFAULT_SECONDS + EXPERIMENT_SWITCH_EXPIRY_MARGIN_SECONDS);
+    }
+  });
+
+  it('refuses a body that is not an object, and an empty or oversized rule list', () => {
+    expect(errorsOf('x')[0]).toMatch(/JSON object/);
+    expect(errorsOf({ rules: [] })[0]).toMatch(/1 to 100/);
+    const many = Array.from({ length: EXPERIMENT_MAX_RULES + 1 }, (_, i) => rule(`r${i}`, 10 + i, [2], { inPort: 1, etherType: 2048, srcIp: `10.0.${i % 200}.1` }));
+    expect(errorsOf({ rules: many })[0]).toMatch(/1 to 100/);
+  });
+
+  it('refuses a bad time limit', () => {
+    expect(errorsOf({ ...valid(), ttlSeconds: 5 }).join()).toMatch(/ttlSeconds/);
+    expect(errorsOf({ ...valid(), ttlSeconds: 301 }).join()).toMatch(/ttlSeconds/);
+    expect(errorsOf({ ...valid(), ttlSeconds: 'x' }).join()).toMatch(/ttlSeconds/);
+  });
+
+  it('refuses bad ids, duplicate ids, and priorities that collide with the table-miss or quarantine', () => {
+    expect(errorsOf({ rules: [rule('has space', 10, [2])] }).join()).toMatch(/id must be/);
+    expect(errorsOf({ rules: [rule('a', 10, [2], { inPort: 1 }), rule('a', 11, [2], { inPort: 2 })] }).join()).toMatch(/duplicate id/);
+    expect(errorsOf({ rules: [rule('a', 0, [2])] }).join()).toMatch(/priority/);
+    expect(errorsOf({ rules: [rule('a', 65535, [2])] }).join()).toMatch(/priority/);
+  });
+
+  it('refuses outputs to port 4 (the controller link), non-distinct ports, and non-integers', () => {
+    expect(errorsOf({ rules: [rule('a', 10, [4], { inPort: 1 })] }).join()).toMatch(/outputPorts/);
+    expect(errorsOf({ rules: [rule('a', 10, [2, 2], { inPort: 1 })] }).join()).toMatch(/outputPorts/);
+    expect(errorsOf({ rules: [rule('a', 10, [2.5], { inPort: 1 })] }).join()).toMatch(/outputPorts/);
+  });
+
+  it('refuses unknown match fields, an IP without eth_type 2048, a prefix without its address, and bad addresses', () => {
+    expect(errorsOf({ rules: [rule('a', 10, [2], { vlan: 5 })] }).join()).toMatch(/unknown match/);
+    expect(errorsOf({ rules: [rule('a', 10, [2], { srcIp: '10.0.2.1' })] }).join()).toMatch(/etherType 2048/);
+    expect(errorsOf({ rules: [rule('a', 10, [2], { etherType: 2048, srcIpPrefixLen: 24 })] }).join()).toMatch(/without srcIp/);
+    expect(errorsOf({ rules: [rule('a', 10, [2], { etherType: 2048, srcIp: '10.0.2.300' })] }).join()).toMatch(/dotted IPv4/);
+    expect(errorsOf({ rules: [rule('a', 10, [2], { etherType: 2048, srcIp: '10.0.2.1', srcIpPrefixLen: 33 })] }).join()).toMatch(/srcIpPrefixLen/);
+  });
+
+  it('refuses a hairpin (output to the ingress port)', () => {
+    expect(errorsOf({ rules: [rule('h', 10, [1, 2], { inPort: 1 })] }).join()).toMatch(/hairpin/);
+  });
+
+  it('refuses a shadowed rule (A5) and an equal-priority conflict (A6)', () => {
+    const shadow = [rule('wide', 100, [2], { inPort: 1 }), rule('narrow', 50, [3], { inPort: 1, etherType: 2054 })];
+    expect(errorsOf({ rules: shadow }).join()).toMatch(/A5/);
+    const conflict = [rule('x', 100, [2], { inPort: 1, etherType: 2054 }), rule('y', 100, [3], { inPort: 1, etherType: 2054, srcMac: 'aa:bb:cc:dd:ee:ff' })];
+    // Same priority, overlapping matches, different outputs.
+    expect(errorsOf({ rules: conflict }).join()).toMatch(/A6|A5/);
+  });
+});
+
+// ─── A fake switch ───────────────────────────────────────────────────────────
+
+interface FakeOptions {
+  /** ids (by index into the last install) the switch silently ignores, to model a rejected or lost FlowMod */
+  dropAdds?: ReadonlySet<number>;
+  established?: boolean;
+  gateBusy?: boolean;
+  /** if true the wildcard delete does nothing (models firmware that ignores it) */
+  ignoreWipe?: boolean;
+}
+
+function maskFor(len: number | undefined): string | undefined {
+  if (len === undefined || len === 32) return undefined;
+  const m = (0xffffffff << (32 - len)) >>> 0;
+  return [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].join('.');
+}
+
+function makeFake(opts: FakeOptions = {}) {
+  let table: FlowStatsEntry[] = [];
+  const sent: FlowModOptions[] = [];
+  const timers: Array<{ fn: () => void; ms: number; live: boolean }> = [];
+  let addIndex = 0;
+  let restores = 0;
+  let gateHeld = opts.gateBusy === true;
+  const missEntry: FlowStatsEntry = { tableId: 0, priority: 0, packetCount: 0n, byteCount: 0n };
+  const deps: InstallerDeps = {
+    sendFlowMod(o) {
+      sent.push(o);
+      if (o.command === FlowModCommand.OFPFC_DELETE) { if (opts.ignoreWipe !== true) table = []; return sent.length; }
+      const idx = addIndex++;
+      if (opts.dropAdds?.has(idx)) return sent.length;
+      const m = o.match ?? {};
+      const e: Record<string, unknown> = { tableId: 0, priority: o.priority, packetCount: 0n, byteCount: 0n };
+      if (m.inPort !== undefined) e['inPort'] = m.inPort;
+      if (m.etherType !== undefined) e['ethType'] = m.etherType;
+      if (m.srcIp !== undefined) { e['srcIp'] = m.srcIp; const k = maskFor(m.srcIpPrefixLen); if (k) e['srcMask'] = k; }
+      if (m.dstIp !== undefined) { e['dstIp'] = m.dstIp; const k = maskFor(m.dstIpPrefixLen); if (k) e['dstMask'] = k; }
+      table.push(e as unknown as FlowStatsEntry);
+      return sent.length;
+    },
+    sendTableMissDrop() { sent.push({ command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} }); table.push(missEntry); },
+    async readFlowStats() { return [...table]; },
+    isSessionEstablished: () => opts.established !== false,
+    gate: { tryAcquire: () => { if (gateHeld) return false; gateHeld = true; return true; }, release: () => { gateHeld = opts.gateBusy === true; }, get isHeld() { return gateHeld; } },
+    isolationPolicy: () => buildPort1IsolationPolicy(),
+    nowMs: () => 1_000_000,
+    sleep: async () => undefined,
+    setTimer(fn, ms) { const t = { fn, ms, live: true }; timers.push(t); return t; },
+    clearTimer(h) { (h as { live: boolean }).live = false; },
+    onRestored() { restores++; },
+  };
+  return { deps, sent, timers, get table() { return table; }, get restores() { return restores; } };
+}
+
+function request(): ExperimentRequest {
+  const r = parseExperimentRequest(valid());
+  if (!r.ok) throw new Error(r.errors.join('; '));
+  return r.request;
+}
+
+describe('ExperimentInstaller', () => {
+  it('wipes, re-installs the table-miss drop, adds the rules in order, and reports a verified install', async () => {
+    const f = makeFake();
+    const inst = new ExperimentInstaller(f.deps);
+    const report = await inst.install(request());
+    expect(report.ok).toBe(true);
+    expect(report.confirmed).toEqual(['arp', 'ip']);
+    expect(report.extraEntries).toBe(0);
+    expect(f.sent[0]!.command).toBe(FlowModCommand.OFPFC_DELETE);
+    expect(f.sent[0]!.match).toEqual({});
+    expect(f.sent[1]!.priority).toBe(0); // the table-miss, straight after the wipe
+    expect(f.sent.slice(2).map((s) => s.priority)).toEqual([100, 100]);
+    expect(inst.state().phase).toBe('active');
+    expect(inst.state().activeRuleIds).toEqual(['arp', 'ip']);
+    expect(f.timers).toHaveLength(1);
+    expect(f.timers[0]!.ms).toBe(EXPERIMENT_TTL_DEFAULT_SECONDS * 1000);
+  });
+
+  it('puts the isolation policy back when the time limit expires', async () => {
+    const f = makeFake();
+    const inst = new ExperimentInstaller(f.deps);
+    await inst.install(request());
+    f.timers[0]!.fn();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(inst.state().phase).toBe('idle');
+    expect(f.restores).toBe(1);
+    expect(f.table.filter((e) => e.priority !== 0)).toHaveLength(buildPort1IsolationPolicy().length);
+    expect(inst.state().last?.action).toBe('restore');
+    expect(inst.state().last?.ok).toBe(true);
+  });
+
+  it('restores at once and reports failure when a rule is missing from the readback', async () => {
+    const f = makeFake({ dropAdds: new Set([1]) }); // the second experimental ADD is lost
+    const inst = new ExperimentInstaller(f.deps);
+    const report = await inst.install(request());
+    expect(report.ok).toBe(false);
+    expect(report.action).toBe('install');
+    expect(report.confirmed).toEqual(['arp']);
+    expect(inst.state().phase).toBe('idle');
+    // after the failed install the isolation policy is what the switch holds (the restore's adds are indices 2..7, none dropped)
+    expect(f.table.filter((e) => e.priority !== 0)).toHaveLength(buildPort1IsolationPolicy().length);
+    expect(f.restores).toBe(1);
+  });
+
+  it('treats leftover entries the wipe did not remove as a failed install', async () => {
+    const f = makeFake({ ignoreWipe: true });
+    const inst = new ExperimentInstaller(f.deps);
+    await inst.restore(); // the table now holds the isolation policy and cannot be wiped
+    const report = await inst.install(request());
+    expect(report.ok).toBe(false);
+    expect(report.extraEntries).toBeGreaterThan(0);
+  });
+
+  it('refuses to start without a session, and leaves nothing stuck', async () => {
+    const f = makeFake({ established: false });
+    const inst = new ExperimentInstaller(f.deps);
+    await expect(inst.install(request())).rejects.toThrow(/no OpenFlow session/);
+    expect(inst.state().phase).toBe('idle');
+    expect(f.sent).toHaveLength(0);
+  });
+
+  it('refuses a second install while one is active, and allows it after a restore', async () => {
+    const f = makeFake();
+    const inst = new ExperimentInstaller(f.deps);
+    await inst.install(request());
+    await expect(inst.install(request())).rejects.toThrow(/already active/);
+    const back = await inst.restore();
+    expect(back.ok).toBe(true);
+    expect(f.timers[0]!.live).toBe(false); // the time-limit timer was cancelled by the restore
+    const again = await inst.install(request());
+    expect(again.ok).toBe(true);
+  });
+
+  it('forgets an active experiment and cancels its timer when the switch session is re-established', async () => {
+    const f = makeFake();
+    const inst = new ExperimentInstaller(f.deps);
+    await inst.install(request());
+    inst.sessionReset();
+    expect(inst.state().phase).toBe('idle');
+    expect(inst.state().activeRuleIds).toEqual([]);
+    expect(f.timers[0]!.live).toBe(false);
+  });
+
+  it('fails closed when the readback lock never frees: no verdict is invented', async () => {
+    const f = makeFake({ gateBusy: true });
+    const inst = new ExperimentInstaller(f.deps);
+    await expect(inst.install(request())).rejects.toThrow(/read lock/);
+    expect(inst.state().phase).toBe('idle');
+  });
+});
