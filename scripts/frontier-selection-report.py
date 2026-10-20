@@ -95,8 +95,16 @@ def main():
     rows = []
     for m, by in pilot.items():
         adm, n, tf, cost, tok, ref = totals(by)
+        # First element is for display only; the ranking below uses the integer counters.
         rows.append((cost / 1e6 / adm if adm else float('inf'), m, by, adm, n, tf, cost, tok, ref))
-    rows.sort(key=lambda r: r[0])
+    # Rank by cost per admissible trial using integer cross-multiplication (cost_a/adm_a < cost_b/adm_b); models with no admissible trial sort last.
+    import functools
+    def _cmp(a, b):
+        if a[3] == 0 or b[3] == 0:
+            return (a[3] == 0) - (b[3] == 0)
+        l, r = a[6] * b[3], b[6] * a[3]
+        return (l > r) - (l < r)
+    rows.sort(key=functools.cmp_to_key(_cmp))
     now = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d %H:%M ET')
 
     L = []
@@ -174,7 +182,7 @@ def main():
     for m, by in sorted(stage2.items(), key=lambda kv: totals(kv[1])[3] / max(1, totals(kv[1])[0])):
         adm, n, tf, cost, tok, ref = totals(by)
         cells = [f"{by[k]['counts']['ADMISSIBLE']}/{by[k]['trialsRun']}" if k in by else '-' for k, _ in INTENTS]
-        viable = n == 40 and adm / 40 >= 0.9 and all(s['counts']['ADMISSIBLE'] / s['trialsRun'] >= 0.7 for s in by.values())
+        viable = n == 40 and adm * 10 >= 9 * 40 and all(s['counts']['ADMISSIBLE'] * 10 >= 7 * s['trialsRun'] for s in by.values())
         verdict = 'viable (cheapest; chosen)' if viable and m == 'claude-haiku-5-5' else ('viable' if viable else ('not viable' if n == 40 else 'incomplete'))
         w(f"| {m} | {' | '.join(cells)} | {adm}/{n}: {ci(adm, n)} | ${cost / 1e6:.4f} | ${cost / 1e6 / max(1, adm):.4f} | {verdict} |")
     w('')

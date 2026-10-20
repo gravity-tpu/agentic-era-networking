@@ -49,7 +49,7 @@ The survivor mutations the flows cannot see, by operator and rule: drop-rule p3-
 - **The readback cannot distinguish rules that differ only by MAC** (the flow-stats parser carries no MAC fields), so any MAC-only difference between a rule set and what the switch holds would be invisible to the install verdict; the wire flows are the check there, and none of these sets match on MACs.
 - **Port 1 egress is seen at the destination host, not on a wire tap**: the F4 and F5 listener counts were below the datagrams sent in some checks (the first packets wait while the lab router resolves the workload address); the check is "at least one arrived".
 - **Admissible is the verifier's verdict over modelled fields.** This run tests that model against hardware; it does not make an admissible set correct for its intent.
-- **Not tested here:** the switch-side hard timeout of an experimental rule (the case where the bridge dies mid-experiment). The bridge-side time limit and explicit restore were exercised on every set.
+- **Not tested here** (see also the 2026-10-16 "Still unmeasured" note in `.agents/network-context.md`, which this does not resolve): the switch-side hard timeout of an experimental rule (the case where the bridge dies mid-experiment). The bridge-side time limit and explicit restore were exercised on every set.
 
 ## Provenance
 

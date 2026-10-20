@@ -239,7 +239,7 @@ function observedPorts(flow: Flow, o: Observed): number[] {
   return ports.sort();
 }
 
-const sameSet = (a: readonly number[], b: readonly number[]): boolean => a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
+const sameSet = (a: readonly number[], b: readonly number[]): boolean => a.length === b.length && (() => { const sa = [...a].sort((x, y) => x - y); const sb = [...b].sort((x, y) => x - y); return sa.every((v, i) => v === sb[i]); })();
 
 // ─── Provenance ──────────────────────────────────────────────────────────────
 async function provenance(facts: HostFacts): Promise<Record<string, unknown>> {

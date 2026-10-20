@@ -19,7 +19,7 @@ interface Committed {
 }
 
 describe.each(BASELINE_TARGETS.map((t, i) => ({ t, i })))('committed baselines for $t.intent.id', ({ t, i }) => {
-  const file = i === 0 ? join(DIR, 'summary.json') : join(DIR, t.intent.id.replace('/', '_'), 'summary.json');
+  const file = i === 0 ? join(DIR, 'summary.json') : join(DIR, t.intent.id.replaceAll('/', '_'), 'summary.json');
   const committed = JSON.parse(readFileSync(file, 'utf-8')) as Committed;
 
   it('equal the regenerated result (gitCommit aside)', () => {

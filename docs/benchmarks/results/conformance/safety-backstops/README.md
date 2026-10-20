@@ -20,6 +20,7 @@ saved only their console output.
   unanswered and flushes its flow table when the session drops (fail-secure behaviour). That reading is **inferred from timing**: the firmware was not read for it.
 - So on this switch an experimental rule cannot outlive a dead or frozen bridge by more than about 5 seconds, and the data plane is dark (only whatever the
   switch holds after the flush) until the bridge reconnects and re-installs the isolation policy.
+- **Cross-reference:** the 2026-10-16 entry in [`.agents/network-context.md`](../../../../../.agents/network-context.md) ("Still unmeasured") already recorded that the firmware's own expiry was not separated from the bridge sweep; these tests did not separate it either. The firmware stores `hard_timeout` on the rule (it is read back), but self-expiry with no bridge running remains unmeasured.
 - **The switch-side hard timeout was not shown to work.** It never became the operative mechanism in these tests, so it remains a redundant backstop that has
   not been exercised. It would take a test that keeps the controller session alive and answering while the bridge's restore is blocked.
 
