@@ -40,7 +40,8 @@ const DATAGRAMS_PER_FLOW = 5;
 const DATAGRAM_SPACING_S = 0.2;
 const CAPTURE_SECONDS = 7;
 const FLOW_SETTLE_S = 1; // the time budgeted for the captures to start; the flow timing below assumes it
-const CAPTURE_START_POLLS = FLOW_SETTLE_S * 10 + 5; // polls of 100 ms: the budget plus 0.5 s of slack
+const CAPTURE_POLL_MS = 100;
+const CAPTURE_START_POLLS = (FLOW_SETTLE_S * 1000 + 500) / CAPTURE_POLL_MS; // the budget plus 0.5 s of slack
 const MAX_RULESETS = 100;
 const SSH_TIMEOUT_MS = 60_000;
 const UDP_TAG_BASE = 41_000;
@@ -169,8 +170,8 @@ async function runFlow(flow: Flow, tag: number, facts: HostFacts, evidenceDir: s
   // Wait until BOTH captures report they are listening (tcpdump prints "listening on" to stderr once the interface is open), instead of
   // assuming a fixed settle time. If either is not listening within the settle budget the flow is not run: an early datagram would be missed.
   const ready = (f: string): string => `grep -q 'listening on' /tmp/conf-${stamp}-${f}.err`;
-  const started = await ssh(JETSON, `${cap(O2_IF, 'O2')}; ${cap(O3_IF, 'O3')}; for i in $(seq 1 ${CAPTURE_START_POLLS}); do if ${ready('O2')} && ${ready('O3')}; then echo started; exit 0; fi; sleep 0.1; done; echo not-started`);
-  if (started.trim() !== 'started') throw new Error(`tcpdump was not listening on both taps within ${CAPTURE_START_POLLS * 100} ms; refusing to send the flow (${flow.id})`);
+  const started = await ssh(JETSON, `${cap(O2_IF, 'O2')}; ${cap(O3_IF, 'O3')}; for i in $(seq 1 ${CAPTURE_START_POLLS}); do if ${ready('O2')} && ${ready('O3')}; then echo started; exit 0; fi; sleep ${CAPTURE_POLL_MS / 1000}; done; echo not-started`);
+  if (started.trim() !== 'started') throw new Error(`tcpdump was not listening on both taps within ${CAPTURE_START_POLLS * CAPTURE_POLL_MS} ms; refusing to send the flow (${flow.id})`);
   let listener = 0;
   if (flow.kind === 'p2-udp') {
     const target = flow.target as Host;

@@ -313,9 +313,10 @@ async function main(): Promise<void> {
   let outputTotal = 0;
   let thoughtTotal = 0;
   let capHit = false;
+  const overCap = (): boolean => args.spend !== null && costUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT;
   let abandoned: { seed: number; turnsUsed: number } | null = null; // a trial stopped mid-way by the spend cap: not scored, its spend is counted
   for (let seed = 1; seed <= args.n; seed++) {
-    if (args.spend !== null && costUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT) { capHit = true; break; }
+    if (overCap()) { capHit = true; break; }
     const t0 = process.hrtime.bigint();
     let record: Record<string, unknown>;
     const messages: Array<{ role: string; content: string }> = [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }];
@@ -324,7 +325,7 @@ async function main(): Promise<void> {
     try {
       for (let turn = 1; turn <= maxTurns; turn++) {
         // Protocol B pays for up to MAX_TURNS turns per trial, so the cap is checked before every paid turn, not once per trial.
-        if (turn > 1 && args.spend !== null && costUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT) throw new SpendCapReached();
+        if (turn > 1 && overCap()) throw new SpendCapReached();
         let content: string;
         let usageFields: Record<string, unknown>;
         if (args.provider === 'gemini' || args.provider === 'anthropic') {

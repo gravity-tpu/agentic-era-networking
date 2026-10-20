@@ -13,11 +13,6 @@ def _jload(path):
         return json.load(fh)
 
 
-def _jsonl(path):
-    with open(path) as fh:
-        return [json.loads(line) for line in fh]
-
-
 def _write(path, text):
     with open(path, 'w') as fh:
         fh.write(text)

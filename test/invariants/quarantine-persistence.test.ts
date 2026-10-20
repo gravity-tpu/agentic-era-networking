@@ -169,6 +169,24 @@ describe('the bridge restores quarantines after a restart and a reconnect', () =
     expect(bridge.reinstallQuarantines()).toBe(1);
   });
 
+  it('the periodic retry re-sends only what is still pending, so a failed send is not left unblocked until the next reconnect', () => {
+    const controller = new ZodiacController();
+    const bridge = new ZodiacBridgeServer(controller);
+    bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' });
+    bridge.requestQuarantine({ targetIp: '10.0.2.51', reason: 'rate' });
+    const pushed: string[] = [];
+    let failFirst = true;
+    vi.spyOn(controller, 'pushRule').mockImplementation((rule) => {
+      if (failFirst && rule.srcCidr === '10.0.2.50/32') { failFirst = false; throw new Error('socket closed'); }
+      pushed.push(rule.srcCidr);
+    });
+    expect(bridge.reinstallQuarantines()).toBe(1); // .51 sent, .50 failed
+    pushed.length = 0;
+    expect(bridge.reinstallQuarantines(undefined, undefined, true)).toBe(1); // only the pending one
+    expect(pushed).toEqual(['10.0.2.50/32']);
+    expect(bridge.reinstallQuarantines(undefined, undefined, true)).toBe(0); // nothing left pending
+  });
+
   it('the switch-ready handler re-sends quarantines right after the table-miss and BEFORE any isolation allow-rule', async () => {
     const a = bridgeWithRecorder();
     a.bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate' });
