@@ -1,0 +1,4 @@
+01:47:38.596270 b8:27:eb:a2:ec:b0 > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.0.2.200 tell 10.0.2.50, length 46
+01:47:39.604014 b8:27:eb:a2:ec:b0 > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.0.2.200 tell 10.0.2.50, length 46
+01:47:40.628075 b8:27:eb:a2:ec:b0 > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.0.2.200 tell 10.0.2.50, length 46
+

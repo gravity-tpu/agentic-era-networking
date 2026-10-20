@@ -1,0 +1,23 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible port1-isolation/v1 protocol-a-port1-isolation_v1-claude-haiku-5-5 seed 11",
+ "rulesRequested": 5,
+ "entriesSeen": 6,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-arp-to-uplink",
+  "p1-intraseg-ipv4-to-uplink",
+  "p1-other-to-tap",
+  "uplink-arp-to-p1",
+  "uplink-ipv4-to-segment-to-p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "5/5 rules confirmed, 6 entries including the table-miss",
+ "atMs": 1792476074211
+}

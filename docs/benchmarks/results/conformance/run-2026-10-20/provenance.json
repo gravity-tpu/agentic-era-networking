@@ -1,0 +1,32 @@
+{
+ "origin": "physical_capture",
+ "switch": "Zodiac FX firmware 0.86 (ledger value; not re-read by this run)",
+ "bridgeRepo": [
+  "commit 685e01bc96bbd277f8fa372dfcef361f9ad0e20f",
+  "branch feat/experiment-install",
+  "dirty_files 0",
+  "dist_sha256 953da1205eebe54e4163f3082aea66e564f7014b80382e2e1f423d26aa41ce49",
+  "tcpdump tcpdump version 4.99.1",
+  "kernel 5.15.148-tegra"
+ ],
+ "harnessCommit": "aaa1e5de09d3e780b7c9f38f400eaffa1d89b9b5",
+ "harnessDirtyTrackedFiles": 0,
+ "observation": {
+  "O2": "enx9c69d39dd0a6 on the Jetson (Zodiac P3 tap; a copy chosen by the rules under test)",
+  "O3": "enx9c69d39ddcc0 on the Jetson (mirror of the Zodiac P2 link; independent of the rules under test)"
+ },
+ "hosts": {
+  "macs": {
+   "agentic-node-01": "b8:27:eb:a2:ec:b0",
+   "rpi-hailo": "98:fe:54:52:9d:85"
+  },
+  "macIp": "10.0.0.119",
+  "macMac": "f2:5b:dc:7d:21:d4",
+  "neighborOk": {
+   "agentic-node-01": true,
+   "rpi-hailo": true
+  }
+ },
+ "datagramsPerFlow": 5,
+ "startedAtEt": "10/20/2026, 1:16:32 AM ET"
+}

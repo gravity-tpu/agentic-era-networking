@@ -1,0 +1,24 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible tap-return-isolation/v1 protocol-a-tap-return-isolation_v1-claude-haiku-5-5 seed 2",
+ "rulesRequested": 6,
+ "entriesSeen": 7,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-intra-ipv4-to-uplink-and-tap",
+  "p1-arp-to-uplink-and-tap",
+  "p1-other-to-tap-only",
+  "tap-to-p1",
+  "p2-ipv4-to-segment",
+  "p2-arp-to-segment"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+ "atMs": 1792476667025
+}

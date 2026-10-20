@@ -1,0 +1,106 @@
+{
+ "label": "model-admissible quarantine-precedence/v1 protocol-a-quarantine-precedence_v1-claude-haiku-5-5 seed 6",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "quarantine-src-10.0.2.51-p1",
+   "priority": 300,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "quarantine-dst-10.0.2.51-p2",
+   "priority": 300,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "p1-intra-segment-ipv4-to-uplink",
+   "priority": 200,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-to-uplink",
+   "priority": 200,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-ipv4-to-tap",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048
+   }
+  },
+  {
+   "id": "p1-other-traffic-to-tap",
+   "priority": 50,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  }
+ ],
+ "meta": {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "source": "docs/benchmarks/results/agent-evaluation/frontier-full/protocol-a-quarantine-precedence_v1-claude-haiku-5-5",
+  "seed": 6,
+  "verdict": "ADMISSIBLE",
+  "installable": true,
+  "priorityClamped": false
+ }
+}
