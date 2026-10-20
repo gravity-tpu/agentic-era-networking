@@ -23,6 +23,13 @@
  *     --price-in-cents 75 --price-out-cents 375 --max-cents 50 --price-note "ai.google.dev pricing 2026-10-19" --out <dir>
  * Prices are integer US cents per 1M tokens. --thinking is `default` (model default), an integer budget (2.5 series), or
  * minimal|low|medium|high (3 series); it is recorded in the summary.
+ *
+ * Anthropic arm (--provider anthropic, official SDK, key from ANTHROPIC_API_KEY, same spend-cap rules): for Claude Fable 5.1
+ * thinking is always on, --thinking carries the effort level (default|low|medium|high|xhigh|max), and temperature, top-p and seed are
+ * not accepted by the model, so that arm cannot match the 0.2 / 0.95 / seeded setting of the others; see the function comment.
+ *   ANTHROPIC_API_KEY=... node --experimental-strip-types scripts/agent-eval.ts --provider anthropic --model claude-fable-5-1 \
+ *     --intent dns-confinement/v1 --n 3 --thinking low --num-predict 16000 --price-in-cents 1000 --price-out-cents 5000 \
+ *     --max-cents 100 --price-note "<source and date>" --out <dir>
  */
 
 import fs from 'node:fs/promises';
@@ -50,7 +57,9 @@ const TOP_P = 0.95;
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const MAX_SPEND_CENTS = 10_000; // upper bound on --max-cents so a typo cannot authorize a large run
 const COST_UNITS_PER_CENT = 1_000_000n; // cost is kept as (tokens x cents per 1M tokens); 1e6 units = 1 cent
-const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const;
+const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const ANTHROPIC_BASE = 'https://api.anthropic.com';
+const ANTHROPIC_EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 const SYSTEM_PROMPT = `You write flow rules for a 4-port OpenFlow 1.3 switch (Zodiac FX). Reply with ONE JSON array of rules and nothing else.
 Each rule is an object with exactly these fields:
@@ -71,7 +80,7 @@ Rules:
 interface Spend { priceInCents: number; priceOutCents: number; maxCents: number; note: string }
 interface Args {
   intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number; protocol: 'A' | 'B';
-  provider: 'ollama' | 'gemini'; thinking: string; spend: Spend | null;
+  provider: 'ollama' | 'gemini' | 'anthropic'; thinking: string; spend: Spend | null;
 }
 
 function parseArgs(argv: readonly string[]): Args {
@@ -88,13 +97,16 @@ function parseArgs(argv: readonly string[]): Args {
   const protocol = get('--protocol') ?? 'A';
   if (protocol !== 'A' && protocol !== 'B') throw new Error('--protocol must be A or B');
   const provider = get('--provider') ?? 'ollama';
-  if (provider !== 'ollama' && provider !== 'gemini') throw new Error('--provider must be ollama or gemini');
+  if (provider !== 'ollama' && provider !== 'gemini' && provider !== 'anthropic') throw new Error('--provider must be ollama, gemini or anthropic');
   const thinking = get('--thinking') ?? 'default';
   if (thinking !== 'default' && !/^\d+$/.test(thinking) && !(THINKING_LEVELS as readonly string[]).includes(thinking)) {
     throw new Error(`--thinking must be default, an integer budget, or one of ${THINKING_LEVELS.join('|')}`);
   }
+  if (provider === 'anthropic' && thinking !== 'default' && !ANTHROPIC_EFFORTS.includes(thinking)) {
+    throw new Error(`for --provider anthropic, --thinking is the effort level: default or one of ${ANTHROPIC_EFFORTS.join('|')}`);
+  }
   let spend: Spend | null = null;
-  if (provider === 'gemini') {
+  if (provider === 'gemini' || provider === 'anthropic') {
     const cents = (k: string): number => {
       const v = Number(need(k));
       if (!Number.isInteger(v) || v < 0) throw new Error(`${k} must be a non-negative integer (US cents)`);
@@ -104,7 +116,7 @@ function parseArgs(argv: readonly string[]): Args {
     if (maxCents < 1 || maxCents > MAX_SPEND_CENTS) throw new Error(`--max-cents must be an integer 1 to ${MAX_SPEND_CENTS}`);
     spend = { priceInCents: cents('--price-in-cents'), priceOutCents: cents('--price-out-cents'), maxCents, note: need('--price-note') };
   }
-  return { protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend };
+  return { protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -229,6 +241,44 @@ async function geminiChat(model: string, messages: ReadonlyArray<{ role: string;
   return { content, promptTokens: usage.promptTokenCount ?? 0, outputTokens: usage.candidatesTokenCount ?? 0, thoughtTokens: usage.thoughtsTokenCount ?? 0, finishReason };
 }
 
+/**
+ * The Anthropic arm, through the official SDK (dynamic import so the Ollama and Gemini paths never need it). The key comes from the
+ * ANTHROPIC_API_KEY environment variable only. Claude Fable 5.1 differences that matter for parity with the other arms: thinking is
+ * always on (the `thinking` parameter is omitted; `output_config.effort` is the only depth control and --thinking carries it);
+ * `temperature`, `top_p` and any seed are not accepted (sending them is a 400), so the recorded sampling for this arm is the model's
+ * own; a safety classifier may end a turn with stop_reason "refusal" (recorded as the turn's doneReason, with no text, so the trial
+ * scores ERR_SYNTAX and the refusal is visible in the record). Thinking tokens are billed as output tokens and are inside output_tokens.
+ */
+async function anthropicClient(): Promise<InstanceType<typeof import('@anthropic-ai/sdk').default>> {
+  const key = process.env['ANTHROPIC_API_KEY'];
+  if (key === undefined || key === '') throw new Error('ANTHROPIC_API_KEY is not set in the environment');
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  return new Anthropic({ apiKey: key, maxRetries: 2 });
+}
+
+async function anthropicModelInfo(model: string): Promise<{ version: string; displayName: string }> {
+  const client = await anthropicClient();
+  const m = await client.models.retrieve(model);
+  return { version: m.id, displayName: m.display_name };
+}
+
+async function anthropicChat(model: string, messages: ReadonlyArray<{ role: string; content: string }>, opts: { numPredict: number; thinking: string }): Promise<GeminiTurn> {
+  const client = await anthropicClient();
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+  const stream = client.messages.stream({
+    model,
+    max_tokens: opts.numPredict,
+    system,
+    messages: messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const), content: m.content })),
+    ...(opts.thinking === 'default' ? {} : { output_config: { effort: opts.thinking as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } }),
+  }, { timeout: TURN_TIMEOUT_MS });
+  const final = await stream.finalMessage();
+  let content = '';
+  for (const block of final.content) if (block.type === 'text') content += block.text;
+  // output_tokens includes the thinking tokens (billed as output); the split is not reported separately by the API
+  return { content, promptTokens: final.usage.input_tokens, outputTokens: final.usage.output_tokens, thoughtTokens: 0, finishReason: final.stop_reason };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (git('status', '--porcelain', '--untracked-files=no') !== '') throw new Error('working tree has uncommitted changes to tracked files; commit first (plan section 8)');
@@ -236,8 +286,8 @@ async function main(): Promise<void> {
   const userPrompt = `Intent: ${spec.description}\nWrite the rule set that implements this intent.`;
   const promptHash = crypto.createHash('sha256').update(SYSTEM_PROMPT + '\n---\n' + userPrompt).digest('hex');
   let model: { digest: string };
-  if (args.provider === 'gemini') {
-    const info = await geminiModelInfo(args.model);
+  if (args.provider === 'gemini' || args.provider === 'anthropic') {
+    const info = args.provider === 'gemini' ? await geminiModelInfo(args.model) : await anthropicModelInfo(args.model);
     model = { digest: `${info.displayName} ${info.version}` };
   } else {
     const tags = (await ollama(args.host, '/api/tags'))['models'] as Array<{ name: string; digest: string }>;
@@ -266,9 +316,11 @@ async function main(): Promise<void> {
       for (let turn = 1; turn <= maxTurns; turn++) {
         let content: string;
         let usageFields: Record<string, unknown>;
-        if (args.provider === 'gemini') {
-          if (args.spend === null) throw new Error('spend limits missing for the gemini provider');
-          const g = await geminiChat(args.model, messages, { seed, numPredict: args.numPredict, thinking: args.thinking });
+        if (args.provider === 'gemini' || args.provider === 'anthropic') {
+          if (args.spend === null) throw new Error(`spend limits missing for the ${args.provider} provider`);
+          const g = args.provider === 'gemini'
+            ? await geminiChat(args.model, messages, { seed, numPredict: args.numPredict, thinking: args.thinking })
+            : await anthropicChat(args.model, messages, { numPredict: args.numPredict, thinking: args.thinking });
           content = g.content;
           promptTotal += g.promptTokens;
           outputTotal += g.outputTokens;
@@ -308,8 +360,8 @@ async function main(): Promise<void> {
     trials: args.n, trialsRun: lines.length, temperature: TEMPERATURE, topP: TOP_P, seeds: `1..${args.n}`, numPredict: args.numPredict, think: args.think,
     promptSha256: promptHash, gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
-    ...(args.provider === 'gemini' && args.spend !== null ? {
-      provider: 'gemini', thinking: args.thinking, stoppedBySpendCap: capHit,
+    ...((args.provider === 'gemini' || args.provider === 'anthropic') && args.spend !== null ? {
+      provider: args.provider, thinking: args.thinking, stoppedBySpendCap: capHit,
       usage: { promptTokens: promptTotal, outputTokens: outputTotal, thoughtTokens: thoughtTotal },
       pricing: { inCentsPer1M: args.spend.priceInCents, outCentsPer1M: args.spend.priceOutCents, note: args.spend.note },
       costMicroUsd: (costUnits / 100n).toString(), // 1e6 cost units = 1 cent = 10,000 micro-USD, so micro-USD = units / 100
