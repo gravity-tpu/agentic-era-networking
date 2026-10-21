@@ -51,6 +51,9 @@ jobs:
 
   review:
     name: AI Code Review
+    # Dependabot-triggered runs get the Dependabot secret store, not the Actions one, so no model API key is present and every reviewer in the chain fails.
+    # Dependency bumps are still gated by the Verify job (types, build, tests).
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -80,6 +83,9 @@ jobs:
 
   ccie-review:
     name: Network Engineering Review
+    # Dependabot-triggered runs get the Dependabot secret store, not the Actions one, so no model API key is present and every reviewer in the chain fails.
+    # Dependency bumps are still gated by the Verify job (types, build, tests).
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
