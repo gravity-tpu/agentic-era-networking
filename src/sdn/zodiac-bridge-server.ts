@@ -72,7 +72,10 @@ import {
 } from '../db/local-telemetry-db.js';
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
-import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback } from './port1-isolation.js';
+import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
+import { admitInstall, type GateResult } from './install-gate.js';
+import { PORT1_ISOLATION_INTENT } from './intents.js';
+import { FlowModCommand } from './openflow-types.js';
 import os from 'node:os';
 import { readFlowStats, readFlowStatsRaw } from './flow-readback.js';
 import {
@@ -598,6 +601,25 @@ export class ZodiacBridgeServer {
     return ips;
   }
 
+  /** Forwarding rules installed through /api/sdn/allow in this switch session, as the rules the switch holds (cleared when the table is rewritten). */
+  private readonly allowRuleModel: Map<string, IsolationRule> = new Map();
+
+  /** The table the switch holds now, as rules: the isolation policy, the allow rules, and the active quarantine DROPs. */
+  private tableModel(): IsolationRule[] {
+    const quarantines: IsolationRule[] = [...this.quarantineExpiry.entries()].map(([id, e]) => ({
+      id,
+      flowMod: { command: FlowModCommand.OFPFC_ADD, priority: e.priority, outputPorts: [], match: { etherType: 0x0800, srcIp: e.ip, srcIpPrefixLen: 32 } },
+    }));
+    return [...buildPort1IsolationPolicy(), ...this.allowRuleModel.values(), ...quarantines];
+  }
+
+  /** The pre-install gate (install-gate.ts) over the table as it would be after adding `proposed`. A refusal is logged with its properties. */
+  private gateInstall(proposed: readonly IsolationRule[], what: string): GateResult {
+    const result = admitInstall({ current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT });
+    if (!result.admitted) console.warn(`[!] [Install gate] REFUSED ${what}: ${result.violations.map((v) => `${v.property} (${v.ruleIds.join(',')})`).join('; ')}`);
+    return result;
+  }
+
   /**
    * Installs a time-limited quarantine DROP if, and only if, it is inside the quarantine envelope (see
    * quarantine-envelope.ts): one source in the workload segment, not protected, under the cap, not already quarantined.
@@ -648,6 +670,19 @@ export class ZodiacBridgeServer {
           requests: proposal.requests,
           message: 'Inside the quarantine envelope but the bridge is in propose mode: nothing was installed. A person can approve it.',
         },
+      };
+    }
+
+    // The envelope bounds WHO may be quarantined; the gate checks the resulting TABLE (A2, A4, A5, A6, A7, A11) before anything is sent.
+    const quarantineRule: IsolationRule = {
+      id: 'quarantine-pending',
+      flowMod: { command: FlowModCommand.OFPFC_ADD, priority: options.priority ?? 65535, outputPorts: [], match: { etherType: 0x0800, srcIp: options.targetIp, srcIpPrefixLen: 32 } },
+    };
+    const gate = this.gateInstall([quarantineRule], `quarantine of ${options.targetIp}`);
+    if (!gate.admitted) {
+      return {
+        status: 409,
+        body: { ok: false, quarantined: false, code: 'gate_refused', error: 'the resulting flow table failed the pre-install checks', violations: gate.violations },
       };
     }
 
@@ -920,7 +955,7 @@ export class ZodiacBridgeServer {
         })(),
         isolationPolicy: () => buildPort1IsolationPolicy(),
         activeQuarantines: () => this.quarantineExpiry.size,
-        afterRestore: () => { this.reinstallQuarantines(); },
+        afterRestore: () => { this.allowRuleModel.clear(); this.reinstallQuarantines(); }, // the restore rewrote the table: allow rules are gone
         nowMs: () => Date.now(),
         sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
         setTimer: (fn, ms) => setTimeout(fn, ms),
@@ -1023,6 +1058,16 @@ export class ZodiacBridgeServer {
         console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);
         return;
       }
+      // The verifier above covers A1 to A3; the install gate adds A2 (wildcards), A5, A6, A7 and A11 over the same table, so a policy that
+      // regresses on any of them is never sent. Same fail-closed outcome: the data plane stays at the table-miss DROP.
+      const startupGate = admitInstall({ current: [], proposed: isolationPolicy, intent: PORT1_ISOLATION_INTENT });
+      if (!startupGate.admitted) {
+        const lines = startupGate.violations.map((v) => `${v.property}: ${v.detail}`);
+        this.isolationStatus = verifierRejectedStatus(lines, Date.now(), process.hrtime.bigint());
+        console.error(`[!] [Bridge Server] Port 1 isolation policy REFUSED by the install gate; data plane left at table-miss DROP:\n  ${lines.join('\n  ')}`);
+        return;
+      }
+      this.allowRuleModel.clear(); // the table is being rewritten from the policy: earlier allow rules are gone
       this.isolationStatus = pendingReadbackStatus();
       this.isolationRechecker.reset(); // a new session: forget the previous session's streaks
       for (const rule of isolationPolicy) {
@@ -2025,10 +2070,17 @@ export class ZodiacBridgeServer {
       return;
     }
 
-    // API: POST /api/sdn/allow (Push a verified forwarding flow rule to the physical switch)
-    // INV-4 (Verification Asymmetry): topology verified loop-free before hardware install.
+    // API: POST /api/sdn/allow (Push a forwarding flow rule to the physical switch, after the install gate has passed the resulting table)
+    // INV-4 (Verification Asymmetry): the table that would result is checked (A2, A4, A5, A6, A7, A11; install-gate.ts) before anything is sent.
     // INV-3 (Fail-Closed): action is ALLOW only; DROP is /api/sdn/quarantine.
+    // Operator only (loopback or an RFC 1918 peer, like the other state-changing operator routes): before 2026-10-20 this route had no access check.
     if (url.pathname === '/api/sdn/allow' && req.method === 'POST') {
+      if (!isLanOperator(req)) {
+        res.statusCode = 401;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Unauthorized: Operator access required.' }));
+        return;
+      }
       const MAX_PAYLOAD = 32 * 1024;
       const chunks: Buffer[] = [];
       let bytesReceived = 0;
@@ -2067,12 +2119,24 @@ export class ZodiacBridgeServer {
         if (aborted || res.headersSent) return;
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-          const { srcMac, dstMac, outPort, priority = 10, description = '' } = body;
+          const { srcMac, dstMac, outPort, inPort, priority = 10, description = '' } = body;
           const MAC_RE = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
           if (typeof outPort !== 'number' || outPort < 1 || outPort > 4) {
             res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ error: 'outPort (1–4) required' }));
+            return;
+          }
+          if (inPort !== undefined && (!Number.isInteger(inPort) || inPort < 1 || inPort > 3)) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'inPort, when given, must be an integer 1 to 3' }));
+            return;
+          }
+          if (!Number.isInteger(priority) || priority < 1 || priority > 65534) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'priority must be an integer 1 to 65534 (65535 is reserved for quarantine, 0 is the table-miss)' }));
             return;
           }
           if (typeof srcMac === 'string' && !MAC_RE.test(srcMac.trim())) {
@@ -2090,21 +2154,33 @@ export class ZodiacBridgeServer {
           const cleanSrcMac = typeof srcMac === 'string' ? srcMac.trim() : undefined;
           const cleanDstMac = typeof dstMac === 'string' ? dstMac.trim() : undefined;
           const ruleId = `allow-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-          const rule = {
+          if (this.experiment !== null && this.experiment.state().phase !== 'idle') {
+            res.statusCode = 409;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, code: 'experiment_active', error: 'an experiment owns the flow table; restore it first' }));
+            return;
+          }
+          // What is checked is exactly what is sent: one IsolationRule, sent below with sendFlowModOptions.
+          const allowRule: IsolationRule = {
             id: ruleId,
-            priority,
-            srcCidr: '0.0.0.0/0',
-            dstCidr: '0.0.0.0/0',
-            protocol: 'ANY' as const,
-            ...(cleanSrcMac ? { srcMac: cleanSrcMac } : {}),
-            ...(cleanDstMac ? { dstMac: cleanDstMac } : {}),
-            action: 'FORWARD' as const,
+            flowMod: {
+              command: FlowModCommand.OFPFC_ADD, priority, outputPorts: [outPort],
+              match: { ...(inPort !== undefined ? { inPort } : {}), ...(cleanSrcMac ? { srcMac: cleanSrcMac } : {}), ...(cleanDstMac ? { dstMac: cleanDstMac } : {}) },
+            },
           };
+          const gate = this.gateInstall([allowRule], `allow rule ${ruleId}`);
+          if (!gate.admitted) {
+            res.statusCode = 422;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, admitted: false, code: 'gate_refused', error: 'the resulting flow table failed the pre-install checks; nothing was sent', violations: gate.violations, notes: gate.notes }));
+            return;
+          }
           let openFlowInstalled = false;
           try {
             if (this.controller.openFlow.metrics.state === 'ESTABLISHED') {
-              this.controller.pushRule(rule, outPort);
+              this.controller.openFlow.sendFlowModOptions(allowRule.flowMod);
               openFlowInstalled = true;
+              this.allowRuleModel.set(ruleId, allowRule);
             }
           } catch (ofErr) {
             console.warn('[!] [Bridge/allow] OpenFlow install error:', ofErr instanceof Error ? ofErr.message : String(ofErr));
