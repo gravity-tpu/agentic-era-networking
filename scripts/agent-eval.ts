@@ -37,6 +37,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { parseProposal, triageProposal, CATEGORY_PRECEDENCE } from '../dist/sdn/proposal-triage.js';
+import { samplingRecord } from '../dist/sdn/eval-sampling.js';
 import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 
 const INTENTS = {
@@ -370,7 +371,7 @@ async function main(): Promise<void> {
   }
   const summary = {
     schema: 'agent-eval/v2', protocol: args.protocol === 'A' ? 'A (zero-shot)' : `B (verifier feedback, up to ${MAX_TURNS} turns)`, intent: args.intent, model: args.model, modelDigest: model.digest, host: args.host,
-    trials: args.n, trialsRun: lines.length, temperature: TEMPERATURE, topP: TOP_P, seeds: `1..${args.n}`, numPredict: args.numPredict, think: args.think,
+    trials: args.n, trialsRun: lines.length, ...(({ temperature, topP, seeds }) => ({ temperature, topP, seeds }))(samplingRecord(args.provider, TEMPERATURE, TOP_P, args.n)), numPredict: args.numPredict, think: args.think,
     promptSha256: promptHash, gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
     ...((args.provider === 'gemini' || args.provider === 'anthropic') && args.spend !== null ? {
