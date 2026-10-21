@@ -103,3 +103,25 @@ describe('the quarantine install is gated', () => {
     expect(bridge.listQuarantineProposals().proposals).toEqual([]);
   });
 });
+
+describe('a declared throughput target (A8)', () => {
+  it('is advisory for quarantines: containment is never refused for throughput, but the shortfall is logged', async () => {
+    vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '12000'); // the deployed table cannot meet this even at k=1
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const b = new ZodiacBridgeServer(new ZodiacController());
+    const r = b.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true });
+    expect(r.status).toBe(200);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/A8 \(12000 pps at 572 B\): NOT met \(advisory, not refused\)/);
+    vi.unstubAllEnvs();
+  });
+
+  it('a malformed target is reported and enforces nothing', () => {
+    vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', 'fast');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const b = new ZodiacBridgeServer(new ZodiacController());
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/NO throughput target is enforced/);
+    expect(b.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true }).status).toBe(200);
+    vi.unstubAllEnvs();
+  });
+});
+

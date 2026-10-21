@@ -134,7 +134,16 @@ def ramp(k, idle_pps, log):
         if sent_pps < 0.97 * pps:
             rec['senderLimited'] = True; log('  the sender could not reach the target rate; stopping the ramp (sender-limited, not a switch capacity)'); break
         if ratio < SAT_RATIO:
-            rec['saturated'] = True; break
+            # Added after run-2026-10-20 (whose k=2 round 1 was stopped by a ~2 s stall): re-probe the same rate once; a step that recovers is a
+            # transient, recorded and not treated as capacity. Runs before this change (see provenance harnessSha256) used the single-step rule.
+            r2 = step(pps)
+            total2, med2, bins2 = delivered_stats(r2['series'], idle_pps)
+            ratio2 = total2 / r2['sent'] if r2['sent'] else 0
+            rec['confirmation'] = {'ratio': round(ratio2, 4), 'medianBusyDeliveredPps': round(med2), 'binsPps': [round(b) for b in bins2], 'sent': r2['sent']}
+            log(f'  k={k} re-probe at {pps}: ratio {ratio2:.3f}')
+            if ratio2 < SAT_RATIO:
+                rec['saturated'] = True; break
+            rec['transient'] = True
         if time.monotonic() - t_installed > QUARANTINE_TTL_S - 40:
             log('  quarantine time limit too close; stopping the ramp'); steps[-1]['stoppedByTtl'] = True; break
         pps = int(pps * STEP_FACTOR)

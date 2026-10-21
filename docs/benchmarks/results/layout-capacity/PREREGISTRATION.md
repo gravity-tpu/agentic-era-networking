@@ -30,3 +30,5 @@ Written 2026-10-20, before any measurement was taken, and committed before the r
 One switch, firmware 0.86; one traffic path (a frame matched by the tap-only rule at priority 150, after the four priority-200 rules); UDP only; a Python paced sender (the run records whether it reached each target). The forwarding-first layout is **not** measured here (the quarantine path cannot build it, because A4 forbids it): the "24% less capacity than forwarding-first" figure in the decision record stays model-derived from the 2026-10-04 ladder. Switch CPU is not measured.
 
 _Added after the run: the results are in [`README.md`](README.md). Prediction 1 did not hold (measured slope 5.42 µs per quarantine against 4.24). The text above is unchanged._
+
+_Added 2026-10-21: after the run, the harness gained a confirmation rule (a step that falls below the saturation ratio is re-probed once at the same rate, and a step that recovers is recorded as a transient, not as capacity). `run-2026-10-20` used the earlier single-step rule, as its `provenance.json` hash shows; the README reports that run's excluded round and a slope that does not use it._
