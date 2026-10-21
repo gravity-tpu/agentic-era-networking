@@ -74,6 +74,7 @@ import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
 import { admitInstall, type GateResult } from './install-gate.js';
+import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
 import os from 'node:os';
@@ -604,7 +605,10 @@ export class ZodiacBridgeServer {
   /** Forwarding rules installed through /api/sdn/allow in this switch session, as the rules the switch holds (cleared when the table is rewritten). */
   private readonly allowRuleModel: Map<string, IsolationRule> = new Map();
 
-  /** The table the switch holds now, as rules: the isolation policy, the allow rules, and the active quarantine DROPs. */
+  /**
+   * The table the switch holds now, as rules: the isolation policy, the allow rules, and the active quarantine DROPs. Quarantines are always
+   * an IPv4 /32 source match (decideQuarantine refuses a request with no IP), so that is the shape modelled; a new quarantine shape must change this too.
+   */
   private tableModel(): IsolationRule[] {
     const quarantines: IsolationRule[] = [...this.quarantineExpiry.entries()].map(([id, e]) => ({
       id,
@@ -676,7 +680,7 @@ export class ZodiacBridgeServer {
     // The envelope bounds WHO may be quarantined; the gate checks the resulting TABLE (A2, A4, A5, A6, A7, A11) before anything is sent.
     const quarantineRule: IsolationRule = {
       id: 'quarantine-pending',
-      flowMod: { command: FlowModCommand.OFPFC_ADD, priority: options.priority ?? 65535, outputPorts: [], match: { etherType: 0x0800, srcIp: options.targetIp, srcIpPrefixLen: 32 } },
+      flowMod: { command: FlowModCommand.OFPFC_ADD, priority: options.priority ?? QUARANTINE_PRIORITY, outputPorts: [], match: { etherType: 0x0800, srcIp: options.targetIp, srcIpPrefixLen: 32 } },
     };
     const gate = this.gateInstall([quarantineRule], `quarantine of ${options.targetIp}`);
     if (!gate.admitted) {
@@ -2133,10 +2137,10 @@ export class ZodiacBridgeServer {
             res.end(JSON.stringify({ error: 'inPort, when given, must be an integer 1 to 3' }));
             return;
           }
-          if (!Number.isInteger(priority) || priority < 1 || priority > 65534) {
+          if (!Number.isInteger(priority) || priority < 1 || priority > MAX_FORWARDING_PRIORITY) {
             res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: 'priority must be an integer 1 to 65534 (65535 is reserved for quarantine, 0 is the table-miss)' }));
+            res.end(JSON.stringify({ error: 'priority must be an integer 1 to 65534 (the quarantine band starts above that, 0 is the table-miss)' }));
             return;
           }
           if (typeof srcMac === 'string' && !MAC_RE.test(srcMac.trim())) {

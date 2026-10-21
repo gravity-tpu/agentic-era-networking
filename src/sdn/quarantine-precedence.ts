@@ -43,6 +43,10 @@ export interface PrecedenceOptions {
 }
 
 export const QUARANTINE_ID_PREFIX = 'quarantine-';
+/** The priority every automated quarantine DROP is installed at. Forwarding rules installed by the bridge must stay strictly below it (A4). */
+export const QUARANTINE_PRIORITY = 65535;
+/** Highest priority the bridge accepts for a forwarding rule it installs: one below the quarantine band. */
+export const MAX_FORWARDING_PRIORITY = QUARANTINE_PRIORITY - 1;
 
 export const defaultIsQuarantine = (r: IsolationRule): boolean => r.id.startsWith(QUARANTINE_ID_PREFIX) && (r.flowMod.outputPorts ?? []).length === 0;
 

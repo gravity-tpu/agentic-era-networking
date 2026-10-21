@@ -114,7 +114,8 @@ export function admitInstall(input: GateInput): GateResult {
     const shape = classifyForCostModel(rules);
     notes.push(shape.modelled ? 'A8: the table is a shape the cost model measured; no throughput target was declared, so no verdict' : `A8 unverifiable: ${shape.reason}`);
   } catch (e) {
-    refuse('uncheckable', [], `the gate could not evaluate the table: ${e instanceof Error ? e.message : String(e)}`);
+    // Every throw refuses (fail closed); the error's name tells a class-budget refusal apart from an unexpected defect.
+    refuse('uncheckable', [], `the gate could not evaluate the table (${e instanceof Error ? e.name : 'non-Error throw'}): ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { admitted: violations.length === 0, violations, notes };
