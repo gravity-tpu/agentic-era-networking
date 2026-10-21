@@ -18,7 +18,7 @@ and measures one layout path (a frame matched by the third-priority tap-only rul
 
 Usage: python3 scripts/layout-capacity-run.py --out <dir> [--ks 0,2,4,8] [--rounds 2]
 """
-import argparse, base64, json, os, subprocess, sys, threading, time, hashlib, statistics
+import argparse, base64, json, os, subprocess, threading, time, hashlib, statistics
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -142,9 +142,11 @@ def ramp(k, idle_pps, log):
     return steps
 
 def main():
+    global MAX_OFFERED_PPS
     ap = argparse.ArgumentParser()
-    ap.add_argument('--out', required=True); ap.add_argument('--ks', default='0,2,4,8'); ap.add_argument('--rounds', type=int, default=2)
+    ap.add_argument('--out', required=True); ap.add_argument('--ks', default='0,2,4,8'); ap.add_argument('--rounds', type=int, default=2); ap.add_argument('--max-pps', type=int, default=MAX_OFFERED_PPS)
     a = ap.parse_args()
+    MAX_OFFERED_PPS = min(a.max_pps, MAX_OFFERED_PPS)
     ks = [int(x) for x in a.ks.split(',')]
     os.makedirs(a.out, exist_ok=True)
     logf = open(os.path.join(a.out, 'run.log'), 'a')

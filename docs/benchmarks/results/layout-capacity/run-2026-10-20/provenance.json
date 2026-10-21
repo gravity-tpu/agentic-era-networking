@@ -1,0 +1,40 @@
+{
+ "startedEt": "2026-10-20 22:45:25 ET",
+ "bridgeCommit": [
+  "2491a05c00258e3521341542b8aa6434eb011b94",
+  "feat/install-path-checks",
+  "0"
+ ],
+ "bridgeDistSha256": "c4bc93fa15a9a3db61218accec7f318d07faa9ec31adf01d0362669f702f6fff",
+ "senderSha256": "4eccef8e7cf9d777e7bbea7f4e3a6201abc585b72b1d8f52df5a6d6504fc2a68",
+ "harnessSha256": "14b466308d2b65d8f3319b63194e243e617dc3b2c41eb1fdbaf7077f19a4ccea",
+ "params": {
+  "startPps": 2000,
+  "stepFactor": 1.2,
+  "maxOfferedPps": 16000,
+  "stepSeconds": 12,
+  "saturationRatio": 0.97,
+  "payloadBytes": 572,
+  "sender": "agentic-node-01 10.0.2.50 via eth0 to 10.0.0.119",
+  "observe": "Jetson enx9c69d39dd0a6 rx_packets (Zodiac P3 link)",
+  "quarantineIps": [
+   "10.0.2.101",
+   "10.0.2.102",
+   "10.0.2.103",
+   "10.0.2.104",
+   "10.0.2.105",
+   "10.0.2.106",
+   "10.0.2.107",
+   "10.0.2.108",
+   "10.0.2.109",
+   "10.0.2.110",
+   "10.0.2.111",
+   "10.0.2.112",
+   "10.0.2.113",
+   "10.0.2.114",
+   "10.0.2.115",
+   "10.0.2.116"
+  ]
+ },
+ "quarantineEnvelope": "bridge defaults (propose mode, approve through the local API; cap 8, ttl 300 s)"
+}
