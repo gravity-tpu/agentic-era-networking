@@ -31,6 +31,13 @@ import {
   meetsCapacityTarget,
   type CostLayout,
 } from './zodiac-cost-model.js';
+import {
+  DEPLOYED_TOLERANCE_PPM,
+  classifyDeployedShape,
+  deployedCapacityPps,
+  explainDeployedDomain,
+  meetsDeployedCapacityTarget,
+} from './deployed-cost-model.js';
 import type { IsolationRule } from './port1-isolation.js';
 import { ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD } from './port1-isolation.js';
 
@@ -244,7 +251,7 @@ export type CapacityVerdict =
        * layout. For a policy with none, the layout is undetermined and this is the lowest-capacity modelled layout:
        * a bound, not a statement about what is installed.
        */
-      readonly decidingLayout: CostLayout;
+      readonly decidingLayout: CostLayout | 'deployed';
       /** Quarantine depth the model was evaluated at: DROP rules present plus the reserve. */
       readonly quarantineDepth: number;
       readonly modelledPps: bigint;
@@ -264,7 +271,12 @@ export function checkCapacityBudget(rules: readonly IsolationRule[], spec: Capac
   if (spec.targetPps < 0n) throw new BudgetInputError(`negative target ${spec.targetPps}`);
 
   const shape = classifyForCostModel(rules);
-  if (!shape.modelled) return { property: 'A8', status: 'unverifiable', reason: shape.reason };
+  if (!shape.modelled) {
+    // Not the two-rule shape of the 2026-10-04 benchmark. The deployed table (policy plus quarantine DROPs) has its own measured model.
+    const deployed = classifyDeployedShape(rules);
+    if (deployed.modelled) return checkDeployedCapacity(deployed.quarantineRuleIds, reserve, spec);
+    return { property: 'A8', status: 'unverifiable', reason: `${shape.reason}; and not the deployed table either (${deployed.reason})` };
+  }
 
   const depth = shape.shape.quarantineRuleIds.length + reserve;
   const depthBig = BigInt(depth);
@@ -303,6 +315,36 @@ export function checkCapacityBudget(rules: readonly IsolationRule[], spec: Capac
               `modelled capacity ${worst.pps} pps (${spec.payloadBytes} B, ${worst.layout}, ${depth} quarantine rules ` +
               `including ${reserve} reserved) does not meet the ${spec.targetPps} pps target after the ` +
               `${MODEL_TOLERANCE_PPM} ppm model tolerance`,
+          },
+        ],
+  };
+}
+
+/** A8 for the deployed table, from the 2026-10-20 hardware model (deployed-cost-model.ts). Same fail-closed margins as the base model. */
+function checkDeployedCapacity(quarantineRuleIds: readonly string[], reserve: number, spec: CapacityBudgetSpec): CapacityVerdict {
+  const depth = quarantineRuleIds.length + reserve;
+  const problem = explainDeployedDomain(spec.payloadBytes, BigInt(depth));
+  if (problem !== null) return { property: 'A8', status: 'unverifiable', reason: problem };
+  const depthBig = BigInt(depth);
+  const modelled = deployedCapacityPps(spec.payloadBytes, depthBig);
+  const ok = meetsDeployedCapacityTarget(spec.payloadBytes, depthBig, spec.targetPps);
+  return {
+    property: 'A8',
+    status: ok ? 'pass' : 'fail',
+    decidingLayout: 'deployed',
+    quarantineDepth: depth,
+    modelledPps: modelled,
+    targetPps: spec.targetPps,
+    tolerancePpm: DEPLOYED_TOLERANCE_PPM,
+    violations: ok
+      ? []
+      : [
+          {
+            property: 'A8',
+            ruleIds: quarantineRuleIds,
+            detail:
+              `modelled capacity ${modelled} pps (${spec.payloadBytes} B, deployed table, ${depth} quarantine rules including ${reserve} reserved) ` +
+              `does not meet the ${spec.targetPps} pps target after the ${DEPLOYED_TOLERANCE_PPM} ppm model tolerance`,
           },
         ],
   };

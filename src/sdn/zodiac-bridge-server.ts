@@ -73,7 +73,7 @@ import {
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
-import { admitInstall, type GateResult } from './install-gate.js';
+import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type GateResult } from './install-gate.js';
 import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
@@ -573,6 +573,8 @@ export class ZodiacBridgeServer {
   /** How often expired quarantines are looked for. */
   public static readonly QUARANTINE_SWEEP_INTERVAL_MS = 5_000;
   private readonly quarantineEnvelope: QuarantineEnvelopeConfig;
+  /** The declared throughput target (A8), or null. Enforced on the allow route; advisory on quarantines and the startup policy. */
+  private readonly capacityTarget: CapacityTargetConfig['target'];
   /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
   private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint; readonly expiresAtMs: number; readonly reason: string; readonly priority: number }> = new Map();
   /** Where active quarantines are kept so a bridge restart puts them back (see quarantine-persistence.ts). */
@@ -617,10 +619,21 @@ export class ZodiacBridgeServer {
     return [...buildPort1IsolationPolicy(), ...this.allowRuleModel.values(), ...quarantines];
   }
 
-  /** The pre-install gate (install-gate.ts) over the table as it would be after adding `proposed`. A refusal is logged with its properties. */
-  private gateInstall(proposed: readonly IsolationRule[], what: string): GateResult {
-    const result = admitInstall({ current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT });
+  /**
+   * The pre-install gate (install-gate.ts) over the table as it would be after adding `proposed`. A refusal is logged with its properties.
+   * `advisory` is for a caller that must not be refused for throughput (a quarantine is containment): A8 then only produces a note, logged when not met.
+   */
+  private gateInstall(proposed: readonly IsolationRule[], what: string, advisory = false): GateResult {
+    const afterQuarantines = this.quarantineExpiry.size + proposed.filter((r) => r.id.startsWith('quarantine-')).length;
+    const result = admitInstall({
+      current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT,
+      ...(this.capacityTarget === null ? {} : {
+        capacityTarget: { ...this.capacityTarget, advisory },
+        capacityReserve: Math.max(0, this.quarantineEnvelope.maxActive - afterQuarantines), // evaluated at the full quarantine depth the envelope allows
+      }),
+    });
     if (!result.admitted) console.warn(`[!] [Install gate] REFUSED ${what}: ${result.violations.map((v) => `${v.property} (${v.ruleIds.join(',')})`).join('; ')}`);
+    for (const n of result.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] ${what}: ${n}`);
     return result;
   }
 
@@ -682,7 +695,7 @@ export class ZodiacBridgeServer {
       id: 'quarantine-pending',
       flowMod: { command: FlowModCommand.OFPFC_ADD, priority: options.priority ?? QUARANTINE_PRIORITY, outputPorts: [], match: { etherType: 0x0800, srcIp: options.targetIp, srcIpPrefixLen: 32 } },
     };
-    const gate = this.gateInstall([quarantineRule], `quarantine of ${options.targetIp}`);
+    const gate = this.gateInstall([quarantineRule], `quarantine of ${options.targetIp}`, true);
     if (!gate.admitted) {
       return {
         status: 409,
@@ -921,6 +934,9 @@ export class ZodiacBridgeServer {
     const envelope = readQuarantineEnvelopeConfig(process.env);
     this.quarantineEnvelope = envelope.config;
     for (const w of envelope.warnings) console.warn(`[!] [Quarantine] ${w}`);
+    const capacityConfig = parseCapacityTarget(process.env);
+    this.capacityTarget = capacityConfig.target;
+    for (const w of capacityConfig.warnings) console.warn(`[!] [Install gate] ${w}`);
     this.quarantineStateFile = resolveQuarantineStateFile(process.env);
     this.loadPersistedQuarantines();
     this.isolationRechecker = new IsolationRechecker({
@@ -1064,7 +1080,13 @@ export class ZodiacBridgeServer {
       }
       // The verifier above covers A1 to A3; the install gate adds A2 (wildcards), A5, A6, A7 and A11 over the same table, so a policy that
       // regresses on any of them is never sent. Same fail-closed outcome: the data plane stays at the table-miss DROP.
-      const startupGate = admitInstall({ current: [], proposed: isolationPolicy, intent: PORT1_ISOLATION_INTENT });
+      const startupGate = admitInstall({
+        current: [], proposed: isolationPolicy, intent: PORT1_ISOLATION_INTENT,
+        // A declared throughput target is checked at the envelope's full quarantine depth, but advisory here: a bridge that refused to start its
+        // policy over a mistyped target would leave the data plane dark, so the verdict is logged instead.
+        ...(this.capacityTarget === null ? {} : { capacityTarget: { ...this.capacityTarget, advisory: true }, capacityReserve: this.quarantineEnvelope.maxActive }),
+      });
+      for (const n of startupGate.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] startup policy: ${n}`);
       if (!startupGate.admitted) {
         const lines = startupGate.violations.map((v) => `${v.property}: ${v.detail}`);
         this.isolationStatus = verifierRejectedStatus(lines, Date.now(), process.hrtime.bigint());
