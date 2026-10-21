@@ -136,6 +136,9 @@ def ramp(k, idle_pps, log):
         if ratio < SAT_RATIO:
             # Added after run-2026-10-20 (whose k=2 round 1 was stopped by a ~2 s stall): re-probe the same rate once; a step that recovers is a
             # transient, recorded and not treated as capacity. Runs before this change (see provenance harnessSha256) used the single-step rule.
+            if time.monotonic() - t_installed > QUARANTINE_TTL_S - 40 - STEP_SECONDS - 5:
+                rec['saturated'] = True; rec['unconfirmed'] = True  # no time left inside the quarantine limit to re-probe: recorded as unconfirmed, not hidden
+                log('  no time left to re-probe inside the quarantine time limit; recording the step as saturated but unconfirmed'); break
             r2 = step(pps)
             total2, med2, bins2 = delivered_stats(r2['series'], idle_pps)
             ratio2 = total2 / r2['sent'] if r2['sent'] else 0

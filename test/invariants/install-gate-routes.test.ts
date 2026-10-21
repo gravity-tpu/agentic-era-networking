@@ -137,15 +137,17 @@ describe('/api/sdn/quarantine accepts requests only from the bridge host', () =>
     req.url = '/api/sdn/quarantine';
     req.headers = { 'content-type': 'application/json', host: 'bridge', ...headers };
     const out: { status: number; body: string } = { status: 0, body: '' };
+    let finish: () => void = () => undefined;
+    const finished = new Promise<void>((r) => { finish = r; });
     const res = Object.assign(new EventEmitter(), {
       statusCode: 200, headersSent: false,
       setHeader: () => undefined,
-      end: (b?: string) => { out.status = (res as unknown as { statusCode: number }).statusCode; out.body = b ?? ''; (res as unknown as { headersSent: boolean }).headersSent = true; },
+      end: (b?: string) => { out.status = (res as unknown as { statusCode: number }).statusCode; out.body = b ?? ''; (res as unknown as { headersSent: boolean }).headersSent = true; finish(); },
     });
     const done = bridge['handleRequest'](req, res as unknown as http.ServerResponse);
     setImmediate(() => { req.emit('data', Buffer.from(JSON.stringify({ targetIp: '10.0.2.50', reason: 'rate' }))); req.emit('end'); });
     await done;
-    await new Promise((r) => setTimeout(r, 20));
+    await finished; // the handler answers exactly once; wait for that, not for a fixed delay
     return { status: out.status, body: out.body === '' ? {} : (JSON.parse(out.body) as Record<string, unknown>) };
   }
 
@@ -164,10 +166,19 @@ describe('/api/sdn/quarantine accepts requests only from the bridge host', () =>
     expect(bridge.listQuarantineProposals().proposals).toEqual([]);
   });
 
+  it('over a REAL socket: a proxy header is refused, and a plain loopback request is accepted', async () => {
+    const withHeader = await new Promise<number>((resolve, reject) => {
+      const payload = JSON.stringify({ targetIp: '10.0.2.50', reason: 'rate' });
+      const req = http.request({ host: '127.0.0.1', port, method: 'POST', path: '/api/sdn/quarantine', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), 'x-forwarded-for': '203.0.113.9' } }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode ?? 0)); });
+      req.on('error', reject); req.write(payload); req.end();
+    });
+    expect(withHeader).toBe(403);
+    expect((await call('POST', '/api/sdn/quarantine', { targetIp: '10.0.2.50', reason: 'rate' })).status).toBe(202);
+  });
+
   it('still accepts the bridge host itself (the detectors post from loopback)', async () => {
     const r = await asPeer('127.0.0.1');
     expect(r.status).toBe(202); // propose mode: inside the envelope, recorded as a proposal
     expect(bridge.listQuarantineProposals().proposals.map((p) => p.targetIp)).toEqual(['10.0.2.50']);
   });
 });
-

@@ -74,7 +74,7 @@ import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
 import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type GateResult } from './install-gate.js';
-import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY } from './quarantine-precedence.js';
+import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY, defaultIsQuarantine } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
 import os from 'node:os';
@@ -625,7 +625,7 @@ export class ZodiacBridgeServer {
    * `advisory` is for a caller that must not be refused for throughput (a quarantine is containment): A8 then only produces a note, logged when not met.
    */
   private gateInstall(proposed: readonly IsolationRule[], what: string, advisory = false): GateResult {
-    const afterQuarantines = this.quarantineExpiry.size + proposed.filter((r) => r.id.startsWith('quarantine-')).length;
+    const afterQuarantines = this.quarantineExpiry.size + proposed.filter(defaultIsQuarantine).length; // the same predicate the gate uses, so the depth cannot drift from an id convention
     const result = admitInstall({
       current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT,
       ...(this.capacityTarget === null ? {} : {
@@ -1088,7 +1088,7 @@ export class ZodiacBridgeServer {
         // policy over a mistyped target would leave the data plane dark, so the verdict is logged instead.
         ...(this.capacityTarget === null ? {} : { capacityTarget: { ...this.capacityTarget, advisory: true }, capacityReserve: this.quarantineEnvelope.maxActive }),
       });
-      for (const n of startupGate.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] startup policy: ${n}`);
+      for (const n of startupGate.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] startup policy: ${n} (this assumes quarantines installed AFTER the policy; the restart path re-sends them BEFORE it, a layout the cost model does not cover)`);
       if (!startupGate.admitted) {
         const lines = startupGate.violations.map((v) => `${v.property}: ${v.detail}`);
         this.isolationStatus = verifierRejectedStatus(lines, Date.now(), process.hrtime.bigint());
