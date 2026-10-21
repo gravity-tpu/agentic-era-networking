@@ -155,6 +155,9 @@ describe('parseCapacityTarget', () => {
       expect(r.target, bad).toBeNull();
       expect(r.warnings.join(), bad).toMatch(/NO throughput target is enforced/);
     }
+    const other = parseCapacityTarget({ ZODIAC_CAPACITY_TARGET_PPS: '8000', ZODIAC_CAPACITY_PAYLOAD_BYTES: '64' });
+    expect(other.target).not.toBeNull();
+    expect(other.warnings.join()).toMatch(/not 572/); // accepted, but flagged at configuration time
     const p = parseCapacityTarget({ ZODIAC_CAPACITY_TARGET_PPS: '8000', ZODIAC_CAPACITY_PAYLOAD_BYTES: 'big' });
     expect(p.target).toBeNull();
     expect(p.warnings.join()).toMatch(/PAYLOAD_BYTES/);

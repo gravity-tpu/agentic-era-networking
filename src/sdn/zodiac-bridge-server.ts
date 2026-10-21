@@ -629,7 +629,8 @@ export class ZodiacBridgeServer {
       current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT,
       ...(this.capacityTarget === null ? {} : {
         capacityTarget: { ...this.capacityTarget, advisory },
-        capacityReserve: Math.max(0, this.quarantineEnvelope.maxActive - afterQuarantines), // evaluated at the full quarantine depth the envelope allows
+        // The installed quarantines are in the table model, so the reserve is only the room the envelope still has: table quarantines plus reserve equals the envelope's cap.
+        capacityReserve: Math.max(0, this.quarantineEnvelope.maxActive - afterQuarantines),
       }),
     });
     if (!result.admitted) console.warn(`[!] [Install gate] REFUSED ${what}: ${result.violations.map((v) => `${v.property} (${v.ruleIds.join(',')})`).join('; ')}`);

@@ -174,5 +174,8 @@ export function parseCapacityTarget(env: Readonly<Record<string, string | undefi
     }
     payload = BigInt(payloadRaw.trim());
   }
+  // Only 572 B was measured for the deployed table, so a target at any other payload cannot be shown to be met. Say so at configuration time
+  // instead of letting the first allow-route install be refused with a domain message.
+  if (payload !== 572n) warnings.push(`ZODIAC_CAPACITY_PAYLOAD_BYTES=${payload} is not 572, the only payload the deployed table was measured at; allow-route installs will be refused as unverifiable until the model covers it`);
   return { target: { payloadBytes: payload, targetPps: BigInt(raw.trim()) }, warnings };
 }
