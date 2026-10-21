@@ -11,11 +11,13 @@ def jload(p):
     with open(p) as fh: return json.load(fh)
 res, prov = jload(f'{RUN}/results.json'), jload(f'{RUN}/provenance.json')
 PRED, TOL = 4.24, 0.20
+# Clean steps deliver about 98.7% of what was sent (a constant receiver-side offset also seen in the 2026-10-04 ladder); the stall rule compares against that.
+DELIVERY_OFFSET = 0.987
 
 def stall_check(step):
     """A saturated step is a TRANSIENT STALL, not capacity, if at least half of its interior 1 s bins still delivered at the offered rate."""
     interior = step['binsPps'][2:-2]
-    at_rate = sum(1 for b in interior if b >= 0.97 * step['sentPps'] * 0.987)
+    at_rate = sum(1 for b in interior if b >= 0.97 * step['sentPps'] * DELIVERY_OFFSET)
     return at_rate / len(interior) >= 0.5 if interior else False
 
 rows = []
@@ -39,6 +41,8 @@ mean_pts = [(k, tus(statistics.mean(v))) for k, v in sorted(by_k.items())]
 slope, intercept = ols(mean_pts)
 all_pts = [(x['k'], tus(x['capacity'])) for x in valid]
 slope_all, _ = ols(all_pts)
+no_k2 = [(k, tus(statistics.mean(v))) for k, v in sorted(by_k.items()) if k != 2]
+slope_no_k2, _ = ols(no_k2)
 slope_hi, _ = ols([(k, tus(max(v))) for k, v in sorted(by_k.items())])
 slope_lo, _ = ols([(k, tus(min(v))) for k, v in sorted(by_k.items())])
 lo, hi = PRED * (1 - TOL), PRED * (1 + TOL)
@@ -69,6 +73,7 @@ P(f'| Per-packet time by k (mean of valid rounds) | {", ".join(f"k={k}: {t:.1f} 
 P(f'| **Slope, least squares on the per-k means** | **{slope:.2f} µs per quarantine** |')
 P(f'| Slope using every valid round separately | {slope_all:.2f} µs |')
 P(f'| Slope using the faster round at each k / the slower round | {slope_hi:.2f} / {slope_lo:.2f} µs |')
+P(f'| Slope using k = 0, 4 and 8 only (no dependence on the k=2 rounds) | {slope_no_k2:.2f} µs |')
 P(f'| Intercept (fixed cost with no quarantine) | {intercept:.1f} µs |')
 P(f'| Predicted slope | {PRED} µs, accepted {lo:.1f} to {hi:.1f} µs |')
 P(f'| Prediction 1 (slope in range) | **{"HOLDS" if lo <= slope <= hi else "DOES NOT HOLD"}**: the measured slope is {abs(slope / PRED - 1) * 100:.0f}% {"above" if slope > PRED else "below"} the prediction |')

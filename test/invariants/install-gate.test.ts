@@ -9,6 +9,9 @@ import { admitInstall, parseCapacityTarget } from '../../src/sdn/install-gate.js
 import { buildPort1IsolationPolicy, type IsolationRule } from '../../src/sdn/port1-isolation.js';
 import { PORT1_ISOLATION_INTENT } from '../../src/sdn/intents.js';
 import { FlowModCommand } from '../../src/sdn/openflow-types.js';
+import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY } from '../../src/sdn/quarantine-precedence.js';
+import { DEFAULT_QUARANTINE_MAX_ACTIVE, MAX_QUARANTINE_MAX_ACTIVE } from '../../src/sdn/quarantine-envelope.js';
+import { FLOW_TABLE_CAPACITY } from '../../src/sdn/dataplane-benchmark.js';
 
 const policy = buildPort1IsolationPolicy();
 const rule = (id: string, priority: number, outputPorts: number[], match: Record<string, unknown>): IsolationRule => ({
@@ -161,5 +164,17 @@ describe('parseCapacityTarget', () => {
     const p = parseCapacityTarget({ ZODIAC_CAPACITY_TARGET_PPS: '8000', ZODIAC_CAPACITY_PAYLOAD_BYTES: 'big' });
     expect(p.target).toBeNull();
     expect(p.warnings.join()).toMatch(/PAYLOAD_BYTES/);
+  });
+});
+
+describe('the quarantine constants that must agree across modules', () => {
+  it('keeps every forwarding priority below the quarantine band, so A4 is satisfiable by construction', () => {
+    expect(MAX_FORWARDING_PRIORITY).toBeLessThan(QUARANTINE_PRIORITY);
+    for (const r of policy) expect(r.flowMod.priority).toBeLessThanOrEqual(MAX_FORWARDING_PRIORITY);
+  });
+
+  it('fits the deployed policy, the table-miss and the largest allowed quarantine count in the hardware table', () => {
+    expect(policy.length + 1 + DEFAULT_QUARANTINE_MAX_ACTIVE).toBeLessThanOrEqual(FLOW_TABLE_CAPACITY);
+    expect(policy.length + 1 + MAX_QUARANTINE_MAX_ACTIVE).toBeLessThanOrEqual(FLOW_TABLE_CAPACITY);
   });
 });
