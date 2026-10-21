@@ -97,6 +97,7 @@ import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from 
 import {
   decideQuarantine,
   mayApproveQuarantine,
+  mayRequestQuarantine,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
   type EvidenceValue,
@@ -1871,6 +1872,15 @@ export class ZodiacBridgeServer {
     // Council Invariant 1 (Anti-Shortcut) & Invariant 3 (Fail-Closed Isolation):
     // Synthesizes OpenFlow 1.3 priority 65535 drop rule to immediately isolate rogue/compromised agents on Port 1.
     if (url.pathname === '/api/sdn/quarantine' && req.method === 'POST') {
+      // Detectors run on this host and post to loopback; a peer elsewhere (LAN, tailnet) is refused before its body is read.
+      if (!mayRequestQuarantine(req.socket.remoteAddress, req.headers)) {
+        console.warn(`[!] [Quarantine] Refused a request from ${req.socket.remoteAddress ?? 'an unknown address'}: quarantine requests are accepted only from the bridge host (loopback, without proxy headers)`);
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, quarantined: false, code: 'not_local', error: 'quarantine requests are accepted only from the bridge host itself (loopback, without proxy headers)' }));
+        req.resume();
+        return;
+      }
       const MAX_PAYLOAD = 32 * 1024;
       const chunks: Buffer[] = [];
       let bytesReceived = 0;

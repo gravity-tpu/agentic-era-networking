@@ -7,6 +7,8 @@
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import http from 'node:http';
+import net from 'node:net';
+import { EventEmitter } from 'node:events';
 import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
 
@@ -122,6 +124,50 @@ describe('a declared throughput target (A8)', () => {
     expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/NO throughput target is enforced/);
     expect(b.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true }).status).toBe(200);
     vi.unstubAllEnvs();
+  });
+});
+
+describe('/api/sdn/quarantine accepts requests only from the bridge host', () => {
+  /** Drives the real route handler with a request that claims a given peer address; the loopback test server cannot produce a remote peer. */
+  async function asPeer(remoteAddress: string, headers: Record<string, string> = {}): Promise<{ status: number; body: Record<string, unknown> }> {
+    const socket = new net.Socket();
+    Object.defineProperty(socket, 'remoteAddress', { value: remoteAddress });
+    const req = new http.IncomingMessage(socket);
+    req.method = 'POST';
+    req.url = '/api/sdn/quarantine';
+    req.headers = { 'content-type': 'application/json', host: 'bridge', ...headers };
+    const out: { status: number; body: string } = { status: 0, body: '' };
+    const res = Object.assign(new EventEmitter(), {
+      statusCode: 200, headersSent: false,
+      setHeader: () => undefined,
+      end: (b?: string) => { out.status = (res as unknown as { statusCode: number }).statusCode; out.body = b ?? ''; (res as unknown as { headersSent: boolean }).headersSent = true; },
+    });
+    const done = bridge['handleRequest'](req, res as unknown as http.ServerResponse);
+    setImmediate(() => { req.emit('data', Buffer.from(JSON.stringify({ targetIp: '10.0.2.50', reason: 'rate' }))); req.emit('end'); });
+    await done;
+    await new Promise((r) => setTimeout(r, 20));
+    return { status: out.status, body: out.body === '' ? {} : (JSON.parse(out.body) as Record<string, unknown>) };
+  }
+
+  it('refuses a LAN peer and a tailnet peer with 403 not_local, and records no proposal', async () => {
+    for (const peer of ['10.0.0.119', '100.112.223.16', '10.0.2.50']) {
+      const r = await asPeer(peer);
+      expect(r.status, peer).toBe(403);
+      expect(r.body['code'], peer).toBe('not_local');
+    }
+    expect(bridge.listQuarantineProposals().proposals).toEqual([]);
+  });
+
+  it('refuses a loopback request carrying a proxy header', async () => {
+    const r = await asPeer('127.0.0.1', { 'x-forwarded-for': '203.0.113.9' });
+    expect(r.status).toBe(403);
+    expect(bridge.listQuarantineProposals().proposals).toEqual([]);
+  });
+
+  it('still accepts the bridge host itself (the detectors post from loopback)', async () => {
+    const r = await asPeer('127.0.0.1');
+    expect(r.status).toBe(202); // propose mode: inside the envelope, recorded as a proposal
+    expect(bridge.listQuarantineProposals().proposals.map((p) => p.targetIp)).toEqual(['10.0.2.50']);
   });
 });
 

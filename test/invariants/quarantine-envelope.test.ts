@@ -13,6 +13,7 @@ import {
   MAX_EVIDENCE_SAMPLES,
   isLoopbackAddress,
   mayApproveQuarantine,
+  mayRequestQuarantine,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
 } from '../../src/sdn/quarantine-envelope.js';
@@ -174,4 +175,20 @@ describe('mayApproveQuarantine', () => {
       expect(mayApproveQuarantine('127.0.0.1', { [header]: [] })).toBe(false);
     },
   );
+});
+
+describe('mayRequestQuarantine', () => {
+  it('accepts the bridge host itself, as every detector posts from there', () => {
+    for (const a of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) expect(mayRequestQuarantine(a, { 'content-type': 'application/json' })).toBe(true);
+  });
+
+  it('refuses a LAN peer, a tailnet peer, the workload segment, and an unknown address', () => {
+    for (const a of ['10.0.0.119', '192.168.0.5', '100.112.223.16', '10.0.2.50', '::ffff:10.0.0.119', '', undefined]) {
+      expect(mayRequestQuarantine(a, {}), String(a)).toBe(false);
+    }
+  });
+
+  it('refuses a loopback request that carries a proxy header, in any case', () => {
+    for (const h of ['x-forwarded-for', 'X-Real-IP', 'Forwarded', 'VIA']) expect(mayRequestQuarantine('127.0.0.1', { [h]: '203.0.113.9' }), h).toBe(false);
+  });
 });
