@@ -1,0 +1,105 @@
+/**
+ * install-gate-routes.test.ts
+ * The pre-install gate is wired into the bridge: /api/sdn/allow and the quarantine install refuse a rule whose resulting table fails a check,
+ * and nothing is sent to the switch when they do. Over a loopback socket against the real routes; no switch is involved, so these show the
+ * wiring and the refusal, not what the firmware does.
+ */
+
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import http from 'node:http';
+import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
+import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
+
+let httpServer: http.Server;
+let port = 0;
+let bridge: ZodiacBridgeServer;
+let controller: ZodiacController;
+let sendSpy: ReturnType<typeof vi.spyOn>;
+
+interface Reply { ok?: boolean; code?: string; violations?: Array<{ property: string; ruleIds: string[] }>; error?: string; quarantined?: boolean }
+
+function call(method: string, path: string, body?: unknown): Promise<{ status: number; json: Reply }> {
+  return new Promise((resolve, reject) => {
+    const payload = body === undefined ? undefined : JSON.stringify(body);
+    const req = http.request(
+      { host: '127.0.0.1', port, method, path, headers: payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {} },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => { const t = Buffer.concat(chunks).toString('utf-8'); resolve({ status: res.statusCode ?? 0, json: t ? JSON.parse(t) : {} }); });
+      },
+    );
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+beforeAll(async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  httpServer = http.createServer((req, res) => { void bridge['handleRequest'](req, res); });
+  await new Promise<void>((r) => httpServer.listen(0, '127.0.0.1', r));
+  const addr = httpServer.address();
+  if (addr === null || typeof addr === 'string') throw new Error('test server has no port');
+  port = addr.port;
+});
+
+beforeEach(() => {
+  controller = new ZodiacController();
+  bridge = new ZodiacBridgeServer(controller);
+  sendSpy = vi.spyOn(controller.openFlow, 'sendFlowModOptions').mockImplementation(() => 1);
+  // Pretend a session exists so an admitted rule WOULD be sent (and a refused one provably is not).
+  Object.defineProperty(controller.openFlow.metrics, 'state', { value: 'ESTABLISHED', configurable: true });
+});
+
+afterAll(async () => {
+  await new Promise<void>((r) => httpServer.close(() => r()));
+  vi.restoreAllMocks();
+});
+
+describe('/api/sdn/allow is gated', () => {
+  it('refuses the old MAC-only shape (no in_port): a packet arriving on its output port would hairpin. Nothing is sent', async () => {
+    const r = await call('POST', '/api/sdn/allow', { srcMac: 'aa:bb:cc:dd:ee:ff', outPort: 2 });
+    expect(r.status).toBe(422);
+    expect(r.json.code).toBe('gate_refused');
+    expect(r.json.violations?.map((v) => v.property)).toContain('A2');
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses a rule the deployed policy already shadows (A5), and one that would let the workload reach the uplink (A11)', async () => {
+    const shadowed = await call('POST', '/api/sdn/allow', { srcMac: 'aa:bb:cc:dd:ee:ff', inPort: 1, outPort: 3, priority: 10 });
+    expect(shadowed.status).toBe(422);
+    expect(shadowed.json.violations?.map((v) => v.property)).toContain('A5');
+    const leak = await call('POST', '/api/sdn/allow', { srcMac: 'aa:bb:cc:dd:ee:ff', inPort: 1, outPort: 2, priority: 300 });
+    expect(leak.status).toBe(422);
+    expect(leak.json.violations?.map((v) => v.property)).toContain('A11');
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the earlier input checks: bad port, bad priority (65535 is the quarantine band), bad MAC', async () => {
+    expect((await call('POST', '/api/sdn/allow', { outPort: 9 })).status).toBe(400);
+    expect((await call('POST', '/api/sdn/allow', { outPort: 2, priority: 65535 })).status).toBe(400);
+    expect((await call('POST', '/api/sdn/allow', { outPort: 2, inPort: 7 })).status).toBe(400);
+    expect((await call('POST', '/api/sdn/allow', { outPort: 2, srcMac: 'nope' })).status).toBe(400);
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('the quarantine install is gated', () => {
+  it('a quarantine at the default 65535 passes the gate and is sent', async () => {
+    const r = bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true });
+    expect(r.status).toBe(200);
+    expect(r.body['quarantined']).toBe(true);
+  });
+
+  it('a quarantine that would sit below a forwarding rule it overlaps is refused with the property, and nothing is pushed', () => {
+    const push = vi.spyOn(controller, 'pushRule').mockImplementation(() => undefined);
+    const r = bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
+    expect(r.status).toBe(409);
+    expect(r.body['code']).toBe('gate_refused');
+    expect(JSON.stringify(r.body['violations'])).toContain('A4');
+    expect(push).not.toHaveBeenCalled();
+    expect(bridge.listQuarantineProposals().proposals).toEqual([]);
+  });
+});
