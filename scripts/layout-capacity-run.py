@@ -29,6 +29,10 @@ SENDER_IF, SENDER_IP, DST_IP, DST_PORT, PAYLOAD = 'eth0', '10.0.2.50', '10.0.0.1
 QUARANTINE_IPS = [f'10.0.2.{n}' for n in range(101, 117)]   # unused workload addresses (not .50, not the protected ones, not the ARP-probe .200)
 START_PPS, STEP_FACTOR, MAX_OFFERED_PPS = 2000, 1.2, 16000
 STEP_SECONDS, SAT_RATIO, QUARANTINE_TTL_S = 12, 0.97, 300
+# Quarantines expire after QUARANTINE_TTL_S. The ramp stops TTL_SAFETY_S before that, so a step never straddles the expiry; a re-probe needs one more
+# step plus REPROBE_SLACK_S for the status check and the 3 s pause, so it is skipped when less than that is left.
+TTL_SAFETY_S, REPROBE_SLACK_S = 40, 5
+NS = 1_000_000_000
 SAMPLE_S = 0.1
 
 SENDER_SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'layout-capacity-sender.py')).read()
@@ -118,7 +122,7 @@ def delivered_stats(series, idle_pps):
 
 def ramp(k, idle_pps, log):
     steps, pps = [], START_PPS
-    t_installed = time.monotonic()
+    t_installed_ns = time.monotonic_ns()
     while pps <= MAX_OFFERED_PPS:
         ok, flows = isolation_ok()
         if not ok:
@@ -136,7 +140,7 @@ def ramp(k, idle_pps, log):
         if ratio < SAT_RATIO:
             # Added after run-2026-10-20 (whose k=2 round 1 was stopped by a ~2 s stall): re-probe the same rate once; a step that recovers is a
             # transient, recorded and not treated as capacity. Runs before this change (see provenance harnessSha256) used the single-step rule.
-            if time.monotonic() - t_installed > QUARANTINE_TTL_S - 40 - STEP_SECONDS - 5:
+            if time.monotonic_ns() - t_installed_ns > (QUARANTINE_TTL_S - TTL_SAFETY_S - STEP_SECONDS - REPROBE_SLACK_S) * NS:
                 rec['saturated'] = True; rec['unconfirmed'] = True  # no time left inside the quarantine limit to re-probe: recorded as unconfirmed, not hidden
                 log('  no time left to re-probe inside the quarantine time limit; recording the step as saturated but unconfirmed'); break
             r2 = step(pps)
@@ -147,7 +151,7 @@ def ramp(k, idle_pps, log):
             if ratio2 < SAT_RATIO:
                 rec['saturated'] = True; break
             rec['transient'] = True
-        if time.monotonic() - t_installed > QUARANTINE_TTL_S - 40:
+        if time.monotonic_ns() - t_installed_ns > (QUARANTINE_TTL_S - TTL_SAFETY_S) * NS:
             log('  quarantine time limit too close; stopping the ramp'); steps[-1]['stoppedByTtl'] = True; break
         pps = int(pps * STEP_FACTOR)
         time.sleep(3)
