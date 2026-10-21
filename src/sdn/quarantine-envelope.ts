@@ -188,3 +188,17 @@ export function mayApproveQuarantine(
   const present = new Set(Object.keys(headers).filter((k) => headers[k] !== undefined).map((k) => k.toLowerCase()));
   return PROXY_HEADERS.every((h) => !present.has(h));
 }
+
+/**
+ * Whether a request may ASK for a quarantine (POST /api/sdn/quarantine): the same rule as approving one, because every detector that posts
+ * there (the TRT daemon, the GPU sentinel) runs on the bridge host and defaults to http://127.0.0.1:3003. Before 2026-10-21 the route accepted
+ * any peer that could reach port 3003. A detector that must run on another machine needs its own authentication first (a shared secret like the
+ * experiment endpoint's); loosening this check is not the way. Same limits as mayApproveQuarantine: it stops a remote peer and a cooperative
+ * proxy, it does not authenticate local processes.
+ */
+export function mayRequestQuarantine(
+  remoteAddress: string | undefined,
+  headers: Readonly<Record<string, string | string[] | undefined>>,
+): boolean {
+  return mayApproveQuarantine(remoteAddress, headers);
+}

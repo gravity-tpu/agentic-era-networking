@@ -74,7 +74,7 @@ import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
 import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type GateResult } from './install-gate.js';
-import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY } from './quarantine-precedence.js';
+import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY, defaultIsQuarantine } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
 import os from 'node:os';
@@ -97,6 +97,7 @@ import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from 
 import {
   decideQuarantine,
   mayApproveQuarantine,
+  mayRequestQuarantine,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
   type EvidenceValue,
@@ -624,7 +625,7 @@ export class ZodiacBridgeServer {
    * `advisory` is for a caller that must not be refused for throughput (a quarantine is containment): A8 then only produces a note, logged when not met.
    */
   private gateInstall(proposed: readonly IsolationRule[], what: string, advisory = false): GateResult {
-    const afterQuarantines = this.quarantineExpiry.size + proposed.filter((r) => r.id.startsWith('quarantine-')).length;
+    const afterQuarantines = this.quarantineExpiry.size + proposed.filter(defaultIsQuarantine).length; // the same predicate the gate uses, so the depth cannot drift from an id convention
     const result = admitInstall({
       current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT,
       ...(this.capacityTarget === null ? {} : {
@@ -1087,7 +1088,7 @@ export class ZodiacBridgeServer {
         // policy over a mistyped target would leave the data plane dark, so the verdict is logged instead.
         ...(this.capacityTarget === null ? {} : { capacityTarget: { ...this.capacityTarget, advisory: true }, capacityReserve: this.quarantineEnvelope.maxActive }),
       });
-      for (const n of startupGate.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] startup policy: ${n}`);
+      for (const n of startupGate.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] startup policy: ${n} (this assumes quarantines installed AFTER the policy; the restart path re-sends them BEFORE it, a layout the cost model does not cover)`);
       if (!startupGate.admitted) {
         const lines = startupGate.violations.map((v) => `${v.property}: ${v.detail}`);
         this.isolationStatus = verifierRejectedStatus(lines, Date.now(), process.hrtime.bigint());
@@ -1871,6 +1872,15 @@ export class ZodiacBridgeServer {
     // Council Invariant 1 (Anti-Shortcut) & Invariant 3 (Fail-Closed Isolation):
     // Synthesizes OpenFlow 1.3 priority 65535 drop rule to immediately isolate rogue/compromised agents on Port 1.
     if (url.pathname === '/api/sdn/quarantine' && req.method === 'POST') {
+      // Detectors run on this host and post to loopback; a peer elsewhere (LAN, tailnet) is refused before its body is read.
+      if (!mayRequestQuarantine(req.socket.remoteAddress, req.headers)) {
+        console.warn(`[!] [Quarantine] Refused a request from ${req.socket.remoteAddress ?? 'an unknown address'}: quarantine requests are accepted only from the bridge host (loopback, without proxy headers)`);
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, quarantined: false, code: 'not_local', error: 'quarantine requests are accepted only from the bridge host itself (loopback, without proxy headers)' }));
+        req.resume();
+        return;
+      }
       const MAX_PAYLOAD = 32 * 1024;
       const chunks: Buffer[] = [];
       let bytesReceived = 0;
