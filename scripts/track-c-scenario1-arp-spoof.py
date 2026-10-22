@@ -35,8 +35,12 @@ O2_IF = 'enx9c69d39dd0a6'        # secondary check: the Zodiac P3 tap (p1-arp's 
 REPLY_COUNT = 3
 CAPTURE_SECONDS = 8            # how long AFTER the send we wait before reading the captures
 CAPTURE_START_BUDGET_S = 5     # per capture: how long start_capture() will poll for "listening on" before giving up
+PID_WAIT_BUDGET_S = 5          # how long start_capture() will poll for the detached launch to report its PID before giving up
 CAPTURE_STARTS = 2             # O3 then O2, started one after the other -- both budgets can elapse (on O3's clock) before the send
-MISC_SSH_BUDGET_S = 6          # the MAC fetch plus both capture_alive() liveness checks between the captures starting and the send itself
+MISC_SSH_BUDGET_S = 6          # the MAC fetch plus both capture_alive() liveness checks between the captures starting and the send itself.
+# This is an ESTIMATE, not a measured bound -- actual SSH round-trip latency is not something this script controls. If it is exceeded, the
+# remote capture can still expire before the send; capture_alive() then refuses the run rather than silently recording a false "no hits"
+# (fail closed), so an underestimate here costs an aborted run, not a wrong result.
 SEND_SETTLE_S = 2              # slack after the send, before checking the captures are done, for SSH round-trip jitter
 # The remote tcpdump is told to run from ITS OWN start (O3's, the earlier of the two) through: both captures finishing their "listening on"
 # poll, the MAC fetch and liveness checks, the send, the post-send wait, and settle slack. This is a worst-case upper bound, not a typical
@@ -126,7 +130,7 @@ def start_capture(iface: str, tag: str) -> int:
     # in this repo for exactly this (the bridge restart recipe in the handoff memory); mirrored here rather than re-discovering it by trial.
     launch = (f"{rm_stale} && echo {base64.b64encode(SAMPLER_CAPTURE.encode()).decode()} | base64 -d > /tmp/tc1-sampler.py && "
               f"(setsid nohup python3 /tmp/tc1-sampler.py {iface} {REMOTE_CAPTURE_WINDOW_S} {out_path} > {out_path}.pidready 2>/dev/null < /dev/null &) && "
-              f"for i in $(seq 1 50); do grep -q PID: {out_path}.pidready 2>/dev/null && break; sleep 0.1; done; "
+              f"for i in $(seq 1 {PID_WAIT_BUDGET_S * 10}); do grep -q PID: {out_path}.pidready 2>/dev/null && break; sleep 0.1; done; "
               f"cat {out_path}.pidready")
     pid_line = run(JETSON, launch)
     pid = next((int(l.split(':', 1)[1]) for l in pid_line.splitlines() if l.startswith('PID:')), None)
@@ -146,7 +150,10 @@ def capture_alive(pid: int) -> bool:
     interface guess that a leftover or manually-started tcpdump could satisfy by coincidence). Called right before the send: a capture that
     already exited (its REMOTE_CAPTURE_WINDOW_S ran out before we were ready to send) must not be allowed to silently produce a false "no
     hits". This still cannot close the gap between this check returning and the ARP replies actually arriving (an SSH round-trip for the
-    send itself) -- SEND_SETTLE_S is the budget for that, not a claim this check removes the race entirely."""
+    send itself) -- SEND_SETTLE_S is the budget for that, not a claim this check removes the race entirely. It is also only meaningful
+    close to when the PID was issued: Linux recycles PIDs, so a check made long after the process that held this PID has exited and been
+    reaped could (in principle) match an unrelated later process. Every call site in this script calls it within seconds of start_capture(),
+    not after an unbounded delay, so this is noted rather than guarded against."""
     out = run(JETSON, f'kill -0 {pid} 2>/dev/null && echo alive || echo dead')
     return out.strip() == 'alive'
 
