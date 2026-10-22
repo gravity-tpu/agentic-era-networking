@@ -9,6 +9,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vites
 import http from 'node:http';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
 
@@ -182,3 +185,69 @@ describe('/api/sdn/quarantine accepts requests only from the bridge host', () =>
     expect(bridge.listQuarantineProposals().proposals.map((p) => p.targetIp)).toEqual(['10.0.2.50']);
   });
 });
+
+describe('the gate writes an audit trail', () => {
+  const trail = (): Array<Record<string, unknown>> => {
+    const f = process.env['ZODIAC_GATE_AUDIT_FILE'] ?? '';
+    return fs.existsSync(f) ? fs.readFileSync(f, 'utf-8').trim().split('\n').filter((l) => l !== '').map((l) => JSON.parse(l) as Record<string, unknown>) : [];
+  };
+
+  it('records a refused allow request with the route, the peer, the proposed rule and the failed properties', async () => {
+    const r = await call('POST', '/api/sdn/allow', { srcMac: 'aa:bb:cc:dd:ee:ff', outPort: 2 });
+    expect(r.status).toBe(422);
+    const t = trail();
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ event: 'refused', route: 'allow', peer: '127.0.0.1' });
+    expect(JSON.stringify(t[0]!['violations'])).toContain('A2');
+    expect((t[0]!['proposed'] as Array<{ outputPorts: number[] }>)[0]?.outputPorts).toEqual([2]);
+  });
+
+  it('records a refused quarantine (A4) with the peer that approved it', async () => {
+    const proposed = await call('POST', '/api/sdn/quarantine', { targetIp: '10.0.2.50', reason: 'rate', priority: 100 });
+    expect(proposed.status).toBe(202);
+    const approved = await call('POST', '/api/sdn/quarantine/approve', { targetIp: '10.0.2.50' });
+    expect(approved.status).toBe(409);
+    const t = trail();
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ event: 'refused', route: 'quarantine', peer: '127.0.0.1' });
+    expect(JSON.stringify(t[0]!['violations'])).toContain('A4');
+  });
+
+  it('writes nothing for an install the gate admits', () => {
+    expect(bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true }).status).toBe(200);
+    expect(trail()).toEqual([]);
+  });
+
+  it('records an advisory throughput shortfall as an advisory event, and the quarantine still goes through', () => {
+    vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '12000');
+    const b = new ZodiacBridgeServer(new ZodiacController());
+    expect(b.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, peer: '127.0.0.1' }).status).toBe(200);
+    const t = trail();
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ event: 'advisory', route: 'quarantine', peer: '127.0.0.1' });
+    expect(JSON.stringify(t[0]!['notes'])).toContain('NOT met');
+    vi.unstubAllEnvs();
+  });
+
+  it('never changes the outcome when the trail cannot be written: the refusal stands and the failure is reported', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-audit-fail-'));
+    fs.writeFileSync(path.join(dir, 'blocker'), 'x');
+    vi.stubEnv('ZODIAC_GATE_AUDIT_FILE', path.join(dir, 'blocker', 'audit.jsonl'));
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const b = new ZodiacBridgeServer(new ZodiacController());
+    const r = b.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
+    expect(r.status).toBe(409);
+    expect(r.body['code']).toBe('gate_refused');
+    expect(err.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/the refusal stands, but it is not in the audit trail/);
+    vi.unstubAllEnvs();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('says in the journal when a flood passes the per-minute limit (the file alone would not show a flood with no later event)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (let i = 0; i < 62; i++) bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
+    expect(trail()).toHaveLength(60);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/audit rate limit reached: 1 gate event\(s\) counted but not written/);
+  });
+});
+
