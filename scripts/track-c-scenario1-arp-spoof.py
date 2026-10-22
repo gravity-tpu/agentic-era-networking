@@ -33,9 +33,25 @@ TARGET_IP = '10.0.2.119'         # the Mac's workload-segment alias (owner-appro
 O3_IF = 'enx9c69d39ddcc0'        # ground truth: mirror of the Zodiac P2 link
 O2_IF = 'enx9c69d39dd0a6'        # secondary check: the Zodiac P3 tap (p1-arp's declared second output)
 REPLY_COUNT = 3
-CAPTURE_SECONDS = 8
+CAPTURE_SECONDS = 8            # how long AFTER the send we wait before reading the captures
+CAPTURE_START_BUDGET_S = 5     # per capture: how long start_capture() will poll for "listening on" before giving up
+CAPTURE_STARTS = 2             # O3 then O2, started one after the other -- both budgets can elapse before the send
+SEND_SETTLE_S = 2              # slack after the send, before checking the captures are done, for SSH round-trip jitter
+# The remote tcpdump is told to run for long enough to cover both captures starting (worst case, back to back) PLUS the actual
+# post-send wait PLUS settle -- not a guess: every term here is a budget already spent somewhere else in this script.
+REMOTE_CAPTURE_WINDOW_S = CAPTURE_START_BUDGET_S * CAPTURE_STARTS + CAPTURE_SECONDS + SEND_SETTLE_S
 SSH_TIMEOUT_S = 20
-ADVERSARY_BIND_SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'adversary-bind.py')).read()
+ADVERSARY_BIND_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'adversary-bind.py')
+
+
+def read_adversary_bind_src() -> str:
+    """Read lazily (not at import time), so --help/--dry-run usage errors surface before a missing-file error would. A clear message, not
+    a bare FileNotFoundError traceback, if scripts/adversary-bind.py is not next to this script."""
+    try:
+        with open(ADVERSARY_BIND_PATH) as f:
+            return f.read()
+    except OSError as err:
+        raise SystemExit(f'cannot read {ADVERSARY_BIND_PATH}: {err}; it must sit next to this script') from err
 
 
 def now_et() -> str:
@@ -96,9 +112,18 @@ p.wait(timeout=3)
 
 def start_capture(iface: str, tag: str) -> None:
     out_path = f'/tmp/tc1-{tag}.txt'
-    status = py_on(JETSON, SAMPLER_CAPTURE, [iface, str(CAPTURE_SECONDS + 2), out_path], timeout=SSH_TIMEOUT_S)
+    status = py_on(JETSON, SAMPLER_CAPTURE, [iface, str(REMOTE_CAPTURE_WINDOW_S), out_path], timeout=SSH_TIMEOUT_S)
     if status.strip() != 'ready':
         raise RuntimeError(f'{tag} capture on {iface} did not confirm "listening on" within 5 s; refusing to proceed without it')
+
+
+def capture_alive(iface: str) -> bool:
+    """Whether the remote tcpdump on `iface` is still running right now. Matches on the interface name, which is unique per capture (O3_IF
+    != O2_IF): pgrep only sees tcpdump's own argv, not the python parent's file-redirection target, so a tag would never match here. Called
+    right before the send: a capture that already exited (its REMOTE_CAPTURE_WINDOW_S ran out before we were ready to send) must not be
+    allowed to silently produce a false "no hits"."""
+    out = run(JETSON, f'pgrep -f "tcpdump -i {iface}" >/dev/null 2>&1 && echo alive || echo dead')
+    return out.strip() == 'alive'
 
 
 def fetch_capture(tag: str) -> list:
@@ -139,7 +164,8 @@ def main() -> None:
     result = {'startedEt': now_et(), 'dryRun': a.dry_run, 'targetIp': TARGET_IP, 'replyCount': reply_count}
 
     log('step 1: preflight on the adversary node (scripts/adversary-bind.py)')
-    run(NODE02, f"echo {base64.b64encode(ADVERSARY_BIND_SRC.encode()).decode()} | base64 -d > /tmp/adversary-bind.py")
+    adversary_bind_src = read_adversary_bind_src()
+    run(NODE02, f"echo {base64.b64encode(adversary_bind_src.encode()).decode()} | base64 -d > /tmp/adversary-bind.py")
     preflight_raw = run(NODE02, 'python3 /tmp/adversary-bind.py preflight')
     preflight = json.loads(preflight_raw)
     result['preflight'] = preflight
@@ -164,11 +190,20 @@ def main() -> None:
     start_capture(O2_IF, 'o2')
 
     if reply_count > 0:
+        for iface, tag in [(O3_IF, 'o3'), (O2_IF, 'o2')]:
+            if not capture_alive(iface):
+                log(f'  REFUSED: the {tag} capture on {iface} is not running anymore; a "no hits" result would be meaningless, not a finding')
+                result['refusalReason'] = f'{tag} capture died before the send'
+                json.dump(result, open(os.path.join(a.out, 'result.json'), 'w'), indent=1)
+                raise SystemExit(1)
         log(f'step 4: sending {reply_count} unsolicited ARP replies from the adversary, bound to eth0, claiming {TARGET_IP}')
         try:
-            out = run(NODE02, f'arping -A -I eth0 -c {reply_count} -w 1 {TARGET_IP} 2>&1; echo "arping exit: $?"')
-            log(f'  {out.strip()[:400]}')
-            result['sendOk'] = 'arping exit: 0' in out or 'Unicast reply' in out or 'Sent' in out
+            out = run(NODE02, f'arping -A -I eth0 -c {reply_count} -w 1 {TARGET_IP}; echo "__TC1_ARPING_EXIT__:$?"')
+            marker = next((l for l in out.splitlines() if l.startswith('__TC1_ARPING_EXIT__:')), None)
+            log(f'  {out.replace(marker, "").strip()[:400] if marker else out.strip()[:400]}')
+            result['sendOk'] = marker == '__TC1_ARPING_EXIT__:0'
+            if marker is None:
+                log('  WARNING: could not find the exit-code marker in arping\'s output; sendOk left False (fail closed, not assumed)')
         except RuntimeError as err:
             log(f'  SEND FAILED: {err}')
             result['sendOk'] = False
@@ -193,16 +228,23 @@ def main() -> None:
     after = local_arp(TARGET_IP)
     result['after'] = after
     log(f'  after: {after["raw"]}')
-    result['cacheChangedToAdversary'] = bool(reply_count > 0 and after.get('mac', '').lower() == adversary_mac.lower())
+    result['cacheChangedToAdversary'] = bool(reply_count > 0 and (after.get('mac') or '').lower() == adversary_mac.lower())
     log(f'  cache changed to the adversary\'s MAC: {result["cacheChangedToAdversary"]}')
 
     log('step 6: corrective ARP cache fix (always run, regardless of outcome)')
     corrected = correct_local_arp(TARGET_IP)
     result['corrected'] = corrected
-    result['correctionOk'] = corrected.get('mac') == before.get('mac')
-    log(f'  after correction: {corrected["raw"]} (matches the pre-run state: {result["correctionOk"]})')
+    still_poisoned = reply_count > 0 and (corrected.get('mac') or '').lower() == adversary_mac.lower()
+    if before.get('mac') is not None:
+        result['correctionOk'] = (not still_poisoned) and corrected.get('mac') == before.get('mac')
+        log(f'  after correction: {corrected["raw"]} (matches the pre-run state: {result["correctionOk"]})')
+    else:
+        # No known-good baseline existed before the run (the pre-run read itself found nothing) -- "restored" cannot be claimed, only
+        # "not still showing the adversary's MAC". Recorded as such rather than a vacuous True from comparing None to None.
+        result['correctionOk'] = not still_poisoned
+        log(f'  after correction: {corrected["raw"]} (no pre-run baseline to restore to; not still poisoned: {result["correctionOk"]})')
     if not result['correctionOk']:
-        log('  WARNING: the corrective step did not restore the original entry; manual follow-up is needed')
+        log('  WARNING: the corrective step did not clear the poisoned state; manual follow-up is needed')
 
     json.dump(result, open(os.path.join(a.out, 'result.json'), 'w'), indent=1)
     log(f'done; wrote {a.out}/result.json')
