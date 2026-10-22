@@ -6,11 +6,16 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 
-process.env['ZODIAC_QUARANTINE_STATE_FILE'] = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zodiac-test-qstate-')), 'quarantine-state.json');
+const workerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zodiac-test-qstate-'));
+process.env['ZODIAC_QUARANTINE_STATE_FILE'] = path.join(workerDir, 'quarantine-state.json');
+// The install gate's audit trail goes to the worker's own directory too, never to /var/lib/zodiac.
+process.env['ZODIAC_GATE_AUDIT_FILE'] = path.join(workerDir, 'install-gate-audit.jsonl');
 
 // A fresh bridge in the next test must not restore what the previous test's bridge saved.
 beforeEach(() => {
   const file = process.env['ZODIAC_QUARANTINE_STATE_FILE'];
   if (file !== undefined && !file.startsWith(os.tmpdir())) return; // a test that points at its own path manages it itself
   if (file !== undefined) fs.rmSync(file, { force: true });
+  const audit = process.env['ZODIAC_GATE_AUDIT_FILE'];
+  if (audit !== undefined && audit.startsWith(os.tmpdir())) fs.rmSync(audit, { force: true });
 });

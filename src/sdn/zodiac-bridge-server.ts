@@ -74,6 +74,7 @@ import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
 import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type GateResult } from './install-gate.js';
+import { GateAuditLog, resolveGateAuditFile, type GateAuditRoute } from './gate-audit.js';
 import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY, defaultIsQuarantine } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
@@ -576,6 +577,8 @@ export class ZodiacBridgeServer {
   private readonly quarantineEnvelope: QuarantineEnvelopeConfig;
   /** The declared throughput target (A8), or null. Enforced on the allow route; advisory on quarantines and the startup policy. */
   private readonly capacityTarget: CapacityTargetConfig['target'];
+  /** Append-only trail of what the install gate refused (gate-audit.ts). */
+  private readonly gateAudit: GateAuditLog;
   /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
   private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint; readonly expiresAtMs: number; readonly reason: string; readonly priority: number }> = new Map();
   /** Where active quarantines are kept so a bridge restart puts them back (see quarantine-persistence.ts). */
@@ -624,10 +627,12 @@ export class ZodiacBridgeServer {
    * The pre-install gate (install-gate.ts) over the table as it would be after adding `proposed`. A refusal is logged with its properties.
    * `advisory` is for a caller that must not be refused for throughput (a quarantine is containment): A8 then only produces a note, logged when not met.
    */
-  private gateInstall(proposed: readonly IsolationRule[], what: string, advisory = false): GateResult {
+  private gateInstall(proposed: readonly IsolationRule[], what: string, ctx: { route: GateAuditRoute; peer: string | null; advisory?: boolean }): GateResult {
+    const advisory = ctx.advisory === true;
     const afterQuarantines = this.quarantineExpiry.size + proposed.filter(defaultIsQuarantine).length; // the same predicate the gate uses, so the depth cannot drift from an id convention
+    const table = this.tableModel();
     const result = admitInstall({
-      current: this.tableModel(), proposed, intent: PORT1_ISOLATION_INTENT,
+      current: table, proposed, intent: PORT1_ISOLATION_INTENT,
       ...(this.capacityTarget === null ? {} : {
         capacityTarget: { ...this.capacityTarget, advisory },
         // The installed quarantines are in the table model, so the reserve is only the room the envelope still has: table quarantines plus reserve equals the envelope's cap.
@@ -635,8 +640,18 @@ export class ZodiacBridgeServer {
       }),
     });
     if (!result.admitted) console.warn(`[!] [Install gate] REFUSED ${what}: ${result.violations.map((v) => `${v.property} (${v.ruleIds.join(',')})`).join('; ')}`);
-    for (const n of result.notes) if (n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable'))) console.warn(`[!] [Install gate] ${what}: ${n}`);
+    const shortfalls = result.notes.filter((n) => n.startsWith('A8') && (n.includes('NOT met') || n.includes('unverifiable')));
+    for (const n of shortfalls) console.warn(`[!] [Install gate] ${what}: ${n}`);
+    if (!result.admitted || shortfalls.length > 0) {
+      this.auditGate({ event: result.admitted ? 'advisory' : 'refused', route: ctx.route, peer: ctx.peer, what, proposed, violations: result.violations, notes: result.admitted ? shortfalls : result.notes, tableRules: table.length + proposed.length });
+    }
     return result;
+  }
+
+  /** Writes a gate audit line. The outcome of the install never depends on this: a failure is logged loudly and counted (gate-audit.ts). */
+  private auditGate(input: Parameters<GateAuditLog['record']>[0]): void {
+    const err = this.gateAudit.record(input);
+    if (err !== null) console.error(`[!] [Install gate] ${err}; the refusal stands, but it is not in the audit trail`);
   }
 
   /**
@@ -654,6 +669,8 @@ export class ZodiacBridgeServer {
     evidence?: Readonly<Record<string, EvidenceValue>> | undefined;
     /** True only when a person approved a proposal: installs even in mode `propose`. The envelope still applies. */
     approved?: boolean | undefined;
+    /** The peer address the request came from, for the gate's audit trail. */
+    peer?: string | undefined;
   }): { status: number; body: Record<string, unknown> } {
     const decision = decideQuarantine({ targetIp: options.targetIp, targetMac: options.targetMac }, this.activeQuarantineIps(), this.quarantineEnvelope);
     if (!decision.allow) {
@@ -697,7 +714,7 @@ export class ZodiacBridgeServer {
       id: 'quarantine-pending',
       flowMod: { command: FlowModCommand.OFPFC_ADD, priority: options.priority ?? QUARANTINE_PRIORITY, outputPorts: [], match: { etherType: 0x0800, srcIp: options.targetIp, srcIpPrefixLen: 32 } },
     };
-    const gate = this.gateInstall([quarantineRule], `quarantine of ${options.targetIp}`, true);
+    const gate = this.gateInstall([quarantineRule], `quarantine of ${options.targetIp}`, { route: 'quarantine', peer: options.peer ?? null, advisory: true });
     if (!gate.admitted) {
       return {
         status: 409,
@@ -766,7 +783,7 @@ export class ZodiacBridgeServer {
    * A person approves a proposal: it is installed, time-limited, if it is still inside the envelope. The proposal is
    * kept if the install is refused (for example the cap is full), so it can be approved again later.
    */
-  public approveQuarantineProposal(targetIp: string): { status: number; body: Record<string, unknown> } {
+  public approveQuarantineProposal(targetIp: string, peer?: string): { status: number; body: Record<string, unknown> } {
     const proposal = this.quarantineProposals.get(targetIp, process.hrtime.bigint());
     if (proposal === null) {
       return { status: 404, body: { ok: false, quarantined: false, error: `no current proposal for ${targetIp} (none was made, it was already handled, or it is older than the approval window)` } };
@@ -777,6 +794,7 @@ export class ZodiacBridgeServer {
       priority: proposal.priority,
       evidence: proposal.evidence,
       approved: true,
+      ...(peer === undefined ? {} : { peer }),
     });
     if (outcome.status === 200) this.quarantineProposals.remove(targetIp);
     return outcome;
@@ -939,6 +957,7 @@ export class ZodiacBridgeServer {
     const capacityConfig = parseCapacityTarget(process.env);
     this.capacityTarget = capacityConfig.target;
     for (const w of capacityConfig.warnings) console.warn(`[!] [Install gate] ${w}`);
+    this.gateAudit = new GateAuditLog({ file: resolveGateAuditFile(process.env) });
     this.quarantineStateFile = resolveQuarantineStateFile(process.env);
     this.loadPersistedQuarantines();
     this.isolationRechecker = new IsolationRechecker({
@@ -1093,6 +1112,7 @@ export class ZodiacBridgeServer {
         const lines = startupGate.violations.map((v) => `${v.property}: ${v.detail}`);
         this.isolationStatus = verifierRejectedStatus(lines, Date.now(), process.hrtime.bigint());
         console.error(`[!] [Bridge Server] Port 1 isolation policy REFUSED by the install gate; data plane left at table-miss DROP:\n  ${lines.join('\n  ')}`);
+        this.auditGate({ event: 'refused', route: 'startup', peer: null, what: 'startup isolation policy', proposed: isolationPolicy, violations: startupGate.violations, notes: startupGate.notes, tableRules: isolationPolicy.length });
         return;
       }
       this.allowRuleModel.clear(); // the table is being rewritten from the policy: earlier allow rules are gone
@@ -1950,6 +1970,7 @@ export class ZodiacBridgeServer {
             reason: typeof reason === 'string' ? reason.trim() : 'Neural Anomaly Detected',
             priority: typeof priority === 'number' ? priority : 65535,
             evidence: sanitizeEvidence(body.evidence),
+            ...(req.socket.remoteAddress === undefined ? {} : { peer: req.socket.remoteAddress }),
           });
           res.statusCode = outcome.status;
           res.setHeader('Content-Type', 'application/json');
@@ -2023,7 +2044,7 @@ export class ZodiacBridgeServer {
             fail(400, 'targetIp (IPv4) required');
             return;
           }
-          const outcome = this.approveQuarantineProposal(targetIp);
+          const outcome = this.approveQuarantineProposal(targetIp, req.socket.remoteAddress);
           res.statusCode = outcome.status;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(outcome.body));
@@ -2205,7 +2226,7 @@ export class ZodiacBridgeServer {
               match: { ...(inPort !== undefined ? { inPort } : {}), ...(cleanSrcMac ? { srcMac: cleanSrcMac } : {}), ...(cleanDstMac ? { dstMac: cleanDstMac } : {}) },
             },
           };
-          const gate = this.gateInstall([allowRule], `allow rule ${ruleId}`);
+          const gate = this.gateInstall([allowRule], `allow rule ${ruleId}`, { route: 'allow', peer: req.socket.remoteAddress ?? null });
           if (!gate.admitted) {
             res.statusCode = 422;
             res.setHeader('Content-Type', 'application/json');
