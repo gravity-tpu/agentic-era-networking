@@ -59,7 +59,9 @@ TOOL_BINDING_CONVENTIONS = {
 
 def bind_socket(sock: socket.socket, iface: str = WORKLOAD_IFACE) -> None:
     """Binds a socket to one interface (Linux SO_BINDTODEVICE): traffic on it can leave only through `iface`, regardless of routing. Needs root.
-    Refuses to bind to an interface that is not currently present and up, rather than risk a silent no-op or a bind to the wrong device on a typo."""
+    Refuses to bind to an interface that is not currently present and up, rather than risk a silent no-op or a bind to the wrong device on a typo.
+    Raises ValueError for that refusal, RuntimeError if SO_BINDTODEVICE is unavailable, and NetworkStateError (a RuntimeError) if the interface
+    state cannot even be read — callers catching RuntimeError get all three; callers catching only ValueError will not catch the state-read case."""
     if not hasattr(socket, 'SO_BINDTODEVICE'):
         raise RuntimeError('SO_BINDTODEVICE is not available on this platform (Linux only); refusing to send unbound')
     present = iface_state()['interfaces']
@@ -103,12 +105,29 @@ def iface_state() -> dict:
     return {'interfaces': ifaces, 'defaultRouteDevices': default_devs}
 
 
-def _in_any_subnet(address: str, subnets: list) -> bool:
+def _parse_ip(address: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
-        ip = ipaddress.ip_address(address)
+        return ipaddress.ip_address(address)
     except ValueError:
-        return False  # not a parseable IPv4/IPv6 address (shouldn't happen from `ip -json`); treated as unexpected rather than silently allowed
-    return ip in IPV6_LINK_LOCAL or any(ip in ipaddress.ip_network(s) for s in subnets)
+        return None  # not a parseable IPv4/IPv6 address. Normal `ip -json addr show` output doesn't produce these, but nothing here depends on
+        #  that holding for every `ip` version or OS: callers treat an unparseable address as neither link-local nor in any expected subnet,
+        #  which is fail-closed in both the places this is used (an unexpected address on the workload interface, or a routable leak elsewhere).
+
+
+def _is_link_local(address: str) -> bool:
+    ip = _parse_ip(address)
+    return ip is not None and ip in IPV6_LINK_LOCAL
+
+
+def _in_any_subnet(address: str, subnets: list) -> bool:
+    ip = _parse_ip(address)
+    return ip is not None and (ip in IPV6_LINK_LOCAL or any(ip in ipaddress.ip_network(s) for s in subnets))
+
+
+def _is_routable(address: str) -> bool:
+    """False only for link-local (RFC 4291): the one address class that structurally cannot reach anywhere off the local segment, so its
+    presence on a non-workload interface is not a leak. An unparseable address is treated as routable (fail-closed: flag it rather than ignore it)."""
+    return not _is_link_local(address)
 
 
 def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WORKLOAD_SUBNETS) -> dict:
@@ -150,7 +169,7 @@ def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WOR
             continue
         # Link-local-only is not a leak (see IPV6_LINK_LOCAL above): an interface with nothing but a link-local address cannot reach the lab
         # LAN or anywhere off-link, so it is not reported here even though it is "up" with "an address".
-        routable = [a for a in info['addresses'] if not _in_any_subnet(a, [])]
+        routable = [a for a in info['addresses'] if _is_routable(a)]
         if routable:
             leaking[name] = routable
     if leaking:
