@@ -94,7 +94,7 @@ Limits: ICMP and ARP only; small samples (five pings per run); one switch, firmw
 
 ### Track C: Adversarial testing on hardware
 
-Use the adversary node (the Pi 3B+ in the target topology) as the red team against the live policy and report what happens. Workload `wlan0` interfaces are off during runs, otherwise the lab-LAN Wi-Fi path bypasses the isolation policy being tested.
+Use the adversary node (the Pi 3B+ in the target topology) as the red team against the live policy and report what happens. Workload `wlan0` interfaces are off during runs, otherwise the lab-LAN Wi-Fi path bypasses the isolation policy being tested. **That understates it:** any interface that reaches the lab LAN without transiting the Zodiac is the same risk, Wi-Fi or wired, and turning one off does not remove the risk if another exists or a script forgets to bind to the workload interface explicitly. See [`docs/design/track-c-adversary-network.md`](design/track-c-adversary-network.md) (found 2026-10-22) and `scripts/adversary-bind.py`, which every scenario script must use before it is trusted to prove anything about the switch.
 
 Scenarios, each repeatable by script and reported with detection and containment times:
 
