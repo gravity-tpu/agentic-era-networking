@@ -35,11 +35,14 @@ O2_IF = 'enx9c69d39dd0a6'        # secondary check: the Zodiac P3 tap (p1-arp's 
 REPLY_COUNT = 3
 CAPTURE_SECONDS = 8            # how long AFTER the send we wait before reading the captures
 CAPTURE_START_BUDGET_S = 5     # per capture: how long start_capture() will poll for "listening on" before giving up
-CAPTURE_STARTS = 2             # O3 then O2, started one after the other -- both budgets can elapse before the send
+CAPTURE_STARTS = 2             # O3 then O2, started one after the other -- both budgets can elapse (on O3's clock) before the send
+MISC_SSH_BUDGET_S = 6          # the MAC fetch plus both capture_alive() liveness checks between the captures starting and the send itself
 SEND_SETTLE_S = 2              # slack after the send, before checking the captures are done, for SSH round-trip jitter
-# The remote tcpdump is told to run for long enough to cover both captures starting (worst case, back to back) PLUS the actual
-# post-send wait PLUS settle -- not a guess: every term here is a budget already spent somewhere else in this script.
-REMOTE_CAPTURE_WINDOW_S = CAPTURE_START_BUDGET_S * CAPTURE_STARTS + CAPTURE_SECONDS + SEND_SETTLE_S
+# The remote tcpdump is told to run from ITS OWN start (O3's, the earlier of the two) through: both captures finishing their "listening on"
+# poll, the MAC fetch and liveness checks, the send, the post-send wait, and settle slack. This is a worst-case upper bound, not a typical
+# case (each polling step usually returns in well under its budget); it is sized to the slowest path actually exercised by this script, not
+# an arbitrary margin.
+REMOTE_CAPTURE_WINDOW_S = CAPTURE_START_BUDGET_S * CAPTURE_STARTS + MISC_SSH_BUDGET_S + CAPTURE_SECONDS + SEND_SETTLE_S
 SSH_TIMEOUT_S = 20
 ADVERSARY_BIND_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'adversary-bind.py')
 
@@ -96,6 +99,7 @@ import subprocess, sys, time
 iface, secs, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 err_path = out_path + '.err'
 p = subprocess.Popen(['tcpdump', '-i', iface, '-nn', '-e', '-l', 'arp'], stdout=open(out_path, 'w'), stderr=open(err_path, 'w'))
+print(f'PID:{p.pid}', flush=True)  # read by capture_alive(): a kill -0 on this exact PID, not a name/interface guess
 start = time.monotonic()
 ready = False
 while time.monotonic() - start < 5:
@@ -110,19 +114,40 @@ p.wait(timeout=3)
 '''
 
 
-def start_capture(iface: str, tag: str) -> None:
+def start_capture(iface: str, tag: str) -> int:
+    """Starts the remote capture and returns its PID (printed as the first line), for a deterministic liveness check later -- not a
+    name/interface guess, which a leftover or manually-started tcpdump on the same interface could satisfy by coincidence."""
     out_path = f'/tmp/tc1-{tag}.txt'
-    status = py_on(JETSON, SAMPLER_CAPTURE, [iface, str(REMOTE_CAPTURE_WINDOW_S), out_path], timeout=SSH_TIMEOUT_S)
+    # py_on() blocks until SAMPLER_CAPTURE's own sleep(secs) finishes, i.e. until the capture ends -- so its PID line must be read via a
+    # separate, immediately-returning SSH call to the same remote script's stdout as that sleep is still running. Launched detached:
+    rm_stale = f"rm -f {out_path} {out_path}.err {out_path}.pidready"
+    # setsid, not just nohup, is required: nohup alone only ignores SIGHUP, it does not leave the SSH session's process group, so sshd can
+    # still wait on it even with every std stream redirected away. setsid + a backgrounded subshell is the pattern already proven elsewhere
+    # in this repo for exactly this (the bridge restart recipe in the handoff memory); mirrored here rather than re-discovering it by trial.
+    launch = (f"{rm_stale} && echo {base64.b64encode(SAMPLER_CAPTURE.encode()).decode()} | base64 -d > /tmp/tc1-sampler.py && "
+              f"(setsid nohup python3 /tmp/tc1-sampler.py {iface} {REMOTE_CAPTURE_WINDOW_S} {out_path} > {out_path}.pidready 2>/dev/null < /dev/null &) && "
+              f"for i in $(seq 1 50); do grep -q PID: {out_path}.pidready 2>/dev/null && break; sleep 0.1; done; "
+              f"cat {out_path}.pidready")
+    pid_line = run(JETSON, launch)
+    pid = next((int(l.split(':', 1)[1]) for l in pid_line.splitlines() if l.startswith('PID:')), None)
+    if pid is None:
+        raise RuntimeError(f'{tag} capture on {iface} never reported a PID; refusing to proceed without one')
+    # One remote SSH call with its own polling loop, not a python-side loop making a fresh SSH connection per check: a new connection's
+    # handshake overhead (easily 1-2s) would burn through CAPTURE_START_BUDGET_S in a couple of iterations without ever genuinely polling.
+    status = run(JETSON, f'for i in $(seq 1 {CAPTURE_START_BUDGET_S * 10}); do grep -q "listening on" {out_path}.err 2>/dev/null && '
+                          f'{{ echo ready; exit 0; }}; sleep 0.1; done; echo not-ready')
     if status.strip() != 'ready':
-        raise RuntimeError(f'{tag} capture on {iface} did not confirm "listening on" within 5 s; refusing to proceed without it')
+        raise RuntimeError(f'{tag} capture on {iface} did not confirm "listening on" within {CAPTURE_START_BUDGET_S}s; refusing to proceed without it')
+    return pid
 
 
-def capture_alive(iface: str) -> bool:
-    """Whether the remote tcpdump on `iface` is still running right now. Matches on the interface name, which is unique per capture (O3_IF
-    != O2_IF): pgrep only sees tcpdump's own argv, not the python parent's file-redirection target, so a tag would never match here. Called
-    right before the send: a capture that already exited (its REMOTE_CAPTURE_WINDOW_S ran out before we were ready to send) must not be
-    allowed to silently produce a false "no hits"."""
-    out = run(JETSON, f'pgrep -f "tcpdump -i {iface}" >/dev/null 2>&1 && echo alive || echo dead')
+def capture_alive(pid: int) -> bool:
+    """Whether the remote tcpdump process with this exact PID is still running right now (`kill -0`, deterministic -- not a name or
+    interface guess that a leftover or manually-started tcpdump could satisfy by coincidence). Called right before the send: a capture that
+    already exited (its REMOTE_CAPTURE_WINDOW_S ran out before we were ready to send) must not be allowed to silently produce a false "no
+    hits". This still cannot close the gap between this check returning and the ARP replies actually arriving (an SSH round-trip for the
+    send itself) -- SEND_SETTLE_S is the budget for that, not a claim this check removes the race entirely."""
+    out = run(JETSON, f'kill -0 {pid} 2>/dev/null && echo alive || echo dead')
     return out.strip() == 'alive'
 
 
@@ -186,13 +211,13 @@ def main() -> None:
     log(f'  before: {before["raw"]}')
 
     log('step 3: starting O3 (ground truth, Zodiac P2 mirror) and O2 (Zodiac P3 tap) captures')
-    start_capture(O3_IF, 'o3')
-    start_capture(O2_IF, 'o2')
+    o3_pid = start_capture(O3_IF, 'o3')
+    o2_pid = start_capture(O2_IF, 'o2')
 
     if reply_count > 0:
-        for iface, tag in [(O3_IF, 'o3'), (O2_IF, 'o2')]:
-            if not capture_alive(iface):
-                log(f'  REFUSED: the {tag} capture on {iface} is not running anymore; a "no hits" result would be meaningless, not a finding')
+        for pid, tag in [(o3_pid, 'o3'), (o2_pid, 'o2')]:
+            if not capture_alive(pid):
+                log(f'  REFUSED: the {tag} capture (pid {pid}) is not running anymore; a "no hits" result would be meaningless, not a finding')
                 result['refusalReason'] = f'{tag} capture died before the send'
                 json.dump(result, open(os.path.join(a.out, 'result.json'), 'w'), indent=1)
                 raise SystemExit(1)
