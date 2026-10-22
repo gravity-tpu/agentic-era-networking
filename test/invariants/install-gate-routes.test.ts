@@ -242,5 +242,12 @@ describe('the gate writes an audit trail', () => {
     vi.unstubAllEnvs();
     fs.rmSync(dir, { recursive: true, force: true });
   });
+
+  it('says in the journal when a flood passes the per-minute limit (the file alone would not show a flood with no later event)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (let i = 0; i < 62; i++) bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
+    expect(trail()).toHaveLength(60);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/audit rate limit reached: 1 gate event\(s\) counted but not written/);
+  });
 });
 

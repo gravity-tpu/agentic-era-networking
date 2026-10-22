@@ -650,8 +650,12 @@ export class ZodiacBridgeServer {
 
   /** Writes a gate audit line. The outcome of the install never depends on this: a failure is logged loudly and counted (gate-audit.ts). */
   private auditGate(input: Parameters<GateAuditLog['record']>[0]): void {
+    const before = this.gateAudit.totalSuppressed;
     const err = this.gateAudit.record(input);
     if (err !== null) console.error(`[!] [Install gate] ${err}; the refusal stands, but it is not in the audit trail`);
+    // A flood past the per-minute limit is counted, not written; say so in the journal at once (the first one, then every 100th), because a flood with no later event leaves nothing in the file.
+    const total = this.gateAudit.totalSuppressed;
+    if (total > before && (total === 1 || total % 100 === 0)) console.warn(`[!] [Install gate] audit rate limit reached: ${total} gate event(s) counted but not written since the bridge started`);
   }
 
   /**

@@ -10,9 +10,10 @@
  * line could be written (fail closed; Invariant 3), and a write failure is returned as an error STRING, counted and logged, never thrown and
  * never silently dropped. It is synchronous and small (refusals are rare, and the allow route is operator-only), so it needs no buffer.
  *
- * Bounds (Invariant 5): every string is truncated, a record carries at most MAX_VIOLATIONS violations, the file rotates once at MAX_FILE_BYTES
- * (keeping one previous file), and at most MAX_EVENTS_PER_MINUTE are written per minute: beyond that events are COUNTED, and the count is written
- * into the next line that is allowed, so a flood cannot fill the disk and cannot hide that it happened. Time is injected, so tests need no sleeps.
+ * Bounds (Invariant 5): every string is truncated, a record carries at most MAX_VIOLATIONS violations and copies only the primitive fields of a rule's
+ * match, the file rotates once at MAX_FILE_BYTES (keeping one previous file, so at most about twice that on disk), and at most MAX_EVENTS_PER_MINUTE
+ * are written per minute: beyond that events are COUNTED, the count is written into the next line that is allowed, and `totalSuppressed` is exposed so
+ * the caller can say so in the journal at once (a flood with no later event would otherwise leave no trace in the file). Time is injected, so tests need no sleeps.
  *
  * What it is not: tamper-evident. The file is owned by the bridge's user; a process running as that user can edit it.
  */
@@ -28,6 +29,18 @@ export const MAX_EVENTS_PER_MINUTE = 60;
 export const MAX_VIOLATIONS = 20;
 const MAX_STRING = 500;
 const MAX_NOTES = 10;
+const MAX_MATCH_FIELDS = 16;
+
+/** Copies at most MAX_MATCH_FIELDS primitive fields of a match (strings clipped); nested values are dropped, so a hostile object cannot widen a line or break the copy. */
+function boundedMatch(match: Readonly<Record<string, unknown>> | undefined): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(match ?? {})) {
+    if (Object.keys(out).length >= MAX_MATCH_FIELDS) break;
+    if (typeof v === 'string') out[clip(k)] = clip(v);
+    else if (typeof v === 'number' || typeof v === 'boolean') out[clip(k)] = v;
+  }
+  return out;
+}
 
 export type GateAuditRoute = 'allow' | 'quarantine' | 'startup';
 export type GateAuditEvent = 'refused' | 'advisory';
@@ -53,7 +66,7 @@ export interface GateAuditRecord {
   readonly peer: string | null;
   readonly what: string;
   readonly tableRules: number;
-  readonly proposed: ReadonlyArray<{ id: string; priority: number; outputPorts: readonly number[]; match: Readonly<Record<string, unknown>> }>;
+  readonly proposed: ReadonlyArray<{ id: string; priority: number; outputPorts: readonly number[]; match: Readonly<Record<string, string | number | boolean>> }>;
   readonly violations: ReadonlyArray<{ property: string; ruleIds: readonly string[]; detail: string }>;
   readonly violationsOmitted: number;
   readonly notes: readonly string[];
@@ -77,7 +90,7 @@ export function buildGateAuditRecord(input: GateAuditInput, atMs: number, suppre
       id: clip(r.id),
       priority: r.flowMod.priority,
       outputPorts: [...(r.flowMod.outputPorts ?? [])],
-      match: JSON.parse(JSON.stringify(r.flowMod.match ?? {})) as Record<string, unknown>,
+      match: boundedMatch(r.flowMod.match as Readonly<Record<string, unknown>> | undefined),
     })),
     violations: input.violations.slice(0, MAX_VIOLATIONS).map((v) => ({ property: v.property, ruleIds: v.ruleIds.slice(0, MAX_VIOLATIONS).map(clip), detail: clip(v.detail) })),
     violationsOmitted: Math.max(0, input.violations.length - MAX_VIOLATIONS),

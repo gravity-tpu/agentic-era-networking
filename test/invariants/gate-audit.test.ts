@@ -38,6 +38,18 @@ describe('buildGateAuditRecord', () => {
     expect(r.peer === null ? 0 : r.peer.length).toBeLessThanOrEqual(501);
   });
 
+  it('copies only primitive fields of a match, at most 16, so a hostile match cannot widen a line or break the copy', () => {
+    const hostile: Record<string, unknown> = { srcMac: 'aa:bb:cc:dd:ee:ff', nested: { deep: { deeper: 1 } }, list: [1, 2, 3], fn: () => 1 };
+    for (let i = 0; i < 40; i++) hostile[`f${i}`] = i;
+    const cyc: Record<string, unknown> = { a: 1 }; cyc['self'] = cyc;
+    const r = buildGateAuditRecord(input({ proposed: [{ id: 'h', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 1, outputPorts: [], match: hostile as never } }, { id: 'c', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 1, outputPorts: [], match: cyc as never } }] }), 1, 0);
+    expect(Object.keys(r.proposed[0]!.match).length).toBeLessThanOrEqual(16);
+    expect(r.proposed[0]!.match['srcMac']).toBe('aa:bb:cc:dd:ee:ff');
+    expect(r.proposed[0]!.match['nested']).toBeUndefined();
+    expect(r.proposed[1]!.match).toEqual({ a: 1 }); // a cyclic object is copied without its cycle
+    expect(() => JSON.stringify(r)).not.toThrow();
+  });
+
   it('keeps a null peer (a call that did not come from a request, such as the startup self-check)', () => {
     expect(buildGateAuditRecord(input({ peer: null, route: 'startup' }), 1, 0).peer).toBeNull();
   });
