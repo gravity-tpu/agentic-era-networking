@@ -57,6 +57,16 @@ One link-local IPv6 address (`fe80::/10`) is present on every interface by const
 administrative-up-but-no-carrier state is reported honestly (`adminUp` vs `up`) rather than folded into a plain "up", since a residual radio that
 could reassociate without warning is a different kind of risk than a live leak and the provenance record should say which.
 
+## A third leak path, found building scenario 1's runner (2026-10-22)
+
+`preflight()` refused on node-02 again while building `scripts/track-c-scenario1-arp-spoof.py` — this time on `eth0` itself, not a second
+interface. `eth0` had picked up a routable global IPv6 address via SLAAC (`scope global dynamic mngtmpaddr proto kernel_ra`): the household
+router's IPv6 advertisements reach the workload segment too, and the Zodiac's policy is IPv4-only, so this is unmediated the same way
+node-01's `10.0.1.0/24` controller segment was. `accept_ra` and `autoconf` were both `1` on that interface. NetworkManager governs `eth0`
+(profile `eth0-sdn`), so the durable fix is `nmcli connection modify eth0-sdn ipv6.method ignore` rather than a bare `sysctl -w`, which
+NetworkManager would otherwise undo on the next reconnect. `preflight()` caught this correctly and refused to let the scenario proceed —
+exactly what it is for.
+
 ## Still to do before any scenario runs
 
 - Strip the default route off `eth1` on node-02 (or raise its metric) so background traffic — not just scenario traffic — can't leak either,

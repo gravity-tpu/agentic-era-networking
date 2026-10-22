@@ -64,6 +64,14 @@ so it isn't read back later as having tested the literal scenario.
   (some OS ARP implementations distinguish gratuitous announcements from replies to nothing outstanding) — itself a useful, recordable
   finding about what actually stops this class of attack today, separate from anything the switch does.
 
+## Amendment (found while building the runner, before any run)
+
+`arp -n 10.0.2.119` on the Mac shows a **`permanent`** entry (`f2:5b:dc:7d:21:d4` on `en0`), not a dynamically learned one. BSD-derived
+network stacks (macOS included) commonly install a static ARP mapping for a host's own configured addresses and protect it from being
+overwritten by incoming ARP traffic, independent of anything the switch does. The measurement is unchanged (still: does this entry change
+after the spoofed replies), but prediction 2 may not hold for a **host-side** reason even if O3 confirms the frame reached P2 — that would
+not be a finding about the switch's policy, and the report must say which of the two it was, not conflate them.
+
 ## Limits stated now
 
 One switch, firmware 0.86. One claimed identity, one host's ARP stack (macOS); the result says nothing about how a different OS's ARP
