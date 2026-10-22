@@ -74,7 +74,7 @@ import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
 import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
 import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type GateResult } from './install-gate.js';
-import { GateAuditLog, resolveGateAuditFile, type GateAuditRoute } from './gate-audit.js';
+import { CALLER_MAX_EVENTS_PER_MINUTE, GateAuditLog, resolveCallerAuditFile, resolveGateAuditFile, safeHeaderText, type GateAuditRoute } from './gate-audit.js';
 import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY, defaultIsQuarantine } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
@@ -580,6 +580,8 @@ export class ZodiacBridgeServer {
   private readonly capacityTarget: CapacityTargetConfig['target'];
   /** Append-only trail of what the install gate refused (gate-audit.ts). */
   private readonly gateAudit: GateAuditLog;
+  /** Callers turned away before the gate: their own file and a smaller budget, so a flood from outside cannot evict gate refusals. */
+  private readonly callerAudit: GateAuditLog;
   /** ruleId -> source IP and the monotonic time (ns) after which the quarantine is removed. */
   private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint; readonly expiresAtMs: number; readonly reason: string; readonly priority: number }> = new Map();
   /** Where active quarantines are kept so a bridge restart puts them back (see quarantine-persistence.ts). */
@@ -654,7 +656,7 @@ export class ZodiacBridgeServer {
    * headers the peer sent (names and values: that is what shows an attempt to pass as local). No other header is copied, so the experiment token never lands here.
    */
   private auditCallerRefusal(route: GateAuditRoute, req: http.IncomingMessage, reason: string): void {
-    const proxy = PROXY_HEADERS.filter((h) => req.headers[h] !== undefined).map((h) => `${h}=${String(req.headers[h])}`);
+    const proxy = PROXY_HEADERS.filter((h) => req.headers[h] !== undefined).map((h) => `${h}=${safeHeaderText(req.headers[h])}`);
     this.auditGate({
       event: 'caller_refused', route, peer: req.socket.remoteAddress ?? null, what: `${req.method ?? '?'} ${(req.url ?? '').split('?')[0]}`,
       proposed: [], violations: [{ property: 'caller', ruleIds: [], detail: reason }],
@@ -664,12 +666,13 @@ export class ZodiacBridgeServer {
 
   /** Writes a gate audit line. The outcome of the install never depends on this: a failure is logged loudly and counted (gate-audit.ts). */
   private auditGate(input: Parameters<GateAuditLog['record']>[0]): void {
-    const before = this.gateAudit.totalSuppressed;
-    const err = this.gateAudit.record(input);
+    const log = input.event === 'caller_refused' ? this.callerAudit : this.gateAudit;
+    const before = log.totalSuppressed;
+    const err = log.record(input);
     if (err !== null) console.error(`[!] [Install gate] ${err}; the refusal stands, but it is not in the audit trail`);
     // A flood past the per-minute limit is counted, not written; say so in the journal at once (the first one, then every 100th), because a flood with no later event leaves nothing in the file.
-    const total = this.gateAudit.totalSuppressed;
-    if (total > before && (total === 1 || total % 100 === 0)) console.warn(`[!] [Install gate] audit rate limit reached: ${total} gate event(s) counted but not written since the bridge started`);
+    const total = log.totalSuppressed;
+    if (total > before && (total === 1 || total % 100 === 0)) console.warn(`[!] [Install gate] ${input.event === 'caller_refused' ? 'caller-refusal' : 'gate'} audit rate limit reached: ${total} event(s) counted but not written since the bridge started`);
   }
 
   /**
@@ -976,6 +979,7 @@ export class ZodiacBridgeServer {
     this.capacityTarget = capacityConfig.target;
     for (const w of capacityConfig.warnings) console.warn(`[!] [Install gate] ${w}`);
     this.gateAudit = new GateAuditLog({ file: resolveGateAuditFile(process.env) });
+    this.callerAudit = new GateAuditLog({ file: resolveCallerAuditFile(process.env), maxEventsPerMinute: CALLER_MAX_EVENTS_PER_MINUTE });
     this.quarantineStateFile = resolveQuarantineStateFile(process.env);
     this.loadPersistedQuarantines();
     this.isolationRechecker = new IsolationRechecker({

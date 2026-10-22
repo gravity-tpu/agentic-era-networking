@@ -247,13 +247,13 @@ describe('the gate writes an audit trail', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     for (let i = 0; i < 62; i++) bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
     expect(trail()).toHaveLength(60);
-    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/audit rate limit reached: 1 gate event\(s\) counted but not written/);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/gate audit rate limit reached: 1 event\(s\) counted but not written/);
   });
 });
 
 describe('caller refusals are audited too', () => {
   const trail = (): Array<Record<string, unknown>> => {
-    const f = process.env['ZODIAC_GATE_AUDIT_FILE'] ?? '';
+    const f = process.env['ZODIAC_CALLER_AUDIT_FILE'] ?? '';
     return fs.existsSync(f) ? fs.readFileSync(f, 'utf-8').trim().split('\n').filter((l) => l !== '').map((l) => JSON.parse(l) as Record<string, unknown>) : [];
   };
 
@@ -300,7 +300,7 @@ describe('caller refusals are audited too', () => {
     };
     expect(await peer('127.0.0.1', wrong)).toBe(401);
     expect(await peer('203.0.113.9', real)).toBe(401);
-    const raw = fs.readFileSync(process.env['ZODIAC_GATE_AUDIT_FILE'] ?? '', 'utf-8');
+    const raw = fs.readFileSync(process.env['ZODIAC_CALLER_AUDIT_FILE'] ?? '', 'utf-8');
     expect(raw).not.toContain(wrong);
     expect(raw).not.toContain(real);
     const t = trail();
@@ -313,6 +313,34 @@ describe('caller refusals are audited too', () => {
   it('writes nothing for a caller that is accepted', async () => {
     expect((await asPeer('127.0.0.1')).status).toBe(202);
     expect(trail()).toEqual([]);
+  });
+
+  it('keeps caller refusals out of the gate trail, and a flood of them cannot evict or starve a gate refusal', async () => {
+    const gateTrail = (): number => {
+      const f = process.env['ZODIAC_GATE_AUDIT_FILE'] ?? '';
+      return fs.existsSync(f) ? fs.readFileSync(f, 'utf-8').trim().split('\n').filter((l) => l !== '').length : 0;
+    };
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (let i = 0; i < 30; i++) await asPeer('100.112.223.16');
+    expect(trail()).toHaveLength(20); // its own, smaller budget; the rest are counted and logged
+    expect(gateTrail()).toBe(0);
+    // A real gate refusal right after the flood is still recorded, in the other file.
+    const r = bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
+    expect(r.status).toBe(409);
+    expect(gateTrail()).toBe(1);
+    expect(trail()).toHaveLength(20);
+  });
+
+  it('bounds and sanitizes header values from an untrusted peer: huge, multi-line and repeated headers', async () => {
+    await asPeer('127.0.0.1', { 'x-forwarded-for': `${'9'.repeat(100_000)}\nINJECTED {"event":"refused"}`, via: 'a\u0001b' });
+    const raw = fs.readFileSync(process.env['ZODIAC_CALLER_AUDIT_FILE'] ?? '', 'utf-8');
+    expect(raw.trim().split('\n')).toHaveLength(1); // one line, whatever the header contained
+    expect(raw.length).toBeLessThan(5_000);
+    expect(raw).not.toContain('\u0001');
+    const note = String((trail()[0]!['notes'] as string[])[0]);
+    expect(note).not.toMatch(/[\u0000-\u001f]/); // control characters were replaced at the source
+    expect(note.length).toBeLessThan(400);
+    expect(JSON.parse(raw.trim())['event']).toBe('caller_refused');
   });
 });
 

@@ -25,6 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { IsolationRule } from './port1-isolation.js';
+import type { GateViolation } from './install-gate.js';
 
 export const GATE_AUDIT_SCHEMA = 'zodiac-gate-audit/v1';
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -45,6 +46,12 @@ function boundedMatch(match: Readonly<Record<string, unknown>> | undefined): Rec
   return out;
 }
 
+/** One header value as text for a log note: arrays joined, control characters (including newlines) replaced, length bounded. The record is JSON, so nothing can break out of the line, but a reader should not see raw control bytes either. */
+export function safeHeaderText(value: string | readonly string[] | undefined, max = 200): string {
+  const text = (Array.isArray(value) ? (value as readonly string[]).join(', ') : String(value ?? '')).replace(/[\u0000-\u001f\u007f]/g, '?');
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 export type GateAuditRoute = 'allow' | 'quarantine' | 'startup' | 'approve' | 'experiment';
 /** `refused`: the gate refused a table. `advisory`: a throughput shortfall it let through. `caller_refused`: a state-changing route refused who was asking, before any rule was read. */
 export type GateAuditEvent = 'refused' | 'advisory' | 'caller_refused';
@@ -55,6 +62,10 @@ export interface GateAuditViolation {
   readonly ruleIds: readonly string[];
   readonly detail: string;
 }
+
+// The gate's own violations must stay recordable: if GateViolation changes in a way this type cannot hold, this line stops compiling.
+const gateViolationsAreRecordable: GateViolation extends GateAuditViolation ? true : never = true;
+void gateViolationsAreRecordable;
 
 export interface GateAuditInput {
   readonly event: GateAuditEvent;
@@ -167,6 +178,15 @@ export class GateAuditLog {
 }
 
 /** Where the bridge keeps it: `ZODIAC_GATE_AUDIT_FILE`, else `$STATE_DIRECTORY` or `/var/lib/zodiac`. */
+export function resolveCallerAuditFile(env: NodeJS.ProcessEnv): string {
+  const explicit = env['ZODIAC_CALLER_AUDIT_FILE'];
+  if (explicit !== undefined && explicit.trim() !== '') return explicit.trim();
+  return path.join(env['STATE_DIRECTORY'] ?? '/var/lib/zodiac', 'install-gate-callers.jsonl');
+}
+
+/** Callers turned away before the gate come from anyone who can reach the port, so they get their OWN file and a smaller per-minute budget: a flood of them cannot evict gate refusals. */
+export const CALLER_MAX_EVENTS_PER_MINUTE = 20;
+
 export function resolveGateAuditFile(env: NodeJS.ProcessEnv): string {
   const explicit = env['ZODIAC_GATE_AUDIT_FILE'];
   if (explicit !== undefined && explicit.trim() !== '') return explicit.trim();
