@@ -130,30 +130,30 @@ describe('a declared throughput target (A8)', () => {
   });
 });
 
-describe('/api/sdn/quarantine accepts requests only from the bridge host', () => {
-  /** Drives the real route handler with a request that claims a given peer address; the loopback test server cannot produce a remote peer. */
-  async function asPeer(remoteAddress: string, headers: Record<string, string> = {}): Promise<{ status: number; body: Record<string, unknown> }> {
-    const socket = new net.Socket();
-    Object.defineProperty(socket, 'remoteAddress', { value: remoteAddress });
-    const req = new http.IncomingMessage(socket);
-    req.method = 'POST';
-    req.url = '/api/sdn/quarantine';
-    req.headers = { 'content-type': 'application/json', host: 'bridge', ...headers };
-    const out: { status: number; body: string } = { status: 0, body: '' };
-    let finish: () => void = () => undefined;
-    const finished = new Promise<void>((r) => { finish = r; });
-    const res = Object.assign(new EventEmitter(), {
-      statusCode: 200, headersSent: false,
-      setHeader: () => undefined,
-      end: (b?: string) => { out.status = (res as unknown as { statusCode: number }).statusCode; out.body = b ?? ''; (res as unknown as { headersSent: boolean }).headersSent = true; finish(); },
-    });
-    const done = bridge['handleRequest'](req, res as unknown as http.ServerResponse);
-    setImmediate(() => { req.emit('data', Buffer.from(JSON.stringify({ targetIp: '10.0.2.50', reason: 'rate' }))); req.emit('end'); });
-    await done;
-    await finished; // the handler answers exactly once; wait for that, not for a fixed delay
-    return { status: out.status, body: out.body === '' ? {} : (JSON.parse(out.body) as Record<string, unknown>) };
-  }
+/** Drives the real route handler with a request that claims a given peer address; the loopback test server cannot produce a remote peer. */
+async function asPeer(remoteAddress: string, headers: Record<string, string> = {}, urlPath = '/api/sdn/quarantine', method = 'POST'): Promise<{ status: number; body: Record<string, unknown> }> {
+  const socket = new net.Socket();
+  Object.defineProperty(socket, 'remoteAddress', { value: remoteAddress });
+  const req = new http.IncomingMessage(socket);
+  req.method = method;
+  req.url = urlPath;
+  req.headers = { 'content-type': 'application/json', host: 'bridge', ...headers };
+  const out: { status: number; body: string } = { status: 0, body: '' };
+  let finish: () => void = () => undefined;
+  const finished = new Promise<void>((r) => { finish = r; });
+  const res = Object.assign(new EventEmitter(), {
+    statusCode: 200, headersSent: false,
+    setHeader: () => undefined,
+    end: (b?: string) => { out.status = (res as unknown as { statusCode: number }).statusCode; out.body = b ?? ''; (res as unknown as { headersSent: boolean }).headersSent = true; finish(); },
+  });
+  const done = bridge['handleRequest'](req, res as unknown as http.ServerResponse);
+  setImmediate(() => { req.emit('data', Buffer.from(JSON.stringify({ targetIp: '10.0.2.50', reason: 'rate' }))); req.emit('end'); });
+  await done;
+  await finished; // the handler answers exactly once; wait for that, not for a fixed delay
+  return { status: out.status, body: out.body === '' ? {} : (JSON.parse(out.body) as Record<string, unknown>) };
+}
 
+describe('/api/sdn/quarantine accepts requests only from the bridge host', () => {
   it('refuses a LAN peer and a tailnet peer with 403 not_local, and records no proposal', async () => {
     for (const peer of ['10.0.0.119', '100.112.223.16', '10.0.2.50']) {
       const r = await asPeer(peer);
@@ -248,6 +248,71 @@ describe('the gate writes an audit trail', () => {
     for (let i = 0; i < 62; i++) bridge.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, priority: 100 });
     expect(trail()).toHaveLength(60);
     expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/audit rate limit reached: 1 gate event\(s\) counted but not written/);
+  });
+});
+
+describe('caller refusals are audited too', () => {
+  const trail = (): Array<Record<string, unknown>> => {
+    const f = process.env['ZODIAC_GATE_AUDIT_FILE'] ?? '';
+    return fs.existsSync(f) ? fs.readFileSync(f, 'utf-8').trim().split('\n').filter((l) => l !== '').map((l) => JSON.parse(l) as Record<string, unknown>) : [];
+  };
+
+  it('records a quarantine request from a remote peer: route, peer, the reason, no rule, and the method and path', async () => {
+    const r = await asPeer('100.112.223.16');
+    expect(r.status).toBe(403);
+    const t = trail();
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ event: 'caller_refused', route: 'quarantine', peer: '100.112.223.16', what: 'POST /api/sdn/quarantine', proposed: [] });
+    expect(JSON.stringify(t[0]!['violations'])).toContain('"property":"caller"');
+  });
+
+  it('records the proxy headers a loopback peer sent, names and values, so an attempt to pass as local is visible', async () => {
+    await asPeer('127.0.0.1', { 'x-forwarded-for': '203.0.113.9', 'x-real-ip': '203.0.113.9', authorization: 'Bearer should-never-be-copied' });
+    const line = JSON.stringify(trail()[0]);
+    expect(line).toContain('x-forwarded-for=203.0.113.9');
+    expect(line).toContain('x-real-ip=203.0.113.9');
+    expect(line).not.toContain('should-never-be-copied'); // only the proxy headers are copied, never anything else
+  });
+
+  it('records a refused approval, and an allow request from a peer that is not an operator', async () => {
+    expect((await asPeer('100.112.223.16', {}, '/api/sdn/quarantine/approve')).status).toBe(403);
+    expect((await asPeer('203.0.113.9', {}, '/api/sdn/allow')).status).toBe(401);
+    expect(trail().map((t) => [t['event'], t['route'], t['peer']])).toEqual([['caller_refused', 'approve', '100.112.223.16'], ['caller_refused', 'allow', '203.0.113.9']]);
+  });
+
+  it('records a wrong experiment token without the token, and a non-operator separately', async () => {
+    vi.stubEnv('ZODIAC_EXPERIMENT_ENDPOINTS', '1');
+    const real = 'real-token-'.padEnd(40, 'r');
+    vi.stubEnv('ZODIAC_EXPERIMENT_TOKEN', real);
+    const b = new ZodiacBridgeServer(new ZodiacController());
+    const wrong = 'wrong-token-'.padEnd(40, 'w');
+    const peer = async (addr: string, token: string): Promise<number> => {
+      const socket = new net.Socket();
+      Object.defineProperty(socket, 'remoteAddress', { value: addr });
+      const req = new http.IncomingMessage(socket);
+      req.method = 'GET'; req.url = '/api/experiment/state'; req.headers = { host: 'bridge', 'x-experiment-token': token };
+      let status = 0; let finish: () => void = () => undefined;
+      const finished = new Promise<void>((r) => { finish = r; });
+      const res = Object.assign(new EventEmitter(), { statusCode: 200, headersSent: false, setHeader: () => undefined, end: () => { status = (res as unknown as { statusCode: number }).statusCode; finish(); } });
+      await b['handleRequest'](req, res as unknown as http.ServerResponse);
+      await finished;
+      return status;
+    };
+    expect(await peer('127.0.0.1', wrong)).toBe(401);
+    expect(await peer('203.0.113.9', real)).toBe(401);
+    const raw = fs.readFileSync(process.env['ZODIAC_GATE_AUDIT_FILE'] ?? '', 'utf-8');
+    expect(raw).not.toContain(wrong);
+    expect(raw).not.toContain(real);
+    const t = trail();
+    expect(t.map((x) => [x['route'], x['peer']])).toEqual([['experiment', '127.0.0.1'], ['experiment', '203.0.113.9']]);
+    expect(JSON.stringify(t[0]!['violations'])).toContain('token is missing or wrong');
+    expect(JSON.stringify(t[1]!['violations'])).toContain('not a LAN operator');
+    vi.unstubAllEnvs();
+  });
+
+  it('writes nothing for a caller that is accepted', async () => {
+    expect((await asPeer('127.0.0.1')).status).toBe(202);
+    expect(trail()).toEqual([]);
   });
 });
 

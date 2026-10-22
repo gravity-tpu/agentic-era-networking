@@ -99,6 +99,7 @@ import {
   decideQuarantine,
   mayApproveQuarantine,
   mayRequestQuarantine,
+  PROXY_HEADERS,
   readQuarantineEnvelopeConfig,
   sanitizeEvidence,
   type EvidenceValue,
@@ -646,6 +647,19 @@ export class ZodiacBridgeServer {
       this.auditGate({ event: result.admitted ? 'advisory' : 'refused', route: ctx.route, peer: ctx.peer, what, proposed, violations: result.violations, notes: result.admitted ? shortfalls : result.notes, tableRules: table.length + proposed.length });
     }
     return result;
+  }
+
+  /**
+   * Records a state-changing route turning away its caller, before any rule was read. Keeps the peer, the method and path, the reason, and the proxy
+   * headers the peer sent (names and values: that is what shows an attempt to pass as local). No other header is copied, so the experiment token never lands here.
+   */
+  private auditCallerRefusal(route: GateAuditRoute, req: http.IncomingMessage, reason: string): void {
+    const proxy = PROXY_HEADERS.filter((h) => req.headers[h] !== undefined).map((h) => `${h}=${String(req.headers[h])}`);
+    this.auditGate({
+      event: 'caller_refused', route, peer: req.socket.remoteAddress ?? null, what: `${req.method ?? '?'} ${(req.url ?? '').split('?')[0]}`,
+      proposed: [], violations: [{ property: 'caller', ruleIds: [], detail: reason }],
+      notes: proxy.length > 0 ? [`proxy headers present: ${proxy.join('; ')}`] : [], tableRules: 0,
+    });
   }
 
   /** Writes a gate audit line. The outcome of the install never depends on this: a failure is logged loudly and counted (gate-audit.ts). */
@@ -1899,6 +1913,7 @@ export class ZodiacBridgeServer {
       // Detectors run on this host and post to loopback; a peer elsewhere (LAN, tailnet) is refused before its body is read.
       if (!mayRequestQuarantine(req.socket.remoteAddress, req.headers)) {
         console.warn(`[!] [Quarantine] Refused a request from ${req.socket.remoteAddress ?? 'an unknown address'}: quarantine requests are accepted only from the bridge host (loopback, without proxy headers)`);
+        this.auditCallerRefusal('quarantine', req, 'quarantine requests are accepted only from the bridge host itself (loopback, without proxy headers)');
         res.statusCode = 403;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ ok: false, quarantined: false, code: 'not_local', error: 'quarantine requests are accepted only from the bridge host itself (loopback, without proxy headers)' }));
@@ -2002,6 +2017,7 @@ export class ZodiacBridgeServer {
       // curl localhost): a process elsewhere on the LAN cannot approve its own proposal.
       // Local callers only, and none that carry proxy headers (see mayApproveQuarantine for what that does and does not cover).
       if (!mayApproveQuarantine(req.socket.remoteAddress, req.headers)) {
+        this.auditCallerRefusal('approve', req, 'approval is accepted only from the bridge host itself (loopback, without proxy headers)');
         res.statusCode = 403;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ ok: false, error: 'approval is accepted only from the bridge host itself (loopback, without proxy headers)' }));
@@ -2138,6 +2154,7 @@ export class ZodiacBridgeServer {
     // Operator only (loopback or an RFC 1918 peer, like the other state-changing operator routes): before 2026-10-20 this route had no access check.
     if (url.pathname === '/api/sdn/allow' && req.method === 'POST') {
       if (!isLanOperator(req)) {
+        this.auditCallerRefusal('allow', req, 'not a LAN operator (loopback or an RFC 1918 peer)');
         res.statusCode = 401;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Unauthorized: Operator access required.' }));
@@ -2314,6 +2331,7 @@ export class ZodiacBridgeServer {
       const presentedBuf = Buffer.from(typeof presented === 'string' ? presented : '', 'utf-8');
       const tokenOk = presentedBuf.length === token.length && timingSafeEqual(presentedBuf, token);
       if (!isLanOperator(req) || !tokenOk) {
+        this.auditCallerRefusal('experiment', req, !isLanOperator(req) ? 'not a LAN operator (loopback or an RFC 1918 peer)' : 'the experiment token is missing or wrong');
         res.statusCode = 401;
         res.end(JSON.stringify({ error: 'Unauthorized: operator access and the experiment token are required.' }));
         return;

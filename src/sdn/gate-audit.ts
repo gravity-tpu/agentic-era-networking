@@ -2,6 +2,10 @@
  * gate-audit.ts
  * An append-only audit trail of what the pre-install gate (install-gate.ts) refused, and of throughput shortfalls it let through as advisory.
  *
+ * It also records the refusals that happen BEFORE the gate: a state-changing route turning away a caller (not the bridge host, a proxy header, not an
+ * operator, a missing or wrong experiment token) is the same kind of event and used to be a journal line only. Those carry the property `caller`, no rule
+ * (the body is never read), and, for proxy headers, the header names and values the peer sent (never the experiment token or any other header).
+ *
  * Why it exists: a refusal is a security-relevant event (someone, or something, tried to put a leaking, hairpinning or over-capacity rule on the
  * switch), and until now it was one console line that rotates away with the journal. Each event is one JSON line with when, which route, who
  * (the peer address the socket reported), what rule was proposed, and which properties failed on which rules.
@@ -21,7 +25,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { IsolationRule } from './port1-isolation.js';
-import type { GateViolation } from './install-gate.js';
 
 export const GATE_AUDIT_SCHEMA = 'zodiac-gate-audit/v1';
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -42,8 +45,16 @@ function boundedMatch(match: Readonly<Record<string, unknown>> | undefined): Rec
   return out;
 }
 
-export type GateAuditRoute = 'allow' | 'quarantine' | 'startup';
-export type GateAuditEvent = 'refused' | 'advisory';
+export type GateAuditRoute = 'allow' | 'quarantine' | 'startup' | 'approve' | 'experiment';
+/** `refused`: the gate refused a table. `advisory`: a throughput shortfall it let through. `caller_refused`: a state-changing route refused who was asking, before any rule was read. */
+export type GateAuditEvent = 'refused' | 'advisory' | 'caller_refused';
+
+/** What a record keeps of a violation. The gate's own violations fit it; a caller refusal uses the property `caller`. */
+export interface GateAuditViolation {
+  readonly property: string;
+  readonly ruleIds: readonly string[];
+  readonly detail: string;
+}
 
 export interface GateAuditInput {
   readonly event: GateAuditEvent;
@@ -52,7 +63,7 @@ export interface GateAuditInput {
   readonly peer: string | null;
   readonly what: string;
   readonly proposed: readonly IsolationRule[];
-  readonly violations: readonly GateViolation[];
+  readonly violations: readonly GateAuditViolation[];
   readonly notes: readonly string[];
   /** Rules in the table the install would have produced. */
   readonly tableRules: number;
