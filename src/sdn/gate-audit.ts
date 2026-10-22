@@ -2,6 +2,10 @@
  * gate-audit.ts
  * An append-only audit trail of what the pre-install gate (install-gate.ts) refused, and of throughput shortfalls it let through as advisory.
  *
+ * It also records the refusals that happen BEFORE the gate: a state-changing route turning away a caller (not the bridge host, a proxy header, not an
+ * operator, a missing or wrong experiment token) is the same kind of event and used to be a journal line only. Those carry the property `caller`, no rule
+ * (the body is never read), and, for proxy headers, the header names and values the peer sent (never the experiment token or any other header).
+ *
  * Why it exists: a refusal is a security-relevant event (someone, or something, tried to put a leaking, hairpinning or over-capacity rule on the
  * switch), and until now it was one console line that rotates away with the journal. Each event is one JSON line with when, which route, who
  * (the peer address the socket reported), what rule was proposed, and which properties failed on which rules.
@@ -42,8 +46,26 @@ function boundedMatch(match: Readonly<Record<string, unknown>> | undefined): Rec
   return out;
 }
 
-export type GateAuditRoute = 'allow' | 'quarantine' | 'startup';
-export type GateAuditEvent = 'refused' | 'advisory';
+/** One header value as text for a log note: arrays joined, control characters (including newlines) replaced, length bounded. The record is JSON, so nothing can break out of the line, but a reader should not see raw control bytes either. */
+export function safeHeaderText(value: string | readonly string[] | undefined, max = 200): string {
+  const text = (Array.isArray(value) ? (value as readonly string[]).join(', ') : String(value ?? '')).replace(/[\u0000-\u001f\u007f]/g, '?');
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+export type GateAuditRoute = 'allow' | 'quarantine' | 'startup' | 'approve' | 'experiment';
+/** `refused`: the gate refused a table. `advisory`: a throughput shortfall it let through. `caller_refused`: a state-changing route refused who was asking, before any rule was read. */
+export type GateAuditEvent = 'refused' | 'advisory' | 'caller_refused';
+
+/** What a record keeps of a violation. The gate's own violations fit it; a caller refusal uses the property `caller`. */
+export interface GateAuditViolation {
+  readonly property: string;
+  readonly ruleIds: readonly string[];
+  readonly detail: string;
+}
+
+// The gate's own violations must stay recordable: if GateViolation changes in a way this type cannot hold, this line stops compiling.
+const gateViolationsAreRecordable: GateViolation extends GateAuditViolation ? true : never = true;
+void gateViolationsAreRecordable;
 
 export interface GateAuditInput {
   readonly event: GateAuditEvent;
@@ -52,7 +74,7 @@ export interface GateAuditInput {
   readonly peer: string | null;
   readonly what: string;
   readonly proposed: readonly IsolationRule[];
-  readonly violations: readonly GateViolation[];
+  readonly violations: readonly GateAuditViolation[];
   readonly notes: readonly string[];
   /** Rules in the table the install would have produced. */
   readonly tableRules: number;
@@ -156,6 +178,15 @@ export class GateAuditLog {
 }
 
 /** Where the bridge keeps it: `ZODIAC_GATE_AUDIT_FILE`, else `$STATE_DIRECTORY` or `/var/lib/zodiac`. */
+export function resolveCallerAuditFile(env: NodeJS.ProcessEnv): string {
+  const explicit = env['ZODIAC_CALLER_AUDIT_FILE'];
+  if (explicit !== undefined && explicit.trim() !== '') return explicit.trim();
+  return path.join(env['STATE_DIRECTORY'] ?? '/var/lib/zodiac', 'install-gate-callers.jsonl');
+}
+
+/** Callers turned away before the gate come from anyone who can reach the port, so they get their OWN file and a smaller per-minute budget: a flood of them cannot evict gate refusals. */
+export const CALLER_MAX_EVENTS_PER_MINUTE = 20;
+
 export function resolveGateAuditFile(env: NodeJS.ProcessEnv): string {
   const explicit = env['ZODIAC_GATE_AUDIT_FILE'];
   if (explicit !== undefined && explicit.trim() !== '') return explicit.trim();

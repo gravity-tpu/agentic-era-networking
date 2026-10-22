@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { GateAuditLog, buildGateAuditRecord, resolveGateAuditFile, GATE_AUDIT_SCHEMA, MAX_VIOLATIONS, MAX_EVENTS_PER_MINUTE, type GateAuditInput } from '../../src/sdn/gate-audit.js';
+import { GateAuditLog, buildGateAuditRecord, resolveGateAuditFile, resolveCallerAuditFile, safeHeaderText, CALLER_MAX_EVENTS_PER_MINUTE, GATE_AUDIT_SCHEMA, MAX_VIOLATIONS, MAX_EVENTS_PER_MINUTE, type GateAuditInput } from '../../src/sdn/gate-audit.js';
 import { FlowModCommand } from '../../src/sdn/openflow-types.js';
 
 const rule = (id: string) => ({ id, flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 10, outputPorts: [2], match: { srcMac: 'aa:bb:cc:dd:ee:ff' } } });
@@ -109,5 +109,22 @@ describe('resolveGateAuditFile', () => {
     expect(resolveGateAuditFile({ ZODIAC_GATE_AUDIT_FILE: ' /x/a.jsonl ' } as NodeJS.ProcessEnv)).toBe('/x/a.jsonl');
     expect(resolveGateAuditFile({ STATE_DIRECTORY: '/s' } as NodeJS.ProcessEnv)).toBe('/s/install-gate-audit.jsonl');
     expect(resolveGateAuditFile({} as NodeJS.ProcessEnv)).toBe('/var/lib/zodiac/install-gate-audit.jsonl');
+  });
+});
+
+describe('caller-refusal helpers', () => {
+  it('safeHeaderText joins repeated headers, replaces control characters, and bounds the length', () => {
+    expect(safeHeaderText(['1.1.1.1', '2.2.2.2'])).toBe('1.1.1.1, 2.2.2.2');
+    expect(safeHeaderText('a\nb\u0000c\u007fd')).toBe('a?b?c?d');
+    expect(safeHeaderText('x'.repeat(1000)).length).toBeLessThanOrEqual(201);
+    expect(safeHeaderText(undefined)).toBe('');
+  });
+
+  it('gives callers their own file and a smaller budget than gate refusals', () => {
+    expect(resolveCallerAuditFile({ ZODIAC_CALLER_AUDIT_FILE: ' /x/c.jsonl ' } as NodeJS.ProcessEnv)).toBe('/x/c.jsonl');
+    expect(resolveCallerAuditFile({ STATE_DIRECTORY: '/s' } as NodeJS.ProcessEnv)).toBe('/s/install-gate-callers.jsonl');
+    expect(resolveCallerAuditFile({} as NodeJS.ProcessEnv)).toBe('/var/lib/zodiac/install-gate-callers.jsonl');
+    expect(resolveCallerAuditFile({} as NodeJS.ProcessEnv)).not.toBe(resolveGateAuditFile({} as NodeJS.ProcessEnv));
+    expect(CALLER_MAX_EVENTS_PER_MINUTE).toBeLessThan(MAX_EVENTS_PER_MINUTE);
   });
 });
