@@ -67,6 +67,29 @@ node-01's `10.0.1.0/24` controller segment was. `accept_ra` and `autoconf` were 
 NetworkManager would otherwise undo on the next reconnect. `preflight()` caught this correctly and refused to let the scenario proceed —
 exactly what it is for.
 
+## Known control channels needed an exception, not a workaround (2026-10-22)
+
+Getting node-02 ready to actually run scenario 1 surfaced two more things.
+
+**The interface names swap, deterministically, on this host.** The onboard NIC (workload segment) and the ASIX USB adapter (household
+network) have a persistent kernel-level naming collision: `journalctl` showed both trying to rename to the other's current name on every
+single boot ("File exists"), regardless of `systemd.link` MAC-based overrides — the kernel's own initial enumeration consistently hands
+"eth0" to the ASIX adapter and "eth1" to the onboard NIC before any `.link` file gets a chance. A direct two-way swap via `.link` files
+cannot resolve this (confirmed: going through an intermediate non-colliding name pair, `eth10`/`eth11`, worked cleanly; going from there back
+to the literal `eth0`/`eth1` hit the identical collision, because every boot starts fresh from the same kernel-assigned pair, not from
+whatever a previous boot's udev rename produced). Forcing "eth0 = onboard" on this specific host would require non-`eth0`/`eth1` names
+entirely, which just relocates the problem. Resolution: stopped fighting it. `scripts/track-c-scenario1-arp-spoof.py` declares
+`NODE02_WORKLOAD_IFACE = 'eth1'` as a documented per-host constant instead.
+
+**`preflight()` could never pass on a host with a live control channel, which is every host that needs one.** An IP-based control channel
+(node-02's `eth0`, carrying its SSH path and Tailscale) necessarily has a routable address, which is exactly what the leak check refuses on.
+Node-01 avoids this because its control channel is serial — no IP traffic at all, structurally incapable of leaking. `preflight()` gained
+`known_control_ifaces`: a caller declares, by name, which interfaces are a known control channel; those are excused and reported in
+`excusedControlInterfaces` (visible in the provenance, not silently dropped), while anything NOT declared still refuses exactly as before.
+Confirmed live: declaring only `eth0` still correctly refused on `tailscale0` left undeclared; declaring both passed cleanly. The actual
+safety property is unchanged — every send is still explicitly bound (`arping -I eth1`), never left to routing-table choice; the allowlist
+only changes what the gate does when a human-approved, deliberately-reachable channel already has an address, not what happens to traffic.
+
 ## Still to do before any scenario runs
 
 - Strip the default route off `eth1` on node-02 (or raise its metric) so background traffic — not just scenario traffic — can't leak either,

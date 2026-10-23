@@ -4,7 +4,8 @@ docs/benchmarks/results/track-c-scenario1-arp-spoof/PREREGISTRATION.md. Do not c
 noting why (same convention as the layout-capacity and conformance harnesses).
 
 What it does: node-02 (the adversary) sends REPLY_COUNT unsolicited ARP replies claiming TARGET_IP (the Mac's workload-segment alias), bound
-explicitly to its own eth0 (never trusting routing-table defaults -- see scripts/adversary-bind.py). Observed three ways: O3 (ground truth for
+explicitly to its own workload interface, NODE02_WORKLOAD_IFACE below -- eth1, not eth0, on this host; see that constant's comment -- never
+trusting routing-table defaults (see scripts/adversary-bind.py). Observed three ways: O3 (ground truth for
 "the switch sent it out of port 2"), O2 (the declared secondary output of the p1-arp rule), and the Mac's own ARP cache for TARGET_IP, read
 before and after. A corrective step always runs afterward, success or failure, so the Mac's cache is not left wrong when the run ends.
 
@@ -27,7 +28,18 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-NODE02 = 'agentic-node-02'       # the adversary (its own eth0; see adversary-bind.py)
+NODE02 = 'agentic-node-02'       # the adversary; see adversary-bind.py
+# node-02's workload interface is eth1, NOT eth0 -- found 2026-10-22 while setting up its eth1 (USB-Ethernet) control channel: the
+# onboard NIC (workload segment, 10.0.2.0/24) and the ASIX USB adapter (household network) have a persistent, reproducible kernel-level
+# naming collision on this specific host (confirmed via journalctl: both try to rename to the other's current name on every boot, "File
+# exists" every time, regardless of systemd .link MAC-based overrides -- the kernel's own initial enumeration deterministically assigns
+# "eth0" to the ASIX adapter and "eth1" to the onboard NIC before any .link file gets a chance, so forcing the opposite literally requires
+# non-"eth0"/"eth1" names, which just moves the problem elsewhere). Documented as a per-host quirk rather than fought further.
+NODE02_WORKLOAD_IFACE = 'eth1'
+# node-02's known, declared control channels: eth0 (the USB-Ethernet adapter reaching the household network, our SSH path) and tailscale0
+# (which rides the same eth0 route). Declared so preflight() excuses exactly these two, by name, and still refuses on anything else up and
+# routable that we did NOT expect -- the actual risk this check exists to catch.
+NODE02_KNOWN_CONTROL_IFACES = ('eth0', 'tailscale0')
 JETSON = 'jetson'
 TARGET_IP = '10.0.2.119'         # the Mac's workload-segment alias (owner-approved scope: our own host, not the real gateway)
 O3_IF = 'enx9c69d39ddcc0'        # ground truth: mirror of the Zodiac P2 link
@@ -198,7 +210,8 @@ def main() -> None:
     log('step 1: preflight on the adversary node (scripts/adversary-bind.py)')
     adversary_bind_src = read_adversary_bind_src()
     run(NODE02, f"echo {base64.b64encode(adversary_bind_src.encode()).decode()} | base64 -d > /tmp/adversary-bind.py")
-    preflight_raw = run(NODE02, 'python3 /tmp/adversary-bind.py preflight')
+    control_flags = ' '.join(f'--known-control-iface {i}' for i in NODE02_KNOWN_CONTROL_IFACES)
+    preflight_raw = run(NODE02, f'python3 /tmp/adversary-bind.py preflight --iface {NODE02_WORKLOAD_IFACE} {control_flags}')
     preflight = json.loads(preflight_raw)
     result['preflight'] = preflight
     if not preflight['ok']:
@@ -206,11 +219,11 @@ def main() -> None:
         log('  nothing was sent; the run stops here (Invariant 3: fail closed)')
         json.dump(result, open(os.path.join(a.out, 'result.json'), 'w'), indent=1)
         raise SystemExit(1)
-    log('  ok: preflight passed, eth0 is safe to send on')
+    log(f'  ok: preflight passed, {NODE02_WORKLOAD_IFACE} is safe to send on')
 
-    adversary_mac = run(NODE02, "ip -o link show eth0 | awk '{print $(NF-2)}'").strip()
+    adversary_mac = run(NODE02, f"ip -o link show {NODE02_WORKLOAD_IFACE} | awk '{{print $(NF-2)}}'").strip()
     result['adversaryEth0Mac'] = adversary_mac
-    log(f'  adversary eth0 MAC: {adversary_mac}')
+    log(f'  adversary {NODE02_WORKLOAD_IFACE} MAC: {adversary_mac}')
 
     log('step 2: baseline — the Mac\'s own ARP cache for the target, before anything is sent')
     before = local_arp(TARGET_IP)
@@ -228,9 +241,9 @@ def main() -> None:
                 result['refusalReason'] = f'{tag} capture died before the send'
                 json.dump(result, open(os.path.join(a.out, 'result.json'), 'w'), indent=1)
                 raise SystemExit(1)
-        log(f'step 4: sending {reply_count} unsolicited ARP replies from the adversary, bound to eth0, claiming {TARGET_IP}')
+        log(f'step 4: sending {reply_count} unsolicited ARP replies from the adversary, bound to {NODE02_WORKLOAD_IFACE}, claiming {TARGET_IP}')
         try:
-            out = run(NODE02, f'arping -A -I eth0 -c {reply_count} -w 1 {TARGET_IP}; echo "__TC1_ARPING_EXIT__:$?"')
+            out = run(NODE02, f'arping -A -I {NODE02_WORKLOAD_IFACE} -c {reply_count} -w 1 {TARGET_IP}; echo "__TC1_ARPING_EXIT__:$?"')
             marker = next((l for l in out.splitlines() if l.startswith('__TC1_ARPING_EXIT__:')), None)
             log(f'  {out.replace(marker, "").strip()[:400] if marker else out.strip()[:400]}')
             result['sendOk'] = marker == '__TC1_ARPING_EXIT__:0'
