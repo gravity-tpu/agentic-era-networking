@@ -34,6 +34,7 @@ via the single module instance scripts/score-labelled-runs.py already loads) and
 import argparse
 import importlib.util
 import json
+import math
 import os
 import sys
 import time
@@ -269,6 +270,35 @@ def margin_target(train_groups, W, margin=MARGIN, sigma=SIGMA):
     return float(np.mean(pooled)) + sigma * float(np.std(pooled)) + margin
 
 
+NUM_WEIGHTS = 10
+
+
+def validate_weights_payload(payload, source):
+    """Fail-closed validation of a --compare-weights-file payload before it is ever used for scoring. Deliberately
+    re-implemented here rather than importing scripts/gpu-sdn-anomaly-sentinel.py's load_weights_payload(): that
+    module registers signal.signal(SIGINT/SIGTERM) handlers at import time (for its own live-daemon role), which
+    this offline fitting script's own process should not inherit just to validate a JSON shape. The checks mirror
+    that function's contract (a JSON object with a NUM_WEIGHTS-element "weights" list of finite floats) plus a
+    finite "tau", which load_weights_payload has no reason to check since its caller is the weights-only path."""
+    if not isinstance(payload, dict):
+        raise SystemExit(f"FATAL: {source} must be a JSON object with \"weights\" and \"tau\" keys, got "
+                          f"{type(payload).__name__}")
+    wlist = payload.get("weights")
+    if not isinstance(wlist, list) or len(wlist) != NUM_WEIGHTS:
+        raise SystemExit(f"FATAL: {source}'s \"weights\" must be a {NUM_WEIGHTS}-element list, got "
+                          f"{len(wlist) if isinstance(wlist, list) else type(wlist).__name__}")
+    try:
+        floats = [float(w) for w in wlist]
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"FATAL: {source}'s weights must all be numbers: {exc}") from exc
+    if not all(math.isfinite(w) for w in floats):
+        raise SystemExit(f"FATAL: {source}'s weights must all be finite, got {floats}")
+    tau = payload.get("tau")
+    if isinstance(tau, bool) or not isinstance(tau, (int, float)) or not math.isfinite(tau):
+        raise SystemExit(f"FATAL: {source}'s \"tau\" must be a finite number, got {tau!r}")
+    return np.asarray(floats, dtype=np.float32), float(tau)
+
+
 def score_holdout(holdout, W, base_tau, label_text):
     """Scores every held-out run under the given weights/tau using slr.score() unmodified (sr.W is set by the caller
     before this runs); returns the same aggregate shape score-labelled-runs.py's own CLI prints, for the sentinel
@@ -320,6 +350,8 @@ def main():
     ap.add_argument("--compare-label", default=None, help="Row label for --compare-weights-file (default: its filename)")
     ap.add_argument("--seed", type=int, default=DE_SEED)
     args = ap.parse_args()
+    if args.compare_label and not args.compare_weights_file:
+        ap.error("--compare-label has no effect without --compare-weights-file")
 
     train_groups, attack_train_groups, attack_train_report, holdout = load_and_split(args.datadir, objective=args.objective)
     n_train_runs = sum(len(v) for v in train_groups.values())
@@ -413,8 +445,7 @@ def main():
         if args.compare_weights_file:
             with open(args.compare_weights_file) as fh:
                 compare_payload = json.load(fh)
-            compare_W = np.asarray(compare_payload["weights"], dtype=np.float32)
-            compare_tau = float(compare_payload["tau"])
+            compare_W, compare_tau = validate_weights_payload(compare_payload, args.compare_weights_file)
             compare_label = args.compare_label or os.path.basename(args.compare_weights_file)
             sr.W = compare_W
             compare_result = score_holdout(holdout, compare_W, compare_tau, compare_label)
