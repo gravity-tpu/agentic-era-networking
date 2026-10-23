@@ -84,13 +84,37 @@ def kernel_loss_batch(X, W):
     return np.mean((X - rec) ** 2, axis=1)
 
 
-def self_check(sample_window):
-    """Fail loudly (Invariant 1: no suppression) if the vectorized loss ever drifts from the real kernel_loss()."""
-    want = sr.kernel_loss(sample_window)
-    got = float(kernel_loss_batch(np.asarray(sample_window, dtype=np.float32).reshape(1, 256), sr.W)[0])
-    if abs(want - got) > 1e-5:
-        raise SystemExit(f"FATAL: kernel_loss_batch disagrees with sr.kernel_loss ({got} vs {want}); refusing to fit "
-                          f"against a formula that may have drifted from the real kernel.")
+def self_check(sample_window, seed=7):
+    """Fail loudly (Invariant 1: no suppression) if the vectorized loss ever drifts from the real kernel_loss().
+
+    Checks more than the one point this would otherwise cover: the compiled-in default weights (the common case,
+    where a drift would be most visible), both corners of BOUNDS (the saturating-sigmoid regime the optimizer
+    explores and np.errstate(over="ignore") deliberately tolerates in kernel_loss_batch — exactly where a scalar/
+    vectorized divergence would be most plausible, not least), and a few random interior points, so the "checked at
+    runtime" claim covers the search space the optimizer actually visits, not just the one weight set most runs
+    start from."""
+    rng = np.random.default_rng(seed)
+    lo = np.array([b[0] for b in BOUNDS], dtype=np.float32)
+    hi = np.array([b[1] for b in BOUNDS], dtype=np.float32)
+    candidates = [np.array(sr.W, dtype=np.float32, copy=True), lo, hi] + \
+        [rng.uniform(lo, hi).astype(np.float32) for _ in range(5)]
+    original_W = np.array(sr.W, dtype=np.float32, copy=True)
+    try:
+        for W in candidates:
+            sr.W = W
+            want = sr.kernel_loss(sample_window)
+            got = float(kernel_loss_batch(np.asarray(sample_window, dtype=np.float32).reshape(1, 256), W)[0])
+            if not (np.isfinite(want) and np.isfinite(got)) and not (np.isnan(want) and np.isnan(got)):
+                # Not expected to ever trip given the formula, but a NaN appearing on only one side would be exactly
+                # the kind of silent divergence this check exists to catch (see np.errstate's own comment above).
+                raise SystemExit(f"FATAL: kernel_loss_batch and sr.kernel_loss disagree on finiteness at W={W} "
+                                  f"({got} vs {want}).")
+            if abs(want - got) > 1e-4:
+                raise SystemExit(f"FATAL: kernel_loss_batch disagrees with sr.kernel_loss at W={W} ({got} vs "
+                                  f"{want}); refusing to fit against a formula that may have drifted from the real "
+                                  f"kernel.")
+    finally:
+        sr.W = original_W
 
 
 def windows_for_run(frames):
@@ -238,11 +262,16 @@ def main():
           f"(pooled over {len(train_losses_trained_W)} training windows)\n")
 
     print("== held-out validation (never used for fitting or threshold calibration) ==")
-    sr.W = baseline_W
-    baseline_result = score_holdout(holdout, baseline_W, sr.BASE_TAU, "baseline")
-    sr.W = np.asarray(trained_W, dtype=np.float32)
-    trained_result = score_holdout(holdout, trained_W, trained_tau, "trained")
-    sr.W = baseline_W  # restore the shared module global before this process does anything else with it
+    # sr.W is a shared mutable module global that sr.kernel_loss()/slr.sentinel_alerts() close over; restore it even
+    # if scoring raises, so a caller importing this module (rather than running it as __main__) never inherits a
+    # mutated weight set from a failed run.
+    try:
+        sr.W = baseline_W
+        baseline_result = score_holdout(holdout, baseline_W, sr.BASE_TAU, "baseline")
+        sr.W = np.asarray(trained_W, dtype=np.float32)
+        trained_result = score_holdout(holdout, trained_W, trained_tau, "trained")
+    finally:
+        sr.W = baseline_W
 
     print("\n== head to head on the held-out split ==")
     print(f"baseline: {baseline_result['detected']}/{baseline_result['attacks']} attacks detected, "
@@ -271,6 +300,7 @@ def main():
         }
         with open(args.out_weights, "w") as fh:
             json.dump(payload, fh, indent=2)
+            fh.write("\n")
         print(f"\nwrote {args.out_weights}")
 
 

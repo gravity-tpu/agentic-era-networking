@@ -109,6 +109,28 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+NUM_CUDA_KERNEL_WEIGHTS = 10  # w0..w9 read by autoencoder_inference_kernel in src/gpu/gpu_anomaly_kernel.cu
+
+
+def load_weights_payload(path: str) -> List[float]:
+    """Parses and validates an opt-in --weights-file / GPU_SENTINEL_WEIGHTS_FILE argument: a JSON object with a
+    "weights" list (or a bare JSON list) of exactly NUM_CUDA_KERNEL_WEIGHTS finite floats, as written by
+    scripts/train-sentinel-weights.py. Pure function (no ctypes/CUDA dependency) so the validation itself is testable
+    without a native engine. Raises OSError (unreadable file), json.JSONDecodeError (not valid JSON), or ValueError
+    (wrong shape, wrong length, or a non-finite element — NaN/Infinity are technically valid JSON via Python's parser
+    but are never a legitimate trained weight) on anything that should fail closed rather than load.
+    """
+    with open(path, 'r') as wf:
+        payload = json.load(wf)
+    wlist = payload['weights'] if isinstance(payload, dict) else payload
+    if not isinstance(wlist, list) or len(wlist) != NUM_CUDA_KERNEL_WEIGHTS:
+        raise ValueError(f"expected a JSON object with a {NUM_CUDA_KERNEL_WEIGHTS}-element \"weights\" list, got "
+                          f"{len(wlist) if isinstance(wlist, list) else type(wlist).__name__}")
+    floats = [float(w) for w in wlist]
+    if not all(math.isfinite(w) for w in floats):
+        raise ValueError(f"weights must all be finite; got {floats}")
+    return floats
+
 
 # ---------------------------------------------------------------------------
 # Neural Autoencoder Model (PyTorch CUDA with NumPy/Pure Math Fallback)
@@ -191,14 +213,14 @@ class Gpu1DAutoencoder:
         if weights_file:
             if self.cuda_lib is not None:
                 try:
-                    with open(weights_file, 'r') as wf:
-                        payload = json.load(wf)
-                    wlist = payload['weights'] if isinstance(payload, dict) else payload
-                    if not isinstance(wlist, list) or len(wlist) != 10:
-                        raise ValueError(f"expected a JSON object with a 10-element \"weights\" list, got "
-                                          f"{len(wlist) if isinstance(wlist, list) else type(wlist).__name__}")
-                    weights_arr = (ctypes.c_float * len(wlist))(*[float(w) for w in wlist])
-                    rc = self.cuda_lib.load_cuda_model_weights(weights_arr, len(wlist))
+                    floats = load_weights_payload(weights_file)
+                    weights_arr = (ctypes.c_float * len(floats))(*floats)
+                    # Pin the calling convention explicitly at the call site rather than relying on the declaration
+                    # made earlier in this same loop (lines above) staying attached to this exact `lib` object —
+                    # cheap, and removes any doubt that this specific call is correctly marshalled.
+                    self.cuda_lib.load_cuda_model_weights.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.c_int]
+                    self.cuda_lib.load_cuda_model_weights.restype = ctypes.c_int
+                    rc = self.cuda_lib.load_cuda_model_weights(weights_arr, len(floats))
                     if rc != 0:
                         sys.stderr.write(f"[gpu-sentinel] FATAL: load_cuda_model_weights rejected {weights_file} (rc={rc}).\n")
                         sys.stderr.write("[gpu-sentinel] Council Invariant 3 (Fail-Closed Isolation): an explicit "
@@ -207,7 +229,7 @@ class Gpu1DAutoencoder:
                         sys.exit(1)
                     sys.stdout.write(f"[gpu-sentinel] Loaded trained weights from {weights_file} into the CUDA engine "
                                       f"(opt-in: default behavior without --weights-file is unchanged).\n")
-                except (OSError, ValueError, KeyError, TypeError) as exc:
+                except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
                     sys.stderr.write(f"[gpu-sentinel] FATAL: could not load --weights-file {weights_file}: {exc}\n")
                     sys.stderr.write("[gpu-sentinel] Council Invariant 3 (Fail-Closed Isolation): aborting rather than "
                                       "silently falling back to the compiled-in default weights.\n")

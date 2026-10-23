@@ -20,7 +20,7 @@ self-check: kernel_loss_batch matches sr.kernel_loss on a real window (ok)
 baseline hardcoded weights' training-objective value: 0.156286
 differential_evolution: nfev=30332 objective=0.107112
 Nelder-Mead polish:     nfev=1818 objective=0.106961
-fitted in 246.9s
+fitted in 235.6s
 trained weights: [2.522395, 2.959262, 4.0726, 3.213009, 2.070316, 2.737096, 2.106811, 0.060554, 0.462932, 1.210113]
 trained training-objective value: 0.106961  (baseline was 0.156286)
 
