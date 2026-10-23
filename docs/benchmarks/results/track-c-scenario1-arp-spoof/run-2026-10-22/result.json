@@ -1,0 +1,96 @@
+{
+ "startedEt": "2026-10-22 20:48:27 ET",
+ "dryRun": false,
+ "targetIp": "10.0.2.119",
+ "replyCount": 3,
+ "preflight": {
+  "ok": true,
+  "refusalReason": null,
+  "workloadIface": "eth1",
+  "excusedControlInterfaces": {
+   "eth0": [
+    "10.0.0.87",
+    "2601:547:ce00:89c6::fcdd",
+    "2601:547:ce00:89c6:e46d:8c30:60f5:68f6"
+   ],
+   "tailscale0": [
+    "100.105.255.18",
+    "fd7a:115c:a1e0::5d2c:ff13"
+   ]
+  },
+  "state": {
+   "interfaces": {
+    "eth0": {
+     "adminUp": true,
+     "up": true,
+     "addresses": [
+      "10.0.0.87",
+      "2601:547:ce00:89c6::fcdd",
+      "2601:547:ce00:89c6:e46d:8c30:60f5:68f6",
+      "fe80::fbcb:e5fb:6b6e:9ab"
+     ]
+    },
+    "eth1": {
+     "adminUp": true,
+     "up": true,
+     "addresses": [
+      "10.0.2.52"
+     ]
+    },
+    "wlan0": {
+     "adminUp": true,
+     "up": false,
+     "addresses": []
+    },
+    "tailscale0": {
+     "adminUp": true,
+     "up": true,
+     "addresses": [
+      "100.105.255.18",
+      "fd7a:115c:a1e0::5d2c:ff13",
+      "fe80::8d44:3140:16a0:248f"
+     ]
+    }
+   },
+   "defaultRouteDevices": [
+    "eth0"
+   ]
+  }
+ },
+ "before": {
+  "raw": "? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]",
+  "mac": "f2:5b:dc:7d:21:d4",
+  "permanent": true
+ },
+ "sendOk": true,
+ "o3": {
+  "totalArpFrames": 15,
+  "matchingHits": [
+   "20:48:30.865954 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46",
+   "20:48:31.166346 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46",
+   "20:48:31.466249 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46",
+   "20:48:39.136563 f2:5b:dc:7d:21:d4 > b8:27:eb:79:ff:0a, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at f2:5b:dc:7d:21:d4, length 46"
+  ]
+ },
+ "o2": {
+  "totalArpFrames": 4,
+  "matchingHits": [
+   "20:48:30.865959 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46",
+   "20:48:31.166352 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46",
+   "20:48:31.466252 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46"
+  ]
+ },
+ "after": {
+  "raw": "? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]",
+  "mac": "f2:5b:dc:7d:21:d4",
+  "permanent": true
+ },
+ "cacheChangedToAdversary": false,
+ "corrected": {
+  "raw": "? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]",
+  "mac": "f2:5b:dc:7d:21:d4",
+  "permanent": true
+ },
+ "correctionOk": true,
+ "adversaryWorkloadMac": "b8:27:eb:79:ff:0a"
+}

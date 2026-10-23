@@ -56,6 +56,11 @@ IPV6_LINK_LOCAL = ipaddress.ip_network('fe80::/10')
 # add its row here rather than assuming a flag "probably" exists. A tool with no reliable binding flag should not be used for scenario traffic.
 TOOL_BINDING_CONVENTIONS = {
     'ping': ['-I', WORKLOAD_IFACE],
+    # arping -A/-U (gratuitous ARP reply/request) binds a socket to the CLAIMED address internally (confirmed 2026-10-22, scenario 1's first
+    #   live run on node-02: "arping: bind: Cannot assign requested address" in both modes) -- it cannot announce an address the host does not
+    #   itself own, which is exactly what ARP-spoofing scenario traffic needs to do. It remains listed for legitimate liveness checks of an
+    #   address the host DOES own (e.g. DAD-style, or probing a real neighbour); do not reach for it to impersonate anything. For spoofing, build
+    #   the frame directly: an AF_PACKET/SOCK_RAW socket bound to the interface (see scripts/track-c-scenario1-arp-spoof.py's RAW_ARP_SEND).
     'arping': ['-I', WORKLOAD_IFACE],
     'nmap': ['-e', WORKLOAD_IFACE],
     'hping3': ['-I', WORKLOAD_IFACE],
@@ -63,6 +68,8 @@ TOOL_BINDING_CONVENTIONS = {
     # scapy: set conf.iface = WORKLOAD_IFACE before building a conf.iroute entry, AND pass iface=WORKLOAD_IFACE to every send()/sendp()/srp()
     #   call explicitly. conf.iface alone is a default, not an enforcement; a call that takes an explicit iface kwarg must get one.
     # python socket (raw or UDP/TCP): call bind_socket(sock, WORKLOAD_IFACE) below, before connect()/sendto(). Requires root (CAP_NET_RAW).
+    #   For AF_PACKET specifically, bind_socket()'s SO_BINDTODEVICE still applies, but AF_PACKET sockets are more commonly bound directly via
+    #   sock.bind((WORKLOAD_IFACE, 0)), which is interface-exact by construction (no device name even enters the picture once bound).
 }
 
 
