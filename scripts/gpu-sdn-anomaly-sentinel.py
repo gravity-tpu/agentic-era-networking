@@ -126,7 +126,14 @@ def load_weights_payload(path: str) -> List[float]:
     if not isinstance(wlist, list) or len(wlist) != NUM_CUDA_KERNEL_WEIGHTS:
         raise ValueError(f"expected a JSON object with a {NUM_CUDA_KERNEL_WEIGHTS}-element \"weights\" list, got "
                           f"{len(wlist) if isinstance(wlist, list) else type(wlist).__name__}")
-    floats = [float(w) for w in wlist]
+    try:
+        floats = [float(w) for w in wlist]
+    except (TypeError, ValueError) as exc:
+        # float() raises TypeError for a non-coercible element (e.g. a dict or list entry) and
+        # ValueError for a non-numeric string; the docstring promises ValueError for "anything
+        # that should fail closed", so both are normalized to ValueError here rather than leaking
+        # TypeError past this function's documented contract.
+        raise ValueError(f"weights must all be numbers; got {wlist}") from exc
     if not all(math.isfinite(w) for w in floats):
         raise ValueError(f"weights must all be finite; got {floats}")
     return floats

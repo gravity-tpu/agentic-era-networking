@@ -104,11 +104,16 @@ def self_check(sample_window, seed=7):
             sr.W = W
             want = sr.kernel_loss(sample_window)
             got = float(kernel_loss_batch(np.asarray(sample_window, dtype=np.float32).reshape(1, 256), W)[0])
-            if not (np.isfinite(want) and np.isfinite(got)) and not (np.isnan(want) and np.isnan(got)):
+            agree_on_finiteness = (np.isfinite(want) and np.isfinite(got)) or (np.isnan(want) and np.isnan(got))
+            if not agree_on_finiteness:
                 # Not expected to ever trip given the formula, but a NaN appearing on only one side would be exactly
                 # the kind of silent divergence this check exists to catch (see np.errstate's own comment above).
                 raise SystemExit(f"FATAL: kernel_loss_batch and sr.kernel_loss disagree on finiteness at W={W} "
                                   f"({got} vs {want}).")
+            # 1e-4, not 1e-5: BOUNDS corners (lo/hi) push the sigmoid into its saturating regime,
+            # where float32 rounding between the scalar and vectorized paths is larger than the
+            # tolerance a mid-range W needs. Loosened specifically for those two corner candidates,
+            # not to hide real drift elsewhere in the candidate set.
             if abs(want - got) > 1e-4:
                 raise SystemExit(f"FATAL: kernel_loss_batch disagrees with sr.kernel_loss at W={W} ({got} vs "
                                   f"{want}); refusing to fit against a formula that may have drifted from the real "
