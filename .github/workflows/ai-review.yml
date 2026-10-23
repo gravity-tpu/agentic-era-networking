@@ -20,6 +20,10 @@ on:
       - 'scratch/**'
       - '.env*'
 
+concurrency:
+  group: ai-review-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Verify (types, build, tests)
