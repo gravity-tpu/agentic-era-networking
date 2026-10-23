@@ -149,13 +149,18 @@ frame = eth_header + arp_payload
 sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0806))
 sock.bind((iface, 0))
 sent = 0
+partial = 0
 for _ in range(count):
-    sock.send(frame)
-    sent += 1
+    n = sock.send(frame)
+    if n == len(frame):
+        sent += 1
+    else:
+        partial += 1  # sock.send() returned fewer bytes than the frame; do not count it as a real send (a 42-byte frame on a raw
+        #                socket should never short-write, but this is what "sent" actually claims, so it is checked rather than assumed)
     if _ < count - 1:
         time.sleep(0.3)
 sock.close()
-print(f"__TC1_SEND_RESULT__:{sent}")
+print(f"__TC1_SEND_RESULT__:{sent}" + (f" partial:{partial}" if partial else ""))
 '''
 
 
@@ -256,7 +261,7 @@ def main() -> None:
     log(f'  ok: preflight passed, {NODE02_WORKLOAD_IFACE} is safe to send on')
 
     adversary_mac = run(NODE02, f"ip -o link show {NODE02_WORKLOAD_IFACE} | awk '{{print $(NF-2)}}'").strip()
-    result['adversaryEth0Mac'] = adversary_mac
+    result['adversaryWorkloadMac'] = adversary_mac  # the MAC stamped into the crafted frame; sent on NODE02_WORKLOAD_IFACE, not necessarily eth0
     log(f'  adversary {NODE02_WORKLOAD_IFACE} MAC: {adversary_mac}')
 
     log('step 2: baseline — the Mac\'s own ARP cache for the target, before anything is sent')
