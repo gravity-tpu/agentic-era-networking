@@ -103,6 +103,19 @@ an open item, not resolved by this run.
   stale config in place. Track C's current adversary node can now actually be quarantined by a detector that fires on
   it; this has not yet been re-tested (would need a fresh scan run in `enforce` mode or another approved proposal to
   confirm end to end).
+- **Re-tested, 2026-10-22 23:53 ET.** Re-ran the fast scan (same command, fresh sentinel instance) with the
+  protected-host entry removed. Two attempts were needed, and the first one is itself a finding, not a procedural
+  footnote: it produced **zero anomalies** (loss tracked just under the adaptive threshold the whole run, e.g.
+  `loss=0.1577` vs. `tau=0.1687` on the very first window) — a live, unplanned replication of the ~1-in-3 miss rate
+  the prior `labelled-runs` dataset already found for this exact scan profile (`attack-portscan-fast-r3`), and exactly
+  the residual possibility the pre-registration flagged for Prediction 2. The second attempt fired normally (935
+  anomaly lines) and, this time, **the proposal actually reached the bridge**:
+  `{"targetIp":"10.0.2.52","reason":"GPU 1D-CNN Autoencoder Loss 0.1738 >= Dynamic Threshold 0.1687
+  (Anomaly)","requests":949,...}` — no 403s, correctly attributed, 949 dispatch attempts collapsed into one visible
+  proposal. This confirms the fix: detection can now reach a proposal end to end in `propose` mode. It does not test
+  `enforce` mode (no flow-mod was installed; that remains a separate, undone measurement), and the back-to-back
+  miss-then-hit pair reinforces that this scan profile's detection is not deterministic run to run, independent of
+  the containment-pipeline question.
 - The live-vs-replay discrepancy on the low-rate scan is worth a dedicated follow-up before trusting
   `sentinel-replay.py`/`score-labelled-runs.py`'s numbers (including the prior `labelled-runs` dataset's own
   half-pps results) as a stand-in for the live deployed process's actual behavior under a burst-then-sparse traffic
