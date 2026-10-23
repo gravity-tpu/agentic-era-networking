@@ -5,6 +5,14 @@ as [`track-c-scenario3-portscan/PREREGISTRATION.md`](../track-c-scenario3-portsc
 `README.md` next to this file; this file is not edited afterwards except to add a dated note saying what changed and
 why.
 
+**2026-10-23 addendum (added by the follow-on margin-training round, `../sentinel-training-margin/`):** that round
+found that `scripts/train-sentinel-weights.py`'s `Nelder-Mead` polish step was not actually constrained to `BOUNDS`
+(a missing `bounds=BOUNDS` argument to `scipy.optimize.minimize`), which is since fixed. The fix was checked against
+this attempt's exact `--objective benign` run before trusting anything downstream of it: it reproduces the identical
+split, weights, `tau=0.1696`, and 15/18-detected/4/9-false-positive headline already published below, unchanged.
+This attempt's polish never actually left the box, so this result stands as published; see
+`../sentinel-training-margin/README.md` for the full account of where the bug did matter.
+
 ## The claim under test
 
 `docs/benchmarks/results/sentinel-detection/README.md` and `labelled-runs/README.md` both disclose that the GPU
