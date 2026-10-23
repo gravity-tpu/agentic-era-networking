@@ -24,19 +24,29 @@ are measured here rather than assumed:
    match uses a slack window (default `DEFAULT_LABEL_SLACK_S`) added to the flow's [start, start+duration] interval
    before comparing to a packet's own (sub-second, pcap-derived) arrival time.
 
-Timezone: CIC-IDS2017's documented capture site uses US Eastern time; July 2017 is EDT (UTC-4). This is not
-asserted on faith here either - validate by checking that `disambiguate_12h` lands flows inside the measured capture
-window at all (see cic-ids2017-adapter.py's coverage report for the fraction that didn't, and why).
+Timezone: **-3 (Atlantic Daylight Time), not -4 (US Eastern).** The first version of this file assumed US Eastern
+(EDT, UTC-4), reasoning only that "CIC-IDS2017's documented capture site uses US Eastern time." That assumption was
+wrong and is corrected here from direct measurement, not from re-reading documentation: picking one labelled flow
+each from the Friday PortScan CSV and the Wednesday DoS Hulk CSV, searching the corresponding raw pcap for packets
+matching that flow's *exact* 5-tuple regardless of timestamp, found real packets at that tuple on both days
+consistently about one hour *earlier* than the CSV's disambiguated start time (-3598.2s and -3576.8s respectively,
+both within the ±59s slop expected from the CSV's minute-only resolution of an exact -3600s/-1h). The ISCX lab is at
+the University of New Brunswick in Fredericton - Atlantic Canada, not the US Eastern zone - and Atlantic Daylight
+Time in July 2017 is UTC-3, one hour ahead of EDT. That matches the measured skew exactly, which is why `-3` is used
+below; whether the true mechanism is literally "ADT" or some other one-hour misconfiguration in how CICFlowMeter's
+host recorded its clock is not verified further than that, and does not change the correction.
 """
 import csv
 import re
 from collections import namedtuple
 
-# EDT = UTC-4. CIC-IDS2017 was captured in July 2017 (daylight time) at the University of New Brunswick's ISCX lab,
-# whose published materials describe times in US/Canada Eastern. The adapter's coverage report is the actual check
-# that this constant is right for a given file: the fraction of flows whose disambiguated time lands inside that
-# file's own measured capture window.
-TZ_OFFSET_HOURS = -4
+# Measured, not documented (see the module docstring): two independent exact-5-tuple checks, one per day, each
+# against a different attack type, both landed within a minute of -3600s/-1h of what -4 (EDT) would have predicted,
+# and 0s of what -3 predicts. The adapter's coverage report is the ongoing check that this constant is right for a
+# given file: the fraction of flows whose disambiguated time lands inside that file's own measured capture window,
+# and - more importantly, since that check alone cannot rule out a wrong-by-exactly-one-hour constant - the overall
+# label join rate jumping from under 2% (TZ_OFFSET_HOURS = -4) to the rate reported once this fix landed.
+TZ_OFFSET_HOURS = -3
 
 # Minute-only timestamp resolution plus independent pcap/flow-meter clocks: this is the slack added on each side of
 # a flow's [start, start+duration] interval before a packet's arrival time is compared to it.

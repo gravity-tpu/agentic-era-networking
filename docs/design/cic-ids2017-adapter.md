@@ -87,16 +87,55 @@ The `-4` (EDT) offset was not assumed: `scan_capture_window` on Friday reports a
 start - exactly the kind of number that confirms the offset rather than merely being consistent with it. Wednesday
 shows the same pattern (file opens `2017-07-05 11:42:42 UTC` = `07:42:42` EDT).
 
-**2. The downloaded Friday pcap appears to be truncated before the DDoS attack finishes.** The DDoS sub-CSV's own
-labelled rows run from literal `3:xx` to `4:59` (15:xx-16:59 PM), but the raw Friday capture's own last packet,
-independently measured, is at `16:02:41` EDT. A disambiguated-timestamp breakdown by minute confirms this is not a
-disambiguation bug: every `3:xx` (15:xx) DDoS row resolves fine (comfortably before the file's end), and the
-`4:xx` (16:xx) rows split cleanly at the few minutes past the file's own last-packet time - rows at `4:00`-`4:04`ish
-resolve, rows past that do not, because there are no packets left in the file after that point, not because the
-timestamp failed to parse. Roughly 55% of DDoS-labelled flow starts in that CSV fall after the file's last packet.
-**This means only the first several minutes of the documented ~62-minute DDoS attack window are present in this
-particular downloaded capture** - a scope limitation of the dataset mirror, disclosed here and in the results note,
-not something this task fixes (re-downloading or sourcing a second copy of the file is out of scope for this task).
+**Added after the first full-scale run: `-4` was wrong by exactly one hour; the real offset is `-3`.** The window-fit
+check above only proves a timezone guess is *plausible* (the file opens near the start of a working day either way);
+it cannot rule out a guess that is wrong by exactly one hour, because shifting both AM and PM candidates by one hour
+usually still leaves one of them inside an 8-hour window. The tell was the label join's own coverage: with
+`TZ_OFFSET_HOURS = -4`, only 38,738/9,915,680 (0.4%) of Friday's IPv4 packets and 148,643/13,705,555 (1.1%) of
+Wednesday's matched a labelled flow at all - far under this doc's own "under 20% means rethink the strategy" line.
+Rather than loosen the slack to paper over it (which would just start matching unrelated flows), the fix was to find
+one labelled flow on each day, take its *exact* 5-tuple, and search the raw pcap for that exact tuple regardless of
+timestamp:
+
+- Friday: `172.16.0.1:43959 -> 192.168.10.50:5357` (TCP, a PortScan-labelled flow). Two matching packets were found
+  in the raw file at `1499450881.75`, which is `-3598.2s` from the CSV's disambiguated start (`1499454480.0`) -
+  about one hour early, not the ±90s slack was built for.
+- Wednesday: `172.16.0.1:50748 -> 192.168.10.50:80` (TCP, a DoS Hulk-labelled flow, picked independently on a
+  different day and attack type). 165 matching packets were found starting at `1499262203.19`, `-3576.8s` from the
+  CSV's start (`1499265780.0`) - again about one hour early (the small additional slop past a clean -3600s, 1.8s and
+  23.2s respectively, is consistent with the CSV's own minute-only resolution, not a second error).
+
+Both land within a minute of a clean one-hour offset, on two different days and attack types - not a coincidence.
+The ISCX lab that generated CIC-IDS2017 is at the University of New Brunswick in Fredericton, which is in the
+**Atlantic**, not US Eastern, time zone; Atlantic Daylight Time in July 2017 is UTC-3, exactly one hour ahead of the
+EDT this file originally assumed. `TZ_OFFSET_HOURS` is now `-3`; see `scripts/cic-ids2017-labels.py` for the same
+note next to the constant, and the results note for the coverage this produced on the full re-run. The investigation
+that found this is recorded in full in the PR discussion, not reproduced here; the two 5-tuple checks above are
+exactly reproducible from the CSVs and the raw pcap and are the load-bearing evidence, not the timezone story about
+*why* - this file does not need to be right about the "why" for the fix to be right.
+
+**2. (Retracted below - keeping the original reasoning visible, not deleting it.) The downloaded Friday pcap appears
+to be truncated before the DDoS attack finishes.** The DDoS sub-CSV's own labelled rows run from literal `3:xx` to
+`4:59` (15:xx-16:59 PM), but the raw Friday capture's own last packet, independently measured, is at `16:02:41` EDT.
+A disambiguated-timestamp breakdown by minute confirms this is not a disambiguation bug: every `3:xx` (15:xx) DDoS
+row resolves fine (comfortably before the file's end), and the `4:xx` (16:xx) rows split cleanly at the few minutes
+past the file's own last-packet time - rows at `4:00`-`4:04`ish resolve, rows past that do not, because there are no
+packets left in the file after that point, not because the timestamp failed to parse. Roughly 55% of DDoS-labelled
+flow starts in that CSV fall after the file's last packet. **This means only the first several minutes of the
+documented ~62-minute DDoS attack window are present in this particular downloaded capture** - a scope limitation of
+the dataset mirror, disclosed here and in the results note, not something this task fixes (re-downloading or
+sourcing a second copy of the file is out of scope for this task).
+
+**Retracted after the timezone fix below: this was the same `-4` vs. `-3` bug, not a truncated capture.** Once
+`TZ_OFFSET_HOURS` was corrected to `-3`, the Friday DDoS CSV's `neither_fits` count on a full reload went from
+129,544/225,745 rows to **0/225,745** - every row resolves inside the measured capture window with no special
+pleading. The "16:xx rows past the file's end" pattern above was real, but it was an artifact of resolving those
+rows to the *wrong* PM hour (one hour later than their true time) under the wrong timezone, not evidence the capture
+was short. The Friday capture is not known to be truncated; no finding here survives past this paragraph. This is
+left in instead of deleted because the reasoning above was a reasonable reading of the evidence *available at the
+time* (a window-fit check alone cannot distinguish "truncated" from "off by exactly one hour") - the lesson is that a
+single corroborating signal (window-fit) is not enough to accept a root-cause story; the coverage number and the
+exact-5-tuple check below are what actually settled it.
 
 ## What would count as "working" (fixed before the full validation run)
 

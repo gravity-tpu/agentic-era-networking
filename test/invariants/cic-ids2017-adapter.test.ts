@@ -54,7 +54,7 @@ print(json.dumps(out))
     // Wednesday's own DoS Slowloris rows read literally as "10:43", correctly AM.
     const [[epoch, reason]] = parse([['5/7/2017 10:43', ...WED_WINDOW]]);
     expect(reason).toBe('ok');
-    expect(epoch).toBeCloseTo(1499265780.0, 1); // 2017-07-05 14:43:00 UTC = 10:43 EDT
+    expect(epoch).toBeCloseTo(1499262180.0, 1); // 2017-07-05 13:43:00 UTC = 10:43 ADT (UTC-3)
   });
 
   it('resolves an afternoon reading (no AM/PM marker; AM would fall before the window) to the PM epoch', () => {
@@ -62,11 +62,11 @@ print(json.dumps(out))
     // distinguishable from a slowloris-like morning time by checking which reading lands in the capture window.
     const [[epoch, reason]] = parse([['5/7/2017 3:12', ...WED_WINDOW]]);
     expect(reason).toBe('ok');
-    expect(epoch).toBeCloseTo(1499281920.0, 1); // 2017-07-05 19:12:00 UTC = 15:12 EDT
+    expect(epoch).toBeCloseTo(1499278320.0, 1); // 2017-07-05 18:12:00 UTC = 15:12 ADT (UTC-3)
   });
 
   it('reports neither_fits when both readings fall outside the measured capture window', () => {
-    const [[epoch, reason]] = parse([['5/7/2017 6:00', ...WED_WINDOW]]); // 06:00 and 18:00 EDT both miss the window
+    const [[epoch, reason]] = parse([['5/7/2017 6:00', ...WED_WINDOW]]); // 06:00 and 18:00 ADT both miss the window
     expect(reason).toBe('neither_fits');
     expect(epoch).toBeNull();
   });
