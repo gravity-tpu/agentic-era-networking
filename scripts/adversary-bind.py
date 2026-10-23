@@ -14,14 +14,23 @@ forgotten flag still leaks). The fix is: every scenario script calls `preflight(
 provenance, and every traffic-generating call in the script explicitly names the workload interface — never trusting the routing table's default
 choice. How to do that varies by tool; see TOOL_BINDING_CONVENTIONS below. This module does not generate any traffic itself.
 
+Known control channels (found 2026-10-22, running this for real against node-02): a live run needs SOME way to reach the adversary node and
+drive it, and an IP-based control channel (unlike node-01's serial console, which carries no IP traffic at all and so can never be a leak)
+necessarily has a routable address -- `preflight()` would otherwise never pass on a host that has one, which defeats its purpose on exactly the
+hosts that need it most. `known_control_ifaces` lets a caller declare "this interface is my control channel, I know it has an address, do not
+refuse because of it" -- but ONLY for interfaces named there; anything else still refuses exactly as before, and the declared interfaces are
+reported in the result (`excusedControlInterfaces`) so the provenance record shows what was knowingly allowed, not silently ignored. The real
+protection is unchanged: every send must still be explicitly bound (TOOL_BINDING_CONVENTIONS / bind_socket), never left to routing-table luck.
+
 Usage (run ON the adversary node, Python 3 standard library only, no third-party dependencies):
-    python3 adversary-bind.py preflight                 # prints the JSON report
-    python3 adversary-bind.py preflight --enforce        # same, but exits 1 if the workload interface is down or any other interface could leak
-    python3 adversary-bind.py preflight --iface eth0     # override the interface under test (default eth0)
+    python3 adversary-bind.py preflight                               # prints the JSON report
+    python3 adversary-bind.py preflight --enforce                      # same, but exits 1 if the report is not ok
+    python3 adversary-bind.py preflight --iface eth0                   # override the interface under test (default eth0)
+    python3 adversary-bind.py preflight --known-control-iface eth0     # repeatable; excuse a declared control channel from the leak check
 
 As a library:
     from adversary_bind import WORKLOAD_IFACE, bind_socket, preflight
-    report = preflight()
+    report = preflight(iface='eth1', known_control_ifaces=['eth0'])
     if not report['ok']:
         raise SystemExit(f"refusing to run: {report['refusalReason']}")
 """
@@ -130,28 +139,32 @@ def _is_routable(address: str) -> bool:
     return not _is_link_local(address)
 
 
-def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WORKLOAD_SUBNETS) -> dict:
+def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WORKLOAD_SUBNETS, known_control_ifaces: tuple = ()) -> dict:
     """
-    Returns {ok, refusalReason, workloadIface, state}, always a dict, never an exception (NetworkStateError and any other failure to read the
-    state is itself a refusal). `ok` is False when:
+    Returns {ok, refusalReason, workloadIface, excusedControlInterfaces, state}, always a dict, never an exception (NetworkStateError and any
+    other failure to read the state is itself a refusal). `ok` is False when:
       - the state could not be read at all;
       - the workload interface is down (nothing can run);
       - the workload interface itself carries an address outside `expected_subnets` (node-01's eth0 example: the 10.0.1.0/24 controller segment
-        sits on the SAME interface as the workload subnet, and the data-plane policy does not mediate it either);
-      - ANY other up interface carries ANY address at all. Not just the default-route holder: an on-link route to that interface's own subnet
-        lets traffic reach hosts there without ever consulting the default route, so holding the default route is not what makes an interface
-        dangerous — having any address reachable outside the workload interface is.
+        sits on the SAME interface as the workload subnet, and the data-plane policy does not mediate it either) -- `known_control_ifaces`
+        does NOT excuse this: a leak built into the workload interface itself is not the same risk as a separate, declared control channel;
+      - any up interface NOT named in `known_control_ifaces` carries any routable address at all. Not just the default-route holder: an
+        on-link route to that interface's own subnet lets traffic reach hosts there without ever consulting the default route, so holding the
+        default route is not what makes an interface dangerous -- having any address reachable outside the workload interface is.
     `ok=False` is a refusal to run, not a warning the caller can choose to ignore — Invariant 3 (fail closed): a scenario whose containment
-    cannot be guaranteed is not run.
+    cannot be guaranteed is not run. A declared control interface that turns out to be down, or present with no address, is not an error; it
+    is simply not reported in `excusedControlInterfaces` (there was nothing on it to excuse).
     """
     try:
         state = iface_state()
     except NetworkStateError as err:
-        return {'ok': False, 'refusalReason': f'could not read the network state: {err}', 'workloadIface': iface, 'state': None}
+        return {'ok': False, 'refusalReason': f'could not read the network state: {err}', 'workloadIface': iface,
+                'excusedControlInterfaces': {}, 'state': None}
 
     workload = state['interfaces'].get(iface)
     if workload is None or not workload['up']:
-        return {'ok': False, 'refusalReason': f'the workload interface {iface} does not exist or is not up', 'workloadIface': iface, 'state': state}
+        return {'ok': False, 'refusalReason': f'the workload interface {iface} does not exist or is not up', 'workloadIface': iface,
+                'excusedControlInterfaces': {}, 'state': state}
 
     unexpected_on_workload = [a for a in workload['addresses'] if not _in_any_subnet(a, expected_subnets)]
     # (link-local addresses are excluded inside _in_any_subnet, not filtered here, so the same rule applies everywhere this helper is used)
@@ -159,27 +172,44 @@ def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WOR
         return {
             'ok': False,
             'refusalReason': f'{iface} itself carries address(es) outside the expected workload subnet(s) {expected_subnets}: '
-                              f'{unexpected_on_workload} (not mediated by the data-plane policy either)',
-            'workloadIface': iface, 'state': state,
+                              f'{unexpected_on_workload} (not mediated by the data-plane policy either; known_control_ifaces does not excuse '
+                              f'the workload interface itself)',
+            'workloadIface': iface, 'excusedControlInterfaces': {}, 'state': state,
         }
 
     leaking = {}
+    excused = {}
     for name, info in state['interfaces'].items():
         if name == iface or not info['up']:
             continue
         # Link-local-only is not a leak (see IPV6_LINK_LOCAL above): an interface with nothing but a link-local address cannot reach the lab
         # LAN or anywhere off-link, so it is not reported here even though it is "up" with "an address".
         routable = [a for a in info['addresses'] if _is_routable(a)]
-        if routable:
+        if not routable:
+            continue
+        if name not in known_control_ifaces:
             leaking[name] = routable
+            continue
+        # A control channel is excused by what it carries, not just its name: an interface declared as control must NOT also carry a
+        # workload-subnet address. Interface names are not stable on every host (node-02's onboard NIC and USB adapter swap names on
+        # every boot, see docs/design/track-c-adversary-network.md) -- if a future rename made `iface` and a "known control" interface
+        # trade physical identities, naively trusting the declared NAME would silently excuse what is now actually the workload path.
+        # Checking the address, not just the name, catches that: a real control channel has no business on the workload subnet.
+        on_workload_subnet = [a for a in routable if _in_any_subnet(a, expected_subnets)]
+        if on_workload_subnet:
+            leaking[name] = routable
+        else:
+            excused[name] = routable
     if leaking:
         return {
             'ok': False,
             'refusalReason': f'interface(s) other than {iface} are up with an address and can reach their subnet without ever using the '
-                              f'default route: {leaking}; any traffic not explicitly bound to {iface} may leave through one of these instead',
-            'workloadIface': iface, 'state': state,
+                              f'default route: {leaking}; any traffic not explicitly bound to {iface} may leave through one of these instead '
+                              f'(declare it with known_control_ifaces if it is actually your control channel, not an oversight; a declared '
+                              f'control interface carrying a workload-subnet address is refused regardless, in case a rename swapped roles)',
+            'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state,
         }
-    return {'ok': True, 'refusalReason': None, 'workloadIface': iface, 'state': state}
+    return {'ok': True, 'refusalReason': None, 'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state}
 
 
 def main() -> int:
@@ -187,10 +217,12 @@ def main() -> int:
     sub = ap.add_subparsers(dest='cmd', required=True)
     p = sub.add_parser('preflight', help='report (and optionally enforce) that scenario traffic can be safely confined to the workload interface')
     p.add_argument('--iface', default=WORKLOAD_IFACE)
+    p.add_argument('--known-control-iface', action='append', default=[], dest='known_control_ifaces',
+                    help='repeatable; a declared control-channel interface excused from the leak check')
     p.add_argument('--enforce', action='store_true', help='exit 1 instead of 0 when the report is not ok')
     args = ap.parse_args()
     if args.cmd == 'preflight':
-        report = preflight(args.iface)
+        report = preflight(args.iface, known_control_ifaces=tuple(args.known_control_ifaces))
         print(json.dumps(report, indent=1))
         if args.enforce and not report['ok']:
             return 1
