@@ -1,13 +1,13 @@
 {
-  "lastUpdated": "2026-09-27T00:00:00Z",
+  "lastUpdated": "2026-10-22T00:00:00Z",
   "globalTimeoutMs": 300000,
   "ollama": {
-    "baseUrl": "http://localhost:11434",
+    "baseUrl": "http://100.112.223.16:11434",
     "jetsonBaseUrl": "http://192.168.55.100:11434",
     "timeoutMs": 30000,
     "temperature": 0.2,
     "numPredict": 8192,
-    "description": "Local Ollama inference — zero API cost, zero latency, zero data egress. Mac serves Gemma to both local pre-push hook (localhost) and Jetson Orin (USB link 192.168.55.100)."
+    "description": "Local Ollama inference — zero API cost, no cloud egress. `baseUrl` below is this machine's documented fallback, overridable per-host with the OLLAMA_BASE_URL env var (see scripts/ai-utils.mjs) so the pre-push hook keeps working on a host with a different bind address. On this Mac, Ollama is bound only to its Tailscale IP, not localhost (~/Library/LaunchAgents/com.ollama.tailscale.plist sets OLLAMA_HOST=100.112.223.16:11434, not 0.0.0.0), so traffic to it transits the Tailscale mesh rather than loopback."
   },
   "routing": {
     "local": {

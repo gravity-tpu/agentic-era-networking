@@ -69,7 +69,9 @@ export function buildModelFallbacks(filterTier = null) {
 
   const routing = config.routing ?? {};
   const ollamaConfig = config.ollama ?? {};
-  const ollamaBaseUrl = ollamaConfig.baseUrl ?? 'http://localhost:11434';
+  // OLLAMA_BASE_URL overrides config/models.json so a machine-specific bind address
+  // (e.g. a Tailscale IP) never has to be hardcoded as the shared default for every host.
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || ollamaConfig.baseUrl || 'http://localhost:11434';
   const ollamaTimeoutMs = typeof ollamaConfig.timeoutMs === 'number' ? ollamaConfig.timeoutMs : 150_000;
   const ollamaTemperature = typeof ollamaConfig.temperature === 'number' ? ollamaConfig.temperature : 0.2;
   const ollamaNumPredict = typeof ollamaConfig.numPredict === 'number' ? ollamaConfig.numPredict : 8192;
