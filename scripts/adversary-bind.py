@@ -187,16 +187,26 @@ def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WOR
         routable = [a for a in info['addresses'] if _is_routable(a)]
         if not routable:
             continue
-        if name in known_control_ifaces:
-            excused[name] = routable
-        else:
+        if name not in known_control_ifaces:
             leaking[name] = routable
+            continue
+        # A control channel is excused by what it carries, not just its name: an interface declared as control must NOT also carry a
+        # workload-subnet address. Interface names are not stable on every host (node-02's onboard NIC and USB adapter swap names on
+        # every boot, see docs/design/track-c-adversary-network.md) -- if a future rename made `iface` and a "known control" interface
+        # trade physical identities, naively trusting the declared NAME would silently excuse what is now actually the workload path.
+        # Checking the address, not just the name, catches that: a real control channel has no business on the workload subnet.
+        on_workload_subnet = [a for a in routable if _in_any_subnet(a, expected_subnets)]
+        if on_workload_subnet:
+            leaking[name] = routable
+        else:
+            excused[name] = routable
     if leaking:
         return {
             'ok': False,
             'refusalReason': f'interface(s) other than {iface} are up with an address and can reach their subnet without ever using the '
                               f'default route: {leaking}; any traffic not explicitly bound to {iface} may leave through one of these instead '
-                              f'(declare it with known_control_ifaces if it is actually your control channel, not an oversight)',
+                              f'(declare it with known_control_ifaces if it is actually your control channel, not an oversight; a declared '
+                              f'control interface carrying a workload-subnet address is refused regardless, in case a rename swapped roles)',
             'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state,
         }
     return {'ok': True, 'refusalReason': None, 'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state}
