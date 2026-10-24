@@ -1,0 +1,153 @@
+== lab benign training pool (unchanged from PR #105/#106) ==
+8 patterns, 18 runs, 6264 windows
+
+== CIC attack-training pool (margin term; replaces the lab's flood runs for this round) ==
+  DoS Hulk             20000 windows (cap was 20000)
+  DoS GoldenEye        20000 windows (cap was 20000)
+
+== CIC held-out pools (never read by training or threshold calibration) ==
+  DoS Slowhttptest     attack                           20000 windows
+  DoS slowloris        attack                           20000 windows
+  DDoS                 attack                           20000 windows
+  CIC-Wed-Benign       benign (generalization check)    25000 windows
+  CIC-Fri-Benign       benign (generalization check)    25000 windows
+
+self-check: kernel_loss_batch matches sr.kernel_loss on a real window (ok)
+
+== fitting (10 params, bounds (-3.0, 5.0) for all) ==
+margin hyperparameters: margin=0.02 sigma=2.5 lambda=1.0
+baseline hardcoded weights' hinge target: 0.2436
+baseline hardcoded weights' training-objective value: 0.252045
+differential_evolution: nfev=30211 objective=0.113324
+Nelder-Mead polish:     nfev=710 objective=0.113320
+fitted in 1774.6s
+trained weights: [4.506653, 3.939442, 0.222242, -0.527495, 2.472321, -2.951751, -0.437407, 4.999854, 4.999229, 0.672571]
+trained training-objective value: 0.113320  (baseline was 0.252045)
+calibrated tau for trained weights: mean=0.0968 std=0.0338 -> base_tau=0.1814 (pooled over 6264 LAB training-benign windows only, never CIC benign)
+
+== axis (a): lab held-out split (identical to PR #106's own 9-benign/13-attack reduced holdout) ==
+baseline   tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR105 (benign-only) tau=0.1696  attack detected (right sender): 2/13   benign false positives: 0/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+this round (CIC-margin) tau=0.1814  attack detected (right sender): 8/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 3/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  3/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== axis (b): CIC held-out flood windows (window-level recall; different granularity than axis (a), not merged into it) ==
+-- baseline (tau=0.1500) --
+  held-out attack                    DoS Slowhttptest n= 20000  window-level recall (alert rate) 34/20000 (0.17%)  attacker-IP agreement (of alerts) 34/34 (100.0%)
+  held-out attack                    DoS slowloris n= 20000  window-level recall (alert rate) 1047/20000 (5.24%)  attacker-IP agreement (of alerts) 977/1047 (93.3%)
+  held-out attack                    DDoS       n= 20000  window-level recall (alert rate) 136/20000 (0.68%)  attacker-IP agreement (of alerts) 122/136 (89.7%)
+-- PR105 (benign-only) (tau=0.1696) --
+  held-out attack                    DoS Slowhttptest n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+  held-out attack                    DoS slowloris n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+  held-out attack                    DDoS       n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+-- PR106 (lab-margin) (tau=0.1716) --
+  held-out attack                    DoS Slowhttptest n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+  held-out attack                    DoS slowloris n= 20000  window-level recall (alert rate) 2/20000 (0.01%)  attacker-IP agreement (of alerts) 1/2 (50.0%)
+  held-out attack                    DDoS       n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+-- this round (CIC-margin) (tau=0.1814) --
+  held-out attack                    DoS Slowhttptest n= 20000  window-level recall (alert rate) 11561/20000 (57.80%)  attacker-IP agreement (of alerts) 10962/11561 (94.8%)
+  held-out attack                    DoS slowloris n= 20000  window-level recall (alert rate) 4099/20000 (20.50%)  attacker-IP agreement (of alerts) 2880/4099 (70.3%)
+  held-out attack                    DDoS       n= 20000  window-level recall (alert rate) 20000/20000 (100.00%)  attacker-IP agreement (of alerts) 15055/20000 (75.3%)
+
+== axis (b), training-performance context: the 2 CIC classes the margin term DID train on (NOT held out; reported for transparency, not the headline) ==
+-- baseline (tau=0.1500) --
+  margin-training (not held out)     DoS Hulk   n= 20000  window-level recall (alert rate) 315/20000 (1.57%)  attacker-IP agreement (of alerts) 258/315 (81.9%)
+  margin-training (not held out)     DoS GoldenEye n= 20000  window-level recall (alert rate) 1139/20000 (5.70%)  attacker-IP agreement (of alerts) 1084/1139 (95.2%)
+-- PR105 (benign-only) (tau=0.1696) --
+  margin-training (not held out)     DoS Hulk   n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+  margin-training (not held out)     DoS GoldenEye n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+-- PR106 (lab-margin) (tau=0.1716) --
+  margin-training (not held out)     DoS Hulk   n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+  margin-training (not held out)     DoS GoldenEye n= 20000  window-level recall (alert rate) 0/20000 (0.00%)
+-- this round (CIC-margin) (tau=0.1814) --
+  margin-training (not held out)     DoS Hulk   n= 20000  window-level recall (alert rate) 20000/20000 (100.00%)  attacker-IP agreement (of alerts) 16456/20000 (82.3%)
+  margin-training (not held out)     DoS GoldenEye n= 20000  window-level recall (alert rate) 2129/20000 (10.64%)  attacker-IP agreement (of alerts) 2095/2129 (98.4%)
+
+== axis (c): CIC-benign generalization check (false-positive rate on a different organization's ordinary traffic; never trained on or used for tau calibration) ==
+-- baseline (tau=0.1500) --
+  CIC-benign generalization          CIC-Wed-Benign n= 25000  window-level false-positive rate 48/25000 (0.19%)
+  CIC-benign generalization          CIC-Fri-Benign n= 25000  window-level false-positive rate 85/25000 (0.34%)
+-- PR105 (benign-only) (tau=0.1696) --
+  CIC-benign generalization          CIC-Wed-Benign n= 25000  window-level false-positive rate 0/25000 (0.00%)
+  CIC-benign generalization          CIC-Fri-Benign n= 25000  window-level false-positive rate 0/25000 (0.00%)
+-- PR106 (lab-margin) (tau=0.1716) --
+  CIC-benign generalization          CIC-Wed-Benign n= 25000  window-level false-positive rate 0/25000 (0.00%)
+  CIC-benign generalization          CIC-Fri-Benign n= 25000  window-level false-positive rate 61/25000 (0.24%)
+-- this round (CIC-margin) (tau=0.1814) --
+  CIC-benign generalization          CIC-Wed-Benign n= 25000  window-level false-positive rate 2264/25000 (9.06%)
+  CIC-benign generalization          CIC-Fri-Benign n= 25000  window-level false-positive rate 2422/25000 (9.69%)
+
+== head-to-head summaries ==
+-- axis (a), lab held-out (run-level) --
+  baseline                   10/13 attacks detected, 4/9 benign false positives
+  PR105 (benign-only)        2/13 attacks detected, 0/9 benign false positives
+  PR106 (lab-margin)         6/13 attacks detected, 1/9 benign false positives
+  this round (CIC-margin)    8/13 attacks detected, 4/9 benign false positives
+  [axis a] this round vs. baseline: NOT a clear improvement
+  [axis a] this round vs. PR105 (benign-only): NOT a clear improvement
+  [axis a] this round vs. PR106 (lab-margin): NOT a clear improvement
+
+-- axis (b)+(c) pairing: CIC held-out recall vs. CIC-benign false-positive rate --
+  DoS Slowhttptest:
+    baseline                   recall 0.17%
+    PR105 (benign-only)        recall 0.00%
+    PR106 (lab-margin)         recall 0.00%
+    this round (CIC-margin)    recall 57.80%
+  DoS slowloris:
+    baseline                   recall 5.24%
+    PR105 (benign-only)        recall 0.00%
+    PR106 (lab-margin)         recall 0.01%
+    this round (CIC-margin)    recall 20.50%
+  DDoS:
+    baseline                   recall 0.68%
+    PR105 (benign-only)        recall 0.00%
+    PR106 (lab-margin)         recall 0.00%
+    this round (CIC-margin)    recall 100.00%
+  CIC-Wed-Benign (false-positive rate):
+    baseline                   FP rate 0.19%
+    PR105 (benign-only)        FP rate 0.00%
+    PR106 (lab-margin)         FP rate 0.00%
+    this round (CIC-margin)    FP rate 9.06%
+  CIC-Fri-Benign (false-positive rate):
+    baseline                   FP rate 0.34%
+    PR105 (benign-only)        FP rate 0.00%
+    PR106 (lab-margin)         FP rate 0.24%
+    this round (CIC-margin)    FP rate 9.69%
+
+wrote /tmp/trained-weights-margin-cic-draft.json

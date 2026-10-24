@@ -1,0 +1,64 @@
+{
+  "weights": [
+    4.506653069843039,
+    3.939441514382638,
+    0.22224231460984537,
+    -0.527495198671359,
+    2.4723207063193002,
+    -2.951750843348947,
+    -0.4374068194725956,
+    4.999853510378603,
+    4.9992289442985705,
+    0.6725712717383769
+  ],
+  "tau": 0.18141492380758611,
+  "objective": "margin-cic",
+  "trained_on_patterns": {
+    "benign": [
+      "benign-http-20rps",
+      "benign-http-5rps",
+      "benign-idle-60s",
+      "benign-interactive-8eps",
+      "benign-ping-5pps",
+      "benign-ping-5pps-node01",
+      "benign-udp-burst-tailscale-like",
+      "benign-udp-small-10pps"
+    ],
+    "attack_cic_margin_term": {
+      "DoS Hulk": 20000,
+      "DoS GoldenEye": 20000
+    }
+  },
+  "held_out_patterns": {
+    "benign_lab": [
+      "benign-bulk-tcp-2mbit",
+      "benign-http-burst-8conns",
+      "benign-ping-20pps",
+      "benign-udp-small-50pps"
+    ],
+    "attack_lab": [
+      "attack-portscan-1pps",
+      "attack-portscan-fast",
+      "attack-portscan-half-pps",
+      "attack-portscan-slow",
+      "attack-synflood-1000pps"
+    ],
+    "attack_cic": {
+      "DoS Slowhttptest": 20000,
+      "DoS slowloris": 20000,
+      "DDoS": 20000
+    },
+    "benign_cic_generalization_check": {
+      "CIC-Wed-Benign": 25000,
+      "CIC-Fri-Benign": 25000
+    }
+  },
+  "seed": 42,
+  "training_objective_value": 0.11332034862529586,
+  "margin_hyperparameters": {
+    "margin": 0.02,
+    "sigma": 2.5,
+    "lambda": 1.0
+  },
+  "note": "Fitted by scripts/train-sentinel-weights-cic.py; see docs/benchmarks/results/sentinel-training-margin-cic/ for methodology and held-out validation before using this in gpu-sdn-anomaly-sentinel.py (--weights-file / GPU_SENTINEL_WEIGHTS_FILE, opt-in only)."
+}
