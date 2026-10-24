@@ -12,7 +12,7 @@ This round's CIC-augmented weights catch far more of CIC's own held-out flood tr
 PR #106 ever did (a measured recall gain, not a rounding effect — see axis (b) below), and improve the lab's own
 held-out attack-detection count over both prior training attempts. **But they also raise the false-positive rate on
 the lab's own held-out benign traffic back up to baseline's level, and raise the false-positive rate on CIC's own
-benign traffic — the generalization check this round added specifically to catch this — by roughly 30-50x over every
+benign traffic — the generalization check this round added specifically to catch this — by roughly 28-47x over every
 other condition, to about 1 in 10 windows.** Per the pre-registered weak-Pareto rule, this fails to count as an
 improvement on every axis once false positives are weighed against it, not just the one it does best on. This is
 reported exactly as that: a real, measured effect in one direction, undercut by a real, measured cost in another,
@@ -50,9 +50,11 @@ pooled benign-training windows (8 patterns, 18 runs) — about 3.7x PR #106's to
 - Baseline hardcoded weights' hinge target (training-split diagnostic only): `0.2436`.
 - Baseline hardcoded weights' training-objective value: `0.252045`.
 - `differential_evolution`: `nfev=30211`, objective `0.113324`. `Nelder-Mead` polish (bounds respected, the PR #106
-  bugfix reused unmodified): `nfev=710`, objective `0.113320`. Total fit time **1774.6s (29.6 minutes)** — slower
+  bugfix reused unmodified): `nfev=710`, objective `0.113320`. Total fit time **1673.4s (27.9 minutes)** — slower
   than PR #106's lab-only fit (which trained on ~10,815 windows rather than 40,000), as expected from the larger
-  per-evaluation array size, still well within a single sitting.
+  per-evaluation array size, still well within a single sitting. (A first run, before the pre-push gate findings
+  below were fixed, measured 1774.6s; both runs' `nfev`, objective values and fitted weights are identical — fitting
+  wall-clock varies run to run with machine load, nothing else does.)
 - **Trained weights:** `[4.506653, 3.939442, 0.222242, -0.527495, 2.472321, -2.951751, -0.437407, 4.999854,
   4.999229, 0.672571]`. **Worth flagging, not a bug:** two of the ten weights (`w7 = 4.999854`, `w8 = 4.999229`) land
   within `0.0008` of the pre-registered upper bound (`5.0`) — the optimizer is pressed right up against the box PR
@@ -108,13 +110,13 @@ sample, not a signal the CIC-trained weights learned something about port scans.
 | CIC class (held out, never trained on) | Baseline | PR #105 | PR #106 | **This round** |
 | :--- | ---: | ---: | ---: | ---: |
 | DoS Slowhttptest (Wednesday, same-day/different-mechanism) | 0.17% | 0.00% | 0.00% | **57.80%** |
-| DoS slowloris (Wednesday, same-day/different-mechanism) | 5.24% | 0.00% | 0.01% | **20.50%** |
+| DoS slowloris (Wednesday, same-day/different-mechanism) | 5.22% | 0.00% | 0.01% | **20.50%** |
 | DDoS (Friday, cross-day/different-tool) | 0.68% | 0.00% | 0.00% | **100.00%** |
 
 Attacker-IP agreement (of the windows that alert, the fraction whose majority source IP is the known `172.16.0.1`
-attacker): this round scores 94.8% (Slowhttptest), 70.3% (slowloris), 75.3% (DDoS) — high enough to say the alerts
+attacker): this round scores 94.82% (Slowhttptest), 70.26% (slowloris), 75.28% (DDoS) — high enough to say the alerts
 are substantially tracking the real attacker, not firing at random, though not perfect (baseline's much smaller
-alert counts happen to have higher agreement, 89.7-100%, consistent with alerting only on the clearest cases).
+alert counts happen to have higher agreement, 89.71-100%, consistent with alerting only on the clearest cases).
 
 **This is the clearest, largest effect measured in this round:** every other condition (including baseline) misses
 nearly all of these three held-out CIC flood classes; this round catches the majority to effectively all of them,
@@ -127,12 +129,12 @@ margin term generalizes to flood shapes and a campaign it never saw in training 
 
 | CIC class (margin-training) | Baseline | PR #105 | PR #106 | This round |
 | :--- | ---: | ---: | ---: | ---: |
-| DoS Hulk | 1.57% | 0.00% | 0.00% | **100.00%** |
-| DoS GoldenEye | 5.70% | 0.00% | 0.00% | **10.64%** |
+| DoS Hulk | 1.51% | 0.00% | 0.00% | **100.00%** |
+| DoS GoldenEye | 5.69% | 0.00% | 0.00% | **10.64%** |
 
 A finding the pre-registration's data-sufficiency caveat anticipated: **the margin term trained on both Hulk and
 GoldenEye with equal (nested-mean) weighting, but the resulting fit separates Hulk from benign almost perfectly
-(100.00%) while barely moving GoldenEye's own recall (10.64%, versus baseline's already-nonzero 5.70%).** A blended
+(100.00%) while barely moving GoldenEye's own recall (10.64%, versus baseline's already-nonzero 5.69%).** A blended
 training objective over exactly 2 classes gave no internal signal that it was fitting one of them far better than
 the other — exactly the failure mode the pre-registration flagged as a risk of a 2-class nested mean, now measured,
 not hypothetical.
@@ -141,10 +143,10 @@ not hypothetical.
 
 | CIC-benign sample (pre-attack, never trained on or used for tau calibration) | Baseline | PR #105 | PR #106 | **This round** |
 | :--- | ---: | ---: | ---: | ---: |
-| Wednesday (25,000 windows) | 0.19% | 0.00% | 0.00% | **9.06%** |
-| Friday (25,000 windows) | 0.34% | 0.00% | 0.24% | **9.69%** |
+| Wednesday (25,000 windows) | 0.19% | 0.00% | 0.00% | **9.05%** |
+| Friday (25,000 windows) | 0.34% | 0.00% | 0.24% | **9.70%** |
 
-This round's false-positive rate on a different organization's ordinary traffic is **roughly 27-48x baseline's own
+This round's false-positive rate on a different organization's ordinary traffic is **roughly 28-47x baseline's own
 rate** and far above both prior training attempts' near-zero rates, on both days independently. **Paired against axis
 (b)'s recall gain per the pre-registration's explicit rule (recall higher AND the CIC-benign false-positive rate not
 worse), this round fails the pairing on every held-out CIC class: the false-positive side got dramatically worse, not

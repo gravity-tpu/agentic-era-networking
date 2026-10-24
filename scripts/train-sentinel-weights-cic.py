@@ -54,20 +54,41 @@ CIC_TRAIN_LABELS = ('DoS Hulk', 'DoS GoldenEye')                           # Wed
 CIC_HOLDOUT_WED_LABELS = ('DoS Slowhttptest', 'DoS slowloris')            # Wednesday, held-out (different mechanism)
 CIC_HOLDOUT_FRI_LABELS = ('DDoS',)                                        # Friday, held-out (different day/tool)
 KNOWN_ATTACKER_IP = '172.16.0.1'  # every in-scope CIC DoS/DDoS class; verified in cic-ids2017-adapter/README.md
+TRAIN_CAP_PER_CLASS = 20_000  # must match the --bucket caps scripts/cic-flood-margin-sampler.py was run with for
+# CIC_TRAIN_LABELS (PREREGISTRATION.md's "Sample-size caps" section); checked below, not just assumed, since a
+# silently under-filled margin-training bucket would change the objective's sample size without any error.
+EXPECTED_LAB_HOLDOUT_BENIGN_RUNS = 9   # PR #106's own published reduced holdout, reused unchanged for axis (a)
+EXPECTED_LAB_HOLDOUT_ATTACK_RUNS = 13  # continuity (4 port-scan patterns/10 runs + attack-synflood-1000pps/3 runs)
+WINDOW_FEATURES = sr.WIN * 4  # one flattened window: WIN=64 packets x 4 features each; derived, not re-literalized,
+# so a future change to the window size or feature count can't silently desync this script's array shapes from
+# scripts/sentinel-replay.py's own Extractor.
 
 
 def load_npz_bucket(npz_path, label):
-    """Returns (features (N,256) float32, epochs (N,) float64, src_ips (N,) str) for one bucket in a
+    """Returns (features (N,WINDOW_FEATURES) float32, epochs (N,) float64, src_ips (N,) str) for one bucket in a
     cic-flood-margin-sampler.py .npz file, or all-empty arrays if that label was never requested/collected."""
     with np.load(npz_path, allow_pickle=True) as z:
         key = label.replace(' ', '_')
         if f'{key}__features' not in z:
-            return np.zeros((0, 256), dtype=np.float32), np.zeros((0,), dtype=np.float64), np.zeros((0,), dtype=object)
+            return (np.zeros((0, WINDOW_FEATURES), dtype=np.float32), np.zeros((0,), dtype=np.float64),
+                    np.zeros((0,), dtype=object))
         feats = z[f'{key}__features'].astype(np.float32)
         epochs = z[f'{key}__epochs'].astype(np.float64)
         src_ips = z[f'{key}__src_ips']
-        order = np.argsort(epochs)  # the sampler already emits in time order; sort defensively, not trusting it blindly
+        order = np.argsort(epochs, kind='stable')  # stable: preserves the sampler's own time-order on any tied
+        # epochs (two windows ending in the same wall-clock second), rather than letting an unstable sort silently
+        # reorder them and perturb the Adaptive EMA trajectory below, which depends on processing order.
         return feats[order], epochs[order], src_ips[order]
+
+
+def pct(numerator, denominator):
+    """Formats numerator/denominator as a percentage string for display only. Never called on a value that feeds
+    back into a decision (the Adaptive threshold check, the weak-Pareto verdict, or anything written to the fitted
+    weights JSON) - every one of those reads the integer numerator/denominator pair directly. This keeps the
+    float-division Invariant 2 is about (packet accounting, byte rates, SLA tracking) out of this reporting path:
+    the counters themselves (alerts, n, named_correct) are plain Python/numpy ints end to end; only this print-time
+    string ever divides them."""
+    return 'n/a (0 windows)' if denominator == 0 else f'{100 * numerator / denominator:.2f}%'
 
 
 def score_cic_block(features, src_ips, W, base_tau, known_attacker_ip=None):
@@ -75,25 +96,19 @@ def score_cic_block(features, src_ips, W, base_tau, known_attacker_ip=None):
     kernel_loss_batch(_, W) then a FRESH sr.Adaptive(tau=base_tau), in order - the same per-capture-reset semantics
     scripts/score-labelled-runs.py's sentinel_alerts() already uses per lab run (a lab run is itself a short,
     independently-reset capture, not a sample of one always-on stream; treating a CIC block the same way is the same
-    semantics, not a new one - see PREREGISTRATION.md). Returns: n, alerts (count), alert_rate, and - if
-    known_attacker_ip is given - named_correct (of the alerting windows, how many had that majority source IP) and
-    named_correct_rate."""
+    semantics, not a new one - see PREREGISTRATION.md). Returns integer counts only - n, alerts, and (if
+    known_attacker_ip is given) named_correct (of the alerting windows, how many had that majority source IP); rates
+    are never stored here, only ever computed from these counts at print time via pct() above."""
     n = len(features)
     if n == 0:
-        return {'n': 0, 'alerts': 0, 'alert_rate': None, 'named_correct': None, 'named_correct_rate': None}
+        return {'n': 0, 'alerts': 0, 'named_correct': None}
     losses = tw.kernel_loss_batch(features, np.asarray(W, dtype=np.float32))
     ad = sr.Adaptive(tau=base_tau)
     alert_flags = np.array([ad.check(float(loss))[0] for loss in losses], dtype=bool)
     alerts = int(alert_flags.sum())
-    result = {'n': n, 'alerts': alerts, 'alert_rate': alerts / n}
+    result = {'n': n, 'alerts': alerts}
     if known_attacker_ip is not None:
-        if alerts:
-            named_correct = int(np.sum(src_ips[alert_flags] == known_attacker_ip))
-            result['named_correct'] = named_correct
-            result['named_correct_rate'] = named_correct / alerts
-        else:
-            result['named_correct'] = 0
-            result['named_correct_rate'] = None
+        result['named_correct'] = int(np.sum(src_ips[alert_flags] == known_attacker_ip)) if alerts else 0
     return result
 
 
@@ -102,12 +117,14 @@ def print_cic_row(label, label_text, result, is_attack):
         print(f'  {label_text:34s} {label:10s} (0 windows collected - skipped)')
         return
     if is_attack:
-        extra = '' if result['named_correct_rate'] is None else f"  attacker-IP agreement (of alerts) {result['named_correct']}/{result['alerts']} ({100*result['named_correct_rate']:.1f}%)"
+        named_correct = result.get('named_correct')
+        extra = '' if named_correct is None or result['alerts'] == 0 else \
+            f"  attacker-IP agreement (of alerts) {named_correct}/{result['alerts']} ({pct(named_correct, result['alerts'])})"
         print(f"  {label_text:34s} {label:10s} n={result['n']:6d}  window-level recall (alert rate) "
-              f"{result['alerts']}/{result['n']} ({100*result['alert_rate']:.2f}%){extra}")
+              f"{result['alerts']}/{result['n']} ({pct(result['alerts'], result['n'])}){extra}")
     else:
         print(f"  {label_text:34s} {label:10s} n={result['n']:6d}  window-level false-positive rate "
-              f"{result['alerts']}/{result['n']} ({100*result['alert_rate']:.2f}%)")
+              f"{result['alerts']}/{result['n']} ({pct(result['alerts'], result['n'])})")
 
 
 def main():
@@ -124,17 +141,33 @@ def main():
     args = ap.parse_args()
 
     # --- Lab side: benign training pool and the identical reduced held-out split PR #106 published against, reused
-    # unchanged via load_and_split(objective="margin"). attack_train_groups/attack_train_report here are the lab's
-    # OWN flood runs (attack-synflood-200pps, attack-udpflood-500pps-1400b) - this round does NOT train on them (see
-    # PREREGISTRATION.md: CIC data replaces them for the margin term), so attack_train_groups is deliberately unused
-    # below except to confirm holdout_lab has the expected shape; what WAS PR #106's training set is, for this round,
-    # simply part of the untouched lab-side ecosystem this script does not touch.
-    train_groups_lab, _attack_train_groups_lab_unused, _attack_train_report_lab_unused, holdout_lab = \
+    # unchanged via load_and_split(objective="margin"). attack_train_groups_lab/attack_train_report_lab here are the
+    # lab's OWN flood runs (attack-synflood-200pps, attack-udpflood-500pps-1400b) - this round does NOT train on them
+    # (see PREREGISTRATION.md: CIC data replaces them for the margin term). They are not read again after the shape
+    # assertion just below; what WAS PR #106's training set is, for this round, simply part of the untouched lab-side
+    # ecosystem this script does not otherwise touch.
+    train_groups_lab, attack_train_groups_lab, attack_train_report_lab, holdout_lab = \
         tw.load_and_split(args.datadir, objective='margin')
     n_train_runs = sum(len(v) for v in train_groups_lab.values())
     n_train_windows = sum(len(w) for runs in train_groups_lab.values() for _rid, w in runs)
     print('== lab benign training pool (unchanged from PR #105/#106) ==')
     print(f'{len(train_groups_lab)} patterns, {n_train_runs} runs, {n_train_windows} windows')
+    # Actually confirm holdout_lab has PR #106's own published reduced-holdout shape (not just claim to without
+    # checking): this is what axis (a)'s "continuity with PR #106" claim depends on, and a catalog drift (a label
+    # added/removed from docs/benchmarks/results/labelled-runs since PR #106 ran) would otherwise silently change
+    # axis (a)'s denominator without any error.
+    n_holdout_benign = sum(1 for h in holdout_lab if h['class'] == 'benign')
+    n_holdout_attack = sum(1 for h in holdout_lab if h['class'] == 'attack')
+    if (n_holdout_benign, n_holdout_attack) != (EXPECTED_LAB_HOLDOUT_BENIGN_RUNS, EXPECTED_LAB_HOLDOUT_ATTACK_RUNS):
+        raise SystemExit(f'FATAL: lab held-out split is {n_holdout_benign} benign / {n_holdout_attack} attack runs, '
+                          f'expected {EXPECTED_LAB_HOLDOUT_BENIGN_RUNS}/{EXPECTED_LAB_HOLDOUT_ATTACK_RUNS} (PR #106\'s '
+                          f'own published split) - the labelled-runs catalog has drifted since PR #106 ran, so axis '
+                          f'(a)\'s "continuity" claim no longer holds against the same denominator. Fix the expected '
+                          f'counts (and re-check continuity with PR #106\'s own numbers) rather than ignore this.')
+    assert len(attack_train_groups_lab) == 2 and len(attack_train_report_lab) == 5, \
+        'lab flood-attack catalog (attack-synflood-200pps, attack-udpflood-500pps-1400b) has drifted from what ' \
+        'PR #106 trained on; this round deliberately does not use it, but a silent catalog change here would mean ' \
+        'the untouched lab-side ecosystem this comment claims is untouched, isn\'t.'
 
     # --- CIC side: load the sampler's capped buckets.
     print('\n== CIC attack-training pool (margin term; replaces the lab\'s flood runs for this round) ==')
@@ -144,10 +177,21 @@ def main():
         feats, epochs, src_ips = load_npz_bucket(args.wednesday_npz, label)
         attack_train_groups_cic[label] = [(f'cic-wed-{label.replace(" ", "-").lower()}', feats)]
         cic_train_src_ips[label] = src_ips
-        print(f'  {label:20s} {len(feats)} windows (cap was {20000})')
+        print(f'  {label:20s} {len(feats)} windows (cap was {TRAIN_CAP_PER_CLASS})')
     missing = [l for l in CIC_TRAIN_LABELS if len(attack_train_groups_cic[l][0][1]) == 0]
     if missing:
         raise SystemExit(f'FATAL: expected CIC margin-training labels not found or empty: {missing}')
+    under_cap = {l: len(attack_train_groups_cic[l][0][1]) for l in CIC_TRAIN_LABELS
+                 if len(attack_train_groups_cic[l][0][1]) < TRAIN_CAP_PER_CLASS}
+    if under_cap:
+        # Unlike a held-out bucket (where under-filling is an expected, disclosed outcome for a rare class - see
+        # PREREGISTRATION.md and scripts/cic-flood-margin-sampler.py's own under-cap warning), a margin-TRAINING
+        # bucket coming back under its pre-registered cap silently shrinks the objective's sample size - fail loudly
+        # rather than fit on fewer windows than this round's own pre-registration specifies without saying so.
+        raise SystemExit(f'FATAL: CIC margin-training bucket(s) under the pre-registered cap of '
+                          f'{TRAIN_CAP_PER_CLASS}: {under_cap}. Re-run scripts/cic-flood-margin-sampler.py (these '
+                          f'classes have far more natural availability than the cap - see PREREGISTRATION.md - so '
+                          f'this means the sampler was mis-run, not that the class is naturally this small).')
 
     print('\n== CIC held-out pools (never read by training or threshold calibration) ==')
     cic_holdout_blocks = {}  # label -> (features, epochs, src_ips, is_attack)
@@ -161,9 +205,18 @@ def main():
         kind = 'attack' if is_attack else 'benign (generalization check)'
         print(f'  {label:20s} {kind:32s} {len(feats)} windows')
 
-    sample_window = next(w[0] for runs in train_groups_lab.values() for _rid, w in runs if len(w)).reshape(64, 4)
-    tw.self_check(sample_window)
-    print('\nself-check: kernel_loss_batch matches sr.kernel_loss on a real window (ok)')
+    # self_check (reused unmodified from scripts/train-sentinel-weights.py) already checks kernel_loss_batch against
+    # sr.kernel_loss at 8 points in weight-space (the compiled-in default, both BOUNDS corners, 5 random interior
+    # points) for whichever single window it is given - run it once against a real LAB window (as PR #105/#106 did)
+    # and once against a real CIC window, since this round is the first to ever feed CIC-sourced feature vectors
+    # through kernel_loss_batch and a batch-axis/broadcasting bug specific to that data's value distribution would
+    # not be caught by a lab-only sample.
+    lab_sample_window = next(w[0] for runs in train_groups_lab.values() for _rid, w in runs
+                             if len(w)).reshape(sr.WIN, 4)
+    tw.self_check(lab_sample_window)
+    cic_sample_window = attack_train_groups_cic[CIC_TRAIN_LABELS[0]][0][1][0].reshape(sr.WIN, 4)
+    tw.self_check(cic_sample_window)
+    print('\nself-check: kernel_loss_batch matches sr.kernel_loss on a real lab window and a real CIC window (ok)')
 
     objective = tw.make_margin_objective(train_groups_lab, attack_train_groups_cic,
                                           margin=args.margin, sigma=tw.SIGMA, lam=args.lambda_weight)
@@ -272,14 +325,12 @@ def main():
         print(f'  {cic_label}:')
         for label, _W, _tau in conditions:
             res = cic_attack_results[label][cic_label]
-            rate_text = 'n/a (0 windows)' if res['alert_rate'] is None else f"{100*res['alert_rate']:.2f}%"
-            print(f"    {label:26s} recall {rate_text}")
+            print(f"    {label:26s} recall {pct(res['alerts'], res['n'])}")
     for cic_label in ('CIC-Wed-Benign', 'CIC-Fri-Benign'):
         print(f'  {cic_label} (false-positive rate):')
         for label, _W, _tau in conditions:
             res = cic_benign_results[label][cic_label]
-            rate_text = 'n/a (0 windows)' if res['alert_rate'] is None else f"{100*res['alert_rate']:.2f}%"
-            print(f"    {label:26s} FP rate {rate_text}")
+            print(f"    {label:26s} FP rate {pct(res['alerts'], res['n'])}")
 
     if args.out_weights:
         payload = {

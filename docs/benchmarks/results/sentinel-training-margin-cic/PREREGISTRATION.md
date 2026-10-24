@@ -7,7 +7,26 @@ and [`../sentinel-training-margin/PREREGISTRATION.md`](../sentinel-training-marg
 margin attempt, PR #106): results go in `README.md` next to this file; this file is not edited afterwards except to
 add a dated note saying what changed and why.
 
-What has already been measured and is reported below as groundwork (dataset facts, not held-out results): the exact
+**2026-10-23 addendum, added after this round's held-out numbers were already produced and published, documenting
+pre-push-gate findings fixed afterward — none of which touched this document's objective, split, caps, or
+improvement rule:** this round's first push was blocked by the repository's strict pre-push AI-review gate on five
+findings in `scripts/cic-flood-margin-sampler.py` / `scripts/train-sentinel-weights-cic.py`, all fixed, not
+bypassed: (1) `score_cic_block` stored derived false-positive/recall rates as floats rather than formatting them from
+integer counts only at print time; (2) a comment claimed a held-out-split shape check that the code did not actually
+perform; (3) a margin-training CIC bucket coming back under its pre-registered cap would have been silently
+under-reported rather than failing loudly; (4) the benign-generalization cutoff's early-stop logic assumed
+non-decreasing capture timestamps without checking it; (5) `self_check` had only ever been run against a lab-sourced
+window, never a CIC-sourced one. Fixing (1) was display-only. Fixing one of the accompanying suggestions — using a
+stable sort (`kind='stable'`) when re-sorting a loaded `.npz` bucket by epoch, rather than trusting an unstable
+sort's tie-breaking to match the sampler's own emission order — **did change a handful of axis (b)/(c) counts by a
+small amount** (a few windows out of 20,000-25,000 per cell; every change is within 0.02 percentage points at the
+precision `README.md` reports, e.g. `DoS slowloris` baseline recall `5.24%→5.22%`, this round's `CIC-Wed-Benign`
+false-positive rate `9.06%→9.05%`), because the `Adaptive` controller's EMA state is sequential and order-sensitive,
+and a few windows shared a tied epoch. The fitted weights, calibrated `tau`, and training-objective value are
+**unchanged, confirmed by direct comparison** (fitting is a pooled mean/std over windows, which is order-invariant;
+only the sequential per-window `Adaptive` replay used for axis (b)/(c) reporting is order-sensitive). `README.md` was
+updated to the corrected (stable-sort) numbers before this round's PR was opened; no number in it reflects the
+unstable-sort run. None of this round's qualitative verdicts changed.
 per-label flow counts in the CIC-IDS2017 CSVs, and the epoch ordering of attacks within each captured day. Nothing
 below depends on any `kernel_loss` value, trained weight, or detection outcome.
 

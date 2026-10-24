@@ -97,6 +97,17 @@ def bucket_frames(frames, flow_index, attack_buckets, benign_bucket=None, benign
     last_t_epoch = None
     for t_us, wire_len, proto, flags, sp, dp, src_ip, dst_ip, t_epoch in frames:
         n += 1
+        # The benign_closed latch below is a one-way ratchet keyed on t_epoch reaching benign_cutoff_epoch; it is
+        # only correct if t_epoch is non-decreasing across the stream (a single out-of-order early frame reporting a
+        # later time than it should could close the benign bucket prematurely, silently under-filling it rather than
+        # loudly failing - Invariant 1). pcapng captures are written in strictly ascending arrival order by the
+        # recording tool (the same assumption scripts/cic-ids2017-adapter.py's identical frame-order handling already
+        # relies on), so this is expected to never trip; it exists to turn a silent violation of that assumption into
+        # a loud one rather than a quietly-wrong sample.
+        if last_t_epoch is not None and t_epoch < last_t_epoch:
+            raise SystemExit(f'FATAL: frames out of time order ({t_epoch} after {last_t_epoch} at packet {n}); '
+                              f'the benign-cutoff early-stop logic assumes non-decreasing capture timestamps and '
+                              f'cannot be trusted if that assumption is violated.')
         last_t_epoch = t_epoch
         if src_ip is not None:
             ip_packets += 1
@@ -203,7 +214,7 @@ def main():
     summary = {}
     for label, b in buckets.items():
         key = label.replace(' ', '_')
-        arr = np.stack(b.features).astype(np.float32) if b.features else np.zeros((0, 256), dtype=np.float32)
+        arr = np.stack(b.features).astype(np.float32) if b.features else np.zeros((0, sr.WIN * 4), dtype=np.float32)
         npz_payload[f'{key}__features'] = arr
         npz_payload[f'{key}__epochs'] = np.asarray(b.epochs, dtype=np.float64)
         npz_payload[f'{key}__src_ips'] = np.asarray(b.src_ips, dtype=object)
@@ -217,7 +228,19 @@ def main():
     print(f'windows seen: {stats["windows_seen"]}  windows by majority label (within the processed prefix only): '
           f'{stats["windows_by_label"]}')
     for label, s in summary.items():
-        print(f'  bucket {label!r}: collected {s["collected"]}/{s["cap"]}')
+        collected, cap = s['collected'], s['cap']
+        if collected < cap:
+            # Not fatal here (a rare class legitimately exhausting the whole file before reaching its cap is an
+            # expected, disclosed outcome - see PREREGISTRATION.md), but printed as an explicit WARNING, not folded
+            # into the same line as a full bucket, so a caller cannot mistake an under-filled held-out class for a
+            # fully-powered one by skimming output. scripts/train-sentinel-weights-cic.py additionally fails loudly
+            # (not just warns) if a MARGIN-TRAINING bucket comes back under its pre-registered cap, since that would
+            # silently change the objective's sample size rather than just this bucket's held-out statistical power.
+            print(f'  bucket {label!r}: WARNING collected {collected}/{cap} (under cap - the file was exhausted or '
+                  f'every other bucket settled first; see "windows by majority label" above for that label\'s true '
+                  f'day-wide total)')
+        else:
+            print(f'  bucket {label!r}: collected {collected}/{cap}')
     print(f'wrote {args.out}')
 
 

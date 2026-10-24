@@ -88,12 +88,14 @@ sr = mod.sr
 
 # Weights/tau chosen so kernel_loss is predictable isn't needed: we bypass kernel_loss entirely by monkeypatching
 # kernel_loss_batch with an oracle that returns a fixed, caller-supplied loss array, so this test pins
-# score_cic_block's OWN arithmetic (alert-rate / attacker-IP-agreement bookkeeping, Adaptive wiring), not whether a
+# score_cic_block's OWN arithmetic (alert-count / attacker-IP-agreement bookkeeping, Adaptive wiring), not whether a
 # real feature vector happens to produce a particular loss - that is covered by self_check/the real training run.
+# score_cic_block returns integer counts only (n, alerts, named_correct) - no stored float rate; pct() is tested
+# separately below as the one place a percentage is ever computed, for display only.
 fixed_losses = np.array(json.loads(sys.argv[2]), dtype=np.float32)
 mod.tw.kernel_loss_batch = lambda X, W: fixed_losses
 n = len(fixed_losses)
-features = np.zeros((n, 256), dtype=np.float32)  # never read by the oracle above
+features = np.zeros((n, mod.WINDOW_FEATURES), dtype=np.float32)  # never read by the oracle above
 src_ips = np.array(json.loads(sys.argv[3]), dtype=object)
 base_tau = float(sys.argv[4])
 res = mod.score_cic_block(features, src_ips, np.zeros(10, dtype=np.float32), base_tau,
@@ -101,7 +103,7 @@ res = mod.score_cic_block(features, src_ips, np.zeros(10, dtype=np.float32), bas
 print(json.dumps(res))
 `;
 
-    it('computes window-level recall/alert-rate and attacker-IP agreement against an independent oracle', () => {
+    it('computes integer window-level alert and attacker-IP-agreement counts against an independent oracle', () => {
       // base_tau=0.15: a fresh sr.Adaptive(tau=0.15) starts with m=tau*0.75=0.1125, v=(tau*0.15)^2=0.000506,
       // so its very first threshold is max(0.15, 0.1125 + 2.5*sqrt(0.000506)) = max(0.15, 0.1687) = 0.1687.
       // Losses: [0.20 (alerts, attacker), 0.20 (alerts, attacker), 0.05 (no alert; EMA updates toward 0.05),
@@ -111,30 +113,46 @@ print(json.dumps(res))
       const out = runPython(DRIVER, [SCRIPT_PATH, JSON.stringify(losses), JSON.stringify(srcIps), '0.15', '172.16.0.1']);
       expect(out.n).toBe(5);
       expect(out.alerts).toBe(3);
-      expect(out.alert_rate).toBeCloseTo(3 / 5, 10);
       expect(out.named_correct).toBe(2);
-      expect(out.named_correct_rate).toBeCloseTo(2 / 3, 10);
-    });
-
-    it('reports an n=0 bucket (a CIC label never collected) distinctly, not as a 0% rate', () => {
-      const out = runPython(DRIVER, [SCRIPT_PATH, '[]', '[]', '0.15', '172.16.0.1']);
-      expect(out.n).toBe(0);
-      expect(out.alert_rate).toBeNull();
-      expect(out.named_correct_rate).toBeNull();
-    });
-
-    it('omits attacker-IP-agreement fields entirely for a benign (generalization-check) block', () => {
-      const out = runPython(DRIVER, [SCRIPT_PATH, '[0.05, 0.3]', '["10.0.0.1", "10.0.0.2"]', '0.15', '']);
-      expect(out.n).toBe(2);
-      expect(out).not.toHaveProperty('named_correct');
+      expect(out).not.toHaveProperty('alert_rate');
       expect(out).not.toHaveProperty('named_correct_rate');
     });
 
-    it('reports named_correct=0 and named_correct_rate=null (not a divide-by-zero) when nothing alerts at all', () => {
+    it('reports an n=0 bucket (a CIC label never collected) distinctly, with named_correct null not 0', () => {
+      const out = runPython(DRIVER, [SCRIPT_PATH, '[]', '[]', '0.15', '172.16.0.1']);
+      expect(out.n).toBe(0);
+      expect(out.alerts).toBe(0);
+      expect(out.named_correct).toBeNull();
+    });
+
+    it('omits the named_correct field entirely for a benign (generalization-check) block', () => {
+      const out = runPython(DRIVER, [SCRIPT_PATH, '[0.05, 0.3]', '["10.0.0.1", "10.0.0.2"]', '0.15', '']);
+      expect(out.n).toBe(2);
+      expect(out).not.toHaveProperty('named_correct');
+    });
+
+    it('reports named_correct=0 (not null, not a divide-by-zero) when nothing alerts at all', () => {
       const out = runPython(DRIVER, [SCRIPT_PATH, '[0.01, 0.01, 0.01]', '["172.16.0.1", "172.16.0.1", "172.16.0.1"]', '0.9', '172.16.0.1']);
       expect(out.alerts).toBe(0);
       expect(out.named_correct).toBe(0);
-      expect(out.named_correct_rate).toBeNull();
+    });
+  });
+
+  describe('pct (the one place a display percentage is ever computed from the integer counts)', () => {
+    const DRIVER = `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('m', sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+print(json.dumps(mod.pct(int(sys.argv[2]), int(sys.argv[3]))))
+`;
+    it('formats a normal ratio to two decimal places', () => {
+      const out = runPython(DRIVER, [SCRIPT_PATH, '11561', '20000']);
+      expect(out).toBe('57.80%');
+    });
+
+    it('reports 0/0 as an explicit n/a, not NaN% or a ZeroDivisionError', () => {
+      const out = runPython(DRIVER, [SCRIPT_PATH, '0', '0']);
+      expect(out).toBe('n/a (0 windows)');
     });
   });
 
