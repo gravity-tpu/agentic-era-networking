@@ -1,0 +1,55 @@
+{
+  "weights": [
+    1.3710340185610805,
+    1.1928868680373395,
+    -1.4414147815760465,
+    -2.9979683541137527,
+    1.014445258405949,
+    1.0026461114987868,
+    2.01083878468204e-07,
+    2.16826961754694,
+    -0.5234294753509997,
+    -0.060598036957836894
+  ],
+  "tau": 0.17163528665904226,
+  "objective": "margin",
+  "trained_on_patterns": {
+    "benign": [
+      "benign-http-20rps",
+      "benign-http-5rps",
+      "benign-idle-60s",
+      "benign-interactive-8eps",
+      "benign-ping-5pps",
+      "benign-ping-5pps-node01",
+      "benign-udp-burst-tailscale-like",
+      "benign-udp-small-10pps"
+    ],
+    "attack_flood_margin_term": [
+      "attack-synflood-200pps",
+      "attack-udpflood-500pps-1400b"
+    ]
+  },
+  "held_out_patterns": {
+    "benign": [
+      "benign-bulk-tcp-2mbit",
+      "benign-http-burst-8conns",
+      "benign-ping-20pps",
+      "benign-udp-small-50pps"
+    ],
+    "attack": [
+      "attack-portscan-1pps",
+      "attack-portscan-fast",
+      "attack-portscan-half-pps",
+      "attack-portscan-slow",
+      "attack-synflood-1000pps"
+    ]
+  },
+  "seed": 42,
+  "training_objective_value": 0.12279190554372257,
+  "note": "Fitted by scripts/train-sentinel-weights.py; see docs/benchmarks/results/sentinel-training/ (objective=benign) or docs/benchmarks/results/sentinel-training-margin/ (objective=margin) for methodology and held-out validation before using this in gpu-sdn-anomaly-sentinel.py (--weights-file / GPU_SENTINEL_WEIGHTS_FILE, opt-in only).",
+  "margin_hyperparameters": {
+    "margin": 0.02,
+    "sigma": 2.5,
+    "lambda": 1.0
+  }
+}
