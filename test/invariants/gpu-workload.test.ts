@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
 import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -150,6 +150,86 @@ describe('Jetson Orin GPU Workload Invariants (gpu-workload)', () => {
       expect(output).toContain('GPU SDN ANOMALY SENTINEL STOPPED');
       expect(output).toContain('Total Inferences Run');
       expect(output).toContain('Dean Latency Budget: < 1.0 ms');
+    });
+
+    it('--weights-file is a no-op on default behavior: unset, the sentinel runs the compiled-in constants unchanged', () => {
+      const scriptPath = path.resolve(REPO_ROOT, 'scripts/gpu-sdn-anomaly-sentinel.py');
+      const output = execSync(`python3 ${scriptPath} --demo --duration 1 --threshold 0.99`, {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        timeout: 10000,
+      });
+      expect(output).toContain('(compiled-in hardcoded constants, default)');
+    });
+  });
+
+  describe('Opt-in trained-weight loading (load_weights_payload, scripts/gpu-sdn-anomaly-sentinel.py)', () => {
+    // Pure-function validation, no CUDA engine needed: this is the fail-closed gate a --weights-file argument must
+    // pass before scripts/train-sentinel-weights.py's (or any future) fitted weights ever reach
+    // load_cuda_model_weights(). Exercises it directly via importlib so the reject paths are tested without
+    // requiring the Jetson's compiled libgpu_anomaly.so.
+    const scriptPath = path.resolve(REPO_ROOT, 'scripts/gpu-sdn-anomaly-sentinel.py');
+
+    // sys.argv carries the script path and the exact bytes to write to the temp file, so no shell/JSON-in-Python-
+    // string quoting is needed for arbitrary test payloads (malformed JSON, embedded quotes, NaN tokens, etc.).
+    const DRIVER = `
+import importlib.util, json, sys, tempfile, os
+spec = importlib.util.spec_from_file_location('sentinel', sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+path = None
+try:
+    fd, path = tempfile.mkstemp(suffix='.json')
+    with os.fdopen(fd, 'w') as f:
+        f.write(sys.argv[2])
+    try:
+        out = mod.load_weights_payload(path)
+        print(json.dumps({'ok': True, 'result': out}))
+    except Exception as exc:
+        print(json.dumps({'ok': False, 'result': f'{type(exc).__name__}: {exc}'}))
+finally:
+    if path:
+        os.unlink(path)
+`;
+
+    function runLoader(jsonText: string): { ok: boolean; result: unknown } {
+      const r = execFileSync('python3', ['-c', DRIVER, scriptPath, jsonText], { encoding: 'utf8', timeout: 10000 });
+      return JSON.parse(r.trim().split('\n').pop() ?? '{}');
+    }
+
+    it('accepts exactly ten finite weights, as a JSON object with a "weights" key', () => {
+      const out = runLoader(JSON.stringify({ weights: [0.2, 0.3, 0.25, 0.25, 0.05, 0.5, 0.02, 0.85, 1.5, 0.4] }));
+      expect(out.ok).toBe(true);
+      expect(out.result).toEqual([0.2, 0.3, 0.25, 0.25, 0.05, 0.5, 0.02, 0.85, 1.5, 0.4]);
+    });
+
+    it('accepts a bare ten-element JSON list too', () => {
+      const out = runLoader(JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
+      expect(out.ok).toBe(true);
+      expect((out.result as number[]).length).toBe(10);
+    });
+
+    it('rejects a weights list of the wrong length (fail closed, not padded or truncated)', () => {
+      const out = runLoader(JSON.stringify({ weights: [1, 2, 3] }));
+      expect(out.ok).toBe(false);
+      expect(out.result).toMatch(/ValueError.*10-element/);
+    });
+
+    it('rejects a non-finite weight (NaN/Infinity, which Python\'s json module accepts by default)', () => {
+      const out = runLoader('{"weights": [0.2, 0.3, 0.25, 0.25, 0.05, 0.5, 0.02, 0.85, 1.5, NaN]}');
+      expect(out.ok).toBe(false);
+      expect(out.result).toMatch(/ValueError.*finite/);
+    });
+
+    it('rejects a payload that is not a list or an object with "weights"', () => {
+      const out = runLoader(JSON.stringify('not-a-list'));
+      expect(out.ok).toBe(false);
+      expect(out.result).toMatch(/ValueError/);
+    });
+
+    it('rejects malformed JSON outright rather than guessing at intent', () => {
+      const out = runLoader('{not valid json');
+      expect(out.ok).toBe(false);
+      expect(out.result).toMatch(/JSONDecodeError/);
     });
   });
 });

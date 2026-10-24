@@ -1,0 +1,60 @@
+== split ==
+training:  8 patterns, 18 runs, 6264 windows
+held-out:  9 benign runs, 18 attack runs
+  train   benign-http-20rps                  ['benign-http-20rps-r2', 'benign-http-20rps']
+  train   benign-http-5rps                   ['benign-http-5rps-r2', 'benign-http-5rps-r3', 'benign-http-5rps']
+  train   benign-idle-60s                    ['benign-idle-60s-r2', 'benign-idle-60s']
+  train   benign-interactive-8eps            ['benign-interactive-8eps-r2', 'benign-interactive-8eps-r3', 'benign-interactive-8eps']
+  train   benign-ping-5pps                   ['benign-ping-5pps-r2', 'benign-ping-5pps-r3', 'benign-ping-5pps']
+  train   benign-ping-5pps-node01            ['benign-ping-5pps-node01']
+  train   benign-udp-burst-tailscale-like    ['benign-udp-burst-tailscale-like-ok']
+  train   benign-udp-small-10pps             ['benign-udp-small-10pps-r2', 'benign-udp-small-10pps-r3', 'benign-udp-small-10pps']
+  holdout benign-bulk-tcp-2mbit              ['benign-bulk-tcp-2mbit-r2', 'benign-bulk-tcp-2mbit']
+  holdout benign-http-burst-8conns           ['benign-http-burst-8conns-r2', 'benign-http-burst-8conns-r3', 'benign-http-burst-8conns']
+  holdout benign-ping-20pps                  ['benign-ping-20pps-r2', 'benign-ping-20pps']
+  holdout benign-udp-small-50pps             ['benign-udp-small-50pps-r2', 'benign-udp-small-50pps']
+
+self-check: kernel_loss_batch matches sr.kernel_loss on a real window (ok)
+
+== fitting (10 params, bounds (-3.0, 5.0) for all) ==
+baseline hardcoded weights' training-objective value: 0.156286
+differential_evolution: nfev=30332 objective=0.107112
+Nelder-Mead polish:     nfev=1818 objective=0.106961
+fitted in 233.2s
+trained weights: [2.522395, 2.959262, 4.0726, 3.213009, 2.070316, 2.737096, 2.106811, 0.060554, 0.462932, 1.210113]
+trained training-objective value: 0.106961  (baseline was 0.156286)
+
+calibrated tau for trained weights: mean=0.0925 std=0.0308 -> base_tau=0.1696 (pooled over 6264 training windows)
+
+== held-out validation (never used for fitting or threshold calibration) ==
+baseline   tau=0.1500  attack detected (right sender): 15/18   benign false positives: 4/9   misattributions: 0/27
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    attack-synflood-200pps             attack-detected 3/3
+    attack-udpflood-500pps-1400b       attack-detected 2/2
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+trained    tau=0.1696  attack detected (right sender): 4/18   benign false positives: 0/9   misattributions: 0/27
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    attack-synflood-200pps             attack-detected 0/3
+    attack-udpflood-500pps-1400b       attack-detected 2/2
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== head to head on the held-out split ==
+baseline: 15/18 attacks detected, 4/9 benign false positives
+trained:  4/18 attacks detected, 0/9 benign false positives
+verdict per the pre-registered rule: NOT a clear improvement
+
+wrote docs/benchmarks/results/sentinel-training/trained-weights-2026-10-23.json

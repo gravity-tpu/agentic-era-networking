@@ -70,9 +70,15 @@ def rate_rule_alerts(frames):
     return out
 
 
-def sentinel_alerts(frames):
-    """[(t_ns, predominant_src, loss)], one per anomalous 64-packet window (the loss itself is the kernel's float math)."""
-    ex, ad = sr.Extractor(), sr.Adaptive()
+def sentinel_alerts(frames, base_tau=None):
+    """[(t_ns, predominant_src, loss)], one per anomalous 64-packet window (the loss itself is the kernel's float math).
+
+    base_tau overrides the Adaptive controller's floor threshold (default sr.BASE_TAU, the deployed 0.15); used by
+    scripts/train-sentinel-weights.py to score a fitted weight set against its own calibrated threshold instead of the
+    one calibrated for the hardcoded weights' loss scale. The weights themselves are read from sr.W at call time (the
+    module-level array kernel_loss() closes over), not a parameter here, so a caller fits or loads a different sr.W
+    before calling this for a non-default weight set."""
+    ex, ad = sr.Extractor(), sr.Adaptive(tau=sr.BASE_TAU if base_tau is None else base_tau)
     srcs = collections.deque()
     out = []
     for t_us, flen, proto, flags, sp, dp, src, t_ns in frames:
@@ -125,7 +131,9 @@ def rack_ok(label):
     return label["rackHealthyAfter"] is True and drops == 0 and drops is not False
 
 
-def score(label, frames):
+def score(label, frames, sentinel_base_tau=None):
+    """sentinel_base_tau overrides the sentinel's floor threshold (see sentinel_alerts); the weight set used is sr.W at
+    call time. Default call (sentinel_base_tau=None) is the deployed baseline: hardcoded weights, tau=0.15."""
     sender = label["senderIp"]  # None for an idle run: nothing was sent, so any alert in it is a false positive
     sender_frames = [f for f in frames if sender is not None and f[6] == sender]
     t0 = sender_frames[0][7] if sender_frames else None
@@ -133,7 +141,7 @@ def score(label, frames):
            "framesOk": sender is None or len(sender_frames) >= MIN_SENDER_FRAMES,
            "rackOk": rack_ok(label),
            "valid": (sender is None or len(sender_frames) >= MIN_SENDER_FRAMES) and rack_ok(label)}
-    for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames))):
+    for name, alerts in (("rate", rate_rule_alerts(frames)), ("sentinel", sentinel_alerts(frames, base_tau=sentinel_base_tau))):
         named_sender = [a for a in alerts if a[1] == sender]
         other = [a for a in alerts if a[1] != sender]
         res[name] = {
