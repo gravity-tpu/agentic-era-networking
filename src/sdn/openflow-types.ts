@@ -105,6 +105,14 @@ export interface FlowModMatchOptions {
   readonly dstIpPrefixLen?: number | undefined;
   readonly etherType?: number | undefined;
   readonly inPort?: number | undefined;
+  /** ARP sender protocol address (OFPXMT_OFB_ARP_SPA). Only meaningful when etherType is 0x0806 (ARP). */
+  readonly arpSpa?: string | undefined;
+  /** CIDR prefix length for `arpSpa` (1..32). Omitted or 32 = exact host match. */
+  readonly arpSpaPrefixLen?: number | undefined;
+  /** ARP target protocol address (OFPXMT_OFB_ARP_TPA). Only meaningful when etherType is 0x0806 (ARP). */
+  readonly arpTpa?: string | undefined;
+  /** CIDR prefix length for `arpTpa` (1..32). Omitted or 32 = exact host match. */
+  readonly arpTpaPrefixLen?: number | undefined;
 }
 
 export interface FlowModOptions {
@@ -346,6 +354,58 @@ export function buildOfpFlowMod(options: FlowModOptions, xid: number): Buffer {
       tlv.writeUInt32BE(0x80000004, 0);
       tlv.writeUInt32BE(match.inPort, 4);
       oxmTlvs.push(tlv);
+    }
+
+    if (match.arpSpa) {
+      const ipBuf = parseIpv4ToBuffer(match.arpSpa);
+      const prefixLen = match.arpSpaPrefixLen;
+      if (prefixLen === undefined || prefixLen === 32) {
+        // OFPXMT_OFB_ARP_SPA: class 0x8000, field 22 (<< 9), length 4 -> 0x80002c04
+        const tlv = Buffer.alloc(8);
+        tlv.writeUInt32BE(0x80002c04, 0);
+        ipBuf.copy(tlv, 4);
+        oxmTlvs.push(tlv);
+      } else {
+        if (!Number.isInteger(prefixLen) || prefixLen < 1 || prefixLen > 31) {
+          throw new Error(`arpSpaPrefixLen must be an integer in 1..32, got ${prefixLen}`);
+        }
+        const mask = (0xffffffff << (32 - prefixLen)) >>> 0;
+        if ((ipBuf.readUInt32BE(0) & ~mask) >>> 0 !== 0) {
+          throw new Error(`arpSpa ${match.arpSpa} has host bits set outside /${prefixLen}`);
+        }
+        // OFPXMT_OFB_ARP_SPA with HASMASK: field 22, hasmask bit set, length 8 -> 0x80002d08
+        const tlv = Buffer.alloc(12);
+        tlv.writeUInt32BE(0x80002d08, 0);
+        ipBuf.copy(tlv, 4);
+        tlv.writeUInt32BE(mask, 8);
+        oxmTlvs.push(tlv);
+      }
+    }
+
+    if (match.arpTpa) {
+      const ipBuf = parseIpv4ToBuffer(match.arpTpa);
+      const prefixLen = match.arpTpaPrefixLen;
+      if (prefixLen === undefined || prefixLen === 32) {
+        // OFPXMT_OFB_ARP_TPA: class 0x8000, field 23 (<< 9), length 4 -> 0x80002e04
+        const tlv = Buffer.alloc(8);
+        tlv.writeUInt32BE(0x80002e04, 0);
+        ipBuf.copy(tlv, 4);
+        oxmTlvs.push(tlv);
+      } else {
+        if (!Number.isInteger(prefixLen) || prefixLen < 1 || prefixLen > 31) {
+          throw new Error(`arpTpaPrefixLen must be an integer in 1..32, got ${prefixLen}`);
+        }
+        const mask = (0xffffffff << (32 - prefixLen)) >>> 0;
+        if ((ipBuf.readUInt32BE(0) & ~mask) >>> 0 !== 0) {
+          throw new Error(`arpTpa ${match.arpTpa} has host bits set outside /${prefixLen}`);
+        }
+        // OFPXMT_OFB_ARP_TPA with HASMASK: field 23, hasmask bit set, length 8 -> 0x80002f08
+        const tlv = Buffer.alloc(12);
+        tlv.writeUInt32BE(0x80002f08, 0);
+        ipBuf.copy(tlv, 4);
+        tlv.writeUInt32BE(mask, 8);
+        oxmTlvs.push(tlv);
+      }
     }
   }
 
