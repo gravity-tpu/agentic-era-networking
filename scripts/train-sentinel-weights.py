@@ -4,16 +4,26 @@ scripts/train-sentinel-weights.py
 ==================================
 Fits the GPU sentinel's ten scalar weights (the arithmetic in scripts/sentinel-replay.py's kernel_loss(), identical
 by construction to src/gpu/gpu_anomaly_kernel.cu, pinned by test/invariants/sentinel-replay.test.ts) against real
-benign-labelled traffic, then validates the fit against a held-out split using scripts/score-labelled-runs.py's own
+labelled traffic, then validates the fit against a held-out split using scripts/score-labelled-runs.py's own
 methodology, unmodified in substance (that script was extended with two optional parameters so this script reuses it
 rather than re-implementing scoring).
 
-Method, split, bounds, optimizer and the threshold-calibration rule are all fixed in
-docs/benchmarks/results/sentinel-training/PREREGISTRATION.md, written before this script was run. Read that file
-before trusting any number this script prints: it also states the data-sufficiency limits of the 51-run dataset this
-draws from.
+Two objective modes, selected with --objective:
 
-Usage: python3 scripts/train-sentinel-weights.py docs/benchmarks/results/labelled-runs [--out-weights PATH] [--seed 42]
+  benign (default)  The first attempt's objective: minimize reconstruction MSE on benign-only training windows.
+                     Method, split, bounds, optimizer and the threshold-calibration rule are fixed in
+                     docs/benchmarks/results/sentinel-training/PREREGISTRATION.md. Unmodified from that attempt.
+
+  margin             This round's objective: the benign-only term above, plus a bounded hinge term that penalizes
+                     flood-attack training windows (attack-synflood-200pps, attack-udpflood-500pps-1400b only;
+                     port scans have a dedicated deterministic detector and are out of scope here, see
+                     docs/benchmarks/results/sentinel-training-margin/PREREGISTRATION.md) whose reconstruction loss
+                     falls below the benign distribution's own calibrated threshold plus a fixed extra margin.
+                     Exact formula, split, and hyperparameters are fixed in that same PREREGISTRATION.md, written
+                     before this mode was run or any held-out number was looked at.
+
+Usage: python3 scripts/train-sentinel-weights.py docs/benchmarks/results/labelled-runs [--objective benign|margin]
+       [--out-weights PATH] [--compare-weights-file PATH --compare-label TEXT] [--seed 42]
 Needs numpy and scipy (scipy is not a dependency of anything else in this repo; it is used only by this offline,
 one-off fitting script, not by any live or test path).
 
@@ -24,6 +34,7 @@ via the single module instance scripts/score-labelled-runs.py already loads) and
 import argparse
 import importlib.util
 import json
+import math
 import os
 import sys
 import time
@@ -47,7 +58,8 @@ def _load(name, path):
 slr = _load("score_labelled_runs", os.path.join(HERE, "score-labelled-runs.py"))
 sr = slr.sr
 
-# --- Fixed by PREREGISTRATION.md: do not tune these against held-out results. ---
+# --- Fixed by docs/benchmarks/results/sentinel-training/PREREGISTRATION.md: do not tune these against held-out
+# results. Reused unmodified by both --objective modes. ---
 TRAIN_BENIGN_PATTERNS = frozenset({
     "benign-ping-5pps", "benign-ping-5pps-node01", "benign-idle-60s", "benign-interactive-8eps",
     "benign-http-5rps", "benign-http-20rps", "benign-udp-small-10pps", "benign-udp-burst-tailscale-like",
@@ -62,6 +74,18 @@ DE_POPSIZE = 20
 DE_MAXITER = 150
 DE_TOL = 1e-10
 POLISH_MAXITER = 5000
+
+# --- Fixed by docs/benchmarks/results/sentinel-training-margin/PREREGISTRATION.md: --objective margin only. Do not
+# tune these against held-out results either. ---
+# The margin term is scoped to flood attacks only: scripts/portscan-rule-detector.py (merged, PR #104) already gets
+# 10/10 port-scan detections with 0/30 false positives on this same dataset, so this round spends its limited
+# labelled-attack budget on the attack class the sentinel is actually needed for, not on re-deriving a solved
+# problem. attack-arpflood-* is never eligible (0 valid runs under the scorer's own validity rule regardless).
+TRAIN_ATTACK_PATTERNS = frozenset({"attack-synflood-200pps", "attack-udpflood-500pps-1400b"})
+# attack-synflood-1000pps is deliberately never in TRAIN_ATTACK_PATTERNS: held out always, to test whether the
+# margin term generalizes within the SYN-flood family to a rate it never saw (trained at 200 pps).
+MARGIN = 0.02    # extra headroom beyond benign_mean + SIGMA*benign_std a training attack window must clear
+LAMBDA = 1.0     # weight of the margin (hinge) term relative to the unweighted benign reconstruction term
 
 
 def kernel_loss_batch(X, W):
@@ -134,10 +158,17 @@ def windows_for_run(frames):
     return np.stack(out).astype(np.float32) if out else np.zeros((0, 256), dtype=np.float32)
 
 
-def load_and_split(datadir):
+def load_and_split(datadir, objective="benign"):
+    """objective="benign": the first attempt's split (all attack runs held out, never fit on).
+    objective="margin": additionally routes TRAIN_ATTACK_PATTERNS' runs into attack_train_groups (for the hinge
+    term) and attack_train_report (the same runs, kept in holdout-row shape so score_holdout() can report their
+    "training performance" separately from the real held-out set); those runs are excluded from `holdout`, which is
+    why the held-out set is smaller under objective="margin" than under objective="benign" (see PREREGISTRATION.md)."""
     runs = slr.load_runs(datadir)
-    train_groups = {}   # pattern -> list of (run_id, windows array)
-    holdout = []         # list of dict: id, class, pattern, label, frames
+    train_groups = {}          # pattern -> list of (run_id, windows array); benign training, both modes
+    attack_train_groups = {}   # pattern -> list of (run_id, windows array); margin mode only, flood patterns only
+    attack_train_report = []   # same shape as `holdout` rows, for the same runs as attack_train_groups
+    holdout = []                # list of dict: id, class, pattern, label, frames
     for label, frames in runs:
         scored = slr.score(label, frames)  # baseline scoring call; also gives us valid/class/pattern/sender for free
         if not scored["valid"]:
@@ -146,6 +177,9 @@ def load_and_split(datadir):
         cls = scored["class"]
         if cls == "benign" and pattern in TRAIN_BENIGN_PATTERNS:
             train_groups.setdefault(pattern, []).append((label["id"], windows_for_run(frames)))
+        elif cls == "attack" and objective == "margin" and pattern in TRAIN_ATTACK_PATTERNS:
+            attack_train_groups.setdefault(pattern, []).append((label["id"], windows_for_run(frames)))
+            attack_train_report.append({"label": label, "frames": frames, "pattern": pattern, "class": cls, "baseline": scored})
         elif cls == "attack" or (cls == "benign" and pattern in HOLDOUT_BENIGN_PATTERNS):
             holdout.append({"label": label, "frames": frames, "pattern": pattern, "class": cls, "baseline": scored})
         else:
@@ -155,7 +189,12 @@ def load_and_split(datadir):
     missing_train = TRAIN_BENIGN_PATTERNS - set(train_groups)
     if missing_train:
         raise SystemExit(f"FATAL: expected training patterns not found or all invalid: {sorted(missing_train)}")
-    return train_groups, holdout
+    if objective == "margin":
+        missing_attack_train = TRAIN_ATTACK_PATTERNS - set(attack_train_groups)
+        if missing_attack_train:
+            raise SystemExit(f"FATAL: expected margin-training attack patterns not found or all invalid: "
+                              f"{sorted(missing_attack_train)}")
+    return train_groups, attack_train_groups, attack_train_report, holdout
 
 
 def make_objective(train_groups):
@@ -179,6 +218,85 @@ def pooled_training_losses(train_groups, W):
             if len(windows):
                 pooled.append(kernel_loss_batch(windows, W))
     return np.concatenate(pooled) if pooled else np.zeros((0,), dtype=np.float32)
+
+
+def make_margin_objective(train_groups, attack_train_groups, margin=MARGIN, sigma=SIGMA, lam=LAMBDA):
+    """L(W) = L_benign(W) + lam * L_margin(W). Exact formula and hyperparameters fixed in
+    docs/benchmarks/results/sentinel-training-margin/PREREGISTRATION.md before this was run.
+
+    L_benign(W): identical to make_objective()'s nested pattern/run/window mean over train_groups.
+
+    L_margin(W): nested pattern/run/window mean, over attack_train_groups only (flood-attack training patterns),
+    of hinge(a, W) = max(0, target(W) - kernel_loss(a; W)), where target(W) = benign_mean(W) + sigma*benign_std(W) +
+    margin, benign_mean/std computed by pooling every training-benign window (same pool pooled_training_losses()
+    uses for threshold calibration). The hinge is zero once an attack window's loss clears target(W) and grows only
+    linearly below it (bounded, not an unbounded "maximize attack loss" term): the optimizer gains nothing from
+    pushing attack loss past target(W), only from closing the gap up to it.
+
+    Each candidate W's benign per-run losses are computed once and reused for both L_benign and the pooled
+    mean/std the margin target needs, rather than recomputing kernel_loss_batch over the same benign windows twice.
+    """
+    def objective(w):
+        W = np.asarray(w, dtype=np.float32)
+        benign_pattern_means = []
+        benign_pooled = []
+        for _pattern, runs in train_groups.items():
+            run_losses = [kernel_loss_batch(windows, W) for _rid, windows in runs if len(windows)]
+            if run_losses:
+                benign_pattern_means.append(sum(float(np.mean(losses)) for losses in run_losses) / len(run_losses))
+                benign_pooled.extend(run_losses)
+        l_benign = sum(benign_pattern_means) / len(benign_pattern_means)
+        pooled = np.concatenate(benign_pooled)
+        target = float(np.mean(pooled)) + sigma * float(np.std(pooled)) + margin
+
+        attack_pattern_means = []
+        for _pattern, runs in attack_train_groups.items():
+            run_means = []
+            for _rid, windows in runs:
+                if len(windows) == 0:
+                    continue
+                hinge = np.maximum(0.0, target - kernel_loss_batch(windows, W))
+                run_means.append(float(np.mean(hinge)))
+            if run_means:
+                attack_pattern_means.append(sum(run_means) / len(run_means))
+        l_margin = sum(attack_pattern_means) / len(attack_pattern_means) if attack_pattern_means else 0.0
+        return l_benign + lam * l_margin
+    return objective
+
+
+def margin_target(train_groups, W, margin=MARGIN, sigma=SIGMA):
+    """target(W) as used inside make_margin_objective, exposed standalone for diagnostics/printing."""
+    pooled = pooled_training_losses(train_groups, W)
+    return float(np.mean(pooled)) + sigma * float(np.std(pooled)) + margin
+
+
+NUM_WEIGHTS = 10
+
+
+def validate_weights_payload(payload, source):
+    """Fail-closed validation of a --compare-weights-file payload before it is ever used for scoring. Deliberately
+    re-implemented here rather than importing scripts/gpu-sdn-anomaly-sentinel.py's load_weights_payload(): that
+    module registers signal.signal(SIGINT/SIGTERM) handlers at import time (for its own live-daemon role), which
+    this offline fitting script's own process should not inherit just to validate a JSON shape. The checks mirror
+    that function's contract (a JSON object with a NUM_WEIGHTS-element "weights" list of finite floats) plus a
+    finite "tau", which load_weights_payload has no reason to check since its caller is the weights-only path."""
+    if not isinstance(payload, dict):
+        raise SystemExit(f"FATAL: {source} must be a JSON object with \"weights\" and \"tau\" keys, got "
+                          f"{type(payload).__name__}")
+    wlist = payload.get("weights")
+    if not isinstance(wlist, list) or len(wlist) != NUM_WEIGHTS:
+        raise SystemExit(f"FATAL: {source}'s \"weights\" must be a {NUM_WEIGHTS}-element list, got "
+                          f"{len(wlist) if isinstance(wlist, list) else type(wlist).__name__}")
+    try:
+        floats = [float(w) for w in wlist]
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"FATAL: {source}'s weights must all be numbers: {exc}") from exc
+    if not all(math.isfinite(w) for w in floats):
+        raise SystemExit(f"FATAL: {source}'s weights must all be finite, got {floats}")
+    tau = payload.get("tau")
+    if isinstance(tau, bool) or not isinstance(tau, (int, float)) or not math.isfinite(tau):
+        raise SystemExit(f"FATAL: {source}'s \"tau\" must be a finite number, got {tau!r}")
+    return np.asarray(floats, dtype=np.float32), float(tau)
 
 
 def score_holdout(holdout, W, base_tau, label_text):
@@ -215,40 +333,84 @@ def score_holdout(holdout, W, base_tau, label_text):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("datadir")
+    ap.add_argument("--objective", choices=["benign", "margin"], default="benign",
+                     help="benign (default): the first attempt's benign-only objective, unmodified. margin: this "
+                          "round's benign-reconstruction-plus-flood-attack-hinge objective; see "
+                          "docs/benchmarks/results/sentinel-training-margin/PREREGISTRATION.md")
+    ap.add_argument("--margin", type=float, default=MARGIN,
+                     help=f"--objective margin only: extra headroom beyond benign_mean + SIGMA*benign_std a "
+                          f"training flood-attack window must clear (default: pre-registered {MARGIN})")
+    ap.add_argument("--lambda-weight", type=float, default=LAMBDA, dest="lambda_weight",
+                     help=f"--objective margin only: weight of the hinge term relative to the unweighted benign "
+                          f"reconstruction term (default: pre-registered {LAMBDA})")
     ap.add_argument("--out-weights", default=None, help="Write fitted weights + metadata as JSON to this path")
+    ap.add_argument("--compare-weights-file", default=None,
+                     help="Also score an existing weights JSON (same shape --out-weights writes) on the identical "
+                          "held-out split, for a three-way comparison in one run")
+    ap.add_argument("--compare-label", default=None, help="Row label for --compare-weights-file (default: its filename)")
     ap.add_argument("--seed", type=int, default=DE_SEED)
     args = ap.parse_args()
+    if args.compare_label and not args.compare_weights_file:
+        ap.error("--compare-label has no effect without --compare-weights-file")
 
-    train_groups, holdout = load_and_split(args.datadir)
+    train_groups, attack_train_groups, attack_train_report, holdout = load_and_split(args.datadir, objective=args.objective)
     n_train_runs = sum(len(v) for v in train_groups.values())
     n_train_windows = sum(len(w) for runs in train_groups.values() for _rid, w in runs)
     n_holdout_benign = sum(1 for h in holdout if h["class"] == "benign")
     n_holdout_attack = sum(1 for h in holdout if h["class"] == "attack")
     print("== split ==")
-    print(f"training:  {len(train_groups)} patterns, {n_train_runs} runs, {n_train_windows} windows")
+    print(f"objective: {args.objective}")
+    print(f"training (benign):  {len(train_groups)} patterns, {n_train_runs} runs, {n_train_windows} windows")
     print(f"held-out:  {n_holdout_benign} benign runs, {n_holdout_attack} attack runs")
     for pattern in sorted(train_groups):
         ids = [rid for rid, _w in train_groups[pattern]]
-        print(f"  train   {pattern:34s} {ids}")
+        print(f"  train benign   {pattern:34s} {ids}")
+    if args.objective == "margin":
+        n_attack_train_runs = sum(len(v) for v in attack_train_groups.values())
+        n_attack_train_windows = sum(len(w) for runs in attack_train_groups.values() for _rid, w in runs)
+        print(f"training (flood attack, margin term only): {len(attack_train_groups)} patterns, "
+              f"{n_attack_train_runs} runs, {n_attack_train_windows} windows")
+        for pattern in sorted(attack_train_groups):
+            ids = [rid for rid, _w in attack_train_groups[pattern]]
+            print(f"  train attack   {pattern:34s} {ids}")
     for pattern in sorted(HOLDOUT_BENIGN_PATTERNS):
         ids = [h["label"]["id"] for h in holdout if h["pattern"] == pattern]
-        print(f"  holdout {pattern:34s} {ids}")
+        print(f"  holdout benign {pattern:34s} {ids}")
+    for pattern in sorted({h["pattern"] for h in holdout if h["class"] == "attack"}):
+        ids = [h["label"]["id"] for h in holdout if h["pattern"] == pattern]
+        print(f"  holdout attack {pattern:34s} {ids}")
     print()
 
     sample_window = next(w[0] for runs in train_groups.values() for _rid, w in runs if len(w)).reshape(64, 4)
     self_check(sample_window)
     print("self-check: kernel_loss_batch matches sr.kernel_loss on a real window (ok)\n")
 
-    objective = make_objective(train_groups)
+    benign_only_objective = make_objective(train_groups)  # kept available as a diagnostic even in margin mode
+    if args.objective == "margin":
+        objective = make_margin_objective(train_groups, attack_train_groups, margin=args.margin, lam=args.lambda_weight)
+    else:
+        objective = benign_only_objective
     baseline_W = np.array(sr.W, dtype=np.float32, copy=True)
     baseline_train_loss = objective(baseline_W)
     print(f"== fitting ({len(BOUNDS)} params, bounds {BOUNDS[0]} for all) ==")
+    if args.objective == "margin":
+        baseline_target = margin_target(train_groups, baseline_W, margin=args.margin, sigma=SIGMA)
+        print(f"margin hyperparameters: margin={args.margin} sigma={SIGMA} lambda={args.lambda_weight}")
+        print(f"baseline hardcoded weights' benign-only loss: {benign_only_objective(baseline_W):.6f}  "
+              f"hinge target: {baseline_target:.4f}")
     print(f"baseline hardcoded weights' training-objective value: {baseline_train_loss:.6f}")
 
     t0 = time.monotonic()
     de = differential_evolution(objective, BOUNDS, seed=args.seed, popsize=DE_POPSIZE, maxiter=DE_MAXITER,
                                  tol=DE_TOL, polish=True, updating="deferred", workers=1)
-    polished = minimize(objective, de.x, method="Nelder-Mead",
+    # bounds=BOUNDS here (not just on the DE phase above) matters: scipy's Nelder-Mead is otherwise unconstrained,
+    # so without it the polish step can walk a weight straight out of the box the pre-registration declares and
+    # justifies ("bounded to keep a global search tractable and to avoid numerically degenerate saturated
+    # solutions"). Found during the margin-objective round of training (2026-10-23): an unbounded polish drove one
+    # weight to -66.8, far outside [-3, 5], while the benign-only objective's polish had stayed inside the box
+    # anyway, by luck rather than by the code enforcing it. Fixed here for both objective modes rather than only
+    # the one that happened to trip it.
+    polished = minimize(objective, de.x, method="Nelder-Mead", bounds=BOUNDS,
                          options={"xatol": 1e-8, "fatol": 1e-12, "maxiter": POLISH_MAXITER, "maxfev": POLISH_MAXITER})
     elapsed = time.monotonic() - t0
     trained_W = polished.x if polished.fun <= de.fun else de.x
@@ -257,9 +419,15 @@ def main():
     print(f"Nelder-Mead polish:     nfev={polished.nfev} objective={polished.fun:.6f}")
     print(f"fitted in {elapsed:.1f}s")
     print(f"trained weights: {[round(float(x), 6) for x in trained_W]}")
-    print(f"trained training-objective value: {trained_loss:.6f}  (baseline was {baseline_train_loss:.6f})\n")
+    print(f"trained training-objective value: {trained_loss:.6f}  (baseline was {baseline_train_loss:.6f})")
+    if args.objective == "margin":
+        trained_target = margin_target(train_groups, trained_W, margin=args.margin, sigma=SIGMA)
+        print(f"trained weights' benign-only loss: {benign_only_objective(np.asarray(trained_W, dtype=np.float32)):.6f}  "
+              f"hinge target: {trained_target:.4f}")
+    print()
 
-    # Threshold calibration: strictly from training data, per PREREGISTRATION.md, before any held-out scoring.
+    # Threshold calibration: strictly from training BENIGN data only (never the attack-training windows, even in
+    # margin mode), per PREREGISTRATION.md, before any held-out scoring.
     train_losses_trained_W = pooled_training_losses(train_groups, trained_W)
     trained_tau = float(np.mean(train_losses_trained_W) + SIGMA * np.std(train_losses_trained_W))
     print(f"calibrated tau for trained weights: mean={np.mean(train_losses_trained_W):.4f} "
@@ -267,42 +435,78 @@ def main():
           f"(pooled over {len(train_losses_trained_W)} training windows)\n")
 
     print("== held-out validation (never used for fitting or threshold calibration) ==")
+    compare_result = compare_W = compare_tau = compare_label = None
     # sr.W is a shared mutable module global that sr.kernel_loss()/slr.sentinel_alerts() close over; restore it even
     # if scoring raises, so a caller importing this module (rather than running it as __main__) never inherits a
     # mutated weight set from a failed run.
     try:
         sr.W = baseline_W
         baseline_result = score_holdout(holdout, baseline_W, sr.BASE_TAU, "baseline")
+        if args.compare_weights_file:
+            with open(args.compare_weights_file) as fh:
+                compare_payload = json.load(fh)
+            compare_W, compare_tau = validate_weights_payload(compare_payload, args.compare_weights_file)
+            compare_label = args.compare_label or os.path.basename(args.compare_weights_file)
+            sr.W = compare_W
+            compare_result = score_holdout(holdout, compare_W, compare_tau, compare_label)
         sr.W = np.asarray(trained_W, dtype=np.float32)
         trained_result = score_holdout(holdout, trained_W, trained_tau, "trained")
     finally:
         sr.W = baseline_W
 
+    if args.objective == "margin" and attack_train_report:
+        print("\n== margin-training flood-attack runs' OWN scores (training performance, NOT a held-out result) ==")
+        try:
+            sr.W = baseline_W
+            score_holdout(attack_train_report, baseline_W, sr.BASE_TAU, "baseline")
+            if compare_result is not None:
+                sr.W = compare_W
+                score_holdout(attack_train_report, compare_W, compare_tau, compare_label)
+            sr.W = np.asarray(trained_W, dtype=np.float32)
+            score_holdout(attack_train_report, trained_W, trained_tau, "trained")
+        finally:
+            sr.W = baseline_W
+
     print("\n== head to head on the held-out split ==")
     print(f"baseline: {baseline_result['detected']}/{baseline_result['attacks']} attacks detected, "
           f"{baseline_result['falsePositives']}/{baseline_result['benign']} benign false positives")
+    if compare_result is not None:
+        print(f"{compare_label}: {compare_result['detected']}/{compare_result['attacks']} attacks detected, "
+              f"{compare_result['falsePositives']}/{compare_result['benign']} benign false positives")
     print(f"trained:  {trained_result['detected']}/{trained_result['attacks']} attacks detected, "
           f"{trained_result['falsePositives']}/{trained_result['benign']} benign false positives")
-    better_or_equal_hit = trained_result["detected"] >= baseline_result["detected"]
-    better_or_equal_fp = trained_result["falsePositives"] <= baseline_result["falsePositives"]
-    strictly_better = trained_result["detected"] > baseline_result["detected"] or \
-        trained_result["falsePositives"] < baseline_result["falsePositives"]
-    verdict = "IMPROVEMENT (weak Pareto, per PREREGISTRATION.md's rule)" if (better_or_equal_hit and better_or_equal_fp and strictly_better) \
-        else "NOT a clear improvement"
-    print(f"verdict per the pre-registered rule: {verdict}")
+
+    def verdict_against(reference, reference_label):
+        better_or_equal_hit = trained_result["detected"] >= reference["detected"]
+        better_or_equal_fp = trained_result["falsePositives"] <= reference["falsePositives"]
+        strictly_better = trained_result["detected"] > reference["detected"] or \
+            trained_result["falsePositives"] < reference["falsePositives"]
+        v = "IMPROVEMENT (weak Pareto, per PREREGISTRATION.md's rule)" if (better_or_equal_hit and better_or_equal_fp and strictly_better) \
+            else "NOT a clear improvement"
+        print(f"verdict vs. {reference_label}: {v}")
+
+    verdict_against(baseline_result, "baseline")
+    if compare_result is not None:
+        verdict_against(compare_result, compare_label)
 
     if args.out_weights:
         payload = {
             "weights": [float(x) for x in trained_W],
             "tau": trained_tau,
-            "trained_on_patterns": sorted(TRAIN_BENIGN_PATTERNS),
-            "held_out_patterns": {"benign": sorted(HOLDOUT_BENIGN_PATTERNS), "attack": "all 7 attack patterns"},
+            "objective": args.objective,
+            "trained_on_patterns": {"benign": sorted(TRAIN_BENIGN_PATTERNS)},
+            "held_out_patterns": {"benign": sorted(HOLDOUT_BENIGN_PATTERNS),
+                                   "attack": sorted({h["pattern"] for h in holdout if h["class"] == "attack"})},
             "seed": args.seed,
             "training_objective_value": trained_loss,
             "note": "Fitted by scripts/train-sentinel-weights.py; see docs/benchmarks/results/sentinel-training/ "
+                    "(objective=benign) or docs/benchmarks/results/sentinel-training-margin/ (objective=margin) "
                     "for methodology and held-out validation before using this in gpu-sdn-anomaly-sentinel.py "
                     "(--weights-file / GPU_SENTINEL_WEIGHTS_FILE, opt-in only).",
         }
+        if args.objective == "margin":
+            payload["trained_on_patterns"]["attack_flood_margin_term"] = sorted(TRAIN_ATTACK_PATTERNS)
+            payload["margin_hyperparameters"] = {"margin": args.margin, "sigma": SIGMA, "lambda": args.lambda_weight}
         with open(args.out_weights, "w") as fh:
             json.dump(payload, fh, indent=2)
             fh.write("\n")
