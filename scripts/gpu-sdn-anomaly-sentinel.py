@@ -109,6 +109,35 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+NUM_CUDA_KERNEL_WEIGHTS = 10  # w0..w9 read by autoencoder_inference_kernel in src/gpu/gpu_anomaly_kernel.cu
+
+
+def load_weights_payload(path: str) -> List[float]:
+    """Parses and validates an opt-in --weights-file / GPU_SENTINEL_WEIGHTS_FILE argument: a JSON object with a
+    "weights" list (or a bare JSON list) of exactly NUM_CUDA_KERNEL_WEIGHTS finite floats, as written by
+    scripts/train-sentinel-weights.py. Pure function (no ctypes/CUDA dependency) so the validation itself is testable
+    without a native engine. Raises OSError (unreadable file), json.JSONDecodeError (not valid JSON), or ValueError
+    (wrong shape, wrong length, or a non-finite element — NaN/Infinity are technically valid JSON via Python's parser
+    but are never a legitimate trained weight) on anything that should fail closed rather than load.
+    """
+    with open(path, 'r') as wf:
+        payload = json.load(wf)
+    wlist = payload['weights'] if isinstance(payload, dict) else payload
+    if not isinstance(wlist, list) or len(wlist) != NUM_CUDA_KERNEL_WEIGHTS:
+        raise ValueError(f"expected a JSON object with a {NUM_CUDA_KERNEL_WEIGHTS}-element \"weights\" list, got "
+                          f"{len(wlist) if isinstance(wlist, list) else type(wlist).__name__}")
+    try:
+        floats = [float(w) for w in wlist]
+    except (TypeError, ValueError) as exc:
+        # float() raises TypeError for a non-coercible element (e.g. a dict or list entry) and
+        # ValueError for a non-numeric string; the docstring promises ValueError for "anything
+        # that should fail closed", so both are normalized to ValueError here rather than leaking
+        # TypeError past this function's documented contract.
+        raise ValueError(f"weights must all be numbers; got {wlist}") from exc
+    if not all(math.isfinite(w) for w in floats):
+        raise ValueError(f"weights must all be finite; got {floats}")
+    return floats
+
 
 # ---------------------------------------------------------------------------
 # Neural Autoencoder Model (PyTorch CUDA with NumPy/Pure Math Fallback)
@@ -121,7 +150,7 @@ class Gpu1DAutoencoder:
     Falls back gracefully to CPU on non-CUDA developer workstations.
     """
 
-    def __init__(self, in_channels: int = NUM_FEATURES, seq_len: int = WINDOW_SIZE):
+    def __init__(self, in_channels: int = NUM_FEATURES, seq_len: int = WINDOW_SIZE, weights_file: str = ''):
         self.seq_len = seq_len
         self.in_channels = in_channels
         self.device_name = "CPU (Fallback)"
@@ -181,6 +210,41 @@ class Gpu1DAutoencoder:
                         break
                 except Exception as exc:
                     sys.stderr.write(f"[gpu-sentinel] Note: Failed loading CUDA library {so_path}: {exc}\n")
+
+        # Opt-in trained-weight loading (Council Invariant 3 - Fail-Closed, Council Invariant 6 - no silent behavior
+        # change): load_cuda_model_weights() exists in the compiled kernel but is never called unless an operator
+        # explicitly passes --weights-file / sets GPU_SENTINEL_WEIGHTS_FILE. With neither set (the default, and the
+        # only mode the live systemd unit uses today), this block does nothing and the engine keeps running the
+        # compiled-in hardcoded constants exactly as before. See docs/benchmarks/results/sentinel-training/ for what
+        # was fit, how it was validated, and the honest comparison against those hardcoded constants.
+        if weights_file:
+            if self.cuda_lib is not None:
+                try:
+                    floats = load_weights_payload(weights_file)
+                    weights_arr = (ctypes.c_float * len(floats))(*floats)
+                    # Pin the calling convention explicitly at the call site rather than relying on the declaration
+                    # made earlier in this same loop (lines above) staying attached to this exact `lib` object —
+                    # cheap, and removes any doubt that this specific call is correctly marshalled.
+                    self.cuda_lib.load_cuda_model_weights.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.c_int]
+                    self.cuda_lib.load_cuda_model_weights.restype = ctypes.c_int
+                    rc = self.cuda_lib.load_cuda_model_weights(weights_arr, len(floats))
+                    if rc != 0:
+                        sys.stderr.write(f"[gpu-sentinel] FATAL: load_cuda_model_weights rejected {weights_file} (rc={rc}).\n")
+                        sys.stderr.write("[gpu-sentinel] Council Invariant 3 (Fail-Closed Isolation): an explicit "
+                                          "--weights-file was given and failed to load; aborting rather than silently "
+                                          "running the compiled-in defaults or a partially-loaded weight set.\n")
+                        sys.exit(1)
+                    sys.stdout.write(f"[gpu-sentinel] Loaded trained weights from {weights_file} into the CUDA engine "
+                                      f"(opt-in: default behavior without --weights-file is unchanged).\n")
+                except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+                    sys.stderr.write(f"[gpu-sentinel] FATAL: could not load --weights-file {weights_file}: {exc}\n")
+                    sys.stderr.write("[gpu-sentinel] Council Invariant 3 (Fail-Closed Isolation): aborting rather than "
+                                      "silently falling back to the compiled-in default weights.\n")
+                    sys.exit(1)
+            else:
+                sys.stderr.write(f"[gpu-sentinel] WARNING: --weights-file {weights_file} was given, but no native CUDA "
+                                  f"engine is active (PyTorch/NumPy fallback in use, a structurally different, "
+                                  f"untrained model). The trained weights were NOT applied.\n")
 
         # 2. Second Priority: PyTorch CUDA if available
         if not self.has_cuda:
@@ -422,7 +486,8 @@ def run_sentinel(
     controller_url: str,
     threshold: float,
     demo_mode: bool = False,
-    duration_s: int = 0
+    duration_s: int = 0,
+    weights_file: str = ''
 ):
     print("======================================================================")
     print("🛡️  STAGE-2 GPU DEEP TRAFFIC ANOMALY SENTINEL (JETSON ORIN NANO SUPER)")
@@ -431,9 +496,10 @@ def run_sentinel(
     print(f"   Controller API: {controller_url}")
     print(f"   Loss Threshold: {threshold} (Reconstruction Error tau)")
     print(f"   Mode          : {'SYNTHETIC DEMO & BENCHMARK' if demo_mode else 'LIVE HARDWARE WIRE-TAP'}")
+    print(f"   Model Weights : {weights_file if weights_file else '(compiled-in hardcoded constants, default)'}")
     print("======================================================================")
 
-    autoencoder = Gpu1DAutoencoder()
+    autoencoder = Gpu1DAutoencoder(weights_file=weights_file)
     print(f"   [+] Neural Engine Initialized: {autoencoder.device_name}")
     print(f"   [+] CUDA Tensor Cores Active : {autoencoder.has_cuda}")
     print("======================================================================\n")
@@ -736,6 +802,11 @@ def main():
     parser.add_argument('--threshold', type=float, default=DEFAULT_ANOMALY_THRESHOLD, help="Anomaly reconstruction threshold tau")
     parser.add_argument('--demo', action='store_true', help="Run in continuous synthetic traffic demo mode")
     parser.add_argument('--duration', type=int, default=0, help="Run duration in seconds (0 = run indefinitely)")
+    parser.add_argument('--weights-file', default=os.environ.get('GPU_SENTINEL_WEIGHTS_FILE', ''),
+                         help="Opt-in path to a JSON file of 10 trained weights (see "
+                              "docs/benchmarks/results/sentinel-training/) to load into the native CUDA engine via "
+                              "load_cuda_model_weights(). Unset by default (or via GPU_SENTINEL_WEIGHTS_FILE): the "
+                              "sentinel runs the compiled-in hardcoded constants, exactly as it does today.")
     args = parser.parse_args()
 
     run_sentinel(
@@ -743,7 +814,8 @@ def main():
         controller_url=args.controller_url,
         threshold=args.threshold,
         demo_mode=args.demo,
-        duration_s=args.duration
+        duration_s=args.duration,
+        weights_file=args.weights_file
     )
 
 

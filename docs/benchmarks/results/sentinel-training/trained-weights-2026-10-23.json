@@ -1,0 +1,37 @@
+{
+  "weights": [
+    2.5223949697150116,
+    2.959261841196053,
+    4.072599735834697,
+    3.21300890111349,
+    2.070315610742564,
+    2.737096130094656,
+    2.106811051979169,
+    0.06055421414201444,
+    0.4629321552460965,
+    1.2101127208679745
+  ],
+  "tau": 0.16962743103476757,
+  "trained_on_patterns": [
+    "benign-http-20rps",
+    "benign-http-5rps",
+    "benign-idle-60s",
+    "benign-interactive-8eps",
+    "benign-ping-5pps",
+    "benign-ping-5pps-node01",
+    "benign-udp-burst-tailscale-like",
+    "benign-udp-small-10pps"
+  ],
+  "held_out_patterns": {
+    "benign": [
+      "benign-bulk-tcp-2mbit",
+      "benign-http-burst-8conns",
+      "benign-ping-20pps",
+      "benign-udp-small-50pps"
+    ],
+    "attack": "all 7 attack patterns"
+  },
+  "seed": 42,
+  "training_objective_value": 0.10696059447668847,
+  "note": "Fitted by scripts/train-sentinel-weights.py; see docs/benchmarks/results/sentinel-training/ for methodology and held-out validation before using this in gpu-sdn-anomaly-sentinel.py (--weights-file / GPU_SENTINEL_WEIGHTS_FILE, opt-in only)."
+}
