@@ -98,9 +98,9 @@ Use the adversary node (the Pi 3B+ in the target topology) as the red team again
 
 Scenarios, each repeatable by script and reported with detection and containment times:
 
-1. ARP spoofing across P1 and P2 (claim the gateway's address toward the lab LAN).
+1. ARP spoofing across P1 and P2 (claim the gateway's address toward the lab LAN). **Done 2026-10-22**: defeated the policy (A10 not implemented); see `docs/benchmarks/results/track-c-scenario1-arp-spoof/README.md`.
 2. MAC and IP spoofing inside the workload segment.
-3. Port scan and low-rate scan.
+3. Port scan and low-rate scan. **Done 2026-10-22**: fast scan detected clearly by the GPU sentinel; low-rate scan detection unresolved (the live process and an independent offline replay of the same documented math disagree). The bigger finding was structural, not detection accuracy: every correctly-attributed quarantine request was refused because the current adversary node (`agentic-node-02`) was still on the bridge's protected-host list from its pre-Track-C role, fixed afterward as its own step. See `docs/benchmarks/results/track-c-scenario3-portscan/README.md`.
 4. Flood to the point of session loss (what an attacker can do to the control plane).
 5. Evasion: traffic crafted to fit allowed rules, fragmentation, rule-table exhaustion.
 6. Address aliasing from the uplink side: a lab-LAN host takes a `10.0.2.x` address and reaches the workload nodes. Observed 2026-10-09: the Mac's benchmark alias `10.0.2.119` reaches `10.0.2.50` to `10.0.2.52` in about 10 ms (the intended receiver path; flow counters not yet read to confirm). Confinement is address-based and the source address is forgeable, so this tests whether anything on the uplink side can reach workloads by choosing an address.
@@ -108,7 +108,7 @@ Scenarios, each repeatable by script and reported with detection and containment
 
 Report per scenario: contained or not, time to detect, time to quarantine, false positives, and whether the verifier or the detector would have prevented it. The detectors under test are the Jetson GPU autoencoder and, once it exists, a Hailo-8 classifier on the Pi 5 sensor (section 3). Their precision and recall are unmeasured today and become a result of this track; the attack runs also produce the labelled captures needed to train a classifier.
 
-**Exit criteria:** scenarios 1 to 4 scripted and reproducible; results table published; any scenario that defeats the policy produces a new verifier property in track A.
+**Exit criteria:** scenarios 1 to 4 scripted and reproducible (2 of 4 done: 1 and 3); results table published; any scenario that defeats the policy produces a new verifier property in track A.
 
 ### Track D: Provenance and telemetry (maintain)
 
