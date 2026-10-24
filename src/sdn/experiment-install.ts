@@ -57,8 +57,12 @@ export const EXPERIMENT_READBACK_LOCK_WAIT_MS = 500;
 const ID_RE = /^[A-Za-z0-9_.:-]+$/;
 const MAC_RE = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
 const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-const MATCH_KEYS: ReadonlySet<string> = new Set(['inPort', 'etherType', 'srcMac', 'dstMac', 'srcIp', 'srcIpPrefixLen', 'dstIp', 'dstIpPrefixLen']);
+const MATCH_KEYS: ReadonlySet<string> = new Set([
+  'inPort', 'etherType', 'srcMac', 'dstMac', 'srcIp', 'srcIpPrefixLen', 'dstIp', 'dstIpPrefixLen',
+  'arpSpa', 'arpSpaPrefixLen', 'arpTpa', 'arpTpaPrefixLen',
+]);
 const ETH_TYPE_IPV4 = 0x0800;
+const ETH_TYPE_ARP = 0x0806;
 
 export interface ExperimentRequest {
   readonly rules: readonly IsolationRule[];
@@ -135,6 +139,15 @@ export function parseExperimentRequest(raw: unknown): ParseResult {
       if (ip === undefined) { if (len !== undefined) fail(`${lenKey} without ${ipKey}`); continue; }
       if (!validIpv4(ip)) { fail(`${ipKey} must be a dotted IPv4 address`); continue; }
       if (m['etherType'] !== ETH_TYPE_IPV4) { fail(`${ipKey} needs etherType 2048 in the same match`); continue; }
+      match[ipKey] = ip;
+      if (len !== undefined) { if (isInt(len, 1, 32)) match[lenKey] = len; else fail(`${lenKey} must be an integer 1 to 32`); }
+    }
+    for (const [ipKey, lenKey] of [['arpSpa', 'arpSpaPrefixLen'], ['arpTpa', 'arpTpaPrefixLen']] as const) {
+      const ip = m[ipKey];
+      const len = m[lenKey];
+      if (ip === undefined) { if (len !== undefined) fail(`${lenKey} without ${ipKey}`); continue; }
+      if (!validIpv4(ip)) { fail(`${ipKey} must be a dotted IPv4 address`); continue; }
+      if (m['etherType'] !== ETH_TYPE_ARP) { fail(`${ipKey} needs etherType 2054 (ARP) in the same match`); continue; }
       match[ipKey] = ip;
       if (len !== undefined) { if (isInt(len, 1, 32)) match[lenKey] = len; else fail(`${lenKey} must be an integer 1 to 32`); }
     }

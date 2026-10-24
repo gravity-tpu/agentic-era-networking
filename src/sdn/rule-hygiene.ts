@@ -42,7 +42,7 @@ import {
 } from './intent-spec.js';
 import type { FlowModMatchOptions } from './openflow-types.js';
 import type { IsolationRule } from './port1-isolation.js';
-import { ZODIAC_PORT_TAP, ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD } from './port1-isolation.js';
+import { ZODIAC_PORT_TAP, ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD, ETH_TYPE_ARP } from './port1-isolation.js';
 
 /** Ports under flow-table control on the Zodiac FX (port 4 is the OpenFlow management port). */
 export const DEFAULT_HYGIENE_PORTS: readonly number[] = [ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP];
@@ -92,12 +92,17 @@ const MODELLED_FIELD_FLAGS = {
   srcIpPrefixLen: true,
   dstIp: true,
   dstIpPrefixLen: true,
+  arpSpa: true,
+  arpSpaPrefixLen: true,
+  arpTpa: true,
+  arpTpaPrefixLen: true,
 } satisfies Record<keyof FlowModMatchOptions, true>;
 const MODELLED_MATCH_FIELDS: ReadonlySet<string> = new Set(Object.keys(MODELLED_FIELD_FLAGS));
 
 /**
- * One IPv4 address constraint in canonical form. A /0 prefix matches every address, and every rule that reaches
- * here carries the eth_type=IPv4 prerequisite, so it is the same constraint as no address match at all.
+ * One address-shaped (IPv4, or ARP SPA/TPA) constraint in canonical form. A /0 prefix matches every address, and
+ * every rule that reaches here carries the matching eth_type prerequisite (IPv4 for srcIp/dstIp, ARP for
+ * arpSpa/arpTpa), so it is the same constraint as no address match at all.
  */
 function ipKey(ip: string | undefined, prefixLen: number | undefined): string | null {
   if (ip === undefined) return null;
@@ -115,6 +120,8 @@ function matchKey(m: FlowModMatchOptions | undefined): string {
     x.dstMac?.trim().toLowerCase() ?? null,
     ipKey(x.srcIp, x.srcIpPrefixLen),
     ipKey(x.dstIp, x.dstIpPrefixLen),
+    ipKey(x.arpSpa, x.arpSpaPrefixLen),
+    ipKey(x.arpTpa, x.arpTpaPrefixLen),
   ]);
 }
 
@@ -170,6 +177,13 @@ export function checkRuleHygiene(rules: readonly IsolationRule[], options: Hygie
         kind: 'invalid-rule',
         ruleIds: [r.id],
         detail: `${r.id}: IPv4 match without eth_type=0x0800 violates OpenFlow 1.3 prerequisites; the switch would refuse it`,
+      });
+    } else if ((m.arpSpa !== undefined || m.arpTpa !== undefined) && m.etherType !== ETH_TYPE_ARP) {
+      violations.push({
+        property: 'prerequisite',
+        kind: 'invalid-rule',
+        ruleIds: [r.id],
+        detail: `${r.id}: ARP_SPA/ARP_TPA match without eth_type=0x0806 violates OpenFlow 1.3 prerequisites; the switch would refuse it`,
       });
     } else {
       valid.push(r);
