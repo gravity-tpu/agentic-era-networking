@@ -1,5 +1,50 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-24 addendum (batch 3, owner-approved, added before batch 3's own numbers were looked at):** batch 2
+resolved batch 1's ambiguity against the sample-size explanation: at the full CIC attack-training cap, lab held-out
+recall stayed exactly at 2/13 (identical to batch 1's smaller sample), and weight-bound pinning got worse (1/10 →
+3/10), while the CIC-benign false-positive rate stayed at ~0% on both days in both batches. The owner approved one
+more bounded data point: **`--beta-cic-benign 0.25`** (favoring the lab-benign term 4:1 over the CIC-benign term),
+full attack-training cap (`20,000`/class, same as batch 2), everything else unchanged from batch 2 (bounds,
+optimizer, seed, CIC-benign anchor size, lab-benign pool size).
+
+**Two reference points already exist without re-running anything:** `BETA=0` is exactly round 3's original objective
+(`docs/benchmarks/results/sentinel-training-margin-cic/README.md`: lab recall 8/13, lab FP 4/9, CIC-benign FP rate
+9.05%/9.70% Wed/Fri, 2/10 weights pinned near the upper bound — `w7`, `w8`); `BETA=1.0` is batch 2 (lab recall 2/13,
+lab FP 1/9, CIC-benign FP rate 0.00%/0.00%, 3/10 weights pinned — `w1` lower, `w5`/`w7` upper).
+
+**Prediction, stated before running, so it can be checked rather than rationalized after the fact:** the continuous
+training-objective components (`L_benign_lab`, `L_benign_cic`, `L_margin` raw hinge) are expected to move
+*monotonically* between the two endpoints as `BETA` increases from 0 to 1 — they are averages over thousands of
+windows, which smooths out the loss surface's ReLU/max kinks, so there is no specific reason to expect them to jump.
+**The discrete lab-held-out metrics (recall, false positives — counts out of 13 and 9 runs) are expected to behave
+less smoothly, and specifically are predicted to land closer to the `BETA=1.0` endpoint (2/13) than to a linear
+interpolation's midpoint (~6-7/13) — i.e., in the 2-5/13 range, not 6+.** Reasoning: (1) these are threshold-crossing
+decisions (the `Adaptive` controller's binary alert/no-alert call) on top of already-smooth continuous losses, so a
+modest continuous shift can still flip a discrete outcome, especially with only 13 runs to read the result from, which
+is coarse enough that "smooth underlying trend" and "jumpy observed count" are not in tension; (2) batch 2 showed
+weight-bound pinning *getting worse*, not better, when the attack-training population scaled up at `BETA=1.0`-this
+suggests the margin (hinge) term's own pressure toward extreme weights, driven by 40,000 full-scale attack windows,
+is a strong force largely independent of how much the benign-cic term is weighted, and a quarter-strength competing
+term is not expected to be enough to fully counteract it. **Symmetrically, the CIC-benign false-positive rate is
+predicted to already be mostly fixed (closer to `BETA=1.0`'s ~0% than to `BETA=0`'s ~9-10%) even at `BETA=0.25`** —
+the hypothesis here is that it does not take much opposing pressure on the specific weights (`w7`/`w8`) that round 3
+diagnosed as the broad-sensitivity culprits to pull them back from the bound enough to stop the worst of the
+false-positive blowup, even if that same modest pressure is not enough to also preserve lab recall.
+
+**If both predictions hold** (recall closer to the collapsed end, CIC-benign FP rate closer to the fixed end, both
+at the same `BETA=0.25`), that is read as evidence of a **sharp cliff**: the CIC-benign fix is "cheap" to get (a small
+`BETA` buys most of it) but recall damage is not "expensive to avoid" in the same proportional way — there may be no
+single `BETA` that buys both at once, and a workable middle ground may not exist on this axis alone (a different
+mechanism — e.g. a smaller MARGIN, or down-weighting LAMBDA alongside BETA — might be needed instead, not tested
+here). **If instead `BETA=0.25` lands closer to a linear interpolation on recall (6-7/13) with a correspondingly
+only-partially-fixed CIC-benign FP rate (roughly 4-6%, not nearly 0%)**, that is read as evidence of a genuine
+*gradient* — a workable middle ground plausibly exists and a finer sweep (e.g. `BETA` in `{0.1, 0.4, 0.6}`) would be
+the next useful bounded step, not this document's business to run unprompted.
+
+This addendum does not change anything else in this document: the objective formula, `LAMBDA`, bounds, optimizer, CIC
+attack/benign sample sizes, or the "what this batch does not do" scope (still no four-axis evaluation, still no PR).
+
 **2026-10-24 addendum (batch 2, owner-approved, added before batch 2's own numbers were looked at):** batch 1's
 informal peek (never a formal result, flagged as such at the time) showed the lab held-out split's attack-detected
 count collapsing from baseline's 10/13 to 2/13 under the two-anchor-trained weights, alongside one weight landing
