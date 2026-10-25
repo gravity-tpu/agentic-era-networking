@@ -1,5 +1,96 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-24 addendum (batch 5, owner-approved, added before batch 5's own numbers were looked at):** batch 4 showed
+the CIC margin term's class-imbalance pattern (one attack class learned well, the other barely moved) reproduce
+under a completely different architecture — 10 parameters (batches 2-3) and 85 parameters (batch 4) both landed on
+one class near its ceiling and the other near its floor (batch 2: Hulk 1.19%/GoldenEye 63.20%; batch 4: Hulk
+0.15%/GoldenEye 44.75%). The same failure surviving an 8.5x capacity change is strong evidence it comes from how the
+margin term is *computed*, not from model capacity. This batch tests a specific, named mechanism for that and a
+specific fix, isolating it from every other variable changed so far.
+
+**Diagnosis of the mechanism:** `make_two_anchor_objective`'s `L_margin(W)` is a nested mean over attack classes:
+`mean(hinge_mean_Hulk(W), hinge_mean_GoldenEye(W))`. The per-window hinge is floored at zero
+(`max(0, target(W) - loss)`), so a class that already clears `target(W)` contributes exactly 0 and cannot be "spent"
+to offset a worse class the way an unbounded loss could — but a **mean of two independent class-level hinges**
+still lets the optimizer find comfort in fixing the *easier* class fully (hinge → 0) while leaving the *harder*
+class only partially fixed, because once the easy class's contribution is zero, the mean's value and gradient depend
+entirely on the hard class alone, and if other terms in the objective (`L_benign_lab`, `L_benign_cic`) make it costly
+to push further on the hard class, a local optimum where the hard class stays only partly separated is a perfectly
+comfortable resting point for a mean — there is no additional pressure that specifically punishes leaving one class
+behind as long as the blended average looks small.
+
+## What changes this batch: the margin combination rule only
+
+**New formula: `L_margin(W) = max(hinge_mean_Hulk(W), hinge_mean_GoldenEye(W))`** — worst-of-both, not the mean.
+Nothing else about the hinge changes: the per-window formula (`max(0, target(W) - loss)`), `target(W)`'s definition
+(lab-benign pool only, unchanged), `MARGIN=0.02`, `SIGMA=2.5` are all identical to every prior round. Generalizes
+cleanly to more than 2 classes (max over however many there are) if this project ever adds a third.
+
+**Why `max`, not a sum of per-class hinges (the other option the task named):** summing two means instead of
+averaging them (`hinge_mean_Hulk + hinge_mean_GoldenEye` vs. `(hinge_mean_Hulk + hinge_mean_GoldenEye) / 2`) is
+**mathematically equivalent up to a constant factor of 2**, already fully absorbed by `LAMBDA`'s own scale — it has
+the exact same critical points (same argmin over `W`), just a rescaled objective value. It is not a structural fix
+for the mechanism diagnosed above; it changes nothing about *which* weight configurations are optimal, only how big
+the number looks. `max`, by contrast, genuinely changes the gradient landscape: whichever class is currently worse
+keeps full, undiminished pressure on the optimizer for as long as it stays worse, and only once it is pulled down to
+match (or below) the other class does the pressure shift to whichever is worse *then* — there is no resting point
+where one class is fully satisfied and the other is left comfortably behind, because the objective's value is
+*defined* by whichever class is doing the worst at any point. This is the direct, named fix for the mechanism this
+batch diagnosed, not a cosmetic rescaling of it.
+
+**A risk named now, before running, not after:** forcing the optimizer to fully satisfy the *worse* class (rather
+than letting it settle for a good average) may be harder to achieve without cost elsewhere — if the two classes'
+natural separability from lab-benign really differs (as batches 2-4 suggest it does), `max` may force weights into a
+regime that trades away some `L_benign_lab`/`L_benign_cic` quality, or lab recall/FP, to chase the harder class. If
+that happens, it is reported plainly as a real cost of the fix, not hidden by only reporting the balance improvement.
+
+## Architecture, objective, data: isolating the one variable
+
+**Back to the 10-parameter architecture** (`scripts/sentinel-replay.py`'s original `kernel_loss` /
+`kernel_loss_batch`), **not** batch 4's 85-parameter expansion — deliberately reverting that change so this batch
+tests exactly one variable (the margin combination rule) against the same, best-understood configuration batches 2-3
+used, rather than confounding it with the capacity change. `BETA=1.0` (batch 2's primary point, the hardest test of
+the conflict, unchanged reasoning from that batch's pre-registration). Bounds `[-3.0, 5.0]` for all 10 weights,
+unchanged. **Optimizer budget restored to the original 10-dimensional scale** (`popsize=20`, `maxiter=150`,
+`Nelder-Mead` polish `maxiter=5000`) — batch 4's reduced budget was specifically a concession to DE's population
+scaling with dimension at 85 parameters; back at 10 parameters there is no such justification for reducing it, and
+not doing so keeps the optimizer identical to batch 2's, isolating the margin-formula change as the only input that
+differs. Data: **batch-1 scale again** (lab benign pool ~6,264 windows unchanged; CIC benign anchor 2,000
+windows/day; CIC attack margin-training 2,000 windows/class, `DoS Hulk` + `DoS GoldenEye`) — the same small, fast
+sanity-check scale as every batch except batch 2's full-cap run, for a fast turnaround.
+
+**Implementation:** additive only. `make_two_anchor_objective`/`two_anchor_components` in
+`scripts/train-sentinel-weights-cic.py` gain an optional `margin_combine` parameter (`'mean'` default, reproducing
+every prior batch's exact behavior unchanged; `'max'` this batch). A new `per_class_margin_hinge` diagnostic
+function reports each class's own mean hinge value directly (regardless of which combine mode drives the fit), so
+the balance this batch is testing for is visible on its own terms, not just inferred from the blended objective
+value. `run_two_anchor` gains a `--margin-combine` CLI flag threading this through.
+
+## Success criterion for this sanity check, decided now — the balance IS the headline this time
+
+Unlike batch 4 (where the three-way lab-recall/lab-FP/CIC-benign-FP bar was primary), **this batch's primary
+criterion is the per-class CIC-margin recall balance directly**, since that imbalance is the thing being tested:
+
+- **Primary: neither `DoS Hulk` nor `DoS GoldenEye`'s window-level recall is below 20% while the other is anywhere
+  near its ceiling** — concretely, both ≥20%, OR (if both land below 20%) the two values are within a factor of 3 of
+  each other rather than one near-zero and the other near-100%. This is a direct test of *balance*, not of overall
+  recall level — a `max`-combined fit that lands both classes at a modest but similar 15-20% would be read as the
+  mechanism working as designed, even without clearing every batch-4-style bar.
+- **Secondary, reported for context, not pass/fail this batch:** the same three-way lab-recall (≥6/13)/lab-FP (as
+  good as or better than batch 2's 1/9)/CIC-benign-FP (≤2%) numbers batch 4 used, so this batch's result sits next
+  to batches 2-4's in the same terms, and so the named risk above (fixing balance at a cost elsewhere) is visible if
+  it occurs.
+
+**Prediction, stated before running:** `max` is expected to narrow the per-class hinge *and* recall gap relative to
+`mean` at the same `BETA=1.0` (batch 2's 1.19%/63.20% split, a ~53x ratio) — not necessarily by raising the worse
+class all the way to the better class's level, but by moving the optimizer away from the "one class free, one class
+abandoned" resting point `mean` permitted. If the gap does not narrow at all, that would be a surprising result
+worth specific attention (it would suggest the imbalance is not explained by the mean-vs-max combination mechanism
+and some other explanation is needed) rather than being read as "the fix didn't matter, move on."
+
+As with every prior batch in this workstream: no PR, no four-axis held-out evaluation, no deployment-path change,
+regardless of outcome.
+
 **2026-10-24 addendum (batch 4, owner-approved, added before batch 4's own numbers were looked at):** batch 3 found a
 sharp cliff, not a gradient — `BETA=0.25` already behaves identically to `BETA=1.0` on every held-out/peek metric
 (lab recall 2/13, lab FP 1/9, CIC-benign FP ~0%), and the underlying weight vectors differ meaningfully between the

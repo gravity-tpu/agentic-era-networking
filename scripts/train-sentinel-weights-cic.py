@@ -179,10 +179,18 @@ def capped_attack_bucket(npz_path, label, cap):
 
 
 def make_two_anchor_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
-                               margin=None, sigma=None, lam=None, beta_cic_benign=BETA_CIC_BENIGN_DEFAULT):
+                               margin=None, sigma=None, lam=None, beta_cic_benign=BETA_CIC_BENIGN_DEFAULT,
+                               margin_combine='mean'):
     """L(W) = L_benign_lab(W) + beta_cic_benign * L_benign_cic(W) + lam * L_margin(W).
     Exact formula and the reasoning for beta_cic_benign are fixed in
     docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md before this was ever run.
+
+    margin_combine (batch 5 addition, default 'mean' reproduces batches 1-4 exactly unchanged): how the per-class
+    mean hinges in attack_train_groups_cic are combined into L_margin(W). 'mean' (default): arithmetic mean across
+    classes, as in every prior batch. 'max': worst-of-both (or worst-of-however-many-classes-there-are) -- see
+    docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 5 addendum for why this is the
+    fix for the cross-architecture class-imbalance pattern batches 2-4 measured, and why a sum (mathematically
+    equivalent to the mean up to a constant already absorbed by `lam`) is not.
 
     L_benign_lab(W): PR #105/#106/#107's unchanged nested pattern/run/window mean over the lab's own training-benign
     pool (train_groups_lab) -- the actual deployment target, reused unmodified, never shrunk for this batch.
@@ -232,7 +240,14 @@ def make_two_anchor_objective(train_groups_lab, cic_benign_anchor, attack_train_
                 run_means.append(float(np.mean(hinge)))
             if run_means:
                 attack_pattern_means.append(sum(run_means) / len(run_means))
-        l_margin = sum(attack_pattern_means) / len(attack_pattern_means) if attack_pattern_means else 0.0
+        if not attack_pattern_means:
+            l_margin = 0.0
+        elif margin_combine == 'max':
+            l_margin = max(attack_pattern_means)
+        elif margin_combine == 'mean':
+            l_margin = sum(attack_pattern_means) / len(attack_pattern_means)
+        else:
+            raise ValueError(f"margin_combine must be 'mean' or 'max', got {margin_combine!r}")
 
         return l_benign_lab + beta_cic_benign * l_benign_cic + lam * l_margin
     return objective
@@ -262,6 +277,27 @@ def two_anchor_components(train_groups_lab, cic_benign_anchor, attack_train_grou
             attack_pattern_means.append(sum(run_means) / len(run_means))
     l_margin = sum(attack_pattern_means) / len(attack_pattern_means) if attack_pattern_means else 0.0
     return l_benign_lab, l_benign_cic, l_margin
+
+
+def per_class_margin_hinge(train_groups_lab, attack_train_groups_cic, W, margin=None, sigma=None):
+    """Batch 5 diagnostic: returns {label: mean_hinge_value} for EACH attack-training class individually, regardless
+    of which margin_combine mode drove the fit -- so the balance batch 5's margin_combine='max' is testing for is
+    visible directly, not just inferred from the single blended L_margin value two_anchor_components reports.
+    target(W) is computed exactly as in make_two_anchor_objective/two_anchor_components (lab-benign pool only)."""
+    margin = tw.MARGIN if margin is None else margin
+    sigma = tw.SIGMA if sigma is None else sigma
+    W = np.asarray(W, dtype=np.float32)
+    target = tw.margin_target(train_groups_lab, W, margin=margin, sigma=sigma)
+    out = {}
+    for label, runs in attack_train_groups_cic.items():
+        run_means = []
+        for _rid, windows in runs:
+            if len(windows) == 0:
+                continue
+            hinge = np.maximum(0.0, target - tw.kernel_loss_batch(windows, W))
+            run_means.append(float(np.mean(hinge)))
+        out[label] = sum(run_means) / len(run_means) if run_means else None
+    return out
 
 
 def report_bound_proximity(W, bounds, eps=BOUND_PIN_EPS):
@@ -313,13 +349,14 @@ def run_two_anchor(args, train_groups_lab, holdout_lab):
     tw.self_check(cic_sample_window)
     print('\nself-check: kernel_loss_batch matches sr.kernel_loss on a real lab window and a real CIC window (ok)')
 
+    margin_combine = getattr(args, 'margin_combine', 'mean')
     objective = make_two_anchor_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                            margin=args.margin, sigma=tw.SIGMA, lam=args.lambda_weight,
-                                           beta_cic_benign=args.beta_cic_benign)
+                                           beta_cic_benign=args.beta_cic_benign, margin_combine=margin_combine)
     baseline_W = np.array(sr.W, dtype=np.float32, copy=True)
     print(f'\n== fitting ({len(tw.BOUNDS)} params, bounds {tw.BOUNDS[0]} for all) ==')
     print(f'hyperparameters: margin={args.margin} sigma={tw.SIGMA} lambda={args.lambda_weight} '
-          f'beta_cic_benign={args.beta_cic_benign}')
+          f'beta_cic_benign={args.beta_cic_benign} margin_combine={margin_combine}')
 
     bl_lab, bl_cic, bl_margin = two_anchor_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                                        baseline_W, margin=args.margin, sigma=tw.SIGMA)
@@ -370,6 +407,13 @@ def run_two_anchor(args, train_groups_lab, holdout_lab):
           f'L_margin(raw hinge)={tr_margin:.6f}')
     print(f'(baseline was L_benign_lab={bl_lab:.6f}  L_benign_cic={bl_cic:.6f}  L_margin(raw hinge)={bl_margin:.6f})')
 
+    per_class_hinge = per_class_margin_hinge(train_groups_lab, attack_train_groups_cic, trained_W,
+                                              margin=args.margin, sigma=tw.SIGMA)
+    print('\n== per-class margin hinge (batch 5 balance diagnostic; the blended L_margin above is '
+          f'{margin_combine} of these) ==')
+    for label, hinge_val in per_class_hinge.items():
+        print(f'  {label:20s} mean hinge = {hinge_val:.6f}' if hinge_val is not None else f'  {label:20s} (no windows)')
+
     train_losses_trained_W = tw.pooled_training_losses(train_groups_lab, trained_W)
     trained_tau = float(np.mean(train_losses_trained_W) + tw.SIGMA * np.std(train_losses_trained_W))
     print(f'\ncalibrated tau for trained weights: mean={np.mean(train_losses_trained_W):.4f} '
@@ -412,6 +456,8 @@ def run_two_anchor(args, train_groups_lab, holdout_lab):
             'objective': 'two-anchor',
             'batch': 'sentinel-training-two-anchor (sanity check, NOT a validated or recommended result)',
             'beta_cic_benign': args.beta_cic_benign,
+            'margin_combine': margin_combine,
+            'per_class_margin_hinge': per_class_hinge,
             'margin_hyperparameters': {'margin': args.margin, 'sigma': tw.SIGMA, 'lambda': args.lambda_weight},
             'sanity_check_sample_sizes': {
                 'lab_benign_training_windows': sum(len(w) for runs in train_groups_lab.values() for _rid, w in runs),
@@ -460,6 +506,11 @@ def main():
     ap.add_argument('--cic-attack-train-cap', type=int, default=None, dest='cic_attack_train_cap',
                      help='--objective two-anchor only: windows per CIC attack class used for the margin term '
                           '(first N in time order from the cached .npz bucket); required for that mode')
+    ap.add_argument('--margin-combine', choices=['mean', 'max'], default='mean', dest='margin_combine',
+                     help="--objective two-anchor only: how per-class mean hinges combine into L_margin. 'mean' "
+                          "(default): every prior batch's behavior, unchanged. 'max' (batch 5): worst-of-both, the "
+                          "fix for the cross-architecture class-imbalance pattern batches 2-4 measured; see "
+                          "docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 5 addendum")
     args = ap.parse_args()
     if args.objective == 'two-anchor':
         if args.cic_benign_anchor_cap is None or args.cic_attack_train_cap is None:
