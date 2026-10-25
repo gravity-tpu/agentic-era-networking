@@ -37,15 +37,18 @@ WIDTH = 128
 HEIGHT = 64
 CYCLE_INTERVAL_SEC = 15
 NUM_PAGES = 6
+TELEMETRY_FETCH_TIMEOUT_SEC = 1.0
+BRIDGE_ENDPOINT = "http://localhost:3003/api/zodiac?summary=1"
 
 def fetch_telemetry_snapshot():
     """
-    Attempt to fetch aggregated telemetry from the local Zodiac Bridge Server (:3003).
-    If unreachable, fall back immediately to local sysfs and psutil without blocking.
+    Fetch aggregated telemetry snapshot from local Zodiac Bridge Server (:3003).
+    Requests summary=1 to exclude rolling timeSeries arrays for fast O(1) response.
+    Falls back to local sysfs and psutil if the bridge is unreachable or times out.
     """
     try:
-        req = urllib.request.Request("http://localhost:3003/api/zodiac", headers={"User-Agent": "OLED-Daemon"})
-        with urllib.request.urlopen(req, timeout=0.4) as res:
+        req = urllib.request.Request(BRIDGE_ENDPOINT, headers={"User-Agent": "OLED-Daemon"})
+        with urllib.request.urlopen(req, timeout=TELEMETRY_FETCH_TIMEOUT_SEC) as res:
             data = json.loads(res.read().decode())
             return parse_bridge_data(data)
     except Exception as e:
