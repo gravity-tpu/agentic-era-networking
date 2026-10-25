@@ -2412,8 +2412,9 @@ export async function probeRpi3Hardware(
   const envUrl = process.env[isNode1 ? 'RPI3_NODE1_URL' : 'RPI3_NODE2_URL'];
   const candidateUrls: string[] = [
     ...(typeof envUrl === 'string' && envUrl.length > 0 ? [envUrl] : []),
+    isNode1 ? 'http://10.0.0.56:8001/telemetry' : 'http://10.0.0.87:8001/telemetry',
     isNode1 ? 'http://10.0.2.50:8001/telemetry' : 'http://10.0.2.52:8001/telemetry',
-    isNode1 ? 'http://10.0.0.45:8001/telemetry' : 'http://10.0.0.177:8001/telemetry',
+    isNode1 ? 'http://10.0.0.45:8001/telemetry' : 'http://10.0.0.175:8001/telemetry',
   ];
 
   const abortCtrl = new AbortController();

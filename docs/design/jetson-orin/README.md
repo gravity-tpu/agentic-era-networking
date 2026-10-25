@@ -1,7 +1,7 @@
 # Jetson Orin Nano Super & Roboco Panini Case Architecture
 
-> **Hardware Specification, Assembly Guide & 5-Screen OLED Telemetry Daemon**  
-> **Substrates:** NVIDIA Jetson Orin Nano Super Developer Kit (67 TOPS Ampere Architecture) + Roboco Panini Case + 0.96" I2C OLED (SSD1306)  
+> **Hardware Specification, Assembly Guide & 6-Screen OLED Telemetry Daemon**  
+> **Substrates:** NVIDIA Jetson Orin Nano Super Developer Kit (67 TOPS Ampere Architecture) + Roboco Panini Case + 0.96" I2C OLED (SSD1306) + Raspberry Pi 5 (`rpi-hailo`) with 26 TOPS Hailo-8 NPU + Dual Raspberry Pi 3B+ Adversarial SDN Nodes  
 > **Governing invariants:** latency budgets, fail-closed simplicity and provenance (Invariant 6); see [AGENTS.md](../../../AGENTS.md).
 
 ---
@@ -12,10 +12,11 @@ The **controller host** operates 24/7 as the centralized edge orchestrator for t
 
 - Real-time OpenFlow 1.3 control over the Northbound Networks Zodiac FX switch.
 - Transparent RFC 1035 DNS resolution and agent anomaly isolation.
-- Coral EdgeTPU line-rate neural inference acceleration.
+- Integration with Raspberry Pi 5 (`rpi-hailo`) hosting 26 TOPS Hailo-8 M.2 NPU neural inference acceleration.
+- Telemetry aggregation from dual Raspberry Pi 3B+ nodes (`agentic-node-01`, `agentic-node-02`) generating adversarial workloads.
 - Physical OLED front-panel hardware diagnostics and network telemetry.
 
-This document details the physical wiring pinouts, button jumper configurations, I2C bus mappings, and the production-grade 5-screen rotational telemetry daemon.
+This document details the physical wiring pinouts, button jumper configurations, I2C bus mappings, and the production-grade 6-screen rotational telemetry daemon.
 
 ---
 
@@ -120,13 +121,13 @@ The OLED daemon cycles across 6 purpose-built screens every 15 seconds (90-secon
 | │Up:02:14:32 L:0.42    │ | │NVMe: 42G/476G 9%     │ | │Temp: 41.2°C 4.85W   │ |
 | └──────────────────────┘ | └──────────────────────┘ | └─────────────────────┘ |
 +-------------------------------------------------------------------------------+
-| SCREEN 4/6: THERM & PWR  | SCREEN 5/6: DNS SENTINEL | SCREEN 6/6: TAP DPI     |
+| SCREEN 4/6: THERM & PWR  | SCREEN 5/6: RPI5 HAILO   | SCREEN 6/6: RPI3 NODES  |
 | ┌──────────────────────┐ | ┌──────────────────────┐ | ┌─────────────────────┐ |
-| │THERM & PWR       4/6 │ | │DNS SENTINEL      5/6 │ | │TAP DPI & SDN    6/6 │ |
+| │THERM & PWR       4/6 │ | │RPI5 HAILO        5/6 │ | │RPI3 NODES       6/6 │ |
 | ├──────────────────────┤ | ├──────────────────────┤ | ├─────────────────────┤ |
-| │CPU: 43.1°C GPU:41°   │ | │DNS Sent: STANDBY     │ | │Tap DPI:  STANDBY    │ |
-| │SOC: 39.8°C TJ :44°   │ | │Rate:     0 inf/sec   │ | │Rate:     0 inf/sec  │ |
-| │Pwr:  11.42W (In)     │ | │Lat:0.0ms  Tot:0      │ | │Lat:0.0ms  P2 P4 UP  │ |
+| │CPU: 43.1°C GPU:41°   │ | │RPi5:  ONLINE 49.6°C  │ | │Node1: ONLINE 36.5°C │ |
+| │SOC: 39.8°C TJ :44°   │ | │Hailo: ONLINE 46.5°C  │ | │Node2: OFFLINE  --°C │ |
+| │Pwr:  11.42W (In)     │ | │Rate:  0 ips  11ms    │ | │SDN:   P2 P4 UP      │ |
 | └──────────────────────┘ | └──────────────────────┘ | └─────────────────────┘ |
 +-------------------------------------------------------------------------------+
 ```
@@ -149,13 +150,11 @@ The OLED daemon cycles across 6 purpose-built screens every 15 seconds (90-secon
 | | | Rail Power | INA3221 Ch 2 (`VDD_CPU_GPU_CV`) | Watts (`W`) |
 | **4/6** | `THERM & PWR` | Thermal Zones | `/sys/class/thermal/thermal_zone{0,1,5,8}/temp` | CPU, GPU, SOC, Junction TJ |
 | | | Total DC Power | INA3221 Ch 1 (`VDD_IN`) | Total Appliance Power (`W`) |
-| **5/6** | `DNS SENTINEL` | Accelerator State | `coral-dns-telemetry.json` / Bridge API | `ACTIVE` / `STANDBY` / `OFFLINE` |
-| | | DNS Inference Rate | Edge TPU Tensor Execution | `inf/sec` (e.g. 185) |
-| | | Inference Latency | P50 Execution Latency | Milliseconds (`ms`) |
-| | | Query Volume | Total DNS Inferences | Pure 64-bit Integer (`Tot:N`) |
-| **6/6** | `TAP DPI & SDN` | Tap DPI State | `coral-telemetry.json` / Bridge API | `ACTIVE` / `STANDBY` / `OFFLINE` |
-| | | Tap Packet Rate | Port 3 Mirror Tap DPI Rate | `inf/sec` |
-| | | Tap Latency | P50 Classification Latency | Milliseconds (`ms`) |
+| **5/6** | `RPI5 HAILO` | RPi 5 Host & Temp | Bridge API (`rpi5.status`, `temperatures.cpuC`) | `ONLINE` / `OFFLINE`, Temp (`°C`) |
+| | | Hailo-8 NPU State | Bridge API (`rpi5.hailo.status`, `temperatures.hailoTs0C`) | `ONLINE` / `OFFLINE`, Temp (`°C`) |
+| | | Inference Rate & Latency | Bridge API (`inferencesPerSecond`, `avgInferenceLatencyMs`) | `Rate: N ips Nms` |
+| **6/6** | `RPI3 NODES` | Node 1 Telemetry | Bridge API (`rpi3_1.status`, `silicon.cpuTempC`) | `ONLINE` / `OFFLINE`, Temp (`°C`) |
+| | | Node 2 Telemetry | Bridge API (`rpi3_2.status`, `silicon.cpuTempC`) | `ONLINE` / `OFFLINE`, Temp (`°C`) |
 | | | Zodiac Ports | Switch CDC Telemetry (`:3003`) | Active OpenFlow Ports (e.g. `P2 P4 UP`) |
 
 ---
@@ -164,7 +163,8 @@ The OLED daemon cycles across 6 purpose-built screens every 15 seconds (90-secon
 
 1. **Anti-Simulation Law (Invariant 6)**:
    - Telemetry must always reflect physical truth.
-   - If the Coral USB accelerator is disconnected, the display immediately shifts to `STANDBY` and rate drops to `0 inf/sec`.
+   - If the RPi 5 or Hailo-8 NPU is disconnected, the display shifts to `OFFLINE` and reports null thermals (`--°C`).
+   - If an adversarial RPi 3 node is unreachable, the display reports `OFFLINE --°C` (never fabricated metrics).
    - If the Zodiac FX switch serial link is disconnected, port status transitions to `NO PORTS UP`.
    - No synthetic or simulated values may be rendered on the physical display.
 2. **Nanosecond Latency Budgets (Jeff Dean Invariant)**:

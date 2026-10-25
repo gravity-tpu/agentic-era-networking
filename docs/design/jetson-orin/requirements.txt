@@ -1,4 +1,4 @@
-# Jetson Orin Hardware Telemetry & Coral EdgeTPU Daemon Dependencies
+# Jetson Orin Hardware & Remote Node Telemetry Daemon Dependencies
 pillow>=10.0.0
 psutil>=5.9.0
 adafruit-circuitpython-ssd1306>=2.12.0

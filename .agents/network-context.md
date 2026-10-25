@@ -102,11 +102,11 @@ The 10.0.2.0/24 workload subnet is NOT advertised.
 | **NETGEAR GS105Ev2 (zodiac_netgear_1)** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2<br>MAC `28:94:01:8b:70:d9` | Port 4 (RPi 5 GbE)<br>Port 3 (RPi 3B+ GbE)<br>Port 2 (RPi 5 USB-GbE capture NIC; mirror destination for P5, both directions verified 2026-10-07)<br>Port 1 (RPi 3B+ `agentic-node-02` GbE)<br>Port 5 (Zodiac Port 1 Uplink 100M) | Intermediate Gigabit aggregation layer for Workload subnet. 128 KB shared packet buffer; IEEE 802.3x Flow Control ENABLED to propagate backpressure across 1Gbps -> 100Mbps speed transition; store-and-forward latency (~12 µs GbE ingress + ~120 µs 100M egress per 1518B MTU); loop detection enabled, IGMP snooping disabled; 802.1Q tagging readiness (fail-closed drop on untagged frames for trunking). Management IP `192.168.0.239`. VLANs (since 2026-10-12): VLAN 1 = P1, P3, P4, P5; VLAN 2 = P2 only, which isolates the Pi 5 capture NIC's mirror port after it was found to accept ingress. |
 | **Jetson Appliance** | NVIDIA Jetson Orin Nano Super | Serial `1791626120820` | `wlP1p1s0` (`10.0.0.15`)<br>`enP8p1s0` (`10.0.1.8`)<br>`enx9c69d39dd0a6` (O2 tap, Zodiac P3)<br>`enx9c69d39ddcc0` (O3 capture, switch #2 P3, USB 3)<br>`br-sim` (Internal OVS) | Master SDN controller, Sentinel ML daemon, the Coral Edge TPUs were removed on 2026-10-11 (`zodiac-coral.service` disabled); hosts Open vSwitch 2.17.12 in userspace `netdev` mode (`br-sim`) for software reference evaluation and large-scale rule verification. |
 | **Raspberry Pi 5** | Broadcom BCM2712 + Hailo-8 (26 TOPS) | Hostname `rpi-hailo` (renamed from `agentic-node-02`, 2026-10-09)<br>MAC `98:fe:54:52:9d:85` | `wlan0` (`10.0.0.179`)<br>`eth0` (`10.0.2.51`)<br>Realtek RTL8153 USB 3.0 GbE (`0bda:8153`) capture NIC `eth1` (MAC `a0:ce:c8:0e:73:f7`, NETGEAR Port 2) | Adversarial edge workload, Red Team workload generator, 26 TOPS INT8 PCIe Gen 3.0 coprocessor host, line-rate GbE traffic engine. Hosts one Coral Edge TPU (USB 3.0 on its own bus; enumerates as `1a6e:089a`; idle, no Edge TPU runtime installed). |
-| **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`; also carries `10.0.1.50/24`, see caveat 8) | Untrusted agent workload node, iperf3 client traffic generator. |
-| **Raspberry Pi 3B+** | Broadcom BCM2837B0 (Rev 1.4) | Hostname `agentic-node-02` (added 2026-10-09)<br>User `agent`, key-only SSH<br>`eth0` MAC `b8:27:eb:79:ff:0a`, `wlan0` MAC `b8:27:eb:2c:aa:5f` | `wlan0` (`10.0.0.177`)<br>`eth0` (`10.0.2.52/24`, profile `eth0-sdn`, never-default)<br>`tailscale0` (`100.105.255.18`) | Second untrusted workload node; planned legitimate client. Raspberry Pi OS Lite 64-bit (Debian 13), `arp_ignore=1`, `arp_announce=2`. Cabled to NETGEAR Port 1. |
+| **Raspberry Pi 3B+** | Broadcom BCM2837B0 | Hostname `agentic-node-01`<br>User `agent` | `wlan0` (`10.0.0.45`)<br>`eth0` (`10.0.2.50`; also carries `10.0.1.50/24`, see caveat 8)<br>USB `eth1` (`10.0.0.56`, Linksys GbE cabled to uplink switch #2 P2)<br>`tailscale0` (`100.79.152.36`) | Untrusted agent workload node, iperf3 client traffic generator. Dual-homed with wired out-of-band management. |
+| **Raspberry Pi 3B+** | Broadcom BCM2837B0 (Rev 1.4) | Hostname `agentic-node-02` (added 2026-10-09)<br>User `agent`, key-only SSH<br>Onboard `eth1` MAC `b8:27:eb:79:ff:0a`, USB `eth0` MAC `6c:6e:07:55:83:a4`, `wlan0` MAC `b8:27:eb:2c:aa:5f` | `wlan0` (`10.0.0.175`)<br>`eth1` (`10.0.2.52/24`, profile `eth0-sdn`, never-default)<br>USB `eth0` (`10.0.0.87`, ASIX AX88179 GbE cabled to uplink switch #2 P1)<br>`tailscale0` (`100.105.255.18`) | Second untrusted workload node; planned legitimate client. Raspberry Pi OS Lite 64-bit (Debian 13), `arp_ignore=1`, `arp_announce=2`. Cabled to NETGEAR Port 1 (workload) and uplink switch #2 Port 1 (wired management). |
 | **Mac Workstation** | Apple Silicon Workstation | MAC `f2:5b:dc:7d:21:d4` | `en0` (`10.0.0.119`, Wi-Fi)<br>`tailscale0` (`100.112.223.16`) | Operator terminal. Connected strictly via Wi-Fi and Tailscale mesh (no direct physical Ethernet link to Zodiac). |
 | **ISP Wi-Fi Extender** | Lab LAN / WAN Bridge | Gateway `10.0.0.1` | RJ45 Ethernet Port | Connected to uplink switch #2 port 5 (was Zodiac Port 2 until 2026-10-09); provides L2 attachment to lab LAN / WAN gateway. |
-| **NETGEAR GS105Ev2 (zodiac_netgear_2)** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2<br>MAC `28:94:01:8b:70:e5` | Port 5 (ISP mesh / extender)<br>Port 4 (Zodiac Port 2)<br>Port 3 (Jetson O3 capture NIC `enx9c69d39ddcc0`, mirror destination)<br>Ports 1 and 2 free | Lab-side L2 aggregation for the uplink (uplink switch #2); installed 2026-10-09 carrying those two links. Port mirroring of port 4 (the Zodiac P2 link) to port 3 is configured as observation point O3, confirmed in the UI and persistent across a switch power cycle (2026-10-12); 802.3x flow control is on for P4 and P5 and off on the mirror destination. VLANs: VLAN 1 = P4, P5; VLAN 2 = P1, P2, P3 (isolates the mirror port after it was found to accept ingress). Static management IP assigned at `192.168.0.240` to avoid address collision with `zodiac_netgear_1` (`192.168.0.239`); IEEE 802.3x Flow Control enabled to propagate backpressure across GbE -> 100M speed boundary. |
+| **NETGEAR GS105Ev2 (zodiac_netgear_2)** | 5-Port Gigabit Smart Managed Switch | Model GS105E v2<br>MAC `28:94:01:8b:70:e5` | Port 5 (ISP mesh / extender)<br>Port 4 (Zodiac Port 2)<br>Port 3 (Jetson O3 capture NIC `enx9c69d39ddcc0`, mirror destination)<br>Port 2 (RPi 3B+ `agentic-node-01` USB GbE `eth1`, `10.0.0.56`)<br>Port 1 (RPi 3B+ `agentic-node-02` USB GbE `eth0`, `10.0.0.87`) | Lab-side L2 aggregation for the uplink (uplink switch #2); installed 2026-10-09 carrying those two links. Port mirroring of port 4 (the Zodiac P2 link) to port 3 is configured as observation point O3, confirmed in the UI and persistent across a switch power cycle (2026-10-12); 802.3x flow control is on for P4 and P5 and off on the mirror destination. VLANs (reconfigured 2026-10-25): VLAN 1 = P1, P2, P4, P5 (providing wired LAN/WAN management to RPi 3s); VLAN 2 = P3 only (isolates the mirror capture port). Static management IP assigned at `192.168.0.240` to avoid address collision with `zodiac_netgear_1` (`192.168.0.239`); IEEE 802.3x Flow Control enabled to propagate backpressure across GbE -> 100M speed boundary. |
 
 ### L3 Subnet & Addressing Schema
 
@@ -135,34 +135,35 @@ The operational procedure is codified in [.agents/workflows/netgear-switch-acces
    - **macOS LaunchAgent (`com.zodiac.netgear-tunnels`):** Registered in `~/Library/LaunchAgents/` using [deploy/mac/zodiac-netgear-tunnel-supervisor.sh](file:///Users/andymorven/git/agentic-era-networking/deploy/mac/zodiac-netgear-tunnel-supervisor.sh). Starts on boot/login, reconnects across sleep/wake, and multiplexes local ports `:8888` and `:8889` over persistent SSH.
    - **Zero Standing Routes on Pivot Host (Invariant 3):** Routes to `192.168.0.0/24` are deliberately **not** persisted as a systemd unit or static configuration on the Raspberry Pi. Instead, the supervisor executes a trapped SSH session (`trap cleanup EXIT INT TERM HUP`). Routes and aliases on the pivot exist strictly while the operator's authenticated SSH session is active, and are immediately sanitized if the connection drops, Mac sleeps, or operator logs out.
 
-```bash
-# Install & activate supervisor LaunchAgent:
-npm run switch:service:install
+   ```bash
+   # Install & activate supervisor LaunchAgent:
+   npm run switch:service:install
 
-# Status check (verifies LaunchAgent, pivot ephemeral isolation, and probes HTTP endpoints):
-npm run switch:service:status
+   # Status check (verifies LaunchAgent, pivot ephemeral isolation, and probes HTTP endpoints):
+   npm run switch:service:status
 
-# Restart persistent supervisor:
-npm run switch:service:restart
+   # Restart persistent supervisor:
+   npm run switch:service:restart
 
-# Uninstall LaunchAgent & restore fail-closed isolation:
-npm run switch:service:uninstall
-```
+   # Uninstall LaunchAgent & restore fail-closed isolation:
+   npm run switch:service:uninstall
+   ```
 
 2. **Ad-Hoc Interactive Sessions (Foreground with Trap):**
 
-```bash
-# Workload switch #1 (192.168.0.239 via eth0 -> http://localhost:8888/):
-npm run switch:workload     # foreground session; Ctrl+C cleans up routes
+   ```bash
+   # Workload switch #1 (192.168.0.239 via eth0 -> http://localhost:8888/):
+   npm run switch:workload     # foreground session; Ctrl+C cleans up routes
 
-# Uplink switch #2 (192.168.0.240 via wlan0 -> http://localhost:8889/):
-npm run switch:uplink       # foreground session; Ctrl+C cleans up routes
+   # Uplink switch #2 (192.168.0.240 via wlan0 -> http://localhost:8889/):
+   npm run switch:uplink       # foreground session; Ctrl+C cleans up routes
 
-# Explicit teardown & flush (preserves fail-closed Invariant 3):
-npm run switch:stop         # or ./scripts/netgear-tunnel.sh stop
-```
+   # Explicit teardown & flush (preserves fail-closed Invariant 3):
+   npm run switch:stop         # or ./scripts/netgear-tunnel.sh stop
+   ```
 
 Once connected, browse to:
+
 - **Switch #1 (Workload):** `http://localhost:8888/` (default password: `password`)
 - **Switch #2 (Uplink):** `http://localhost:8889/` (default password: `password`)
 
@@ -325,11 +326,11 @@ Current scope is a real-hardware testbed and verifier for agent-proposed SDN pol
    - *Resolution*: Configured `/etc/modprobe.d/openvswitch.conf` with `install openvswitch /bin/true` to treat module loading as a no-op. OVS bridges are instantiated explicitly with `datapath_type: netdev` (userspace datapath), running fully functional OpenFlow 1.3 pipelines in memory.
    - *Controller Connection Hardening (DoS Mitigation)*: `src/sdn/openflow-server.ts` enforces single-tenant session exclusivity (Invariant 3 & NET-001). When an authenticated switch session is in `ESTABLISHED` or `HANDSHAKE` state, any secondary or rogue connection attempt is immediately rejected (`socket.destroy()`) and accounted for in `rejectedConnections` without dropping the live switch. Additionally, virtual testbed bridges like `br-sim` are bound to a separate test port (`tcp:127.0.0.1:6634`) and pinned to `protocols=OpenFlow13` to preserve complete control-plane isolation.
 10. **Jetson O3 capture NIC: kernel gap, egress drop and boot persistence (2026-10-12)**:
-   - *Coral telemetry after removal*: checked 2026-10-12, the bridge reports the Coral as `NOT_DETECTED` with `Disconnected`, zero rates and a null temperature, so no stale detector data is shown.
-   - *Mirror port ingress (found and mitigated on both switches, 2026-10-12)*: the documented claim that GS105Ev2 mirror destination ports drop ingress was **false on both units**. With the egress drop lifted, a tagged test frame sent from the capture NIC came back through the mirror: from the Jetson's O3 NIC on `zodiac_netgear_2` P3, and from the untrusted Pi 5's capture NIC `eth1` on `zodiac_netgear_1` P2. Each switch now isolates its mirror port in its own 802.1Q VLAN: `zodiac_netgear_2` VLAN 1 = P4, P5 and VLAN 2 = P1, P2, P3; `zodiac_netgear_1` VLAN 1 = P1, P3, P4, P5 and VLAN 2 = P2 only. Re-tests with the same helpers (`zodiac-o3-nic.sh ingress-test --tagged` on the Jetson, `pi5-ingress-test.sh --tagged` on the Pi 5) saw no frame come back for untagged frames, for 802.1Q VID 1 and VID 2 frames, and for double-tagged (Q-in-Q) frames with outer ethertype 0x8100 and 0x88a8; the mirrors still deliver traffic and the workload network is healthy. PVIDs (isolated port = 2, others = 1) are to be confirmed in each UI; the tests, not the PVID listing, are the evidence. Re-run the tests after any switch configuration change.
-   - *Residual risk (tracked)*: a qdisc blackhole (Jetson) or a `clsact` filter (Pi 5) does not stop a raw `AF_PACKET` socket that asks the kernel to bypass the qdisc, so the host-side egress drops are partial. The switch-level VLAN isolation is the layer that closes the injection path, for the untagged, single-tagged and double-tagged variants tested. Injection variants beyond those tested (for example other ethertypes or malformed frames) are untested. Separately, ARP still crosses P1 to P2 (confirmed at O2 and O3), so the ARP-spoofing surface remains open; it is tracked as roadmap A10 and track C scenario 1.
-   - *Kernel gap*: this Tegra kernel (`5.15.148-tegra`) is built without `CONFIG_NET_CLS_MATCHALL`, so the Pi 5's `clsact` matchall drop filter fails with "TC classifier not found". The O3 NIC (`enx9c69d39ddcc0`, MAC `9c:69:d3:9d:dc:c0`) drops egress with a root `blackhole` qdisc instead. Proven by the drop counter rising and by `tcpdump -Q out` seeing nothing leave. A raw socket that bypasses the qdisc is not covered, and the switch's destination-port ingress drop is unverified for `zodiac_netgear_2`.
-   - *Boot persistence*: the udev rule did not fire at boot (the NIC stayed DOWN with GRO on), so a boot unit, `zodiac-o3-nic-boot.service`, finds the NIC by MAC, brings it up and applies the receive-only config. A real reboot confirmed it applies unattended; hotplug still uses the udev rule.
-   - *USB*: the NIC must be on a USB 3 port. An earlier plug negotiated 480M on a hub port; both capture NICs now link at 5000M. The Zodiac's micro-USB cable also powers the switch, so unplugging it reboots the Zodiac and reinstalls the flow table.
-   - *Noise*: P4 faces the lab LAN, so O3 carries ambient broadcast, mDNS and Wi-Fi-to-Wi-Fi unicast. Filter by testbed hosts when counting.
-   - *Tooling*: the setup helper and runbook are local-only (`.agents/local/`, gitignored); evidence pcaps with provenance sidecars are in `/var/lib/zodiac/o3-captures/` on the Jetson and were copied to the operator's Mac.
+    - *Coral telemetry after removal*: checked 2026-10-12, the bridge reports the Coral as `NOT_DETECTED` with `Disconnected`, zero rates and a null temperature, so no stale detector data is shown.
+    - *Mirror port ingress (found and mitigated on both switches, 2026-10-12)*: the documented claim that GS105Ev2 mirror destination ports drop ingress was **false on both units**. With the egress drop lifted, a tagged test frame sent from the capture NIC came back through the mirror: from the Jetson's O3 NIC on `zodiac_netgear_2` P3, and from the untrusted Pi 5's capture NIC `eth1` on `zodiac_netgear_1` P2. Each switch now isolates its mirror port in its own 802.1Q VLAN: `zodiac_netgear_2` VLAN 1 = P1, P2, P4, P5 and VLAN 2 = P3 only (reconfigured 2026-10-25 to grant wired management to RPi 3s while preserving O3 mirror isolation); `zodiac_netgear_1` VLAN 1 = P1, P3, P4, P5 and VLAN 2 = P2 only. Re-tests with the same helpers (`zodiac-o3-nic.sh ingress-test --tagged` on the Jetson, `pi5-ingress-test.sh --tagged` on the Pi 5) saw no frame come back for untagged frames, for 802.1Q VID 1 and VID 2 frames, and for double-tagged (Q-in-Q) frames with outer ethertype 0x8100 and 0x88a8; the mirrors still deliver traffic and the workload network is healthy. PVIDs (isolated port = 2, others = 1) are to be confirmed in each UI; the tests, not the PVID listing, are the evidence. Re-run the tests after any switch configuration change.
+    - *Residual risk (tracked)*: a qdisc blackhole (Jetson) or a `clsact` filter (Pi 5) does not stop a raw `AF_PACKET` socket that asks the kernel to bypass the qdisc, so the host-side egress drops are partial. The switch-level VLAN isolation is the layer that closes the injection path, for the untagged, single-tagged and double-tagged variants tested. Injection variants beyond those tested (for example other ethertypes or malformed frames) are untested. Separately, ARP still crosses P1 to P2 (confirmed at O2 and O3), so the ARP-spoofing surface remains open; it is tracked as roadmap A10 and track C scenario 1.
+    - *Kernel gap*: this Tegra kernel (`5.15.148-tegra`) is built without `CONFIG_NET_CLS_MATCHALL`, so the Pi 5's `clsact` matchall drop filter fails with "TC classifier not found". The O3 NIC (`enx9c69d39ddcc0`, MAC `9c:69:d3:9d:dc:c0`) drops egress with a root `blackhole` qdisc instead. Proven by the drop counter rising and by `tcpdump -Q out` seeing nothing leave. A raw socket that bypasses the qdisc is not covered, and the switch's destination-port ingress drop is unverified for `zodiac_netgear_2`.
+    - *Boot persistence*: the udev rule did not fire at boot (the NIC stayed DOWN with GRO on), so a boot unit, `zodiac-o3-nic-boot.service`, finds the NIC by MAC, brings it up and applies the receive-only config. A real reboot confirmed it applies unattended; hotplug still uses the udev rule.
+    - *USB*: the NIC must be on a USB 3 port. An earlier plug negotiated 480M on a hub port; both capture NICs now link at 5000M. The Zodiac's micro-USB cable also powers the switch, so unplugging it reboots the Zodiac and reinstalls the flow table.
+    - *Noise*: P4 faces the lab LAN, so O3 carries ambient broadcast, mDNS and Wi-Fi-to-Wi-Fi unicast. Filter by testbed hosts when counting.
+    - *Tooling*: the setup helper and runbook are local-only (`.agents/local/`, gitignored); evidence pcaps with provenance sidecars are in `/var/lib/zodiac/o3-captures/` on the Jetson and were copied to the operator's Mac.

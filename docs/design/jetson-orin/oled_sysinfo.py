@@ -6,9 +6,8 @@ Autonomous 6-Screen Rotational Hardware Monitor (Cycles every 15 seconds)
 Hardware Substrates:
 - NVIDIA Jetson Orin Nano Super (67 TOPS Ampere Architecture)
 - 0.96" I2C 128x64 Monochrome OLED Display (SSD1306) on I2C Bus 7 (0x3c)
-- Dual Google Coral EdgeTPU (USB Accelerators):
-    1. Tap DPI (Wire Tap Packet Classifier)
-    2. DNS Sentinel (RFC 1035 Query & Anomaly Sentinel)
+- Raspberry Pi 5 (`rpi-hailo`) with 26 TOPS Hailo-8 M.2 NPU
+- Dual Raspberry Pi 3B+ Adversarial SDN Nodes (`agentic-node-01`, `agentic-node-02`)
 - Northbound Networks Zodiac FX OpenFlow Switch
 
 Governing Council Invariants:
@@ -58,7 +57,9 @@ def parse_bridge_data(data):
     jetson = data.get("jetson", {})
     temps = jetson.get("temperatures", {})
     power = jetson.get("powerMw", {})
-    coral = data.get("coral", {})
+    rpi5 = data.get("rpi5", {})
+    rpi3_1 = data.get("rpi3_1", {})
+    rpi3_2 = data.get("rpi3_2", {})
     ports = data.get("ports", [])
     
     wifi_ip, eth_ip = get_local_ips()
@@ -84,35 +85,32 @@ def parse_bridge_data(data):
     
     gpu_load, gpu_freq_mhz = get_gpu_sysfs()
     
-    # Dual Edge TPU Extraction
-    devices = coral.get("devices", [])
-    tap_dev = next((d for d in devices if d.get("assignedRole") == "TAP_PACKET_CLASSIFIER" or "Tap" in d.get("name", "")), None)
-    if not tap_dev and len(devices) > 0:
-        tap_dev = devices[0]
-        
-    dns_dev = next((d for d in devices if d.get("assignedRole") == "DNS_SENTINEL" or "DNS" in d.get("name", "")), None)
-    if not dns_dev and len(devices) > 1:
-        dns_dev = devices[1]
-        
-    # Tap DPI Telemetry
-    if tap_dev:
-        tap_active = bool(tap_dev.get("status") == "INFERENCE_ACTIVE" or (int(tap_dev.get("inferencesPerSecond", 0) or 0) > 0))
-        tap_status = "ACTIVE" if tap_active else ("STANDBY" if tap_dev.get("status") == "STANDBY" else "OFFLINE")
-        tap_rate = int(tap_dev.get("inferencesPerSecond", 0) or 0)
-        tap_lat_ms = int(tap_dev.get("latencyP50Ns", 0) or 0) // 1_000_000
-        tap_total = int(tap_dev.get("totalInferences", 0) or 0)
-    else:
-        tap_active, tap_status, tap_rate, tap_lat_ms, tap_total = False, "OFFLINE", 0, 0, 0
+    # RPi 5 + Hailo-8 Telemetry
+    def fmt_temp(val):
+        return f"{val:.1f}°C" if (isinstance(val, (int, float)) and not isinstance(val, bool)) else "--°C"
 
-    # DNS Sentinel Telemetry
-    if dns_dev:
-        dns_active = bool(dns_dev.get("status") == "INFERENCE_ACTIVE" or (int(dns_dev.get("inferencesPerSecond", 0) or 0) > 0))
-        dns_status = "ACTIVE" if dns_active else ("STANDBY" if dns_dev.get("status") == "STANDBY" else "OFFLINE")
-        dns_rate = int(dns_dev.get("inferencesPerSecond", 0) or 0)
-        dns_lat_ms = int(dns_dev.get("latencyP50Ns", 0) or 0) // 1_000_000
-        dns_total = int(dns_dev.get("totalInferences", 0) or 0)
-    else:
-        dns_active, dns_status, dns_rate, dns_lat_ms, dns_total = False, "OFFLINE", 0, 0, 0
+    rpi5_online = bool(rpi5 and rpi5.get("status") == "online")
+    rpi5_status = "ONLINE" if rpi5_online else "OFFLINE"
+    rpi5_temp_raw = rpi5.get("temperatures", {}).get("cpuC") if (rpi5 and rpi5_online) else None
+    rpi5_temp_str = fmt_temp(rpi5_temp_raw)
+    
+    hailo = rpi5.get("hailo", {}) if (rpi5 and rpi5_online) else {}
+    hailo_status = "ONLINE" if (rpi5_online and str(hailo.get("status", "")).lower() == "online") else "OFFLINE"
+    hailo_temp_raw = rpi5.get("temperatures", {}).get("hailoTs0C") if (rpi5 and rpi5_online) else None
+    hailo_temp_str = fmt_temp(hailo_temp_raw)
+    hailo_rate = int(hailo.get("inferencesPerSecond", 0) or 0) if rpi5_online else 0
+    hailo_lat_ms = int(hailo.get("avgInferenceLatencyMs", 0) or 0) if rpi5_online else 0
+
+    # RPi 3 Nodes Telemetry
+    node1_online = bool(rpi3_1 and rpi3_1.get("status") == "online")
+    node1_status = "ONLINE" if node1_online else "OFFLINE"
+    node1_temp_raw = rpi3_1.get("silicon", {}).get("cpuTempC") if rpi3_1 else None
+    node1_temp_str = fmt_temp(node1_temp_raw)
+
+    node2_online = bool(rpi3_2 and rpi3_2.get("status") == "online")
+    node2_status = "ONLINE" if node2_online else "OFFLINE"
+    node2_temp_raw = rpi3_2.get("silicon", {}).get("cpuTempC") if rpi3_2 else None
+    node2_temp_str = fmt_temp(node2_temp_raw)
 
     up_ports = [f"P{p.get('port')}" for p in ports if p.get("status") == "UP"]
     zodiac_str = " ".join(up_ports) + " UP" if up_ports else "NO PORTS UP"
@@ -137,16 +135,16 @@ def parse_bridge_data(data):
         "gpu_rail_w": gpu_rail_w,
         "gpu_load": gpu_load,
         "gpu_freq_mhz": gpu_freq_mhz,
-        "tap_active": tap_active,
-        "tap_status": tap_status,
-        "tap_rate": tap_rate,
-        "tap_lat_ms": tap_lat_ms,
-        "tap_total": tap_total,
-        "dns_active": dns_active,
-        "dns_status": dns_status,
-        "dns_rate": dns_rate,
-        "dns_lat_ms": dns_lat_ms,
-        "dns_total": dns_total,
+        "rpi5_status": rpi5_status,
+        "rpi5_temp_str": rpi5_temp_str,
+        "hailo_status": hailo_status,
+        "hailo_temp_str": hailo_temp_str,
+        "hailo_rate": hailo_rate,
+        "hailo_lat_ms": hailo_lat_ms,
+        "node1_status": node1_status,
+        "node1_temp_str": node1_temp_str,
+        "node2_status": node2_status,
+        "node2_temp_str": node2_temp_str,
         "zodiac_str": zodiac_str
     }
 
@@ -192,23 +190,6 @@ def get_uptime_fallback():
         sys.stderr.write(f"[oled-daemon] Uptime fallback read failed: {e}\n")
         return "00:00:00"
 
-def get_sysfs_coral_count():
-    usb_base = "/sys/bus/usb/devices"
-    corals = []
-    try:
-        for d in sorted(os.listdir(usb_base)):
-            if ":" in d:
-                continue
-            vp = os.path.join(usb_base, d, "idVendor")
-            if os.path.exists(vp):
-                with open(vp, "r") as f:
-                    vid = f.read().strip().lower()
-                    if vid in ("1a6e", "18d1"):
-                        corals.append(d)
-    except Exception as e:
-        sys.stderr.write(f"[oled-daemon] Coral USB probe failed: {e}\n")
-    return corals
-
 def parse_local_sysfs():
     wifi_ip, eth_ip = get_local_ips()
     uptime_str = get_uptime_fallback()
@@ -246,43 +227,6 @@ def parse_local_sysfs():
 
     gpu_load, gpu_freq_mhz = get_gpu_sysfs()
     
-    # Check physical hardware presence via sysfs
-    corals = get_sysfs_coral_count()
-    has_tap_device = len(corals) >= 1
-    has_dns_device = len(corals) >= 2
-
-    # Tap DPI telemetry fallback
-    tap_active, tap_status, tap_rate, tap_lat_ms, tap_total = False, ("STANDBY" if has_tap_device else "OFFLINE"), 0, 0, 0
-    for cand in ("/run/zodiac/coral-telemetry.json", "/tmp/coral-telemetry.json"):
-        if os.path.exists(cand):
-            try:
-                with open(cand, "r") as f:
-                    c = json.load(f)
-                    tap_active = c.get("status") == "ACTIVE"
-                    tap_status = "ACTIVE" if tap_active else ("STANDBY" if has_tap_device else "OFFLINE")
-                    tap_rate = int(c.get("inferencesPerSecond", 0) or 0)
-                    tap_lat_ms = int(c.get("latencyP50Ns", 0) or 0) // 1_000_000
-                    tap_total = int(c.get("totalInferences", 0) or 0)
-                    break
-            except Exception as e:
-                sys.stderr.write(f"[oled-daemon] Failed to read tap telemetry from {cand}: {e}\n")
-
-    # DNS Sentinel telemetry fallback
-    dns_active, dns_status, dns_rate, dns_lat_ms, dns_total = False, ("STANDBY" if has_dns_device else "OFFLINE"), 0, 0, 0
-    for cand in ("/run/zodiac/coral-dns-telemetry.json", "/run/zodiac/coral-burst-telemetry.json", "/tmp/coral-dns-telemetry.json", "/tmp/coral-burst-telemetry.json"):
-        if os.path.exists(cand):
-            try:
-                with open(cand, "r") as f:
-                    c = json.load(f)
-                    dns_active = c.get("status") == "ACTIVE"
-                    dns_status = "ACTIVE" if dns_active else ("STANDBY" if has_dns_device else "OFFLINE")
-                    dns_rate = int(c.get("inferencesPerSecond", 0) or 0)
-                    dns_lat_ms = int(c.get("latencyP50Ns", 0) or 0) // 1_000_000
-                    dns_total = int(c.get("totalInferences", 0) or 0)
-                    break
-            except Exception as e:
-                sys.stderr.write(f"[oled-daemon] Failed to read dns telemetry from {cand}: {e}\n")
-        
     return {
         "wifi_ip": wifi_ip,
         "eth_ip": eth_ip,
@@ -303,16 +247,17 @@ def parse_local_sysfs():
         "gpu_rail_w": gpu_rail_w,
         "gpu_load": gpu_load,
         "gpu_freq_mhz": gpu_freq_mhz,
-        "tap_active": tap_active,
-        "tap_status": tap_status,
-        "tap_rate": tap_rate,
-        "tap_lat_ms": tap_lat_ms,
-        "tap_total": tap_total,
-        "dns_active": dns_active,
-        "dns_status": dns_status,
-        "dns_rate": dns_rate,
-        "dns_lat_ms": dns_lat_ms,
-        "dns_total": dns_total,
+        # local-only fallback cannot observe remote nodes; always OFFLINE by design (Invariant 6)
+        "rpi5_status": "OFFLINE",
+        "rpi5_temp_str": "--°C",
+        "hailo_status": "OFFLINE",
+        "hailo_temp_str": "--°C",
+        "hailo_rate": 0,
+        "hailo_lat_ms": 0,
+        "node1_status": "OFFLINE",
+        "node1_temp_str": "--°C",
+        "node2_status": "OFFLINE",
+        "node2_temp_str": "--°C",
         "zodiac_str": "Offline"
     }
 
@@ -390,20 +335,20 @@ def main():
                 draw.text((1, 47), pwr_str, font=font, fill=1)
 
             elif page == 4:
-                # Screen 5: DNS Sentinel
-                draw.text((2, 0), "DNS SENTINEL", font=font, fill=0)
+                # Screen 5: RPi 5 & Hailo-8 NPU
+                draw.text((2, 0), "RPI5 HAILO", font=font, fill=0)
                 draw.text((104, 0), "5/6", font=font, fill=0)
-                draw.text((1, 15), f"DNS Sent: {metrics['dns_status']}", font=font, fill=1)
-                draw.text((1, 31), f"Rate:     {metrics['dns_rate']} inf/sec", font=font, fill=1)
-                draw.text((1, 47), f"Lat:{metrics['dns_lat_ms']:.1f}ms  Tot:{metrics['dns_total']}", font=font, fill=1)
+                draw.text((1, 15), f"RPi5:  {metrics['rpi5_status']} {metrics['rpi5_temp_str']}", font=font, fill=1)
+                draw.text((1, 31), f"Hailo: {metrics['hailo_status']} {metrics['hailo_temp_str']}", font=font, fill=1)
+                draw.text((1, 47), f"Rate:  {metrics['hailo_rate']} ips  {metrics['hailo_lat_ms']}ms", font=font, fill=1)
 
             elif page == 5:
-                # Screen 6: Tap DPI & SDN
-                draw.text((2, 0), "TAP DPI & SDN", font=font, fill=0)
+                # Screen 6: RPi 3 Nodes & SDN Switch
+                draw.text((2, 0), "RPI3 NODES", font=font, fill=0)
                 draw.text((104, 0), "6/6", font=font, fill=0)
-                draw.text((1, 15), f"Tap DPI:  {metrics['tap_status']}", font=font, fill=1)
-                draw.text((1, 31), f"Rate:     {metrics['tap_rate']} inf/sec", font=font, fill=1)
-                draw.text((1, 47), f"Lat:{metrics['tap_lat_ms']:.1f}ms  {metrics['zodiac_str']}", font=font, fill=1)
+                draw.text((1, 15), f"Node1: {metrics['node1_status']} {metrics['node1_temp_str']}", font=font, fill=1)
+                draw.text((1, 31), f"Node2: {metrics['node2_status']} {metrics['node2_temp_str']}", font=font, fill=1)
+                draw.text((1, 47), f"SDN:   {metrics['zodiac_str']}", font=font, fill=1)
 
             display.image(image)
             display.show()
