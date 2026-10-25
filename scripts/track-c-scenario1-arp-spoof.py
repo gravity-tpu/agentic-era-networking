@@ -210,18 +210,11 @@ def fetch_capture(tag: str) -> list:
 
 
 def frames_claiming(lines: list, target_ip: str, sender_mac: str) -> list:
-    """ARP replies in tcpdump -e output that claim target_ip is-at the adversary's own MAC -- i.e. the spoofed binding itself, not merely a
-    line that mentions the adversary's MAC in some other role (as a unicast destination, for instance). Matches on tcpdump's own phrasing for
-    a REPLY specifically: "<ip> is-at <mac>" (a REQUEST instead reads "who-has <ip> tell <ip>", with no "is-at" at all). Confirmed against a
-    real captured frame 2026-10-22: tcpdump's actual text is "... ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at
-    b8:27:eb:79:ff:0a, length 46".
-
-    Found 2026-10-25: an earlier version of this check (`sender_mac.lower() not in l.lower()`) was a bare substring test against the whole
-    line, so it also matched the adversary's MAC appearing as a unicast *destination* -- e.g. a legitimate host defending its own real
-    binding by replying directly to the adversary ("<real-mac> > <adversary-mac> ... Reply <target_ip> is-at <real-mac>") was miscounted as
-    the adversary's claim reaching the capture point. The claim itself, "<target_ip> is-at <sender_mac>", is the only thing that actually
-    means the spoof was observed here."""
-    claim = f'{target_ip} is-at {sender_mac.lower()}'
+    """Lines where the exact claim "<target_ip> is-at <sender_mac>" appears -- the spoofed binding itself, not merely a line that mentions
+    sender_mac in some other role (e.g. a unicast destination). tcpdump -e prints a REPLY as "<ip> is-at <mac>" (a REQUEST instead reads
+    "who-has <ip> tell <ip>", with no "is-at"). A prior, looser version of this check and the false positive it produced are documented in
+    docs/benchmarks/results/track-c-scenario1-arp-spoof/README.md ("Two confounds found and resolved")."""
+    claim = f'{target_ip.lower()} is-at {sender_mac.lower()}'
     hits = []
     for l in lines:
         if claim not in l.lower():

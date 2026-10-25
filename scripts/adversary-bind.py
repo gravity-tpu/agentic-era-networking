@@ -153,6 +153,11 @@ def _is_routable(address: str) -> bool:
     return not _is_link_local(address)
 
 
+PREFLIGHT_SCOPE_CAVEAT = ('this preflight only inspects interfaces on the node it runs on; it cannot detect a switch-fabric VLAN change that '
+                          'bridges a declared control interface onto the segment under test -- verify the physical/VLAN topology independently '
+                          '(see .agents/network-context.md caveat 11)')
+
+
 def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WORKLOAD_SUBNETS, known_control_ifaces: tuple = ()) -> dict:
     """
     Returns {ok, refusalReason, workloadIface, excusedControlInterfaces, state}, always a dict, never an exception (NetworkStateError and any
@@ -173,12 +178,12 @@ def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WOR
         state = iface_state()
     except NetworkStateError as err:
         return {'ok': False, 'refusalReason': f'could not read the network state: {err}', 'workloadIface': iface,
-                'excusedControlInterfaces': {}, 'state': None}
+                'excusedControlInterfaces': {}, 'state': None, 'caveat': PREFLIGHT_SCOPE_CAVEAT}
 
     workload = state['interfaces'].get(iface)
     if workload is None or not workload['up']:
         return {'ok': False, 'refusalReason': f'the workload interface {iface} does not exist or is not up', 'workloadIface': iface,
-                'excusedControlInterfaces': {}, 'state': state}
+                'excusedControlInterfaces': {}, 'state': state, 'caveat': PREFLIGHT_SCOPE_CAVEAT}
 
     unexpected_on_workload = [a for a in workload['addresses'] if not _in_any_subnet(a, expected_subnets)]
     # (link-local addresses are excluded inside _in_any_subnet, not filtered here, so the same rule applies everywhere this helper is used)
@@ -188,7 +193,7 @@ def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WOR
             'refusalReason': f'{iface} itself carries address(es) outside the expected workload subnet(s) {expected_subnets}: '
                               f'{unexpected_on_workload} (not mediated by the data-plane policy either; known_control_ifaces does not excuse '
                               f'the workload interface itself)',
-            'workloadIface': iface, 'excusedControlInterfaces': {}, 'state': state,
+            'workloadIface': iface, 'excusedControlInterfaces': {}, 'state': state, 'caveat': PREFLIGHT_SCOPE_CAVEAT,
         }
 
     leaking = {}
@@ -221,9 +226,9 @@ def preflight(iface: str = WORKLOAD_IFACE, expected_subnets: list = EXPECTED_WOR
                               f'default route: {leaking}; any traffic not explicitly bound to {iface} may leave through one of these instead '
                               f'(declare it with known_control_ifaces if it is actually your control channel, not an oversight; a declared '
                               f'control interface carrying a workload-subnet address is refused regardless, in case a rename swapped roles)',
-            'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state,
+            'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state, 'caveat': PREFLIGHT_SCOPE_CAVEAT,
         }
-    return {'ok': True, 'refusalReason': None, 'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state}
+    return {'ok': True, 'refusalReason': None, 'workloadIface': iface, 'excusedControlInterfaces': excused, 'state': state, 'caveat': PREFLIGHT_SCOPE_CAVEAT}
 
 
 def main() -> int:
