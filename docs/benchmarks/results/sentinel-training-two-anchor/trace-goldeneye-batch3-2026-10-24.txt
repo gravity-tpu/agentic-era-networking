@@ -1,0 +1,34 @@
+Loaded docs/benchmarks/results/sentinel-training-two-anchor/trained-weights-two-anchor-batch3-2026-10-24.json: tau=0.181823
+Lab-benign pool under these weights: mean=0.098559 std=0.033306
+target(W) = benign_mean + 2.5*std + 0.02 = 0.201823  (a window with loss >= this has hinge=0, i.e. the TRAINING objective considers it well-separated)
+
+DoS GoldenEye: 20000 windows, time-ordered. loss min/mean/max = 0.161844/0.372910/0.547498
+19980/20000 windows clear target(W) (hinge=0) -- 99.90% "training says separated"
+
+Adaptive(tau=0.1818) window-level recall over this block: 1818/20000 (9.09%) -- this matches score_cic_block's own number for this condition
+
+== Traced example: window #1607 ==
+  loss = 0.216859  (target(W) = 0.201823 -- this window DOES clear target: training-time hinge = 0.000000, i.e. 0, 'well-separated')
+  Adaptive's running threshold AT THIS WINDOW = 0.218927 (base_tau=0.181823, running mean m=0.141685, running std=0.030897, threshold = max(base_tau, m + 2.5*std))
+  0.216859 < 0.218927  ->  Adaptive does NOT alert on this window, despite it clearing the static training-time target by 0.015036.
+  Mechanism: the running threshold (0.218927) is HIGHER than the static target(W) (0.201823) by 0.017104 at this point in the sequence -- it ratcheted up from earlier windows in this same block, not from this window itself.
+
+Last 10 windows before the traced example (showing the ratchet building up):
+  # 1597  loss=0.300175  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1598  loss=0.290470  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1599  loss=0.311983  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1600  loss=0.303242  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1601  loss=0.311313  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1602  loss=0.276142  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1603  loss=0.276549  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1604  loss=0.217668  clears_target=True   running_threshold_before=0.204551  alert=True 
+  # 1605  loss=0.199823  clears_target=False  running_threshold_before=0.204551  alert=False
+  # 1606  loss=0.182442  clears_target=False  running_threshold_before=0.214872  alert=False
+  # 1607  loss=0.216859  clears_target=True   running_threshold_before=0.218927  alert=False <== traced example
+
+For context, the very first 5 windows of this block (showing the Adaptive controller's starting state):
+  #    0  loss=0.277773  clears_target=True   running_threshold_before=0.204551  alert=True 
+  #    1  loss=0.279031  clears_target=True   running_threshold_before=0.204551  alert=True 
+  #    2  loss=0.281595  clears_target=True   running_threshold_before=0.204551  alert=True 
+  #    3  loss=0.291274  clears_target=True   running_threshold_before=0.204551  alert=True 
+  #    4  loss=0.291310  clears_target=True   running_threshold_before=0.204551  alert=True 

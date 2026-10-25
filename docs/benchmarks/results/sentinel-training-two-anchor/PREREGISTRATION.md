@@ -1,5 +1,79 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-24 addendum (batch 6, owner-approved, added before batch 6's own numbers were looked at):** batches 4 and 5
+each independently changed one variable from batch 2's baseline configuration (10 params, `mean`-combined margin) and
+each independently produced the same previously-never-seen result: **0 weights pinned to a bound** (batch 4: 0/85 at
+85 params with `mean`; batch 5: 0/10 at 10 params with `max`). Both levers relieving the same pinning symptom
+independently suggests they may share a root cause rather than being two unrelated fixes — this batch tests whether
+they **compound** by combining both at once: **85 parameters (batch 4's exact un-tied-stage-1 architecture) + `max`
+of per-class hinge (batch 5's exact margin fix), together, for the first time.**
+
+## What changes, and what does not
+
+Architecture: batch 4's exact 85-parameter shape (stage 1 un-tied per the window's 16 existing groups: 16×5 + 5 = 85
+parameters; stages 2-4 unchanged, globally shared). Margin: batch 5's exact fix
+(`L_margin(W) = max(hinge_mean_Hulk(W), hinge_mean_GoldenEye(W))`, not the mean). Everything else matches batch 4
+(not batch 5): `BETA=1.0`, batch-1-scale data (lab benign ~6,264 windows, CIC-benign anchor 2,000/day, CIC
+attack-margin-training 2,000/class), bounds `[-3.0, 5.0]` for all 85 parameters, and the **same reduced optimizer
+budget batch 4 used** (`popsize=6`, `maxiter=60`, `Nelder-Mead` polish `maxiter=2000`) — the dimension is still 85, so
+the same justification for reducing the budget (DE's population scales with `ndim`) still applies; this is not a new
+deviation, it is reusing batch 4's already-justified one. `MARGIN=0.02`, `SIGMA=2.5`, `LAMBDA=1.0` unchanged, as in
+every batch. Implementation: `scripts/train-sentinel-weights-expanded.py`'s
+`make_two_anchor_objective_expanded`/`components_expanded` gain the same additive `margin_combine` parameter
+(`'mean'` default, reproducing batch 4 exactly; `'max'` this batch) that
+`scripts/train-sentinel-weights-cic.py` already has for the 10-parameter path, plus a parallel
+`per_class_margin_hinge_expanded` diagnostic.
+
+## Combined success bar: both prior bars, restated together, not loosened
+
+**From batch 4 (the three-way bar):** lab held-out attack-detected ≥ 6/13, AND CIC-benign false-positive rate ≤ 2%
+on both days, AND CIC-margin recall ≥ 20% on **both** `DoS Hulk` and `DoS GoldenEye`.
+
+**From batch 5 (the balance bar, restated on recall, the metric that actually matters operationally — not the raw
+hinge, which batch 5 already showed can be well-balanced without the recall being balanced):** neither class's
+window-level recall is below 20% while the other is near its ceiling — concretely, both ≥20%, OR (if both land below
+20%) the two values are within a factor of 3 of each other.
+
+**This batch's combined bar is both of the above holding at once** — not an "or," and not a relaxed version of
+either. Reported against each individually regardless of the combined outcome, exactly as batches 4 and 5 were, so a
+partial result (e.g. the three-way bar met but balance not, or vice versa) is visible as exactly that.
+
+## Prediction, stated before running
+
+**I do not expect a clean compounding of gains.** Both batch 4 and batch 5 independently eliminated weight-pinning,
+and I expect that to hold in combination too (pinning looks like a symptom both levers can independently relieve, so
+there is no specific reason to expect it to reappear when both are applied together). I also expect the
+**training-time** components (`L_benign_lab`, `L_benign_cic`, and especially the per-class hinges) to look as good as
+or better than either batch alone — batch 4 alone drove the `mean`-combined hinge to 0.0024 (lower than batch 5's
+`max`-combined 0.0229/0.0060), so more capacity plus a combination rule that cannot "rest" on one satisfied class
+should plausibly push both classes' hinges down together, further than either lever achieved alone.
+
+**What I do not expect to compound is the deployed-metric side.** Batches 2, 3, and 5 each separately showed the
+same disconnect: training-time hinge satisfaction does not reliably predict the deployed `Adaptive` controller's
+actual window-level recall (batch 5 in particular showed per-class hinges 3.8x apart translate to per-class *recall*
+33x apart, in the opposite direction of which class "won"). Because that disconnect has now appeared under three
+different configurations spanning both the capacity axis and the margin-formula axis, I have no specific mechanism to
+expect combining the two levers would suddenly resolve it — my prediction is **"something else," not a clean
+compounding of either gains or costs**: the training-objective numbers will likely look like the best yet in this
+workstream, while the combined success bar (which is graded on deployed recall/FP, not training loss) still fails,
+most likely on the same axes (lab recall below 6/13, and/or persistent recall imbalance) that failed batches 4 and 5
+individually. The one sub-question I genuinely do not have a confident prediction for: whether batch 5's new
+Friday-specific CIC-benign false-positive regression (7.45%, `max`-combine at 10 params) persists, worsens, or
+resolves when combined with batch 4's extra capacity — I am flagging this as open, not predicting a direction.
+
+## If the combined run does not resolve the hinge-vs-recall disconnect: trace one concrete example instead of a 7th aggregate table
+
+Per the task's own instruction: if this batch's result does not resolve the recurring disconnect, the next step this
+round is **not** another formula variant. It is picking one specific attack-training window where the training-time
+hinge says "well-separated" (loss comfortably above `target(W)`) but the deployed-style `Adaptive` controller scores
+it as not-anomalous, and tracing through *why* — most likely the EMA threshold ratcheting upward during a sustained,
+only-moderately-elevated attack (the mechanism batch 2's and batch 3's READMEs already named as a hypothesis, never
+directly traced through a single window's numbers end to end) rather than something else. This is a single concrete
+trace, not a new aggregate metric, and is explicitly not required to produce a fix this round — only a traced
+mechanism.
+
+As with every prior batch: no PR, no four-axis held-out evaluation, no deployment-path change, regardless of outcome.
+
 **2026-10-24 addendum (batch 5, owner-approved, added before batch 5's own numbers were looked at):** batch 4 showed
 the CIC margin term's class-imbalance pattern (one attack class learned well, the other barely moved) reproduce
 under a completely different architecture — 10 parameters (batches 2-3) and 85 parameters (batch 4) both landed on

@@ -167,10 +167,16 @@ def self_check_expanded(sample_window, seed=11):
 # --------------------------------------------------------------------------------------------------------------
 
 def make_two_anchor_objective_expanded(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
-                                        margin=tw.MARGIN, sigma=tw.SIGMA, lam=tw.LAMBDA, beta_cic_benign=BETA_CIC_BENIGN):
+                                        margin=tw.MARGIN, sigma=tw.SIGMA, lam=tw.LAMBDA, beta_cic_benign=BETA_CIC_BENIGN,
+                                        margin_combine='mean'):
     """Identical formula to scripts/train-sentinel-weights-cic.py's make_two_anchor_objective, with
     kernel_loss_batch_expanded in place of tw.kernel_loss_batch throughout. See that function's docstring for the
-    formula itself; not re-derived here beyond the one substitution."""
+    formula itself; not re-derived here beyond the one substitution.
+
+    margin_combine (batch 6 addition, default 'mean' reproduces batch 4 exactly unchanged): 'mean' combines the
+    per-class mean hinges by averaging (batch 4's behavior); 'max' (batch 6) takes the worst of the two classes,
+    batch 5's fix, now combined with this module's 85-parameter architecture. See
+    docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 6 addendum."""
     def objective(w):
         W = np.asarray(w, dtype=np.float32)
         benign_pattern_means = []
@@ -198,10 +204,36 @@ def make_two_anchor_objective_expanded(train_groups_lab, cic_benign_anchor, atta
                 run_means.append(float(np.mean(hinge)))
             if run_means:
                 attack_pattern_means.append(sum(run_means) / len(run_means))
-        l_margin = sum(attack_pattern_means) / len(attack_pattern_means) if attack_pattern_means else 0.0
+        if not attack_pattern_means:
+            l_margin = 0.0
+        elif margin_combine == 'max':
+            l_margin = max(attack_pattern_means)
+        elif margin_combine == 'mean':
+            l_margin = sum(attack_pattern_means) / len(attack_pattern_means)
+        else:
+            raise ValueError(f"margin_combine must be 'mean' or 'max', got {margin_combine!r}")
 
         return l_benign_lab + beta_cic_benign * l_benign_cic + lam * l_margin
     return objective
+
+
+def per_class_margin_hinge_expanded(train_groups_lab, attack_train_groups_cic, W, margin=tw.MARGIN, sigma=tw.SIGMA):
+    """Batch 6 diagnostic, mirrors scripts/train-sentinel-weights-cic.py's per_class_margin_hinge for the 85-param
+    kernel: {label: mean_hinge_value} for EACH attack-training class individually, regardless of which
+    margin_combine mode drove the fit."""
+    W = np.asarray(W, dtype=np.float32)
+    pooled = pooled_losses_expanded(train_groups_lab, W)
+    target = float(np.mean(pooled)) + sigma * float(np.std(pooled)) + margin
+    out = {}
+    for label, runs in attack_train_groups_cic.items():
+        run_means = []
+        for _rid, windows in runs:
+            if len(windows) == 0:
+                continue
+            hinge = np.maximum(0.0, target - kernel_loss_batch_expanded(windows, W))
+            run_means.append(float(np.mean(hinge)))
+        out[label] = sum(run_means) / len(run_means) if run_means else None
+    return out
 
 
 def components_expanded(train_groups_lab, cic_benign_anchor, attack_train_groups_cic, W, margin=tw.MARGIN, sigma=tw.SIGMA):
@@ -329,11 +361,16 @@ def main():
     ap.add_argument('--lambda-weight', type=float, default=tw.LAMBDA, dest='lambda_weight')
     ap.add_argument('--seed', type=int, default=tw.DE_SEED)
     ap.add_argument('--out-weights', default=None)
+    ap.add_argument('--margin-combine', choices=['mean', 'max'], default='mean', dest='margin_combine',
+                     help="'mean' (default): batch 4's behavior, unchanged. 'max' (batch 6): batch 5's per-class "
+                          "fix, combined with this module's 85-parameter architecture; see "
+                          "docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 6 addendum")
     args = ap.parse_args()
 
     print(f'== architecture: stage-1 encoder un-tied per {N_GROUPS} groups ({NUM_WEIGHTS_EXPANDED} parameters '
           f'total; stages 2-4 unchanged, 5 shared scalars) ==')
-    print(f'== objective: two-anchor-expanded (BETA_cic_benign={args.beta_cic_benign}) ==\n')
+    print(f'== objective: two-anchor-expanded (BETA_cic_benign={args.beta_cic_benign}, '
+          f'margin_combine={args.margin_combine}) ==\n')
 
     train_groups_lab, _attack_lab, _attack_lab_report, holdout_lab = tw.load_and_split(args.datadir, objective='margin')
     n_train_runs = sum(len(v) for v in train_groups_lab.values())
@@ -372,7 +409,8 @@ def main():
 
     objective = make_two_anchor_objective_expanded(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                                     margin=args.margin, sigma=tw.SIGMA, lam=args.lambda_weight,
-                                                    beta_cic_benign=args.beta_cic_benign)
+                                                    beta_cic_benign=args.beta_cic_benign,
+                                                    margin_combine=args.margin_combine)
     baseline_W = np.zeros(NUM_WEIGHTS_EXPANDED, dtype=np.float32)   # no hardcoded prior for 85 params; an all-zero
     # starting point is a neutral reference for "what does the baseline objective value even look like at this
     # shape" - NOT a claim that zero is a sensible deployed default the way the original 10 hardcoded constants are.
@@ -421,6 +459,13 @@ def main():
     print(f'trained weights -- L_benign_lab={tr_lab:.6f}  L_benign_cic={tr_cic:.6f}  L_margin(raw hinge)={tr_margin:.6f}')
     print(f'(all-zero reference was L_benign_lab={bl_lab:.6f}  L_benign_cic={bl_cic:.6f}  L_margin(raw hinge)={bl_margin:.6f})')
 
+    per_class_hinge = per_class_margin_hinge_expanded(train_groups_lab, attack_train_groups_cic, trained_W,
+                                                       margin=args.margin, sigma=tw.SIGMA)
+    print(f'\n== per-class margin hinge (batch 6 balance diagnostic; the blended L_margin above is '
+          f'{args.margin_combine} of these) ==')
+    for label, hinge_val in per_class_hinge.items():
+        print(f'  {label:20s} mean hinge = {hinge_val:.6f}' if hinge_val is not None else f'  {label:20s} (no windows)')
+
     train_losses_trained_W = pooled_losses_expanded(train_groups_lab, trained_W)
     trained_tau = float(np.mean(train_losses_trained_W) + tw.SIGMA * np.std(train_losses_trained_W))
     print(f'\ncalibrated tau for trained weights: mean={np.mean(train_losses_trained_W):.4f} '
@@ -450,31 +495,49 @@ def main():
         cic_benign_fp_pct[day] = fp_pct
         print(f"  {day:10s} n={res['n']}  two-anchor-expanded FP rate {tc.pct(res['alerts'], res['n'])}")
 
-    print('\n== success criterion (PREREGISTRATION.md, decided before this run) ==')
+    print('\n== success criteria (PREREGISTRATION.md batch 6 addendum, decided before this run -- COMBINED bar: '
+          'batch 4\'s three-way bar AND batch 5\'s balance bar, both required) ==')
     crit_recall = lab_result['detected'] >= SUCCESS_LAB_RECALL_MIN
     crit_fp = all(v <= SUCCESS_CIC_BENIGN_FP_MAX_PCT for v in cic_benign_fp_pct.values())
-    crit_margin = all(v >= SUCCESS_CIC_MARGIN_RECALL_MIN_PCT for v in cic_margin_recall.values())
-    print(f"lab recall >= {SUCCESS_LAB_RECALL_MIN}/13: {lab_result['detected']}/13 -> {'PASS' if crit_recall else 'FAIL'}")
-    print(f'CIC-benign FP <= {SUCCESS_CIC_BENIGN_FP_MAX_PCT}% both days: ' +
+    crit_margin_strict = all(v >= SUCCESS_CIC_MARGIN_RECALL_MIN_PCT for v in cic_margin_recall.values())
+    margin_vals = list(cic_margin_recall.values())
+    lo, hi = (min(margin_vals), max(margin_vals)) if margin_vals else (0.0, 0.0)
+    if lo >= SUCCESS_CIC_MARGIN_RECALL_MIN_PCT and hi >= SUCCESS_CIC_MARGIN_RECALL_MIN_PCT:
+        crit_balance = True
+    elif hi < SUCCESS_CIC_MARGIN_RECALL_MIN_PCT:
+        crit_balance = (hi == 0.0) or (hi <= 3 * lo)
+    else:
+        crit_balance = False   # one class clears 20%, the other doesn't, and they're not both-low-and-close either
+    print(f"[batch 4 three-way bar] lab recall >= {SUCCESS_LAB_RECALL_MIN}/13: {lab_result['detected']}/13 -> "
+          f"{'PASS' if crit_recall else 'FAIL'}")
+    print(f'[batch 4 three-way bar] CIC-benign FP <= {SUCCESS_CIC_BENIGN_FP_MAX_PCT}% both days: ' +
           ', '.join(f'{d}={v:.2f}%' for d, v in cic_benign_fp_pct.items()) + f" -> {'PASS' if crit_fp else 'FAIL'}")
-    print(f'CIC-margin recall >= {SUCCESS_CIC_MARGIN_RECALL_MIN_PCT}% both classes: ' +
-          ', '.join(f'{l}={v:.2f}%' for l, v in cic_margin_recall.items()) + f" -> {'PASS' if crit_margin else 'FAIL'}")
-    n_pass = sum([crit_recall, crit_fp, crit_margin])
-    print(f'\nOVERALL: {n_pass}/3 criteria met -- '
-          f"{'capacity appears to resolve the conflict at this scale' if n_pass == 3 else 'capacity does NOT fully resolve the conflict at this scale/search budget' if n_pass == 0 else 'partial - reported as exactly that, not rounded either way'}")
+    print(f'[batch 4 three-way bar] CIC-margin recall >= {SUCCESS_CIC_MARGIN_RECALL_MIN_PCT}% both classes: ' +
+          ', '.join(f'{l}={v:.2f}%' for l, v in cic_margin_recall.items()) + f" -> {'PASS' if crit_margin_strict else 'FAIL'}")
+    print(f'[batch 5 balance bar] both >=20% OR within a factor of 3 of each other: '
+          f'lo={lo:.2f}% hi={hi:.2f}% -> {"PASS" if crit_balance else "FAIL"}')
+    three_way_pass = crit_recall and crit_fp and crit_margin_strict
+    combined_pass = three_way_pass and crit_balance
+    print(f'\nthree-way bar (batch 4): {"PASS" if three_way_pass else "FAIL"}   '
+          f'balance bar (batch 5): {"PASS" if crit_balance else "FAIL"}')
+    print(f'COMBINED (this batch\'s bar): {"PASS" if combined_pass else "FAIL"} -- '
+          f"{'both levers compounded into a full pass' if combined_pass else 'combination does NOT clear the combined bar'}")
 
     if args.out_weights:
         payload = {
             'weights': [float(x) for x in trained_W],
             'tau': trained_tau,
             'objective': 'two-anchor-expanded',
-            'batch': 'sentinel-training-two-anchor batch 4 (sanity check, NOT a validated or recommended result, '
-                     'NOT loadable by the live sentinel -- different parameter shape)',
+            'batch': 'sentinel-training-two-anchor batch 6 (85-param architecture + max-combined margin, combined; '
+                     'sanity check, NOT a validated or recommended result, NOT loadable by the live sentinel -- '
+                     'different parameter shape)',
             'architecture': {'num_weights': NUM_WEIGHTS_EXPANDED, 'n_groups': N_GROUPS,
                               'stage1_params_per_group': STAGE1_PARAMS_PER_GROUP,
                               'note': 'weights[0:80] = 16 groups of (w0,w1,w2,w3,bias); weights[80:85] = w5..w9 '
                                       '(shared bottleneck/broadcast/decode, same roles as the original 10-param formula)'},
             'beta_cic_benign': args.beta_cic_benign,
+            'margin_combine': args.margin_combine,
+            'per_class_margin_hinge': per_class_hinge,
             'margin_hyperparameters': {'margin': args.margin, 'sigma': tw.SIGMA, 'lambda': args.lambda_weight},
             'optimizer': {'popsize': DE_POPSIZE, 'maxiter': DE_MAXITER, 'polish_maxiter': POLISH_MAXITER,
                           'note': 'deliberately reduced from the rest of this workstream\'s popsize=20/maxiter=150 '
@@ -492,10 +555,12 @@ def main():
             'success_criterion': {'lab_recall_min': SUCCESS_LAB_RECALL_MIN,
                                    'cic_benign_fp_max_pct': SUCCESS_CIC_BENIGN_FP_MAX_PCT,
                                    'cic_margin_recall_min_pct': SUCCESS_CIC_MARGIN_RECALL_MIN_PCT,
-                                   'criteria_met': n_pass},
+                                   'three_way_bar_pass': three_way_pass,
+                                   'balance_bar_pass': crit_balance,
+                                   'combined_pass': combined_pass},
             'seed': args.seed,
             'note': 'Fitted by scripts/train-sentinel-weights-expanded.py; see '
-                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 4 addendum). '
+                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 6 addendum). '
                     'This is an offline-only sanity check on a small bounded sample, a different parameter shape '
                     'than the deployed kernel, and is NEVER to be loaded via --weights-file / '
                     'GPU_SENTINEL_WEIGHTS_FILE (shape mismatch; the live loader expects exactly 10 weights).',
