@@ -22,6 +22,13 @@ refuse because of it" -- but ONLY for interfaces named there; anything else stil
 reported in the result (`excusedControlInterfaces`) so the provenance record shows what was knowingly allowed, not silently ignored. The real
 protection is unchanged: every send must still be explicitly bound (TOOL_BINDING_CONVENTIONS / bind_socket), never left to routing-table luck.
 
+What this cannot catch (found 2026-10-25, .agents/network-context.md caveat 11): `known_control_ifaces` is sound only as long as those interfaces
+genuinely cannot reach the segment under test. A switch-level VLAN change on the physical fabric -- not anything on this node -- silently broke
+that assumption for a few hours by bridging node-02's `eth0` onto the same VLAN as the Zodiac's own P2 uplink link, giving it a second, this
+script's preflight-invisible path onto exactly the segment Track C scenario 1 targets. This module only ever inspects interfaces on the node it
+runs on; it has no way to see the switch fabric's own VLAN table. Re-verify the physical/VLAN topology (not just this script's report) after any
+change to a switch a control interface is cabled through.
+
 Usage (run ON the adversary node, Python 3 standard library only, no third-party dependencies):
     python3 adversary-bind.py preflight                               # prints the JSON report
     python3 adversary-bind.py preflight --enforce                      # same, but exits 1 if the report is not ok

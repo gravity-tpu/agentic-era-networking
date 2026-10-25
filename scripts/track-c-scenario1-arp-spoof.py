@@ -210,19 +210,21 @@ def fetch_capture(tag: str) -> list:
 
 
 def frames_claiming(lines: list, target_ip: str, sender_mac: str) -> list:
-    """ARP replies in tcpdump -e output where the Ethernet source matches the adversary's MAC and the target_ip appears (SPA in a reply).
-    Matches on tcpdump's own phrasing for a REPLY specifically: "<ip> is-at <mac>" (a REQUEST instead reads "who-has <ip> tell <ip>", with no
-    "is-at" at all). Confirmed against a real captured frame 2026-10-22: tcpdump's actual text is "... ethertype ARP (0x0806), length 60:
-    Reply 10.0.2.119 is-at b8:27:eb:79:ff:0a, length 46" -- the earlier check for the literal substring "ARP, Reply" never matched anything,
-    because "ARP" and "Reply" are not adjacent in real output; this was found and fixed only by inspecting an actual captured line, not by
-    reasoning about the format in advance."""
+    """ARP replies in tcpdump -e output that claim target_ip is-at the adversary's own MAC -- i.e. the spoofed binding itself, not merely a
+    line that mentions the adversary's MAC in some other role (as a unicast destination, for instance). Matches on tcpdump's own phrasing for
+    a REPLY specifically: "<ip> is-at <mac>" (a REQUEST instead reads "who-has <ip> tell <ip>", with no "is-at" at all). Confirmed against a
+    real captured frame 2026-10-22: tcpdump's actual text is "... ethertype ARP (0x0806), length 60: Reply 10.0.2.119 is-at
+    b8:27:eb:79:ff:0a, length 46".
+
+    Found 2026-10-25: an earlier version of this check (`sender_mac.lower() not in l.lower()`) was a bare substring test against the whole
+    line, so it also matched the adversary's MAC appearing as a unicast *destination* -- e.g. a legitimate host defending its own real
+    binding by replying directly to the adversary ("<real-mac> > <adversary-mac> ... Reply <target_ip> is-at <real-mac>") was miscounted as
+    the adversary's claim reaching the capture point. The claim itself, "<target_ip> is-at <sender_mac>", is the only thing that actually
+    means the spoof was observed here."""
+    claim = f'{target_ip} is-at {sender_mac.lower()}'
     hits = []
     for l in lines:
-        if sender_mac.lower() not in l.lower():
-            continue
-        if ' is-at ' not in l:
-            continue
-        if target_ip not in l:
+        if claim not in l.lower():
             continue
         hits.append(l)
     return hits
