@@ -1,0 +1,35 @@
+[2026-10-25 18:34:46 ET] step 1: preflight on the adversary node (scripts/adversary-bind.py)
+[2026-10-25 18:34:47 ET]   REFUSED: interface(s) other than eth1 are up with an address and can reach their subnet without ever using the default route: {'wlan0': ['10.0.0.175', '2601:547:ce00:89c6::915b', '2601:547:ce00:89c6:671:f16b:cfd2:5099']}; any traffic not explicitly bound to eth1 may leave through one of these instead (declare it with known_control_ifaces if it is actually your control channel, not an oversight; a declared control interface carrying a workload-subnet address is refused regardless, in case a rename swapped roles)
+[2026-10-25 18:34:47 ET]   nothing was sent; the run stops here (Invariant 3: fail closed)
+[2026-10-25 18:36:34 ET] step 1: preflight on the adversary node (scripts/adversary-bind.py)
+[2026-10-25 18:36:36 ET]   ok: preflight passed, eth1 is safe to send on
+[2026-10-25 18:36:36 ET]   adversary eth1 MAC: b8:27:eb:79:ff:0a
+[2026-10-25 18:36:36 ET] step 2: baseline — the Mac's own ARP cache for the target, before anything is sent
+[2026-10-25 18:36:36 ET]   before: ? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]
+[2026-10-25 18:36:36 ET] step 3: starting O3 (ground truth, Zodiac P2 mirror) and O2 (Zodiac P3 tap) captures
+[2026-10-25 18:36:37 ET] step 4: sending 3 unsolicited ARP replies from the adversary, bound to eth1, claiming 10.0.2.119
+[2026-10-25 18:36:39 ET]   
+[2026-10-25 18:36:39 ET]   waiting out the 8s capture window
+[2026-10-25 18:36:47 ET]   O3 (reached P2?): 0 matching frame(s) of 10 ARP frames seen
+[2026-10-25 18:36:47 ET]   O2 (Zodiac P3 tap): 3 matching frame(s) of 3 ARP frames seen
+[2026-10-25 18:36:47 ET] step 5: re-reading the Mac's ARP cache for the target, after the replies
+[2026-10-25 18:36:47 ET]   after: ? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]
+[2026-10-25 18:36:47 ET]   cache changed to the adversary's MAC: False
+[2026-10-25 18:36:47 ET] step 6: corrective ARP cache fix (always run, regardless of outcome)
+[2026-10-25 18:38:05 ET] step 1: preflight on the adversary node (scripts/adversary-bind.py)
+[2026-10-25 18:38:06 ET]   ok: preflight passed, eth1 is safe to send on
+[2026-10-25 18:38:07 ET]   adversary eth1 MAC: b8:27:eb:79:ff:0a
+[2026-10-25 18:38:07 ET] step 2: baseline — the Mac's own ARP cache for the target, before anything is sent
+[2026-10-25 18:38:07 ET]   before: ? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]
+[2026-10-25 18:38:07 ET] step 3: starting O3 (ground truth, Zodiac P2 mirror) and O2 (Zodiac P3 tap) captures
+[2026-10-25 18:38:08 ET] step 4: sending 3 unsolicited ARP replies from the adversary, bound to eth1, claiming 10.0.2.119
+[2026-10-25 18:38:09 ET]   
+[2026-10-25 18:38:09 ET]   waiting out the 8s capture window
+[2026-10-25 18:38:18 ET]   O3 (reached P2?): 1 matching frame(s) of 15 ARP frames seen
+[2026-10-25 18:38:18 ET]   O2 (Zodiac P3 tap): 3 matching frame(s) of 4 ARP frames seen
+[2026-10-25 18:38:18 ET] step 5: re-reading the Mac's ARP cache for the target, after the replies
+[2026-10-25 18:38:18 ET]   after: ? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet]
+[2026-10-25 18:38:18 ET]   cache changed to the adversary's MAC: False
+[2026-10-25 18:38:18 ET] step 6: corrective ARP cache fix (always run, regardless of outcome)
+[2026-10-25 18:38:19 ET]   after correction: ? (10.0.2.119) at f2:5b:dc:7d:21:d4 on en0 ifscope permanent [ethernet] (matches the pre-run state: True)
+[2026-10-25 18:38:19 ET] done; wrote docs/benchmarks/results/track-c-scenario1-arp-spoof/run-2026-10-25b/result.json
