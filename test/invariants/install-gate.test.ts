@@ -88,7 +88,7 @@ describe('admitInstall', () => {
   });
 
   it('fails closed when the check cannot run: a duplicate id refuses, it does not pass', () => {
-    const r = admitInstall({ current: policy, proposed: [rule('p1-arp', 5, [3], { inPort: 2 })] });
+    const r = admitInstall({ current: policy, proposed: [rule('p1-ipv4-intra-segment', 5, [3], { inPort: 2 })] });
     expect(r.admitted).toBe(false);
     expect(props(r)).toContain('uncheckable');
   });

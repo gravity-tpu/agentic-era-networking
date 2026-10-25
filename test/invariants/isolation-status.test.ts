@@ -45,8 +45,8 @@ describe('statusFromReadback', () => {
     expect(s.confirmed).toHaveLength(policy.length);
     expect(s.checkedAtMs).toBe(1_700_000_000_000);
     expect(s.checkedAtMonoNs).toBe(42n);
-    const line = describeReadback(s, policy.length, 7);
-    expect(line).toContain('Isolation readback VERIFIED: 6/6 rules confirmed on switch (7 total entries)');
+    const line = describeReadback(s, policy.length, 8);
+    expect(line).toContain('Isolation readback VERIFIED: 7/7 rules confirmed on switch (8 total entries)');
     expect(line).toContain('actions confirmed');
   });
 

@@ -132,6 +132,8 @@ function makeFake(opts: FakeOptions = {}) {
       ...(m.etherType !== undefined ? { ethType: m.etherType } : {}),
       ...(m.srcIp !== undefined ? { srcIp: m.srcIp, ...(maskFor(m.srcIpPrefixLen) ? { srcMask: maskFor(m.srcIpPrefixLen) as string } : {}) } : {}),
       ...(m.dstIp !== undefined ? { dstIp: m.dstIp, ...(maskFor(m.dstIpPrefixLen) ? { dstMask: maskFor(m.dstIpPrefixLen) as string } : {}) } : {}),
+      ...(m.arpSpa !== undefined ? { arpSpa: m.arpSpa, ...(maskFor(m.arpSpaPrefixLen) ? { arpSpaMask: maskFor(m.arpSpaPrefixLen) as string } : {}) } : {}),
+      ...(m.arpTpa !== undefined ? { arpTpa: m.arpTpa, ...(maskFor(m.arpTpaPrefixLen) ? { arpTpaMask: maskFor(m.arpTpaPrefixLen) as string } : {}) } : {}),
     };
   };
   const deps: InstallerDeps = {
