@@ -1,0 +1,71 @@
+== lab benign training pool (unchanged from PR #105/#106) ==
+8 patterns, 18 runs, 6264 windows
+== objective: two-anchor (BETA_cic_benign=1.0) ==
+
+== CIC benign anchor (NEW term this round; replaces nothing, adds to the objective) ==
+  Wednesday  anchor(train)=2000 windows   peek(informal only)=2000 windows
+  Friday     anchor(train)=2000 windows   peek(informal only)=2000 windows
+
+== CIC attack margin-training pool (bounded subsample of round 3's cached buckets, for this batch only) ==
+  DoS Hulk             20000 windows (sanity-check cap; round 3 used 20000)
+  DoS GoldenEye        20000 windows (sanity-check cap; round 3 used 20000)
+
+self-check: kernel_loss_batch matches sr.kernel_loss on a real lab window and a real CIC window (ok)
+
+== fitting (10 params, bounds (-3.0, 5.0) for all) ==
+hyperparameters: margin=0.02 sigma=2.5 lambda=1.0 beta_cic_benign=1.0
+baseline hardcoded weights -- L_benign_lab=0.156286  L_benign_cic=0.144882  L_margin(raw hinge)=0.095758  (components reported separately, never blended)
+baseline hardcoded weights' total two-anchor objective value: 0.396927
+differential_evolution: nfev=30266 objective=0.211866
+Nelder-Mead polish:     nfev=3492 objective=0.205904
+fitted in 2033.8s
+trained weights: [0.003546, -2.999922, 2.711572, 3.158642, 3.334819, 4.999981, -0.001489, 4.9986, 4.932544, 1.032975]
+trained training-objective value: 0.205904  (baseline was 0.396927)
+
+== sanity check 1: finite? ==
+all finite: True
+
+== sanity check 2: any fitted weight pinned to its bound (within 0.0100)? ==
+PINNED (3/10 weights) -- a repeat of round 3's failure mode:
+  w1 = -2.999922  (lower bound -3.0, distance 0.000078)
+  w5 = 4.999981  (upper bound 5.0, distance 0.000019)
+  w7 = 4.998600  (upper bound 5.0, distance 0.001400)
+
+== sanity check 3: per-term values at the trained weights (never blended) ==
+trained weights -- L_benign_lab=0.117972  L_benign_cic=0.069048  L_margin(raw hinge)=0.018885
+(baseline was L_benign_lab=0.156286  L_benign_cic=0.144882  L_margin(raw hinge)=0.095758)
+
+calibrated tau for trained weights: mean=0.1032 std=0.0333 -> base_tau=0.1866 (pooled over 6264 LAB training-benign windows only, never CIC benign)
+
+== CIC margin-training classes (Hulk, GoldenEye), own-data window-level recall (training performance, NOT held out -- same convention as round 3's axis (b) training-performance block) ==
+  DoS Hulk             n=20000  baseline recall 1.51%   two-anchor recall 1.19%
+  DoS GoldenEye        n=20000  baseline recall 5.69%   two-anchor recall 63.20%
+
+== sanity check 4: informal peek (NOT a held-out result, NOT axis (a)/(b)/(c), sample too small and not pre-registered as a formal evaluation -- purely to catch an immediately, obviously broken outcome) ==
+-- lab held-out split (9 benign/13 attack), baseline --
+baseline   tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+-- lab held-out split (9 benign/13 attack), two-anchor-trained --
+two-anchor tau=0.1866  attack detected (right sender): 2/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+-- CIC-benign peek slice (disjoint from the training anchor), false-positive rate only --
+  Wednesday  n=2000  baseline FP rate 0.00%   two-anchor FP rate 0.00%
+  Friday     n=2000  baseline FP rate 0.25%   two-anchor FP rate 0.00%
+
+wrote /tmp/two-anchor-sanity-out/trained-weights-two-anchor-batch2-2026-10-24.json

@@ -372,6 +372,16 @@ def run_two_anchor(args, train_groups_lab, holdout_lab):
           f'std={np.std(train_losses_trained_W):.4f} -> base_tau={trained_tau:.4f} '
           f'(pooled over {len(train_losses_trained_W)} LAB training-benign windows only, never CIC benign)')
 
+    print('\n== CIC margin-training classes (Hulk, GoldenEye), own-data window-level recall '
+          '(training performance, NOT held out -- same convention as round 3\'s axis (b) training-performance block) ==')
+    for label in CIC_TRAIN_LABELS:
+        feats = attack_train_groups_cic[label][0][1]
+        src_ips_f = cic_train_src_ips[label]
+        res_base = score_cic_block(feats, src_ips_f, baseline_W, sr.BASE_TAU, known_attacker_ip=KNOWN_ATTACKER_IP)
+        res_trained = score_cic_block(feats, src_ips_f, trained_W, trained_tau, known_attacker_ip=KNOWN_ATTACKER_IP)
+        print(f'  {label:20s} n={res_base["n"]}  baseline recall {pct(res_base["alerts"], res_base["n"])}   '
+              f'two-anchor recall {pct(res_trained["alerts"], res_trained["n"])}')
+
     if args.cic_benign_peek_cap > 0:
         print('\n== sanity check 4: informal peek (NOT a held-out result, NOT axis (a)/(b)/(c), sample too small and '
               'not pre-registered as a formal evaluation -- purely to catch an immediately, obviously broken outcome) ==')

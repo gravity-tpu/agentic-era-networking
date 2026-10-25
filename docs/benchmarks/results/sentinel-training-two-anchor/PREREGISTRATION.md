@@ -1,5 +1,47 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-24 addendum (batch 2, owner-approved, added before batch 2's own numbers were looked at):** batch 1's
+informal peek (never a formal result, flagged as such at the time) showed the lab held-out split's attack-detected
+count collapsing from baseline's 10/13 to 2/13 under the two-anchor-trained weights, alongside one weight landing
+within 0.0003 of its lower bound. Two explanations were left open in batch 1's report: (a) this is a small-sample
+artifact of batch 1's deliberately 10x-shrunk CIC attack-training cap (2,000/class vs. round 3's 20,000/class), or
+(b) it is a real cost of the equal-weighted (`BETA=1.0`) CIC-benign anchor term itself. The owner approved one more
+bounded experiment to tell these apart, run before any full evaluation: **re-run the identical two-anchor objective
+and weighting (same `BETA=1.0`, `LAMBDA=1.0`, hinge formula, bounds, optimizer config, and seed as batch 1) with the
+CIC attack-training cap restored to round 3's full `20,000` windows/class for `DoS Hulk`/`DoS GoldenEye`, changing
+nothing else.**
+
+The CIC-benign anchor cap (2,000 windows/day) and the lab-benign training pool (unchanged, ~6,264 windows) are
+**deliberately held fixed at batch 1's values, not scaled up**, even though scaling them too might arguably be "more
+representative" of a real full run. This is a one-variable-at-a-time isolation, chosen specifically because the
+question this experiment answers only has a clean answer if exactly one thing changed: if the CIC-benign anchor size
+also changed, a recall change afterward could not be attributed to the attack-training sample size alone, which is
+the entire point of running this second experiment instead of jumping straight to a full run. If the hypothesis this
+experiment is testing needs a larger benign anchor too, that is exactly the kind of question a further, separately
+pre-registered experiment should isolate — not something to fold into this one and lose the isolation.
+
+**What counts as resolving the ambiguity, decided now, before batch 2 is run:**
+
+- **Lab held-out attack-detected (right sender) of 6/13 or higher** (informal peek, same 9-benign/13-attack reduced
+  split as every prior round, same caveat that this is a peek on a thin split, not a formal axis (a) evaluation): read
+  as recall recovering materially toward baseline (10/13) and round 3's full-CIC run (8/13) — consistent with
+  explanation (a), sample size, and two-anchor being reasonably read as ready for a full run (pending the other sanity
+  checks below still looking sane).
+- **3/13 or lower** (no material change from batch 1's 2/13): read as recall staying collapsed — consistent with
+  explanation (b), a real cost of the equal-weighted CIC-benign term, and the next move being the pre-registered
+  `BETA`-sweep fallback (a lower `--beta-cic-benign`) rather than a full run at `BETA=1.0`.
+- **4-5/13**: reported honestly as partial/ambiguous, neither bucket forced, with the caveat repeated that 13 runs is
+  too few for a one-run swing (≈8 percentage points) to be read as a stable rate either way.
+- Independently of the recall threshold above, the weight-bound-proximity check (`BOUND_PIN_EPS=0.01`, same as batch
+  1) and the no-NaN/Inf check are re-applied and reported on their own terms, not folded into the recall verdict —
+  a run could resolve the recall ambiguity in either direction while also surfacing a new or worse pinning problem,
+  and that would be reported as exactly that, not smoothed over.
+
+This addendum does not change anything else in this document: the objective formula, `BETA`, `LAMBDA`, bounds,
+optimizer, or the "what this batch does not do" scope (still no four-axis evaluation, still no PR this round).
+
+## Batch 1 (original pre-registration, below, unedited)
+
 Written 2026-10-24, before any two-anchor objective value is computed and before any held-out or sanity number is
 looked at. Same convention as the three prior rounds'
 [`../sentinel-training/PREREGISTRATION.md`](../sentinel-training/PREREGISTRATION.md),
