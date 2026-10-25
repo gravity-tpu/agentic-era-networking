@@ -311,6 +311,152 @@ def report_bound_proximity(W, bounds, eps=BOUND_PIN_EPS):
     return pinned
 
 
+# --- Batch 7: Adaptive-replay-aware margin. Fixed by PREREGISTRATION.md's batch 7 addendum. ---
+WARMUP_CAP = 500  # fixed, deterministic lab-benign windows used to warm a simulated sr.Adaptive before replaying
+# attack-training windows through it -- see PREREGISTRATION.md for why 500 and why this models "the daemon has been
+# running on lab traffic before an attack starts," not a cold-start Adaptive instance.
+
+
+def build_benign_warmup_sequence(train_groups_lab, cap=WARMUP_CAP):
+    """A FIXED, deterministic sequence of `cap` lab-benign training windows, built once (not resampled per objective
+    evaluation): concatenates windows across patterns (sorted alphabetically) and runs (sorted by run id) in that
+    order, then takes the first `cap`. Fails loudly rather than silently returning fewer than `cap` windows if the
+    pool is smaller than requested (it is not, at ~6,264 windows, but the check costs nothing and catches a future
+    catalog shrink before it silently changes this batch's warm-up length)."""
+    windows = []
+    for pattern in sorted(train_groups_lab):
+        for rid, w in sorted(train_groups_lab[pattern], key=lambda item: item[0]):
+            if len(w):
+                windows.append(w)
+    pool = np.concatenate(windows, axis=0) if windows else np.zeros((0, 256), dtype=np.float32)
+    if len(pool) < cap:
+        raise SystemExit(f'FATAL: lab-benign training pool has only {len(pool)} windows, need {cap} for the '
+                          f'pre-registered warm-up sequence length.')
+    return pool[:cap]
+
+
+def _replay_class_hinge(warmup_windows, class_windows, W, base_tau):
+    """Warms a FRESH sr.Adaptive(tau=base_tau) on warmup_windows' losses (discarding the alert outputs -- this is
+    purely to advance the EMA state to a representative operating point), then continues the SAME instance through
+    class_windows' losses IN ORDER, recording hinge_i = max(0, threshold_i - loss_i) for each, where threshold_i is
+    read DIRECTLY from Adaptive.check()'s own second return value -- the exact quantity the real deployed decision
+    is made against, not a hand-rederived formula. Returns the array of per-window hinges for class_windows only
+    (the warm-up windows are never scored, per PREREGISTRATION.md -- only the margin term uses this replay; benign
+    reconstruction quality is judged elsewhere, unchanged). Uses sr.Adaptive completely unmodified."""
+    ad = sr.Adaptive(tau=base_tau)
+    warmup_losses = tw.kernel_loss_batch(warmup_windows, W)
+    for loss in warmup_losses:
+        ad.check(float(loss))   # advance EMA state only; warm-up windows are never part of the penalized signal
+    class_losses = tw.kernel_loss_batch(class_windows, W)
+    hinges = np.empty(len(class_losses), dtype=np.float64)
+    for i, loss in enumerate(class_losses):
+        _is_anom, threshold = ad.check(float(loss))
+        hinges[i] = max(0.0, threshold - float(loss))
+    return hinges
+
+
+def self_check_adaptive_determinism(warmup_windows, sample_class_windows, W, seed=13):
+    """Nothing in _replay_class_hinge is randomized; replaying the SAME class windows through two independently
+    constructed, identically-warmed Adaptive instances must produce bit-identical hinge sequences. Fails loudly if
+    not, catching accidental shared mutable state or non-determinism in this batch's own new orchestration code
+    before fitting against it -- the kernel math itself is covered by tw.self_check(), reused unchanged, separately."""
+    rng = np.random.default_rng(seed)
+    lo = np.array([b[0] for b in tw.BOUNDS], dtype=np.float32)
+    hi = np.array([b[1] for b in tw.BOUNDS], dtype=np.float32)
+    for trial_W in [np.asarray(W, dtype=np.float32), rng.uniform(lo, hi).astype(np.float32)]:
+        h1 = _replay_class_hinge(warmup_windows, sample_class_windows, trial_W, base_tau=0.2)
+        h2 = _replay_class_hinge(warmup_windows, sample_class_windows, trial_W, base_tau=0.2)
+        if not np.array_equal(h1, h2):
+            raise SystemExit('FATAL: _replay_class_hinge is non-deterministic (two identically-warmed replays of '
+                              'the same windows/weights disagree) -- refusing to fit against it.')
+
+
+def make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic, warmup_windows,
+                                    lam=None, beta_cic_benign=BETA_CIC_BENIGN_DEFAULT, sigma=None, margin_combine='mean'):
+    """L(W) = L_benign_lab(W) + beta_cic_benign * L_benign_cic(W) + lam * L_margin_adaptive(W).
+
+    L_benign_lab, L_benign_cic: UNCHANGED from make_two_anchor_objective -- pooled nested means, no Adaptive replay.
+    See PREREGISTRATION.md's batch 7 addendum for why only the margin term uses the replay.
+
+    L_margin_adaptive(W): for each attack-training class, a FRESH sr.Adaptive(tau=base_tau(W)) is warmed on
+    warmup_windows then replayed through that class's own windows (_replay_class_hinge); the per-class hinge is the
+    mean of those per-window hinges. base_tau(W) = mean + sigma*std of the LAB training-benign pool (unchanged
+    calibration convention, no MARGIN added -- see PREREGISTRATION.md for why). Per-class means are combined via
+    margin_combine ('mean' default; batch 7 does not stack this with batch 5's 'max', see PREREGISTRATION.md)."""
+    sigma = tw.SIGMA if sigma is None else sigma
+    lam = tw.LAMBDA if lam is None else lam
+
+    def objective(w):
+        W = np.asarray(w, dtype=np.float32)
+        benign_pattern_means = []
+        benign_pooled = []
+        for _pattern, runs in train_groups_lab.items():
+            run_losses = [tw.kernel_loss_batch(windows, W) for _rid, windows in runs if len(windows)]
+            if run_losses:
+                benign_pattern_means.append(sum(float(np.mean(l)) for l in run_losses) / len(run_losses))
+                benign_pooled.extend(run_losses)
+        l_benign_lab = sum(benign_pattern_means) / len(benign_pattern_means)
+        pooled = np.concatenate(benign_pooled)
+        base_tau = float(np.mean(pooled)) + sigma * float(np.std(pooled))
+
+        day_means = [float(np.mean(tw.kernel_loss_batch(windows, W)))
+                     for windows in cic_benign_anchor.values() if len(windows)]
+        l_benign_cic = sum(day_means) / len(day_means) if day_means else 0.0
+
+        class_means = []
+        for _label, runs in attack_train_groups_cic.items():
+            for _rid, windows in runs:
+                if len(windows) == 0:
+                    continue
+                hinges = _replay_class_hinge(warmup_windows, windows, W, base_tau)
+                class_means.append(float(np.mean(hinges)))
+        if not class_means:
+            l_margin = 0.0
+        elif margin_combine == 'max':
+            l_margin = max(class_means)
+        elif margin_combine == 'mean':
+            l_margin = sum(class_means) / len(class_means)
+        else:
+            raise ValueError(f"margin_combine must be 'mean' or 'max', got {margin_combine!r}")
+
+        return l_benign_lab + beta_cic_benign * l_benign_cic + lam * l_margin
+    return objective
+
+
+def adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic, warmup_windows, W, sigma=None):
+    """Per-term values at W, never blended -- mirrors two_anchor_components for the Adaptive-replay margin."""
+    sigma = tw.SIGMA if sigma is None else sigma
+    W = np.asarray(W, dtype=np.float32)
+    l_benign_lab = float(tw.make_objective(train_groups_lab)(W))
+    pooled = tw.pooled_training_losses(train_groups_lab, W)
+    base_tau = float(np.mean(pooled)) + sigma * float(np.std(pooled))
+    day_means = [float(np.mean(tw.kernel_loss_batch(windows, W)))
+                 for windows in cic_benign_anchor.values() if len(windows)]
+    l_benign_cic = sum(day_means) / len(day_means) if day_means else 0.0
+    per_class = per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, warmup_windows, W, sigma=sigma)
+    vals = [v for v in per_class.values() if v is not None]
+    l_margin = sum(vals) / len(vals) if vals else 0.0
+    return l_benign_lab, l_benign_cic, l_margin
+
+
+def per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, warmup_windows, W, sigma=None):
+    """{label: mean_hinge_value}, the Adaptive-replay analogue of per_class_margin_hinge."""
+    sigma = tw.SIGMA if sigma is None else sigma
+    W = np.asarray(W, dtype=np.float32)
+    pooled = tw.pooled_training_losses(train_groups_lab, W)
+    base_tau = float(np.mean(pooled)) + sigma * float(np.std(pooled))
+    out = {}
+    for label, runs in attack_train_groups_cic.items():
+        hinge_means = []
+        for _rid, windows in runs:
+            if len(windows) == 0:
+                continue
+            hinges = _replay_class_hinge(warmup_windows, windows, W, base_tau)
+            hinge_means.append(float(np.mean(hinges)))
+        out[label] = sum(hinge_means) / len(hinge_means) if hinge_means else None
+    return out
+
+
 def run_two_anchor(args, train_groups_lab, holdout_lab):
     """--objective two-anchor's entire flow: load a small, bounded CIC sample (benign anchor + attack margin
     population) from round 3's already-cached .npz files, fit the three-term objective, and report the sanity-check
@@ -479,6 +625,191 @@ def run_two_anchor(args, train_groups_lab, holdout_lab):
         print(f'\nwrote {args.out_weights}')
 
 
+def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
+    """--objective two-anchor-adaptive-margin's entire flow (batch 7): same data loading as run_two_anchor, but the
+    margin term replays attack-training windows through a real, unmodified sr.Adaptive instead of comparing against
+    a static target. See docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 7 addendum
+    for the exact design and why. 10-parameter architecture, mean-combine -- deliberately NOT stacked with batch 5's
+    max-combine or batch 4's 85-parameter architecture, to isolate this one new mechanism cleanly."""
+    print(f'== objective: two-anchor-adaptive-margin (BETA_cic_benign={args.beta_cic_benign}) ==\n')
+
+    warmup_windows = build_benign_warmup_sequence(train_groups_lab, cap=WARMUP_CAP)
+    print(f'== Adaptive-replay warm-up: {len(warmup_windows)} fixed lab-benign windows (deterministic order) ==\n')
+
+    print('== CIC benign anchor (unchanged mechanism from batch 1-6; benign terms do not use Adaptive replay) ==')
+    cic_benign_anchor = {}
+    cic_benign_peek = {}
+    for day, npz_path in (('Wednesday', args.wednesday_npz), ('Friday', args.friday_npz)):
+        anchor, peek, peek_src = load_npz_benign_split(npz_path, args.cic_benign_anchor_cap, args.cic_benign_anchor_cap)
+        cic_benign_anchor[day] = anchor
+        cic_benign_peek[day] = (peek, peek_src)
+        print(f'  {day:10s} anchor(train)={len(anchor)} windows   peek(informal only)={len(peek)} windows')
+
+    print('\n== CIC attack margin-training pool (also the sequence replayed through the simulated Adaptive) ==')
+    attack_train_groups_cic = {}
+    cic_train_src_ips = {}
+    for label in CIC_TRAIN_LABELS:
+        capped = capped_attack_bucket(args.wednesday_npz, label, args.cic_attack_train_cap)
+        _feats, _epochs, src_ips = load_npz_bucket(args.wednesday_npz, label)
+        attack_train_groups_cic[label] = [(f'cic-wed-{label.replace(" ", "-").lower()}-sanity', capped)]
+        cic_train_src_ips[label] = src_ips[:args.cic_attack_train_cap]
+        print(f'  {label:20s} {len(capped)} windows')
+
+    lab_sample_window = next(w[0] for runs in train_groups_lab.values() for _rid, w in runs
+                             if len(w)).reshape(sr.WIN, 4)
+    tw.self_check(lab_sample_window)
+    cic_sample_window = attack_train_groups_cic[CIC_TRAIN_LABELS[0]][0][1][0].reshape(sr.WIN, 4)
+    tw.self_check(cic_sample_window)
+    sample_class_windows = attack_train_groups_cic[CIC_TRAIN_LABELS[0]][0][1]
+    self_check_adaptive_determinism(warmup_windows, sample_class_windows, sr.W)
+    print('\nself-check: kernel_loss_batch matches sr.kernel_loss (lab + CIC windows); _replay_class_hinge is '
+          'deterministic (ok)')
+
+    objective = make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
+                                                warmup_windows, lam=args.lambda_weight,
+                                                beta_cic_benign=args.beta_cic_benign)
+    baseline_W = np.array(sr.W, dtype=np.float32, copy=True)
+    print(f'\n== fitting ({len(tw.BOUNDS)} params, bounds {tw.BOUNDS[0]} for all) ==')
+    print(f'hyperparameters: sigma={tw.SIGMA} lambda={args.lambda_weight} beta_cic_benign={args.beta_cic_benign} '
+          f'(no static MARGIN this batch -- see PREREGISTRATION.md)')
+
+    bl_lab, bl_cic, bl_margin = adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
+                                                            warmup_windows, baseline_W, sigma=tw.SIGMA)
+    baseline_train_loss = objective(baseline_W)
+    print(f'baseline hardcoded weights -- L_benign_lab={bl_lab:.6f}  L_benign_cic={bl_cic:.6f}  '
+          f'L_margin(adaptive-replay hinge)={bl_margin:.6f}')
+    print(f'baseline hardcoded weights\' total objective value: {baseline_train_loss:.6f}')
+    if not np.isfinite(baseline_train_loss):
+        raise SystemExit(f'FATAL: baseline objective value is not finite ({baseline_train_loss}); sanity check '
+                          f'FAILED before any fitting starts.')
+
+    t0 = time.monotonic()
+    de = tw.differential_evolution(objective, tw.BOUNDS, seed=args.seed, popsize=tw.DE_POPSIZE, maxiter=tw.DE_MAXITER,
+                                    tol=tw.DE_TOL, polish=True, updating='deferred', workers=1)
+    polished = tw.minimize(objective, de.x, method='Nelder-Mead', bounds=tw.BOUNDS,
+                            options={'xatol': 1e-8, 'fatol': 1e-12, 'maxiter': tw.POLISH_MAXITER,
+                                     'maxfev': tw.POLISH_MAXITER})
+    elapsed = time.monotonic() - t0
+    trained_W = polished.x if polished.fun <= de.fun else de.x
+    trained_loss = min(polished.fun, de.fun)
+    print(f'differential_evolution: nfev={de.nfev} objective={de.fun:.6f}')
+    print(f'Nelder-Mead polish:     nfev={polished.nfev} objective={polished.fun:.6f}')
+    print(f'fitted in {elapsed:.1f}s')
+    print(f'trained weights: {[round(float(x), 6) for x in trained_W]}')
+    print(f'trained training-objective value: {trained_loss:.6f}  (baseline was {baseline_train_loss:.6f})')
+
+    print('\n== sanity check 1: finite? ==')
+    all_finite = np.isfinite(trained_loss) and np.all(np.isfinite(trained_W)) and np.isfinite(de.fun) and np.isfinite(polished.fun)
+    print(f'all finite: {all_finite}')
+    if not all_finite:
+        raise SystemExit('FATAL: non-finite value in the fitted result (NaN/Inf) -- sanity check FAILED on check 1.')
+
+    print(f'\n== sanity check 2: fitted weights pinned to a bound (within {BOUND_PIN_EPS})? ==')
+    pinned = report_bound_proximity(trained_W, tw.BOUNDS, eps=BOUND_PIN_EPS)
+    if pinned:
+        print(f'PINNED ({len(pinned)}/10 weights):')
+        for i, w, lo, hi in pinned:
+            edge = 'lower' if abs(w - lo) < abs(w - hi) else 'upper'
+            print(f'  w{i} = {w:.6f}  ({edge} bound, distance {min(abs(w - lo), abs(w - hi)):.6f})')
+    else:
+        print('none pinned')
+
+    tr_lab, tr_cic, tr_margin = adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
+                                                            warmup_windows, trained_W, sigma=tw.SIGMA)
+    print('\n== sanity check 3: per-term values at the trained weights (never blended) ==')
+    print(f'trained weights -- L_benign_lab={tr_lab:.6f}  L_benign_cic={tr_cic:.6f}  '
+          f'L_margin(adaptive-replay hinge)={tr_margin:.6f}')
+    print(f'(baseline was L_benign_lab={bl_lab:.6f}  L_benign_cic={bl_cic:.6f}  L_margin(adaptive-replay hinge)={bl_margin:.6f})')
+
+    per_class_hinge = per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, warmup_windows,
+                                                       trained_W, sigma=tw.SIGMA)
+    print('\n== per-class adaptive-replay margin hinge ==')
+    for label, hinge_val in per_class_hinge.items():
+        print(f'  {label:20s} mean hinge = {hinge_val:.6f}' if hinge_val is not None else f'  {label:20s} (no windows)')
+
+    train_losses_trained_W = tw.pooled_training_losses(train_groups_lab, trained_W)
+    trained_tau = float(np.mean(train_losses_trained_W) + tw.SIGMA * np.std(train_losses_trained_W))
+    print(f'\ncalibrated tau for trained weights: mean={np.mean(train_losses_trained_W):.4f} '
+          f'std={np.std(train_losses_trained_W):.4f} -> base_tau={trained_tau:.4f} '
+          f'(pooled over {len(train_losses_trained_W)} LAB training-benign windows only, never CIC benign)')
+
+    print('\n== CIC margin-training classes (Hulk, GoldenEye), own-data window-level recall under the REAL '
+          'score_cic_block scoring (training performance, NOT held out) -- the primary success criterion ==')
+    cic_margin_recall = {}
+    PRIOR_BEST = {'DoS Hulk': 28.58, 'DoS GoldenEye': 63.20}   # batch 3 and batch 2 respectively, published numbers
+    for label in CIC_TRAIN_LABELS:
+        feats = attack_train_groups_cic[label][0][1]
+        src_ips_f = cic_train_src_ips[label]
+        res = score_cic_block(feats, src_ips_f, trained_W, trained_tau, known_attacker_ip=KNOWN_ATTACKER_IP)
+        recall_pct = 100 * res['alerts'] / res['n'] if res['n'] else 0.0
+        cic_margin_recall[label] = recall_pct
+        beats_prior = recall_pct > PRIOR_BEST.get(label, 0.0)
+        print(f"  {label:20s} n={res['n']}  adaptive-margin-trained recall {pct(res['alerts'], res['n'])}  "
+              f"(prior best: {PRIOR_BEST.get(label, 0.0):.2f}%) -> {'BEATS PRIOR BEST' if beats_prior else 'does not beat prior best'}")
+
+    print('\n== secondary context: informal peek (NOT a held-out result, same caveat as every prior batch) ==')
+    try:
+        sr.W = baseline_W
+        print('-- lab held-out split (9 benign/13 attack), baseline --')
+        tw.score_holdout(holdout_lab, baseline_W, sr.BASE_TAU, 'baseline')
+        sr.W = np.asarray(trained_W, dtype=np.float32)
+        print('-- lab held-out split (9 benign/13 attack), adaptive-margin-trained --')
+        lab_result = tw.score_holdout(holdout_lab, trained_W, trained_tau, 'adaptive-margin')
+    finally:
+        sr.W = baseline_W
+    print('-- CIC-benign peek slice (disjoint from the training anchor), false-positive rate only --')
+    cic_benign_fp_pct = {}
+    for day, (peek_feats, peek_src) in cic_benign_peek.items():
+        res = score_cic_block(peek_feats, peek_src, trained_W, trained_tau)
+        fp_pct = 100 * res['alerts'] / res['n'] if res['n'] else 0.0
+        cic_benign_fp_pct[day] = fp_pct
+        print(f"  {day:10s} n={res['n']}  adaptive-margin-trained FP rate {pct(res['alerts'], res['n'])}")
+
+    print('\n== PRIMARY success criterion (PREREGISTRATION.md batch 7 addendum, decided before this run) ==')
+    beats_both = all(cic_margin_recall[label] > PRIOR_BEST[label] for label in CIC_TRAIN_LABELS)
+    for label in CIC_TRAIN_LABELS:
+        print(f'  {label}: {cic_margin_recall[label]:.2f}% vs prior best {PRIOR_BEST[label]:.2f}% -> '
+              f"{'PASS' if cic_margin_recall[label] > PRIOR_BEST[label] else 'FAIL'}")
+    print(f"\nOVERALL: {'PASS -- beats the best-ever prior recall on BOTH classes' if beats_both else 'FAIL -- does not beat prior best on at least one class'}")
+
+    if args.out_weights:
+        payload = {
+            'weights': [float(x) for x in trained_W],
+            'tau': trained_tau,
+            'objective': 'two-anchor-adaptive-margin',
+            'batch': 'sentinel-training-two-anchor batch 7 (Adaptive-replay-aware margin; sanity check, NOT a '
+                     'validated or recommended result)',
+            'beta_cic_benign': args.beta_cic_benign,
+            'warmup_windows': WARMUP_CAP,
+            'per_class_adaptive_margin_hinge': per_class_hinge,
+            'cic_margin_recall_pct': cic_margin_recall,
+            'prior_best_recall_pct': PRIOR_BEST,
+            'lambda': args.lambda_weight,
+            'sanity_check_sample_sizes': {
+                'lab_benign_training_windows': sum(len(w) for runs in train_groups_lab.values() for _rid, w in runs),
+                'cic_benign_anchor_windows_per_day': args.cic_benign_anchor_cap,
+                'cic_attack_margin_windows_per_class': args.cic_attack_train_cap,
+            },
+            'training_objective_value': float(trained_loss),
+            'training_objective_components': {'L_benign_lab': tr_lab, 'L_benign_cic': tr_cic, 'L_margin_adaptive_replay': tr_margin},
+            'bound_pinned_weights': [{'index': i, 'value': w, 'lower': lo, 'upper': hi} for i, w, lo, hi in pinned],
+            'informal_peek': {'lab_holdout_detected': lab_result['detected'], 'lab_holdout_attacks': lab_result['attacks'],
+                               'lab_holdout_fp': lab_result['falsePositives'], 'lab_holdout_benign': lab_result['benign'],
+                               'cic_benign_fp_pct': cic_benign_fp_pct},
+            'success_criterion_pass': beats_both,
+            'seed': args.seed,
+            'note': 'Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-adaptive-margin; see '
+                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 7 addendum). '
+                    'This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not '
+                    'recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under '
+                    'any circumstance.',
+        }
+        with open(args.out_weights, 'w') as fh:
+            json.dump(payload, fh, indent=2)
+            fh.write('\n')
+        print(f'\nwrote {args.out_weights}')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('datadir', help='docs/benchmarks/results/labelled-runs (the lab\'s own captures)')
@@ -490,9 +821,11 @@ def main():
     ap.add_argument('--lambda-weight', type=float, default=tw.LAMBDA, dest='lambda_weight')
     ap.add_argument('--seed', type=int, default=tw.DE_SEED)
     ap.add_argument('--out-weights', default=None)
-    ap.add_argument('--objective', choices=['margin-cic', 'two-anchor'], default='margin-cic',
-                     help='margin-cic (default): round 3\'s exact objective, unmodified. two-anchor: this batch\'s '
-                          'new objective (adds a CIC-benign reconstruction anchor term); see '
+    ap.add_argument('--objective', choices=['margin-cic', 'two-anchor', 'two-anchor-adaptive-margin'], default='margin-cic',
+                     help='margin-cic (default): round 3\'s exact objective, unmodified. two-anchor: batch 1-6\'s '
+                          'objective (adds a CIC-benign reconstruction anchor term). two-anchor-adaptive-margin '
+                          '(batch 7): same benign terms, but the margin term replays attack-training windows '
+                          'through a real sr.Adaptive instead of a static target; see '
                           'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md')
     ap.add_argument('--beta-cic-benign', type=float, default=BETA_CIC_BENIGN_DEFAULT, dest='beta_cic_benign',
                      help=f'--objective two-anchor only: weight of the new CIC-benign reconstruction term relative '
@@ -512,9 +845,9 @@ def main():
                           "fix for the cross-architecture class-imbalance pattern batches 2-4 measured; see "
                           "docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 5 addendum")
     args = ap.parse_args()
-    if args.objective == 'two-anchor':
+    if args.objective in ('two-anchor', 'two-anchor-adaptive-margin'):
         if args.cic_benign_anchor_cap is None or args.cic_attack_train_cap is None:
-            ap.error('--objective two-anchor requires --cic-benign-anchor-cap and --cic-attack-train-cap')
+            ap.error(f'--objective {args.objective} requires --cic-benign-anchor-cap and --cic-attack-train-cap')
 
     # --- Lab side: benign training pool and the identical reduced held-out split PR #106 published against, reused
     # unchanged via load_and_split(objective="margin"). attack_train_groups_lab/attack_train_report_lab here are the
@@ -547,6 +880,9 @@ def main():
 
     if args.objective == 'two-anchor':
         run_two_anchor(args, train_groups_lab, holdout_lab)
+        return
+    if args.objective == 'two-anchor-adaptive-margin':
+        run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab)
         return
 
     # --- CIC side: load the sampler's capped buckets.

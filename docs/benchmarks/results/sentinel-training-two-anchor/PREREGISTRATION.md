@@ -1,5 +1,121 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-25 addendum (batch 7, owner-approved, added before batch 7's own numbers were looked at):**
+`scripts/trace-margin-adaptive-gap.py`'s traced example (batch 6's report) showed the actual mechanism behind the
+recurring hinge-vs-recall disconnect: every margin formula tried so far (batches 2, 3, 5, 6) scores a training
+window against a **static** target (`benign_mean(W) + SIGMA*std(W) + MARGIN`, one fixed number), but the real
+deployed decision is made by `sr.Adaptive`, whose threshold is **dynamic and history-dependent** — frozen during a
+sustained alert run, then capable of spiking sharply after just one or two post-alert dips (the variance update
+squares the deviation from a still-low running mean). A weight configuration can clear the static bar by a wide
+margin and still get swallowed by the real controller. This batch replaces the static target with a margin term
+computed by **actually replaying attack-training windows through the real, unmodified `sr.Adaptive` class**,
+sequentially, so the training objective is scored against the same dynamic decision the deployed system actually
+makes.
+
+## Scope boundary, repeated because it is the one that matters most this batch
+
+This is a **training-side fix only**. `scripts/sentinel-replay.py`'s `Adaptive` class is used exactly as it already
+is — imported, called via its existing public `check()` method, **never edited, subclassed with different logic, or
+monkeypatched**. No deployment-path file, the native kernel, or `gpu-sdn-anomaly-sentinel.py`'s default behavior is
+touched, identical boundary to every prior batch. The change here is entirely in *what training optimizes against*,
+not in what the live system runs or how it decides.
+
+## Design decisions, made and justified before running
+
+- **Architecture and margin-combine: 10 parameters, `mean`-combine (batch 2/3's exact baseline), not stacked with
+  batch 5's `max`.** This batch's question is narrower and more specific than "does any lever help" — it is "does
+  making the margin term honest about the *dynamic* threshold, by itself, close the hinge-vs-recall gap." Stacking it
+  with batch 5's still-unresolved class-imbalance fix (which batch 6 showed can itself produce a new failure mode —
+  uniform collapse) would make it impossible to tell which change is responsible for any result. The cleanest
+  isolation point is the simplest prior configuration this workstream has, batch 2/3's own baseline, changing only
+  the margin mechanism.
+- **Only the margin term changes; `L_benign_lab` and `L_benign_cic` stay exactly as pooled nested means, unchanged.**
+  Reasoning (matching the task's own stated default): `Adaptive` replay specifically matters for *is this attack
+  window's loss above the threshold it would actually face*, a sequential, order-dependent question. Whether benign
+  traffic reconstructs well is not a sequential question in the same sense — those terms were never about "would an
+  Adaptive replay flag this," they are about reconstruction fidelity, and introducing a sequential replay there would
+  conflate two different questions (reconstruction quality vs. alerting behavior) that this project has kept
+  separate since round 1.
+- **No static `MARGIN` buffer added to the new hinge.** Every prior hinge used `target = benign_mean + SIGMA*std +
+  MARGIN` (`MARGIN=0.02`), an explicit safety buffer beyond the bar a window had to clear. The real deployed decision
+  has no such buffer — `Adaptive.check()` alerts the instant loss reaches its own computed threshold, nothing more.
+  Keeping an artificial buffer here would reintroduce exactly the kind of "training optimizes against a proxy, not
+  the real decision" gap this batch exists to remove. The new hinge is `max(0, threshold_from_adaptive - loss)`,
+  where `threshold_from_adaptive` is **read directly from `Adaptive.check()`'s own second return value** (the exact
+  quantity the real decision is made against), not a hand-rederived formula — this also means there is no new
+  reimplementation of the threshold arithmetic to drift from the real class, by construction.
+- **Warm-up: a fixed, deterministic 500-window sequence of the lab's own training-benign windows**, built once (not
+  resampled per evaluation) by concatenating windows across the 8 training-benign patterns (sorted alphabetically)
+  and their runs (sorted by run id) in that order, and taking the first 500. This models the real deployment
+  scenario this fix is about: the daemon has been running continuously on **the lab's own traffic — the actual
+  deployment target, same reasoning as every benign-anchoring choice this workstream has made** — before an attack
+  ever starts, so its `Adaptive` instance already has real operating history, not a cold start. `base_tau(W)` for the
+  instance's own `tau` floor is computed exactly as every prior round: `mean + SIGMA*std` of the **full** lab-benign
+  training pool (not just the 500-window warm-up slice) — unchanged from every prior batch's calibration. 500 is a
+  deliberately modest, bounded size (not the full 6,264-window pool): the per-objective-evaluation cost of this
+  mechanism is a sequential Python loop, not a vectorized array op, and a smaller warm-up keeps a batch-1-scale
+  sanity check fast without any evidence yet that a much longer history is needed to reach a representative EMA
+  steady state (500 windows comfortably exceeds the `alpha=0.05` EMA's own effective memory window of roughly
+  `1/alpha=20` updates many times over).
+- **A fresh, independently-warmed `Adaptive` instance per attack class**, not one instance carried across both
+  classes — each class represents an independent hypothetical "an attack of this shape starts now" scenario; sharing
+  state across classes would make one class's hinge depend on an arbitrary artifact of which class happened to be
+  replayed first, not a property of the class itself.
+- **A real, disclosed limit of this simulation, stated now:** a fixed 500-window warm-up snapshot is far less varied
+  than what the live `Adaptive` instance's operating history would actually look like at an arbitrary, unpredictable
+  moment in continuous deployment (a single snapshot, not a distribution over "whatever the EMA happened to have seen
+  recently"). This batch tests whether the mechanism moves the needle at all with a deliberately simple warm-up, not
+  a claim that this warm-up is itself a faithful model of every possible operating state the real controller could be
+  in when an attack begins.
+
+## Data, bounds, optimizer: batch-1 scale, as in every batch except batch 2
+
+Lab benign training pool unchanged (~6,264 windows, 8 patterns) — both for `L_benign_lab` and as the source of the
+500-window warm-up slice. CIC benign anchor: 2,000 windows/day (Wednesday, Friday pre-attack), unchanged. CIC
+attack-training population: 2,000 windows/class (`DoS Hulk`, `DoS GoldenEye`), unchanged — these are now **also** the
+sequence replayed through the simulated `Adaptive`, in the same time order `load_npz_bucket` already provides.
+Bounds `[-3.0, 5.0]` for all 10 weights, unchanged. **Optimizer budget: the original 10-dimensional scale**
+(`popsize=20`, `maxiter=150`, `Nelder-Mead` polish `maxiter=5000`), unchanged from batch 2/3 — this batch's added
+cost is a per-evaluation sequential replay (roughly `(500 warm-up + 2,000 attack) × 2 classes = 5,000` lightweight
+Python-level `Adaptive.check()` calls per objective evaluation), not a dimensionality increase, so there is no
+batch-4-style justification for reducing the search budget; the measured wall-clock cost is reported honestly rather
+than the budget being shrunk pre-emptively on a guess.
+
+## Self-check
+
+Reuses `scripts/train-sentinel-weights.py`'s `self_check()` unchanged for the kernel formula itself (nothing about
+`kernel_loss`/`kernel_loss_batch` changes this batch). **New check specific to this batch's own orchestration code**
+(not the kernel, which is already covered): since nothing in the replay is randomized, replaying the *same* class's
+windows through two independently-constructed, identically-warmed `Adaptive` instances must produce bit-identical
+hinge sequences — this is checked once before fitting and fails loudly if it does not, catching any accidental
+shared mutable state between classes or non-determinism in the orchestration, the same "catch a drift before fitting
+against it" discipline every prior batch's self-check uses, applied to new code instead of the kernel math.
+
+## Success criterion — the first batch where this is the thing being measured, not an afterthought
+
+**Primary:** for each of `DoS Hulk` and `DoS GoldenEye`, is this batch's measured window-level recall (via
+`scripts/train-sentinel-weights-cic.py`'s unmodified `score_cic_block`, the same real-`Adaptive`-scoring path every
+prior batch has been judged against) **higher than the best recall any single prior batch achieved for that same
+class**, measured at this batch's own calibrated `base_tau`? Concretely, from the published numbers so far: **Hulk's
+best-ever prior result is batch 3's 28.58%; GoldenEye's best-ever prior result is batch 2's 63.20%.** Success this
+batch means beating *both* individually, not a blended average and not "beats more batches than it loses to" — this
+is a direct, concrete test of whether the Adaptive-replay-aware training signal finally produces a weight
+configuration the real deployed scoring agrees is well-separated, which is exactly the question this batch exists to
+answer.
+
+**Secondary, reported for context, not pass/fail:** the same lab held-out recall/FP and CIC-benign FP numbers every
+batch has reported, so this batch's full picture sits next to the other six's in the same terms.
+
+**Honest framing, stated now:** this is a genuinely novel mechanism, never tried in this workstream, aimed precisely
+at the mechanism batch 6 traced — there is real reason to expect it could help more than any prior lever (capacity
+and margin-combine both left the static-vs-dynamic mismatch completely untouched). There is equally real reason it
+might not fully resolve it (the warm-up simplification named above, and the fact that `max(0, threshold - loss)` is
+still only a per-window, not a per-attack-run, success signal — a lone good window still doesn't guarantee a
+*sustained* detection the way `score_cic_block`'s own alert-rate measurement cares about). Either outcome is reported
+as exactly that.
+
+As with every prior batch: no PR, no four-axis held-out evaluation, no deployment-path change, regardless of outcome.
+
 **2026-10-24 addendum (batch 6, owner-approved, added before batch 6's own numbers were looked at):** batches 4 and 5
 each independently changed one variable from batch 2's baseline configuration (10 params, `mean`-combined margin) and
 each independently produced the same previously-never-seen result: **0 weights pinned to a bound** (batch 4: 0/85 at
