@@ -107,9 +107,12 @@ def pct(numerator, denominator):
     return 'n/a (0 windows)' if denominator == 0 else f'{100 * numerator / denominator:.2f}%'
 
 
-def score_cic_block(features, src_ips, W, base_tau, known_attacker_ip=None):
+def score_cic_block(features, src_ips, W, base_tau, known_attacker_ip=None, kernel_loss_fn=None):
     """Axis (b)/(c) scorer: feeds `features` (one capped CIC bucket, already time-ordered) through
-    kernel_loss_batch(_, W) then a FRESH sr.Adaptive(tau=base_tau), in order - the same per-capture-reset semantics
+    kernel_loss_fn(_, W) (default tw.kernel_loss_batch, the existing 10-parameter formula; resolved at call time so
+    a caller testing a different-shaped kernel - e.g. sentinel-training-two-anchor's 85-parameter expanded
+    architecture - can pass its own batch loss function without duplicating this Adaptive-controller bookkeeping)
+    then a FRESH sr.Adaptive(tau=base_tau), in order - the same per-capture-reset semantics
     scripts/score-labelled-runs.py's sentinel_alerts() already uses per lab run (a lab run is itself a short,
     independently-reset capture, not a sample of one always-on stream; treating a CIC block the same way is the same
     semantics, not a new one - see PREREGISTRATION.md). Returns integer counts only - n, alerts, and (if
@@ -118,7 +121,8 @@ def score_cic_block(features, src_ips, W, base_tau, known_attacker_ip=None):
     n = len(features)
     if n == 0:
         return {'n': 0, 'alerts': 0, 'named_correct': None}
-    losses = tw.kernel_loss_batch(features, np.asarray(W, dtype=np.float32))
+    loss_fn = kernel_loss_fn if kernel_loss_fn is not None else tw.kernel_loss_batch
+    losses = loss_fn(features, np.asarray(W, dtype=np.float32))
     ad = sr.Adaptive(tau=base_tau)
     alert_flags = np.array([ad.check(float(loss))[0] for loss in losses], dtype=bool)
     alerts = int(alert_flags.sum())

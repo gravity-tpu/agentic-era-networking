@@ -1,0 +1,65 @@
+== architecture: stage-1 encoder un-tied per 16 groups (85 parameters total; stages 2-4 unchanged, 5 shared scalars) ==
+== objective: two-anchor-expanded (BETA_cic_benign=1.0) ==
+
+== lab benign training pool (unchanged from the rest of this workstream) ==
+8 patterns, 18 runs, 6264 windows
+lab held-out split (informal peek only): 9 benign runs, 13 attack runs
+
+== CIC benign anchor (2,000/day, batch-1 scale) ==
+  Wednesday  anchor(train)=2000 windows   peek(informal only)=2000 windows
+  Friday     anchor(train)=2000 windows   peek(informal only)=2000 windows
+
+== CIC attack margin-training pool (batch-1 scale, bounded subsample of round 3's cached buckets) ==
+  DoS Hulk             2000 windows
+  DoS GoldenEye        2000 windows
+
+self-check: kernel_loss_batch_expanded matches the independent loop-based reference on a real lab window and a real CIC window (ok)
+
+== fitting (85 params, bounds (-3.0, 5.0) for all, popsize=6 (population 510), maxiter=60) ==
+hyperparameters: margin=0.02 sigma=2.5 lambda=1.0 beta_cic_benign=1.0
+all-zero-weights reference -- L_benign_lab=0.139562  L_benign_cic=0.160899  L_margin(raw hinge)=0.116990  total=0.417451
+differential_evolution: nfev=34722 objective=0.148634
+Nelder-Mead polish:     nfev=2000 objective=0.137974
+fitted in 575.4s
+trained training-objective value: 0.137974  (all-zero reference was 0.417451)
+
+== sanity check 1: finite? ==
+all finite: True
+
+== sanity check 2: fitted weights pinned to a bound (within 0.01)? ==
+0/85 pinned (none)
+
+== sanity check 3: per-term values at the trained weights (never blended) ==
+trained weights -- L_benign_lab=0.064868  L_benign_cic=0.070694  L_margin(raw hinge)=0.002411
+(all-zero reference was L_benign_lab=0.139562  L_benign_cic=0.160899  L_margin(raw hinge)=0.116990)
+
+calibrated tau for trained weights: mean=0.0613 std=0.0198 -> base_tau=0.1108 (pooled over 6264 LAB training-benign windows only, never CIC benign)
+
+== CIC margin-training classes (Hulk, GoldenEye), own-data window-level recall (training performance, NOT held out) ==
+  DoS Hulk             n=2000  two-anchor-expanded recall 0.15%
+  DoS GoldenEye        n=2000  two-anchor-expanded recall 44.75%
+
+== sanity check 4: informal peek (NOT a held-out result, same caveat as every prior batch) ==
+-- lab held-out split (informal peek), two-anchor-expanded --
+expanded     tau=0.1108  attack detected (right sender): 2/13   benign false positives: 4/9
+    attack-portscan-1pps               attack-detected 0/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 0/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  2/2
+    benign-http-burst-8conns           false-positive  1/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  1/2
+-- CIC-benign peek slice (disjoint from the training anchor), false-positive rate only --
+  Wednesday  n=2000  two-anchor-expanded FP rate 0.25%
+  Friday     n=2000  two-anchor-expanded FP rate 1.65%
+
+== success criterion (PREREGISTRATION.md, decided before this run) ==
+lab recall >= 6/13: 2/13 -> FAIL
+CIC-benign FP <= 2.0% both days: Wednesday=0.25%, Friday=1.65% -> PASS
+CIC-margin recall >= 20.0% both classes: DoS Hulk=0.15%, DoS GoldenEye=44.75% -> FAIL
+
+OVERALL: 1/3 criteria met -- partial - reported as exactly that, not rounded either way
+
+wrote /tmp/two-anchor-sanity-out/trained-weights-expanded-batch4-2026-10-24.json

@@ -1,5 +1,131 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-24 addendum (batch 4, owner-approved, added before batch 4's own numbers were looked at):** batch 3 found a
+sharp cliff, not a gradient — `BETA=0.25` already behaves identically to `BETA=1.0` on every held-out/peek metric
+(lab recall 2/13, lab FP 1/9, CIC-benign FP ~0%), and the underlying weight vectors differ meaningfully between the
+two `BETA` values despite landing on identical discrete outcomes. The owner's hypothesis for this batch: the
+three-way conflict (low lab-benign loss + low CIC-benign loss + a wide lab-attack margin, all at once) may be a
+genuine **capacity ceiling** of the current architecture — ten scalars, heavily weight-tied (the same 4 encoder
+weights + bias applied identically to every one of the 64 packets in a window; the same 2 decoder weights broadcast
+across all 256 reconstructed outputs) — rather than something any `BETA`/`LAMBDA`/`MARGIN` choice could fix. This
+batch tests that hypothesis by giving the model more free parameters, **entirely offline, in the Python replica
+only.**
+
+**Explicit boundary, stated before any code is written:** `src/gpu/gpu_anomaly_kernel.cu` (the native CUDA kernel),
+`scripts/sentinel-replay.py`'s `kernel_loss`/`Extractor`/`Adaptive` (the offline replica of that exact deployed
+formula, pinned by `test/invariants/sentinel-replay.test.ts`), `scripts/gpu-sdn-anomaly-sentinel.py`'s default
+behavior, and `scripts/score-labelled-runs.py` (the shared scoring harness several other things in this repo rely on
+being stable) are **not modified** by this batch. `load_cuda_model_weights()` / `--weights-file` expects exactly the
+existing 10-scalar shape; a differently-shaped model cannot be loaded by the live daemon without a new kernel variant,
+hardware rebuild, and re-validation of the fail-closed loader for a new shape — a separate, much larger follow-on
+project, not in scope here. Everything new this batch lives in a new script,
+`scripts/train-sentinel-weights-expanded.py`, with one small, additive, backward-compatible change to
+`scripts/train-sentinel-weights-cic.py`'s `score_cic_block` (an optional `kernel_loss_fn` parameter, default
+unchanged, so the CIC-block scoring plumbing built over the last three batches can be reused for a different-shaped
+kernel instead of being duplicated).
+
+## Architecture: un-tie stage 1 only, per the existing 16 groups — 85 parameters, not the largest option
+
+The current formula (`kernel_loss` in `scripts/sentinel-replay.py`) has four stages: **(1)** an encoder
+(`W[:4]`, `W[4]`) mapping each packet's 4 features to one scalar `h`, with *the same 5 weights applied identically to
+all 64 packets in the window*; **(2)** a bottleneck (`W[5]`, `W[6]`) that sums `h` within each of 16 groups of 4
+consecutive packets (the same grouping the window already has from `h.reshape(16,4)`) and applies one shared
+linear+ReLU; **(3)** a broadcast-decode step (`W[7]`) that repeats the 16 latent values cyclically back out to 64;
+**(4)** a final decode (`W[8]`, `W[9]`) broadcasting those 64 values to the 256 output features via a shared
+sigmoid. Round 1's own README already named stage (1)'s and (4)'s weight-tying as the specific thing that "caps how
+much a fit can possibly discriminate between traffic shapes regardless of how well it is optimized."
+
+**This batch un-ties stage (1) only, along the window's own existing 16-group boundary** (the same grouping stage
+(2) already uses): instead of one shared 5-parameter encoder (4 weights + bias) applied to all 64 packets, each of
+the 16 groups of 4 consecutive packets gets its **own** 5-parameter encoder. Stages (2), (3), (4) are left exactly
+as they are — still one shared `W5`/`W6`, one shared `W7`, one shared `W8`/`W9`. **Total: 16 × 5 + 5 = 85
+parameters** (vs. the current 10), laid out as an `(80,)` block of 16 per-group `(w0,w1,w2,w3,bias)` tuples followed
+by the unchanged 5 shared scalars.
+
+**Why this level, not more or less:** stage (1)'s tying is the most severe in the current formula — it forces the
+reconstruction to treat a packet at the start of a 64-packet window identically to one at the end, discarding any
+temporal-position information entirely, even though the detector's whole job is reading a time-ordered sequence for
+burst/onset behavior. Un-tying it along the window's *own* existing grouping (not inventing a new one, e.g.
+per-packet) is the smallest change that removes that specific blindness, reuses structure the formula already has,
+and is cheap enough to search with a bounded optimizer budget at batch-1 data scale. A fuller expansion (per-packet
+stage 1 = 64×5 = 320 params, or also un-tying stages 2-4 per group) was considered and rejected for *this* batch
+specifically because the question being asked is "does *any* added capacity move the needle at all" — an 8.5x
+increase (10 → 85) is already a substantial, clearly-motivated test of that question; reaching for the largest
+possible expansion first would conflate "capacity doesn't help" with "the search couldn't cover a much bigger space
+on a sanity-check budget," which this batch is specifically trying to avoid confounding.
+
+## Objective, bounds, data: the two-anchor formula unchanged, `BETA=1.0` (not `0.25`)
+
+Reuses the exact two-anchor objective from batches 1-2 (`L(W) = L_benign_lab(W) + BETA * L_benign_cic(W) + LAMBDA *
+L_margin(W)`, same hinge formula, `MARGIN=0.02`, `SIGMA=2.5`, `LAMBDA=1.0`), with the loss arithmetic computed by a
+**new** `kernel_loss_batch_expanded` instead of `kernel_loss_batch` — no change to the formula's shape, only to which
+per-window scalar function evaluates it. **`BETA=1.0`**, not batch 3's `0.25`: this batch's question is whether more
+capacity resolves the conflict under the *strongest* version of the competing pressure (where batches 1-2 measured
+the worst recall collapse and the worst bound-pinning), which is the most informative place to test "does capacity
+help at all" — if `BETA=1.0` still can't be satisfied with 85 parameters, a milder `BETA` is unlikely to need rescuing
+by capacity either, and if it *can* be satisfied at `BETA=1.0`, that is unambiguous evidence capacity was the limit.
+
+Bounds: `[-3.0, 5.0]` for all 85 parameters, unchanged from every prior round's box — reused for continuity (many of
+the new parameters play the same functional role, an encoder weight or a bias, as the ones already in that box) and
+because this batch is not testing whether a different box helps, only whether more free parameters inside the
+*same* box do.
+
+Data: **batch-1 scale, reused as-is** — the lab's unchanged full benign-training pool (~6,264 windows), the CIC
+benign anchor (2,000 windows/day, Wednesday + Friday pre-attack), and the CIC attack margin-training pool (2,000
+windows/class, `DoS Hulk` + `DoS GoldenEye`) — all drawn from the same cached `.npz` files and index ranges batch 1
+used. The lab's existing 9-benign/13-attack reduced held-out split is reused for the same informal peek batches 1-3
+used (not a formal axis (a) evaluation).
+
+**Optimizer budget, deliberately reduced from batches 1-3 and why:** `scipy.optimize.differential_evolution`'s
+`popsize` parameter is a *multiplier on the number of parameters* — the actual population is `popsize × ndim`. At
+the prior rounds' `popsize=20` and `ndim=10`, that is a population of 200; at `ndim=85` it would be 1,700, roughly
+8.5x more function evaluations per generation at the same `maxiter`. Run at that scale, this sanity check would cost
+roughly 8.5x batch 1's runtime for no benefit to what this batch needs to learn. **`popsize` is reduced to `6`
+(population 510) and `maxiter` to `60`** (vs. 150), chosen so the total evaluation budget (`population × (maxiter+1)`
+≈ 31,110) lands close to batch 1's own `nfev` (30,211) — a deliberately *comparable total search budget* to batch 1,
+not a comparable per-dimension budget (which would need far more). **This is disclosed plainly as a real limit of
+this sanity check, not hidden**: an 85-dimensional space searched with roughly the same total evaluation count as a
+10-dimensional one is a much sparser relative search, and a negative result here (capacity doesn't seem to help)
+cannot fully rule out that a properly-scaled search budget would find a better 85-parameter fit. A positive result
+(capacity does help, even under-searched) would be the stronger, more informative outcome either way. The
+`Nelder-Mead` polish step's `maxiter`/`maxfev` are reduced from `5000` to `2000` for the same cost-bounding reason.
+
+## Self-check: no pre-existing oracle exists for this formula, so one is built for this batch specifically
+
+Every prior round's `self_check()` verifies a vectorized re-implementation against `sr.kernel_loss`, the known-good,
+already-pinned reference for the *existing* 10-parameter formula. No such reference exists for the new 85-parameter
+shape, because it has never been implemented before this batch. This batch writes an independent, deliberately
+un-vectorized, loop-based scalar reference (`kernel_loss_scalar_expanded`, one packet/group at a time, no batching
+tricks) of the *same intended formula* as `kernel_loss_batch_expanded`, and checks the two agree (same tolerance
+discipline as the existing `self_check`: `1e-4`, loosened only at the `BOUNDS` corners where the sigmoid saturates)
+at the compiled-in-style defaults (all-zero and a few arbitrary small values), both `BOUNDS` corners, and several
+random interior points, on both a real lab window and a real CIC window — this is not a "does it match the deployed
+kernel" check (there is nothing deployed to match), it is a "do two independently-written codings of the same new
+formula agree" check, the same discipline for the same reason, applied to new code instead of old.
+
+## Success criterion for this sanity check, decided now
+
+Stated concretely, per the task's own framing, checked against the informal lab-held-out peek and the CIC-benign
+peek (same small, non-formal samples as batches 1-3, not a held-out-validated claim either way):
+
+- **Lab held-out attack-detected (right sender) ≥ 6/13**, AND
+- **CIC-benign false-positive rate ≤ 2% on both days**, AND
+- **Non-trivial CIC-margin recall on *both* training classes** (`DoS Hulk` and `DoS GoldenEye`), defined as **≥20%
+  window-level recall on each**, not just one — batches 2 and 3 both showed one class at high recall and the other
+  barely above baseline under the existing 2-class nested mean; requiring both classes to clear a bar avoids crediting
+  the same lopsided-learning pattern as "capacity fixed it" when it may have just moved which class benefits.
+
+**If all three hold:** read as real evidence that capacity, not the objective or the data, was the binding
+constraint, and that a full-scale run of this architecture (not attempted this batch) is a reasonable next step.
+**If lab recall or CIC-margin recall stay collapsed even with 85 parameters, while the CIC-benign fix still holds:**
+read as evidence the cliff is a property of the *objective* (the three-way pull between the terms), not of capacity
+— capacity alone, at least at this level and this search budget, does not resolve it, which is itself a legitimate,
+useful, reportable finding, not a failed experiment. Partial outcomes (e.g. two of three criteria met) are reported
+as exactly that, not rounded toward either reading.
+
+As with every prior batch in this workstream: no PR, no four-axis held-out evaluation, no deployment-path change,
+regardless of outcome.
+
 **2026-10-24 addendum (batch 3, owner-approved, added before batch 3's own numbers were looked at):** batch 2
 resolved batch 1's ambiguity against the sample-size explanation: at the full CIC attack-training cap, lab held-out
 recall stayed exactly at 2/13 (identical to batch 1's smaller sample), and weight-bound pinning got worse (1/10 →
