@@ -69,22 +69,22 @@ def parse_bridge_data(data):
     load = os.getloadavg()[0]
     uptime_str = jetson.get("uptime", get_uptime_fallback())
     
-    cpu_pct = jetson.get("cpuUtilizationPct", psutil.cpu_percent(interval=None))
-    ram_used_g = jetson.get("ramUsedBytes", 0) / (1024**3)
-    ram_tot_g = jetson.get("ramTotalBytes", 8 * 1024**3) / (1024**3)
+    cpu_pct = float(jetson.get("cpuUtilizationPct", psutil.cpu_percent(interval=None)) or 0.0)
+    ram_used_g = float(int(jetson.get("ramUsedBytes", 0) or 0)) / (1024**3)
+    ram_tot_g = float(int(jetson.get("ramTotalBytes", 8 * 1024**3) or (8 * 1024**3))) / (1024**3)
     ram_pct = int((ram_used_g / ram_tot_g * 100)) if ram_tot_g > 0 else 0
     
-    nvme_used_g = jetson.get("nvmeUsedBytes", 0) / (1024**3)
-    nvme_tot_g = jetson.get("nvmeTotalBytes", 500 * 1024**3) / (1024**3)
+    nvme_used_g = float(int(jetson.get("nvmeUsedBytes", 0) or 0)) / (1024**3)
+    nvme_tot_g = float(int(jetson.get("nvmeTotalBytes", 500 * 1024**3) or (500 * 1024**3))) / (1024**3)
     nvme_pct = int((nvme_used_g / nvme_tot_g * 100)) if nvme_tot_g > 0 else 0
     
-    cpu_c = temps.get("cpuC", 0)
-    gpu_c = temps.get("gpuC", 0)
-    soc_c = temps.get("socC", 0)
-    tj_c = temps.get("junctionC", 0)
+    cpu_c = float(temps.get("cpuC", 0) or 0)
+    gpu_c = float(temps.get("gpuC", 0) or 0)
+    soc_c = float(temps.get("socC", 0) or 0)
+    tj_c = float(temps.get("junctionC", 0) or 0)
     
-    vdd_in_w = (power.get("vddIn", 0) or 0) / 1000.0
-    gpu_rail_w = (power.get("vddCpuGpuCv", 0) or 0) / 1000.0
+    vdd_in_w = float(int(power.get("vddIn", 0) or 0)) / 1000.0
+    gpu_rail_w = float(int(power.get("vddCpuGpuCv", 0) or 0)) / 1000.0
     
     gpu_load, gpu_freq_mhz = get_gpu_sysfs()
     
