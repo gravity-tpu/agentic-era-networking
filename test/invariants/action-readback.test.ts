@@ -170,7 +170,7 @@ describe('action-level readback verdict', () => {
 
   it('compares output ports as a set, in any order', () => {
     const entries = faithful();
-    const idx = policy.findIndex((r) => r.id === 'p1-arp') + 1; // intended [2, 3]
+    const idx = policy.findIndex((r) => r.id === 'p1-arp-allow-10.0.2.50') + 1; // intended [2, 3]
     entries[idx] = entryFrom(flowMods[idx - 1] as Buffer, applyActions(outputAction(3), outputAction(2)));
     expect(readback(entries).actions.status).toBe('confirmed');
   });
@@ -233,7 +233,7 @@ describe('action-level readback verdict', () => {
 
   it('a real port mismatch outranks an absent table-miss: mismatch, not unobservable', () => {
     const entries = faithful();
-    const idx = policy.findIndex((r) => r.id === 'p1-arp') + 1;
+    const idx = policy.findIndex((r) => r.id === 'p1-arp-allow-10.0.2.50') + 1;
     entries[idx] = entryFrom(flowMods[idx - 1] as Buffer, applyActions(outputAction(2))); // intended [2, 3]
     const v = readback(entries.slice(1)); // and no table-miss entry
     expect(v.actions.tableMiss).toBe('absent');

@@ -9,6 +9,7 @@
 
 import type { IntentSpec } from './intent-spec.js';
 import {
+  DEFAULT_WORKLOAD_HOSTS,
   ETH_TYPE_ARP,
   ETH_TYPE_IPV4,
   WORKLOAD_PREFIX_LEN,
@@ -26,15 +27,20 @@ const P3 = ZODIAC_PORT_TAP;
  * Port-1 isolation as an intent, written independently of `buildPort1IsolationPolicy`.
  * Port 4 is the Zodiac FX OpenFlow management port and is not under flow-table control.
  *
- * The ARP clauses encode the documented residual exposure (ARP crosses P1 and P2 because
- * ARP_SPA/ARP_TPA matching is unverified in firmware 0.86, roadmap A10). They are permissions the
- * intent grants knowingly, not something the checker overlooks.
+ * The ARP clauses encode A10 (ARP confinement, workload -> uplink direction): a known workload host
+ * may reach the uplink only by claiming its own address (one clause per `DEFAULT_WORKLOAD_HOSTS`
+ * entry, evaluated first); any other ARP_SPA falls to `p1-everything-else`, which permits only the
+ * tap. Confirmed on real hardware that firmware 0.86 enforces ARP_SPA matching
+ * (docs/benchmarks/results/a10-arp-spa-feasibility/), so this is no longer a knowingly-granted
+ * residual exposure the way it was before 2026-10-24 -- see `buildPort1IsolationPolicy`'s docstring
+ * for the full history and the uplink -> workload direction's remaining, undemonstrated limit.
  */
 export const PORT1_ISOLATION_INTENT: IntentSpec = {
   id: 'port1-isolation/v1',
   description:
-    'Workload segment 10.0.2.0/24 on P1 may only exchange intra-segment IPv4 and ARP with the uplink (P2); ' +
-    'everything else from P1 goes only to the tap (P3); the uplink reaches P1 only for IPv4 to the segment and ARP.',
+    'Workload segment 10.0.2.0/24 on P1 may only exchange intra-segment IPv4 with the uplink (P2), and ARP only ' +
+    'when claiming one of its own known addresses; everything else from P1 goes only to the tap (P3); the uplink ' +
+    'reaches P1 only for IPv4 to the segment and ARP.',
   ports: [P1, P2, P3],
   clauses: [
     {
@@ -50,7 +56,12 @@ export const PORT1_ISOLATION_INTENT: IntentSpec = {
       mustReach: [P2],
       mayReach: [P2, P3],
     },
-    { id: 'p1-arp', match: { inPort: P1, etherType: ETH_TYPE_ARP }, mustReach: [P2], mayReach: [P2, P3] },
+    ...DEFAULT_WORKLOAD_HOSTS.map((host) => ({
+      id: `p1-arp-allow-${host}`,
+      match: { inPort: P1, etherType: ETH_TYPE_ARP, arpSpa: host },
+      mustReach: [P2],
+      mayReach: [P2, P3],
+    })),
     { id: 'p1-everything-else', match: { inPort: P1 }, mustReach: [], mayReach: [P3] },
     {
       id: 'p2-ipv4-to-segment',
@@ -144,7 +155,12 @@ export const TAP_RETURN_ISOLATION_INTENT: IntentSpec = {
       mustReach: [P2, P3],
       mayReach: [P2, P3],
     },
-    { id: 'p1-arp', match: { inPort: P1, etherType: ETH_TYPE_ARP }, mustReach: [P2, P3], mayReach: [P2, P3] },
+    ...DEFAULT_WORKLOAD_HOSTS.map((host) => ({
+      id: `p1-arp-allow-${host}`,
+      match: { inPort: P1, etherType: ETH_TYPE_ARP, arpSpa: host },
+      mustReach: [P2, P3],
+      mayReach: [P2, P3],
+    })),
     { id: 'p1-everything-else', match: { inPort: P1 }, mustReach: [P3], mayReach: [P3] },
     {
       id: 'p2-ipv4-to-segment',

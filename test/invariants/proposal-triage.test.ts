@@ -55,7 +55,7 @@ describe('triageProposal', () => {
     expect(category(edit((r) => { delete (r[0]!['match'] as Record<string, unknown>)['etherType']; return r; }))).toBe('ERR_PREREQUISITE');
   });
   it('flags a rule that outputs to its own ingress port as ERR_HAIRPIN', () => {
-    expect(category(edit((r) => { r[5]!['outputPorts'] = [3]; return r; }))).toBe('ERR_HAIRPIN');
+    expect(category(edit((r) => { r[6]!['outputPorts'] = [3]; return r; }))).toBe('ERR_HAIRPIN');
   });
   it('flags equal-priority overlap with different outputs as ERR_AMBIGUITY', () => {
     expect(category(edit((r) => { r.push({ id: 'dup', priority: 200, outputPorts: [3], match: { inPort: 1, etherType: 0x0806 } }); return r; }))).toBe('ERR_AMBIGUITY');
@@ -64,13 +64,13 @@ describe('triageProposal', () => {
     expect(category(edit((r) => { r.push({ id: 'dead', priority: 120, outputPorts: [2], match: { inPort: 3 } }); return r; }))).toBe('ERR_SHADOWED');
   });
   it('flags forwarding all workload traffic to the uplink as ERR_INTENT_LEAK', () => {
-    expect(category(edit((r) => { r[2]!['outputPorts'] = [2, 3]; return r; }))).toBe('ERR_INTENT_LEAK');
+    expect(category(edit((r) => { r[3]!['outputPorts'] = [2, 3]; return r; }))).toBe('ERR_INTENT_LEAK');
   });
   it('flags a policy that drops required traffic as ERR_INTENT_MISSING', () => {
     expect(category(edit((r) => r.filter((x) => x['id'] !== 'p2-arp')))).toBe('ERR_INTENT_MISSING');
   });
   it('reports the first category by fixed precedence and keeps every violation', () => {
-    const p = parseProposal(edit((r) => { r[5]!['outputPorts'] = [3]; r[2]!['outputPorts'] = [2, 3]; return r; }));
+    const p = parseProposal(edit((r) => { r[6]!['outputPorts'] = [3]; r[3]!['outputPorts'] = [2, 3]; return r; }));
     expect(p.ok).toBe(true);
     if (p.ok) {
       const t = triageProposal(p.rules, PORT1_ISOLATION_INTENT);

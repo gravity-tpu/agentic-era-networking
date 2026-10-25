@@ -52,7 +52,10 @@ export interface Triage {
 }
 
 const RULE_KEYS = new Set(['id', 'priority', 'outputPorts', 'match']);
-const MATCH_KEYS = new Set(['inPort', 'etherType', 'srcIp', 'srcIpPrefixLen', 'dstIp', 'dstIpPrefixLen', 'srcMac', 'dstMac']);
+const MATCH_KEYS = new Set([
+  'inPort', 'etherType', 'srcIp', 'srcIpPrefixLen', 'dstIp', 'dstIpPrefixLen', 'srcMac', 'dstMac',
+  'arpSpa', 'arpSpaPrefixLen', 'arpTpa', 'arpTpaPrefixLen',
+]);
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const MAC = /^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$/;
 
@@ -99,8 +102,8 @@ function leniently(raw: unknown): unknown {
   const m = r['match'];
   if (m !== null && typeof m === 'object' && !Array.isArray(m)) {
     const mm: Record<string, unknown> = { ...(m as Record<string, unknown>) };
-    for (const k of ['inPort', 'etherType', 'srcIpPrefixLen', 'dstIpPrefixLen']) mm[k] = asNumber(mm[k]);
-    for (const [ipKey, lenKey] of [['srcIp', 'srcIpPrefixLen'], ['dstIp', 'dstIpPrefixLen']] as const) {
+    for (const k of ['inPort', 'etherType', 'srcIpPrefixLen', 'dstIpPrefixLen', 'arpSpaPrefixLen', 'arpTpaPrefixLen']) mm[k] = asNumber(mm[k]);
+    for (const [ipKey, lenKey] of [['srcIp', 'srcIpPrefixLen'], ['dstIp', 'dstIpPrefixLen'], ['arpSpa', 'arpSpaPrefixLen'], ['arpTpa', 'arpTpaPrefixLen']] as const) {
       const v = mm[ipKey];
       const hit = typeof v === 'string' ? CIDR.exec(v) : null;
       if (hit === null) continue;
@@ -144,8 +147,12 @@ export function parseProposal(text: string, options: ParseOptions = {}): ParsedP
     for (const k of Object.keys(mm)) if (!MATCH_KEYS.has(k)) return syntax(`rule ${r['id']}: unknown match field ${k}`);
     if (mm['inPort'] !== undefined && !isInt(mm['inPort'], 1, MAX_PORT)) return syntax(`rule ${r['id']}: inPort must be 1 to ${MAX_PORT}`);
     if (mm['etherType'] !== undefined && !isInt(mm['etherType'], 0, 65535)) return syntax(`rule ${r['id']}: etherType must be an integer 0 to 65535 (decimal)`);
-    for (const k of ['srcIp', 'dstIp'] as const) if (mm[k] !== undefined && (typeof mm[k] !== 'string' || !IPV4.test(mm[k] as string))) return syntax(`rule ${r['id']}: ${k} is not a dotted IPv4 address`);
-    for (const k of ['srcIpPrefixLen', 'dstIpPrefixLen'] as const) if (mm[k] !== undefined && !isInt(mm[k], 1, 32)) return syntax(`rule ${r['id']}: ${k} must be 1 to 32`);
+    for (const k of ['srcIp', 'dstIp', 'arpSpa', 'arpTpa'] as const) if (mm[k] !== undefined && (typeof mm[k] !== 'string' || !IPV4.test(mm[k] as string))) return syntax(`rule ${r['id']}: ${k} is not a dotted IPv4 address`);
+    for (const k of ['srcIpPrefixLen', 'dstIpPrefixLen', 'arpSpaPrefixLen', 'arpTpaPrefixLen'] as const) if (mm[k] !== undefined && !isInt(mm[k], 1, 32)) return syntax(`rule ${r['id']}: ${k} must be 1 to 32`);
+    // ARP confinement (A10) only admits an exact claimed address: a narrower syntax error here, before
+    // the rule reaches verification, is clearer feedback than the same proposal failing hygiene/isolation
+    // checks downstream for a reason the message there doesn't explain as plainly.
+    for (const k of ['arpSpaPrefixLen', 'arpTpaPrefixLen'] as const) if (mm[k] !== undefined && mm[k] !== 32) return syntax(`rule ${r['id']}: ${k} must be exactly 32; ARP confinement only admits an exact address, not a range`);
     for (const k of ['srcMac', 'dstMac'] as const) if (mm[k] !== undefined && (typeof mm[k] !== 'string' || !MAC.test(mm[k] as string))) return syntax(`rule ${r['id']}: ${k} is not a MAC address`);
     rules.push({
       id: r['id'],

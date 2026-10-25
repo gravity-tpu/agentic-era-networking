@@ -600,6 +600,14 @@ export interface FlowStatsEntry {
   readonly dstIp?: string;
   /** IPV4_DST mask as dotted quad; absent for an exact (unmasked) match. */
   readonly dstMask?: string;
+  /** ARP_SPA value the switch reports for this entry; absent if no such match field was reported. */
+  readonly arpSpa?: string;
+  /** ARP_SPA mask as dotted quad; absent for an exact (unmasked) match. */
+  readonly arpSpaMask?: string;
+  /** ARP_TPA value the switch reports for this entry; absent if no such match field was reported. */
+  readonly arpTpa?: string;
+  /** ARP_TPA mask as dotted quad; absent for an exact (unmasked) match. */
+  readonly arpTpaMask?: string;
   /**
    * What the entry does, from its instruction block (see flow-actions.ts). Always set by parseFlowStatsReply;
    * absent on hand-built entries, which action-level readback treats as carrying no action information.
@@ -612,6 +620,8 @@ const OXM_FIELD_IN_PORT = 0;
 const OXM_FIELD_ETH_TYPE = 5;
 const OXM_FIELD_IPV4_SRC = 11;
 const OXM_FIELD_IPV4_DST = 12;
+const OXM_FIELD_ARP_SPA = 22;
+const OXM_FIELD_ARP_TPA = 23;
 
 const dotted = (b: Buffer, off: number): string => `${b[off]}.${b[off + 1]}.${b[off + 2]}.${b[off + 3]}`;
 
@@ -625,7 +635,10 @@ function parseEntryMatch(
   matchOff: number,
   entryEnd: number,
 ): Omit<FlowStatsEntry, 'tableId' | 'priority' | 'packetCount' | 'byteCount' | 'actions'> {
-  const out: { srcIp?: string; srcMask?: string; inPort?: number; ethType?: number; dstIp?: string; dstMask?: string } = {};
+  const out: {
+    srcIp?: string; srcMask?: string; inPort?: number; ethType?: number; dstIp?: string; dstMask?: string;
+    arpSpa?: string; arpSpaMask?: string; arpTpa?: string; arpTpaMask?: string;
+  } = {};
   if (matchOff + 4 > entryEnd || packet.readUInt16BE(matchOff) !== 1) return out;
   const matchLen = packet.readUInt16BE(matchOff + 2);
   const end = Math.min(matchOff + matchLen, entryEnd);
@@ -652,6 +665,18 @@ function parseEntryMatch(
       else if (hasMask && len === 8) {
         out.dstIp = dotted(packet, p + 4);
         out.dstMask = dotted(packet, p + 8);
+      }
+    } else if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_ARP_SPA) {
+      if (!hasMask && len === 4) out.arpSpa = dotted(packet, p + 4);
+      else if (hasMask && len === 8) {
+        out.arpSpa = dotted(packet, p + 4);
+        out.arpSpaMask = dotted(packet, p + 8);
+      }
+    } else if (cls === OXM_CLASS_BASIC && field === OXM_FIELD_ARP_TPA) {
+      if (!hasMask && len === 4) out.arpTpa = dotted(packet, p + 4);
+      else if (hasMask && len === 8) {
+        out.arpTpa = dotted(packet, p + 4);
+        out.arpTpaMask = dotted(packet, p + 8);
       }
     }
     p += 4 + len;
