@@ -1,0 +1,57 @@
+{
+  "weights": [
+    -0.7518253701823479,
+    0.034663140886584023,
+    -0.06756153290233821,
+    4.763767507458395,
+    3.1198913630748155,
+    1.5214901641763259,
+    1.8444242595400409,
+    4.984226042635216,
+    -2.561320385281504,
+    0.9754438647697683
+  ],
+  "tau": 0.19184966217144198,
+  "objective": "two-anchor-adaptive-margin",
+  "batch": "sentinel-training-two-anchor batch 8 (Adaptive-replay-aware margin, COLD-start fix; sanity check, NOT a validated or recommended result)",
+  "beta_cic_benign": 1.0,
+  "warmup_windows": 0,
+  "per_class_adaptive_margin_hinge": {
+    "DoS Hulk": 0.01719649496033842,
+    "DoS GoldenEye": 0.020566098394167405
+  },
+  "cic_margin_recall_pct": {
+    "DoS Hulk": 0.0,
+    "DoS GoldenEye": 38.4
+  },
+  "prior_best_recall_pct": {
+    "DoS Hulk": 28.58,
+    "DoS GoldenEye": 63.2
+  },
+  "lambda": 1.0,
+  "sanity_check_sample_sizes": {
+    "lab_benign_training_windows": 6264,
+    "cic_benign_anchor_windows_per_day": 2000,
+    "cic_attack_margin_windows_per_class": 2000
+  },
+  "training_objective_value": 0.21175868900617373,
+  "training_objective_components": {
+    "L_benign_lab": 0.11794691816681908,
+    "L_benign_cic": 0.07493047416210175,
+    "L_margin_adaptive_replay": 0.018881296677252912
+  },
+  "bound_pinned_weights": [],
+  "informal_peek": {
+    "lab_holdout_detected": 4,
+    "lab_holdout_attacks": 13,
+    "lab_holdout_fp": 1,
+    "lab_holdout_benign": 9,
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.0
+    }
+  },
+  "success_criterion_pass": false,
+  "seed": 42,
+  "note": "Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-adaptive-margin (batch 8: Adaptive replay now starts COLD, no lab-benign warm-up, matching score_cic_block exactly); see docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 7/8 addenda). This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under any circumstance."
+}

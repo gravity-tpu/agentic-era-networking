@@ -1,0 +1,42 @@
+{
+  "weights": [
+    4.849364630184009,
+    1.3149868508845013,
+    0.2555153218853283,
+    -2.1792275562720573,
+    0.204491124505215,
+    -1.9060069445941643,
+    -1.6855288150476737,
+    2.7720692255414354,
+    -1.8644545608023497,
+    0.8155436767957216
+  ],
+  "tau": 0.18184345888418657,
+  "objective": "two-anchor",
+  "batch": "sentinel-training-two-anchor (sanity check, NOT a validated or recommended result)",
+  "beta_cic_benign": 1.0,
+  "margin_combine": "max",
+  "per_class_margin_hinge": {
+    "DoS Hulk": 0.02287921868264675,
+    "DoS GoldenEye": 0.005951465107500553
+  },
+  "margin_hyperparameters": {
+    "margin": 0.02,
+    "sigma": 2.5,
+    "lambda": 1.0
+  },
+  "sanity_check_sample_sizes": {
+    "lab_benign_training_windows": 6264,
+    "cic_benign_anchor_windows_per_day": 2000,
+    "cic_attack_margin_windows_per_class": 2000
+  },
+  "training_objective_value": 0.21763326892895357,
+  "training_objective_components": {
+    "L_benign_lab": 0.11428494857890266,
+    "L_benign_cic": 0.08046910166740417,
+    "L_margin_raw": 0.014415341895073652
+  },
+  "bound_pinned_weights": [],
+  "seed": 42,
+  "note": "Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor; see docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md. This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under any circumstance."
+}

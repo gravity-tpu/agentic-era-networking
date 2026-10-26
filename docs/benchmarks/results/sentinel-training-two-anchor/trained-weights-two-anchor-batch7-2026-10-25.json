@@ -1,0 +1,57 @@
+{
+  "weights": [
+    2.9562673680450895,
+    2.6856109303046005,
+    -0.6199998905344002,
+    1.374480361450512,
+    2.0984498231157205,
+    -0.7584441599462278,
+    -2.4207093925484364,
+    1.1899978399103448,
+    -0.9061219618374203,
+    0.620173694497514
+  ],
+  "tau": 0.16385982967547846,
+  "objective": "two-anchor-adaptive-margin",
+  "batch": "sentinel-training-two-anchor batch 7 (Adaptive-replay-aware margin; sanity check, NOT a validated or recommended result)",
+  "beta_cic_benign": 1.0,
+  "warmup_windows": 500,
+  "per_class_adaptive_margin_hinge": {
+    "DoS Hulk": 0.008967673847769994,
+    "DoS GoldenEye": 0.004157975465331859
+  },
+  "cic_margin_recall_pct": {
+    "DoS Hulk": 1.5,
+    "DoS GoldenEye": 39.1
+  },
+  "prior_best_recall_pct": {
+    "DoS Hulk": 28.58,
+    "DoS GoldenEye": 63.2
+  },
+  "lambda": 1.0,
+  "sanity_check_sample_sizes": {
+    "lab_benign_training_windows": 6264,
+    "cic_benign_anchor_windows_per_day": 2000,
+    "cic_attack_margin_windows_per_class": 2000
+  },
+  "training_objective_value": 0.2011596516867328,
+  "training_objective_components": {
+    "L_benign_lab": 0.11885111033916473,
+    "L_benign_cic": 0.07574571669101715,
+    "L_margin_adaptive_replay": 0.0065628246565509266
+  },
+  "bound_pinned_weights": [],
+  "informal_peek": {
+    "lab_holdout_detected": 2,
+    "lab_holdout_attacks": 13,
+    "lab_holdout_fp": 2,
+    "lab_holdout_benign": 9,
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.0
+    }
+  },
+  "success_criterion_pass": false,
+  "seed": 42,
+  "note": "Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-adaptive-margin; see docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 7 addendum). This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under any circumstance."
+}

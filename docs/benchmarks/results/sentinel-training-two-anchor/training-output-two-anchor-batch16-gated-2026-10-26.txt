@@ -1,0 +1,85 @@
+== batch 15 (option 3): jointly-fit gated two-sub-kernel detector, ONE unified model/threshold ==
+architecture: 23 params (2x10 sub-kernel + 3 gate), bounds (-3.0, 5.0) (sub-kernels) / [(-20.0, 20.0), (-20.0, 20.0), (-10.0, 10.0)] (gate)
+pre-registered bar (must beat batch 13's ensemble AS A SINGLE MODEL): lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs
+
+== CIC benign anchor ==
+  Wednesday  anchor(train)=2000 windows   peek=2000 windows
+  Friday     anchor(train)=2000 windows   peek=2000 windows
+
+== CIC attack margin-training pool ==
+  DoS Hulk             2000 windows
+  DoS GoldenEye        2000 windows
+
+== self-check: new arithmetic (gate_values, gated_kernel_loss_batch, gated_sentinel_alerts) ==
+ok: gate_values matches an independent loop-based reference; gated_kernel_loss_batch reduces to tw.kernel_loss_batch when W_A==W_B; gated_sentinel_alerts matches slr.sentinel_alerts and tsc.score_cic_block(kernel_loss_fn=...) matches the real score_cic_block in that same degenerate case
+
+baseline (W_A=W_B=hardcoded, arbitrary gate) total objective value: 0.388186
+
+== fitting (23 params) ==
+hyperparameters: margin=0.02 sigma=2.5 lambda=1.0 beta_cic_benign=1.0 de_popsize=20 de_maxiter=60 seed=42
+differential_evolution: nfev=28996 objective=0.185287
+Nelder-Mead polish:     nfev=5000 objective=0.170362
+fitted in 1210.7s
+trained W_A: [4.788711, 4.058551, 4.508504, 3.434203, 0.796306, -0.091821, -2.9763, 0.327472, -2.067343, 0.01682]
+trained W_B: [-1.435445, 0.136285, -2.001382, 4.203612, -0.303203, 0.512914, 4.998488, 4.997252, 0.581171, 0.492588]
+trained gate (wg0_ln, wg1_pe, bias): [19.991603, -13.648545, 9.958599]
+trained objective value: 0.170362  (baseline reference was 0.388186)
+
+== sanity check 1: finite? ==
+all finite: True
+
+== sanity check 2: any fitted weight pinned to its bound (within 0.01) ==
+PINNED (3/23 weights):
+  index 16 (W_B) = 4.998488  (upper bound, distance 0.001512)
+  index 17 (W_B) = 4.997252  (upper bound, distance 0.002748)
+  index 20 (gate) = 19.991603  (upper bound, distance 0.008397)
+
+== sanity check 3: per-term values at the trained weights (never blended) ==
+L_benign_lab=0.107807  L_benign_cic=0.061558  L_margin(raw hinge)=0.000997
+
+calibrated tau: mean=0.0938 std=0.0309 -> base_tau=0.1712 (pooled over 6264 LAB training-benign windows)
+
+== gate behavior (diagnostic: does the gate differentiate CIC-shaped vs lab-shaped windows?) ==
+  lab-benign training pool           n=  6264  mean gate value (1=favors W_A, 0=favors W_B) = 0.9186  (std 0.1245)
+  CIC DoS Hulk (training)            n=  2000  mean gate value (1=favors W_A, 0=favors W_B) = 0.4906  (std 0.0609)
+  CIC DoS GoldenEye (training)       n=  2000  mean gate value (1=favors W_A, 0=favors W_B) = 0.1928  (std 0.1272)
+  CIC-benign anchor (Wednesday)      n=  2000  mean gate value (1=favors W_A, 0=favors W_B) = 0.9802  (std 0.0424)
+  CIC-benign anchor (Friday)         n=  2000  mean gate value (1=favors W_A, 0=favors W_B) = 0.9808  (std 0.0533)
+
+== EVALUATION: the three core anchors, this one unified model, ONE threshold ==
+  DoS Hulk             recall 5.60%
+  DoS GoldenEye        recall 50.25%
+  Wednesday  CIC-benign FP 0.00%
+  Friday     CIC-benign FP 0.00%
+
+-- lab held-out (run-level) --
+gated (single model)   attack detected (right sender): 4/13   benign false positives: 0/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== PRE-REGISTERED VERDICT (must beat batch 13's ensemble AS A SINGLE MODEL) ==
+  lab held-out detected: 4/13 (FAIL >= 8/13)  [batch 13 ensemble: 10/13]
+  DoS Hulk recall: 5.60% (FAIL >= 90%)  [batch 13 ensemble: 100.00%]
+  DoS GoldenEye recall: 50.25% (FAIL >= 90%)  [batch 13 ensemble: 100.00%]
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)  [batch 13 ensemble: 0.00%]
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)  [batch 13 ensemble: 0.25%]
+
+OVERALL: does NOT beat batch 13 ensemble bar as a single model
+
+== BATCH 14 continuity: out-of-sample CIC classes (never in CIC_TRAIN_LABELS) ==
+  DoS Slowhttptest     n= 20000  recall 0.02%
+  DoS slowloris        n= 20000  recall 12.27%
+  DDoS                 n= 20000  recall 4.48%
+
+wrote /tmp/batch15-out/trained-weights-batch15-gated.json
+
+wrote /tmp/batch15-out/batch15-result.json

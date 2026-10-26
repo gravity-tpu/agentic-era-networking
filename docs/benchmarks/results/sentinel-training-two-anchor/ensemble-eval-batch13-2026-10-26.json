@@ -1,0 +1,69 @@
+{
+  "batch": 13,
+  "method": "OR-ensemble of two already-fitted weight vectors; no training or fitting performed",
+  "pre_registered_bar": {
+    "lab_holdout_detected_gte": 8,
+    "cic_recall_gte_pct": 90.0,
+    "cic_benign_fp_lte_pct": 2.0
+  },
+  "model_a": {
+    "file": "docs/benchmarks/results/sentinel-training-two-anchor/trained-weights-two-anchor-batch10-2026-10-25.json",
+    "tau": 0.18765954167836152,
+    "label": "CIC-shaped (batch 10)"
+  },
+  "model_b": {
+    "file": "(hardcoded sr.W, no file)",
+    "tau": 0.15,
+    "label": "baseline (hardcoded sr.W)",
+    "chosen_over": "PR106 (lab-margin)",
+    "lab_holdout_candidates": {
+      "baseline (hardcoded sr.W)": {
+        "detected": 10,
+        "attacks": 13,
+        "falsePositives": 4,
+        "benign": 9,
+        "misattributions": 0
+      },
+      "PR106 (lab-margin)": {
+        "detected": 6,
+        "attacks": 13,
+        "falsePositives": 1,
+        "benign": 9,
+        "misattributions": 0
+      }
+    }
+  },
+  "model_a_solo": {
+    "cic_recall_pct": {
+      "DoS Hulk": 100.0,
+      "DoS GoldenEye": 100.0
+    },
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.0
+    }
+  },
+  "ensemble": {
+    "cic_recall_pct": {
+      "DoS Hulk": 100.0,
+      "DoS GoldenEye": 100.0
+    },
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.25
+    },
+    "lab_holdout": {
+      "detected": 10,
+      "attacks": 13,
+      "falsePositives": 5,
+      "benign": 9,
+      "misattributions": 0
+    }
+  },
+  "verdict": {
+    "lab_ok": true,
+    "recall_ok": true,
+    "fp_ok": true,
+    "overall_good_candidate": true
+  }
+}
