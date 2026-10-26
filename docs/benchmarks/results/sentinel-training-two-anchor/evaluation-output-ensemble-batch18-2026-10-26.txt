@@ -1,0 +1,2930 @@
+################################################################################
+### BATCH 18 STEP 1: diagnostic run at tau_B=0.19 (batch 17's recommended candidate),
+### --verbose-per-model-flags, to confirm which model (A or B) fires on the two remaining
+### lab-benign FP patterns (benign-bulk-tcp-2mbit, benign-ping-20pps) before choosing a lever.
+################################################################################
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== sanity: Model A solo, reproducing batch 10's own committed numbers on the identical sample slices ==
+  DoS Hulk             Model A solo recall 100.00%
+  DoS GoldenEye        Model A solo recall 100.00%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.187660   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 100.00%  (Model A solo was 100.00%)
+  DoS GoldenEye        ensemble recall 100.00%  (Model A solo was 100.00%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.187660 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2577 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 100.00% (PASS >= 90%)
+  DoS GoldenEye recall: 100.00% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+################################################################################
+### BATCH 18 STEP 2: joint tau_A x tau_B grid (coarse pass).
+### tau_A in {0.187660 (baseline), 0.22, 0.26, 0.30, 0.335} x tau_B in {0.19, 0.195, 0.20, 0.205}
+### tau_A range derived from Model A's own lab-benign calibration pool (mean=0.1042 std=0.0334
+### p90=0.1467 p95=0.1651 p99=0.1678 max=0.1718, same 6264-window pool/method batch 10 and batch 17
+### used) plus Model A's own DoS Hulk/GoldenEye raw loss distributions (Hulk min=0.2122 p1=0.2709
+### p5=0.3102 p10=0.3358; GoldenEye min=0.2112 p1=0.3027 p5=0.3628 p10=0.3913) -- 0.335 is
+### approximately where a NAIVE static-threshold reading of Hulk's own loss distribution would
+### cross the 90% recall bar; CIC-benign FP headroom under Model A is enormous (Wed/Fri max loss
+### only ~0.09/0.12), so it was never the binding constraint on tau_A.
+################################################################################
+
+=== tau_A=0.187660 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.187660 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 100.00%
+  DoS GoldenEye        Model A solo recall 100.00%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.187660   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 100.00%  (Model A solo was 100.00%)
+  DoS GoldenEye        ensemble recall 100.00%  (Model A solo was 100.00%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.187660 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2577 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 100.00% (PASS >= 90%)
+  DoS GoldenEye recall: 100.00% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.187660_B0.19.json
+
+=== tau_A=0.187660 tau_B=0.195 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.187660 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.195000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 100.00%
+  DoS GoldenEye        Model A solo recall 100.00%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.187660   Model B (baseline (hardcoded sr.W)) tau=0.195000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 100.00%  (Model A solo was 100.00%)
+  DoS GoldenEye        ensemble recall 100.00%  (Model A solo was 100.00%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.187660 tau_B=0.195000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=10 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=17 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=259 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=48 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2577 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=17 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 100.00% (PASS >= 90%)
+  DoS GoldenEye recall: 100.00% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.187660_B0.195.json
+
+=== tau_A=0.187660 tau_B=0.20 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.187660 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.200000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 100.00%
+  DoS GoldenEye        Model A solo recall 100.00%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.187660   Model B (baseline (hardcoded sr.W)) tau=0.200000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 100.00%  (Model A solo was 100.00%)
+  DoS GoldenEye        ensemble recall 100.00%  (Model A solo was 100.00%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 5/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.187660 tau_B=0.200000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=3  Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=1  Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=1  Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2577 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=1  Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 5/13 (FAIL >= 8/13)
+  DoS Hulk recall: 100.00% (PASS >= 90%)
+  DoS GoldenEye recall: 100.00% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.187660_B0.20.json
+
+=== tau_A=0.187660 tau_B=0.205 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.187660 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.205000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 100.00%
+  DoS GoldenEye        Model A solo recall 100.00%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.187660   Model B (baseline (hardcoded sr.W)) tau=0.205000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 100.00%  (Model A solo was 100.00%)
+  DoS GoldenEye        ensemble recall 100.00%  (Model A solo was 100.00%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 2/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.187660 tau_B=0.205000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=0  (no alert)
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2577 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 2/13 (FAIL >= 8/13)
+  DoS Hulk recall: 100.00% (PASS >= 90%)
+  DoS GoldenEye recall: 100.00% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.187660_B0.205.json
+
+=== tau_A=0.22 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.220000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 3.35%
+  DoS GoldenEye        Model A solo recall 99.85%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.220000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 3.35%  (Model A solo was 3.35%)
+  DoS GoldenEye        ensemble recall 99.85%  (Model A solo was 99.85%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.220000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=279 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 3.35% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.85% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.22_B0.19.json
+
+=== tau_A=0.22 tau_B=0.195 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.220000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.195000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 3.35%
+  DoS GoldenEye        Model A solo recall 99.85%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.220000   Model B (baseline (hardcoded sr.W)) tau=0.195000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 3.35%  (Model A solo was 3.35%)
+  DoS GoldenEye        ensemble recall 99.85%  (Model A solo was 99.85%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.220000 tau_B=0.195000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=10 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=67 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=17 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=259 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=48 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=279 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=17 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 3.35% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.85% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.22_B0.195.json
+
+=== tau_A=0.22 tau_B=0.20 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.220000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.200000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 3.35%
+  DoS GoldenEye        Model A solo recall 99.85%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.220000   Model B (baseline (hardcoded sr.W)) tau=0.200000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 3.35%  (Model A solo was 3.35%)
+  DoS GoldenEye        ensemble recall 99.85%  (Model A solo was 99.85%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 5/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.220000 tau_B=0.200000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=65 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=3  Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=1  Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=1  Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=279 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=1  Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 5/13 (FAIL >= 8/13)
+  DoS Hulk recall: 3.35% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.85% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.22_B0.20.json
+
+=== tau_A=0.22 tau_B=0.205 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.220000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.205000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 3.35%
+  DoS GoldenEye        Model A solo recall 99.85%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.220000   Model B (baseline (hardcoded sr.W)) tau=0.205000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 3.35%  (Model A solo was 3.35%)
+  DoS GoldenEye        ensemble recall 99.85%  (Model A solo was 99.85%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 2/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.220000 tau_B=0.205000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=5  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=65 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=0  (no alert)
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=279 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 2/13 (FAIL >= 8/13)
+  DoS Hulk recall: 3.35% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.85% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.22_B0.205.json
+
+=== tau_A=0.26 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.260000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.40%
+  DoS GoldenEye        Model A solo recall 52.50%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.260000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.40%  (Model A solo was 1.40%)
+  DoS GoldenEye        ensemble recall 52.50%  (Model A solo was 52.50%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.260000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=244 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.40% (FAIL >= 90%)
+  DoS GoldenEye recall: 52.50% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.26_B0.19.json
+
+=== tau_A=0.26 tau_B=0.195 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.260000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.195000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.40%
+  DoS GoldenEye        Model A solo recall 52.50%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.260000   Model B (baseline (hardcoded sr.W)) tau=0.195000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.40%  (Model A solo was 1.40%)
+  DoS GoldenEye        ensemble recall 52.50%  (Model A solo was 52.50%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.260000 tau_B=0.195000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=10 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=67 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=17 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=259 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=48 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=244 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=17 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.40% (FAIL >= 90%)
+  DoS GoldenEye recall: 52.50% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.26_B0.195.json
+
+=== tau_A=0.26 tau_B=0.20 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.260000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.200000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.40%
+  DoS GoldenEye        Model A solo recall 52.50%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.260000   Model B (baseline (hardcoded sr.W)) tau=0.200000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.40%  (Model A solo was 1.40%)
+  DoS GoldenEye        ensemble recall 52.50%  (Model A solo was 52.50%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 5/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.260000 tau_B=0.200000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=65 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=3  Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=1  Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=1  Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=244 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=1  Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 5/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.40% (FAIL >= 90%)
+  DoS GoldenEye recall: 52.50% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.26_B0.20.json
+
+=== tau_A=0.26 tau_B=0.205 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.260000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.205000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.40%
+  DoS GoldenEye        Model A solo recall 52.50%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.260000   Model B (baseline (hardcoded sr.W)) tau=0.205000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.40%  (Model A solo was 1.40%)
+  DoS GoldenEye        ensemble recall 52.50%  (Model A solo was 52.50%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 2/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.260000 tau_B=0.205000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=3  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=3  Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=0  (no alert)
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=244 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 2/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.40% (FAIL >= 90%)
+  DoS GoldenEye recall: 52.50% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.26_B0.205.json
+
+=== tau_A=0.30 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.300000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.00%
+  DoS GoldenEye        Model A solo recall 42.80%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.300000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.00%  (Model A solo was 1.00%)
+  DoS GoldenEye        ensemble recall 42.80%  (Model A solo was 42.80%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.300000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.00% (FAIL >= 90%)
+  DoS GoldenEye recall: 42.80% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.30_B0.19.json
+
+=== tau_A=0.30 tau_B=0.195 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.300000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.195000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.00%
+  DoS GoldenEye        Model A solo recall 42.80%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.300000   Model B (baseline (hardcoded sr.W)) tau=0.195000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.00%  (Model A solo was 1.00%)
+  DoS GoldenEye        ensemble recall 42.80%  (Model A solo was 42.80%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.300000 tau_B=0.195000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=10 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=67 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=17 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=259 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=48 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=17 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.00% (FAIL >= 90%)
+  DoS GoldenEye recall: 42.80% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.30_B0.195.json
+
+=== tau_A=0.30 tau_B=0.20 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.300000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.200000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.00%
+  DoS GoldenEye        Model A solo recall 42.80%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.300000   Model B (baseline (hardcoded sr.W)) tau=0.200000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.00%  (Model A solo was 1.00%)
+  DoS GoldenEye        ensemble recall 42.80%  (Model A solo was 42.80%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 5/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.300000 tau_B=0.200000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=65 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=3  Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=1  Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=1  Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=1  Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 5/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.00% (FAIL >= 90%)
+  DoS GoldenEye recall: 42.80% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.30_B0.20.json
+
+=== tau_A=0.30 tau_B=0.205 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.300000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.205000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.00%
+  DoS GoldenEye        Model A solo recall 42.80%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.300000   Model B (baseline (hardcoded sr.W)) tau=0.205000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.00%  (Model A solo was 1.00%)
+  DoS GoldenEye        ensemble recall 42.80%  (Model A solo was 42.80%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 2/13   benign false positives: 0/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.300000 tau_B=0.205000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=3  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=3  Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=0  (no alert)
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 2/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.00% (FAIL >= 90%)
+  DoS GoldenEye recall: 42.80% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.30_B0.205.json
+
+=== tau_A=0.335 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.335000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.05%
+  DoS GoldenEye        Model A solo recall 2.25%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.335000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.05%  (Model A solo was 1.05%)
+  DoS GoldenEye        ensemble recall 2.25%  (Model A solo was 2.25%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.335000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.05% (FAIL >= 90%)
+  DoS GoldenEye recall: 2.25% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.335_B0.19.json
+
+=== tau_A=0.335 tau_B=0.195 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.335000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.195000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.05%
+  DoS GoldenEye        Model A solo recall 2.25%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.335000   Model B (baseline (hardcoded sr.W)) tau=0.195000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.05%  (Model A solo was 1.05%)
+  DoS GoldenEye        ensemble recall 2.25%  (Model A solo was 2.25%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.335000 tau_B=0.195000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=10 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=67 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=17 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=259 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=48 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=17 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.05% (FAIL >= 90%)
+  DoS GoldenEye recall: 2.25% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.335_B0.195.json
+
+=== tau_A=0.335 tau_B=0.20 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.335000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.200000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.05%
+  DoS GoldenEye        Model A solo recall 2.25%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.335000   Model B (baseline (hardcoded sr.W)) tau=0.200000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.05%  (Model A solo was 1.05%)
+  DoS GoldenEye        ensemble recall 2.25%  (Model A solo was 2.25%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 5/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.335000 tau_B=0.200000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=65 Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=3  Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=1  Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=1  Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=1  Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 5/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.05% (FAIL >= 90%)
+  DoS GoldenEye recall: 2.25% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.335_B0.20.json
+
+=== tau_A=0.335 tau_B=0.205 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.335000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.205000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 1.05%
+  DoS GoldenEye        Model A solo recall 2.25%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.335000   Model B (baseline (hardcoded sr.W)) tau=0.205000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 1.05%  (Model A solo was 1.05%)
+  DoS GoldenEye        ensemble recall 2.25%  (Model A solo was 2.25%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 2/13   benign false positives: 0/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 0/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.335000 tau_B=0.205000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=3  Model B only
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=3  Model B only
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=0  (no alert)
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=0  (no alert)
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 2/13 (FAIL >= 8/13)
+  DoS Hulk recall: 1.05% (FAIL >= 90%)
+  DoS GoldenEye recall: 2.25% (FAIL >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/grid_A0.335_B0.205.json
+
+################################################################################
+### BATCH 18 STEP 3: fine localization of Model A's own cliff (tau_B held at 0.19).
+### tau_A in {0.19, 0.195, 0.20, 0.205, 0.21} -- the coarse pass showed a catastrophic Hulk
+### recall collapse already by tau_A=0.22 (100% -> 3.35%), far below the naive 0.335 ceiling,
+### so this pass finds exactly where that cliff starts.
+################################################################################
+
+=== tau_A=0.19 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.190000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 99.95%
+  DoS GoldenEye        Model A solo recall 99.95%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.190000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 99.95%  (Model A solo was 99.95%)
+  DoS GoldenEye        ensemble recall 99.95%  (Model A solo was 99.95%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.190000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2574 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 99.95% (PASS >= 90%)
+  DoS GoldenEye recall: 99.95% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/fine_A0.19_B0.19.json
+
+=== tau_A=0.195 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.195000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 99.95%
+  DoS GoldenEye        Model A solo recall 99.95%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.195000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 99.95%  (Model A solo was 99.95%)
+  DoS GoldenEye        ensemble recall 99.95%  (Model A solo was 99.95%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.195000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2563 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 99.95% (PASS >= 90%)
+  DoS GoldenEye recall: 99.95% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/fine_A0.195_B0.19.json
+
+=== tau_A=0.20 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.200000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 30.85%
+  DoS GoldenEye        Model A solo recall 99.95%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.200000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 30.85%  (Model A solo was 30.85%)
+  DoS GoldenEye        ensemble recall 99.95%  (Model A solo was 99.95%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.200000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=2554 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 30.85% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.95% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/fine_A0.20_B0.19.json
+
+=== tau_A=0.205 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.205000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 22.25%
+  DoS GoldenEye        Model A solo recall 99.95%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.205000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 22.25%  (Model A solo was 22.25%)
+  DoS GoldenEye        ensemble recall 99.95%  (Model A solo was 99.95%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.205000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=861 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 22.25% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.95% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/fine_A0.205_B0.19.json
+
+=== tau_A=0.21 tau_B=0.19 ===
+== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==
+pre-registered bar: lab held-out detected >= 8/13 AND CIC Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days
+
+lab held-out split: 9 benign runs, 13 attack runs (matches PR #106)
+
+Model A ("CIC-shaped"): trained-weights-two-anchor-batch10-2026-10-25.json  tau=0.187660
+
+[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated 0.187660 to 0.210000 for this ensemble run. Model A's weights are unchanged.
+
+== choosing Model B: baseline hardcoded sr.W vs. PR #106 lab-margin weights, on lab held-out ==
+baseline (hardcoded sr.W) tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+PR106 (lab-margin) tau=0.1716  attack detected (right sender): 6/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+Model B chosen: baseline (hardcoded sr.W) (10/13 detected, 4/9 FP) over PR106 (lab-margin) (6/13 detected, 1/9 FP)  tau=0.150000
+
+[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated 0.150000 to 0.190000 for this ensemble run. Model B's weights, Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.
+
+== CIC data (cached .npz buckets, unchanged since batch 10) ==
+  DoS Hulk             2000 windows (cap 2000, same basis as batch 10)
+  DoS GoldenEye        2000 windows (cap 2000, same basis as batch 10)
+  Wednesday  BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+  Friday     BENIGN peek slice: 2000 windows (same offset/size as batch 10's own peek)
+
+== self-check: ensemble replay helpers agree with the real scorers in the model-B==model-A case ==
+ok: cic_block_ensemble_flags matches tsc.score_cic_block; ensemble_sentinel_alerts matches slr.sentinel_alerts
+
+== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10's committed numbers ==
+  DoS Hulk             Model A solo recall 3.35%
+  DoS GoldenEye        Model A solo recall 99.90%
+  Wednesday  Model A solo CIC-benign FP 0.00%
+  Friday     Model A solo CIC-benign FP 0.00%
+
+== ENSEMBLE: alert if EITHER model's own kernel_loss exceeds its own tau ==
+Model A tau=0.210000   Model B (baseline (hardcoded sr.W)) tau=0.190000
+
+-- CIC Hulk/GoldenEye recall (window-level, same sample as above) --
+  DoS Hulk             ensemble recall 3.35%  (Model A solo was 3.35%)
+  DoS GoldenEye        ensemble recall 99.90%  (Model A solo was 99.90%)
+
+-- CIC-benign FP, both days (ensemble; this is the real question: does Model B blow up CIC FP?) --
+  Wednesday  ensemble FP 0.00%  (Model A solo was 0.00%)
+  Friday     ensemble FP 0.00%  (Model A solo was 0.00%)
+
+-- Lab held-out (run-level), ensemble --
+ensemble A|B           attack detected (right sender): 6/13   benign false positives: 2/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 1/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  1/2
+    benign-udp-small-50pps             false-positive  0/2
+
+== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), tau_A=0.210000 tau_B=0.190000 ==
+    attack-portscan-1pps-r2            attack  attack-portscan-1pps       alerts=6  Model A AND Model B
+    attack-portscan-1pps               attack  attack-portscan-1pps       alerts=0  (no alert)
+    attack-portscan-fast-r2            attack  attack-portscan-fast       alerts=13 Model B only
+    attack-portscan-fast-r3            attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-fast               attack  attack-portscan-fast       alerts=0  (no alert)
+    attack-portscan-half-pps-r2        attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-half-pps           attack  attack-portscan-half-pps   alerts=0  (no alert)
+    attack-portscan-slow-r2            attack  attack-portscan-slow       alerts=148 Model A AND Model B
+    attack-portscan-slow-r3            attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-portscan-slow               attack  attack-portscan-slow       alerts=0  (no alert)
+    attack-synflood-1000pps-r2         attack  attack-synflood-1000pps    alerts=28 Model B only
+    attack-synflood-1000pps-r3         attack  attack-synflood-1000pps    alerts=291 Model B only
+    attack-synflood-1000pps            attack  attack-synflood-1000pps    alerts=185 Model B only
+    benign-bulk-tcp-2mbit-r2           benign  benign-bulk-tcp-2mbit      alerts=292 Model A only
+    benign-bulk-tcp-2mbit              benign  benign-bulk-tcp-2mbit      alerts=0  (no alert)
+    benign-http-burst-8conns-r2        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns-r3        benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-http-burst-8conns           benign  benign-http-burst-8conns   alerts=0  (no alert)
+    benign-ping-20pps-r2               benign  benign-ping-20pps          alerts=0  (no alert)
+    benign-ping-20pps                  benign  benign-ping-20pps          alerts=184 Model B only
+    benign-udp-small-50pps-r2          benign  benign-udp-small-50pps     alerts=0  (no alert)
+    benign-udp-small-50pps             benign  benign-udp-small-50pps     alerts=0  (no alert)
+
+== PRE-REGISTERED VERDICT ==
+  lab held-out detected: 6/13 (FAIL >= 8/13)
+  DoS Hulk recall: 3.35% (FAIL >= 90%)
+  DoS GoldenEye recall: 99.90% (PASS >= 90%)
+  Wednesday CIC-benign FP: 0.00% (PASS <= 2%)
+  Friday CIC-benign FP: 0.00% (PASS <= 2%)
+
+OVERALL: NOT a good candidate (fails the pre-registered bar)
+
+[batch 17/18] tau_A, tau_B override is set: skipping the batch 14 regression check (it exists to catch UNINTENDED drift from batch 13's numbers, and this run intentionally changes them) and the batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).
+
+
+wrote /tmp/sentinel-batch18-sweep/fine_A0.21_B0.19.json

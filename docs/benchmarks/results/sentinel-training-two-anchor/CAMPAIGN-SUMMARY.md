@@ -1,15 +1,16 @@
-# Two-anchor sentinel training campaign: summary and recommendation (batches 1-17, 2026-10-25/26)
+# Two-anchor sentinel training campaign: summary and recommendation (batches 1-18, 2026-10-25/26)
 
-**Status: campaign paused at batch 16, then resumed for one owner-directed follow-up (batch 17).** This document was
-originally written at the point where two independent negative results on unifying the detector into one model
-(batches 4 and 16) made continuing to search that direction a poor use of time relative to the working answer
-already found (batch 13). Batches 1-16 live on the local, unpushed branch `feat/sentinel-two-anchor-training` with
-no PR open, per the convention established at batch 1. **Batch 17 is a separate, owner-approved follow-up that
-reviewed batch 13's recommendation, found its disclosed lab-benign false-positive cost (5/9) unacceptable for
-production, and tried one specific fix (recalibrating Model B's own tau as an ensemble component).** It lives on its
-own local, unpushed branch, `feat/sentinel-ensemble-fp-reduction`, based on current `main` post-PR-#125-merge — NOT
-on `feat/sentinel-two-anchor-training`, which is already fully merged. See the batch 17 section below and
-`PREREGISTRATION.md`'s batch 17 addendum for the full write-up. Nothing in either branch is final in the sense of
+**Status: campaign paused at batch 16, then resumed for two owner-directed follow-ups (batches 17-18).** This
+document was originally written at the point where two independent negative results on unifying the detector into
+one model (batches 4 and 16) made continuing to search that direction a poor use of time relative to the working
+answer already found (batch 13). Batches 1-16 live on the local, unpushed branch `feat/sentinel-two-anchor-training`
+with no PR open, per the convention established at batch 1. **Batches 17-18 are a separate, owner-approved follow-up
+that reviewed batch 13's recommendation, found its disclosed lab-benign false-positive cost (5/9) unacceptable for
+production, and tried two successive, independent fixes (batch 17: recalibrating Model B's own tau as an ensemble
+component; batch 18: a diagnostic plus a joint Model-A/Model-B tau sweep).** They live on their own local, unpushed
+branch, `feat/sentinel-ensemble-fp-reduction`, based on current `main` post-PR-#125-merge — NOT on
+`feat/sentinel-two-anchor-training`, which is already fully merged. See the batch 17/18 sections below and
+`PREREGISTRATION.md`'s batch 17/18 addenda for the full write-up. Nothing in either branch is final in the sense of
 being merged, deployed, or acted on; this write-up is for the project owner to read and decide what, if anything, to
 do next.
 
@@ -110,6 +111,30 @@ double it), and the sweep found a sharp cliff just past this point (tau_B=0.205 
 collapses to 2/13) — reaching the full target from here would cost most of the remaining lab-attack recall. See
 `PREREGISTRATION.md`'s batch 17 addendum for the full tradeoff table, the AND-rule reference point, and next steps.
 
+**Batch 18 (same branch): diagnosed which model fires on the two remaining lab-benign FP patterns at tau_B=0.19,
+then tried the joint tau_A/tau_B lever batch 17 flagged as the natural next step.** A new `--verbose-per-model-flags`
+diagnostic (reusing, not reimplementing, the ensemble replay helpers' own internal is_a/is_b flags) found a SPLIT
+attribution: Model A alone causes the `benign-bulk-tcp-2mbit` false positive; Model B alone, even after batch 17's
+recalibration, still causes the `benign-ping-20pps` false positive. Because Model A is responsible for one of the
+two, tau_B alone can never fix it — confirming the joint-lever branch was the right one to pursue. A 25-point
+tau_A x tau_B grid (tau_A's own range derived from its lab-benign calibration pool and its DoS Hulk/GoldenEye raw
+loss distributions, the same discipline batch 17 used for tau_B) found an even sharper cliff than batch 17's: Hulk
+recall collapses from ~100% to 30.85% between tau_A=0.195 and 0.20, traced to a specific, verified mechanism —
+`AdaptiveThresholdController` seeds its own dynamic threshold at `1.125 x base_threshold` before any window is
+observed, and that seed already sits almost exactly at DoS Hulk's own lowest-loss window at the CURRENT tau_a, a
+razor-thin margin inherited from batch 10's own calibration. Even within tau_A's narrow safe band, raising it buys
+zero improvement on `benign-bulk-tcp-2mbit` (its own loss range genuinely overlaps DoS Hulk/GoldenEye's), and pushing
+tau_A far enough to suppress it (tau_A>=0.30) does reach lab-benign FP 1/9 with lab detected holding at 6/13 — but
+collapses CIC Hulk recall to ~1% and GoldenEye to 2-43%, both catastrophically failing the recall floor. An
+exploratory check swapping in PR106's weights as Model B reproduced an identical 2/9 tradeoff point with a
+completely different weight vector. **No point on the grid, nor the exploratory swap, clears batch 18's own
+pre-registered bar (lab-benign FP<=1/9 AND lab detected>=6/13 AND CIC recall>=90% each AND CIC-benign FP<=2% both
+days).** Three independent probes (tau_B alone, tau_A+tau_B jointly, a Model-B weight swap) now converge on the same
+~2/9 FP floor for >=6/13 lab detected with this Model-A/Model-B pair — strong evidence of a real ceiling in this
+two-scalar-threshold architecture, not just an under-searched tuning gap. See `PREREGISTRATION.md`'s batch 18
+addendum for the full grid, the mechanism trace, and two concrete untried levers named for a future batch (a
+dedicated lab-benign anchor term for Model A's training, or a deterministic pre-filter feature ahead of the OR rule).
+
 ## Recommendation
 
 **Deploy consideration: batch 13's two-model ensemble, with batch 17's tau_B=0.19 recalibration as the owner-facing
@@ -166,7 +191,8 @@ much larger optimizer budget — rather than another one-off variant of what's a
 | 14 | `f162817` | Out-of-sample CIC classes | honest scope limit: near-zero to modest generalization beyond Hulk/GoldenEye |
 | 15 | `e1f4ef7` | Jointly-fit gated architecture (option 3), design + smoke test | INCOMPLETE at commit time (full run not finished) |
 | 16 | `247aa5a` | Same architecture, full-scale run | FAIL — option 3's second negative result |
-| 17 (own branch `feat/sentinel-ensemble-fp-reduction`) | (this batch) | Sweep Model B's own tau as an ensemble component, holding Model A fixed | tau_B=0.19 clears a pre-registered bar: lab-benign FP 5/9→2/9, lab held-out 10/13→6/13, CIC recall/FP unaffected or improved; does not reach the owner's full ~10% FP target |
+| 17 (own branch `feat/sentinel-ensemble-fp-reduction`) | `f9b84a6` | Sweep Model B's own tau as an ensemble component, holding Model A fixed | tau_B=0.19 clears a pre-registered bar: lab-benign FP 5/9→2/9, lab held-out 10/13→6/13, CIC recall/FP unaffected or improved; does not reach the owner's full ~10% FP target |
+| 18 (same branch) | (this batch) | Diagnosed which model fires on the two remaining lab-benign FP patterns, then jointly swept Model A's and Model B's own tau | split attribution (Model A causes one FP pattern, Model B the other); 25-point joint grid found an even sharper, mechanistically-traced cliff on tau_A with zero marginal benefit in its safe range; no point clears batch 18's own tighter bar; three independent levers now converge on the same ~2/9 FP ceiling |
 
 ## Verification discipline used throughout
 

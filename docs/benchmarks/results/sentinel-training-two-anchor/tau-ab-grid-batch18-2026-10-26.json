@@ -1,0 +1,461 @@
+{
+  "batch": 18,
+  "method": "Joint tau_A/tau_B sweep of the two already-fitted weight vectors' thresholds; no training/fitting",
+  "diagnostic_preceding_the_lever_choice": {
+    "question": "At tau_B=0.19 (batch 17 recommended candidate), which model (A or B) fires on the two remaining lab-benign FP runs (benign-bulk-tcp-2mbit, benign-ping-20pps)?",
+    "method": "--verbose-per-model-flags, reusing ensemble_sentinel_alerts's own already-computed is_a/is_b flags (no reimplementation)",
+    "finding": {
+      "benign-bulk-tcp-2mbit-r2": "Model A only (2577/3400 window alerts); Model B does not fire on this run",
+      "benign-ping-20pps": "Model B only (184/546 window alerts) even at the raised tau_B=0.19; Model A does not fire on this run"
+    },
+    "interpretation": "Split/mixed attribution -- one pattern each, not a clean match to either of the two hypothesis branches in the batch 18 task. Because Model A is responsible for at least one of the two patterns, tau_B alone can never fix it, so the joint tau_A/tau_B lever (the task's option 1) is the correct branch to pursue."
+  },
+  "tau_a_derivation": {
+    "model_a_own_lab_benign_calibration_pool": {
+      "n": 6264,
+      "mean": 0.1042,
+      "std": 0.0334,
+      "p90": 0.1467,
+      "p95": 0.1651,
+      "p99": 0.1678,
+      "max": 0.1718,
+      "note": "identical 6264-window pool/method batch 10 used to calibrate tau_a=mean+2.5*std=0.187660 in the first place; every pool window is already below that tau"
+    },
+    "model_a_dos_hulk_raw_loss": {
+      "min": 0.2122,
+      "p1": 0.2709,
+      "p5": 0.3102,
+      "p10": 0.3358
+    },
+    "model_a_dos_goldeneye_raw_loss": {
+      "min": 0.2112,
+      "p1": 0.3027,
+      "p5": 0.3628,
+      "p10": 0.3913
+    },
+    "model_a_cic_benign_loss_ceiling": {
+      "Wednesday_max": 0.0893,
+      "Friday_max": 0.1162,
+      "note": "huge headroom; CIC-benign FP was never the binding constraint on tau_a"
+    }
+  },
+  "pre_registered_bar": {
+    "lab_benign_fp_lte": "1/9 (~11%)",
+    "lab_holdout_detected_gte": "6/13",
+    "cic_hulk_goldeneye_recall_gte_pct": 90.0,
+    "cic_benign_fp_lte_pct_both_days": 2.0
+  },
+  "grid": [
+    {
+      "tau_a": 0.18766,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.18766,
+      "tau_b": 0.195,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.18766,
+      "tau_b": 0.2,
+      "lab_detected": 5,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.18766,
+      "tau_b": 0.205,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.19,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 99.95,
+      "goldeneye_recall_pct": 99.95,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.195,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 99.95,
+      "goldeneye_recall_pct": 99.95,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.2,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 30.85,
+      "goldeneye_recall_pct": 99.95,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.205,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 22.25,
+      "goldeneye_recall_pct": 99.95,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.21,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 3.35,
+      "goldeneye_recall_pct": 99.9,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.22,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 3.35,
+      "goldeneye_recall_pct": 99.85,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.22,
+      "tau_b": 0.195,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 3.35,
+      "goldeneye_recall_pct": 99.85,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.22,
+      "tau_b": 0.2,
+      "lab_detected": 5,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 3.35,
+      "goldeneye_recall_pct": 99.85,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.22,
+      "tau_b": 0.205,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 3.35,
+      "goldeneye_recall_pct": 99.85,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.26,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.4,
+      "goldeneye_recall_pct": 52.5,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.26,
+      "tau_b": 0.195,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.4,
+      "goldeneye_recall_pct": 52.5,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.26,
+      "tau_b": 0.2,
+      "lab_detected": 5,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.4,
+      "goldeneye_recall_pct": 52.5,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.26,
+      "tau_b": 0.205,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.4,
+      "goldeneye_recall_pct": 52.5,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.3,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.0,
+      "goldeneye_recall_pct": 42.8,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.3,
+      "tau_b": 0.195,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.0,
+      "goldeneye_recall_pct": 42.8,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.3,
+      "tau_b": 0.2,
+      "lab_detected": 5,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.0,
+      "goldeneye_recall_pct": 42.8,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.3,
+      "tau_b": 0.205,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 0,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.0,
+      "goldeneye_recall_pct": 42.8,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.335,
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.05,
+      "goldeneye_recall_pct": 2.25,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.335,
+      "tau_b": 0.195,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.05,
+      "goldeneye_recall_pct": 2.25,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.335,
+      "tau_b": 0.2,
+      "lab_detected": 5,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.05,
+      "goldeneye_recall_pct": 2.25,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    },
+    {
+      "tau_a": 0.335,
+      "tau_b": 0.205,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 0,
+      "lab_benign": 9,
+      "hulk_recall_pct": 1.05,
+      "goldeneye_recall_pct": 2.25,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch18_bar": false
+    }
+  ],
+  "cliff_mechanism_found": {
+    "observation": "Hulk recall collapses from ~100% to 30.85% between tau_A=0.195 and tau_A=0.20 -- far sharper and far earlier than a naive percentile reading of Hulk's raw loss distribution would predict (naive 90%-recall crossing was estimated at ~0.3358).",
+    "verification": "Checked directly: ALL 2000 DoS Hulk window losses under Model A are >= 0.2122 (none below 0.20), so a static threshold at tau_A=0.20 implies 100% recall by raw loss alone -- the real collapse is caused by sr.AdaptiveThresholdController's own warm-up dynamics, not a raw-loss percentile crossing.",
+    "mechanism": "AdaptiveThresholdController seeds its own dynamic threshold BEFORE any window is observed at exactly 1.125 x base_threshold (seed ema_loss=0.75*base, seed ema_std=0.15*base, so seed dynamic_tau = base*(0.75+2.5*0.15) = 1.125*base). At the CURRENT tau_a=0.187660, this seed (0.2112) already sits almost exactly at DoS Hulk's own lowest-loss window (0.2122) -- a razor-thin, already near-zero margin. Any increase to base_threshold raises this seed above the attack block's earliest low-loss windows, which get wrongly assimilated into the adaptive baseline as \"normal\" (AdaptiveThresholdController only incorporates non-anomalous windows), triggering the same EMA-assimilation runaway batch 11 diagnosed for a different scenario and collapsing recall for the rest of the block."
+  },
+  "exploratory_bonus_check_uncommitted": {
+    "note": "Reuses but does not newly self-check the already-self-checked ensemble helpers (same disclosed status as batch 17's AND-rule reference point)",
+    "config": "Model A unchanged (tau=0.187660) OR PR106's own lab-margin weights as Model B (tau=0.171600, its own standalone-calibrated value) -- NOT batch 13/17's chosen Model B (baseline sr.W)",
+    "result": {
+      "lab_detected": "6/13",
+      "lab_fp": "2/9 (same two patterns: bulk-tcp from Model A, ping-20pps from PR106 itself, which already carries this FP standalone)",
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      }
+    },
+    "interpretation": "Identical tradeoff point to tau_A=baseline/tau_B=0.19-0.195. Shows the ping-20pps vulnerability is not an artifact of one specific Model-B weight vector -- it reproduces across the two different candidate B weight sets this workstream has ever fit."
+  },
+  "verdict": {
+    "any_point_clears_batch_18_bar": false,
+    "closest_points": [
+      {
+        "tau_a": 0.18766,
+        "tau_b": 0.19,
+        "why": "ties batch 17's own recommendation; clears batch 17's bar (FP<=2/9) but not batch 18's tighter FP<=1/9 bar"
+      },
+      {
+        "tau_a": 0.3,
+        "tau_b": 0.19,
+        "why": "achieves BOTH lab_fp<=1/9 AND lab_detected>=6/13 simultaneously (proving the two are not mutually exclusive by themselves) but catastrophically fails CIC Hulk recall (1.00%) and GoldenEye recall (42.80%), both far below the 90% floor"
+      }
+    ],
+    "recommended_candidate": "Unchanged from batch 17: Model A unchanged (tau=0.187660), Model B unchanged weights (baseline sr.W) with tau=0.19. Batch 18 found no joint tau_A/tau_B configuration that improves on this."
+  }
+}

@@ -182,9 +182,14 @@ def self_check_cic_ensemble(features, src_ips, w, tau, known_attacker_ip):
 def ensemble_sentinel_alerts(frames, w_a, tau_a, w_b, tau_b):
     """Mirrors slr.sentinel_alerts's internals (one Extractor, windows fed in order, the predominant source of the
     last WIN frames attributed to an alerting window) but runs TWO independent sr.Adaptive controllers -- one per
-    model, each seeded with that model's own weights/tau -- and alerts on a window if EITHER fires. Returns the same
-    [(t_ns, predominant_src, loss)] shape sentinel_alerts returns (loss here is max(loss_a, loss_b), for display
-    only; it is never compared to anything further)."""
+    model, each seeded with that model's own weights/tau -- and alerts on a window if EITHER fires. Returns
+    [(t_ns, predominant_src, loss, is_a, is_b)] -- the same (t_ns, predominant_src, loss) shape sentinel_alerts
+    returns (loss here is max(loss_a, loss_b), for display only; it is never compared to anything further), plus two
+    booleans recording which of the two already-computed per-model Adaptive decisions fired on this window. is_a/is_b
+    are not a new computation -- they are the same is_a/is_b this function already computes to decide whether to
+    alert at all (see the `if is_a or is_b:` line below); batch 18 (PREREGISTRATION.md's batch 18 addendum) exposes
+    them in the return value instead of discarding them, purely for diagnostic attribution (which model is
+    responsible for a given alert). Existing callers that only use the first two or three fields are unaffected."""
     ex = sr.Extractor()
     ad_a, ad_b = sr.Adaptive(tau=tau_a), sr.Adaptive(tau=tau_b)
     w_a = np.asarray(w_a, dtype=np.float32)
@@ -205,7 +210,7 @@ def ensemble_sentinel_alerts(frames, w_a, tau_a, w_b, tau_b):
         is_b, _ = ad_b.check(loss_b)
         if is_a or is_b:
             known = collections.Counter(s for s in srcs if s != 'unknown')
-            out.append((t_ns, known.most_common(1)[0][0] if known else 'unknown', max(loss_a, loss_b)))
+            out.append((t_ns, known.most_common(1)[0][0] if known else 'unknown', max(loss_a, loss_b), is_a, is_b))
     return out
 
 
@@ -219,7 +224,7 @@ def self_check_lab_ensemble(frames, w, tau):
         real = [(t, s) for t, s, _loss in slr.sentinel_alerts(frames, base_tau=tau)]
     finally:
         sr.W = original_w
-    mine = [(t, s) for t, s, _loss in ensemble_sentinel_alerts(frames, w, tau, w, tau)]
+    mine = [(t, s) for t, s, _loss, _is_a, _is_b in ensemble_sentinel_alerts(frames, w, tau, w, tau)]
     if mine != real:
         raise SystemExit(f'FATAL: ensemble_sentinel_alerts disagrees with the real slr.sentinel_alerts in the '
                           f'degenerate model-B==model-A case ({len(mine)} vs {len(real)} alert windows); refusing '
@@ -265,6 +270,36 @@ def score_holdout_ensemble(holdout, w_a, tau_a, w_b, tau_b, label_text):
             'misattributions': mis}
 
 
+def print_per_model_lab_attribution(holdout, w_a, tau_a, w_b, tau_b):
+    """Batch 18 diagnostic (PREREGISTRATION.md's batch 18 addendum): for every lab held-out run, report which of
+    Model A / Model B actually fired, using the is_a/is_b flags ensemble_sentinel_alerts already computes internally
+    for its own OR decision (see that function's docstring) -- this does NOT reimplement or re-derive anything;
+    it only reports fields that function already returns. score_holdout_ensemble's own detected/FP/misattribution
+    arithmetic is untouched and unaffected by this function (it is called separately, after, purely for printing).
+    This exists to answer one question before choosing batch 18's lever: of the two lab-benign patterns still
+    producing false positives at tau_B=0.19 (benign-bulk-tcp-2mbit, benign-ping-20pps per
+    evaluation-output-ensemble-batch17-2026-10-26.txt), is it Model A or Model B (or both) firing on the specific
+    runs responsible?"""
+    print(f"\n== BATCH 18 diagnostic: per-run model attribution (which of Model A/Model B fired), "
+          f"tau_A={tau_a:.6f} tau_B={tau_b:.6f} ==")
+    for item in holdout:
+        label = item['label']
+        alerts = ensemble_sentinel_alerts(item['frames'], w_a, tau_a, w_b, tau_b)
+        fired_a = any(is_a for _t, _s, _loss, is_a, _is_b in alerts)
+        fired_b = any(is_b for _t, _s, _loss, _is_a, is_b in alerts)
+        if not alerts:
+            which = '(no alert)'
+        elif fired_a and fired_b:
+            which = 'Model A AND Model B'
+        elif fired_a:
+            which = 'Model A only'
+        elif fired_b:
+            which = 'Model B only'
+        else:
+            which = '(unreachable: alert with neither flag set)'
+        print(f"    {label['id']:34s} {item['class']:7s} {item['pattern']:26s} alerts={len(alerts):<2d} {which}")
+
+
 # --- Main -----------------------------------------------------------------------------------------------------
 
 def main():
@@ -292,6 +327,16 @@ def main():
                           "NOT change which candidate is chosen as Model B, Model B's weights, or Model A's "
                           "weights/tau at all -- pure evaluation, same as the rest of this script. Leaves "
                           "cic_block_ensemble_flags/score_cic_block_ensemble/ensemble_sentinel_alerts untouched.")
+    ap.add_argument('--model-a-tau-override', type=float, default=None, dest='model_a_tau_override',
+                     help="batch 18 (docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md): "
+                          "override Model A's tau, for jointly sweeping it alongside --model-b-tau-override. Does "
+                          "NOT change Model A's weights or Model B's weights/tau/selection at all -- pure "
+                          "evaluation, same convention as --model-b-tau-override.")
+    ap.add_argument('--verbose-per-model-flags', action='store_true', dest='verbose_per_model_flags',
+                     help="batch 18 diagnostic: for every lab held-out run, print which of Model A / Model B (or "
+                          "both) actually fired, reusing ensemble_sentinel_alerts's own already-computed is_a/is_b "
+                          "flags (see print_per_model_lab_attribution). Adds one extra report section; does not "
+                          "change any scored number.")
     args = ap.parse_args()
 
     print('== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==')
@@ -314,6 +359,11 @@ def main():
     with open(args.model_a_weights) as fh:
         w_a, tau_a = tw.validate_weights_payload(json.load(fh), args.model_a_weights)
     print(f'Model A ("CIC-shaped"): {os.path.basename(args.model_a_weights)}  tau={tau_a:.6f}')
+    if args.model_a_tau_override is not None:
+        print(f"\n[batch 18] --model-a-tau-override: Model A's tau overridden from its own batch-10-calibrated "
+              f"{tau_a:.6f} to {args.model_a_tau_override:.6f} for this ensemble run. Model A's weights are "
+              f"unchanged.")
+        tau_a = args.model_a_tau_override
 
     # --- Model B candidates: the baseline hardcoded weights vs. PR #106's own dedicated lab-margin weights. Checked
     # against lab held-out via the real tw.score_holdout (never guessed from the preregistration's own prose).
@@ -376,7 +426,14 @@ def main():
 
     # --- Reproduce Model A's own already-committed solo numbers on this exact slice, as a second sanity layer (not
     # a self-check of the ensemble machinery, but of THIS script's own data loading against batch 10's own JSON).
-    print('== sanity: Model A solo, reproducing batch 10\'s own committed numbers on the identical sample slices ==')
+    # Batch 18: when --model-a-tau-override is set, these numbers are EXPECTED to differ from batch 10's committed
+    # ones (that is the whole point of sweeping tau_A) -- the heading below says so rather than keeping the
+    # batch-13/17 wording, which would otherwise misleadingly imply an exact-match check is happening here.
+    if args.model_a_tau_override is not None:
+        print('== Model A solo at the OVERRIDDEN tau (batch 18): expected to differ from batch 10\'s committed '
+              'numbers ==')
+    else:
+        print('== sanity: Model A solo, reproducing batch 10\'s own committed numbers on the identical sample slices ==')
     model_a_solo_recall = {}
     for label in tsc.CIC_TRAIN_LABELS:
         feats, src_ips = attack_blocks[label]
@@ -418,6 +475,9 @@ def main():
     print('\n-- Lab held-out (run-level), ensemble --')
     ensemble_lab = score_holdout_ensemble(holdout_lab, w_a, tau_a, model_b_w, model_b_tau, 'ensemble A|B')
 
+    if args.verbose_per_model_flags:
+        print_per_model_lab_attribution(holdout_lab, w_a, tau_a, model_b_w, model_b_tau)
+
     print('\n== PRE-REGISTERED VERDICT ==')
     lab_ok = ensemble_lab['detected'] >= LAB_HOLDOUT_DETECTED_BAR
     recall_ok = all(ensemble_recall[label] >= CIC_RECALL_BAR_PCT for label in tsc.CIC_TRAIN_LABELS)
@@ -434,15 +494,18 @@ def main():
     print(f"\nOVERALL: {'GOOD CANDIDATE (clears the pre-registered bar)' if overall else 'NOT a good candidate (fails the pre-registered bar)'}")
 
     oos_results, oos_interpretation = {}, {}
-    if args.model_b_tau_override is not None:
+    if args.model_b_tau_override is not None or args.model_a_tau_override is not None:
         # Batch 17: the whole point of --model-b-tau-override is to deliberately move Model B's tau away from its
         # batch-13 standalone-calibrated value, so the batch 14 regression check below (which exists to catch
         # UNINTENDED drift from batch 13's committed numbers) would always and correctly fire here -- that is not a
         # bug, it is the self-check doing its job, but it is not an informative check to run when the drift is the
         # whole point of the run. Skip it (and the out-of-sample section, which is diagnostic only and not needed
         # for a tau sweep) rather than silently making it pass; the primary metrics (lab held-out, CIC Hulk/GoldenEye
-        # recall, CIC-benign FP) are all already printed above, unaffected by this skip.
-        print('\n[batch 17] --model-b-tau-override is set: skipping the batch 14 regression check (it exists to '
+        # recall, CIC-benign FP) are all already printed above, unaffected by this skip. Batch 18 extends the same
+        # skip condition to --model-a-tau-override for the identical reason: jointly sweeping tau_A makes the
+        # same numbers drift from batch 13 intentionally, not a harness bug.
+        overridden = ', '.join(f'tau_{m}' for m, flag in (('A', args.model_a_tau_override), ('B', args.model_b_tau_override)) if flag is not None)
+        print(f'\n[batch 17/18] {overridden} override is set: skipping the batch 14 regression check (it exists to '
               'catch UNINTENDED drift from batch 13\'s numbers, and this run intentionally changes them) and the '
               'batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).\n')
     else:
@@ -509,7 +572,8 @@ def main():
             'pre_registered_bar': {'lab_holdout_detected_gte': LAB_HOLDOUT_DETECTED_BAR,
                                     'cic_recall_gte_pct': CIC_RECALL_BAR_PCT,
                                     'cic_benign_fp_lte_pct': CIC_BENIGN_FP_BAR_PCT},
-            'model_a': {'file': args.model_a_weights, 'tau': tau_a, 'label': 'CIC-shaped (batch 10)'},
+            'model_a': {'file': args.model_a_weights, 'tau': tau_a, 'label': 'CIC-shaped (batch 10)',
+                        'tau_override_applied': args.model_a_tau_override},
             'model_b': {'file': (args.pr106_weights if model_b_label == 'PR106 (lab-margin)' else '(hardcoded sr.W, no file)'),
                         'tau': model_b_tau, 'label': model_b_label,
                         'tau_override_applied': args.model_b_tau_override,
@@ -525,9 +589,11 @@ def main():
             'batch_14_out_of_sample': {
                 'method': 'diagnostic/exploratory, not a pass/fail gate -- see module docstring and '
                           'PREREGISTRATION.md\'s batch 14 addendum',
-                'regression_check_against_batch_13': ('skipped: --model-b-tau-override is set (batch 17), so drift '
-                                                        'from batch 13 is the intended result, not a harness bug'
-                                                        if args.model_b_tau_override is not None
+                'regression_check_against_batch_13': ('skipped: a tau override is set (--model-a-tau-override and/or '
+                                                        '--model-b-tau-override, batch 17/18), so drift from batch 13 '
+                                                        'is the intended result, not a harness bug'
+                                                        if (args.model_b_tau_override is not None
+                                                            or args.model_a_tau_override is not None)
                                                         else 'ok (no drift; see stdout)'),
                 'classes': {label: {'n': r['n'],
                                      'model_a_recall_pct': 100 * r['model_a']['alerts'] / r['n'],

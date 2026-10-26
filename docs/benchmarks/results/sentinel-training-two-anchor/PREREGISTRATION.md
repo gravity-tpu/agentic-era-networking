@@ -111,6 +111,170 @@ untouched), no PR, no push, stays local/unpushed, same boundary as every prior b
 table) and `evaluation-output-ensemble-batch17-2026-10-26.txt` (full stdout for every sweep point plus the AND-rule
 reference run).
 
+**2026-10-26 addendum (batch 18, own branch `feat/sentinel-ensemble-fp-reduction`, continuing batch 17 -- EVALUATION
+ONLY, no training, no fitting, diagnostic/hypothesis/method/bar written before any of this batch's numbers were
+looked at):** batch 17 recommended tau_B=0.19 (lab-benign FP 5/9 -> 2/9, lab held-out 10/13 -> 6/13, CIC recall/FP
+unaffected or improved) but found a cliff just past it, short of the owner's ~1/9 (~10%) target, and named the two
+lab-benign patterns still producing false positives at tau_B=0.19 (`benign-bulk-tcp-2mbit`, `benign-ping-20pps`) as
+the next thing to investigate. This batch does that, then tries a second, independent lever informed by what it
+finds.
+
+**Step 1, diagnostic (must be done before choosing a lever, per this batch's own instructions): which model fires on
+the two remaining FP patterns?** `scripts/eval-sentinel-ensemble.py` gained a `--verbose-per-model-flags` diagnostic
+flag. It reuses, without reimplementing, `ensemble_sentinel_alerts`'s own already-computed `is_a`/`is_b` booleans
+(the exact values that function already uses internally to decide `if is_a or is_b:` before alerting) -- it only
+exposes them in the function's return tuple (now `(t_ns, predominant_src, loss, is_a, is_b)` instead of
+`(t_ns, predominant_src, loss)`) and prints, per lab held-out run, whether Model A, Model B, or both fired. The one
+other caller of this tuple shape (`self_check_lab_ensemble`) was updated to unpack the two new trailing fields and
+discard them; its own self-check logic (comparing `(t, s)` pairs against the real `slr.sentinel_alerts`) is
+unchanged. Result, at tau_B=0.19 (batch 17's candidate), tau_A at its unchanged batch-10 value (0.187660):
+
+| Lab-benign run | Alerts | Which model fired |
+| --- | --- | --- |
+| `benign-bulk-tcp-2mbit-r2` (the FP run) | 2577/3400 windows | **Model A only** |
+| `benign-ping-20pps` (the FP run) | 184/546 windows | **Model B only** (even at the raised tau_B=0.19) |
+
+**Finding: split attribution, not a clean match to either of this batch's two pre-written hypothesis branches.**
+Model A causes the `benign-bulk-tcp-2mbit` false positive; Model B, even after batch 17's recalibration, still
+causes the `benign-ping-20pps` false positive. Because Model A is responsible for at least one of the two remaining
+patterns, tau_B alone can structurally never fix it -- confirming (not assuming) that the joint tau_A/tau_B lever is
+the right branch to pursue, per this batch's own pre-written decision rule ("if Model A is the one firing ... jointly
+raise Model A's tau_A alongside tau_B").
+
+**Step 2, deriving tau_A's own sweep range from data (not guessed), same discipline batch 17 used for tau_B:**
+Model A's own `kernel_loss` distribution on the identical 6,264-window lab-benign training pool batch 10 calibrated
+it against (`pooled_training_losses`, same pool/method, Model A's weights instead of the baseline's): mean=0.1042,
+std=0.0334, p90=0.1467, p95=0.1651, p99=0.1678, max=0.1718 -- note the CURRENT tau_a=0.187660 already equals
+mean+2.5*std on this exact pool (that is literally how batch 10 calibrated it), so there is no room to push further
+within the SIGMA=2.5 convention; any higher point needs its own justification. Also measured, to find where raising
+tau_A would start costing CIC recall: Model A's own DoS Hulk raw window-loss distribution (min=0.2122, p1=0.2709,
+p5=0.3102, p10=0.3358) and DoS GoldenEye's (min=0.2112, p1=0.3027, p5=0.3628, p10=0.3913) -- a NAIVE static-threshold
+reading of these would put the 90%-recall crossing for Hulk (the tighter of the two) at roughly tau_A=0.3358.
+CIC-benign FP headroom under Model A is enormous (Wednesday/Friday max loss only ~0.09/0.12) and was never the
+binding constraint. Grid tested (coarse pass): tau_A in {0.187660 (baseline), 0.22, 0.26, 0.30, 0.335 (the naive
+Hulk-recall-bar crossing)} x tau_B in {0.19, 0.195, 0.20, 0.205} (batch 17's own region of interest) = 20 points,
+followed by a fine pass localizing tau_A's own cliff: tau_A in {0.19, 0.195, 0.20, 0.205, 0.21} at tau_B=0.19 fixed
+= 5 more points. 25 points total, all via the unmodified, already-self-checked `score_cic_block_ensemble` /
+`score_holdout_ensemble`.
+
+**Result: a much sharper and much earlier cliff than the naive percentile estimate predicted, with a specific,
+verified mechanism -- not just "it got worse."**
+
+| tau_A | tau_B | Lab detected | Lab FP | Hulk recall | GoldenEye recall | CIC-benign FP (Wed/Fri) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.187660 (baseline) | 0.19 / 0.195 | 6/13 | 2/9 | 100.00% | 100.00% | 0.00% / 0.00% |
+| 0.187660 (baseline) | 0.20 | 5/13 | 2/9 | 100.00% | 100.00% | 0.00% / 0.00% |
+| 0.187660 (baseline) | 0.205 | 2/13 | 1/9 | 100.00% | 100.00% | 0.00% / 0.00% |
+| 0.19 | 0.19 | 6/13 | 2/9 | 99.95% | 99.95% | 0.00% / 0.00% |
+| 0.195 | 0.19 | 6/13 | 2/9 | 99.95% | 99.95% | 0.00% / 0.00% |
+| **0.20** | 0.19 | 6/13 | 2/9 | **30.85%** | 99.95% | 0.00% / 0.00% |
+| 0.205 | 0.19 | 6/13 | 2/9 | 22.25% | 99.95% | 0.00% / 0.00% |
+| 0.21 | 0.19 | 6/13 | 2/9 | 3.35% | 99.90% | 0.00% / 0.00% |
+| 0.22 | 0.19-0.205 | 6 or 5 or 2/13 (tau_B-dependent) | 2/9 or 1/9 | 3.35% | 99.85% | 0.00% / 0.00% |
+| 0.26 | 0.19-0.205 | 6 or 5 or 2/13 | 2/9 or 1/9 | 1.40% | 52.50% | 0.00% / 0.00% |
+| **0.30** | 0.19 | **6/13** | **1/9** | 1.00% | 42.80% | 0.00% / 0.00% |
+| 0.335 | 0.19 | 6/13 | 1/9 | 1.05% | 2.25% | 0.00% / 0.00% |
+
+(Full 25-point grid, both passes, in `tau-ab-grid-batch18-2026-10-26.json`; full stdout for every point plus the
+diagnostic run in `evaluation-output-ensemble-batch18-2026-10-26.txt`.)
+
+**Mechanism, verified directly, not inferred:** Hulk recall collapses from ~100% to 30.85% between tau_A=0.195 and
+tau_A=0.20 -- a cliff even sharper than batch 17's own tau_B cliff, and far earlier than the naive percentile
+estimate (~0.3358) suggested. Checked directly: every one of DoS Hulk's 2000 window losses under Model A is >=
+0.2122 (none below 0.20), so a plain static threshold at tau_A=0.20 would still give 100% recall by raw loss alone.
+The real cause is `AdaptiveThresholdController`'s own warm-up arithmetic: it seeds its dynamic threshold, before any
+window is observed, at exactly `base_threshold * (0.75 + 2.5*0.15) = 1.125 * base_threshold` (`ema_loss =
+initial_threshold*0.75`, `ema_var = (initial_threshold*0.15)**2`, `dynamic_tau = max(base_threshold, ema_loss +
+sensitivity*ema_std)`). At the CURRENT tau_a=0.187660, this seed value (0.2112) already sits almost exactly at DoS
+Hulk's own lowest-loss window (0.2122) -- an already razor-thin, near-zero margin inherited from batch 10's own
+calibration, not something this batch introduced. Any increase to tau_A raises this seed proportionally, pushing it
+above the attack block's earliest low-loss windows; those windows get wrongly assimilated into the adaptive baseline
+as "normal" (the controller only incorporates non-anomalous windows), which raises the EMA baseline further and
+cascades into the same runaway assimilation failure mode batch 11 diagnosed for a different scenario -- collapsing
+recall for the rest of the block. This is a different, more precise mechanism than batch 17's tau_B cliff (which
+was never traced to a specific root cause, per that batch's own "flagged as open, not resolved" note) -- here the
+exact arithmetic reason is identified and confirmed against the raw per-window loss data.
+
+**Even within tau_A's narrow safe band (<= 0.195), raising it buys zero improvement on the one pattern it affects:**
+lab-benign FP stays at exactly 2/9 throughout 0.187660-0.195, because `benign-bulk-tcp-2mbit-r2`'s own kernel_loss
+under Model A (mean=0.2433, max=0.3107) sits squarely inside the SAME range as DoS Hulk/GoldenEye's own loss
+distributions (Hulk min=0.2122, GoldenEye min=0.2112) -- a genuine feature-space collision between this one lab
+pattern and the exact attack signatures Model A was fit to catch, not a calibration gap a small threshold nudge can
+close. Suppressing it needs tau_A roughly >= 0.31 (near the run's own max loss), which the grid confirms: at
+tau_A=0.30 and 0.335, `benign-bulk-tcp-2mbit`'s FP does clear (0/2) and lab-benign FP reaches 1/9 -- the owner's
+actual target -- with lab detected holding at 6/13, but DoS Hulk recall has already collapsed to ~1% and GoldenEye to
+2-43%, both catastrophically failing the pre-registered >=90% floor. **This is the clean proof that lab-benign FP
+<=1/9 and lab-detected >=6/13 CAN co-occur in this architecture, but only by destroying the entire reason Model A is
+in the ensemble at all.** It is the same three-way capacity conflict batches 1-12 found when trying to unify into one
+kernel, now showing up as a threshold-level echo of the same underlying weight-level conflict: Model A's weights were
+fit specifically to separate Hulk/GoldenEye-style volumetric floods from ordinary traffic, and sustained 2mbit bulk
+TCP is volumetrically flood-like enough to land in the same decision region.
+
+tau_B's own behavior is unaffected by tau_A across the whole grid (identical lab detected/FP pattern at every tau_A
+row for a given tau_B), confirming batch 17's cliff is a real, tau_A-independent property of Model B, not an
+interaction effect worth chasing further.
+
+**Exploratory bonus check (uncommitted, not newly self-checked beyond reusing the already-self-checked ensemble
+helpers -- same disclosed status as batch 17's AND-rule reference point):** swapped PR106's own lab-margin weights
+in as Model B (its own standalone-calibrated tau=0.1716, not re-selected via batch 13/17's own choice logic, which
+still picks the baseline) paired with Model A unchanged. Result: lab detected 6/13, lab-benign FP 2/9 -- an IDENTICAL
+tradeoff point to tau_A=baseline/tau_B=0.19-0.195, with the same two patterns responsible (`benign-bulk-tcp-2mbit`
+from Model A, `benign-ping-20pps` from PR106 itself, which already carries this exact FP standalone per batch 13's
+own Model-B candidate comparison table above). CIC Hulk/GoldenEye recall 100.00%/100.00%, CIC-benign FP 0.00%/0.00%
+both days -- unaffected. This shows the `benign-ping-20pps` vulnerability is not an artifact of one specific Model-B
+weight vector or tau choice: it reproduces identically across the only two candidate B weight sets this entire
+workstream has ever fit.
+
+**Verdict against this batch's own pre-registered bar (lab-benign FP <= 1/9 AND lab held-out detected >= 6/13 AND CIC
+Hulk/GoldenEye recall >= 90% each AND CIC-benign FP <= 2% both days, decided before any of this batch's numbers were
+looked at): NO point on the 25-point grid, nor the exploratory PR106 swap, clears it.** The two closest points are
+mutually exclusive in what they sacrifice: tau_A=baseline/tau_B=0.19 (ties batch 17's own recommendation) clears
+batch 17's looser bar (FP<=2/9) but not this batch's tighter FP<=1/9 requirement; tau_A=0.30/tau_B=0.19 clears the
+FP<=1/9 AND detected>=6/13 halves of the bar but fails CIC recall catastrophically. **Recommended candidate for the
+owner's review is unchanged from batch 17: Model A unchanged (batch 10's weights, tau=0.187660), Model B unchanged
+weights (baseline `sr.W`) with tau=0.19 (or 0.195, tying it).** Batch 18 found no joint tau_A/tau_B configuration, and
+no Model-B weight substitution, that improves on it.
+
+**Is this a fundamental ceiling of the two-scalar-threshold architecture, or is there a concrete untried lever?**
+Three independent probes have now converged on the same ~2/9 lab-benign-FP floor for >=6/13 lab-detected with this
+Model-A/Model-B pair: batch 17's tau_B-alone sweep (sharp cliff), this batch's joint tau_A/tau_B sweep (an even
+sharper, mechanistically-identified cliff on tau_A, with zero marginal benefit inside its safe range), and this
+batch's Model-B weight swap (identical tradeoff point with a completely different B weight vector). My honest read:
+**yes, this specific architecture -- two independently-fitted weight vectors, each gated by a single scalar
+threshold, OR-combined -- has a real ceiling around lab-benign FP~=2/9 while holding lab-detected>=6/13 and CIC
+recall>=90%, for Model A and either tested Model B candidate.** The reason is not a tuning gap but a genuine
+feature-space collision: `benign-bulk-tcp-2mbit`'s kernel_loss under Model A's weights overlaps DoS Hulk/GoldenEye's
+own loss range, so no single scalar threshold on Model A can separate them, and `benign-ping-20pps` produces a
+similar (if less extreme) collision under both tested Model-B weight vectors. Further threshold sweeping -- finer
+grids, different grid shapes, other tau_B sub-ranges -- is unlikely to find a materially different outcome; this is
+the same kind of two-independent-negative-result pattern (batch 4 and batch 16 for option 3) that already justified
+treating a direction as exhausted at this level of effort.
+
+**Concrete, named, untried levers for batch 19 (not vague "try more things"):**
+
+1. **A dedicated lab-benign anchor term for `benign-bulk-tcp-2mbit` specifically**, added to Model A's own training
+   objective (not a full retrain from scratch) -- the inverse of batch 11's lab-ATTACK anchor term, but for this one
+   troublesome lab-BENIGN pattern, kept narrowly scoped to avoid reopening the broader capacity conflict batches 1-12
+   found with wider lab-focused objectives. This changes Model A's WEIGHTS, not just its threshold, so it needs a new
+   training run, not another pure-evaluation batch like this one.
+2. **A simple, deterministic, rule-based pre-filter** (not a jointly-trained gate -- batches 15-16 already found that
+   fails twice) using features `sr.Extractor` already computes (e.g., inter-arrival variance, port diversity, or
+   flow-count-vs-byte-rate shape) to distinguish "sustained single-flow bulk transfer" from "volumetric flood" before
+   either kernel's OR-rule runs. This is architecturally different from a third scalar threshold and from the
+   previously-failed jointly-fit gate; it would need the owner's buy-in since it is a new deterministic component,
+   not just evaluation of existing weights.
+3. **Accept the ~2/9 FP / 6/13 lab-detected point (or batch 13's full 10/13/5/9 point) as this architecture's
+   practical ceiling** and let the owner decide whether that tradeoff is acceptable for production, given three
+   independent levers have now converged on it.
+
+All 13 `test/invariants/train-sentinel-weights-cic.test.ts` tests pass (unchanged this batch). Full `npx vitest run`
+passes with the same file/pass/skip counts as batch 13/14/16/17 (76 files, 986 passed, 11 skipped, 0 failed). No
+production code touched (`scripts/gpu-sdn-anomaly-sentinel.py` untouched), no PR, no push, stays local/unpushed, same
+boundary as every prior batch. Artifacts:
+`docs/benchmarks/results/sentinel-training-two-anchor/tau-ab-grid-batch18-2026-10-26.json` (machine-readable 25-point
+grid plus the diagnostic and exploratory-check results) and `evaluation-output-ensemble-batch18-2026-10-26.txt` (full
+stdout for the diagnostic run and every grid point).
+
 **2026-10-26 addendum (batch 16, autonomous overnight continuation — completes batch 15's prototype to a full-scale
 result):** batch 15 committed a jointly-fit, 23-parameter gated two-sub-kernel architecture
 (`scripts/train-sentinel-weights-gated.py`) as an honest INCOMPLETE: a 50-window smoke run looked mechanistically
