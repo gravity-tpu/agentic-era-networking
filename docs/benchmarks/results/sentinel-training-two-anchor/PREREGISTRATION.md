@@ -1,5 +1,49 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-26 addendum (batch 16, autonomous overnight continuation — completes batch 15's prototype to a full-scale
+result):** batch 15 committed a jointly-fit, 23-parameter gated two-sub-kernel architecture
+(`scripts/train-sentinel-weights-gated.py`) as an honest INCOMPLETE: a 50-window smoke run looked mechanistically
+promising (real gate differentiation between CIC-attack and CIC-benign windows), but the full-scale run hadn't
+finished within that batch's time. This batch is that same, unmodified script run to completion
+(`--de-maxiter 60`, same data caps as batch 9/10, seed `42`) and the result read honestly against the
+pre-registered bar batch 15 already wired into the script's own output.
+
+**Result:**
+
+| Metric | Gated (single model) | Bar (must beat batch 13's ensemble) | Batch 13 ensemble (for reference) |
+| --- | --- | --- | --- |
+| Lab held-out detected | 4/13 | ≥ 8/13 | 10/13 |
+| Lab held-out FP | 0/9 | (not pass/fail) | 5/9 |
+| DoS Hulk recall | 5.60% | ≥ 90% | 100.00% |
+| DoS GoldenEye recall | 50.25% | ≥ 90% | 100.00% |
+| CIC-benign FP (Wed/Fri) | 0.00%/0.00% | ≤ 2% both days | 0.00%/0.25% |
+
+**Verdict: FAILS the pre-registered bar** on three of five conditions (lab held-out detected, Hulk recall, GoldenEye
+recall all far short) — only the CIC-benign FP guardrail passes, and cleanly (better than the ensemble's own 0.25%
+Friday number, at 0.00%/0.00%). The clean FP is not a consolation: it's the same pattern as every unified-kernel
+batch in this workstream — trivially easy to avoid alerting on windows you were never pushed to reject, hard to
+reliably alert on the ones you were.
+
+**Diagnosis of the failure (read from the committed weights, not guessed):** 3 of 23 weights pinned to their
+search bounds, including the gate's own `mean_ln` coefficient (`19.99`, upper bound `20.0`) — the optimizer wanted
+an even steeper, more binary gate than the bounds allowed. The gate's actual behavior is also backwards from what a
+working specialization would need: lab-benign windows get a mean gate value of `0.92` (strongly favoring `W_A`, the
+CIC-shaped sub-kernel), and CIC attack windows split almost evenly between the two sub-kernels (Hulk `0.49`,
+GoldenEye `0.19`) rather than cleanly routing to whichever sub-kernel is actually good at catching them. The joint
+optimization found a local optimum that minimizes the blended training loss without learning a gate that routes
+windows the way batch 13's externally-imposed OR rule does by construction (each model always gets a vote on every
+window, with no risk of a bad gate silently suppressing the specialist that would have caught something).
+
+**This is option 3's second negative result, after batch 4's (raw 10→85 parameter width expansion didn't resolve
+the capacity conflict either).** Combined, the evidence across 16 batches is: wider doesn't help (batch 4), and a
+single jointly-trained gated model doesn't either (batch 16) — at least not with this gate parameterization and
+optimizer budget. This does not prove no unified architecture could ever work (a different gate feature set, a
+curriculum that trains the gate and sub-kernels in separate phases, or simply a much larger optimizer budget might
+behave differently), but per the owner's own standing decision rule, two independent negative results on
+"structurally different, not wider" is the point to stop searching option 3 and consolidate on option 2's verified,
+working answer (batch 13's ensemble) rather than continue generating one-off architecture variants. See
+`CAMPAIGN-SUMMARY.md` in this same directory for the full campaign write-up and recommendation.
+
 **2026-10-26 addendum (batch 15, autonomous overnight continuation per owner's explicit authorization — a DESIGN
 batch with a bounded prototype attempt, option 3 of batch 12's three-option list, in the owner-chosen order
 "option 2 then option 3"):** batches 13-14 (option 2) showed that an ensemble of two INDEPENDENTLY-fitted

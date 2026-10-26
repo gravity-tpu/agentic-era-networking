@@ -1,0 +1,65 @@
+{
+  "weights_shape": "23 = W_A(10) ++ W_B(10) ++ gate(wg0_ln, wg1_pe, bias)",
+  "weights": [
+    4.78871094053833,
+    4.058551488162909,
+    4.508504072361317,
+    3.4342032683084778,
+    0.7963059325584871,
+    -0.09182106071489302,
+    -2.9762995320071335,
+    0.32747187627770513,
+    -2.0673431073388633,
+    0.01682037169202308,
+    -1.4354452699355154,
+    0.1362846064903891,
+    -2.001381773381236,
+    4.203612397623143,
+    -0.30320349671517277,
+    0.5129144629019846,
+    4.9984876504140505,
+    4.997251905401196,
+    0.58117051840532,
+    0.49258822037510797,
+    19.99160329918668,
+    -13.648544740418991,
+    9.958599382286348
+  ],
+  "tau": 0.17117248474174762,
+  "objective": "two-anchor-gated (batch 15, static hinge, same formula as batches 1-6, two sub-kernels blended by a jointly-fit gate instead of one 10-parameter kernel)",
+  "batch": "sentinel-training-two-anchor batch 15 (option 3 prototype; NOT a validated or recommended result)",
+  "beta_cic_benign": 1.0,
+  "margin_hyperparameters": {
+    "margin": 0.02,
+    "sigma": 2.5,
+    "lambda": 1.0
+  },
+  "training_objective_value": 0.17036163526356388,
+  "training_objective_components": {
+    "L_benign_lab": 0.10780676795168743,
+    "L_benign_cic": 0.061557525639913874,
+    "L_margin_raw": 0.000997341671962564
+  },
+  "bound_pinned_weights": [
+    {
+      "index": 16,
+      "value": 4.9984876504140505,
+      "lower": -3.0,
+      "upper": 5.0
+    },
+    {
+      "index": 17,
+      "value": 4.997251905401196,
+      "lower": -3.0,
+      "upper": 5.0
+    },
+    {
+      "index": 20,
+      "value": 19.99160329918668,
+      "lower": -20.0,
+      "upper": 20.0
+    }
+  ],
+  "seed": 42,
+  "note": "Fitted by scripts/train-sentinel-weights-gated.py. This is a batch-15 DESIGN-BATCH PROTOTYPE on the batch-1 sanity-check data scale, not a held-out-validated result; not recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under any circumstance (that script expects a 10-element weights shape and would reject this file outright)."
+}
