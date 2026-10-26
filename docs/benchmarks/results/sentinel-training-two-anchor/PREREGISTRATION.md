@@ -1,5 +1,201 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-26 addendum (batch 15, autonomous overnight continuation per owner's explicit authorization — a DESIGN
+batch with a bounded prototype attempt, option 3 of batch 12's three-option list, in the owner-chosen order
+"option 2 then option 3"):** batches 13-14 (option 2) showed that an ensemble of two INDEPENDENTLY-fitted
+10-parameter kernels beats anything a single shared 10-parameter kernel reached in 12 rounds. This batch asks the
+option-3 question batch 12 posed: can a **single, unified** detector reach the ensemble's numbers by being
+*structurally* different (not just wider — batch 4 already falsified "wider" at 85 parameters), informed by *why*
+specialization, not width, was the lever that worked?
+
+**Step 1: what is actually being fit, read directly from code, not assumed.** `sr.kernel_loss`/`tw.kernel_loss_batch`
+(`scripts/sentinel-replay.py`, `scripts/train-sentinel-weights.py`) is a 10-scalar, heavily weight-tied 4-stage
+autoencoder, confirmed by reading the formula (not just batch 4's prose description of it): **(1)** a per-packet
+encoder `h = ReLU(x[:, :4]·W[0:4] - W[4])` — the SAME 4 feature weights + bias applied identically to every one of
+the 64 packets in a window, on the 4 features `sr.Extractor` already produces per packet (`dtn`=inter-arrival time,
+`ln`=normalized frame length, `fl`=TCP-flags/protocol indicator, `pe`=normalized source/dest port difference);
+**(2)** a bottleneck `lat = ReLU(sum_4(h)·W[5] - W[6])` summing `h` within each of the window's own 16 groups of 4
+consecutive packets, one shared linear+ReLU for all 16 groups; **(3)** a broadcast-decode `rh = ReLU(lat[i mod 16]·
+W[7])` that CYCLICALLY repeats the 16 latents back out to 64 positions (position 0 and position 16 get the same
+latent, not a contiguous block repeat); **(4)** a final decode `rec = sigmoid(rh[i mod 64]·W[8] - W[9])` broadcasting
+cyclically again, 64→256, with one shared scale/bias. Loss is the window-wide reconstruction MSE. There is exactly
+one learned nonlinear projection (stage 1) applied uniformly to every packet regardless of its position or which
+traffic distribution produced it — this is the kernel's one real degree of freedom, and it is shared across
+everything the detector is ever asked to look at.
+
+**Step 2: the real Jetson compute budget, measured, not assumed (Invariant 5/6).** `scripts/gpu-sdn-anomaly-
+sentinel.py`'s own in-code comment claims "< 1.0 ms per batch" as a design target (the "Dean latency invariant"), but
+the actual MEASURED number, cited from `docs/archive/sentinel/gpu-workload-roadmap.md` and
+`docs/SENTINEL-ROADMAP.md` (both marked frozen/archived design history as of 2026-10-09, but the measurement itself
+is physical, not re-derived or assumed here) is **0.271 ms average inference latency across 174 live inferences** on
+the Jetson GPU for the EXISTING 10-parameter kernel — `docs/SENTINEL-ROADMAP.md` computes **~3,690 windows/second**
+max throughput from that number, against the **~10 windows/second** a 100 ms detection window actually needs, i.e.
+**~369x headroom**. This is cited for proportionality only — this batch does no Jetson/CUDA measurement of its own,
+makes no latency claim about any new architecture, and is explicit that a 23-parameter shape could not be loaded by
+the live `--weights-file` loader without a new kernel variant and hardware re-validation (same disclosed boundary as
+batch 4's 85-parameter experiment). The conclusion drawn from it is narrow and defensible: doubling the kernel
+evaluation (two 10-parameter sub-kernels instead of one) plus a handful of extra scalar multiply-adds for a gate is
+nowhere near the measured budget's ceiling, so **compute headroom was never the reason a unified detector failed —
+the capacity conflict is, and a *mildly* more expensive unified architecture is not ruled out by the budget.**
+
+**Step 3: why CIC-shaped and lab-shaped data conflict, read directly off the already-committed weight vectors (not
+guessed).** Comparing the original baseline `sr.W` against three mutually-consistent CIC-anchored fits that all used
+the "fixed" (temperature=0.5) objective (batch 10, batch 11, batch 12's `--lambda-weight 0.5`), weight by weight:
+
+| index | role | baseline | batch 10 (2/13 lab) | batch 11 (4/13 lab) | batch 12-λ0.5 (4/13 lab) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| w0 | dtn weight | 0.20 | -0.059 | -1.182 | -0.994 |
+| w1 | **ln weight** | **+0.30** | **-2.619** | **-2.996 (pinned)** | **-2.699** |
+| w2 | fl weight | 0.25 | 0.671 | 0.596 | 1.653 |
+| w3 | **pe weight** | 0.25 | 0.716 | **4.708** | **3.927** |
+| w4 | encoder bias | 0.05 | 0.686 | 1.871 | 1.652 |
+| w5 | bottleneck scale | 0.50 | 3.838 | 1.349 | 1.232 |
+| w6 | **bottleneck bias** | 0.02 | **0.049** | **4.245** | **4.005** |
+| w7 | broadcast scale | 0.85 | 2.383 | 0.745 | 0.790 |
+| w8 | decode scale | 1.50 | 4.461 (near bound) | 0.750 | 0.823 |
+| w9 | decode bias | 0.40 | 1.025 | 1.076 | 0.977 |
+
+Two findings, both measured directly from these already-committed JSON files, not inferred:
+
+1. **A literal sign flip, robust across all three CIC-satisfying fits:** `w1` (the shared encoder's weight on `ln`,
+   normalized frame length) goes from `+0.30` at baseline to strongly negative, pinned near the `-3.0` lower bound,
+   in every one of batch 10/11/12's fits. (Batch 9's own fit, made under the un-fixed temperature=0.25 objective
+   that regressed Friday CIC-benign FP, lands at `w1=+2.10` instead — evidence the search landscape has more than
+   one CIC-satisfying basin, not a single clean axis, a caveat disclosed honestly rather than cherry-picking the
+   cleaner three-fit comparison.) Because `w1` is the SAME scalar applied to every packet regardless of source, the
+   kernel cannot simultaneously treat "large packet → more anomalous" (what baseline's positive sign implies) and
+   "large packet → less anomalous" (what satisfying the CIC-benign anchor, which contains normal-sized HTTP
+   benign/attack traffic, evidently requires) — a genuine, measured sign conflict in a linear term.
+2. **The lab-recall-recovering lever (2/13→4/13) is NOT "un-flip w1."** Both batch 11 (a dedicated lab-margin
+   anchor term) and batch 12-λ0.5 (turning down CIC-margin pressure) land at nearly identical weight vectors to EACH
+   OTHER — confirming batch 12's own "one shared give, two independent levers spend it the same way" finding — but
+   relative to batch 10, the shift that buys 2 more detected lab attacks moves **at least four other weights
+   substantially**: `w3` (pe weight) roughly 5-6x larger, `w6` (bottleneck bias) from near-zero to near its own
+   active range, `w5`/`w7`/`w8` all pull back from the more extreme values batch 10 needed (w8 in particular moves
+   off a near-saturated `4.46`, close to the `5.0` bound). This is a coordinated shift spanning BOTH the encoder
+   (`w3`) and the downstream bottleneck/decode stages (`w5`, `w6`, `w7`, `w8`) — five of ten weights move together,
+   not one.
+
+**Conclusion drawn from steps 1-3, decided BEFORE prototyping:** the conflict is not a single pairwise sign flip a
+single new interaction term could plausibly absorb (finding 2 rules out option (c)'s simplest form — there is no one
+clean axis to add a correction term to). It is better described as: the kernel's one shared nonlinear projection
+(stage 1's encoder) is being asked to serve two regimes whose required feature-to-anomaly mappings disagree on more
+than one weight at once. That is a specialization problem, not a one-term-interaction problem — pointing at option
+(a) (gating between specialist sub-kernels), not option (c), as the better-motivated structural fix.
+
+**Chosen candidate: a cheap, JOINTLY-fit gate over two full 10-parameter sub-kernels** (direction (a)), blending
+their SCALAR losses rather than hard-OR-ing two independent Adaptive controllers (batch 13's design) or stacking
+reconstruction vectors:
+
+```text
+gate(window) = sigmoid(wg0 * mean_ln(window) + wg1 * mean_pe(window) + wg2)
+loss(window) = gate(window) * kernel_loss(window; W_A) + (1 - gate(window)) * kernel_loss(window; W_B)
+```
+
+`mean_ln`/`mean_pe` are window-level means of the two raw features the weight audit above flags as most conflicted
+(`w1`, `w3`) — no new feature engineering, reusing exactly what `sr.Extractor` already computes. 23 parameters total
+(`W_A` 10 + `W_B` 10 + 3 gate scalars), ONE calibrated `tau` over the single blended loss stream — a genuinely
+unified detector, not two models and an external rule. Unlike batch 13, `W_A`, `W_B`, and the gate are optimized
+TOGETHER in one `differential_evolution`+Nelder-Mead search over all 23 dimensions at once, under one combined
+objective — there is no independent-fit-then-combine step.
+
+**Implementation: `scripts/train-sentinel-weights-gated.py` (new script; no change to any existing fitting/scoring
+code path).** Imports `scripts/train-sentinel-weights-cic.py` as a library only (same pattern as batch 13's
+`scripts/eval-sentinel-ensemble.py`), reusing its data loading (`load_and_split`, `load_npz_bucket`,
+`load_npz_benign_split`, `capped_attack_bucket`), its already-pluggable `score_cic_block(..., kernel_loss_fn=...)`
+(added in batch 4 for exactly this situation — a differently-shaped kernel — and exercised here for the first time),
+and `report_bound_proximity`. New code, each self-checked before any fitted number was looked at (same discipline as
+every self-check in this file family):
+
+- `gate_values`: checked against an independent, loop-based reference of the same formula (batch 4's own self-check
+  discipline for genuinely new arithmetic), at both `GATE_BOUNDS` corners and random interior points.
+- `gated_kernel_loss_batch`: checked to reduce EXACTLY to the plain `tw.kernel_loss_batch` when `W_A == W_B`, for
+  ANY gate parameters (the blend's defining algebraic property, `g*L + (1-g)*L = L`), at bound corners and random
+  interior points, on both a real lab window and a real CIC window.
+- `gated_sentinel_alerts` (the lab held-out replay helper, mirroring `slr.sentinel_alerts`'s internals with ONE
+  `sr.Adaptive` fed the blended loss, the direct single-model analogue of batch 13's `ensemble_sentinel_alerts`):
+  checked against the REAL `slr.sentinel_alerts` in the degenerate `W_A==W_B` case on a real held-out attack run's
+  frames.
+- An end-to-end check of `tsc.score_cic_block(..., kernel_loss_fn=gated_kernel_loss_batch)` against the real
+  `score_cic_block` in the same degenerate case — the first real exercise of that batch-4-added hook.
+All checks passed before any fitted result was examined.
+
+**Objective: deliberately the SIMPLER static-hinge two-anchor formula (batches 1-6), not batch 9/10's best-ever
+sequence-level Adaptive-replay surrogate — a disclosed, real scope limitation, not an oversight.** Re-deriving
+`_replay_class_soft_alerts` for a non-`sr.kernel_loss`-shaped loss would be genuinely new Adaptive-replay training
+machinery, which this batch's own pre-registered scope rule says not to force ("if it needs ... non-trivial new
+scoring machinery, do not force it"). `make_two_anchor_objective_gated` is a line-for-line copy of
+`tsc.make_two_anchor_objective` with every `tw.kernel_loss_batch(...)` call replaced by
+`gated_kernel_loss_batch(...)`, same `MARGIN=0.02`, `SIGMA=2.5`, `LAMBDA=1.0`, `BETA_cic_benign=1.0`, same data caps
+as batch 9/10 (6,264-window lab-benign pool, 2,000-window CIC-benign anchor/day, 2,000-window CIC attack-training
+pool/class). **This means any prototype result here is tested against the workstream's ORIGINAL objective, not its
+best one — a fair comparison to batches 1-6's own numbers under that objective, but not a like-for-like comparison to
+batch 13's ensemble (built from batch 10's sequence-surrogate-trained Model A).** Bounds: `[-3.0, 5.0]` for all 20
+sub-kernel weights (unchanged box, for continuity); `[-20.0, 20.0]`/`[-20.0, 20.0]`/`[-10.0, 10.0]` for the gate's
+three weights (a new, disclosed, bounded box — not unbounded — chosen because `mean_ln`/`mean_pe` are themselves
+already normalized to roughly `[0, 1]`, so a logistic gate needs an argument of magnitude `>= ~6` to approach a
+near-hard 0/1 decision; `+-20` lets the optimizer reach a sharp gate if the data wants one while remaining a fixed,
+bounded, Invariant-5-compliant box).
+
+**What ran, and what did not finish — reported honestly, per this batch's own pre-registered scope rule.** A
+50-window-per-class smoke-scale run (`--de-popsize 4 --de-maxiter 5`) completed end to end in ~92s, confirmed every
+self-check passes, and produced one genuinely encouraging mechanistic signal at this toy scale: the fitted gate's
+mean value was **0.99 on CIC `DoS Hulk`/`DoS GoldenEye` training windows**, **0.08-0.16 on the CIC-benign anchor**,
+and **0.75 (std 0.32, i.e. NOT uniform) on the lab-benign pool** — exactly the kind of regime-dependent routing this
+architecture is betting on, visible even before any real optimizer budget was spent. This smoke-test's recall/FP
+numbers themselves are not reported as a result (same convention as every prior batch's smoke test): at this scale
+they are near-zero across the board, as expected from 50 training windows per class. A full-scale run (same data
+caps as batch 9/10, default `popsize=20`/`maxiter=150`) was started but did not complete in this batch's available
+time (differential_evolution's own one-line progress print only appears at completion, and at `ndim=23` — roughly
+2.3x batch 10's `ndim=10` population at the same `popsize`/`maxiter` — it ran past 30 minutes without finishing); a
+second attempt at a batch-4-style reduced budget (`--de-maxiter 60`, matching batch 4's own disclosed compromise for
+higher-dimensional searches) was started but this batch's autonomous window closed before it finished either.
+**No full-scale, pre-registered-bar result exists for this architecture as of this batch.** The pre-registered bar
+itself (must meet or beat batch 13's ensemble — lab held-out detected `>= 8/13`, CIC Hulk/GoldenEye recall `>= 90%`
+each, CIC-benign FP `<= 2%` both days — AS A SINGLE MODEL) is written into `scripts/train-sentinel-weights-gated.py`
+itself (printed and JSON-written automatically against `BATCH13_ENSEMBLE`'s committed numbers) specifically so the
+next batch can run it to completion and get an immediate, honest verdict without re-deriving anything.
+
+**This is reported as an honest INCOMPLETE, not spun as either a positive or a negative result.** The architecture
+is implemented, self-checked, and runs correctly; the smoke-scale gate-differentiation signal is a genuinely
+promising sign the mechanism does something sensible; but there is no full-scale evidence yet of whether it clears,
+falls short of, or exceeds batch 13's ensemble bar. The honest, pre-registered-before-looking-at-results bar is
+sitting in the script, untouched by any result, waiting for a run with enough wall-clock budget to finish.
+
+**Most natural next batch, stated honestly:** run `scripts/train-sentinel-weights-gated.py` to completion at a
+budget it can actually finish in (start with `--de-maxiter 60`, matching batch 4's own precedent, and increase only
+if time allows) and report the three-anchor table against batch 13's bar, plus batch 14's three out-of-sample
+classes for continuity (already wired into the script's own evaluation section). If it clears the bar, this is
+option 3's first positive result and a genuine single-model alternative to batch 13's ensemble. If it does not, that
+is still a useful, disclosed result (a cheap gate over the SIMPLER batches-1-6 objective was not enough; retrying
+under batch 9/10's sequence-surrogate objective — which would need the non-trivial new Adaptive-replay-for-a-
+different-loss-shape machinery this batch deliberately avoided forcing — becomes the next thing actually worth
+building, not re-sweeping this same configuration's hyperparameters).
+
+**Owner's explicit question, answered honestly:** after 15 batches (12 unified-kernel attempts, a working two-model
+ensemble, and one option-3 design+partial-prototype), is continuing worthwhile, or is this a natural stopping point
+for a consolidated write-up? My honest read: **batch 13's ensemble is already a strong, verified, practical answer**
+(10/13 lab recall, 100%/100% CIC Hulk/GoldenEye recall, <=0.25% CIC-benign FP, with batch 14's disclosed scope limit
+that it does not generalize to CIC classes outside its two literal training anchors). This batch's design work is
+genuinely new evidence (the weight-audit finding that the conflict spans 5+ weights, ruling out a one-term fix; the
+measured 369x compute headroom, ruling out budget as the blocker) and the gated-kernel prototype is real, working,
+self-checked code sitting one completed optimizer run away from a verdict — **not** a dead end or busywork. The
+honest position is: **this is NOT yet a natural stopping point for option 3 specifically**, because the one
+concrete next step (run the already-written script to completion) is cheap, well-scoped, and could change the
+practical recommendation (a single unified model is operationally simpler to deploy and reason about than an
+ensemble, if it works). But if a completed full-scale run of THIS architecture also fails to beat batch 13's bar,
+that would be a second option-3 data point after batch 4's, and at that point I would recommend stopping the search
+and consolidating on batch 13's ensemble as the final practical answer, with batch 14's scope limit and this batch's
+negative option-3 result both disclosed — further option-3 variants (deeper gating, more sub-kernels) would be
+chasing a progressively less-motivated hypothesis rather than following new evidence. Recommend: one more batch to
+finish this already-built prototype's evaluation, then decide based on that result, not before.
+
+All 13 `test/invariants/train-sentinel-weights-cic.test.ts` tests pass (that script and every other existing
+fitting/scoring script are untouched this batch — only the new `scripts/train-sentinel-weights-gated.py` was added).
+Full `npx vitest run` passes (71 files, 941 passed, 11 skipped, 0 failed), identical counts to batch 13/14. No
+production code touched (`scripts/gpu-sdn-anomaly-sentinel.py`, `src/gpu/gpu_anomaly_kernel.cu` untouched), no PR, no
+push, stays local/unpushed, same boundary as every prior batch in this workstream.
+
 **2026-10-26 addendum (batch 14, autonomous overnight continuation per owner's explicit authorization, EVALUATION
 ONLY — no training, no fitting, hypothesis/method/bar written before any of this batch's numbers were looked at):**
 batch 13's headline numbers — Model A ("CIC-shaped") at 100.00%/100.00% recall on `DoS Hulk`/`DoS GoldenEye` — are
