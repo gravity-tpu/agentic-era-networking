@@ -1,5 +1,80 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-25 addendum (batch 9, owner-approved "option 2", hypothesis/method/bar written before this batch's
+full-scale (2,000-window-per-class) numbers were looked at — a small 50-window-per-class smoke test was run first,
+purely to confirm the new code path runs end to end without crashing, and its numbers are not used for the pass/fail
+verdict below):** batch 8's own commit message diagnosed a specific, falsifiable reason the Adaptive-replay-aware
+margin (batches 7/8) might be the wrong training signal even though it is "Adaptive-aware": its per-window hinge
+`max(0, threshold_from_adaptive.check() - loss)` scores each window independently against whatever threshold the
+simulated `sr.Adaptive` happens to hold at that moment, but the actual metric graded against — `score_cic_block`'s
+`alerts/n` — is an AGGREGATE alert rate over the WHOLE replayed sequence. A window can individually clear or miss its
+momentary threshold without that translating cleanly into the sequence-level rate the deployed detector is judged
+on. **This batch tests that diagnosis directly**: does replacing the per-window hinge with a genuinely
+SEQUENCE-LEVEL, differentiable surrogate for `alerts/n` itself — the mean, across a class's whole cold-replayed
+sequence, of a smooth `sigmoid((loss - threshold) / temperature)` standing in for each window's hard alert boolean,
+with `sr.Adaptive`'s own mean/variance EMA update left completely untouched (only the alert decision is relaxed, not
+the underlying statistics) — close the gap batches 7/8 could not close?
+
+**Result (full-scale, 2,000-window-per-class run, matching batch 8's data/bounds/seed/optimizer budget exactly):
+YES, decisively.** `DoS Hulk` recall 99.20% (vs. the 28.58% bar — batch 3's best-ever, and batch 8's own 0.00%),
+`DoS GoldenEye` recall 99.45% (vs. the 63.20% bar — batch 5's best-ever, and batch 8's own 38.40%), both measured by
+the unmodified `score_cic_block`, the real grading function. Both classes individually clear their bars by a wide
+margin — this is a PASS on both the pre-registered per-class (AND/OR) bar and, for direct comparability, batches
+7/8's stricter both-classes bar. The per-class surrogate recall at the trained weights (98.94% Hulk, 99.36%
+GoldenEye — this objective's own differentiable estimate) tracked the real `score_cic_block` recall closely (within
+~0.3-0.5 points), confirming the surrogate is a tight approximation of the sequence-level metric it was built to
+approximate, unlike batches 7/8's per-window hinge whose training signal never tracked real recall at all. This is
+strong evidence FOR batch 8's diagnosis: the Adaptive-replay-aware approach itself was not the problem; the
+PER-WINDOW hinge, which never directly optimized the aggregate alert rate, was.
+
+**The one real tradeoff, reported honestly, not minimized:** CIC-benign false-positive rate held at batch 8's clean
+0.00% on Wednesday but regressed to 0.75% (15/2,000 windows) on Friday — a real, non-zero cost from batch 8's
+cleanest-ever 0.00%/0.00%, not a wash. Lab held-out recall (informal peek only) dropped to 4/13 from the hardcoded
+baseline's 10/13, with FP at 1/9 — both numbers happen to match batch 8's own lab-held-out peek exactly, so this
+specialization-to-CIC-at-the-cost-of-the-lab's-own-attack-patterns tradeoff is not new to batch 9; it is consistent
+with every Adaptive-replay/two-anchor batch so far and is not a verdict on this batch's one real change (the margin
+formula). No weight pinned to a `BOUNDS` edge (0/10).
+
+## The one change, and nothing else (batch 9)
+
+`make_sequence_alert_rate_objective` (`scripts/train-sentinel-weights-cic.py`, `--objective
+two-anchor-sequence-alert-rate`) keeps every other part of batch 8's mechanism identical: the same fresh, COLD
+`sr.Adaptive(tau=base_tau(W))` per class (no warm-up, matching `score_cic_block` exactly), the same 10-parameter
+architecture, the same `mean`-combine across classes (not stacked with batch 5's `max`-combine — a different,
+already-tried lever), the same benign terms (pooled nested means over the lab-benign pool and the CIC-benign
+anchor, no replay), the same data caps (6,264-window lab-benign pool, 2,000-window CIC-benign anchor per day,
+2,000-window CIC attack-training pool per class — identical to batch 8), the same bounds `[-3.0, 5.0]`, the same
+optimizer budget (`popsize=20`, `maxiter=150`, Nelder-Mead polish `maxiter=5000`), and the same seed (42). The ONLY
+change is the margin term's formula: batch 8's per-window hinge against a momentary threshold snapshot is replaced
+by `_replay_class_soft_alerts`' per-window `sigmoid((loss - threshold) / temperature)`, averaged across the WHOLE
+class sequence into a surrogate recall, with `1 - surrogate_recall` (the surrogate miss rate) as the per-class loss
+term the optimizer minimizes. `temperature` is set to `SEQUENCE_SURROGATE_TEMPERATURE_SIGMA_FRAC_DEFAULT = 0.25`
+times the LAB training-benign pool's own std at the current candidate `W` (not a fixed absolute number — see that
+constant's own comment in the script for why a W-relative scale is needed across the wide `BOUNDS` search space
+differential_evolution explores). This temperature choice is fixed before the full-scale run and not tuned against
+results.
+
+## Success criterion — pre-registered, decided before full-scale numbers were looked at
+
+**Primary:** for each of `DoS Hulk` and `DoS GoldenEye`, independently, does this batch's measured window-level
+recall (via the unmodified `score_cic_block`, the same scoring function every batch is graded against) beat the
+best-ever prior recall for that class — **Hulk's 28.58% (batch 3) AND/OR GoldenEye's 63.20% (batch 5)**? Unlike
+batches 7/8's stricter "beats both or it's a FAIL" framing, this batch's own pre-registered bar is explicitly
+per-class (AND/OR): beating either class individually is a PASS for that class, reported as such, not folded into a
+single blended verdict.
+
+**Secondary, reported for context, not pass/fail:** CIC-benign false-positive rate must not regress from batch 8's
+0.00%/0.00% (the cleanest result in the workstream so far) — any tradeoff here is flagged explicitly even if recall
+improves. Lab held-out recall/FP (informal peek only, not a held-out-validated result) is also reported for
+continuity with every prior batch.
+
+**What this batch does and does not tell us:** if the sequence-level surrogate beats one or both bars, that is
+evidence FOR batch 8's diagnosis — the per-window hinge, not the Adaptive-awareness idea itself, was the wrong
+training signal. If it still fails both bars, that is evidence the Adaptive-replay-aware approach as a whole
+underperforms the simpler static-target hinges of batches 2/3/5 regardless of how the per-window-vs-sequence-level
+distinction is handled, and the next batch should likely return to extending the static-target line (e.g. combining
+batch 5's max-combine with a wider/deeper architecture) rather than continuing to refine Adaptive-replay.
+
 **2026-10-25 addendum (batch 8, owner-approved, added before batch 8's own numbers were looked at):** batch 7's own
 commit message found, after the fact, a real train/eval convention mismatch in its Adaptive-replay-aware margin:
 training warmed the simulated `sr.Adaptive` instance on 500 lab-benign windows before replaying attack-training
