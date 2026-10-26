@@ -2432,35 +2432,45 @@
       const osEl = document.getElementById(`${prefix}-os-badge`);
       if (osEl && r.osVersion) osEl.innerText = `${r.osVersion.split(' ')[0]} · Linux 6.18`;
 
-      // KPI 1: Wire Injection Rate (eth0)
+      // KPI 1: Wire Injection Rate (Workload SDN Interface)
       const ifaces = Array.isArray(r.interfaces) ? r.interfaces : [];
-      const eth0 = ifaces.find((i) => i.name === 'eth0');
-      const eth0Up = isOnline && eth0?.status === 'UP';
-      const eth0RateBps = eth0 ? safeBigInt(eth0.rxRateBps) + safeBigInt(eth0.txRateBps) : 0n;
-      const eth0Pps = eth0 ? safeBigInt(eth0.rxRatePps) + safeBigInt(eth0.txRatePps) : 0n;
+      const sdnIface = ifaces.find((i) => i.isWorkload || i.role?.includes('Workload')) || ifaces.find((i) => i.name === 'eth0');
+      const sdnIfaceUp = isOnline && sdnIface?.status === 'UP';
+      const sdnRateBps = sdnIface ? safeBigInt(sdnIface.rxRateBps) + safeBigInt(sdnIface.txRateBps) : 0n;
+      const sdnPps = sdnIface ? safeBigInt(sdnIface.rxRatePps) + safeBigInt(sdnIface.txRatePps) : 0n;
 
       const kpiRateEl = document.getElementById(`${prefix}-kpi-eth0-rate`);
-      if (kpiRateEl) kpiRateEl.innerText = isOnline ? `${formatBytes(eth0RateBps)}/s` : '--/s';
+      if (kpiRateEl) kpiRateEl.innerText = (isOnline && sdnIface) ? `${formatBytes(sdnRateBps)}/s` : '--/s';
 
       const kpiStatusEl = document.getElementById(`${prefix}-kpi-eth0-status`);
+      const linkSpeedMbps = sdnIface?.speedMbps || 1000;
       if (kpiStatusEl) {
-        kpiStatusEl.innerText = eth0Up ? `${eth0.speedMbps || 1000}M Full` : 'DOWN';
-        kpiStatusEl.className = `cf-pill-badge ${eth0Up ? 'green' : 'gray'}`;
+        if (!sdnIface) {
+          kpiStatusEl.innerText = 'NO WORKLOAD IFACE';
+          kpiStatusEl.className = 'cf-pill-badge gray';
+        } else {
+          kpiStatusEl.innerText = sdnIfaceUp ? `${sdnIface.name} · ${linkSpeedMbps}M Full` : `${sdnIface.name} · DOWN`;
+          kpiStatusEl.className = `cf-pill-badge ${sdnIfaceUp ? 'green' : 'gray'}`;
+        }
       }
+
+      // Wire capacity derived dynamically from negotiated link speed (Council Invariants 2 & 5: integer accounting)
+      const ifaceSpeedMbps = safeBigInt(linkSpeedMbps);
+      const wireCapBytesPerSec = ifaceSpeedMbps > 0n ? (ifaceSpeedMbps * 1_000_000n) / 8n : 125_000_000n;
+      let capPct = sdnRateBps > 0n ? (sdnRateBps * 100n) / wireCapBytesPerSec : (sdnIfaceUp ? 5n : 0n);
+      if (capPct > 100n) capPct = 100n;
 
       const barEth0El = document.getElementById(`${prefix}-bar-eth0`);
       if (barEth0El) {
-        const capPct = eth0RateBps > 0n ? Math.min(100, Number((eth0RateBps * 100n) / 12_500_000n)) : (eth0Up ? 5 : 0);
-        barEth0El.style.width = `${capPct}%`;
+        barEth0El.style.width = `${capPct.toString()}%`;
       }
 
       const kpiPpsEl = document.getElementById(`${prefix}-kpi-eth0-pps`);
-      if (kpiPpsEl) kpiPpsEl.innerText = isOnline ? `${formatNumber(eth0Pps)} pps` : '-- pps';
+      if (kpiPpsEl) kpiPpsEl.innerText = (isOnline && sdnIface) ? `${formatNumber(sdnPps)} pps` : '-- pps';
 
       const kpiCapEl = document.getElementById(`${prefix}-kpi-eth0-cap`);
       if (kpiCapEl) {
-        const capPct = eth0RateBps > 0n ? ((eth0RateBps * 100n) / 12_500_000n).toString() : '0';
-        kpiCapEl.innerText = isOnline ? `${capPct}%` : '--%';
+        kpiCapEl.innerText = (isOnline && sdnIface) ? `${capPct.toString()}%` : '--%';
       }
 
       // KPI 2: SDN Boundary Containment (Council Invariants 3 & 6: Data-plane verified isolation)

@@ -16,6 +16,7 @@ Council Invariants Enforced:
 """
 
 import fcntl
+import ipaddress
 import json
 import os
 import socket
@@ -25,7 +26,7 @@ import sys
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 PORT = int(os.environ.get("RPI3_TELEMETRY_PORT", "8001"))
 CPU_THERMAL_PATH = "/sys/class/thermal/thermal_zone0/temp"
@@ -41,9 +42,51 @@ THROTTLED_CACHE_TTL_NS = 1_000_000_000  # 1s monotonic ns
 
 INTERFACE_ROLES: Dict[str, str] = {
     "eth0": "Workload Data Plane (Zodiac FX Ingress via NETGEAR GS105Ev2)",
+    "eth1": "Out-of-Band Wired Management (NETGEAR GS105Ev2 Uplink Switch #2)",
     "wlan0": "Out-of-Band Management & Wi-Fi Gateway",
     "tailscale0": "WireGuard Management Mesh Overlay",
 }
+
+# Configurable subnet boundaries for data plane and management plane (Council Invariants 1 & 5)
+IPNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
+
+def _parse_network_safe(subnet_str: str, default_cidr: str) -> IPNetwork:
+    try:
+        return ipaddress.ip_network(subnet_str, strict=False)
+    except Exception as e:
+        sys.stderr.write(f"[rpi3-telemetry] Error parsing subnet {subnet_str}: {e}; falling back to {default_cidr}\n")
+        return ipaddress.ip_network(default_cidr, strict=False)
+
+WORKLOAD_NETWORK: IPNetwork = _parse_network_safe(os.getenv("ZODIAC_WORKLOAD_SUBNET", "10.0.2.0/24"), "10.0.2.0/24")
+WIRED_MGMT_NETWORK: IPNetwork = _parse_network_safe(os.getenv("ZODIAC_WIRED_MGMT_SUBNET", "10.0.0.0/24"), "10.0.0.0/24")
+
+def ip_in_network(ip_str: str, net: IPNetwork) -> bool:
+    """Check if an IP string belongs to a pre-parsed ipaddress network."""
+    try:
+        return ipaddress.ip_address(ip_str) in net
+    except Exception as e:
+        sys.stderr.write(f"[rpi3-telemetry] Subnet membership check error for {ip_str}: {e}\n")
+        return False
+
+def resolve_interface_role(iface: str, ip_addr: Optional[str]) -> str:
+    """Determine network interface topology role based on IP subnet and interface naming."""
+    if ip_addr and ip_in_network(ip_addr, WORKLOAD_NETWORK):
+        return "Workload Data Plane (Zodiac FX Ingress via NETGEAR GS105Ev2)"
+    if (iface.startswith("eth") or iface.startswith("en")) and ip_addr and ip_in_network(ip_addr, WIRED_MGMT_NETWORK):
+        return "Out-of-Band Wired Management (NETGEAR GS105Ev2 Uplink Switch #2)"
+    if iface == "wlan0":
+        return "Out-of-Band Management & Wi-Fi Gateway"
+    if iface == "tailscale0":
+        return "WireGuard Management Mesh Overlay"
+    role = INTERFACE_ROLES.get(iface)
+    if role:
+        return role
+    if ip_addr:
+        sys.stderr.write(
+            f"[rpi3-telemetry] Interface {iface} IP {ip_addr} does not match known subnets "
+            f"({WORKLOAD_NETWORK}, {WIRED_MGMT_NETWORK})\n"
+        )
+    return "Network Interface"
 
 
 class SystemMetricsCollector:
@@ -241,7 +284,6 @@ class SystemMetricsCollector:
     def get_network_interfaces(self) -> List[Dict[str, Any]]:
         """Extract network interface metrics from /proc/net/dev and sysfs."""
         results: List[Dict[str, Any]] = []
-        target_ifaces = ["eth0", "wlan0", "tailscale0"]
         net_dev_data: Dict[str, Dict[str, int]] = {}
 
         if os.path.exists(NET_DEV_PATH):
@@ -266,7 +308,24 @@ class SystemMetricsCollector:
             except Exception as e:
                 sys.stderr.write(f"[rpi3-telemetry] Error reading /proc/net/dev: {e}\n")
 
+        # Dynamically discover all non-loopback network interfaces in sysfs or procfs
+        all_sys_ifaces: List[str] = []
+        if os.path.exists(SYS_NET_PATH):
+            try:
+                all_sys_ifaces = sorted([d for d in os.listdir(SYS_NET_PATH) if d != "lo" and not d.startswith(".")])
+            except Exception as e:
+                sys.stderr.write(f"[rpi3-telemetry] Error listing {SYS_NET_PATH}: {e}\n")
+                all_sys_ifaces = []
+
+        preferred_order = ["eth0", "eth1", "wlan0", "tailscale0"]
+        discovered = (set(all_sys_ifaces) | set(net_dev_data.keys())) - {"lo"}
+        target_ifaces = [i for i in preferred_order if i in discovered] + sorted([i for i in discovered if i not in preferred_order])
+
         for iface in target_ifaces:
+            mac = "None"
+            status = "DOWN"
+            speed_mbps = 0
+
             stats = net_dev_data.get(iface, {})
             rx_bytes = stats.get("rx_bytes", 0)
             tx_bytes = stats.get("tx_bytes", 0)
@@ -278,42 +337,46 @@ class SystemMetricsCollector:
             tx_errors = stats.get("tx_errors", 0)
 
             mac_path = f"{SYS_NET_PATH}/{iface}/address"
-            mac = "None"
             if os.path.exists(mac_path):
                 try:
                     with open(mac_path, "r") as f:
                         mac = f.read().strip() or "None"
-                except Exception:
-                    pass
+                except Exception as e:
+                    sys.stderr.write(f"[rpi3-telemetry] Error reading MAC for {iface}: {e}\n")
+                    mac = "None"
 
             operstate_path = f"{SYS_NET_PATH}/{iface}/operstate"
-            status = "DOWN"
             if os.path.exists(operstate_path):
                 try:
                     with open(operstate_path, "r") as f:
                         op = f.read().strip().lower()
                         status = "UP" if op == "up" or rx_bytes > 0 else "DOWN"
-                except Exception:
-                    pass
+                except Exception as e:
+                    sys.stderr.write(f"[rpi3-telemetry] Error reading operstate for {iface}: {e}\n")
+                    status = "DOWN"
             elif rx_bytes > 0:
                 status = "UP"
 
             speed_path = f"{SYS_NET_PATH}/{iface}/speed"
-            speed_mbps = 1000 if iface == "eth0" else (433 if iface == "wlan0" else 1000)
             if os.path.exists(speed_path):
                 try:
                     with open(speed_path, "r") as f:
                         val = int(f.read().strip())
                         if val > 0:
                             speed_mbps = val
-                except Exception:
-                    pass
+                except Exception as e:
+                    sys.stderr.write(f"[rpi3-telemetry] Error reading speed for {iface}: {e}\n")
+                    speed_mbps = 0
 
             ip_addr = self.get_interface_ip(iface)
+            role = resolve_interface_role(iface, ip_addr)
+            is_workload = role.startswith("Workload")
 
             results.append({
                 "name": iface,
-                "role": INTERFACE_ROLES.get(iface, "Network Interface"),
+                "role": role,
+                "is_workload": is_workload,
+                "isWorkload": is_workload,
                 "mac_address": mac,
                 "ip_address": ip_addr,
                 "status": status,

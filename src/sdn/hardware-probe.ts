@@ -2490,6 +2490,7 @@ export async function probeRpi3Hardware(
             const ifObj = item as Record<string, unknown>;
             const name = String(ifObj['name'] || '');
             const role = String(ifObj['role'] || '');
+            const isWorkload = Boolean(ifObj['is_workload'] ?? ifObj['isWorkload'] ?? role.includes('Workload'));
             const macAddress = String(ifObj['mac_address'] || 'None');
             const ipAddress = typeof ifObj['ip_address'] === 'string' ? ifObj['ip_address'] : null;
             const status = String(ifObj['status'] || 'DOWN').toUpperCase() === 'UP' ? 'UP' : 'DOWN';
@@ -2524,6 +2525,7 @@ export async function probeRpi3Hardware(
             results.push({
               name,
               role,
+              isWorkload,
               macAddress,
               ipAddress,
               status,
