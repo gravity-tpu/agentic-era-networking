@@ -312,41 +312,25 @@ def report_bound_proximity(W, bounds, eps=BOUND_PIN_EPS):
 
 
 # --- Batch 7: Adaptive-replay-aware margin. Fixed by PREREGISTRATION.md's batch 7 addendum. ---
-WARMUP_CAP = 500  # fixed, deterministic lab-benign windows used to warm a simulated sr.Adaptive before replaying
-# attack-training windows through it -- see PREREGISTRATION.md for why 500 and why this models "the daemon has been
-# running on lab traffic before an attack starts," not a cold-start Adaptive instance.
+# --- Batch 8: cold-start fix. Batch 7's training-time replay warmed sr.Adaptive on 500 lab-benign windows before
+# replaying attack windows, but score_cic_block (the function every batch, including this one, is actually graded
+# against -- see its `ad = sr.Adaptive(tau=base_tau)` below, no warm-up at all) starts every evaluation block's
+# Adaptive instance COLD. Batch 7 therefore trained its margin against a warmed dynamic but was scored against a
+# cold one -- a train/eval mismatch, flagged in batch 7's own commit message as the single most actionable next
+# step. This batch removes the warm-up entirely: _replay_class_hinge now starts every replay exactly the way
+# score_cic_block does (a fresh sr.Adaptive(tau=base_tau), no windows fed to it before the ones being scored). No
+# other part of batch 7's mechanism changes -- same 10-parameter architecture, same mean-combine, same
+# --objective two-anchor-adaptive-margin flag, same hinge formula (max(0, threshold - loss) read directly from
+# Adaptive.check()'s own return value).
 
 
-def build_benign_warmup_sequence(train_groups_lab, cap=WARMUP_CAP):
-    """A FIXED, deterministic sequence of `cap` lab-benign training windows, built once (not resampled per objective
-    evaluation): concatenates windows across patterns (sorted alphabetically) and runs (sorted by run id) in that
-    order, then takes the first `cap`. Fails loudly rather than silently returning fewer than `cap` windows if the
-    pool is smaller than requested (it is not, at ~6,264 windows, but the check costs nothing and catches a future
-    catalog shrink before it silently changes this batch's warm-up length)."""
-    windows = []
-    for pattern in sorted(train_groups_lab):
-        for rid, w in sorted(train_groups_lab[pattern], key=lambda item: item[0]):
-            if len(w):
-                windows.append(w)
-    pool = np.concatenate(windows, axis=0) if windows else np.zeros((0, 256), dtype=np.float32)
-    if len(pool) < cap:
-        raise SystemExit(f'FATAL: lab-benign training pool has only {len(pool)} windows, need {cap} for the '
-                          f'pre-registered warm-up sequence length.')
-    return pool[:cap]
-
-
-def _replay_class_hinge(warmup_windows, class_windows, W, base_tau):
-    """Warms a FRESH sr.Adaptive(tau=base_tau) on warmup_windows' losses (discarding the alert outputs -- this is
-    purely to advance the EMA state to a representative operating point), then continues the SAME instance through
-    class_windows' losses IN ORDER, recording hinge_i = max(0, threshold_i - loss_i) for each, where threshold_i is
+def _replay_class_hinge(class_windows, W, base_tau):
+    """Replays class_windows' losses through a FRESH, COLD sr.Adaptive(tau=base_tau) IN ORDER -- no warm-up windows
+    first, matching score_cic_block's own convention exactly (same instantiation, same cold initial state: m =
+    tau*0.75, v = (tau*0.15)**2) -- recording hinge_i = max(0, threshold_i - loss_i) for each, where threshold_i is
     read DIRECTLY from Adaptive.check()'s own second return value -- the exact quantity the real deployed decision
-    is made against, not a hand-rederived formula. Returns the array of per-window hinges for class_windows only
-    (the warm-up windows are never scored, per PREREGISTRATION.md -- only the margin term uses this replay; benign
-    reconstruction quality is judged elsewhere, unchanged). Uses sr.Adaptive completely unmodified."""
+    is made against, not a hand-rederived formula. Uses sr.Adaptive completely unmodified."""
     ad = sr.Adaptive(tau=base_tau)
-    warmup_losses = tw.kernel_loss_batch(warmup_windows, W)
-    for loss in warmup_losses:
-        ad.check(float(loss))   # advance EMA state only; warm-up windows are never part of the penalized signal
     class_losses = tw.kernel_loss_batch(class_windows, W)
     hinges = np.empty(len(class_losses), dtype=np.float64)
     for i, loss in enumerate(class_losses):
@@ -355,34 +339,35 @@ def _replay_class_hinge(warmup_windows, class_windows, W, base_tau):
     return hinges
 
 
-def self_check_adaptive_determinism(warmup_windows, sample_class_windows, W, seed=13):
+def self_check_adaptive_determinism(sample_class_windows, W, seed=13):
     """Nothing in _replay_class_hinge is randomized; replaying the SAME class windows through two independently
-    constructed, identically-warmed Adaptive instances must produce bit-identical hinge sequences. Fails loudly if
+    constructed, identically-cold Adaptive instances must produce bit-identical hinge sequences. Fails loudly if
     not, catching accidental shared mutable state or non-determinism in this batch's own new orchestration code
     before fitting against it -- the kernel math itself is covered by tw.self_check(), reused unchanged, separately."""
     rng = np.random.default_rng(seed)
     lo = np.array([b[0] for b in tw.BOUNDS], dtype=np.float32)
     hi = np.array([b[1] for b in tw.BOUNDS], dtype=np.float32)
     for trial_W in [np.asarray(W, dtype=np.float32), rng.uniform(lo, hi).astype(np.float32)]:
-        h1 = _replay_class_hinge(warmup_windows, sample_class_windows, trial_W, base_tau=0.2)
-        h2 = _replay_class_hinge(warmup_windows, sample_class_windows, trial_W, base_tau=0.2)
+        h1 = _replay_class_hinge(sample_class_windows, trial_W, base_tau=0.2)
+        h2 = _replay_class_hinge(sample_class_windows, trial_W, base_tau=0.2)
         if not np.array_equal(h1, h2):
-            raise SystemExit('FATAL: _replay_class_hinge is non-deterministic (two identically-warmed replays of '
+            raise SystemExit('FATAL: _replay_class_hinge is non-deterministic (two identically-cold replays of '
                               'the same windows/weights disagree) -- refusing to fit against it.')
 
 
-def make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic, warmup_windows,
+def make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                     lam=None, beta_cic_benign=BETA_CIC_BENIGN_DEFAULT, sigma=None, margin_combine='mean'):
     """L(W) = L_benign_lab(W) + beta_cic_benign * L_benign_cic(W) + lam * L_margin_adaptive(W).
 
     L_benign_lab, L_benign_cic: UNCHANGED from make_two_anchor_objective -- pooled nested means, no Adaptive replay.
     See PREREGISTRATION.md's batch 7 addendum for why only the margin term uses the replay.
 
-    L_margin_adaptive(W): for each attack-training class, a FRESH sr.Adaptive(tau=base_tau(W)) is warmed on
-    warmup_windows then replayed through that class's own windows (_replay_class_hinge); the per-class hinge is the
-    mean of those per-window hinges. base_tau(W) = mean + sigma*std of the LAB training-benign pool (unchanged
-    calibration convention, no MARGIN added -- see PREREGISTRATION.md for why). Per-class means are combined via
-    margin_combine ('mean' default; batch 7 does not stack this with batch 5's 'max', see PREREGISTRATION.md)."""
+    L_margin_adaptive(W): for each attack-training class, a FRESH, COLD sr.Adaptive(tau=base_tau(W)) (batch 8: no
+    warm-up -- see this file's batch 8 banner comment above _replay_class_hinge) is replayed through that class's
+    own windows (_replay_class_hinge); the per-class hinge is the mean of those per-window hinges. base_tau(W) =
+    mean + sigma*std of the LAB training-benign pool (unchanged calibration convention, no MARGIN added -- see
+    PREREGISTRATION.md for why). Per-class means are combined via margin_combine ('mean' default; batch 7 does not
+    stack this with batch 5's 'max', see PREREGISTRATION.md)."""
     sigma = tw.SIGMA if sigma is None else sigma
     lam = tw.LAMBDA if lam is None else lam
 
@@ -408,7 +393,7 @@ def make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_t
             for _rid, windows in runs:
                 if len(windows) == 0:
                     continue
-                hinges = _replay_class_hinge(warmup_windows, windows, W, base_tau)
+                hinges = _replay_class_hinge(windows, W, base_tau)
                 class_means.append(float(np.mean(hinges)))
         if not class_means:
             l_margin = 0.0
@@ -423,7 +408,7 @@ def make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_t
     return objective
 
 
-def adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic, warmup_windows, W, sigma=None):
+def adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic, W, sigma=None):
     """Per-term values at W, never blended -- mirrors two_anchor_components for the Adaptive-replay margin."""
     sigma = tw.SIGMA if sigma is None else sigma
     W = np.asarray(W, dtype=np.float32)
@@ -433,13 +418,13 @@ def adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train
     day_means = [float(np.mean(tw.kernel_loss_batch(windows, W)))
                  for windows in cic_benign_anchor.values() if len(windows)]
     l_benign_cic = sum(day_means) / len(day_means) if day_means else 0.0
-    per_class = per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, warmup_windows, W, sigma=sigma)
+    per_class = per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, W, sigma=sigma)
     vals = [v for v in per_class.values() if v is not None]
     l_margin = sum(vals) / len(vals) if vals else 0.0
     return l_benign_lab, l_benign_cic, l_margin
 
 
-def per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, warmup_windows, W, sigma=None):
+def per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, W, sigma=None):
     """{label: mean_hinge_value}, the Adaptive-replay analogue of per_class_margin_hinge."""
     sigma = tw.SIGMA if sigma is None else sigma
     W = np.asarray(W, dtype=np.float32)
@@ -451,7 +436,7 @@ def per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, w
         for _rid, windows in runs:
             if len(windows) == 0:
                 continue
-            hinges = _replay_class_hinge(warmup_windows, windows, W, base_tau)
+            hinges = _replay_class_hinge(windows, W, base_tau)
             hinge_means.append(float(np.mean(hinges)))
         out[label] = sum(hinge_means) / len(hinge_means) if hinge_means else None
     return out
@@ -626,15 +611,17 @@ def run_two_anchor(args, train_groups_lab, holdout_lab):
 
 
 def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
-    """--objective two-anchor-adaptive-margin's entire flow (batch 7): same data loading as run_two_anchor, but the
-    margin term replays attack-training windows through a real, unmodified sr.Adaptive instead of comparing against
-    a static target. See docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 7 addendum
-    for the exact design and why. 10-parameter architecture, mean-combine -- deliberately NOT stacked with batch 5's
-    max-combine or batch 4's 85-parameter architecture, to isolate this one new mechanism cleanly."""
+    """--objective two-anchor-adaptive-margin's entire flow (batch 7, cold-start fixed in batch 8): same data loading
+    as run_two_anchor, but the margin term replays attack-training windows through a real, unmodified sr.Adaptive
+    instead of comparing against a static target. See docs/benchmarks/results/sentinel-training-two-anchor/
+    PREREGISTRATION.md's batch 7 addendum for the exact design and why. 10-parameter architecture, mean-combine --
+    deliberately NOT stacked with batch 5's max-combine or batch 4's 85-parameter architecture, to isolate this one
+    new mechanism cleanly. Batch 8: the replay now starts COLD (see this file's batch 8 banner comment above
+    _replay_class_hinge), matching score_cic_block's own convention exactly instead of warming on 500 lab-benign
+    windows first."""
     print(f'== objective: two-anchor-adaptive-margin (BETA_cic_benign={args.beta_cic_benign}) ==\n')
 
-    warmup_windows = build_benign_warmup_sequence(train_groups_lab, cap=WARMUP_CAP)
-    print(f'== Adaptive-replay warm-up: {len(warmup_windows)} fixed lab-benign windows (deterministic order) ==\n')
+    print('== Adaptive-replay: COLD start (batch 8) -- matches score_cic_block exactly, no lab-benign warm-up ==\n')
 
     print('== CIC benign anchor (unchanged mechanism from batch 1-6; benign terms do not use Adaptive replay) ==')
     cic_benign_anchor = {}
@@ -661,12 +648,12 @@ def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
     cic_sample_window = attack_train_groups_cic[CIC_TRAIN_LABELS[0]][0][1][0].reshape(sr.WIN, 4)
     tw.self_check(cic_sample_window)
     sample_class_windows = attack_train_groups_cic[CIC_TRAIN_LABELS[0]][0][1]
-    self_check_adaptive_determinism(warmup_windows, sample_class_windows, sr.W)
+    self_check_adaptive_determinism(sample_class_windows, sr.W)
     print('\nself-check: kernel_loss_batch matches sr.kernel_loss (lab + CIC windows); _replay_class_hinge is '
           'deterministic (ok)')
 
     objective = make_adaptive_margin_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
-                                                warmup_windows, lam=args.lambda_weight,
+                                                lam=args.lambda_weight,
                                                 beta_cic_benign=args.beta_cic_benign)
     baseline_W = np.array(sr.W, dtype=np.float32, copy=True)
     print(f'\n== fitting ({len(tw.BOUNDS)} params, bounds {tw.BOUNDS[0]} for all) ==')
@@ -674,7 +661,7 @@ def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
           f'(no static MARGIN this batch -- see PREREGISTRATION.md)')
 
     bl_lab, bl_cic, bl_margin = adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
-                                                            warmup_windows, baseline_W, sigma=tw.SIGMA)
+                                                            baseline_W, sigma=tw.SIGMA)
     baseline_train_loss = objective(baseline_W)
     print(f'baseline hardcoded weights -- L_benign_lab={bl_lab:.6f}  L_benign_cic={bl_cic:.6f}  '
           f'L_margin(adaptive-replay hinge)={bl_margin:.6f}')
@@ -715,13 +702,13 @@ def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
         print('none pinned')
 
     tr_lab, tr_cic, tr_margin = adaptive_margin_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
-                                                            warmup_windows, trained_W, sigma=tw.SIGMA)
+                                                            trained_W, sigma=tw.SIGMA)
     print('\n== sanity check 3: per-term values at the trained weights (never blended) ==')
     print(f'trained weights -- L_benign_lab={tr_lab:.6f}  L_benign_cic={tr_cic:.6f}  '
           f'L_margin(adaptive-replay hinge)={tr_margin:.6f}')
     print(f'(baseline was L_benign_lab={bl_lab:.6f}  L_benign_cic={bl_cic:.6f}  L_margin(adaptive-replay hinge)={bl_margin:.6f})')
 
-    per_class_hinge = per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic, warmup_windows,
+    per_class_hinge = per_class_adaptive_margin_hinge(train_groups_lab, attack_train_groups_cic,
                                                        trained_W, sigma=tw.SIGMA)
     print('\n== per-class adaptive-replay margin hinge ==')
     for label, hinge_val in per_class_hinge.items():
@@ -777,10 +764,10 @@ def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
             'weights': [float(x) for x in trained_W],
             'tau': trained_tau,
             'objective': 'two-anchor-adaptive-margin',
-            'batch': 'sentinel-training-two-anchor batch 7 (Adaptive-replay-aware margin; sanity check, NOT a '
-                     'validated or recommended result)',
+            'batch': 'sentinel-training-two-anchor batch 8 (Adaptive-replay-aware margin, COLD-start fix; sanity '
+                     'check, NOT a validated or recommended result)',
             'beta_cic_benign': args.beta_cic_benign,
-            'warmup_windows': WARMUP_CAP,
+            'warmup_windows': 0,
             'per_class_adaptive_margin_hinge': per_class_hinge,
             'cic_margin_recall_pct': cic_margin_recall,
             'prior_best_recall_pct': PRIOR_BEST,
@@ -798,8 +785,9 @@ def run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab):
                                'cic_benign_fp_pct': cic_benign_fp_pct},
             'success_criterion_pass': beats_both,
             'seed': args.seed,
-            'note': 'Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-adaptive-margin; see '
-                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 7 addendum). '
+            'note': 'Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-adaptive-margin (batch 8: '
+                    'Adaptive replay now starts COLD, no lab-benign warm-up, matching score_cic_block exactly); see '
+                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 7/8 addenda). '
                     'This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not '
                     'recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under '
                     'any circumstance.',

@@ -1,5 +1,65 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-25 addendum (batch 8, owner-approved, added before batch 8's own numbers were looked at):** batch 7's own
+commit message found, after the fact, a real train/eval convention mismatch in its Adaptive-replay-aware margin:
+training warmed the simulated `sr.Adaptive` instance on 500 lab-benign windows before replaying attack-training
+windows through it (modeling "the daemon has been running a while before an attack"), but `score_cic_block` — the
+unmodified function every batch, including batch 7, is actually graded against — starts each evaluation block's
+`Adaptive` instance COLD (`ad = sr.Adaptive(tau=base_tau)`, initial `m = tau*0.75`, no warm-up at all; see
+`score_cic_block`, line 126 at the time batch 7 was written). Batch 7 therefore optimized its margin against a
+warmed dynamic while being scored against a cold one. **This batch isolates exactly that one variable**: does
+cold-start replay (matching `score_cic_block`'s own convention exactly) recover batch 7's failed result, or does the
+Adaptive-replay-aware margin idea itself not help regardless of warm-up?
+
+**Result: FAILS on both, same as batch 7, and does not recover.** Hulk 0.00% (worse than batch 7's already-poor
+1.50%, far below the 28.58% bar), GoldenEye 38.40% (essentially unchanged from batch 7's 39.10%, well below the
+63.20% bar). The cold-start fix moved neither number meaningfully relative to batch 7 — Hulk got slightly worse,
+GoldenEye was flat within noise. This is evidence against "the warm-up mismatch alone explains the failure": fixing
+exactly that one variable did not recover anything close to batch 3's or GoldenEye's best-ever recall, so the
+Adaptive-replay-aware margin mechanism itself, not just its training/eval convention, is the more likely explanation
+for both batches' failure. CIC-benign FP: 0.00%/0.00%, unchanged from batch 7 — no regression on the one metric this
+batch was flagged to watch. Weight-bound pinning: 0/10 (consistent with every departure from round 3's original
+exact recipe in this workstream). Lab held-out: 4/13 recall, 1/9 FP (the recall figure is actually the best
+lab-held-out number of the two adaptive-margin batches, though still an informal peek, not a held-out-validated
+result, and not this batch's pre-registered metric). Per-class hinge (adaptive-replay-based): Hulk 0.0172, GoldenEye
+0.0206 — both noticeably larger than batch 7's (0.0090, 0.0042), i.e. the cold-start objective is harder to drive
+down (a cold `Adaptive` instance's threshold starts lower, at `tau*0.75`, before the EMA has a chance to drift
+upward, so attack windows face a stricter bar from window 1) — this by itself does not translate into better
+real-world recall, since `score_cic_block`'s alert-rate measurement is exactly that cold dynamic and the fitted
+weights still do not clear it often enough.
+
+## The one change, and nothing else
+
+`_replay_class_hinge` no longer warms on any lab-benign windows before replaying a class's attack-training windows —
+it constructs a fresh `sr.Adaptive(tau=base_tau)` and starts scoring the class's own windows immediately, the exact
+same instantiation and initial-state convention `score_cic_block` uses. `build_benign_warmup_sequence` and the
+500-window warm-up slice are removed entirely (not bypassed-but-kept — there is no warm-up sequence to build).
+Everything else from batch 7 is unchanged: 10-parameter architecture, `mean`-combine (not stacked with batch 5's
+`max` or batch 4's 85-parameter expansion), the same `--objective two-anchor-adaptive-margin` flag (no new flag —
+this is a behavior change to the existing mode, the same way batch 5 added `--margin-combine` in place rather than
+a new objective name), the same hinge formula (`max(0, threshold - loss)` read directly from `Adaptive.check()`'s
+own second return value, no static `MARGIN` buffer), the same benign terms (pooled nested means, no replay), the
+same data (6,264-window lab-benign pool, 2,000-window CIC benign anchor per day, 2,000-window CIC attack-training
+pool per class), the same bounds `[-3.0, 5.0]`, the same optimizer budget (`popsize=20`, `maxiter=150`, Nelder-Mead
+polish `maxiter=5000`), and the same seed (42).
+
+## Success criterion — identical to batch 7's, so the two results are directly comparable
+
+**Primary (pre-registered, decided before this run):** for each of `DoS Hulk` and `DoS GoldenEye`, is this batch's
+measured window-level recall (via the unmodified `score_cic_block`) higher than the best-ever prior result for that
+class individually — **Hulk's 28.58% (batch 3), GoldenEye's 63.20%**? Beating one class but not the other, or
+beating neither, is a FAIL by the same rule batch 7 used (not a blended average, not "beats more batches than it
+loses to").
+
+**Secondary, reported for context, not pass/fail:** the same lab held-out recall/FP and CIC-benign FP numbers every
+batch has reported. CIC-benign FP in particular is checked for regression from batch 7's 0.00%/0.00% (the cleanest
+result in the workstream) — a real tradeoff there would be worth flagging explicitly even if recall improves.
+
+**What this batch does and does not tell us:** if cold-start recovers the recall, the mismatch alone explains
+batch 7's failure and the Adaptive-replay-aware idea is still live. If cold-start recall is similar to or worse than
+batch 7's, the mismatch was not the (sole) explanation and the idea itself likely does not help at this scale —
+either outcome is reported as exactly that, not spun.
+
 **2026-10-25 addendum (batch 7, owner-approved, added before batch 7's own numbers were looked at):**
 `scripts/trace-margin-adaptive-gap.py`'s traced example (batch 6's report) showed the actual mechanism behind the
 recurring hinge-vs-recall disconnect: every margin formula tried so far (batches 2, 3, 5, 6) scores a training
