@@ -154,6 +154,8 @@ Section 9 D12 explains why this exists. Nothing in sections 1 to 9 is edited. Th
 | Protocols and budgets | As sections 5 and 9: Protocol A N = 50 and Protocol B N = 20 per intent per model, temperature 0.2, top-p 0.95, seeds 1..N where the provider accepts them (D4), one run per cell. |
 | Pilot | One Protocol A run of N = 3 per intent with Qwen under v2, to check the harness runs and the prompt can express the task. It is excluded from every result and kept in `pilot-v2-excluded/`. |
 
+**Pilot outcome** (recorded 2026-10-26 after the pilot ran and before any registered run; the four runs are in `docs/benchmarks/results/agent-evaluation/pilot-v2-excluded/`): 12 trials, 2 admissible (both INTENT-1) and 10 `ERR_INTENT_LEAK` (INTENT-1 1, INTENT-2 3, INTENT-3 3, INTENT-4 3), no syntax errors, no transport failures, each summary recording `promptVersion` v2 and the pinned `intentSha256`. It shows the harness runs and that a model can express and satisfy the per-host ARP requirement under v2 (INTENT-1). Three trials per intent say nothing about rates, and **neither the prompt nor this plan was changed because of the pilot**. It is not part of any result.
+
 ### 10.3 Analysis, fixed in advance
 
 - The same metrics as section 6 (admissible counts with 95% Wilson intervals, the category of every failure, distinct outputs, transport failures), plus the cross-intent re-judge of D9.
