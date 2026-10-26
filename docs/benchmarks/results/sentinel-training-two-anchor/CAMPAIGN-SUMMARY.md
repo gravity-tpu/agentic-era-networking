@@ -54,6 +54,17 @@ by a wide margin, and the first result in the whole campaign to get near-origina
 at the same time. Verified independently (not just trusted from the subagent's self-report): the new evaluation
 script's self-checks pass, and Model A's solo numbers reproduce batch 10's committed numbers byte-for-byte.
 
+**A real cost this result does not hide, but the pre-registered bar also did not gate on:** lab-benign false
+positives. Model A alone: 1/9. Model B alone (the baseline): 4/9. The OR-combined ensemble: **5/9** — worse than
+*either* model alone, which is the expected mechanical consequence of ORing two models' alerts (false positives can
+only add, never cancel). Lab-held-out FP was never part of batch 13's pre-registered pass/fail bar (only CIC-benign
+FP was), so the batch's own verdict of "clears the bar" is correct as stated — but a 5/9 (56%) false-alert rate
+against ordinary lab traffic (bulk TCP, HTTP bursts, ping, small UDP) is a material, practical cost that belongs in
+the headline result, not left for a reader to find by digging into the raw training transcript. Whether this
+tradeoff — materially better real-attack recall at roughly double the false-alert rate on ordinary lab traffic — is
+acceptable is a judgment call for whoever reviews this before any production wiring, not a decision this campaign
+made on their behalf.
+
 **Batch 14: honestly scope what the ensemble can't claim.** Model A was only ever anchored against two of
 CIC-IDS2017's many attack classes (Hulk, GoldenEye). Tested against three classes it had never seen
 (`DoS Slowhttptest`, `DoS slowloris`, `DDoS`, using data already cached locally): recall was near-zero on two of
@@ -83,7 +94,12 @@ also didn't resolve the capacity conflict).
 
 **Deploy consideration: batch 13's two-model ensemble**, not any single unified kernel. It is the only configuration
 in 16 batches to clear CIC recall, CIC-benign FP, and lab-attack recall simultaneously, verified against the real
-scoring functions and independently checked for leakage/degenerate solutions before being accepted. Its outputs
+scoring functions and independently checked for leakage/degenerate solutions before being accepted. **This comes
+with a real, disclosed cost, not a free win: lab-benign false positives rise to 5/9 (56%), worse than either
+component model alone (Model A 1/9, Model B 4/9) — the expected consequence of ORing two models' alerts together.**
+Materially better real-attack recall at roughly double the false-alert rate on ordinary lab traffic is the actual
+tradeoff being recommended here, and whether that's an acceptable production tradeoff is for the reviewer to decide,
+not something this campaign resolved on its own. Its outputs
 (`scripts/eval-sentinel-ensemble.py`, `docs/benchmarks/results/sentinel-training-two-anchor/trained-weights-two-anchor-batch10-2026-10-25.json`
 as Model A plus the original hardcoded `sr.W` as Model B) are not wired into
 `scripts/gpu-sdn-anomaly-sentinel.py` — that integration was explicitly out of scope for this autonomous campaign
@@ -120,7 +136,7 @@ much larger optimizer budget — rather than another one-off variant of what's a
 | 10 | `89acd1c` | Softer surrogate temperature | 100%/100% recall, 0.00%/0.00% CIC-benign FP; lab recall worst-ever (2/13) |
 | 11 | `6858fc7` | Dedicated lab-attack anchor term | PARTIAL — lab recall to 4/13, but new CIC-benign FP cost |
 | 12 | `03039c1` | CIC-margin weight sweep (no lab anchor) | same 4/13 tradeoff point via a different lever — confirmed capacity conflict |
-| 13 | `a213700` | Two-model OR ensemble (option 2) | **PASS** — 10/13 lab, 100%/100% CIC recall, 0.00%/0.25% CIC-benign FP |
+| 13 | `a213700` | Two-model OR ensemble (option 2) | **PASS** — 10/13 lab recall, 100%/100% CIC recall, 0.00%/0.25% CIC-benign FP; but lab-benign FP 5/9, worse than either model alone (not pre-registered, disclosed) |
 | 14 | `f162817` | Out-of-sample CIC classes | honest scope limit: near-zero to modest generalization beyond Hulk/GoldenEye |
 | 15 | `e1f4ef7` | Jointly-fit gated architecture (option 3), design + smoke test | INCOMPLETE at commit time (full run not finished) |
 | 16 | `247aa5a` | Same architecture, full-scale run | FAIL — option 3's second negative result |
