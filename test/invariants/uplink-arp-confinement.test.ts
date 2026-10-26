@@ -99,5 +99,6 @@ describe('A10 uplink -> workload ARP confinement (opt-in)', () => {
     // Any mutant of a peer rule other than a priority raise (which changes nothing: no rule overlaps it) must be caught.
     const peerSurvivors = b.survivedMutants.filter((id: string) => id.includes('p2-arp-allow-') && !id.startsWith('raise-priority:'));
     expect(peerSurvivors).toEqual([]);
+    expect(b.survivedMutants.filter((id: string) => id.startsWith('drop-rule:p2-arp-allow-'))).toEqual([]); // the confinement property itself
   });
 });
