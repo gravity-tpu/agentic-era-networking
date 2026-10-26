@@ -1,0 +1,69 @@
+{
+  "weights": [
+    -0.05862223876335415,
+    -2.6194342904328076,
+    0.6705013993709787,
+    0.715904575919017,
+    0.6857508004521907,
+    3.837664662695108,
+    0.04878896141378834,
+    2.3833719511780425,
+    4.460914959792724,
+    1.0245956872624413
+  ],
+  "tau": 0.18765954167836152,
+  "objective": "two-anchor-sequence-alert-rate",
+  "batch": "sentinel-training-two-anchor batch 10 (batch 9's unmodified sequence-level alert-rate surrogate mechanism, re-run with --surrogate-temperature-frac=0.5 instead of batch 9's pre-registered default 0.25, to recover batch 9's Friday CIC-benign FP regression; sanity check, NOT a validated or recommended result)",
+  "beta_cic_benign": 1.0,
+  "warmup_windows": 0,
+  "surrogate_temperature_sigma_frac": 0.5,
+  "per_class_sequence_surrogate": {
+    "DoS Hulk": {
+      "surrogate_recall": 0.9985474148818083,
+      "surrogate_miss_rate": 0.001452585118191685
+    },
+    "DoS GoldenEye": {
+      "surrogate_recall": 0.9994411887133058,
+      "surrogate_miss_rate": 0.0005588112866942163
+    }
+  },
+  "cic_margin_recall_pct": {
+    "DoS Hulk": 100.0,
+    "DoS GoldenEye": 100.0
+  },
+  "prior_best_recall_pct": {
+    "DoS Hulk": 28.58,
+    "DoS GoldenEye": 63.2
+  },
+  "lambda": 1.0,
+  "sanity_check_sample_sizes": {
+    "lab_benign_training_windows": 6264,
+    "cic_benign_anchor_windows_per_day": 2000,
+    "cic_attack_margin_windows_per_class": 2000
+  },
+  "training_objective_value": 0.18805922978814765,
+  "training_objective_components": {
+    "L_benign_lab": 0.11875961366153899,
+    "L_benign_cic": 0.06829391792416573,
+    "L_margin_sequence_surrogate": 0.0010056982024429506
+  },
+  "bound_pinned_weights": [],
+  "informal_peek": {
+    "lab_holdout_detected": 2,
+    "lab_holdout_attacks": 13,
+    "lab_holdout_fp": 1,
+    "lab_holdout_benign": 9,
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.0
+    }
+  },
+  "success_criterion_pass_either_class": true,
+  "success_criterion_pass_both_classes": true,
+  "cic_benign_fp_regressed_vs_batch8": {
+    "Wednesday": false,
+    "Friday": false
+  },
+  "seed": 42,
+  "note": "Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-sequence-alert-rate --surrogate-temperature-frac 0.5 (batch 10: batch 9's own mechanism, code unchanged; only --surrogate-temperature-frac raised from batch 9's pre-registered default 0.25 to 0.5, the better of three sweep points tried -- see docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 10 addendum for the other two (--beta-cic-benign=3.0 and --surrogate-temperature-frac=0.08) and why this one was chosen). This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under any circumstance."
+}

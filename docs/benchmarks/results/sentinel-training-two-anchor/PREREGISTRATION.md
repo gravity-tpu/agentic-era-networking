@@ -1,5 +1,70 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-25 addendum (batch 10, owner-approved, hypothesis/method/bar written before this batch's numbers were
+looked at):** batch 9's own commit message flagged one real, non-zero cost from its sequence-level surrogate:
+CIC-benign false-positive rate held at batch 8's clean 0.00% on Wednesday but regressed to 0.75% (15/2,000 windows)
+on Friday. **This batch holds batch 9's sequence-level alert-rate surrogate mechanism
+(`make_sequence_alert_rate_objective`/`_replay_class_soft_alerts`) completely fixed — no change to the core idea —
+and tests two independent, already-existing CLI levers against that one regression**, each in isolation (ONE
+hyperparameter changed per run, everything else identical to batch 9's exact data caps (6,264 lab-benign / 2,000
+CIC-benign-anchor-per-day / 2,000 CIC-attack-per-class), bounds `[-3.0, 5.0]`, seed `42`, and optimizer budget (DE
+`popsize=20`/`maxiter=150`, Nelder-Mead polish `maxiter=5000`)):
+
+1. `--beta-cic-benign`: the weight on the CIC-benign reconstruction anchor `L_benign_cic`, raised 3x from its
+   pre-registered default (`1.0` → `3.0`), to push harder against the Friday-day CIC-benign windows specifically.
+2. `--surrogate-temperature-frac`: the softness of the sigmoid alert-rate surrogate, swept away from batch 9's
+   pre-registered default of `0.25` in both directions — sharper (`0.08`) and softer (`0.5`) — since temperature
+   controls how "soft" the surrogate reward is near the decision threshold.
+
+**Pre-registered bar (decided before any of the three runs' numbers were looked at):** PRIMARY — does Friday
+CIC-benign FP return to 0.00%, or at least move meaningfully closer to it from batch 9's 0.75%? GUARDRAIL — do
+`DoS Hulk` and `DoS GoldenEye` recall (via the unmodified `score_cic_block`) stay within a few points of batch 9's
+99.20%/99.45%, not regress back toward batch 8's 0.00%/38.40%? If more than one run clears both, commit whichever
+gets Friday FP closest to 0.00% with the smallest recall cost; if none clears it, report the best achieved tradeoff
+point honestly rather than overclaim, and commit the better of the attempted points as this batch's disclosed
+result. The lab held-out informal peek (batch 8/9's identical 4/13 recall, 1/9 FP) is checked for movement but is
+not pass/fail.
+
+**Result:**
+
+- `--beta-cic-benign 3.0` (lever 1, Run A): `DoS Hulk` 100.00%, `DoS GoldenEye` 99.90% (both improve on batch 9).
+  Friday CIC-benign FP got WORSE, not better: 1.30% (26/2,000), up from batch 9's 0.75%. Lab held-out peek: 4/13
+  recall (unchanged), FP 2/9 (worse than batch 9's 1/9). **Lever 1 FAILS the primary bar, in the wrong direction** —
+  raising the equal-weighted Wednesday+Friday nested-day-mean anchor term does not selectively suppress Friday's
+  regression; it is a day-blind average, so it cannot differentially fix one day, and empirically it pushed the fit
+  to a different, Friday-worse local optimum in the 10-parameter search space.
+- `--surrogate-temperature-frac 0.08` (lever 2, sharper, Run B): `DoS Hulk` 100.00%, `DoS GoldenEye` 99.90%. Friday
+  FP 0.80% (16/2,000) — statistically indistinguishable from batch 9's 0.75%, not an improvement. Lab held-out peek:
+  4/13 recall (unchanged), FP 2/9 (worse). A sharper surrogate does not help.
+- `--surrogate-temperature-frac 0.5` (lever 2, softer, Run C): `DoS Hulk` 100.00%, `DoS GoldenEye` 100.00% (both
+  improve on batch 9 and on Runs A/B). **Friday CIC-benign FP 0.00% (0/2,000) — fully recovers batch 8's clean
+  0.00%/0.00%, both days, with no non-zero regression left on either day.** Lab held-out peek: FP unchanged at 1/9
+  (matches batch 9 exactly), but recall dropped to 2/13 from batch 8/9's 4/13 — a real, disclosed cost on this
+  informal, non-pre-registered metric, the first time it has moved in this workstream.
+
+**Chosen for this batch: `--surrogate-temperature-frac 0.5`, holding `--beta-cic-benign` at its pre-registered
+default (`1.0`).** This is the only one of the three points tried that clears both the primary bar (Friday FP
+exactly 0.00%, no regression at all) and the recall guardrail (both classes improve on batch 9, nowhere near batch
+8's collapse). The direction is the OPPOSITE of this batch's own stated hypothesis ("a different (likely smaller,
+sharper) temperature may reduce false alerts") — a SOFTER surrogate, not a sharper one, is what worked. A plausible
+mechanism (not verified beyond this one data point, reported as a hypothesis, not a proven cause): batch 9's default
+`0.25` produces a near-hard decision boundary for the optimizer, letting it specialize tightly enough to the
+Wednesday-side training distribution that the resulting boundary still clips into Friday's distinct benign tail,
+while a wider `0.5`-sigma band smooths the gradient over more of both distributions and leaves more margin on both
+days. `--beta-cic-benign` is NOT a useful lever for this specific regression at the one value tried (`3.0`): it is a
+day-blind nested mean, so it structurally cannot differentially fix one day's regression, and empirically pushing it
+only moved the fit to a worse point for Friday specifically.
+
+**What this result does and does not tell us:** this is one sweep point per lever, not a full grid — `0.5` is not
+claimed to be the optimal temperature, only the better of the three values tried here, and the mechanism explanation
+above is a plausible hypothesis, not a verified cause. The lab held-out recall cost (2/13, down from 4/13) is new
+this batch and should be treated as this batch's own, not folded into the "same as every prior batch" framing
+batches 7-9 used for that peek.
+
+This addendum does not change anything else in this document: the objective formula
+(`make_sequence_alert_rate_objective`), the architecture, bounds, optimizer, CIC data scope, and the
+`margin_combine='mean'` default are all unchanged from batch 9.
+
 **2026-10-25 addendum (batch 9, owner-approved "option 2", hypothesis/method/bar written before this batch's
 full-scale (2,000-window-per-class) numbers were looked at — a small 50-window-per-class smoke test was run first,
 purely to confirm the new code path runs end to end without crashing, and its numbers are not used for the pass/fail
