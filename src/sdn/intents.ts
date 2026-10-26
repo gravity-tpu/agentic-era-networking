@@ -74,6 +74,35 @@ export const PORT1_ISOLATION_INTENT: IntentSpec = {
   ],
 };
 
+/**
+ * Port-1 isolation with the uplink -> workload ARP direction confined (A10's second half). A NEW intent, not an edit of
+ * PORT1_ISOLATION_INTENT: intents are frozen once an evaluation plan is, and the four evaluated intents must not move.
+ * ARP from the uplink reaches the workload only when it claims one of `uplinkArpPeers` (one clause per peer, evaluated
+ * first); any other uplink ARP reaches nothing. Written independently of `buildPort1IsolationPolicy`.
+ */
+export function port1IsolationUplinkArpIntent(uplinkArpPeers: readonly string[]): IntentSpec {
+  return {
+    ...PORT1_ISOLATION_INTENT,
+    id: 'port1-isolation-uplink-arp/v1',
+    description:
+      PORT1_ISOLATION_INTENT.description.replace(
+        'the uplink reaches P1 only for IPv4 to the segment and ARP.',
+        'the uplink reaches P1 only for IPv4 to the segment and for ARP claiming one of its known peer addresses.',
+      ),
+    clauses: [
+      ...PORT1_ISOLATION_INTENT.clauses.filter((c) => c.id !== 'p2-arp' && c.id !== 'p3-tap-return'),
+      ...uplinkArpPeers.map((peer) => ({
+        id: `p2-arp-allow-${peer}`,
+        match: { inPort: P2, etherType: ETH_TYPE_ARP, arpSpa: peer },
+        mustReach: [P1],
+        mayReach: [P1],
+      })),
+      { id: 'p2-arp-other', match: { inPort: P2, etherType: ETH_TYPE_ARP }, mustReach: [], mayReach: [] },
+      ...PORT1_ISOLATION_INTENT.clauses.filter((c) => c.id === 'p3-tap-return'),
+    ],
+  };
+}
+
 /** The resolver INTENT-2 allows the workload to reach (the plan names 10.0.2.1). */
 export const DNS_RESOLVER_IP = '10.0.2.1';
 /** The host INTENT-3 quarantines (the plan names 10.0.2.51). */
