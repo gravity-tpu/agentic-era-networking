@@ -117,9 +117,10 @@ describe('Ollama limits are bounded (Invariant 5)', () => {
     for (const bad of ['5', 1.5, NaN, undefined, null]) expect(boundedInt(bad, 7, 1, 10)).toBe(7);
   });
 
-  it('the configured local tier streams long enough for a reasoning model and carries the think level', () => {
-    const local = buildModelFallbacks().find((f: { provider: string }) => f.provider === 'ollama');
-    if (!local) return; // CI or SKIP_OLLAMA: the local tier is not built
+  // The local tier is not built in CI or with SKIP_OLLAMA; skip visibly there instead of passing without checking anything.
+  const local = buildModelFallbacks().find((f: { provider: string }) => f.provider === 'ollama');
+  it.skipIf(!local)('the configured local tier streams long enough for a reasoning model and carries the think level', () => {
+    if (!local) throw new Error('unreachable: skipped when the local tier is absent');
     expect(local.model).toBe('qwen3.8:27b');
     expect(local.timeoutMs).toBeGreaterThanOrEqual(300_000);
     expect(local.timeoutMs).toBeLessThanOrEqual(OLLAMA_TIMEOUT_MAX_MS);
