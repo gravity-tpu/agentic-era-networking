@@ -877,8 +877,10 @@ def self_check_sequence_determinism(sample_class_windows, W, seed=13, temperatur
 def make_sequence_alert_rate_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                         lam=None, beta_cic_benign=BETA_CIC_BENIGN_DEFAULT, sigma=None,
                                         temperature_sigma_frac=SEQUENCE_SURROGATE_TEMPERATURE_SIGMA_FRAC_DEFAULT,
-                                        margin_combine='mean'):
-    """L(W) = L_benign_lab(W) + beta_cic_benign * L_benign_cic(W) + lam * L_margin_sequence(W).
+                                        margin_combine='mean', attack_train_groups_lab=None, lab_margin_lambda=0.0,
+                                        lab_margin=None):
+    """L(W) = L_benign_lab(W) + beta_cic_benign * L_benign_cic(W) + lam * L_margin_sequence(W)
+              + lab_margin_lambda * L_margin_lab(W).
 
     L_benign_lab, L_benign_cic: UNCHANGED from make_two_anchor_objective/make_adaptive_margin_objective -- pooled
     nested means, no Adaptive replay. See this file's batch 9 banner comment above for why only the margin term
@@ -894,9 +896,25 @@ def make_sequence_alert_rate_objective(train_groups_lab, cic_benign_anchor, atta
     temperature_sigma_frac * std of the LAB training-benign pool at this same candidate W (the identical pool/W pair
     base_tau(W) is computed from) -- see SEQUENCE_SURROGATE_TEMPERATURE_SIGMA_FRAC_DEFAULT's own comment for why this
     is W-relative rather than a fixed absolute number. Per-class surrogate-miss values are combined via
-    margin_combine ('mean' default, matching every batch since 1; this batch does not stack with batch 5's 'max')."""
+    margin_combine ('mean' default, matching every batch since 1; this batch does not stack with batch 5's 'max').
+
+    L_margin_lab(W): NEW this batch (batch 11, default lab_margin_lambda=0.0 so omitting the flag reproduces batch
+    10 exactly). attack_train_groups_lab is PR #106's own lab flood-attack training set (attack-synflood-200pps,
+    attack-udpflood-500pps-1400b -- the SAME two patterns scripts/train-sentinel-weights.py --objective margin
+    trained on; loaded by main() via tw.load_and_split(objective='margin') but, before this batch, discarded
+    unused). This term is PR #106's own STATIC hinge (no Adaptive replay, deliberately cheap and simple per
+    docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 11 addendum): hinge(a, W) =
+    max(0, lab_target(W) - kernel_loss(a; W)), lab_target(W) = mean(lab-benign pool) + sigma*std(lab-benign pool) +
+    lab_margin -- the SAME benign pool/mean/std already computed above for L_benign_lab and base_tau(W), reused here
+    (not recomputed a second time) for the same efficiency reason tw.make_margin_objective's own docstring gives.
+    Nested pattern/run mean, same discipline as every other term. This is a SEPARATE anchor from the CIC margin term
+    above: it never touches _replay_class_soft_alerts, sr.Adaptive, or the CIC attack windows, and the lab attack
+    patterns it trains on (synflood-200pps/udpflood-500pps-1400b) are disjoint from the lab held-out patterns
+    (portscan-*/synflood-1000pps) the informal peek below reports -- so any held-out recall improvement is a true
+    generalization result within the lab's own attack family, not training on the metric it's evaluated against."""
     sigma = tw.SIGMA if sigma is None else sigma
     lam = tw.LAMBDA if lam is None else lam
+    lab_margin = tw.MARGIN if lab_margin is None else lab_margin
 
     def objective(w):
         W = np.asarray(w, dtype=np.float32)
@@ -909,8 +927,9 @@ def make_sequence_alert_rate_objective(train_groups_lab, cic_benign_anchor, atta
                 benign_pooled.extend(run_losses)
         l_benign_lab = sum(benign_pattern_means) / len(benign_pattern_means)
         pooled = np.concatenate(benign_pooled)
+        pooled_mean = float(np.mean(pooled))
         pooled_std = float(np.std(pooled))
-        base_tau = float(np.mean(pooled)) + sigma * pooled_std
+        base_tau = pooled_mean + sigma * pooled_std
         temperature = max(1e-6, temperature_sigma_frac * pooled_std)  # floor: a candidate W that collapses every
         # lab-benign window to the exact same loss (pooled_std == 0) would otherwise divide by zero; this is a
         # degenerate corner of the search space, not an expected operating point, so a tiny floor (not a silent
@@ -936,7 +955,22 @@ def make_sequence_alert_rate_objective(train_groups_lab, cic_benign_anchor, atta
         else:
             raise ValueError(f"margin_combine must be 'mean' or 'max', got {margin_combine!r}")
 
-        return l_benign_lab + beta_cic_benign * l_benign_cic + lam * l_margin
+        l_margin_lab = 0.0
+        if attack_train_groups_lab and lab_margin_lambda != 0.0:
+            lab_target = pooled_mean + sigma * pooled_std + lab_margin
+            lab_pattern_means = []
+            for _pattern, runs in attack_train_groups_lab.items():
+                run_means = []
+                for _rid, windows in runs:
+                    if len(windows) == 0:
+                        continue
+                    hinge = np.maximum(0.0, lab_target - tw.kernel_loss_batch(windows, W))
+                    run_means.append(float(np.mean(hinge)))
+                if run_means:
+                    lab_pattern_means.append(sum(run_means) / len(run_means))
+            l_margin_lab = sum(lab_pattern_means) / len(lab_pattern_means) if lab_pattern_means else 0.0
+
+        return l_benign_lab + beta_cic_benign * l_benign_cic + lam * l_margin + lab_margin_lambda * l_margin_lab
     return objective
 
 
@@ -988,15 +1022,21 @@ def per_class_sequence_surrogate(train_groups_lab, attack_train_groups_cic, W, s
     return out
 
 
-def run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab):
+def run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab, attack_train_groups_lab=None):
     """--objective two-anchor-sequence-alert-rate's entire flow (batch 9): same data loading, same benign terms,
     same 10-parameter architecture and mean-combine, same cold-start Adaptive replay as
     run_two_anchor_adaptive_margin (batches 7/8) -- the ONE change is the margin term itself:
     make_sequence_alert_rate_objective replaces batch 7/8's per-window hinge max(0, threshold - loss) with a direct
     differentiable surrogate for score_cic_block's own sequence-level alerts/n metric. See that function's docstring
-    and this file's batch 9 banner comment for the full reasoning behind isolating this one variable."""
+    and this file's batch 9 banner comment for the full reasoning behind isolating this one variable.
+
+    attack_train_groups_lab (batch 11, optional, default None): PR #106's own lab flood-attack training set
+    (synflood-200pps/udpflood-500pps-1400b), passed through from main() so --lab-margin-lambda (default 0.0,
+    batch-10-identical) can add make_sequence_alert_rate_objective's new L_margin_lab term -- see
+    docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 11 addendum."""
     print(f'== objective: two-anchor-sequence-alert-rate (BETA_cic_benign={args.beta_cic_benign}, '
-          f'surrogate_temperature_sigma_frac={args.surrogate_temperature_frac}) ==\n')
+          f'surrogate_temperature_sigma_frac={args.surrogate_temperature_frac}, '
+          f'lab_margin_lambda={args.lab_margin_lambda}) ==\n')
 
     print('== Adaptive-replay: COLD start (matches score_cic_block exactly, no lab-benign warm-up, same as batch 8) ==\n')
 
@@ -1031,12 +1071,16 @@ def run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab):
 
     objective = make_sequence_alert_rate_objective(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                                     lam=args.lambda_weight, beta_cic_benign=args.beta_cic_benign,
-                                                    temperature_sigma_frac=args.surrogate_temperature_frac)
+                                                    temperature_sigma_frac=args.surrogate_temperature_frac,
+                                                    attack_train_groups_lab=attack_train_groups_lab,
+                                                    lab_margin_lambda=args.lab_margin_lambda,
+                                                    lab_margin=args.lab_margin)
     baseline_W = np.array(sr.W, dtype=np.float32, copy=True)
     print(f'\n== fitting ({len(tw.BOUNDS)} params, bounds {tw.BOUNDS[0]} for all) ==')
     print(f'hyperparameters: sigma={tw.SIGMA} lambda={args.lambda_weight} beta_cic_benign={args.beta_cic_benign} '
           f'surrogate_temperature_sigma_frac={args.surrogate_temperature_frac} (no static MARGIN this batch, same as '
-          f'batch 7/8 -- see PREREGISTRATION.md)')
+          f'batch 7/8 -- see PREREGISTRATION.md) lab_margin_lambda={args.lab_margin_lambda} lab_margin={args.lab_margin} '
+          f'(batch 11 addition, 0.0 default reproduces batch 10 exactly)')
 
     bl_lab, bl_cic, bl_margin = sequence_alert_rate_components(train_groups_lab, cic_benign_anchor, attack_train_groups_cic,
                                                                 baseline_W, sigma=tw.SIGMA,
@@ -1099,6 +1143,16 @@ def run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab):
         else:
             print(f'  {label:20s} surrogate recall = {100*v["surrogate_recall"]:.2f}%  '
                   f'(surrogate miss-rate = {v["surrogate_miss_rate"]:.6f})')
+
+    if attack_train_groups_lab and args.lab_margin_lambda != 0.0:
+        lab_margin_hinge = per_class_margin_hinge(train_groups_lab, attack_train_groups_lab, trained_W,
+                                                   margin=args.lab_margin, sigma=tw.SIGMA)
+        print('\n== batch 11: per-pattern LAB-attack static margin hinge (L_margin_lab, NEW this batch, lambda='
+              f'{args.lab_margin_lambda}) -- trained on PR #106\'s synflood-200pps/udpflood-500pps-1400b, DISJOINT '
+              'from the portscan-*/synflood-1000pps patterns the informal lab held-out peek below reports ==')
+        for label, hinge_val in lab_margin_hinge.items():
+            print(f'  {label:34s} mean hinge = {hinge_val:.6f}' if hinge_val is not None
+                  else f'  {label:34s} (no windows)')
 
     train_losses_trained_W = tw.pooled_training_losses(train_groups_lab, trained_W)
     trained_tau = float(np.mean(train_losses_trained_W) + tw.SIGMA * np.std(train_losses_trained_W))
@@ -1181,6 +1235,11 @@ def run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab):
             'training_objective_components': {'L_benign_lab': tr_lab, 'L_benign_cic': tr_cic,
                                                'L_margin_sequence_surrogate': tr_margin},
             'bound_pinned_weights': [{'index': i, 'value': w, 'lower': lo, 'upper': hi} for i, w, lo, hi in pinned],
+            'lab_margin_lambda': args.lab_margin_lambda,  # batch 11 addition; 0.0 is batch-10-identical
+            'lab_margin': args.lab_margin,
+            'per_pattern_lab_margin_hinge': (per_class_margin_hinge(train_groups_lab, attack_train_groups_lab,
+                                                                     trained_W, margin=args.lab_margin, sigma=tw.SIGMA)
+                                              if attack_train_groups_lab and args.lab_margin_lambda != 0.0 else None),
             'informal_peek': {'lab_holdout_detected': lab_result['detected'], 'lab_holdout_attacks': lab_result['attacks'],
                                'lab_holdout_fp': lab_result['falsePositives'], 'lab_holdout_benign': lab_result['benign'],
                                'cic_benign_fp_pct': cic_benign_fp_pct},
@@ -1190,8 +1249,9 @@ def run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab):
             'seed': args.seed,
             'note': 'Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-sequence-alert-rate '
                     '(batch 9: the margin term is now a direct differentiable surrogate for score_cic_block\'s own '
-                    'sequence-level alerts/n metric, not a per-window hinge); see '
-                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 9 addendum). '
+                    'sequence-level alerts/n metric, not a per-window hinge; batch 11 adds an optional L_margin_lab '
+                    'term, see lab_margin_lambda above); see '
+                    'docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 9/11 addenda). '
                     'This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not '
                     'recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under '
                     'any circumstance.',
@@ -1248,6 +1308,17 @@ def main():
                           f'{SEQUENCE_SURROGATE_TEMPERATURE_SIGMA_FRAC_DEFAULT}); see '
                           'SEQUENCE_SURROGATE_TEMPERATURE_SIGMA_FRAC_DEFAULT\'s own comment for why this is '
                           'W-relative rather than an absolute loss value')
+    ap.add_argument('--lab-margin-lambda', type=float, default=0.0, dest='lab_margin_lambda',
+                     help='--objective two-anchor-sequence-alert-rate only (batch 11): weight of a NEW, optional '
+                          'L_margin_lab term -- PR #106\'s own static hinge (no Adaptive replay), trained on PR '
+                          '#106\'s lab flood-attack patterns (synflood-200pps/udpflood-500pps-1400b), relative to '
+                          'the unweighted L_benign_lab term. Default 0.0 (term disabled) reproduces batch 10 '
+                          'exactly byte-for-byte; see docs/benchmarks/results/sentinel-training-two-anchor/'
+                          'PREREGISTRATION.md\'s batch 11 addendum for why this lever and not a bigger redesign')
+    ap.add_argument('--lab-margin', type=float, default=tw.MARGIN, dest='lab_margin',
+                     help='--lab-margin-lambda only: extra headroom beyond lab_benign_mean + SIGMA*lab_benign_std a '
+                          'lab flood-attack training window must clear (default: pre-registered margin value '
+                          f'{tw.MARGIN}, same constant PR #106 used for its own static margin)')
     args = ap.parse_args()
     if args.objective in ('two-anchor', 'two-anchor-adaptive-margin', 'two-anchor-sequence-alert-rate'):
         if args.cic_benign_anchor_cap is None or args.cic_attack_train_cap is None:
@@ -1255,10 +1326,11 @@ def main():
 
     # --- Lab side: benign training pool and the identical reduced held-out split PR #106 published against, reused
     # unchanged via load_and_split(objective="margin"). attack_train_groups_lab/attack_train_report_lab here are the
-    # lab's OWN flood runs (attack-synflood-200pps, attack-udpflood-500pps-1400b) - this round does NOT train on them
-    # (see PREREGISTRATION.md: CIC data replaces them for the margin term). They are not read again after the shape
-    # assertion just below; what WAS PR #106's training set is, for this round, simply part of the untouched lab-side
-    # ecosystem this script does not otherwise touch.
+    # lab's OWN flood runs (attack-synflood-200pps, attack-udpflood-500pps-1400b) - --objective margin-cic/two-anchor/
+    # two-anchor-adaptive-margin do NOT train on them (see PREREGISTRATION.md: CIC data replaces them for the margin
+    # term in those modes); attack_train_report_lab specifically is not read again after the shape assertion just
+    # below. attack_train_groups_lab IS read again, though, by --objective two-anchor-sequence-alert-rate when
+    # --lab-margin-lambda is non-zero (batch 11's new optional L_margin_lab term) - see run_two_anchor_sequence_alert_rate.
     train_groups_lab, attack_train_groups_lab, attack_train_report_lab, holdout_lab = \
         tw.load_and_split(args.datadir, objective='margin')
     n_train_runs = sum(len(v) for v in train_groups_lab.values())
@@ -1289,7 +1361,8 @@ def main():
         run_two_anchor_adaptive_margin(args, train_groups_lab, holdout_lab)
         return
     if args.objective == 'two-anchor-sequence-alert-rate':
-        run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab)
+        run_two_anchor_sequence_alert_rate(args, train_groups_lab, holdout_lab,
+                                           attack_train_groups_lab=attack_train_groups_lab)
         return
 
     # --- CIC side: load the sampler's capped buckets.

@@ -1,5 +1,54 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-25 addendum (batch 11, owner-approved, hypothesis/method/bar written before this batch's numbers were
+looked at):** batch 10's transcript surfaced a regression nobody had been tracking as a pass/fail metric: the
+ORIGINAL hardcoded baseline weights (`sr.W`, pre-dating this whole workstream) detect 10/13 lab held-out attacks
+with 4/9 benign false positives; by batch 10 the sequence-surrogate-trained weights were down to 2/13 detected
+(batches 7-9 had been flat at 4/13). **Diagnostic finding (not pass/fail, read-only against batch 10's already-committed
+weights):** replaying lab held-out runs through the exact `sr.Extractor`/`sr.Adaptive` construction
+`scripts/score-labelled-runs.py` uses confirmed the mechanism is a feedback loop, not just a static gap shrinking —
+`sr.Adaptive`'s own EMA mean assimilates early attack windows as "normal" once the baseline/trained loss gap to tau
+gets too small, which then locks out detection for the rest of that run. The CIC-margin objective, by reshaping the
+shared 10-parameter kernel to separate CIC Hulk/GoldenEye from CIC-benign, incidentally collapses lab-attack
+separability that was never trained on or anchored at all.
+
+**Fix tested:** an optional 4th objective term, `L_margin_lab(W)` — PR #106's own static hinge (no Adaptive replay),
+`max(0, lab_target(W) - kernel_loss(window; W))` where `lab_target(W) = mean(lab-benign pool) + sigma*std(lab-benign
+pool) + lab_margin`, trained on PR #106's own lab flood-attack patterns (`attack-synflood-200pps`,
+`attack-udpflood-500pps-1400b`) — **disjoint from the held-out evaluation patterns**
+(`portscan-*`/`attack-synflood-1000pps`), so any held-out improvement is genuine generalization within the lab's own
+attack family, not training against the eval set. New `--lab-margin-lambda` (default `0.0`, exactly reproduces batch
+10) and `--lab-margin` (default `tw.MARGIN`) CLI flags; everything else held identical to batch 10 (`--objective
+two-anchor-sequence-alert-rate`, `--surrogate-temperature-frac 0.5`, same data caps, bounds, seed `42`, optimizer
+budget).
+
+**Pre-registered bar (decided before the full-scale run's numbers were looked at; a smoke-scale run at
+`--cic-attack-train-cap 50` was used only to catch crashes, per this doc's own batch-1 convention, not for the
+verdict):** MINIMUM BAR for "fixed" — lab held-out detected `> 2/13` AND FP `<= 2/9` AND `DoS Hulk`/`DoS GoldenEye`
+recall `>= 95%` each AND CIC-benign FP `<= 1%` on both days. Falling short of any one of these is a partial result,
+to be reported as such, not spun as a pass.
+
+**Result (full scale, `--lab-margin-lambda 1.0`, `--lab-margin 0.02`, seed `42`):**
+
+- Lab held-out: **detected 4/13** (up from batch 10's 2/13, matching batches 7-9's level — PASSES `> 2/13`), FP
+  **1/9** (PASSES `<= 2/9`).
+- `DoS Hulk` / `DoS GoldenEye` recall (via the unmodified `score_cic_block`): **100.00% / 100.00%** (PASSES `>= 95%`
+  each, unchanged from batch 10).
+- CIC-benign FP: Wednesday **0.00%** (PASSES `<= 1%`), Friday **3.30%** (66/2,000 windows) — **FAILS `<= 1%`**, and is
+  a real regression from batch 10's clean 0.00%/0.00%, worse than batch 9's own 0.75% Friday regression that batch
+  10 had fixed.
+- One weight pinned near a bound this run (`w1 = -2.996259`, distance 0.0037 from the lower bound `-3.0`) — batches 9
+  and 10 had none pinned.
+
+**Verdict: PARTIAL, not fixed.** Three of the four pre-registered conditions pass (lab detection recovered, lab FP
+held, CIC recall held), but the CIC-benign FP guardrail fails on Friday. The lab-attack anchor term does what it was
+designed to do — it demonstrably pulls the shared 10-parameter kernel back toward a shape that also separates lab
+attacks, confirming the diagnostic's mechanism — but at a real, measured cost to the CIC-benign anchor it wasn't
+weighted against. This is consistent with hypothesis 3's capacity-conflict framing (a 10-parameter kernel cannot
+fully satisfy a CIC-shaped anchor, a CIC-shaped margin, and a lab-shaped margin simultaneously without some give),
+not just a missing-term problem solved by this one addition. Not committing this as a replacement for batch 10;
+recorded as a disclosed, honest diagnostic result.
+
 **2026-10-25 addendum (batch 10, owner-approved, hypothesis/method/bar written before this batch's numbers were
 looked at):** batch 9's own commit message flagged one real, non-zero cost from its sequence-level surrogate:
 CIC-benign false-positive rate held at batch 8's clean 0.00% on Wednesday but regressed to 0.75% (15/2,000 windows)
