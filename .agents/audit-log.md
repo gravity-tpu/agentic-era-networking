@@ -118,3 +118,17 @@ CI run on `main` (`ff34381`) still shows **Network Engineering Review: failure**
   code path, which is why a single Warning failed the job the same way a Critical would have. Not fixed here; worth a tool-side fix later
   (the pre-push gate's own `--strict` mode is intentionally this strict, so the behavior itself is not wrong, only the "requested" framing
   on a merge that already happened).
+
+## 6. Merges to `main` made under the owner's standing authorization (2026-10-25)
+
+Merges were allowed only with green CI, no force and no protection bypass; each merge to `main` runs the GitHub Actions production deploy, which the
+owner was told about. Merge-commit style, as the repo already uses. The owner was away; all four were made on 2026-10-26.
+
+| PR | Merge commit | What | CI at merge | Gate |
+| -- | ------------ | ---- | ----------- | ---- |
+| #120 | `4a27b2b` | CI installs numpy and scipy (main's Verify job had failed since the sentinel training test was added) | Verify, AI Code Review, Network Engineering Review, Markdown: pass | pushed with `--no-verify`, row in section 4 |
+| #118 | `1b20679` | Dashboard no longer hardcodes a Gemma model | all pass | passed all six gates |
+| #117 | `0f3c6c4` | Local review tier: Qwen3.8 27B, streamed, gatekeeper prompt | all pass | pushed with `--no-verify`, row in section 4 |
+| #119 | `2096c04` | A10 opt-in uplink to workload ARP confinement (not deployed) | all pass | pushed with `--no-verify`, row in section 4 |
+
+Main's run for `2096c04` succeeded; the runs for the two earlier merge commits were cancelled by the newer ones.
