@@ -285,6 +285,13 @@ def main():
                      help='windows per day for the CIC-benign evaluation slice, same basis as batch 10\'s own peek '
                           f'(default {CIC_BENIGN_PEEK_CAP_DEFAULT})')
     ap.add_argument('--out-json', default=None, dest='out_json', help='write the full numbers table as JSON here')
+    ap.add_argument('--model-b-tau-override', type=float, default=None, dest='model_b_tau_override',
+                     help="batch 17 (docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md): "
+                          "override Model B's tau AFTER it is chosen, for sweeping its threshold specifically in its "
+                          "role as an ensemble component (as opposed to its own standalone-calibrated value). Does "
+                          "NOT change which candidate is chosen as Model B, Model B's weights, or Model A's "
+                          "weights/tau at all -- pure evaluation, same as the rest of this script. Leaves "
+                          "cic_block_ensemble_flags/score_cic_block_ensemble/ensemble_sentinel_alerts untouched.")
     args = ap.parse_args()
 
     print('== batch 13: OR-ensemble evaluation of two ALREADY-FITTED weight vectors (no training, no fitting) ==')
@@ -338,6 +345,12 @@ def main():
           f"over {other_label} "
           f"({b_results[other_label]['detected']}/{b_results[other_label]['attacks']} detected, "
           f"{b_results[other_label]['falsePositives']}/{b_results[other_label]['benign']} FP)  tau={model_b_tau:.6f}")
+
+    if args.model_b_tau_override is not None:
+        print(f"\n[batch 17] --model-b-tau-override: Model B's tau overridden from its own standalone-calibrated "
+              f"{model_b_tau:.6f} to {args.model_b_tau_override:.6f} for this ensemble run. Model B's weights, "
+              f"Model A's weights/tau, and which candidate was chosen as Model B are all unchanged.")
+        model_b_tau = args.model_b_tau_override
 
     # --- Load CIC data (same cached .npz buckets scripts/cic-flood-margin-sampler.py already produced).
     print('\n== CIC data (cached .npz buckets, unchanged since batch 10) ==')
@@ -420,63 +433,74 @@ def main():
     overall = lab_ok and recall_ok and fp_ok
     print(f"\nOVERALL: {'GOOD CANDIDATE (clears the pre-registered bar)' if overall else 'NOT a good candidate (fails the pre-registered bar)'}")
 
-    # --- Batch 14: regression check -- reconfirm batch 13's own already-committed numbers are unchanged before
-    # trusting anything new (Model A, Model B, and the ensemble rule are byte-for-byte unchanged this batch; this is
-    # a sanity check that nothing about the harness itself drifted, not a new result).
-    print('\n== BATCH 14 regression check: batch 13 numbers unchanged (Model A/B/ensemble themselves are untouched) ==')
-    regressions = []
-    lab_now = (ensemble_lab['detected'], ensemble_lab['attacks'], ensemble_lab['falsePositives'], ensemble_lab['benign'])
-    lab_was = (BATCH13_LAB_DETECTED, BATCH13_LAB_ATTACKS, BATCH13_LAB_FP, BATCH13_LAB_BENIGN)
-    if lab_now != lab_was:
-        regressions.append(f'lab held-out: now {lab_now[0]}/{lab_now[1]} detected, {lab_now[2]}/{lab_now[3]} FP, '
-                            f'was {lab_was[0]}/{lab_was[1]} detected, {lab_was[2]}/{lab_was[3]} FP')
-    for label, expected in BATCH13_CIC_RECALL_PCT.items():
-        if abs(ensemble_recall[label] - expected) > 1e-9:
-            regressions.append(f'{label} ensemble recall: now {ensemble_recall[label]:.2f}%, was {expected:.2f}%')
-    for day, expected in BATCH13_CIC_BENIGN_FP_PCT.items():
-        if abs(ensemble_fp[day] - expected) > 1e-9:
-            regressions.append(f'{day} ensemble CIC-benign FP: now {ensemble_fp[day]:.2f}%, was {expected:.2f}%')
-    if regressions:
-        raise SystemExit('FATAL: batch 13 numbers drifted on a re-run that should be byte-for-byte identical '
-                          '(Model A/B/ensemble rule unchanged this batch) -- not safe to report batch 14\'s '
-                          'out-of-sample numbers against a harness that may itself have moved:\n  ' +
-                          '\n  '.join(regressions))
-    print('ok: lab held-out detected/FP, CIC Hulk/GoldenEye ensemble recall, and CIC-benign ensemble FP (both days) '
-          'all match batch 13\'s own committed numbers exactly\n')
+    oos_results, oos_interpretation = {}, {}
+    if args.model_b_tau_override is not None:
+        # Batch 17: the whole point of --model-b-tau-override is to deliberately move Model B's tau away from its
+        # batch-13 standalone-calibrated value, so the batch 14 regression check below (which exists to catch
+        # UNINTENDED drift from batch 13's committed numbers) would always and correctly fire here -- that is not a
+        # bug, it is the self-check doing its job, but it is not an informative check to run when the drift is the
+        # whole point of the run. Skip it (and the out-of-sample section, which is diagnostic only and not needed
+        # for a tau sweep) rather than silently making it pass; the primary metrics (lab held-out, CIC Hulk/GoldenEye
+        # recall, CIC-benign FP) are all already printed above, unaffected by this skip.
+        print('\n[batch 17] --model-b-tau-override is set: skipping the batch 14 regression check (it exists to '
+              'catch UNINTENDED drift from batch 13\'s numbers, and this run intentionally changes them) and the '
+              'batch 14 out-of-sample section (diagnostic only, not needed for a tau sweep).\n')
+    else:
+        # --- Batch 14: regression check -- reconfirm batch 13's own already-committed numbers are unchanged before
+        # trusting anything new (Model A, Model B, and the ensemble rule are byte-for-byte unchanged this batch; this
+        # is a sanity check that nothing about the harness itself drifted, not a new result).
+        print('== BATCH 14 regression check: batch 13 numbers unchanged (Model A/B/ensemble themselves are untouched) ==')
+        regressions = []
+        lab_now = (ensemble_lab['detected'], ensemble_lab['attacks'], ensemble_lab['falsePositives'], ensemble_lab['benign'])
+        lab_was = (BATCH13_LAB_DETECTED, BATCH13_LAB_ATTACKS, BATCH13_LAB_FP, BATCH13_LAB_BENIGN)
+        if lab_now != lab_was:
+            regressions.append(f'lab held-out: now {lab_now[0]}/{lab_now[1]} detected, {lab_now[2]}/{lab_now[3]} FP, '
+                                f'was {lab_was[0]}/{lab_was[1]} detected, {lab_was[2]}/{lab_was[3]} FP')
+        for label, expected in BATCH13_CIC_RECALL_PCT.items():
+            if abs(ensemble_recall[label] - expected) > 1e-9:
+                regressions.append(f'{label} ensemble recall: now {ensemble_recall[label]:.2f}%, was {expected:.2f}%')
+        for day, expected in BATCH13_CIC_BENIGN_FP_PCT.items():
+            if abs(ensemble_fp[day] - expected) > 1e-9:
+                regressions.append(f'{day} ensemble CIC-benign FP: now {ensemble_fp[day]:.2f}%, was {expected:.2f}%')
+        if regressions:
+            raise SystemExit('FATAL: batch 13 numbers drifted on a re-run that should be byte-for-byte identical '
+                              '(Model A/B/ensemble rule unchanged this batch) -- not safe to report batch 14\'s '
+                              'out-of-sample numbers against a harness that may itself have moved:\n  ' +
+                              '\n  '.join(regressions))
+        print('ok: lab held-out detected/FP, CIC Hulk/GoldenEye ensemble recall, and CIC-benign ensemble FP (both days) '
+              'all match batch 13\'s own committed numbers exactly\n')
 
-    # --- Batch 14: out-of-sample CIC attack classes (never in tsc.CIC_TRAIN_LABELS -- see module docstring).
-    print('== BATCH 14: out-of-sample CIC attack classes (never anchored by Model A\'s training) ==')
-    print(f'Model A tau={tau_a:.6f}   Model B ({model_b_label}) tau={model_b_tau:.6f}\n')
-    oos_sources = [(label, args.wednesday_npz) for label in tsc.CIC_HOLDOUT_WED_LABELS] + \
-                  [(label, args.friday_npz) for label in tsc.CIC_HOLDOUT_FRI_LABELS]
-    oos_results = {}
-    for label, npz_path in oos_sources:
-        feats, _epochs, src_ips = tsc.load_npz_bucket(npz_path, label)
-        if len(feats) == 0:
-            raise SystemExit(f"FATAL: out-of-sample bucket {label!r} in {npz_path} is empty -- cannot evaluate.")
-        res_a = tsc.score_cic_block(feats, src_ips, w_a, tau_a, known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
-        res_b = tsc.score_cic_block(feats, src_ips, model_b_w, model_b_tau, known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
-        res_ens = score_cic_block_ensemble(feats, src_ips, w_a, tau_a, model_b_w, model_b_tau,
-                                            known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
-        oos_results[label] = {'n': res_a['n'], 'model_a': res_a, 'model_b': res_b, 'ensemble': res_ens}
-        print(f"  {label:20s} n={res_a['n']:6d}  Model A solo {tsc.pct(res_a['alerts'], res_a['n']):>8s}  "
-              f"Model B solo {tsc.pct(res_b['alerts'], res_b['n']):>8s}  "
-              f"Ensemble {tsc.pct(res_ens['alerts'], res_ens['n']):>8s}")
+        # --- Batch 14: out-of-sample CIC attack classes (never in tsc.CIC_TRAIN_LABELS -- see module docstring).
+        print('== BATCH 14: out-of-sample CIC attack classes (never anchored by Model A\'s training) ==')
+        print(f'Model A tau={tau_a:.6f}   Model B ({model_b_label}) tau={model_b_tau:.6f}\n')
+        oos_sources = [(label, args.wednesday_npz) for label in tsc.CIC_HOLDOUT_WED_LABELS] + \
+                      [(label, args.friday_npz) for label in tsc.CIC_HOLDOUT_FRI_LABELS]
+        for label, npz_path in oos_sources:
+            feats, _epochs, src_ips = tsc.load_npz_bucket(npz_path, label)
+            if len(feats) == 0:
+                raise SystemExit(f"FATAL: out-of-sample bucket {label!r} in {npz_path} is empty -- cannot evaluate.")
+            res_a = tsc.score_cic_block(feats, src_ips, w_a, tau_a, known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
+            res_b = tsc.score_cic_block(feats, src_ips, model_b_w, model_b_tau, known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
+            res_ens = score_cic_block_ensemble(feats, src_ips, w_a, tau_a, model_b_w, model_b_tau,
+                                                known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
+            oos_results[label] = {'n': res_a['n'], 'model_a': res_a, 'model_b': res_b, 'ensemble': res_ens}
+            print(f"  {label:20s} n={res_a['n']:6d}  Model A solo {tsc.pct(res_a['alerts'], res_a['n']):>8s}  "
+                  f"Model B solo {tsc.pct(res_b['alerts'], res_b['n']):>8s}  "
+                  f"Ensemble {tsc.pct(res_ens['alerts'], res_ens['n']):>8s}")
 
-    print('\n-- interpretation (bins pre-registered before these numbers were looked at; see module docstring) --')
-    oos_interpretation = {}
-    for label, r in oos_results.items():
-        a_pct = 100 * r['model_a']['alerts'] / r['n']
-        b_pct = 100 * r['model_b']['alerts'] / r['n']
-        ens_pct = 100 * r['ensemble']['alerts'] / r['n']
-        if ens_pct - a_pct >= OOS_ENSEMBLE_LIFT_PCT:
-            bucket = 'ensemble meaningfully outperforms Model A alone (Model B contributes real coverage here)'
-        elif a_pct >= OOS_NEAR_ZERO_PCT:
-            bucket = 'Model A alone meaningfully nonzero (some anchor generalization beyond the literal two classes)'
-        else:
-            bucket = 'near-zero across the board (expected: the anchor is signature-specific, not a general detector)'
-        oos_interpretation[label] = {'model_a_pct': a_pct, 'model_b_pct': b_pct, 'ensemble_pct': ens_pct, 'bucket': bucket}
-        print(f'  {label:20s} {bucket}')
+        print('\n-- interpretation (bins pre-registered before these numbers were looked at; see module docstring) --')
+        for label, r in oos_results.items():
+            a_pct = 100 * r['model_a']['alerts'] / r['n']
+            b_pct = 100 * r['model_b']['alerts'] / r['n']
+            ens_pct = 100 * r['ensemble']['alerts'] / r['n']
+            if ens_pct - a_pct >= OOS_ENSEMBLE_LIFT_PCT:
+                bucket = 'ensemble meaningfully outperforms Model A alone (Model B contributes real coverage here)'
+            elif a_pct >= OOS_NEAR_ZERO_PCT:
+                bucket = 'Model A alone meaningfully nonzero (some anchor generalization beyond the literal two classes)'
+            else:
+                bucket = 'near-zero across the board (expected: the anchor is signature-specific, not a general detector)'
+            oos_interpretation[label] = {'model_a_pct': a_pct, 'model_b_pct': b_pct, 'ensemble_pct': ens_pct, 'bucket': bucket}
+            print(f'  {label:20s} {bucket}')
 
     if args.out_json:
         payload = {
@@ -488,6 +512,7 @@ def main():
             'model_a': {'file': args.model_a_weights, 'tau': tau_a, 'label': 'CIC-shaped (batch 10)'},
             'model_b': {'file': (args.pr106_weights if model_b_label == 'PR106 (lab-margin)' else '(hardcoded sr.W, no file)'),
                         'tau': model_b_tau, 'label': model_b_label,
+                        'tau_override_applied': args.model_b_tau_override,
                         'chosen_over': other_label,
                         # 'rows' (per-run detail) dropped here: aggregate counts only, same density as every prior
                         # batch's committed weights JSON; the full per-run breakdown is in the saved stdout log.
@@ -500,7 +525,10 @@ def main():
             'batch_14_out_of_sample': {
                 'method': 'diagnostic/exploratory, not a pass/fail gate -- see module docstring and '
                           'PREREGISTRATION.md\'s batch 14 addendum',
-                'regression_check_against_batch_13': 'ok (no drift; see stdout)',
+                'regression_check_against_batch_13': ('skipped: --model-b-tau-override is set (batch 17), so drift '
+                                                        'from batch 13 is the intended result, not a harness bug'
+                                                        if args.model_b_tau_override is not None
+                                                        else 'ok (no drift; see stdout)'),
                 'classes': {label: {'n': r['n'],
                                      'model_a_recall_pct': 100 * r['model_a']['alerts'] / r['n'],
                                      'model_b_recall_pct': 100 * r['model_b']['alerts'] / r['n'],

@@ -1,11 +1,17 @@
-# Two-anchor sentinel training campaign: summary and recommendation (batches 1-16, 2026-10-25/26)
+# Two-anchor sentinel training campaign: summary and recommendation (batches 1-17, 2026-10-25/26)
 
-**Status: campaign paused here.** This document is the consolidated answer to "what came out of all this," written
-at the point where two independent negative results on unifying the detector into one model (batches 4 and 16) made
-continuing to search that direction a poor use of time relative to the working answer already found (batch 13).
-Nothing below is final in the sense of being merged, deployed, or acted on — every batch in this campaign lives on
-the local, unpushed branch `feat/sentinel-two-anchor-training` with no PR open, per the convention established at
-batch 1. This write-up is for the project owner to read and decide what, if anything, to do next.
+**Status: campaign paused at batch 16, then resumed for one owner-directed follow-up (batch 17).** This document was
+originally written at the point where two independent negative results on unifying the detector into one model
+(batches 4 and 16) made continuing to search that direction a poor use of time relative to the working answer
+already found (batch 13). Batches 1-16 live on the local, unpushed branch `feat/sentinel-two-anchor-training` with
+no PR open, per the convention established at batch 1. **Batch 17 is a separate, owner-approved follow-up that
+reviewed batch 13's recommendation, found its disclosed lab-benign false-positive cost (5/9) unacceptable for
+production, and tried one specific fix (recalibrating Model B's own tau as an ensemble component).** It lives on its
+own local, unpushed branch, `feat/sentinel-ensemble-fp-reduction`, based on current `main` post-PR-#125-merge — NOT
+on `feat/sentinel-two-anchor-training`, which is already fully merged. See the batch 17 section below and
+`PREREGISTRATION.md`'s batch 17 addendum for the full write-up. Nothing in either branch is final in the sense of
+being merged, deployed, or acted on; this write-up is for the project owner to read and decide what, if anything, to
+do next.
 
 ## The problem
 
@@ -90,16 +96,36 @@ loss without reproducing what batch 13's externally-imposed, always-both-vote en
 construction. This is option 3's **second** negative result, after batch 4's (raw width expansion to 85 parameters
 also didn't resolve the capacity conflict).
 
+**Batch 17 (separate branch, `feat/sentinel-ensemble-fp-reduction`): the owner reviewed batch 13's disclosed 5/9
+lab-benign FP cost and asked for it to be reduced, accepting some recall cost if needed.** The owner's target is
+roughly a 90% "signal to noise" ratio on alerts (lab-benign FP toward ~1/9, ~10%). This batch tried the one lever
+nobody in batches 1-16 had tried: recalibrating Model B's (the baseline's) own `tau` specifically for its role as an
+ensemble component, holding Model A completely fixed. A 9-point sweep of Model B's tau (0.15 baseline up to 0.2236,
+the ceiling derived from Model B's own loss distribution on its lab-benign training pool) found **tau_B=0.19 clears
+a pre-registered bar** (lab-benign FP `<= 2/9`, lab held-out detected `>= 6/13`, CIC Hulk/GoldenEye recall `>= 90%`
+each, CIC-benign FP `<= 2%` both days): lab-benign FP improves from 5/9 (56%) to 2/9 (~22%), CIC Hulk/GoldenEye
+recall stays at 100.00%/100.00%, and CIC-benign FP actually improves too (0.25%→0.00% Friday) — at the cost of lab
+held-out detection falling from 10/13 to 6/13. This does not reach the owner's ~10% target (2/9 is still roughly
+double it), and the sweep found a sharp cliff just past this point (tau_B=0.205 reaches 1/9 FP but lab detection
+collapses to 2/13) — reaching the full target from here would cost most of the remaining lab-attack recall. See
+`PREREGISTRATION.md`'s batch 17 addendum for the full tradeoff table, the AND-rule reference point, and next steps.
+
 ## Recommendation
 
-**Deploy consideration: batch 13's two-model ensemble**, not any single unified kernel. It is the only configuration
-in 16 batches to clear CIC recall, CIC-benign FP, and lab-attack recall simultaneously, verified against the real
-scoring functions and independently checked for leakage/degenerate solutions before being accepted. **This comes
-with a real, disclosed cost, not a free win: lab-benign false positives rise to 5/9 (56%), worse than either
-component model alone (Model A 1/9, Model B 4/9) — the expected consequence of ORing two models' alerts together.**
-Materially better real-attack recall at roughly double the false-alert rate on ordinary lab traffic is the actual
-tradeoff being recommended here, and whether that's an acceptable production tradeoff is for the reviewer to decide,
-not something this campaign resolved on its own. Its outputs
+**Deploy consideration: batch 13's two-model ensemble, with batch 17's tau_B=0.19 recalibration as the owner-facing
+alternative for lower lab-benign false positives**, not any single unified kernel. Batch 13's ensemble (Model A =
+batch 10's weights, Model B = baseline `sr.W` at its own standalone tau=0.15) is the only configuration in 16 batches
+to clear CIC recall, CIC-benign FP, and lab-attack recall simultaneously, verified against the real scoring functions
+and independently checked for leakage/degenerate solutions before being accepted. **This comes with a real, disclosed
+cost, not a free win: lab-benign false positives rise to 5/9 (56%), worse than either component model alone (Model A
+1/9, Model B 4/9) — the expected consequence of ORing two models' alerts together.** Materially better real-attack
+recall at roughly double the false-alert rate on ordinary lab traffic is the actual tradeoff batch 13 recommended,
+and whether that's acceptable was explicitly left for the reviewer — the owner reviewed it and said no, prompting
+batch 17. **Batch 17's tau_B=0.19 variant (same two weight sets, Model B's tau raised from 0.15 to 0.19) is a
+disclosed, real alternative point on the same tradeoff curve: lab-benign FP 2/9 instead of 5/9, at the cost of lab
+held-out detection 6/13 instead of 10/13, with CIC recall/FP unaffected or improved.** Neither point reaches the
+owner's full ~90% signal/noise goal; which point (or whether to keep searching for a better one, e.g. jointly
+retuning Model A's own tau) is a decision for the owner, not resolved by this campaign. Its outputs
 (`scripts/eval-sentinel-ensemble.py`, `docs/benchmarks/results/sentinel-training-two-anchor/trained-weights-two-anchor-batch10-2026-10-25.json`
 as Model A plus the original hardcoded `sr.W` as Model B) are not wired into
 `scripts/gpu-sdn-anomaly-sentinel.py` — that integration was explicitly out of scope for this autonomous campaign
@@ -140,6 +166,7 @@ much larger optimizer budget — rather than another one-off variant of what's a
 | 14 | `f162817` | Out-of-sample CIC classes | honest scope limit: near-zero to modest generalization beyond Hulk/GoldenEye |
 | 15 | `e1f4ef7` | Jointly-fit gated architecture (option 3), design + smoke test | INCOMPLETE at commit time (full run not finished) |
 | 16 | `247aa5a` | Same architecture, full-scale run | FAIL — option 3's second negative result |
+| 17 (own branch `feat/sentinel-ensemble-fp-reduction`) | (this batch) | Sweep Model B's own tau as an ensemble component, holding Model A fixed | tau_B=0.19 clears a pre-registered bar: lab-benign FP 5/9→2/9, lab held-out 10/13→6/13, CIC recall/FP unaffected or improved; does not reach the owner's full ~10% FP target |
 
 ## Verification discipline used throughout
 

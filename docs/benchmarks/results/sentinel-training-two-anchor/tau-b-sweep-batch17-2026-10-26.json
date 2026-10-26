@@ -1,0 +1,153 @@
+{
+  "batch": 17,
+  "hypothesis": "Model B (the original baseline, tau=0.15) drives almost all of the OR-ensemble's lab-benign false positives (4/9 standalone vs Model A's 1/9); raising Model B's OWN tau specifically in its role as an ensemble component (not its own standalone-optimal value) should reduce ensemble lab-benign FP while Model A (unchanged) continues to carry CIC Hulk/GoldenEye recall and CIC-benign FP performance, since Model B's own recall on those CIC classes was already near-zero.",
+  "method": "Pure evaluation via scripts/eval-sentinel-ensemble.py's new --model-b-tau-override flag (additive; does not touch cic_block_ensemble_flags/score_cic_block_ensemble/ensemble_sentinel_alerts). Model A's weights/tau and Model B's weights held byte-for-byte fixed at batch 13's values throughout; only Model B's tau (the floor in sr.Adaptive's check(), tau=max(base, m+sigma*std)) is swept.",
+  "sweep_ceiling_derivation": "Model B's (baseline sr.W) own kernel_loss distribution on its 6264-window lab-benign training pool (scripts/train-sentinel-weights.py's pooled_training_losses, objective='margin' split): mean=0.1391, std=0.0338, max=0.2300, p90=0.1961, p99=0.2247. Ceiling chosen as mean+2.5*std=0.2236, the same SIGMA=2.5 threshold-calibration convention this codebase already uses elsewhere (e.g. train-sentinel-weights.py's own trained_tau calibration) -- not a round-number guess.",
+  "pre_registered_bar_decided_before_results": {
+    "lab_benign_fp_lte": "2/9 (~22%)",
+    "lab_holdout_detected_gte": "6/13",
+    "cic_hulk_goldeneye_recall_gte_pct": 90.0,
+    "cic_benign_fp_lte_pct_both_days": 2.0
+  },
+  "sweep": [
+    {
+      "tau_b": 0.15,
+      "note": "baseline / batch-13 full-sensitivity ensemble (reference, not swept this batch)",
+      "lab_detected": 10,
+      "lab_attacks": 13,
+      "lab_fp": 5,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.25
+      },
+      "clears_batch17_bar": false
+    },
+    {
+      "tau_b": 0.17,
+      "lab_detected": 8,
+      "lab_attacks": 13,
+      "lab_fp": 3,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": false
+    },
+    {
+      "tau_b": 0.19,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": true
+    },
+    {
+      "tau_b": 0.195,
+      "lab_detected": 6,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": true
+    },
+    {
+      "tau_b": 0.2,
+      "lab_detected": 5,
+      "lab_attacks": 13,
+      "lab_fp": 2,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": false
+    },
+    {
+      "tau_b": 0.205,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": false
+    },
+    {
+      "tau_b": 0.21,
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": false
+    },
+    {
+      "tau_b": 0.2236,
+      "note": "ceiling = Model B's own mean + 2.5*std on its 6264-window lab-benign training pool (the same SIGMA=2.5 calibration convention used elsewhere in this codebase)",
+      "lab_detected": 2,
+      "lab_attacks": 13,
+      "lab_fp": 1,
+      "lab_benign": 9,
+      "hulk_recall_pct": 100.0,
+      "goldeneye_recall_pct": 100.0,
+      "cic_benign_fp_pct": {
+        "Wednesday": 0.0,
+        "Friday": 0.0
+      },
+      "clears_batch17_bar": false
+    }
+  ],
+  "and_rule_reference_point": {
+    "method": "alert only if BOTH Model A (tau=0.187660) AND Model B (baseline, tau=0.15, UNMODIFIED -- not combined with the tau sweep) fire on the same window; reference point only, not self-checked to the same rigor as the OR-ensemble machinery (there is no pre-existing real AND scorer in this codebase to check against, unlike the OR rule which batch 13 could check against the already-existing slr.sentinel_alerts)",
+    "lab_detected": "2/13",
+    "lab_fp": "0/9",
+    "hulk_recall_pct": 0.75,
+    "goldeneye_recall_pct": 14.1,
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.0
+    },
+    "verdict": "as expected, recall collapses far below the 90% floor (Hulk 0.75%, GoldenEye 14.10%) -- the opposite extreme of the tradeoff spectrum from the full OR ensemble, included for context only"
+  },
+  "verdict": "tau_B=0.19 (and the plateau up to 0.195) is the lowest tau_B that still clears the pre-registered bar: lab-benign FP 2/9 (~22%, down from the full ensemble's 5/9 / 56%), lab held-out detected 6/13 (at the floor, matching batches 7/9/11/12's level), CIC Hulk/GoldenEye recall unchanged at 100%/100%, CIC-benign FP improved to 0.00%/0.00% both days (better than the full ensemble's 0.25% Friday). This is a real, meaningful improvement toward the owner's ~90% signal/noise target, but does NOT reach it: 2/9 (~22%) is still roughly double the ~10% target. The sweep found a sharp cliff between tau_B=0.195 (6/13 detected, 2/9 FP) and tau_B=0.205 (2/13 detected, 1/9 FP) -- reaching 1/9 FP costs 4 of the remaining 6 detected lab attacks, a steep price for the last FP improvement. No point on this sweep reaches both lab-benign FP<=1/9 AND lab held-out detected>=6/13 simultaneously.",
+  "recommended_candidate": {
+    "tau_b": 0.19,
+    "lab_detected": "6/13",
+    "lab_fp": "2/9",
+    "hulk_recall_pct": 100.0,
+    "goldeneye_recall_pct": 100.0,
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 0.0
+    },
+    "recall_cost_vs_full_ensemble": "gives back 4/13 of lab held-out detection (10/13 -> 6/13) relative to the full-sensitivity (tau_B=0.15) ensemble, in exchange for lab-benign FP dropping from 5/9 to 2/9 and Friday CIC-benign FP improving from 0.25% to 0.00%"
+  }
+}

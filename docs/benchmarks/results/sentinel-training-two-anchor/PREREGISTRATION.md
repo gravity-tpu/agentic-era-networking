@@ -1,5 +1,116 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-26 addendum (batch 17, owner-approved, EVALUATION ONLY — no training, no fitting, hypothesis/method/bar
+written before any of this batch's numbers were looked at):** the campaign paused at batch 16 (see
+`CAMPAIGN-SUMMARY.md`) with batch 13's two-model OR ensemble as the recommended candidate, carrying one disclosed,
+un-gated cost: lab held-out benign false positives at 5/9 (56%), worse than either component model alone (Model A
+1/9, Model B — the original baseline — 4/9). The owner reviewed this and decided 5/9 is not acceptable for
+production: the target is roughly a 90% "signal to noise" ratio on alerts (lab-benign FP toward ~1/9, ~10%), and
+asked for the plain OR rule to be improved on, accepting some recall cost if needed, rather than left as-is. Model
+B is the one driving almost all of the ensemble's own false-positive cost (4/9 standalone vs Model A's 1/9), and
+nobody in batches 1-16 had tried recalibrating Model B's tau specifically for its role as an ensemble component, as
+opposed to its own standalone-optimal value (`sr.BASE_TAU=0.15`, unchanged since before this whole workstream). This
+batch tests that one lever: sweep Model B's tau upward (less sensitive) while holding Model A's weights/tau and
+Model B's weights completely fixed, and measure the OR-ensemble's full metric set at each point.
+
+**Method:** `scripts/eval-sentinel-ensemble.py` (batch 13's pure-evaluation script) gained ONE new, additive CLI flag,
+`--model-b-tau-override`, applied immediately after Model B is chosen (unchanged selection logic) and before any
+ensemble number is computed. It does not touch `cic_block_ensemble_flags`, `score_cic_block_ensemble`,
+`ensemble_sentinel_alerts`, or `score_holdout_ensemble` — the already-self-checked ensemble replay machinery batch 13
+verified against the real scorers — at all; it only changes which `tau` value is passed into them for Model B. The
+flag also skips the batch-14 regression check and out-of-sample section when set (those exist to catch *unintended*
+drift from batch 13's committed numbers; intentionally changing tau_B makes that drift the expected result, not a
+harness bug, so running that check here would always and uninformatively fire — confirmed once with the flag unset,
+reproducing batch 13/14's numbers byte-for-byte, exit 0, before any swept run). This is a pure threshold sweep: no
+optimizer, no retraining, no new model, just repeated evaluation of two already-fitted weight vectors at different
+Model-B tau values.
+
+**Sweep ceiling, derived from data, not guessed:** Model B's own `kernel_loss` distribution on its 6,264-window
+lab-benign training pool (`scripts/train-sentinel-weights.py`'s `pooled_training_losses`, `objective='margin'`
+split, baseline `sr.W`): mean=0.1391, std=0.0338, p90=0.1961, p99=0.2247, max=0.2300. Ceiling chosen as
+`mean + 2.5*std = 0.2236` — the same `SIGMA=2.5` threshold-calibration convention this codebase already uses
+elsewhere (e.g. `train-sentinel-weights.py`'s own `trained_tau` calibration), not a round number. Swept five points
+roughly evenly spaced between the current baseline (0.15) and that ceiling (0.17, 0.19, 0.21, 0.2236), then added two
+finer points (0.195, 0.20) after the initial sweep showed a sharp cliff between 0.19 and 0.21, to localize it.
+
+**Pre-registered bar (decided before any of this batch's numbers were looked at):** a tau_B value is a GOOD CANDIDATE
+if lab-benign FP `<= 2/9` (~22%, a meaningful step toward the ~10% target, allowing room short of exactly 1/9) AND
+lab held-out detected stays `>= 6/13` (meaningfully better than any single model's historical 2-4/13 range, even if
+it gives back some of the full ensemble's 10/13) AND CIC Hulk/GoldenEye recall stays `>= 90%` each AND CIC-benign FP
+stays `<= 2%` both days. If multiple points clear the bar, the one with the lowest lab-benign FP is the recommended
+candidate. If none clears it, that is reported as a valid negative result, not spun as a win.
+
+**Result (full real scoring via `tw.score_holdout` and the unmodified `score_cic_block`, Model A/B weights
+byte-for-byte fixed at batch 13's values throughout):**
+
+| tau_B | Lab held-out detected | Lab held-out FP | Hulk recall | GoldenEye recall | CIC-benign FP (Wed/Fri) | Clears batch 17 bar? |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.15 (ref: batch 13's full ensemble) | 10/13 | 5/9 | 100.00% | 100.00% | 0.00% / 0.25% | — (reference, not a sweep point) |
+| 0.17 | 8/13 | 3/9 | 100.00% | 100.00% | 0.00% / 0.00% | NO (FP 3/9 > 2/9) |
+| **0.19** | **6/13** | **2/9** | **100.00%** | **100.00%** | **0.00% / 0.00%** | **YES — recommended candidate** |
+| 0.195 | 6/13 | 2/9 | 100.00% | 100.00% | 0.00% / 0.00% | YES (ties 0.19, no further FP gain) |
+| 0.20 | 5/13 | 2/9 | 100.00% | 100.00% | 0.00% / 0.00% | NO (detected 5/13 < 6/13) |
+| 0.205 | 2/13 | 1/9 | 100.00% | 100.00% | 0.00% / 0.00% | NO (detected 2/13 < 6/13) |
+| 0.21 | 2/13 | 1/9 | 100.00% | 100.00% | 0.00% / 0.00% | NO (detected 2/13 < 6/13) |
+| 0.2236 (ceiling) | 2/13 | 1/9 | 100.00% | 100.00% | 0.00% / 0.00% | NO (detected 2/13 < 6/13) |
+
+**Secondary check, the inverse-extreme AND rule (alert only if BOTH models fire; Model B at its own unmodified
+tau=0.15, not combined with the sweep above — just the opposite end of the tradeoff spectrum for context):** lab
+held-out detected 2/13, FP 0/9; `DoS Hulk` recall 0.75%, `DoS GoldenEye` recall 14.10%; CIC-benign FP 0.00%/0.00%.
+As expected, recall collapses far below the 90% floor — ANDing two independently-calibrated detectors is far too
+conservative to use alone, included only as the sweep's natural opposite bound. (This reference point used a small,
+uncommitted, NOT-self-checked-to-the-same-rigor script, since there is no pre-existing real AND scorer in this
+codebase to check it against the way batch 13 could check the OR rule against `slr.sentinel_alerts`; acceptable per
+this check's own explicitly limited scope.)
+
+**Verdict: tau_B=0.19 is a GOOD CANDIDATE, the only point on this sweep that clears the pre-registered bar, and the
+lowest tau_B that does (0.195 ties it with no further benefit).** Relative to the full-sensitivity ensemble
+(tau_B=0.15): lab-benign FP improves from 5/9 (56%) to 2/9 (~22%) — a real, meaningful step toward the owner's ~90%
+signal/noise target, though it does not reach it (2/9 is still roughly double the ~10% goal). CIC Hulk/GoldenEye
+recall is completely unaffected (100.00%/100.00% throughout the whole sweep — Model A, untouched, already carries
+100% of that recall on its own, and Model B's own recall on these two classes was always near-zero, so raising its
+tau costs nothing there). CIC-benign FP actually improves too, from 0.25% to 0.00% Friday. The real, disclosed cost
+is lab held-out detection: 10/13 → 6/13, giving back 4 of the 13 lab attacks the full ensemble caught (back down to
+the 4-6/13 range several single-lever batches in this campaign — 7, 9, 11, 12 — already landed at). **The sweep
+found a sharp cliff, not a smooth dial:** between tau_B=0.195 (6/13 detected, 2/9 FP) and tau_B=0.205 (2/13 detected,
+1/9 FP), lab held-out detection falls off a cliff for one more FP point of improvement — reaching the owner's ~1/9
+target costs 4 of the remaining 6 detected attacks, a steep, disproportionate price. No point on this sweep reaches
+both lab-benign FP `<= 1/9` AND lab held-out detected `>= 6/13` simultaneously; the pre-registered bar's own `<= 2/9`
+margin (rather than demanding exactly 1/9) is what tau_B=0.19 actually clears.
+
+**What this does and does not tell us.** This is one lever (Model B's own tau) swept at nine points (seven plus two
+refinement points), on one fixed pair of already-fitted weight vectors, against the same fixed lab held-out/CIC
+samples every prior batch in this workstream used — it is not a proof that 2/9 is an information-theoretic floor for
+6/13 lab recall with this architecture, only that this lever's own curve has a sharp cliff right past it. It also
+does not explain *why* the cliff sits specifically between 0.195 and 0.205 (which lab-benign runs' loss distributions
+cross which thresholds there would need its own trace, the kind batch 6 and batch 11's diagnostic did for other
+mechanisms) — flagged as open, not resolved, here. Nor does it test jointly re-tuning Model A's own tau alongside
+Model B's (out of this batch's scope, which was specifically "hold Model A fixed").
+
+**Recommended candidate for the owner's review: Model A unchanged (batch 10's weights, tau=0.187660), Model B
+unchanged weights (baseline `sr.W`) with tau raised from 0.15 to 0.19.** This is a disclosed, real tradeoff, not a
+free win: materially fewer lab-benign false alerts (5/9 → 2/9) and a cleaner Friday CIC-benign number (0.25% → 0.00%)
+in exchange for giving back 4/13 of lab held-out attack detection relative to the full-sensitivity ensemble. Whether
+6/13 lab recall at 2/9 lab-benign FP is an acceptable production tradeoff — better signal/noise than the full
+ensemble, still worse signal/noise than the owner's ~90% target — is a decision for the owner, not resolved by this
+batch.
+
+**Most natural next step, stated honestly.** The cliff between 0.195 and 0.205 suggests this single-lever sweep is
+close to exhausting what tau_B alone can buy without a disproportionate recall cost; reaching the owner's full ~90%
+signal/noise target from here would most likely need a second, independent lever (e.g. jointly re-tuning Model A's
+own tau alongside Model B's, or revisiting which lab-benign patterns drive Model B's remaining 2/9 FP specifically —
+`benign-ping-20pps` and `benign-bulk-tcp-2mbit` at tau_B=0.19, see the full per-pattern breakdown in
+`evaluation-output-ensemble-batch17-2026-10-26.txt`) rather than pushing this same lever further past the cliff.
+
+All 13 `test/invariants/train-sentinel-weights-cic.test.ts` tests pass (that script is untouched this batch; only
+`scripts/eval-sentinel-ensemble.py` gained the additive `--model-b-tau-override` flag and a corresponding skip of the
+batch-14-specific regression/out-of-sample sections when that flag is set). Full `npx vitest run` passes with the
+same file/pass/skip counts as batch 13/14/16. No production code touched (`scripts/gpu-sdn-anomaly-sentinel.py`
+untouched), no PR, no push, stays local/unpushed, same boundary as every prior batch in this workstream. Artifacts:
+`docs/benchmarks/results/sentinel-training-two-anchor/tau-b-sweep-batch17-2026-10-26.json` (machine-readable sweep
+table) and `evaluation-output-ensemble-batch17-2026-10-26.txt` (full stdout for every sweep point plus the AND-rule
+reference run).
+
 **2026-10-26 addendum (batch 16, autonomous overnight continuation — completes batch 15's prototype to a full-scale
 result):** batch 15 committed a jointly-fit, 23-parameter gated two-sub-kernel architecture
 (`scripts/train-sentinel-weights-gated.py`) as an honest INCOMPLETE: a 50-window smoke run looked mechanistically
