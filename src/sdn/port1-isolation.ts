@@ -57,6 +57,23 @@ export const WORKLOAD_PREFIX_LEN = 24;
  */
 export const DEFAULT_WORKLOAD_HOSTS: readonly string[] = ['10.0.2.50', '10.0.2.52'];
 
+/**
+ * Reads the opt-in uplink ARP peer list from an environment value (ZODIAC_UPLINK_ARP_PEERS). Unset or blank means the
+ * feature is off and the policy keeps its unconfined `p2-arp`. The word `none` means confined with no peers (no uplink
+ * ARP reaches the workload). Otherwise a comma-separated list of /32 addresses. A malformed value throws, so a typo
+ * stops the bridge at startup instead of silently leaving the direction open.
+ */
+export function parseUplinkArpPeers(raw: string | undefined): readonly string[] | undefined {
+  const text = raw?.trim();
+  if (!text) return undefined;
+  if (text.toLowerCase() === 'none') return [];
+  const peers = text.split(',').map((p) => p.trim());
+  for (const p of peers) {
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(p)) throw new Error(`ZODIAC_UPLINK_ARP_PEERS: "${p}" is not an IPv4 address`);
+  }
+  return peers;
+}
+
 export const PRIORITY_ISOLATION_ALLOW = 200;
 export const PRIORITY_ISOLATION_TAP_ONLY = 150;
 export const PRIORITY_TAP_RETURN = 100;
@@ -74,6 +91,7 @@ export function buildPort1IsolationPolicy(
   subnet: string = WORKLOAD_SUBNET,
   prefixLen: number = WORKLOAD_PREFIX_LEN,
   workloadHosts: readonly string[] = DEFAULT_WORKLOAD_HOSTS,
+  uplinkArpPeers?: readonly string[],
 ): readonly IsolationRule[] {
   // Fail closed on a misconfigured host list rather than silently installing a rule that matches no
   // real traffic: a typo'd address (e.g. a host in the wrong subnet) would otherwise pass every check
@@ -81,6 +99,24 @@ export function buildPort1IsolationPolicy(
   for (const host of workloadHosts) {
     if (!isHostAddressConfined(host, 32, subnet, prefixLen)) {
       throw new Error(`buildPort1IsolationPolicy: workload host ${host} is not a /32 address within ${subnet}/${prefixLen}`);
+    }
+  }
+
+  // A10, uplink -> workload direction. Opt-in: with `uplinkArpPeers` undefined the policy is unchanged and `p2-arp`
+  // forwards every ARP frame from the uplink. With a list, only ARP claiming one of those exact addresses reaches the
+  // workload; everything else from the uplink falls to the table-miss DROP. A peer inside the workload host list is
+  // refused: an uplink frame claiming a workload host's own address is the spoof this direction exists to stop.
+  if (uplinkArpPeers !== undefined) {
+    const seen = new Set<string>();
+    for (const peer of uplinkArpPeers) {
+      if (!isHostAddressConfined(peer, 32, subnet, prefixLen)) {
+        throw new Error(`buildPort1IsolationPolicy: uplink ARP peer ${peer} is not a /32 address within ${subnet}/${prefixLen}`);
+      }
+      if (workloadHosts.includes(peer)) {
+        throw new Error(`buildPort1IsolationPolicy: uplink ARP peer ${peer} is a workload host address; the uplink may not claim it`);
+      }
+      if (seen.has(peer)) throw new Error(`buildPort1IsolationPolicy: uplink ARP peer ${peer} is listed twice`);
+      seen.add(peer);
     }
   }
 
@@ -132,13 +168,24 @@ export function buildPort1IsolationPolicy(
         dstIpPrefixLen: prefixLen,
       }),
     },
-    {
-      id: 'p2-arp',
-      flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_WORKLOAD], {
-        inPort: ZODIAC_PORT_UPLINK,
-        etherType: ETH_TYPE_ARP,
-      }),
-    },
+    ...(uplinkArpPeers === undefined
+      ? [
+          {
+            id: 'p2-arp',
+            flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_WORKLOAD], {
+              inPort: ZODIAC_PORT_UPLINK,
+              etherType: ETH_TYPE_ARP,
+            }),
+          },
+        ]
+      : uplinkArpPeers.map((peer) => ({
+          id: `p2-arp-allow-${peer}`,
+          flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_WORKLOAD], {
+            inPort: ZODIAC_PORT_UPLINK,
+            etherType: ETH_TYPE_ARP,
+            arpSpa: peer,
+          }),
+        }))),
     {
       id: 'p3-tap-return',
       flowMod: add(PRIORITY_TAP_RETURN, [ZODIAC_PORT_WORKLOAD], {
@@ -178,10 +225,20 @@ export function isHostAddressConfined(
   return addr >= subnetBase && addr <= subnetBase + size - 1;
 }
 
+export interface Port1VerifyOptions {
+  /**
+   * When true, an ARP rule forwarding uplink -> workload must claim one exact address (`arpSpa`, /32, inside the
+   * subnet), like the workload -> uplink direction. Default false: the deployed policy leaves `p2-arp` unconfined
+   * (A10's open half), and the verifier does not claim otherwise.
+   */
+  readonly requireConfinedUplinkArp?: boolean;
+}
+
 export function verifyPort1Isolation(
   rules: readonly IsolationRule[],
   subnet: string = WORKLOAD_SUBNET,
   prefixLen: number = WORKLOAD_PREFIX_LEN,
+  options: Port1VerifyOptions = {},
 ): string[] {
   const violations: string[] = [];
   const confined = (ip: string | undefined, len: number | undefined): boolean =>
@@ -213,8 +270,15 @@ export function verifyPort1Isolation(
     }
 
     if (m.inPort === ZODIAC_PORT_UPLINK && out.includes(ZODIAC_PORT_WORKLOAD)) {
-      const ok = isArpUnconfined || (isIpv4 && confined(m.dstIp, m.dstIpPrefixLen));
-      if (!ok) violations.push(`${id}: uplink → workload without 10.0.2.0/24 dst confinement`);
+      const arpOk = options.requireConfinedUplinkArp ? isArpSpaConfined : isArpUnconfined;
+      const ok = arpOk || (isIpv4 && confined(m.dstIp, m.dstIpPrefixLen));
+      if (!ok) {
+        violations.push(
+          options.requireConfinedUplinkArp && isArpUnconfined
+            ? `${id}: uplink → workload ARP without a specific confined arpSpa (uplink ARP confinement is required)`
+            : `${id}: uplink → workload without 10.0.2.0/24 dst confinement`,
+        );
+      }
     }
 
     if (out.includes(m.inPort)) {

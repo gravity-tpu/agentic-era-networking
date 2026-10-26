@@ -72,11 +72,11 @@ import {
 } from '../db/local-telemetry-db.js';
 import { appendQuarantineEvent } from '../db/quarantine-audit.js';
 import { signBridgePayload } from '../security/request-attestation.js';
-import { buildPort1IsolationPolicy, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
+import { buildPort1IsolationPolicy, parseUplinkArpPeers, verifyPort1Isolation, verifyIsolationReadback, type IsolationRule } from './port1-isolation.js';
 import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type GateResult } from './install-gate.js';
 import { CALLER_MAX_EVENTS_PER_MINUTE, GateAuditLog, resolveCallerAuditFile, resolveGateAuditFile, safeHeaderText, type GateAuditRoute } from './gate-audit.js';
 import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY, defaultIsQuarantine } from './quarantine-precedence.js';
-import { PORT1_ISOLATION_INTENT } from './intents.js';
+import { PORT1_ISOLATION_INTENT, port1IsolationUplinkArpIntent } from './intents.js';
 import { FlowModCommand } from './openflow-types.js';
 import os from 'node:os';
 import { readFlowStats, readFlowStatsRaw } from './flow-readback.js';
@@ -586,6 +586,8 @@ export class ZodiacBridgeServer {
   private readonly quarantineExpiry: Map<string, { readonly ip: string; readonly expiresMonoNs: bigint; readonly expiresAtMs: number; readonly reason: string; readonly priority: number }> = new Map();
   /** Where active quarantines are kept so a bridge restart puts them back (see quarantine-persistence.ts). */
   private readonly quarantineStateFile: string;
+  /** Opt-in A10 uplink -> workload ARP confinement (ZODIAC_UPLINK_ARP_PEERS); undefined keeps the unconfined `p2-arp`. */
+  private readonly uplinkArpPeers: readonly string[] | undefined;
   private quarantineSweepTimer: NodeJS.Timeout | null = null;
   /** Requests inside the envelope that are waiting for a person (mode `propose`). */
   private readonly quarantineProposals = new QuarantineProposals();
@@ -614,6 +616,16 @@ export class ZodiacBridgeServer {
   /** Forwarding rules installed through /api/sdn/allow in this switch session, as the rules the switch holds (cleared when the table is rewritten). */
   private readonly allowRuleModel: Map<string, IsolationRule> = new Map();
 
+  /** The isolation policy for this bridge: the deployed default, or the uplink-ARP-confined variant when peers are configured. */
+  private isolationPolicy(): readonly IsolationRule[] {
+    return buildPort1IsolationPolicy(undefined, undefined, undefined, this.uplinkArpPeers);
+  }
+
+  /** The intent the install gate checks that policy against; it must match the policy's uplink ARP stance. */
+  private isolationIntent() {
+    return this.uplinkArpPeers === undefined ? PORT1_ISOLATION_INTENT : port1IsolationUplinkArpIntent(this.uplinkArpPeers);
+  }
+
   /**
    * The table the switch holds now, as rules: the isolation policy, the allow rules, and the active quarantine DROPs. Quarantines are always
    * an IPv4 /32 source match (decideQuarantine refuses a request with no IP), so that is the shape modelled; a new quarantine shape must change this too.
@@ -623,7 +635,7 @@ export class ZodiacBridgeServer {
       id,
       flowMod: { command: FlowModCommand.OFPFC_ADD, priority: e.priority, outputPorts: [], match: { etherType: 0x0800, srcIp: e.ip, srcIpPrefixLen: 32 } },
     }));
-    return [...buildPort1IsolationPolicy(), ...this.allowRuleModel.values(), ...quarantines];
+    return [...this.isolationPolicy(), ...this.allowRuleModel.values(), ...quarantines];
   }
 
   /**
@@ -635,7 +647,7 @@ export class ZodiacBridgeServer {
     const afterQuarantines = this.quarantineExpiry.size + proposed.filter(defaultIsQuarantine).length; // the same predicate the gate uses, so the depth cannot drift from an id convention
     const table = this.tableModel();
     const result = admitInstall({
-      current: table, proposed, intent: PORT1_ISOLATION_INTENT,
+      current: table, proposed, intent: this.isolationIntent(),
       ...(this.capacityTarget === null ? {} : {
         capacityTarget: { ...this.capacityTarget, advisory },
         // The installed quarantines are in the table model, so the reserve is only the room the envelope still has: table quarantines plus reserve equals the envelope's cap.
@@ -981,9 +993,10 @@ export class ZodiacBridgeServer {
     this.gateAudit = new GateAuditLog({ file: resolveGateAuditFile(process.env) });
     this.callerAudit = new GateAuditLog({ file: resolveCallerAuditFile(process.env), maxEventsPerMinute: CALLER_MAX_EVENTS_PER_MINUTE });
     this.quarantineStateFile = resolveQuarantineStateFile(process.env);
+    this.uplinkArpPeers = parseUplinkArpPeers(process.env['ZODIAC_UPLINK_ARP_PEERS']); // a malformed list throws here: the bridge does not start with the direction silently open
     this.loadPersistedQuarantines();
     this.isolationRechecker = new IsolationRechecker({
-      policy: buildPort1IsolationPolicy(),
+      policy: this.isolationPolicy(),
       read: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
       getStatus: () => this.isolationStatus,
       setStatus: (s) => {
@@ -1016,7 +1029,7 @@ export class ZodiacBridgeServer {
             return parseExperimentSettleMs(undefined);
           }
         })(),
-        isolationPolicy: () => buildPort1IsolationPolicy(),
+        isolationPolicy: () => this.isolationPolicy(),
         activeQuarantines: () => this.quarantineExpiry.size,
         afterRestore: () => { this.allowRuleModel.clear(); this.reinstallQuarantines(); }, // the restore rewrote the table: allow rules are gone
         nowMs: () => Date.now(),
@@ -1113,9 +1126,9 @@ export class ZodiacBridgeServer {
       // all other workload traffic is mirrored to the Port 3 sentinel tap only.
       // Council Invariant 4: the rule set must pass the symbolic verifier before touching the
       // data plane. On failure nothing is installed and table-miss DROP keeps Port 1 dark.
-      const isolationPolicy = buildPort1IsolationPolicy();
+      const isolationPolicy = this.isolationPolicy();
       this.flowModXidLabels.clear();
-      const violations = verifyPort1Isolation(isolationPolicy);
+      const violations = verifyPort1Isolation(isolationPolicy, undefined, undefined, { requireConfinedUplinkArp: this.uplinkArpPeers !== undefined });
       if (violations.length > 0) {
         this.isolationStatus = verifierRejectedStatus(violations, Date.now(), process.hrtime.bigint());
         console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);
@@ -1124,7 +1137,7 @@ export class ZodiacBridgeServer {
       // The verifier above covers A1 to A3; the install gate adds A2 (wildcards), A5, A6, A7 and A11 over the same table, so a policy that
       // regresses on any of them is never sent. Same fail-closed outcome: the data plane stays at the table-miss DROP.
       const startupGate = admitInstall({
-        current: [], proposed: isolationPolicy, intent: PORT1_ISOLATION_INTENT,
+        current: [], proposed: isolationPolicy, intent: this.isolationIntent(),
         // A declared throughput target is checked at the envelope's full quarantine depth, but advisory here: a bridge that refused to start its
         // policy over a mistyped target would leave the data plane dark, so the verdict is logged instead.
         ...(this.capacityTarget === null ? {} : { capacityTarget: { ...this.capacityTarget, advisory: true }, capacityReserve: this.quarantineEnvelope.maxActive }),
@@ -1223,7 +1236,7 @@ export class ZodiacBridgeServer {
     try {
       const { replies } = await readFlowStatsRaw(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS);
       return buildFlowProbeReport({
-        policy: buildPort1IsolationPolicy(),
+        policy: this.isolationPolicy(),
         replies,
         capturedAtIso: new Date().toISOString(),
         capturedMonotonicNs: process.hrtime.bigint(),
