@@ -125,7 +125,7 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
         eval_count: 100,
         eval_duration: 1_000_000_000, // 1000 ms -> 100 tok/s
         total_duration: 1_250_000_000,
-      }, 'gemma4:26b', testFile);
+      }, 'qwen3.8:27b', testFile);
 
       let raw = fs.readFileSync(testFile, 'utf8');
       let data = JSON.parse(raw);
@@ -151,7 +151,7 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
         eval_count: 70,
         eval_duration: 700_000_000,
         total_duration: 850_000_000,
-      }, 'gemma4:26b', testFile);
+      }, 'qwen3.8:27b', testFile);
 
       raw = fs.readFileSync(testFile, 'utf8');
       data = JSON.parse(raw);
@@ -166,7 +166,7 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
       await recordOllamaInferenceMetrics({
         prompt_eval_count: 9_007_199_254_740_992n,
         eval_count: 10n,
-      }, 'gemma4:26b', testFile);
+      }, 'qwen3.8:27b', testFile);
 
       raw = fs.readFileSync(testFile, 'utf8');
       data = JSON.parse(raw);
@@ -190,7 +190,7 @@ describe('Workstation Telemetry & Token Accounting Invariants', () => {
           eval_count: 5,
           eval_duration: 50_000_000,
           total_duration: 150_000_000,
-        }, 'gemma4:26b', testFile)
+        }, 'qwen3.8:27b', testFile)
       );
 
       await Promise.all(tasks);
