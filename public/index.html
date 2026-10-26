@@ -72,7 +72,7 @@
           <button class="cf-device-btn" id="btn-device-workstation" role="tab" aria-selected="false" data-device="workstation">
             <span class="cf-status-dot green" id="dot-device-workstation"></span>
             <span class="cf-device-btn-name">MacBook M5</span>
-            <span class="cf-pill-badge amber" id="btn-device-workstation-badge">Gemma 4</span>
+            <span class="cf-pill-badge amber" id="btn-device-workstation-badge">Local model</span>
           </button>
           <button class="cf-device-btn" id="btn-device-openflow" role="tab" aria-selected="false" data-device="openflow">
             <span class="cf-status-dot green" id="dot-device-openflow"></span>
@@ -356,7 +356,7 @@
           </a>
         </nav>
 
-        <!-- ── MacBook M5 Gemma 4 Workstation ── (hidden until device switch) -->
+        <!-- ── MacBook M5 Ollama Workstation ── (hidden until device switch) -->
         <nav class="cf-nav-group" id="cf-nav-workstation" style="display:none">
           <a class="cf-nav-item active" data-section="overview" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -389,11 +389,11 @@
             </svg>
             Token Velocity
           </a>
-          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-gemma-card">
+          <a class="cf-nav-item" data-section="overview" data-scroll="workstation-model-card">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
             </svg>
-            Gemma 4 Gateway
+            Local Model Gateway
           </a>
           <a class="cf-nav-item" data-section="council" data-scroll="">
             <svg class="cf-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2975,17 +2975,17 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
           </div><!-- /view-device-coral-2 -->
 
-          <!-- MACBOOK M5 / GEMMA 4 WORKSTATION VIEW -->
+          <!-- MACBOOK M5 / OLLAMA WORKSTATION VIEW -->
           <div id="view-device-workstation" style="display: none;">
             <div class="cf-page-header">
               <div>
-                <h1 class="cf-page-title" id="ws-page-title">MacBook M5 Workstation — Local Gemma 4 AI Gateway</h1>
-                <p class="cf-page-desc" id="ws-page-desc">Apple Silicon Metal GPU accelerated local AI code reviewer running Gemma 4 (25.2B Q4_K_M).</p>
+                <h1 class="cf-page-title" id="ws-page-title">MacBook M5 Workstation — Local Ollama AI Gateway</h1>
+                <p class="cf-page-desc" id="ws-page-desc">Apple Silicon Metal GPU accelerated local AI code reviewer running the model reported by Ollama.</p>
               </div>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <span class="cf-pill-badge amber" id="ws-chip-badge">Apple M5 Pro</span>
                 <span class="cf-pill-badge blue" id="ws-gpu-badge">20-Core Metal GPU</span>
-                <span class="cf-pill-badge purple" id="ws-model-badge">Gemma 4 · 25.2B</span>
+                <span class="cf-pill-badge purple" id="ws-model-badge">no model loaded</span>
                 <span class="cf-pill-badge green" id="ws-ollama-badge">Ollama Online</span>
               </div>
             </div>
@@ -3009,11 +3009,11 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                 </div>
               </div>
 
-              <!-- KPI 2: Gemma 4 Token Generation Velocity -->
+              <!-- KPI 2: Ollama Token Generation Velocity -->
               <div class="cf-stat-card" id="workstation-token-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Token Generation Velocity</span>
-                  <span class="cf-pill-badge green" id="ws-kpi-peak-tok-rate">Gemma 4</span>
+                  <span class="cf-pill-badge green" id="ws-kpi-peak-tok-rate">idle</span>
                 </div>
                 <div class="cf-stat-value" style="color: #059669;" id="ws-kpi-tok-rate">0.0 <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span></div>
                 <div class="cf-mini-bar">
@@ -3042,7 +3042,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               </div>
 
               <!-- KPI 4: Local Review Model -->
-              <div class="cf-stat-card" id="workstation-gemma-card">
+              <div class="cf-stat-card" id="workstation-model-card">
                 <div class="cf-stat-header">
                   <span class="cf-stat-label">Local Review Model</span>
                   <span class="cf-pill-badge purple">Local</span>
@@ -3052,7 +3052,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                   <div class="cf-mini-bar-fill purple" style="width: 100%;"></div>
                 </div>
                 <div class="cf-stat-footer">
-                  <span id="ws-kpi-active-model">Model: <strong>gemma4:26b</strong></span>
+                  <span id="ws-kpi-active-model">Model: <strong>no model loaded</strong></span>
                   <span id="ws-kpi-last-latency">TTFT: <strong class="cf-mono" id="ws-kpi-ttft">-- ms</strong></span>
                 </div>
               </div>
@@ -3316,14 +3316,14 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
               </div>
             </div>
 
-            <!-- Deep Dive Card 2: Gemma 4 & Ollama Token Accounting Ledger -->
+            <!-- Deep Dive Card 2: Ollama Token Accounting Ledger -->
             <div class="cf-card" style="margin-top: 1.5rem;">
               <div class="cf-card-header">
                 <div>
-                  <h3 class="cf-card-title">Local Gemma 4 Token Accounting &amp; Inference Velocity</h3>
+                  <h3 class="cf-card-title">Local Model Token Accounting &amp; Inference Velocity</h3>
                   <div class="cf-card-subtitle">Deterministic BigInt token counters &amp; nanosecond precision durations (Invariant 2)</div>
                 </div>
-                <span class="cf-pill-badge purple" id="ws-ollama-model-badge">gemma4:26b Q4_K_M</span>
+                <span class="cf-pill-badge purple" id="ws-ollama-model-badge">no model loaded</span>
               </div>
               <div class="cf-card-body" style="padding: 0;">
                 <div class="table-responsive">
@@ -3340,7 +3340,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
                       <tr>
                         <td><strong>Active Review Model</strong></td>
                         <td>Ollama GGUF Weights</td>
-                        <td id="ws-tbl-token-model">gemma4:26b (25.2B parameters, Q4_K_M)</td>
+                        <td id="ws-tbl-token-model">no model loaded</td>
                         <td>Symbolic Loop-Free Review Gate</td>
                       </tr>
                       <tr>
@@ -3728,7 +3728,7 @@ Type 'show status', 'show ports', 'show of', or 'show config' to inspect switch 
 
 
   <!-- Zodiac FX Core Client Application -->
-  <script defer src="zodiac-app.e47fa4d276.js"></script>
+  <script defer src="zodiac-app.cba43eca34.js"></script>
 
   <!-- Vercel Web Analytics -->
   <script>

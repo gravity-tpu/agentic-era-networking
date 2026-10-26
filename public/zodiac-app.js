@@ -403,7 +403,7 @@
     viewDeviceWorkstation: document.getElementById('view-device-workstation'),
 
 
-    // Workstation (MacBook M5 / Gemma 4) Elements
+    // Workstation (MacBook M5 / Ollama) Elements
     wsChipBadge: document.getElementById('ws-chip-badge'),
     wsGpuBadge: document.getElementById('ws-gpu-badge'),
     wsModelBadge: document.getElementById('ws-model-badge'),
@@ -966,7 +966,7 @@
       } else if (activeDeviceId === 'openflow') {
         els.breadcrumbName.innerText = 'OpenFlow 1.3 Controller';
       } else if (activeDeviceId === 'workstation') {
-        els.breadcrumbName.innerText = 'MacBook M5 · Gemma 4 Workstation (26B)';
+        els.breadcrumbName.innerText = 'MacBook M5 · Local Ollama Workstation';
       } else {
         els.breadcrumbName.innerText = devName;
       }
@@ -988,7 +988,7 @@
       } else if (activeDeviceId === 'openflow') {
         els.sidebarDevName.innerText = 'OpenFlow_Controller';
       } else if (activeDeviceId === 'workstation') {
-        els.sidebarDevName.innerText = 'MacBook_M5_Gemma4';
+        els.sidebarDevName.innerText = 'MacBook_M5_Ollama';
       } else {
         els.sidebarDevName.innerText = devName;
       }
@@ -1809,7 +1809,7 @@
       }
     }
 
-    // 9. MacBook M5 Gemma 4 Workstation Appliance Telemetry
+    // 9. MacBook M5 Ollama Workstation Appliance Telemetry
     if (snapshot.workstation) {
       const ws = snapshot.workstation;
       const isOnline = deviceOnlineStates.workstation;
@@ -1819,14 +1819,14 @@
         els.dotDeviceWorkstation.className = isOnline ? 'cf-status-dot green' : 'cf-status-dot down';
       }
       if (els.btnDeviceWorkstationBadge) {
-        els.btnDeviceWorkstationBadge.innerText = ws.activeModel ? ws.activeModel.split(':')[0] : 'Gemma 4';
+        els.btnDeviceWorkstationBadge.innerText = ws.activeModel ? ws.activeModel.split(':')[0] : 'Local model';
         els.btnDeviceWorkstationBadge.className = `cf-pill-badge ${isOnline ? (isOllamaOnline ? 'amber' : 'purple') : 'gray'}`;
       }
 
       // Badges
       if (els.wsChipBadge) els.wsChipBadge.innerText = ws.chipModel || 'Apple Silicon';
       if (els.wsGpuBadge) els.wsGpuBadge.innerText = `${ws.gpuCoreCount || 20}-Core Metal GPU`;
-      if (els.wsModelBadge) els.wsModelBadge.innerText = `${ws.activeModel || 'gemma4:26b'} · ${ws.modelParameterSize || '25.2B'}`;
+      if (els.wsModelBadge) els.wsModelBadge.innerText = `${ws.activeModel || 'no model loaded'} · ${ws.modelParameterSize || '--'}`;
       if (els.wsOllamaBadge) {
         els.wsOllamaBadge.innerText = isOllamaOnline ? `Ollama ${ws.ollamaStatus}` : 'Ollama Offline';
         els.wsOllamaBadge.className = `cf-pill-badge ${isOllamaOnline ? 'green' : 'gray'}`;
@@ -1852,7 +1852,7 @@
           : `-- <span style="font-size: 0.9rem; font-weight: 500;">tok/s</span>`;
       }
       if (els.wsKpiPeakTokRate) {
-        els.wsKpiPeakTokRate.innerText = peakTokRate > 0 ? `Peak: ${peakTokRate.toFixed(1)} t/s` : 'Gemma 4';
+        els.wsKpiPeakTokRate.innerText = peakTokRate > 0 ? `Peak: ${peakTokRate.toFixed(1)} t/s` : 'idle';
       }
       if (els.wsBarTokRate) {
         const peakTokCeil = Math.max(100, Math.ceil(peakTokRate / 20) * 20);
@@ -1891,7 +1891,7 @@
         els.wsKpiGatewayStatus.style.color = isOnline ? '#7e22ce' : 'var(--cf-text-secondary)';
       }
       if (els.wsKpiActiveModel) {
-        els.wsKpiActiveModel.innerHTML = `Model: <strong>${escapeHtml(ws.activeModel || 'gemma4:26b')}</strong>`;
+        els.wsKpiActiveModel.innerHTML = `Model: <strong>${escapeHtml(ws.activeModel || 'no model loaded')}</strong>`;
       }
       const ttftNs = safeBigInt(ws.timeToFirstTokenNs || ws.lastPromptEvalDurationNs);
       const ttftMs = (Number(ttftNs) / 1e6).toFixed(0);
@@ -1941,12 +1941,12 @@
         els.wsTblVramBadge.className = `cf-pill-badge ${hasVram ? 'green' : 'gray'}`;
       }
 
-      // Deep Dive Table 2: Gemma 4 Token Accounting
+      // Deep Dive Table 2: Ollama Token Accounting
       if (els.wsOllamaModelBadge) {
-        els.wsOllamaModelBadge.innerText = `${ws.activeModel || 'gemma4:26b'} ${ws.modelQuantization || 'Q4_K_M'}`;
+        els.wsOllamaModelBadge.innerText = `${ws.activeModel || 'no model loaded'} ${ws.modelQuantization || '--'}`;
       }
       if (els.wsTblTokenModel) {
-        els.wsTblTokenModel.innerText = `${ws.activeModel || 'gemma4:26b'} (${ws.modelParameterSize || '25.2B'} parameters, ${ws.modelQuantization || 'Q4_K_M'}, ${ws.modelFormat || 'gguf'})`;
+        els.wsTblTokenModel.innerText = `${ws.activeModel || 'no model loaded'} (${ws.modelParameterSize || '--'} parameters, ${ws.modelQuantization || '--'}, ${ws.modelFormat || 'gguf'})`;
       }
       if (els.wsTblEdgeRatio) {
         const edgeRatio = typeof ws.edgeComputeRatioPct === 'number' ? ws.edgeComputeRatioPct : 100.0;
@@ -3860,7 +3860,7 @@
     const promptSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.promptTokensPerSecond);
     drawSegmentedPath(ctx, promptSegments, (pt) => getTokCoord(pt, pt.promptTokensPerSecond), '#0284c7', null, 1.8, padTop + plotH);
 
-    // 4. Gemma 4 Token Generation Velocity (tok/s) Line & Fill (Emerald #059669)
+    // 4. Ollama Token Generation Velocity (tok/s) Line & Fill (Emerald #059669)
     const tokSegments = partitionContiguousSegments(points, currentRange, (pt) => pt.tokensPerSecond);
     drawSegmentedPath(ctx, tokSegments, (pt) => getTokCoord(pt, pt.tokensPerSecond), '#059669', 'rgba(5, 150, 105, 0.15)', 2.2, padTop + plotH);
 
@@ -5952,7 +5952,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     return `<div style="font-weight: 700; color: #94a3b8;">${timeStr} · Latency</div>`;
   });
 
-  // 10. MacBook M5 Gemma 4 Workstation Chart Tooltip
+  // 10. MacBook M5 Ollama Workstation Chart Tooltip
   bindChartHoverTooltip('canvas-wrapper-workstation', getWorkstationPointsForDisplay, 45, 50, (closestPt) => {
     const d = new Date(closestPt.timestampMs);
     const timeStr = d.toTimeString().slice(0, 8);
@@ -5964,7 +5964,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     const compTok = safeBigInt(closestPt.totalCompletionTokens);
     const totalTok = safeBigInt(closestPt.totalTokens || (promptTok + compTok));
     return `
-      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · M5 Gemma 4 Workstation</div>
+      <div style="font-weight: 700; color: #94a3b8; margin-bottom: 3px;">${timeStr} · M5 Ollama Workstation</div>
       <div style="color: #f59e0b; font-weight: 600;">● Metal GPU: ${gpuVal}%</div>
       <div style="color: #0051c3; font-weight: 600;">● Host CPU: ${cpuVal}%</div>
       <div style="color: #059669; font-weight: 600;">● Generation: ${tokRate} tok/s</div>
@@ -6230,7 +6230,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
     'coral-2':   { hwName: 'Google Coral TPU \u00b7 DNS Sentinel',  firmware: 'PyCoral \u00b7 RFC 1035 DGA Sentinel', navId: 'cf-nav-coral-2' },
     coral:       { hwName: 'Google Coral TPU \u00b7 Tap DPI',       firmware: 'PyCoral \u00b7 MobileNet V2 INT8',     navId: 'cf-nav-coral-1' },
     openflow:    { hwName: 'OpenFlow 1.3 Controller',               firmware: 'Zodiac FX \u00b7 KSZ8795 Data Plane', navId: 'cf-nav-openflow' },
-    workstation: { hwName: 'Apple M5 Pro \u00b7 20-Core Metal GPU',     firmware: 'macOS 26 \u00b7 Ollama Gemma 4 (25.2B)', navId: 'cf-nav-workstation' },
+    workstation: { hwName: 'Apple M5 Pro \u00b7 20-Core Metal GPU',     firmware: 'macOS 26 \u00b7 Ollama', navId: 'cf-nav-workstation' },
   };
 
   // Cached section elements (queried once — stable IDs, never recreated)
@@ -6391,7 +6391,7 @@ Please connect the physical switch via USB to execute '${command}' on device har
       } else if (device === 'openflow') {
         els.breadcrumbName.innerText = 'OpenFlow 1.3 Controller';
       } else if (device === 'workstation') {
-        els.breadcrumbName.innerText = 'MacBook M5 · Gemma 4 Workstation (26B)';
+        els.breadcrumbName.innerText = 'MacBook M5 · Local Ollama Workstation';
       }
     }
 
