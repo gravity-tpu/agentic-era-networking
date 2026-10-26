@@ -63,5 +63,5 @@
     "raise-priority:p3-tap-return"
   ],
   "note": "a survived mutant is either an equivalent mutant (same behaviour under the intent) or a gap in the checks; this file does not say which",
-  "gitCommit": "e4c1380cea60067133c3093003420e359adb3f25"
+  "gitCommit": "992f3cafa8ac4128fdf57b53b5e79c0d5db41fd6"
 }

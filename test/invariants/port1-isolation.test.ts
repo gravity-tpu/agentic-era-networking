@@ -61,7 +61,7 @@ describe('Port 1 isolation policy', () => {
 
   it('mirrors every workload frame class to the sentinel tap', () => {
     const p1 = policy.filter((r) => r.flowMod.match?.inPort === ZODIAC_PORT_WORKLOAD);
-    expect(p1.length).toBe(3);
+    expect(p1.length).toBe(4); // ipv4-intra-segment, 2 per-host arp-allow, default-tap-only
     for (const r of p1) expect(r.flowMod.outputPorts).toContain(ZODIAC_PORT_TAP);
   });
 

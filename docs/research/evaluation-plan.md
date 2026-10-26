@@ -131,5 +131,54 @@ The sections above are the plan as written and are left unedited. This section l
 | D9 | Section 6.2: A1 to A7 and A10 as the admissibility test | Admissible outputs were also **re-judged against the other intents** (cross-intent check), and the number of **distinct outputs** is recorded per run. | Shows the check discriminates (an INTENT-1 set can fail INTENT-4) and avoids counting repeats as independent samples. Not a change to the verdict. |
 | D10 | Section 6.5 and RQ4: on-wire conformance for accepted sets | Done as a single run: 58 rule sets (4 references, 38 surviving mutants, 16 Haiku-admissible sets), 290 flow checks, 5 flows (UDP and ARP only, observed on two taps), 290 agree. | The flows cannot tell 29 of the 38 surviving mutants from their references, no port-3 ingress was tested, and the switch-side hard timeout is not separated from the bridge sweep. This tests the verifier's model on the forwarding fields the flows can see; it says nothing about capacity or cost. |
 | D11 | Section 8: raw logs and a clean tree for every run | Held for the runs, but several pushes carrying the harness used `--no-verify` (listed with outcomes in `.agents/audit-log.md` section 4). | Process deviation, recorded there. |
+| D12 | Section 3: the four intents as defined | INTENT-1, INTENT-3 and INTENT-4 were **changed in place** by the A10 policy work (commit `992f3ca`, 2026-10-25): INTENT-1's ARP clause became one clause per workload host, and INTENT-3 and INTENT-4 are built from `...PORT1_ISOLATION_INTENT.clauses`, so they changed with it. INTENT-2 did not change. | Found 2026-10-26 by re-judging every recorded first turn with the current verifier (`rejudge-recorded-runs-2026-10-26.json`): INTENT-2, 0 of 210 verdicts change; for INTENT-1, 3 and 4 no set that was admissible when the runs were made is admissible now. Results for those three intents hold for the specifications of 2026-10-18 to 2026-10-25 (the prior state is `992f3ca^` in git) and say nothing about today's. The plan's own rule is that a changed intent needs a new plan version; section 10 is that version, and `test/invariants/eval-intents-frozen.test.ts` now pins the four specifications so this cannot happen silently again. |
+| D13 | Section 4: Gemma 4 26B and the frontier references | **Qwen3.8 27B** (`qwen3.8:27b`, Q4_K_M, local, reasoning on) was run on all four intents, N = 50 for Protocol A and N = 20 for Protocol B: 113 of 200 zero-shot and 80 of 80 with feedback (`qwen3.8-27b.md`). | The owner asked whether a local model could replace the cloud proposer. Abstract admissibility only; one run per cell. |
+| D14 | Section 10.2: INTENT-3 and INTENT-4 "at their current specifications" | The **descriptions** of INTENT-3 and INTENT-4 were corrected to state the per-host ARP rule (amendment 1, section 10.6). | The A10 change rewrote their clauses to require per-host ARP but left their descriptions telling the model to allow ARP generally, so a model that followed the text could not pass. Found from the first registered Haiku runs (0 of 50 on each, every failure an unconfined ARP rule the description asked for). |
 
 **Not yet done from the plan:** the hardware cost check (A8) is not applied; no intent exercises the 128-entry table limit, so `ERR_TABLE_OVERFLOW` has never fired on a model output; each intent has a single prompt wording; the plan's Protocol B budget (N=20) was run for Gemma, `qwen2.5:3b` and Haiku, one run per cell.
+
+## 10. Plan v2 addendum (pre-registered 2026-10-26, before any v2 data)
+
+Section 9 D12 explains why this exists. Nothing in sections 1 to 9 is edited. This section is written, and committed, before any run it describes.
+
+### 10.1 What changes
+
+- **Prompt v2** (`src/sdn/proposer-prompt.ts`). Prompt v1 never told the model that `arpSpa` and `arpTpa` exist or which addresses are the workload hosts, so no model could have satisfied the per-host ARP requirement that INTENT-1, 3 and 4 now carry. v2 is v1 plus one line naming the two ARP fields (exact host only, with `etherType` 2054) and one line in the user message listing the known workload host addresses (`10.0.2.50`, `10.0.2.52`). Nothing else in the wording changes. A test reproduces the recorded v1 hashes, so earlier results stay explainable.
+- **Every summary records `promptVersion` and `intentSha256`** (a hash of the canonical intent specification), and the four specifications are pinned by a test.
+
+### 10.2 Cohort, intents, budgets
+
+| Item | Value |
+| :--- | :--- |
+| Models | `qwen3.8:27b` through Ollama on the Mac (reasoning on, `num_predict` 32768) and Claude Haiku 5.5 (effort low, the Claude arm's provider sampling, a spend cap of 200 cents per run). Gemma 4 26B is run only if the owner asks, with its earlier settings. |
+| Intents | INTENT-1, INTENT-3 and INTENT-4 at their current specifications (hashes pinned), plus INTENT-2, whose specification is unchanged, as a **control for the prompt change alone**: its v2 results are compared with its v1 results for the same model. |
+| Protocols and budgets | As sections 5 and 9: Protocol A N = 50 and Protocol B N = 20 per intent per model, temperature 0.2, top-p 0.95, seeds 1..N where the provider accepts them (D4), one run per cell. |
+| Pilot | One Protocol A run of N = 3 per intent with Qwen under v2, to check the harness runs and the prompt can express the task. It is excluded from every result and kept in `pilot-v2-excluded/`. |
+
+**Pilot outcome** (recorded 2026-10-26 after the pilot ran and before any registered run; the four runs are in `docs/benchmarks/results/agent-evaluation/pilot-v2-excluded/`): 12 trials, 2 admissible (both INTENT-1) and 10 `ERR_INTENT_LEAK` (INTENT-1 1, INTENT-2 3, INTENT-3 3, INTENT-4 3), no syntax errors, no transport failures, each summary recording `promptVersion` v2 and the pinned `intentSha256`. It shows the harness runs and that a model can express and satisfy the per-host ARP requirement under v2 (INTENT-1). Three trials per intent say nothing about rates, and **neither the prompt nor this plan was changed because of the pilot**. It is not part of any result.
+
+### 10.3 Analysis, fixed in advance
+
+- The same metrics as section 6 (admissible counts with 95% Wilson intervals, the category of every failure, distinct outputs, transport failures), plus the cross-intent re-judge of D9.
+- INTENT-2 v1 against INTENT-2 v2, per model, reports whether the prompt change alone moved a result.
+- No prediction is made about direction or size. The earlier v1 numbers are not a target.
+- A run is relaunched only for an infrastructure failure (the process died, the host went to sleep), with both attempts kept and listed. No cell is re-run to improve a number, and a failed cell is reported as failed.
+- The results are reported next to the pre-A10 numbers with the specification change stated, never merged with them.
+
+### 10.4 What this will still not show
+
+On-wire behaviour (RQ4), run-to-run variation (one run per cell), and anything about a model or quantization not in the table. The verifier was not frozen between 2026-10-18 and now apart from the specification change, which D12's re-judge measured for INTENT-2 only.
+
+### 10.5 Cost and time, estimated from the runs already made
+
+Qwen: about 9 to 10 hours of the Mac's time for the 4 intents (the 2026-10-25 and 2026-10-26 runs took 5 h 49 min for Protocol A and 3 h 6 min for Protocol B). Haiku: under 2 hours of wall time; measured API cost was a small fraction of a cent per trial in the earlier selection, so the 200-cent cap per run is far above the expected spend and exists only to stop a runaway.
+
+### 10.6 Amendment 1 (2026-10-26, before any Qwen run on INTENT-3 or INTENT-4)
+
+**What was found.** Haiku's registered Protocol A runs finished first. INTENT-3 and INTENT-4 came back 0 of 50 each, all `ERR_INTENT_LEAK` with the same detail (`p1-everything-else via p1-arp-to-uplink ... reaches [2]`). The descriptions of those two intents still said ARP from P1 may reach the uplink (INTENT-3: "intra-segment IPv4 and ARP with the uplink"; INTENT-4: "ARP from P1 must also reach the uplink") while their clauses, inherited from INTENT-1 by `...PORT1_ISOLATION_INTENT.clauses`, require one clause per workload host and forbid the rest. INTENT-1's description had been updated to say "ARP only when claiming one of its own known addresses"; the other two had not. A model that follows the text cannot pass, so those cells measured whether a model ignores its instruction, not the task.
+
+**What changes.** The two descriptions now use INTENT-1's wording for the ARP rule (the clauses are unchanged), their pinned hashes are updated in `test/invariants/eval-intents-frozen.test.ts`, and a new test requires any intent with per-host ARP clauses to say so in its description. INTENT-1 and INTENT-2 are unchanged (their hashes are the ones pinned in section 10.1).
+
+**What happens to the runs already made.** Haiku's INTENT-3 and INTENT-4 Protocol A runs under the uncorrected text are kept, renamed with the suffix `-uncorrected-description`, and reported as such: they are valid records of what the model did with that text, not a result for the corrected intents. They are not merged with the corrected runs. The corrected runs use the same N, seeds and settings, and are the registered result for INTENT-3 and INTENT-4. Reason for re-running: a defect in the instrument, stated above, not a number to improve; the rule in section 10.3 (no cell re-run to improve a number) stands.
+
+**Haiku Protocol B (infrastructure).** All four Haiku Protocol B runs failed on 2026-10-26 because the API account ran out of credit mid-run (`Your credit balance is too low to access the Anthropic API`): 73 of 80 trials are `TRANSPORT_FAILURE` with zero tokens, and the 7 trials that ran (INTENT-1, seeds 1 to 7) were admissible. That is an infrastructure failure under section 10.3: the four failed attempts are kept, renamed `-failed-attempt1-no-credit`, and listed here; the runs are relaunched once the balance is restored.

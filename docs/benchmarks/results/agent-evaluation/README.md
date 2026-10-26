@@ -1,5 +1,7 @@
 # Agent-proposal evaluation, first results: INTENT-1 (2026-10-18 and 2026-10-19)
 
+> **2026-10-26: Qwen3.8 27B on all four intents (N = 50 zero-shot, N = 20 with feedback) is in [`qwen3.8-27b.md`](qwen3.8-27b.md).** Summary: 113 of 200 zero-shot and 80 of 80 with feedback, against Gemma 4's 70 of 200 and 75 of 80 and Haiku 5.5's 191 of 200 and 80 of 80; abstract admissibility only.
+
 First execution of the pre-registered protocol in [`docs/research/evaluation-plan.md`](../../../research/evaluation-plan.md),
 one intent and one model. Abstract evaluation only (RQ1 to RQ3): the verdicts come from `src/sdn/proposal-triage.ts`,
 which calls the existing checks (table budget, hygiene A5/A6, prerequisites, hairpin, exact intent evaluation A11). Nothing

@@ -451,6 +451,7 @@ export interface Rpi3ComputeTelemetry {
 export interface Rpi3NetworkInterfaceTelemetry {
   readonly name: string;
   readonly role: string;
+  readonly isWorkload?: boolean;
   readonly macAddress: string;
   readonly ipAddress: string | null;
   readonly status: 'UP' | 'DOWN';
@@ -1195,73 +1196,104 @@ export function createDefaultRpi3Snapshot(
 ): Rpi3TelemetrySnapshot {
   const isNode1 = nodeNum === 1;
   const hostname = isNode1 ? 'agentic-node-01' : 'agentic-node-02';
-  const eth0Mac = isNode1 ? 'b8:27:eb:a2:ec:b0' : 'b8:27:eb:79:ff:0a';
-  const eth0Ip = isNode1 ? '10.0.2.50' : '10.0.2.52';
+  const eth0Mac = isNode1 ? 'b8:27:eb:a2:ec:b0' : '6c:6e:07:55:83:a4';
+  const eth0Ip = isNode1 ? '10.0.2.50' : '10.0.0.87';
+  const eth0Role = isNode1
+    ? 'Workload Data Plane (Zodiac FX Ingress via NETGEAR GS105Ev2 Port 3)'
+    : 'Out-of-Band Wired Management (NETGEAR GS105Ev2 Uplink Switch #2 Port 2)';
+  const eth1Mac = isNode1 ? '58:ef:68:b4:88:a3' : 'b8:27:eb:79:ff:0a';
+  const eth1Ip = isNode1 ? '10.0.0.56' : '10.0.2.52';
+  const eth1Role = isNode1
+    ? 'Out-of-Band Wired Management (NETGEAR GS105Ev2 Uplink Switch #2 Port 1)'
+    : 'Workload Data Plane (Zodiac FX Ingress via NETGEAR GS105Ev2 Port 1)';
   const wlan0Mac = isNode1 ? 'b8:27:eb:f7:b9:e5' : 'b8:27:eb:2c:aa:5f';
-  const wlan0Ip = isNode1 ? '10.0.0.45' : '10.0.0.177';
+  const wlan0Ip = isNode1 ? '10.0.0.45' : '10.0.0.175';
   const tailscale0Ip = isNode1 ? '100.79.152.36' : '100.105.255.18';
-  const netgearPort = isNode1 ? 3 : 1;
 
   const interfaces: Rpi3NetworkInterfaceTelemetry[] = [
     {
       name: 'eth0',
-      role: `Workload Data Plane (Zodiac FX Ingress via NETGEAR GS105Ev2 Port ${netgearPort})`,
+      role: eth0Role,
+      isWorkload: isNode1,
       macAddress: isDisconnected ? 'None' : eth0Mac,
       ipAddress: isDisconnected ? null : eth0Ip,
       status: isDisconnected ? 'DOWN' : 'UP',
       speedMbps: isDisconnected ? 0 : 1000,
-      rxBytes: isDisconnected ? 0n : (isNode1 ? 3827608n : 552097n),
-      txBytes: isDisconnected ? 0n : (isNode1 ? 29721n : 227700n),
-      rxPackets: isDisconnected ? 0n : (isNode1 ? 61725n : 6870n),
-      txPackets: isDisconnected ? 0n : (isNode1 ? 214n : 1534n),
+      rxBytes: 0n,
+      txBytes: 0n,
+      rxPackets: 0n,
+      txPackets: 0n,
       rxDropped: 0n,
       txDropped: 0n,
       rxErrors: 0n,
       txErrors: 0n,
-      rxRateBps: isDisconnected ? 0n : 12400n,
-      txRateBps: isDisconnected ? 0n : 8500n,
-      rxRatePps: isDisconnected ? 0n : 18n,
-      txRatePps: isDisconnected ? 0n : 12n,
+      rxRateBps: 0n,
+      txRateBps: 0n,
+      rxRatePps: 0n,
+      txRatePps: 0n,
+    },
+    {
+      name: 'eth1',
+      role: eth1Role,
+      isWorkload: !isNode1,
+      macAddress: isDisconnected ? 'None' : eth1Mac,
+      ipAddress: isDisconnected ? null : eth1Ip,
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 1000,
+      rxBytes: 0n,
+      txBytes: 0n,
+      rxPackets: 0n,
+      txPackets: 0n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: 0n,
+      txRateBps: 0n,
+      rxRatePps: 0n,
+      txRatePps: 0n,
     },
     {
       name: 'wlan0',
       role: 'Out-of-Band Management & Wi-Fi Gateway',
+      isWorkload: false,
       macAddress: isDisconnected ? 'None' : wlan0Mac,
       ipAddress: isDisconnected ? null : wlan0Ip,
       status: isDisconnected ? 'DOWN' : 'UP',
       speedMbps: isDisconnected ? 0 : 433,
-      rxBytes: isDisconnected ? 0n : (isNode1 ? 60078566n : 7924483n),
-      txBytes: isDisconnected ? 0n : (isNode1 ? 3876858n : 914024n),
-      rxPackets: isDisconnected ? 0n : (isNode1 ? 531531n : 63170n),
-      txPackets: isDisconnected ? 0n : (isNode1 ? 49060n : 7687n),
-      rxDropped: isDisconnected ? 0n : (isNode1 ? 83n : 7n),
-      txDropped: 0n,
-      rxErrors: 0n,
-      txErrors: 0n,
-      rxRateBps: isDisconnected ? 0n : 3400n,
-      txRateBps: isDisconnected ? 0n : 2100n,
-      rxRatePps: isDisconnected ? 0n : 15n,
-      txRatePps: isDisconnected ? 0n : 8n,
-    },
-    {
-      name: 'tailscale0',
-      role: 'WireGuard Management Mesh Overlay',
-      macAddress: 'None',
-      ipAddress: isDisconnected ? null : tailscale0Ip,
-      status: isDisconnected ? 'DOWN' : 'UP',
-      speedMbps: isDisconnected ? 0 : 1000,
-      rxBytes: isDisconnected ? 0n : (isNode1 ? 8326n : 69128n),
-      txBytes: isDisconnected ? 0n : (isNode1 ? 11607n : 77894n),
-      rxPackets: isDisconnected ? 0n : (isNode1 ? 55n : 372n),
-      txPackets: isDisconnected ? 0n : (isNode1 ? 133n : 347n),
+      rxBytes: 0n,
+      txBytes: 0n,
+      rxPackets: 0n,
+      txPackets: 0n,
       rxDropped: 0n,
       txDropped: 0n,
       rxErrors: 0n,
       txErrors: 0n,
-      rxRateBps: isDisconnected ? 0n : 400n,
-      txRateBps: isDisconnected ? 0n : 600n,
-      rxRatePps: isDisconnected ? 0n : 2n,
-      txRatePps: isDisconnected ? 0n : 3n,
+      rxRateBps: 0n,
+      txRateBps: 0n,
+      rxRatePps: 0n,
+      txRatePps: 0n,
+    },
+    {
+      name: 'tailscale0',
+      role: 'WireGuard Management Mesh Overlay',
+      isWorkload: false,
+      macAddress: 'None',
+      ipAddress: isDisconnected ? null : tailscale0Ip,
+      status: isDisconnected ? 'DOWN' : 'UP',
+      speedMbps: isDisconnected ? 0 : 1000,
+      rxBytes: 0n,
+      txBytes: 0n,
+      rxPackets: 0n,
+      txPackets: 0n,
+      rxDropped: 0n,
+      txDropped: 0n,
+      rxErrors: 0n,
+      txErrors: 0n,
+      rxRateBps: 0n,
+      txRateBps: 0n,
+      rxRatePps: 0n,
+      txRatePps: 0n,
     },
   ];
 

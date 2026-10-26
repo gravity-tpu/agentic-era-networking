@@ -72,9 +72,10 @@ export function buildModelFallbacks(filterTier = null) {
   // OLLAMA_BASE_URL overrides config/models.json so a machine-specific bind address
   // (e.g. a Tailscale IP) never has to be hardcoded as the shared default for every host.
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || ollamaConfig.baseUrl || 'http://localhost:11434';
-  const ollamaTimeoutMs = typeof ollamaConfig.timeoutMs === 'number' ? ollamaConfig.timeoutMs : 150_000;
+  const ollamaTimeoutMs = boundedInt(ollamaConfig.timeoutMs, OLLAMA_TIMEOUT_DEFAULT_MS, OLLAMA_TIMEOUT_MIN_MS, OLLAMA_TIMEOUT_MAX_MS);
   const ollamaTemperature = typeof ollamaConfig.temperature === 'number' ? ollamaConfig.temperature : 0.2;
-  const ollamaNumPredict = typeof ollamaConfig.numPredict === 'number' ? ollamaConfig.numPredict : 8192;
+  const ollamaNumPredict = boundedInt(ollamaConfig.numPredict, OLLAMA_NUM_PREDICT_DEFAULT, 256, OLLAMA_NUM_PREDICT_MAX);
+  const ollamaThink = ['low', 'medium', 'high', 'xhigh'].includes(ollamaConfig.think) ? ollamaConfig.think : undefined;
   const seen = new Set();
   const list = [];
 
@@ -98,6 +99,7 @@ export function buildModelFallbacks(filterTier = null) {
       timeoutMs: ollamaTimeoutMs,
       temperature: ollamaTemperature,
       numPredict: ollamaNumPredict,
+      think: ollamaThink,
     });
   }
 
@@ -115,6 +117,25 @@ export function buildModelFallbacks(filterTier = null) {
   }
 
   return list;
+}
+
+// Local-model limits (Invariant 5: named, configurable via config/models.json `ollama`, and clamped to these bounds).
+// A reasoning model streams for minutes: measured on qwen3.8:27b at think=medium, 159 s to 660 s per review.
+export const OLLAMA_TIMEOUT_DEFAULT_MS = 420_000;
+export const OLLAMA_TIMEOUT_MIN_MS = 5_000;
+export const OLLAMA_TIMEOUT_MAX_MS = 1_800_000;
+// num_predict counts thinking tokens too: medium used 3.3k to 12.5k tokens per review, xhigh used up to 31k.
+export const OLLAMA_NUM_PREDICT_DEFAULT = 16_384;
+export const OLLAMA_NUM_PREDICT_MAX = 65_536;
+// Memory bounds on a streamed answer, independent of the peer's own completion signal (a review is a few KB; xhigh thinking
+// is not kept). A longer answer or a line with no newline is a broken peer, so it fails the review.
+export const OLLAMA_MAX_RESPONSE_CHARS = 1_000_000;
+export const OLLAMA_MAX_LINE_CHARS = 1_000_000;
+
+/** Integer from config, clamped to [min, max]; anything that is not a finite integer falls back to `fallback`. */
+export function boundedInt(value, fallback, min, max) {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
 }
 
 export const DEFAULT_GLOBAL_TIMEOUT_MS = 180_000;
@@ -542,7 +563,7 @@ export async function flushPendingTelemetry(timeoutMs = DEFAULT_TELEMETRY_DRAIN_
  * Council Invariant 1: Serialized transaction queue eliminates Read-Modify-Write race conditions.
  * Jeff Dean Latency Budget: Non-blocking asynchronous I/O; serialized queue guarantees atomic increments.
  */
-export async function recordOllamaInferenceMetrics(data, model = 'gemma4:26b', filePath = WORKSTATION_METRICS_FILE) {
+export async function recordOllamaInferenceMetrics(data, model = 'qwen3.8:27b', filePath = WORKSTATION_METRICS_FILE) {
   if (!data || typeof data !== 'object') return;
   return enqueueTelemetryMutation(filePath, async () => {
     let totalPromptTokens = 0n;
@@ -703,14 +724,18 @@ export async function callOllama(
 ) {
   const url = `${baseUrl}/api/chat`;
   const temperature = options.temperature ?? 0.2;
-  const num_predict = options.numPredict ?? 8192;
+  const num_predict = options.numPredict ?? OLLAMA_NUM_PREDICT_DEFAULT;
+  const think = options.think;
+  // Streamed: a non-streaming request sends no response headers until generation ends, and Node's HTTP client
+  // gives up after 300 s of silence (UND_ERR_HEADERS_TIMEOUT), which a reasoning model exceeds.
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
     body: JSON.stringify({
       model,
-      stream: false,
+      stream: true,
+      ...(think !== undefined && { think }),
       options: { temperature, num_predict },
       messages: [
         { role: 'system', content: systemPrompt },
@@ -722,11 +747,40 @@ export async function callOllama(
     const body = await readErrorBody(res);
     throw new Error(`Ollama ${res.status} from ${url}: ${body}`);
   }
-  const data = await res.json();
+
+  const decoder = new TextDecoder();
+  let pending = '';
+  let content = '';
+  let final = null;
+  const take = (line) => {
+    if (!line.trim()) return;
+    const chunk = JSON.parse(line);
+    if (chunk.error) throw new Error(`Ollama stream error for ${model}: ${String(chunk.error).slice(0, 500)}`);
+    content += chunk.message?.content ?? '';
+    if (content.length > OLLAMA_MAX_RESPONSE_CHARS) throw new Error(`Ollama answer for ${model} exceeded ${OLLAMA_MAX_RESPONSE_CHARS} characters`);
+    if (chunk.done) final = chunk;
+  };
+  for await (const part of res.body) {
+    pending += decoder.decode(part, { stream: true });
+    if (pending.length > OLLAMA_MAX_LINE_CHARS) throw new Error(`Ollama stream for ${model} sent a line over ${OLLAMA_MAX_LINE_CHARS} characters with no newline`);
+    let nl;
+    while ((nl = pending.indexOf('\n')) >= 0) {
+      take(pending.slice(0, nl));
+      pending = pending.slice(nl + 1);
+    }
+  }
+  pending += decoder.decode();
+  take(pending);
+
+  // Fail closed (Invariant 3): a stream that never reported done, or stopped on the token cap, or produced no
+  // answer (a thinking-only response is what think=xhigh returned on a 10 KB diff), is a failed review. Throwing
+  // lets runWithFallback move to the next model instead of treating a partial or empty answer as a verdict.
+  if (!final) throw new Error(`Ollama stream for ${model} ended before completion`);
+  // Only a normal stop is a complete answer; 'length' (token cap, thinking counts) and any other reason are not.
+  if (final.done_reason !== 'stop') throw new Error(`Ollama response for ${model} did not stop normally (done_reason=${final.done_reason}; token cap ${num_predict}, thinking counts)`);
   // Decouple telemetry recording from the inference response critical path
-  trackTelemetryTask(recordOllamaInferenceMetrics(data, model));
-  const content = data.message?.content;
-  if (!content || typeof content !== 'string' || !content.trim()) {
+  trackTelemetryTask(recordOllamaInferenceMetrics(final, model, options.metricsFile ?? WORKSTATION_METRICS_FILE));
+  if (!content.trim()) {
     throw new Error(`Ollama returned empty response for ${model}`);
   }
   return content;
@@ -838,6 +892,7 @@ const PROVIDER_DISPATCH = Object.freeze({
     callOllama(model, systemPrompt, userMessage, signal, item.baseUrl, {
       temperature: item.temperature,
       numPredict: item.numPredict,
+      think: item.think,
     }),
   google: (model, systemPrompt, userMessage, signal) =>
     callGemini(model, systemPrompt, userMessage, signal),
@@ -886,10 +941,11 @@ export async function runWithFallback(fallbacks, systemPrompt, userMessage, opti
       if (!dispatch) {
         throw new Error(`Unknown provider: ${provider}`);
       }
-      const result = await dispatch(model, systemPrompt, userMessage, ac.signal, item);
+      const prompt = options.systemPromptByProvider?.[provider] ?? systemPrompt;
+      const result = await dispatch(model, prompt, userMessage, ac.signal, item);
 
       console.log(`  ✅  Success with ${model}\n`);
-      return { result, model };
+      return { result, model, provider };
     } catch (e) {
       const reason = e.name === 'AbortError' ? `timed out after ${(timeoutMs / 1000).toFixed(0)}s` : e.message;
       console.warn(`  🟡  ${model} failed: ${reason}`);

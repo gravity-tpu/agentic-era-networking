@@ -18,6 +18,7 @@ function rule(id: string, priority: number, outputPorts: readonly number[], matc
 }
 
 const ipv4 = (extra: FlowModMatchOptions): FlowModMatchOptions => ({ etherType: ETH_TYPE_IPV4, ...extra });
+const arp = (extra: FlowModMatchOptions): FlowModMatchOptions => ({ etherType: ETH_TYPE_ARP, ...extra });
 
 function depthRules(cond: Partial<DepthCondition> & Pick<DepthCondition, 'depth'>): IsolationRule[] {
   const plan = planDepthCondition({
@@ -212,11 +213,35 @@ describe('exactness guards', () => {
   });
 
   it('enumerates the expected number of packet classes, including the extra "other port" class', () => {
-    // ports {1,2,3} plus the unnamed-port representative = 4; one non-IP class (unused ethertype) + one IPv4 class each
-    expect(checkRuleHygiene([rule('only', 100, [2], { inPort: 1 })]).classesEvaluated).toBe(4 * 2);
+    // ports {1,2,3} plus the unnamed-port representative = 4; one non-IP, non-ARP class (unused ethertype), one
+    // IPv4 class and one ARP class each (ARP SPA/TPA are modelled as their own partitioned branch, same as IPv4).
+    expect(checkRuleHygiene([rule('only', 100, [2], { inPort: 1 })]).classesEvaluated).toBe(4 * 3);
     // an IPv4 /24 source adds one IP atom boundary (the prefix start; its end is the top of the address space)
     const withPrefix = checkRuleHygiene([rule('p', 100, [2], ipv4({ inPort: 1, srcIp: '10.0.0.0', srcIpPrefixLen: 24 }))]);
-    expect(withPrefix.classesEvaluated).toBe(4 * (1 + 3 * 1));
+    expect(withPrefix.classesEvaluated).toBe(4 * (1 + 3 * 1 + 1));
+  });
+
+  it('does not shadow an ARP rule constrained to one SPA by a lower-priority catch-all ARP rule (A10 regression)', () => {
+    // Confirmed on real hardware (docs/benchmarks/results/a10-arp-spa-feasibility/): a flow matching a specific
+    // claimed ARP_SPA only takes traffic claiming that address, not every ARP frame. Before arpSpa/arpTpa were
+    // modelled in intent-spec.ts's packet-class enumeration, this exact two-rule shape was incorrectly refused as
+    // "shadowed": the catch-all rule looked identical to the specific one because nothing distinguished them.
+    const dropSpecific = rule('arp-spa-drop-test', 100, [], arp({ inPort: 1, arpSpa: '10.0.2.250' }));
+    const forwardRest = rule('arp-forward-control', 50, [2, 3], arp({ inPort: 1 }));
+    const v = checkRuleHygiene([dropSpecific, forwardRest]);
+    expect(v.violations).toEqual([]);
+    expect(v.satisfied).toBe(true);
+  });
+
+  it('does flag a genuinely shadowed ARP rule (identical SPA constraint, lower priority)', () => {
+    // The fix must not become a rubber stamp: a rule that really is covered by a higher-priority rule with the
+    // same ARP_SPA constraint must still be caught.
+    const higher = rule('arp-a', 100, [2], arp({ inPort: 1, arpSpa: '10.0.2.250' }));
+    const shadowed = rule('arp-b', 50, [3], arp({ inPort: 1, arpSpa: '10.0.2.250' }));
+    const v = checkRuleHygiene([higher, shadowed]);
+    expect(v.violations).toHaveLength(1);
+    expect(v.violations[0]?.kind).toBe('shadowed');
+    expect(v.violations[0]?.ruleIds).toEqual(['arp-b', 'arp-a']);
   });
 
   it('excludes and reports a rule carrying a match field outside the modelled set (no silent projection)', () => {

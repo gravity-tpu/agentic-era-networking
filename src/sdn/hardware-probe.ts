@@ -2412,8 +2412,9 @@ export async function probeRpi3Hardware(
   const envUrl = process.env[isNode1 ? 'RPI3_NODE1_URL' : 'RPI3_NODE2_URL'];
   const candidateUrls: string[] = [
     ...(typeof envUrl === 'string' && envUrl.length > 0 ? [envUrl] : []),
+    isNode1 ? 'http://10.0.0.56:8001/telemetry' : 'http://10.0.0.87:8001/telemetry',
     isNode1 ? 'http://10.0.2.50:8001/telemetry' : 'http://10.0.2.52:8001/telemetry',
-    isNode1 ? 'http://10.0.0.45:8001/telemetry' : 'http://10.0.0.177:8001/telemetry',
+    isNode1 ? 'http://10.0.0.45:8001/telemetry' : 'http://10.0.0.175:8001/telemetry',
   ];
 
   const abortCtrl = new AbortController();
@@ -2489,6 +2490,7 @@ export async function probeRpi3Hardware(
             const ifObj = item as Record<string, unknown>;
             const name = String(ifObj['name'] || '');
             const role = String(ifObj['role'] || '');
+            const isWorkload = Boolean(ifObj['is_workload'] ?? ifObj['isWorkload'] ?? role.includes('Workload'));
             const macAddress = String(ifObj['mac_address'] || 'None');
             const ipAddress = typeof ifObj['ip_address'] === 'string' ? ifObj['ip_address'] : null;
             const status = String(ifObj['status'] || 'DOWN').toUpperCase() === 'UP' ? 'UP' : 'DOWN';
@@ -2523,6 +2525,7 @@ export async function probeRpi3Hardware(
             results.push({
               name,
               role,
+              isWorkload,
               macAddress,
               ipAddress,
               status,

@@ -1,18 +1,19 @@
 {
   "lastUpdated": "2026-10-22T00:00:00Z",
-  "globalTimeoutMs": 300000,
+  "globalTimeoutMs": 600000,
   "ollama": {
     "baseUrl": "http://100.112.223.16:11434",
     "jetsonBaseUrl": "http://192.168.55.100:11434",
-    "timeoutMs": 30000,
+    "timeoutMs": 420000,
     "temperature": 0.2,
-    "numPredict": 8192,
+    "numPredict": 16384,
+    "think": "medium",
     "description": "Local Ollama inference — zero API cost, no cloud egress. `baseUrl` below is this machine's documented fallback, overridable per-host with the OLLAMA_BASE_URL env var (see scripts/ai-utils.mjs) so the pre-push hook keeps working on a host with a different bind address. On this Mac, Ollama is bound only to its Tailscale IP, not localhost (~/Library/LaunchAgents/com.ollama.tailscale.plist sets OLLAMA_HOST=100.112.223.16:11434, not 0.0.0.0), so traffic to it transits the Tailscale mesh rather than loopback."
   },
   "routing": {
     "local": {
       "description": "Local Ollama models — pre-push hook only (not available in CI). Repository invariants loaded via system prompt.",
-      "ollama": "gemma4:26b"
+      "ollama": "qwen3.8:27b"
     },
     "fast": {
       "description": "Fastest cloud models — CI fallback and offline pre-push fallback",
@@ -28,7 +29,7 @@
     }
   },
   "allModels": [
-    "gemma4:26b",
+    "qwen3.8:27b",
     "gemini-3.8-flash",
     "gemini-pro-latest",
     "gemini-flash-latest",

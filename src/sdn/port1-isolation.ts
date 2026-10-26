@@ -10,8 +10,8 @@
  * untrusted workload itself controls. This module replaces that with a fail-closed policy:
  *
  *   prio 200  in_port=1, IPv4 src 10.0.2.0/24 dst 10.0.2.0/24 → [P2, P3]
- *   prio 200  in_port=1, ARP                                    → [P2, P3]
- *   prio 150  in_port=1, anything else                          → [P3]   (sentinel tap only)
+ *   prio 200  in_port=1, ARP, arp_spa = one of DEFAULT_WORKLOAD_HOSTS (one rule per host) → [P2, P3]
+ *   prio 150  in_port=1, anything else (including ARP claiming any other address) → [P3]  (sentinel tap only)
  *   prio 200  in_port=2, IPv4 dst 10.0.2.0/24                   → [P1]
  *   prio 200  in_port=2, ARP                                    → [P1]
  *   prio 100  in_port=3                                         → [P1]   (tap return path)
@@ -19,15 +19,23 @@
  *
  * Quarantine DROPs at 65535 still override everything here.
  *
- * Residual exposure (documented, not hidden): ARP is forwarded across P1⟷P2 because Zodiac FX
- * firmware 0.86 ARP_TPA/ARP_SPA OXM support is unverified. ARP alone cannot carry IPv4 payloads,
- * so LAN/WAN reachability remains blocked; it only discloses L2/L3 address bindings.
+ * A10 (ARP confinement, workload -> uplink direction): confirmed not implemented on real hardware
+ * 2026-10-22 (Track C scenario 1, docs/benchmarks/results/track-c-scenario1-arp-spoof/ -- a spoofed
+ * reply claiming 10.0.2.119 crossed P1 to P2 unfiltered under the old unconstrained `p1-arp` rule).
+ * Confirmed 2026-10-24 that firmware 0.86 DOES enforce ARP_SPA matching on the data plane
+ * (docs/benchmarks/results/a10-arp-spa-feasibility/), so this is now closed by per-host exact-address
+ * allow rules instead of one unconstrained ARP rule. A subnet-prefix check (as used for IPv4 above)
+ * would not have been sufficient: the scenario 1 attack claimed an address that is itself inside
+ * 10.0.2.0/24, so only exact per-host confinement actually distinguishes a legitimate claim from a
+ * spoofed one. The uplink -> workload direction (`p2-arp`) is NOT confined by this change and is not
+ * claimed fixed -- see verifyPort1Isolation's comment on that limit.
  */
 
 import type { FlowModOptions } from './openflow-types.js';
 import { FlowModCommand } from './openflow-types.js';
 import type { FlowStatsEntry } from './dataplane-benchmark.js';
 import { verifyActionReadback, type ActionReadbackVerdict } from './action-readback.js';
+import { ipv4ToUint } from './intent-spec.js';
 
 export const ETH_TYPE_IPV4 = 0x0800;
 export const ETH_TYPE_ARP = 0x0806;
@@ -38,6 +46,35 @@ export const ZODIAC_PORT_TAP = 3;
 
 export const WORKLOAD_SUBNET = '10.0.2.0';
 export const WORKLOAD_PREFIX_LEN = 24;
+
+/**
+ * The workload segment's known legitimate hosts (agentic-node-01, agentic-node-02), used to confine
+ * which ARP_SPA a workload host may claim toward the uplink (A10). A subnet-prefix confinement is not
+ * sufficient here: Track C scenario 1 (docs/benchmarks/results/track-c-scenario1-arp-spoof/) spoofed
+ * 10.0.2.119, an address that is itself inside 10.0.2.0/24 even though it physically belongs to a host
+ * on the uplink side -- a prefix check alone would not have caught it. Per-host exact-address
+ * confinement does, because neither real workload host may claim an address that is not its own.
+ */
+export const DEFAULT_WORKLOAD_HOSTS: readonly string[] = ['10.0.2.50', '10.0.2.52'];
+
+/**
+ * Reads the opt-in uplink ARP peer list from an environment value (ZODIAC_UPLINK_ARP_PEERS). Unset or blank means the
+ * feature is off and the policy keeps its unconfined `p2-arp`. The word `none` means confined with no peers (no uplink
+ * ARP reaches the workload). Otherwise a comma-separated list of /32 addresses. A malformed value throws, so a typo
+ * stops the bridge at startup instead of silently leaving the direction open.
+ */
+export function parseUplinkArpPeers(raw: string | undefined): readonly string[] | undefined {
+  const text = raw?.trim();
+  if (!text) return undefined;
+  if (text.toLowerCase() === 'none') return [];
+  const peers = text.split(',').map((p) => p.trim());
+  for (const p of peers) {
+    const octets = p.split('.');
+    const valid = /^\d{1,3}(\.\d{1,3}){3}$/.test(p) && octets.every((o) => Number(o) <= 255);
+    if (!valid) throw new Error(`ZODIAC_UPLINK_ARP_PEERS: "${p}" is not an IPv4 address`);
+  }
+  return peers;
+}
 
 export const PRIORITY_ISOLATION_ALLOW = 200;
 export const PRIORITY_ISOLATION_TAP_ONLY = 150;
@@ -55,13 +92,51 @@ export interface IsolationRule {
 export function buildPort1IsolationPolicy(
   subnet: string = WORKLOAD_SUBNET,
   prefixLen: number = WORKLOAD_PREFIX_LEN,
+  workloadHosts: readonly string[] = DEFAULT_WORKLOAD_HOSTS,
+  uplinkArpPeers?: readonly string[],
 ): readonly IsolationRule[] {
+  // Fail closed on a misconfigured host list rather than silently installing a rule that matches no
+  // real traffic: a typo'd address (e.g. a host in the wrong subnet) would otherwise pass every check
+  // here and only be noticed later, if at all, as "that host's ARP never seems to reach the uplink."
+  for (const host of workloadHosts) {
+    if (!isHostAddressConfined(host, 32, subnet, prefixLen)) {
+      throw new Error(`buildPort1IsolationPolicy: workload host ${host} is not a /32 address within ${subnet}/${prefixLen}`);
+    }
+  }
+
+  // A10, uplink -> workload direction. Opt-in: with `uplinkArpPeers` undefined the policy is unchanged and `p2-arp`
+  // forwards every ARP frame from the uplink. With a list, only ARP claiming one of those exact addresses reaches the
+  // workload; everything else from the uplink falls to the table-miss DROP. A peer inside the workload host list is
+  // refused: an uplink frame claiming a workload host's own address is the spoof this direction exists to stop.
+  if (uplinkArpPeers !== undefined) {
+    const seen = new Set<string>();
+    for (const peer of uplinkArpPeers) {
+      if (!isHostAddressConfined(peer, 32, subnet, prefixLen)) {
+        throw new Error(`buildPort1IsolationPolicy: uplink ARP peer ${peer} is not a /32 address within ${subnet}/${prefixLen}`);
+      }
+      if (workloadHosts.includes(peer)) {
+        throw new Error(`buildPort1IsolationPolicy: uplink ARP peer ${peer} is a workload host address; the uplink may not claim it`);
+      }
+      if (seen.has(peer)) throw new Error(`buildPort1IsolationPolicy: uplink ARP peer ${peer} is listed twice`);
+      seen.add(peer);
+    }
+  }
+
   const add = (priority: number, outputPorts: readonly number[], match: FlowModOptions['match']): FlowModOptions => ({
     command: FlowModCommand.OFPFC_ADD,
     priority,
     outputPorts,
     match,
   });
+
+  const arpAllowRules: IsolationRule[] = workloadHosts.map((host) => ({
+    id: `p1-arp-allow-${host}`,
+    flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP], {
+      inPort: ZODIAC_PORT_WORKLOAD,
+      etherType: ETH_TYPE_ARP,
+      arpSpa: host,
+    }),
+  }));
 
   return [
     {
@@ -75,13 +150,11 @@ export function buildPort1IsolationPolicy(
         dstIpPrefixLen: prefixLen,
       }),
     },
-    {
-      id: 'p1-arp',
-      flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP], {
-        inPort: ZODIAC_PORT_WORKLOAD,
-        etherType: ETH_TYPE_ARP,
-      }),
-    },
+    ...arpAllowRules,
+    // No general p1-arp rule: an ARP frame claiming an address outside workloadHosts falls through
+    // to p1-default-tap-only below (it matches on inPort alone, so it already catches ARP), which
+    // keeps sentinel visibility without forwarding the claim to the uplink. This is the A10 fix --
+    // see DEFAULT_WORKLOAD_HOSTS' doc comment for why a subnet-prefix check would not have sufficed.
     {
       id: 'p1-default-tap-only',
       flowMod: add(PRIORITY_ISOLATION_TAP_ONLY, [ZODIAC_PORT_TAP], {
@@ -97,13 +170,24 @@ export function buildPort1IsolationPolicy(
         dstIpPrefixLen: prefixLen,
       }),
     },
-    {
-      id: 'p2-arp',
-      flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_WORKLOAD], {
-        inPort: ZODIAC_PORT_UPLINK,
-        etherType: ETH_TYPE_ARP,
-      }),
-    },
+    ...(uplinkArpPeers === undefined
+      ? [
+          {
+            id: 'p2-arp',
+            flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_WORKLOAD], {
+              inPort: ZODIAC_PORT_UPLINK,
+              etherType: ETH_TYPE_ARP,
+            }),
+          },
+        ]
+      : uplinkArpPeers.map((peer) => ({
+          id: `p2-arp-allow-${peer}`,
+          flowMod: add(PRIORITY_ISOLATION_ALLOW, [ZODIAC_PORT_WORKLOAD], {
+            inPort: ZODIAC_PORT_UPLINK,
+            etherType: ETH_TYPE_ARP,
+            arpSpa: peer,
+          }),
+        }))),
     {
       id: 'p3-tap-return',
       flowMod: add(PRIORITY_TAP_RETURN, [ZODIAC_PORT_WORKLOAD], {
@@ -121,14 +205,48 @@ export function buildPort1IsolationPolicy(
  *
  * Returns the list of violations; an empty list means the policy is admissible.
  */
+/**
+ * True only if `ip` is an EXACT address (prefixLen 32 or omitted -- a wider range would let a rule
+ * re-admit the exact problem this check exists to close, since any wildcard wide enough to be
+ * convenient also covers addresses the claiming host does not own) and that exact address falls
+ * within `subnet`/`prefixLen`. Shared by `verifyPort1Isolation` (does a proposed rule confine ARP_SPA
+ * correctly) and `buildPort1IsolationPolicy` (does every entry in `workloadHosts` actually belong to
+ * the subnet it is being granted an allow rule for, so a typo fails loudly at build time rather than
+ * silently producing a rule that matches nothing real).
+ */
+export function isHostAddressConfined(
+  ip: string | undefined,
+  len: number | undefined,
+  subnet: string = WORKLOAD_SUBNET,
+  prefixLen: number = WORKLOAD_PREFIX_LEN,
+): boolean {
+  if (ip === undefined || (len !== undefined && len !== 32)) return false;
+  const subnetBase = ipv4ToUint(subnet);
+  const size = 2 ** (32 - prefixLen);
+  const addr = ipv4ToUint(ip);
+  return addr >= subnetBase && addr <= subnetBase + size - 1;
+}
+
+export interface Port1VerifyOptions {
+  /**
+   * When true, an ARP rule forwarding uplink -> workload must claim one exact address (`arpSpa`, /32, inside the
+   * subnet), like the workload -> uplink direction. Default false: the deployed policy leaves `p2-arp` unconfined
+   * (A10's open half), and the verifier does not claim otherwise.
+   */
+  readonly requireConfinedUplinkArp?: boolean;
+}
+
 export function verifyPort1Isolation(
   rules: readonly IsolationRule[],
   subnet: string = WORKLOAD_SUBNET,
   prefixLen: number = WORKLOAD_PREFIX_LEN,
+  options: Port1VerifyOptions = {},
 ): string[] {
   const violations: string[] = [];
   const confined = (ip: string | undefined, len: number | undefined): boolean =>
     ip === subnet && (len ?? 32) >= prefixLen;
+  const hostConfined = (ip: string | undefined, len: number | undefined): boolean =>
+    isHostAddressConfined(ip, len, subnet, prefixLen);
 
   for (const { id, flowMod } of rules) {
     const m = flowMod.match;
@@ -138,17 +256,31 @@ export function verifyPort1Isolation(
       continue;
     }
 
-    const isArp = m.etherType === ETH_TYPE_ARP && m.srcIp === undefined && m.dstIp === undefined;
+    // A10: an ARP rule forwarding workload -> uplink is only confined if it claims a specific
+    // address (arpSpa), not merely "is ARP" -- the subnet-prefix check used for IPv4 is not enough
+    // here, because an uplink-side host can claim an address that is itself inside the workload
+    // subnet (Track C scenario 1 spoofed 10.0.2.119, in-subnet but not actually a workload host).
+    // The uplink -> workload direction (p2-arp) is not yet confined by this check; that is a
+    // separate, undemonstrated direction (closer to Track C scenario 6) and not claimed fixed here.
+    const isArpSpaConfined = m.etherType === ETH_TYPE_ARP && m.srcIp === undefined && m.dstIp === undefined && hostConfined(m.arpSpa, m.arpSpaPrefixLen);
+    const isArpUnconfined = m.etherType === ETH_TYPE_ARP && m.srcIp === undefined && m.dstIp === undefined;
     const isIpv4 = m.etherType === ETH_TYPE_IPV4;
 
     if (m.inPort === ZODIAC_PORT_WORKLOAD && out.includes(ZODIAC_PORT_UPLINK)) {
-      const ok = isArp || (isIpv4 && confined(m.srcIp, m.srcIpPrefixLen) && confined(m.dstIp, m.dstIpPrefixLen));
-      if (!ok) violations.push(`${id}: workload → uplink without 10.0.2.0/24 src+dst confinement`);
+      const ok = isArpSpaConfined || (isIpv4 && confined(m.srcIp, m.srcIpPrefixLen) && confined(m.dstIp, m.dstIpPrefixLen));
+      if (!ok) violations.push(`${id}: workload → uplink without 10.0.2.0/24 src+dst confinement, or (for ARP) without a specific confined arpSpa`);
     }
 
     if (m.inPort === ZODIAC_PORT_UPLINK && out.includes(ZODIAC_PORT_WORKLOAD)) {
-      const ok = isArp || (isIpv4 && confined(m.dstIp, m.dstIpPrefixLen));
-      if (!ok) violations.push(`${id}: uplink → workload without 10.0.2.0/24 dst confinement`);
+      const arpOk = options.requireConfinedUplinkArp ? isArpSpaConfined : isArpUnconfined;
+      const ok = arpOk || (isIpv4 && confined(m.dstIp, m.dstIpPrefixLen));
+      if (!ok) {
+        violations.push(
+          options.requireConfinedUplinkArp && isArpUnconfined
+            ? `${id}: uplink → workload ARP without a specific confined arpSpa (uplink ARP confinement is required)`
+            : `${id}: uplink → workload without 10.0.2.0/24 dst confinement`,
+        );
+      }
     }
 
     if (out.includes(m.inPort)) {
@@ -225,6 +357,10 @@ export function verifyIsolationReadback(
       srcMask: prefixLenToMask(m?.srcIpPrefixLen),
       dstIp: m?.dstIp,
       dstMask: prefixLenToMask(m?.dstIpPrefixLen),
+      arpSpa: m?.arpSpa,
+      arpSpaMask: prefixLenToMask(m?.arpSpaPrefixLen),
+      arpTpa: m?.arpTpa,
+      arpTpaMask: prefixLenToMask(m?.arpTpaPrefixLen),
     };
     const hits = entries.filter(
       (e) =>
@@ -234,7 +370,11 @@ export function verifyIsolationReadback(
         e.srcIp === want.srcIp &&
         e.srcMask === want.srcMask &&
         e.dstIp === want.dstIp &&
-        e.dstMask === want.dstMask,
+        e.dstMask === want.dstMask &&
+        e.arpSpa === want.arpSpa &&
+        e.arpSpaMask === want.arpSpaMask &&
+        e.arpTpa === want.arpTpa &&
+        e.arpTpaMask === want.arpTpaMask,
     );
     if (hits.length === 1) {
       confirmed.push(id);
@@ -244,7 +384,7 @@ export function verifyIsolationReadback(
       const samePrio = entries.filter((e) => e.priority === want.priority && e.inPort === want.inPort);
       mismatches.push(
         samePrio.length > 0
-          ? `${id}: switch holds priority ${want.priority} in_port ${String(want.inPort)} but with different match fields ${JSON.stringify(samePrio.map(({ ethType, srcIp, srcMask, dstIp, dstMask }) => ({ ethType, srcIp, srcMask, dstIp, dstMask })))}`
+          ? `${id}: switch holds priority ${want.priority} in_port ${String(want.inPort)} but with different match fields ${JSON.stringify(samePrio.map(({ ethType, srcIp, srcMask, dstIp, dstMask, arpSpa, arpSpaMask, arpTpa, arpTpaMask }) => ({ ethType, srcIp, srcMask, dstIp, dstMask, arpSpa, arpSpaMask, arpTpa, arpTpaMask })))}`
           : `${id}: not present on switch (priority ${want.priority}, in_port ${String(want.inPort)})`,
       );
     } else {

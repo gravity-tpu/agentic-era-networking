@@ -14,13 +14,16 @@
  * therefore exhaustive over the modelled fields, not a sample.
  *
  * What this proves: over the modelled fields (in_port, eth_type, eth_src, eth_dst, ipv4_src,
- * ipv4_dst), under OpenFlow 1.3 single-table priority semantics with a table-miss DROP, the rule set
- * forwards each packet class to a port set that the intent permits, and reaches every port the
- * intent requires.
+ * ipv4_dst, arp_spa, arp_tpa), under OpenFlow 1.3 single-table priority semantics with a table-miss
+ * DROP, the rule set forwards each packet class to a port set that the intent permits, and reaches
+ * every port the intent requires.
  *
  * What it does NOT prove:
- *   - that the Zodiac FX firmware implements those semantics (track B conformance probe);
- *   - anything about fields not modelled (L4 ports, VLAN, ARP SPA/TPA; see roadmap A10);
+ *   - that the Zodiac FX firmware implements those semantics beyond what's been measured on hardware
+ *     (track B conformance probe; ARP_SPA/TPA enforcement itself was confirmed on real hardware,
+ *     docs/benchmarks/results/a10-arp-spa-feasibility/, but this module's exactness claim is about the
+ *     model, not a re-verification of the firmware on every run);
+ *   - anything about fields still not modelled (L4 ports, VLAN);
  *   - that the table-miss DROP is installed (roadmap A3, readback);
  *   - capacity (roadmap A8).
  *
@@ -32,6 +35,7 @@ import type { FlowModMatchOptions } from './openflow-types.js';
 import type { IsolationRule } from './port1-isolation.js';
 
 export const ETH_TYPE_IPV4_INTENT = 0x0800;
+export const ETH_TYPE_ARP_INTENT = 0x0806;
 
 /** Default ceiling on enumerated packet classes. A 128-rule table stays far below it. */
 export const DEFAULT_MAX_PACKET_CLASSES = 250_000;
@@ -60,7 +64,10 @@ export interface IntentSpec {
   readonly clauses: readonly IntentClause[];
 }
 
-/** A representative packet. IPv4 fields exist only when `etherType` is IPv4 (OF 1.3 prerequisites). */
+/**
+ * A representative packet. IPv4 fields exist only when `etherType` is IPv4, and ARP SPA/TPA fields
+ * only when `etherType` is ARP (OF 1.3 prerequisites).
+ */
 export interface PacketClass {
   readonly inPort: number;
   readonly etherType: number;
@@ -68,6 +75,8 @@ export interface PacketClass {
   readonly dstMac: string;
   readonly srcIp?: string;
   readonly dstIp?: string;
+  readonly arpSpa?: string;
+  readonly arpTpa?: string;
 }
 
 export type IntentViolationKind = 'leak' | 'missing' | 'ambiguous' | 'invalid-rule';
@@ -195,11 +204,13 @@ export function enumeratePacketClasses(
   }
 
   const inPorts = new Set<number>(ports);
-  const etherTypes = new Set<number>([ETH_TYPE_IPV4_INTENT]);
+  const etherTypes = new Set<number>([ETH_TYPE_IPV4_INTENT, ETH_TYPE_ARP_INTENT]);
   const srcMacs = new Set<string>();
   const dstMacs = new Set<string>();
   const srcIntervals: Interval[] = [];
   const dstIntervals: Interval[] = [];
+  const arpSpaIntervals: Interval[] = [];
+  const arpTpaIntervals: Interval[] = [];
 
   for (const p of predicates) {
     if (p.inPort !== undefined) inPorts.add(p.inPort);
@@ -208,6 +219,8 @@ export function enumeratePacketClasses(
     if (p.dstMac !== undefined) dstMacs.add(normMac(p.dstMac));
     if (p.srcIp !== undefined) srcIntervals.push(prefixInterval(p.srcIp, p.srcIpPrefixLen));
     if (p.dstIp !== undefined) dstIntervals.push(prefixInterval(p.dstIp, p.dstIpPrefixLen));
+    if (p.arpSpa !== undefined) arpSpaIntervals.push(prefixInterval(p.arpSpa, p.arpSpaPrefixLen));
+    if (p.arpTpa !== undefined) arpTpaIntervals.push(prefixInterval(p.arpTpa, p.arpTpaPrefixLen));
   }
   etherTypes.add(unusedEtherType(etherTypes));
   srcMacs.add(unusedMac(srcMacs));
@@ -215,10 +228,12 @@ export function enumeratePacketClasses(
 
   const srcAtoms = ipAtoms(srcIntervals);
   const dstAtoms = ipAtoms(dstIntervals);
-  const nonIpTypes = [...etherTypes].filter((t) => t !== ETH_TYPE_IPV4_INTENT);
+  const arpSpaAtoms = ipAtoms(arpSpaIntervals);
+  const arpTpaAtoms = ipAtoms(arpTpaIntervals);
+  const nonIpTypes = [...etherTypes].filter((t) => t !== ETH_TYPE_IPV4_INTENT && t !== ETH_TYPE_ARP_INTENT);
 
   const perL2 = inPorts.size * srcMacs.size * dstMacs.size;
-  const total = perL2 * (nonIpTypes.length + srcAtoms.length * dstAtoms.length);
+  const total = perL2 * (nonIpTypes.length + srcAtoms.length * dstAtoms.length + arpSpaAtoms.length * arpTpaAtoms.length);
   if (total > maxClasses) throw new IntentClassBudgetError(total, maxClasses);
 
   const out: PacketClass[] = [];
@@ -230,6 +245,11 @@ export function enumeratePacketClasses(
         for (const s of srcAtoms) {
           for (const d of dstAtoms) {
             out.push({ inPort, etherType: ETH_TYPE_IPV4_INTENT, srcMac, dstMac, srcIp: uintToIpv4(s), dstIp: uintToIpv4(d) });
+          }
+        }
+        for (const s of arpSpaAtoms) {
+          for (const d of arpTpaAtoms) {
+            out.push({ inPort, etherType: ETH_TYPE_ARP_INTENT, srcMac, dstMac, arpSpa: uintToIpv4(s), arpTpa: uintToIpv4(d) });
           }
         }
       }
@@ -257,6 +277,8 @@ export function matchesPacket(m: FlowModMatchOptions, pkt: PacketClass): boolean
   if (m.dstMac !== undefined && normMac(m.dstMac) !== pkt.dstMac) return false;
   if (m.srcIp !== undefined && !inPrefix(pkt.srcIp, m.srcIp, m.srcIpPrefixLen)) return false;
   if (m.dstIp !== undefined && !inPrefix(pkt.dstIp, m.dstIp, m.dstIpPrefixLen)) return false;
+  if (m.arpSpa !== undefined && !inPrefix(pkt.arpSpa, m.arpSpa, m.arpSpaPrefixLen)) return false;
+  if (m.arpTpa !== undefined && !inPrefix(pkt.arpTpa, m.arpTpa, m.arpTpaPrefixLen)) return false;
   return true;
 }
 
@@ -302,6 +324,14 @@ export function checkIntent(
         ruleIds: [r.id],
         ports: [],
         detail: `${r.id}: IPv4 match without eth_type=0x0800 violates OpenFlow 1.3 prerequisites`,
+      });
+    } else if ((m.arpSpa !== undefined || m.arpTpa !== undefined) && m.etherType !== ETH_TYPE_ARP_INTENT) {
+      violations.push({
+        kind: 'invalid-rule',
+        clauseId: '',
+        ruleIds: [r.id],
+        ports: [],
+        detail: `${r.id}: ARP_SPA/ARP_TPA match without eth_type=0x0806 violates OpenFlow 1.3 prerequisites`,
       });
     } else {
       valid.push(r);
