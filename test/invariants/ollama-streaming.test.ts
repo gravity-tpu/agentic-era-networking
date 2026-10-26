@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   callOllama, runWithFallback, boundedInt, buildModelFallbacks, flushPendingTelemetry,
-  OLLAMA_TIMEOUT_MIN_MS, OLLAMA_TIMEOUT_MAX_MS, OLLAMA_NUM_PREDICT_MAX, NoAvailableModelsError,
+  OLLAMA_TIMEOUT_MIN_MS, OLLAMA_TIMEOUT_MAX_MS, OLLAMA_NUM_PREDICT_MAX, OLLAMA_MAX_RESPONSE_CHARS, OLLAMA_MAX_LINE_CHARS, NoAvailableModelsError,
 } from '../../scripts/ai-utils.mjs';
 import { GATEKEEPER_PREAMBLE, TECHNICAL_SYSTEM_PROMPT, CCIE_SYSTEM_PROMPT, buildGatekeeperPrompt } from '../../scripts/ai-reviewer.mjs';
 
@@ -51,6 +51,22 @@ describe('callOllama streaming: fail closed on an incomplete or empty answer', (
   it('rejects a response cut off by the token cap, because the verdict may be missing', async () => {
     vi.stubGlobal('fetch', streamFetch([ND({ message: { content: '## Critical Issues\nNo' } }, done({ done_reason: 'length' }))]));
     await expect(call()).rejects.toThrow(/token cap/);
+  });
+
+  it('rejects any stop reason other than a normal stop, not only the token cap', async () => {
+    for (const reason of ['load', 'unload', undefined]) {
+      vi.stubGlobal('fetch', streamFetch([ND({ message: { content: 'looks complete' } }, done({ done_reason: reason }))]));
+      await expect(call()).rejects.toThrow(/did not stop normally/);
+    }
+  });
+
+  it('bounds memory: an answer over the character cap, and a line with no newline, both fail the review', async () => {
+    // many short lines (a normal stream), so only the total-answer cap can trip
+    const lines = Array.from({ length: 11 }, () => ND({ message: { content: 'x'.repeat(OLLAMA_MAX_RESPONSE_CHARS / 10) } }));
+    vi.stubGlobal('fetch', streamFetch([...lines, ND(done())]));
+    await expect(call()).rejects.toThrow(/exceeded .* characters/);
+    vi.stubGlobal('fetch', streamFetch(['{"message":{"content":"', 'y'.repeat(OLLAMA_MAX_LINE_CHARS + 1)]));
+    await expect(call()).rejects.toThrow(/no newline/);
   });
 
   it('rejects a stream that ends without a done record', async () => {
@@ -121,6 +137,11 @@ describe('gatekeeper prompt for the local tier', () => {
     expect(GATEKEEPER_PREAMBLE).toMatch(/Integer accounting/);
     expect(GATEKEEPER_PREAMBLE).toMatch(/❌ CHANGES REQUESTED/);
     expect(GATEKEEPER_PREAMBLE).toMatch(/is NOT a suggestion/);
+  });
+
+  it('the systems prompt still carries the marker the swap depends on (a reword must fail here, not silently drop the gatekeeper)', () => {
+    expect(TECHNICAL_SYSTEM_PROMPT).toContain('The repository is a real-hardware');
+    expect(buildGatekeeperPrompt(TECHNICAL_SYSTEM_PROMPT)).not.toBe(TECHNICAL_SYSTEM_PROMPT);
   });
 
   it('leaves a prompt without the marker unchanged instead of dropping the rubric', () => {

@@ -269,7 +269,11 @@ async function main() {
   let outcome;
   try {
     // The gatekeeper opening is for the systems review only; the network review keeps its own rubric for every model.
-    const systemPromptByProvider = isCCIE ? undefined : { ollama: buildGatekeeperPrompt(activeCouncil.systemPrompt) };
+    const gatekeeperPrompt = isCCIE ? null : buildGatekeeperPrompt(activeCouncil.systemPrompt);
+    if (gatekeeperPrompt === activeCouncil.systemPrompt) {
+      console.warn('🟡  Gatekeeper prompt NOT applied: the role-paragraph marker is missing from the systems prompt, so the local model gets the plain prompt.');
+    }
+    const systemPromptByProvider = gatekeeperPrompt ? { ollama: gatekeeperPrompt } : undefined;
     outcome = await runWithFallback(FALLBACKS, activeCouncil.systemPrompt, userMessage, { systemPromptByProvider });
   } catch (err) {
     await flushPendingTelemetry();

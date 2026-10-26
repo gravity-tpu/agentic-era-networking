@@ -127,6 +127,10 @@ export const OLLAMA_TIMEOUT_MAX_MS = 1_800_000;
 // num_predict counts thinking tokens too: medium used 3.3k to 12.5k tokens per review, xhigh used up to 31k.
 export const OLLAMA_NUM_PREDICT_DEFAULT = 16_384;
 export const OLLAMA_NUM_PREDICT_MAX = 65_536;
+// Memory bounds on a streamed answer, independent of the peer's own completion signal (a review is a few KB; xhigh thinking
+// is not kept). A longer answer or a line with no newline is a broken peer, so it fails the review.
+export const OLLAMA_MAX_RESPONSE_CHARS = 1_000_000;
+export const OLLAMA_MAX_LINE_CHARS = 1_000_000;
 
 /** Integer from config, clamped to [min, max]; anything that is not a finite integer falls back to `fallback`. */
 export function boundedInt(value, fallback, min, max) {
@@ -753,10 +757,12 @@ export async function callOllama(
     const chunk = JSON.parse(line);
     if (chunk.error) throw new Error(`Ollama stream error for ${model}: ${String(chunk.error).slice(0, 500)}`);
     content += chunk.message?.content ?? '';
+    if (content.length > OLLAMA_MAX_RESPONSE_CHARS) throw new Error(`Ollama answer for ${model} exceeded ${OLLAMA_MAX_RESPONSE_CHARS} characters`);
     if (chunk.done) final = chunk;
   };
   for await (const part of res.body) {
     pending += decoder.decode(part, { stream: true });
+    if (pending.length > OLLAMA_MAX_LINE_CHARS) throw new Error(`Ollama stream for ${model} sent a line over ${OLLAMA_MAX_LINE_CHARS} characters with no newline`);
     let nl;
     while ((nl = pending.indexOf('\n')) >= 0) {
       take(pending.slice(0, nl));
@@ -770,7 +776,8 @@ export async function callOllama(
   // answer (a thinking-only response is what think=xhigh returned on a 10 KB diff), is a failed review. Throwing
   // lets runWithFallback move to the next model instead of treating a partial or empty answer as a verdict.
   if (!final) throw new Error(`Ollama stream for ${model} ended before completion`);
-  if (final.done_reason === 'length') throw new Error(`Ollama response for ${model} hit the ${num_predict}-token cap (thinking counts)`);
+  // Only a normal stop is a complete answer; 'length' (token cap, thinking counts) and any other reason are not.
+  if (final.done_reason !== 'stop') throw new Error(`Ollama response for ${model} did not stop normally (done_reason=${final.done_reason}; token cap ${num_predict}, thinking counts)`);
   // Decouple telemetry recording from the inference response critical path
   trackTelemetryTask(recordOllamaInferenceMetrics(final, model, options.metricsFile ?? WORKSTATION_METRICS_FILE));
   if (!content.trim()) {
