@@ -1,0 +1,86 @@
+== lab benign training pool (unchanged from PR #105/#106) ==
+8 patterns, 18 runs, 6264 windows
+== objective: two-anchor-sequence-alert-rate (BETA_cic_benign=1.0, surrogate_temperature_sigma_frac=0.5, lab_margin_lambda=0.0) ==
+
+== Adaptive-replay: COLD start (matches score_cic_block exactly, no lab-benign warm-up, same as batch 8) ==
+
+== CIC benign anchor (unchanged mechanism from batch 1-8; benign terms do not use Adaptive replay) ==
+  Wednesday  anchor(train)=2000 windows   peek(informal only)=2000 windows
+  Friday     anchor(train)=2000 windows   peek(informal only)=2000 windows
+
+== CIC attack margin-training pool (also the sequence replayed through the simulated Adaptive) ==
+  DoS Hulk             2000 windows
+  DoS GoldenEye        2000 windows
+
+self-check: kernel_loss_batch matches sr.kernel_loss (lab + CIC windows); _replay_class_soft_alerts is deterministic (ok)
+
+== fitting (10 params, bounds (-3.0, 5.0) for all) ==
+hyperparameters: sigma=2.5 lambda=0.25 beta_cic_benign=1.0 surrogate_temperature_sigma_frac=0.5 (no static MARGIN this batch, same as batch 7/8 -- see PREREGISTRATION.md) lab_margin_lambda=0.0 lab_margin=0.02 (batch 11 addition, 0.0 default reproduces batch 10 exactly)
+baseline hardcoded weights -- L_benign_lab=0.156286  L_benign_cic=0.144882  L_margin(sequence surrogate miss-rate)=0.976626
+baseline hardcoded weights' total objective value: 0.545325
+differential_evolution: nfev=30211 objective=0.235028
+Nelder-Mead polish:     nfev=1030 objective=0.232111
+fitted in 869.8s
+trained weights: [-1.401803, -2.172578, 0.5319, 4.605412, -0.194068, 0.344129, 4.297658, 2.564094, 1.654913, 0.990901]
+trained training-objective value: 0.232111  (baseline was 0.545325)
+
+== sanity check 1: finite? ==
+all finite: True
+
+== sanity check 2: fitted weights pinned to a bound (within 0.01)? ==
+none pinned
+
+== sanity check 3: per-term values at the trained weights (never blended) ==
+trained weights -- L_benign_lab=0.117808  L_benign_cic=0.113280  L_margin(sequence surrogate miss-rate)=0.004092
+(baseline was L_benign_lab=0.156286  L_benign_cic=0.144882  L_margin(sequence surrogate miss-rate)=0.976626)
+
+== per-class sequence surrogate (this objective's own differentiable estimate of recall; compare against the REAL score_cic_block recall reported below -- how tight is the surrogate?) ==
+  DoS Hulk             surrogate recall = 99.30%  (surrogate miss-rate = 0.006964)
+  DoS GoldenEye        surrogate recall = 99.88%  (surrogate miss-rate = 0.001219)
+
+calibrated tau for trained weights: mean=0.1030 std=0.0335 -> base_tau=0.1867 (pooled over 6264 LAB training-benign windows only, never CIC benign)
+
+== CIC margin-training classes (Hulk, GoldenEye), own-data window-level recall under the REAL score_cic_block scoring (training performance, NOT held out) -- the primary success criterion ==
+  DoS Hulk             n=2000  sequence-surrogate-trained recall 51.55%  (prior best: 28.58%) -> BEATS PRIOR BEST
+  DoS GoldenEye        n=2000  sequence-surrogate-trained recall 100.00%  (prior best: 63.20%) -> BEATS PRIOR BEST
+
+== secondary context: informal peek (NOT a held-out result, same caveat as every prior batch) ==
+-- lab held-out split (9 benign/13 attack), baseline --
+baseline   tau=0.1500  attack detected (right sender): 10/13   benign false positives: 4/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 2/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 3/3
+    attack-synflood-1000pps            attack-detected 3/3
+    benign-bulk-tcp-2mbit              false-positive  0/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  2/2
+    benign-udp-small-50pps             false-positive  2/2
+-- lab held-out split (9 benign/13 attack), sequence-surrogate-trained --
+sequence-surrogate tau=0.1867  attack detected (right sender): 4/13   benign false positives: 1/9   misattributions: 0/22
+    attack-portscan-1pps               attack-detected 1/2
+    attack-portscan-fast               attack-detected 2/3
+    attack-portscan-half-pps           attack-detected 0/2
+    attack-portscan-slow               attack-detected 1/3
+    attack-synflood-1000pps            attack-detected 0/3
+    benign-bulk-tcp-2mbit              false-positive  1/2
+    benign-http-burst-8conns           false-positive  0/3
+    benign-ping-20pps                  false-positive  0/2
+    benign-udp-small-50pps             false-positive  0/2
+-- CIC-benign peek slice (disjoint from the training anchor), false-positive rate only --
+  Wednesday  n=2000  sequence-surrogate-trained FP rate 0.00%
+  Friday     n=2000  sequence-surrogate-trained FP rate 2.80%
+
+== PRIMARY success criterion (PREREGISTRATION.md batch 9 addendum, decided before this run) ==
+pre-registered bar is PER-CLASS (AND/OR), not a combined "beats both" requirement like batches 7/8 used:
+  DoS Hulk: 51.55% vs prior best 28.58% -> PASS
+  DoS GoldenEye: 100.00% vs prior best 63.20% -> PASS
+
+OVERALL (pre-registered either-class bar): PASS -- beats the best-ever prior recall on at least one class
+(for comparability with batches 7/8's stricter both-class bar: PASS)
+
+== CIC-benign FP regression check vs batch 8 (0.00%/0.00%, cleanest so far) ==
+  Wednesday  0.00% -> no regression
+  Friday     2.80% -> REGRESSION from batch 8
+
+wrote /tmp/batch12-runs/trained-weights-batch12-lambda0.25.json

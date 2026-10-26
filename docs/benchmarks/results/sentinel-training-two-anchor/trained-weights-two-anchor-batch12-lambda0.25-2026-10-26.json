@@ -1,0 +1,72 @@
+{
+  "weights": [
+    -1.4018034300319326,
+    -2.1725780892424797,
+    0.5319003246386756,
+    4.60541167118957,
+    -0.19406831068149993,
+    0.34412938189392933,
+    4.297657545618584,
+    2.564093874964044,
+    1.6549132549813066,
+    0.9909014940110681
+  ],
+  "tau": 0.18670667447960293,
+  "objective": "two-anchor-sequence-alert-rate",
+  "batch": "sentinel-training-two-anchor batch 9 (sequence-level differentiable alert-rate surrogate, replacing batches 7/8's per-window hinge; sanity check, NOT a validated or recommended result)",
+  "beta_cic_benign": 1.0,
+  "warmup_windows": 0,
+  "surrogate_temperature_sigma_frac": 0.5,
+  "per_class_sequence_surrogate": {
+    "DoS Hulk": {
+      "surrogate_recall": 0.9930356097892784,
+      "surrogate_miss_rate": 0.006964390210721594
+    },
+    "DoS GoldenEye": {
+      "surrogate_recall": 0.9987809357131779,
+      "surrogate_miss_rate": 0.001219064286822058
+    }
+  },
+  "cic_margin_recall_pct": {
+    "DoS Hulk": 51.55,
+    "DoS GoldenEye": 100.0
+  },
+  "prior_best_recall_pct": {
+    "DoS Hulk": 28.58,
+    "DoS GoldenEye": 63.2
+  },
+  "lambda": 0.25,
+  "sanity_check_sample_sizes": {
+    "lab_benign_training_windows": 6264,
+    "cic_benign_anchor_windows_per_day": 2000,
+    "cic_attack_margin_windows_per_class": 2000
+  },
+  "training_objective_value": 0.23211115324013315,
+  "training_objective_components": {
+    "L_benign_lab": 0.11780835351064092,
+    "L_benign_cic": 0.11327986791729927,
+    "L_margin_sequence_surrogate": 0.004091727248771826
+  },
+  "bound_pinned_weights": [],
+  "lab_margin_lambda": 0.0,
+  "lab_margin": 0.02,
+  "per_pattern_lab_margin_hinge": null,
+  "informal_peek": {
+    "lab_holdout_detected": 4,
+    "lab_holdout_attacks": 13,
+    "lab_holdout_fp": 1,
+    "lab_holdout_benign": 9,
+    "cic_benign_fp_pct": {
+      "Wednesday": 0.0,
+      "Friday": 2.8
+    }
+  },
+  "success_criterion_pass_either_class": true,
+  "success_criterion_pass_both_classes": true,
+  "cic_benign_fp_regressed_vs_batch8": {
+    "Wednesday": false,
+    "Friday": true
+  },
+  "seed": 42,
+  "note": "Fitted by scripts/train-sentinel-weights-cic.py --objective two-anchor-sequence-alert-rate (batch 9: the margin term is now a direct differentiable surrogate for score_cic_block's own sequence-level alerts/n metric, not a per-window hinge; batch 11 adds an optional L_margin_lab term, see lab_margin_lambda above); see docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md (batch 9/11 addenda). This is a batch-1 SANITY CHECK on a small bounded sample, not a held-out-validated result; not recommended for gpu-sdn-anomaly-sentinel.py --weights-file / GPU_SENTINEL_WEIGHTS_FILE under any circumstance."
+}

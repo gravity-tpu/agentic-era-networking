@@ -1,5 +1,98 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-26 addendum (batch 12, owner-approved, hypothesis/method/bar written before any of this batch's numbers
+were looked at):** batch 11 tested one fix for the lab held-out recall collapse (an `L_margin_lab` anchor term) and
+got a PARTIAL result -- lab detection recovered from batch 10's 2/13 to 4/13, but CIC-benign Friday FP regressed to
+3.30%, framed as possible evidence of a capacity conflict (a 10-parameter kernel cannot simultaneously satisfy
+CIC-benign, CIC-attack, and lab-attack anchors without some give). **This batch tests that capacity-conflict reading
+directly, isolating the other variable**: instead of adding a new lab-anchor term, hold batch 10's exact winning
+config fixed (`--objective two-anchor-sequence-alert-rate --surrogate-temperature-frac 0.5`, `--lab-margin-lambda
+0.0`, i.e. no lab anchor at all) and sweep `--lambda-weight` -- the CIC margin term's own weight, `tw.LAMBDA=1.0` by
+default -- DOWN, at three points: `0.5`, `0.25`, `0.1`. Everything else is held byte-for-byte identical to batch 10:
+same data caps (6,264 lab-benign / 2,000 CIC-benign-anchor-per-day / 2,000 CIC-attack-per-class), bounds `[-3.0,
+5.0]`, seed `42`, optimizer budget (DE `popsize=20`/`maxiter=150`, Nelder-Mead polish `maxiter=5000`). A 50-window
+smoke-scale run at `--lambda-weight 0.5` was used only to confirm the code path runs end to end without crashing
+(it did, exit 0); its numbers are not used for the verdict below.
+
+**Pre-registered bar (decided before any full-scale run's numbers were looked at):** for each `--lambda-weight`
+value, report (a) lab held-out detected/FP, (b) CIC `DoS Hulk`/`DoS GoldenEye` recall (via the unmodified
+`score_cic_block`), (c) CIC-benign FP both days. A value "recovers" lab detection if held-out detected `> 2/13`
+(batch 10's number) **without** `DoS Hulk`/`DoS GoldenEye` recall falling below 80% (a meaningful floor, not just
+"not zero"). The full curve is reported honestly regardless of outcome -- a clean negative (no lambda value recovers
+meaningful lab detection without a severe CIC recall cost) is as useful a result here as a positive one.
+
+**Result (full scale, all three points, seed 42, `--lab-margin-lambda 0.0` throughout):**
+
+| `--lambda-weight` | lab held-out detected | lab held-out FP | CIC Hulk recall | CIC GoldenEye recall | CIC-benign FP (Wed / Fri) | Recovers? (bar above) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1.0 (batch 10, for reference) | 2/13 | 1/9 | 100.00% | 100.00% | 0.00% / 0.00% | -- (baseline) |
+| **0.5** | **4/13** | 1/9 | 99.95% | 100.00% | 0.00% / **3.25%** | **YES** |
+| 0.25 | 4/13 | 1/9 | **51.55%** | 100.00% | 0.00% / 2.80% | NO (Hulk < 80% floor) |
+| 0.1 | 2/13 | 1/9 | **7.65%** | 100.00% | 0.00% / 0.00% | NO (no lab recovery, Hulk collapses below even the pre-two-anchor baseline of 28.58%) |
+
+(Batch 11's own result, for direct comparison on the same row shape: `--lab-margin-lambda 1.0`, `--lambda-weight 1.0`
+-- lab held-out 4/13 detected, FP 1/9, Hulk 100.00%, GoldenEye 100.00%, CIC-benign FP 0.00% / 3.30%.)
+
+**The curve is not monotonic, and that is itself the finding.** `DoS GoldenEye` recall is untouched at 100.00% across
+every lambda tried -- it is not the class under pressure here. `DoS Hulk` recall falls off a cliff as lambda drops
+(100.00% -> 99.95% -> 51.55% -> 7.65%), and lab held-out detection does NOT track that decline monotonically: it
+recovers to 4/13 at both `0.5` and `0.25`, then falls straight back to batch 10's 2/13 at `0.1`, where Hulk recall has
+also collapsed to the point of failing the CIC objective itself (7.65%, worse than the pre-two-anchor-workstream
+baseline of 28.58% Hulk has beaten every batch since batch 9). Reducing CIC-margin pressure does not uniformly "free
+up capacity" for the lab; there appears to be a narrow band (`lambda` in roughly `[0.25, 0.5]`) where the search lands
+on weights that both separate lab attacks and still clear the CIC margin, and pushing further destroys the CIC side
+without buying any further lab recovery -- consistent with a specific local-optimum landscape, not a smooth
+capacity-vs-cost dial.
+
+**Verdict: `--lambda-weight 0.5` alone -- with ZERO lab-anchor term, `--lab-margin-lambda` left at its default `0.0`
+-- recovers lab held-out detection to 4/13, matching batch 11's dedicated `L_margin_lab` fix exactly on that number,
+with CIC Hulk/GoldenEye recall both still comfortably above the 80% floor (99.95%/100.00%). Its CIC-benign Friday FP
+cost (3.25%) is statistically indistinguishable from batch 11's own cost (3.30%) for the identical 4/13 lab-recall
+gain.** This is a clean, decisive answer to this batch's own question: the lab-recall collapse is NOT specifically
+about the *absence* of a lab-attack anchor. A simple capacity knob -- turning down how hard the shared kernel is
+pushed toward the CIC margin shape -- reaches the SAME operating point (same lab recall, same order-of-magnitude CIC-
+benign cost, same intact CIC recall) that batch 11's purpose-built anchor term reached, with no new data, no new
+objective term, and no risk of training against lab-attack patterns at all (even disjoint ones). This favors the
+capacity-conflict reading over the missing-anchor reading: there is one shared "give" in this 10-parameter kernel
+between lab-attack separability and CIC-benign Friday reconstruction, and at least two independent levers
+(`--lambda-weight` down, `--lab-margin-lambda` up) spend that same give the same way, landing at roughly the same
+price (~3.2-3.3 points of Friday FP for ~2/13 more lab attacks detected). Neither lever is a free fix, and this
+batch found no point on the `--lambda-weight` curve that clears 4/13 lab recall without that cost -- `0.25` and `0.1`
+do not recover MORE lab detection than `0.5` already does; they only trade CIC Hulk recall away for nothing in
+return. Not committing any of these three weight files as a replacement for batch 10 or batch 11; recorded as a
+disclosed diagnostic result, same as batch 11.
+
+**What this does and does not tell us.** This is three points on one lever's curve, in one 10-parameter architecture,
+with one seed -- it is not a proof that `~3.2%` Friday FP is an information-theoretic floor for 4/13 lab recall in
+this kernel, only that the two levers tried so far (nine batches in, across two different mechanisms) both land
+there. It also does not explain WHY the Hulk-recall cliff sits between `0.5` and `0.25` rather than somewhere else,
+or why lab recall fails to track Hulk's decline monotonically at `0.1` -- those would need their own dedicated
+investigation (e.g., tracing which of the 10 weights move most across the sweep, the same kind of trace batch 6 did
+for the hinge-vs-Adaptive gap) and are flagged as open, not resolved, by this batch's three-point sweep.
+
+**Most natural next batch, stated honestly:** this workstream is now 12 batches deep without a single batch that
+clears CIC-benign FP, CIC Hulk/GoldenEye recall, AND lab held-out recall simultaneously at a level anyone would call
+"fixed" -- batch 10 is clean on CIC-benign/CIC-recall but keeps lab recall at its worst-ever point (2/13); batches 9,
+11, and this batch's `--lambda-weight 0.5` point all reach 4/13 lab recall but at a real, repeated ~3.2-3.3%
+Friday-FP cost. Two independent 10-parameter-kernel levers landing at the same tradeoff point is itself evidence that
+the next useful step is probably NOT a third lever searched inside the same 10-parameter architecture hoping for a
+different answer -- batch 4 already showed capacity alone (85 parameters, no margin-shape change) does not resolve
+this kind of conflict either. Three honest options going forward, in order of how much new infrastructure each
+needs: (1) accept batch 10's CIC-only weights as the current best disclosed candidate, explicitly documenting lab
+held-out detection as a known, unresolved gap rather than continuing to chase a unified fix; (2) treat CIC-shaped and
+lab-shaped detection as two separately-deployed models/thresholds (e.g. an ensemble or a mode switch) rather than one
+shared kernel, since this and batch 11 both suggest the two anchors may not be jointly satisfiable at this capacity;
+or (3) a genuinely different, larger-capacity architecture (not just more of the same 10/85-parameter stage-1
+expansion batch 4 already tried) if a unified detector remains a hard requirement. This batch's own evidence does not
+pick among these three -- it only strengthens the case that continuing to add one-off terms or re-sweep existing
+levers inside the current 10-parameter kernel is unlikely to produce a qualitatively different result from what
+batches 9-12 have already found.
+
+All 13 `test/invariants/train-sentinel-weights-cic.test.ts` tests pass (script untouched this batch --
+`--lambda-weight` already existed as a CLI flag; this batch only supplies a non-default value). No PR, no four-axis
+held-out evaluation, no deployment-path change, regardless of outcome, same boundary as every prior batch in this
+workstream.
+
 **2026-10-25 addendum (batch 11, owner-approved, hypothesis/method/bar written before this batch's numbers were
 looked at):** batch 10's transcript surfaced a regression nobody had been tracking as a pass/fail metric: the
 ORIGINAL hardcoded baseline weights (`sr.W`, pre-dating this whole workstream) detect 10/13 lab held-out attacks
