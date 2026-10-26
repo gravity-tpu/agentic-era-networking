@@ -1,5 +1,97 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-26 addendum (batch 13, owner-approved "option 2", EVALUATION ONLY — no training, no fitting, hypothesis/
+method/bar written before any of this batch's numbers were looked at):** batches 1-12 established that this
+10-parameter kernel has exactly two stable operating points (CIC-shaped, batch 10; lab-shaped, roughly the original
+hardcoded baseline) and that no lever tried inside this architecture reaches a third point that is good on all three
+anchors at once. The owner decided to stop searching for a unified kernel and instead evaluate deploying the two
+existing operating points as a two-model OR ensemble (option 2 of the three options batch 12 laid out), reusing
+weights that already exist — a scoring batch, not a training batch.
+
+**Method:** a new script, `scripts/eval-sentinel-ensemble.py`, imports `scripts/train-sentinel-weights-cic.py` as a
+library (its module-level code only defines functions/constants; `main()` is never called, so this does not touch
+or risk the fitting code path at all) and reuses `tw.kernel_loss_batch`, `score_cic_block`, `tw.score_holdout`, and
+the CIC `.npz` loading helpers unmodified. Because the pre-registered OR rule ("alert if either model's own
+`kernel_loss` exceeds its own `tau`") is a per-window decision and `score_cic_block`/`tw.score_holdout` only return
+aggregate counts, two small replay helpers (`cic_block_ensemble_flags`, `ensemble_sentinel_alerts`) mirror those
+functions' internals exactly but run two independent `sr.Adaptive` controllers (one per model, each seeded with
+that model's own tau) and OR-combine the per-window flags. Both are self-checked at runtime in the degenerate
+model-B-equals-model-A case against the real `score_cic_block`/`slr.sentinel_alerts` they generalize (same
+discipline as this file's own `self_check`/`self_check_adaptive_determinism`/`self_check_sequence_determinism`) —
+both checks passed before any ensemble number was computed.
+
+- **Model A ("CIC-shaped"):** batch 10's weights/tau as-is
+  (`trained-weights-two-anchor-batch10-2026-10-25.json`), unmodified.
+- **Model B ("lab-shaped"):** chosen empirically, not assumed. Both candidates — the ORIGINAL hardcoded baseline
+  `sr.W` (tau=`0.15`) and PR #106's own dedicated margin-trained weights
+  (`trained-weights-margin-2026-10-23.json`, tau=`0.1716`) — were scored against the real lab held-out split via
+  `tw.score_holdout`: baseline **10/13 detected, 4/9 FP**; PR106 **6/13 detected, 1/9 FP**. Baseline wins decisively
+  on detection (the primary axis) even though PR106 has fewer false positives, so **baseline `sr.W` was chosen as
+  Model B** — confirming batch 11's own prose claim about the baseline's 10/13 lab recall was accurate, and settling
+  that PR106's own dedicated lab-margin training is NOT actually the better lab-shaped reference once measured
+  directly (its lab recall is worse than the untouched original weights, 6/13 vs 10/13).
+- Sample bases for comparability with batch 10's own committed numbers: CIC Hulk/GoldenEye recall measured on the
+  identical 2,000-window-per-class time-ordered slice batch 10's own `cic_margin_recall_pct` used; CIC-benign FP
+  measured on the identical 2,000-window-per-day peek slice batch 10's own `informal_peek.cic_benign_fp_pct` used.
+  Model A's solo numbers on these exact slices were reproduced byte-for-byte against batch 10's committed JSON
+  (100.00%/100.00% recall, 0.00%/0.00% FP) as a second, independent sanity layer before any ensemble number was
+  trusted.
+
+**Pre-registered bar (decided before any of this batch's numbers were looked at):** the ensemble is a GOOD candidate
+for deployment if lab held-out detected `>= 8/13` AND CIC Hulk/GoldenEye recall `>= 90%` each AND CIC-benign FP
+`<= 2%` both days. Falling short is reported honestly as evidence that OR-ensembling has its own cost, not spun as a
+pass.
+
+**Result (full real scoring, no sampling beyond the slices above):**
+
+| Metric | Model A alone | Model B alone (baseline) | Ensemble (A OR B) | Bar | Pass? |
+| --- | --- | --- | --- | --- | --- |
+| Lab held-out detected | 2/13 | 10/13 | **10/13** | `>= 8/13` | **YES** |
+| Lab held-out FP | 1/9 | 4/9 | 5/9 | (not pre-registered) | — |
+| `DoS Hulk` recall | 100.00% | (untrained on this) | **100.00%** | `>= 90%` | **YES** |
+| `DoS GoldenEye` recall | 100.00% | (untrained on this) | **100.00%** | `>= 90%` | **YES** |
+| CIC-benign FP (Wed) | 0.00% | (unmeasured) | **0.00%** | `<= 2%` | **YES** |
+| CIC-benign FP (Fri) | 0.00% | (unmeasured) | **0.25%** | `<= 2%` | **YES** |
+
+All three pre-registered conditions pass, by a wide margin, not a near-miss: lab held-out detection matches the
+better single model exactly (10/13, same as baseline alone — Model A alone would only add 2/13's worth of windows,
+and none of those windows happened to be ones baseline was already missing, so OR added nothing on this axis this
+time); CIC Hulk/GoldenEye recall is untouched at 100.00%/100.00% (as expected — OR can only add alerts, and
+baseline's own loss distribution on CIC Hulk/GoldenEye windows was never close to baseline's own tau, so it never
+independently fires there); CIC-benign FP grew only trivially (0.00%→0.00% Wednesday, 0.00%→0.25% Friday, i.e. 5
+extra false-positive windows out of 2,000). The one real, disclosed cost is on the lab side: lab held-out
+FALSE POSITIVES grew from baseline alone's 4/9 to the ensemble's 5/9 (`benign-bulk-tcp-2mbit` flipped from 0/2 to
+1/2 — Model A fired on a window baseline alone did not). Detected count did not change (10/13 both alone and
+ensembled).
+
+**Verdict: GOOD CANDIDATE.** The ensemble clears the pre-registered bar on all three primary axes, and the
+mechanism matches the hypothesis this batch set out to test honestly either way: Model B (the original baseline)
+was never pushed toward CIC-reactive shapes at all (it predates this entire workstream), so its own loss
+distribution on CIC Hulk/GoldenEye/benign traffic sits nowhere near its own tau — OR-ing it in costs almost nothing
+on the CIC side. The reverse holds for Model A on the lab side much less cleanly (it only adds 1 more lab-benign FP,
+not zero), but the asymmetry is small and well inside the bar's margin. This is the first result in this 13-batch
+workstream that reaches both a lab held-out number close to the 10/13 original baseline AND the clean CIC
+Hulk/GoldenEye/benign numbers batch 10 achieved, simultaneously — something no single 10-parameter kernel tried in
+batches 1-12 ever did. It does so by accepting two independently-maintained models and thresholds instead of one,
+exactly the tradeoff option 2 was proposed to test.
+
+**What this does and does not tell us.** This is one evaluation, on the same fixed sample slices batch 10 already
+used (not a fresh held-out draw), of a particular pair of weight files this workstream happened to produce; it does
+not prove OR-ensembling is free in general, only that THIS specific pair's false-positive distributions barely
+overlap in the regions each model's own tau sits in. A different Model B (or different data) could cost much more.
+It also does not test what a THIRD attacker class, unseen by either model's training, would do to either axis — both
+models remain exactly as blind to genuinely novel traffic shapes as they always were; OR-ensembling two detectors
+that each saw different training data does not manufacture generalization neither one has. No production code was
+touched this batch (see "most natural batch 14" below for what wiring this in would take).
+
+Artifacts: `scripts/eval-sentinel-ensemble.py` (new, pure evaluation — no changes to
+`scripts/train-sentinel-weights-cic.py`, `scripts/train-sentinel-weights.py`, or any fitting code path);
+`docs/benchmarks/results/sentinel-training-two-anchor/ensemble-eval-batch13-2026-10-26.json` (machine-readable
+result); `docs/benchmarks/results/sentinel-training-two-anchor/evaluation-output-ensemble-batch13-2026-10-26.txt`
+(full stdout). All 13 `test/invariants/train-sentinel-weights-cic.test.ts` tests pass (that script is unmodified);
+full `npx vitest run` suite passes (71 files, 941 passed, 11 skipped, 0 failed). No PR, no production wiring,
+regardless of outcome, same boundary as every prior batch in this workstream.
+
 **2026-10-26 addendum (batch 12, owner-approved, hypothesis/method/bar written before any of this batch's numbers
 were looked at):** batch 11 tested one fix for the lab held-out recall collapse (an `L_margin_lab` anchor term) and
 got a PARTIAL result -- lab detection recovered from batch 10's 2/13 to 4/13, but CIC-benign Friday FP regressed to
