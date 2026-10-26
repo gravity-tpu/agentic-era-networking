@@ -1,5 +1,110 @@
 # Two-anchor margin training: pre-registration (batch 1 — sanity check only)
 
+**2026-10-26 addendum (batch 14, autonomous overnight continuation per owner's explicit authorization, EVALUATION
+ONLY — no training, no fitting, hypothesis/method/bar written before any of this batch's numbers were looked at):**
+batch 13's headline numbers — Model A ("CIC-shaped") at 100.00%/100.00% recall on `DoS Hulk`/`DoS GoldenEye` — are
+**IN-SAMPLE**: `tsc.CIC_TRAIN_LABELS = ('DoS Hulk', 'DoS GoldenEye')` is the exact pair of attack classes Model A's
+10-parameter kernel was fitted/anchored against (batches 1–10). In-sample recall on the exact signatures a kernel was
+shaped to separate is a much weaker signal about real-world readiness than recall on CIC-IDS2017 attack classes the
+kernel has never seen. This batch measures that directly, using data already cached locally with zero new data
+processing: `/tmp/cic-flood-margin-cache/wednesday.npz` already contains full `DoS_Slowhttptest` (20,000 windows)
+and `DoS_slowloris` (20,000 windows) buckets alongside the already-used `DoS_Hulk`/`DoS_GoldenEye`/`BENIGN` buckets;
+`/tmp/cic-flood-margin-cache/friday.npz` already contains a full `DDoS` bucket (20,000 windows) alongside the
+already-used `BENIGN` bucket. `tsc.CIC_HOLDOUT_WED_LABELS = ('DoS Slowhttptest', 'DoS slowloris')` and
+`tsc.CIC_HOLDOUT_FRI_LABELS = ('DDoS',)` already named exactly these three classes as out-of-sample in
+`scripts/train-sentinel-weights-cic.py`, confirming they were never part of Model A's training data.
+
+**Method:** `scripts/eval-sentinel-ensemble.py` (batch 13's pure-evaluation script, unmodified in its core logic) got
+ONE new reporting section, added after its existing pre-registered-verdict block, plus a short regression check
+before it. No new reimplementation: the new section calls the SAME, already-self-checked `tsc.score_cic_block` (for
+Model A solo and Model B solo) and `score_cic_block_ensemble` (for the ensemble) that batch 13 already verified
+against the real scorers in the degenerate model-B==model-A case — correctness of those functions does not depend on
+which features are passed in, so no new self-check was needed, only new data. `tsc.load_npz_bucket` (verified, not
+assumed, to generalize to arbitrary label strings — confirmed by reading its implementation, which takes `label` as a
+plain string and does `label.replace(' ', '_')` to form the `.npz` key, with no class-name-specific logic anywhere)
+was reused unmodified for data loading, called directly (not through `capped_attack_bucket`, which this batch does
+not use, since the point was an UNCAPPED read). Unlike `CIC_ATTACK_RECALL_CAP_DEFAULT` (2,000 windows/class, kept for
+batch 10 comparability on the two IN-SAMPLE classes), the three out-of-sample classes use the FULL cached bucket
+(20,000 windows each, no cap) — the same "held-out reads everything available" convention
+`scripts/train-sentinel-weights-cic.py`'s own `--objective margin-cic` axis (b) already uses for these identical
+three labels. `scripts/gpu-sdn-anomaly-sentinel.py` (the production detector) was not touched.
+
+**Pre-registered bar — EXPLORATORY, not a pass/fail gate (decided before any of this batch's numbers were looked
+at):** there is no reason to expect a kernel anchored on exactly two attack signatures to generalize to unrelated
+ones, so a low out-of-sample recall is an EXPECTED, informative negative result here, not a batch failure, and must
+not be spun as one. Three interpretation bins, decided in advance:
+
+1. **Near-zero recall on all three classes** (Model A solo `< 5%` on every class) — fully expected: the anchor is
+   signature-specific, not a general "is this an attack" detector.
+2. **Meaningfully nonzero recall on some class(es)** (Model A solo `>= 5%`) — more interesting: some shared structure
+   in the loss landscape generalizes a bit beyond what was literally anchored.
+3. **Ensemble meaningfully outperforms Model A alone specifically on these classes** (ensemble recall exceeds Model A
+   solo's by `>= 10` percentage points on a class) — would suggest Model B (the original lab-shaped baseline)
+   contributes real, complementary out-of-sample coverage, strengthening the case for the ensemble approach beyond
+   just the two in-sample classes batch 13 already showed. (Because the ensemble is the OR of two independent
+   per-window flag arrays, it can only ever be a superset of Model A solo's alerts — this bin can only fire via Model
+   B solo independently covering windows Model A solo misses, not as an artifact of the OR rule itself.)
+
+Also re-confirmed as a sanity check (not a new result; Model A, Model B, and the ensemble rule are byte-for-byte
+unchanged this batch): CIC-benign FP both days and lab held-out detected/FP, diffed in code against batch 13's own
+committed `ensemble-eval-batch13-2026-10-26.json` — the script raises `SystemExit` if any of them drift.
+
+**Result (full real scoring, full 20,000-window buckets, no sampling):**
+
+| Class (source) | n | Model A alone | Model B alone (baseline) | Ensemble (A OR B) | Bin |
+| --- | --- | --- | --- | --- | --- |
+| `DoS Slowhttptest` (Wed) | 20,000 | 2.33% | 0.17% | 2.50% | near-zero |
+| `DoS slowloris` (Wed) | 20,000 | **16.23%** | 5.22% | 21.09% | **meaningfully nonzero** (Model A) |
+| `DDoS` (Fri) | 20,000 | 3.46% | 0.68% | 4.08% | near-zero |
+
+Regression check: lab held-out detected **10/13**, FP **5/9** (unchanged); `DoS Hulk`/`DoS GoldenEye` ensemble recall
+**100.00%/100.00%** (unchanged); CIC-benign ensemble FP **0.00%/0.25%** Wed/Fri (unchanged) — all match batch 13's
+committed numbers exactly, confirming nothing about the harness drifted between batches.
+
+**Which scenario actually happened: mostly bin 1, with one instance of bin 2 — NOT bin 3.** Two of the three
+out-of-sample classes (`DoS Slowhttptest`, `DDoS`) land solidly in the expected near-zero bin for both models and the
+ensemble (all `<= 4.1%`). `DoS slowloris` is the one exception: Model A solo reaches 16.23%, clearly above the 5%
+threshold — some structure in the CIC-Hulk/GoldenEye-shaped kernel's loss landscape evidently generalizes partially
+to this third, mechanistically-related HTTP-flood tool (`slowloris` is, like Hulk and GoldenEye, an HTTP-layer DoS
+tool, unlike `Slowhttptest`'s and `DDoS`'s different traffic shapes — a plausible, not proven, explanation for why
+this one class alone shows partial transfer). Bin 3 did NOT occur on any class: Model B (the lab-shaped baseline)
+scores LOWER than Model A on all three out-of-sample classes (0.17–0.68% vs. 2.33–16.23%), so the ensemble's modest
+lift over Model A alone (e.g., `DoS slowloris` 16.23% → 21.09%, a 4.86-point gain, below the 10-point bin-3
+threshold) comes from only a small amount of non-overlapping coverage from Model B, not a complementary generalization
+story — the lab-shaped kernel does not show strong independent transfer to these CIC classes either.
+
+**What this does and does not tell us.** This is one evaluation, on three fixed CIC-IDS2017 classes, of two
+already-fitted weight vectors; it is not a claim that `DoS slowloris`'s 16.23%/21.09% partial recall would reliably
+catch a real slowloris attack in deployment — a 16–21% PER-WINDOW alert rate is far below anything this workstream
+would call "detected," and these numbers were never used to calibrate either model's `tau` (so this is an honest read
+of what each model's already-fixed threshold would do, not a best-case estimate). It also does not explain WHY
+`slowloris` partially transfers while `Slowhttptest` and `DDoS` do not — that would need its own loss-landscape trace
+(the kind batch 6 did for the hinge-vs-Adaptive gap), flagged as open, not resolved, here. Nor does this test a FOURTH
+unrelated attack family (e.g., a non-HTTP, non-flood-shaped CIC class, or anything outside CIC-IDS2017 entirely) —
+the same caveat batch 13 already disclosed about novel traffic shapes applies unchanged.
+
+**Most natural next batch, stated honestly.** With out-of-sample recall near-zero on 2 of 3 classes and only modestly
+nonzero (not deployment-grade) on the third, and with 14 batches now establishing both (a) no single 10-parameter
+kernel can jointly satisfy CIC-benign/CIC-attack/lab-attack anchors, and (b) the resulting ensemble's real-world
+coverage is genuinely scoped to the two HTTP-flood signatures it was anchored on plus the lab's own flood/scan family
+— the next useful step is probably NOT another training lever chasing broader CIC coverage (batches 1–12 already
+spent twelve rounds inside this exact architecture; this batch's near-zero-to-modest result gives no reason to expect
+a thirteenth lever behaves differently). The natural framing is a consolidated final write-up that makes this a
+**documented, disclosed scope limit**: this detector family (the OR ensemble, or either model alone) can be
+described as catching CIC-IDS2017's Hulk/GoldenEye-style volumetric HTTP floods (plus, incidentally and only
+partially, the mechanistically similar `slowloris`) and the lab's own flood/scan patterns — not a general network
+intrusion/anomaly detector. That write-up is a good use of a future batch; chasing more one-off training levers for
+broader coverage, given this batch's evidence, is not.
+
+All 13 `test/invariants/train-sentinel-weights-cic.test.ts` tests pass (that script is untouched this batch — only
+`scripts/eval-sentinel-ensemble.py` gained a new reporting section). Full `npx vitest run` passes (71 files, 941
+passed, 11 skipped, 0 failed), identical counts to batch 13. Artifacts:
+`docs/benchmarks/results/sentinel-training-two-anchor/ensemble-eval-batch14-2026-10-26.json` (machine-readable
+result, including the new `batch_14_out_of_sample` section) and
+`evaluation-output-ensemble-batch14-2026-10-26.txt` (full stdout). No production code touched
+(`scripts/gpu-sdn-anomaly-sentinel.py` untouched), no PR, no push, stays local/unpushed, same boundary as every prior
+batch in this workstream.
+
 **2026-10-26 addendum (batch 13, owner-approved "option 2", EVALUATION ONLY — no training, no fitting, hypothesis/
 method/bar written before any of this batch's numbers were looked at):** batches 1-12 established that this
 10-parameter kernel has exactly two stable operating points (CIC-shaped, batch 10; lab-shaped, roughly the original

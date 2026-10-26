@@ -40,6 +40,20 @@ Usage:
       [--out-json PATH]
 
 Needs numpy and scipy (through scripts/train-sentinel-weights-cic.py / scripts/train-sentinel-weights.py).
+
+Batch 14 addition (docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md's batch 14 addendum):
+batch 13's 100.00%/100.00% CIC recall is IN-SAMPLE -- Model A was only ever anchored against
+tsc.CIC_TRAIN_LABELS = ('DoS Hulk', 'DoS GoldenEye'). This adds ONE new reporting section, after the pre-registered
+verdict, that evaluates Model A solo / Model B solo / the ensemble against tsc.CIC_HOLDOUT_WED_LABELS ('DoS
+Slowhttptest', 'DoS slowloris') and tsc.CIC_HOLDOUT_FRI_LABELS ('DDoS') -- CIC attack classes NEITHER model's
+training ever saw, already cached in the same two .npz files. It is a pure additional read of already-cached data
+through the SAME, unmodified score_cic_block / score_cic_block_ensemble functions above -- no new reimplementation,
+so no new self-check is needed (self_check_cic_ensemble already verifies score_cic_block_ensemble's correctness
+independent of which features are passed to it). This section is explicitly diagnostic/exploratory, not a pass/fail
+gate: see OOS_NEAR_ZERO_PCT/OOS_ENSEMBLE_LIFT_PCT below for the three pre-registered interpretation bins. A
+regression check also reconfirms this run's lab-held-out/CIC-recall/CIC-benign-FP numbers exactly match batch 13's
+own committed ensemble-eval-batch13-2026-10-26.json before any new number is reported -- Model A/Model B/the
+ensemble rule are byte-for-byte unchanged this batch, so a mismatch would mean the harness itself drifted.
 """
 import argparse
 import collections
@@ -83,6 +97,35 @@ CIC_BENIGN_PEEK_CAP_DEFAULT = 2000     # matches batch 10's own cic_benign_ancho
 # anchor and peek slices in that batch; this script only ever reads the PEEK slice -- it never trains, so there is
 # no "anchor" here, only an evaluation sample -- but keeps the exact same offset/size so the slice is the same set
 # of windows batch 10's own disclosed peek numbers were computed on).
+
+# --- Batch 14: out-of-sample CIC evaluation (diagnostic/exploratory -- see module docstring and PREREGISTRATION.md's
+# batch 14 addendum). Unlike CIC_ATTACK_RECALL_CAP_DEFAULT above (a 2,000-window cap kept for exact comparability
+# with batch 10's own committed numbers), the out-of-sample classes below use the FULL cached bucket for each class
+# (tsc.load_npz_bucket with no cap) -- the same "held-out reads everything available, training reads a capped slice"
+# convention tsc.main()'s own `--objective margin-cic` axis (b) already uses for these identical three labels, for
+# the strongest-available read since nothing here is capped for training-budget reasons (nothing is trained).
+#
+# Pre-registered interpretation bins (decided before this batch's numbers were looked at): there is no reason to
+# expect a kernel anchored on exactly two attack signatures (DoS Hulk, DoS GoldenEye) to generalize to unrelated
+# ones, so a low out-of-sample recall is an EXPECTED, informative negative result here, not a batch failure.
+OOS_NEAR_ZERO_PCT = 5.0        # Model A solo recall below this on a class = "near-zero" (expected: the anchor is
+# signature-specific, not a general "is this an attack" detector).
+OOS_ENSEMBLE_LIFT_PCT = 10.0   # ensemble recall exceeding Model A solo's recall by at least this many percentage
+# points on a class = "ensemble meaningfully outperforms Model A alone" there. Because the ensemble is the OR of two
+# independent per-window flag arrays, ensemble alerts can only EVER be a superset of Model A solo's alerts, so this
+# can only happen via Model B solo independently covering windows Model A solo misses on that class -- i.e. it is a
+# direct read of whether the lab-shaped kernel contributes real, complementary out-of-sample coverage, not an
+# artifact of the OR rule itself.
+
+# Batch 13's own already-committed numbers (ensemble-eval-batch13-2026-10-26.json), reconfirmed at runtime below
+# rather than trusted by inspection -- Model A/Model B/the ensemble rule are byte-for-byte unchanged this batch, so
+# any drift here would mean the harness (not the models) moved since batch 13.
+BATCH13_LAB_DETECTED = 10
+BATCH13_LAB_ATTACKS = 13
+BATCH13_LAB_FP = 5
+BATCH13_LAB_BENIGN = 9
+BATCH13_CIC_RECALL_PCT = {'DoS Hulk': 100.0, 'DoS GoldenEye': 100.0}       # ensemble (== Model A solo in batch 13)
+BATCH13_CIC_BENIGN_FP_PCT = {'Wednesday': 0.0, 'Friday': 0.25}            # ensemble
 
 
 # --- Ensemble replay helpers -------------------------------------------------------------------------------------
@@ -377,6 +420,64 @@ def main():
     overall = lab_ok and recall_ok and fp_ok
     print(f"\nOVERALL: {'GOOD CANDIDATE (clears the pre-registered bar)' if overall else 'NOT a good candidate (fails the pre-registered bar)'}")
 
+    # --- Batch 14: regression check -- reconfirm batch 13's own already-committed numbers are unchanged before
+    # trusting anything new (Model A, Model B, and the ensemble rule are byte-for-byte unchanged this batch; this is
+    # a sanity check that nothing about the harness itself drifted, not a new result).
+    print('\n== BATCH 14 regression check: batch 13 numbers unchanged (Model A/B/ensemble themselves are untouched) ==')
+    regressions = []
+    lab_now = (ensemble_lab['detected'], ensemble_lab['attacks'], ensemble_lab['falsePositives'], ensemble_lab['benign'])
+    lab_was = (BATCH13_LAB_DETECTED, BATCH13_LAB_ATTACKS, BATCH13_LAB_FP, BATCH13_LAB_BENIGN)
+    if lab_now != lab_was:
+        regressions.append(f'lab held-out: now {lab_now[0]}/{lab_now[1]} detected, {lab_now[2]}/{lab_now[3]} FP, '
+                            f'was {lab_was[0]}/{lab_was[1]} detected, {lab_was[2]}/{lab_was[3]} FP')
+    for label, expected in BATCH13_CIC_RECALL_PCT.items():
+        if abs(ensemble_recall[label] - expected) > 1e-9:
+            regressions.append(f'{label} ensemble recall: now {ensemble_recall[label]:.2f}%, was {expected:.2f}%')
+    for day, expected in BATCH13_CIC_BENIGN_FP_PCT.items():
+        if abs(ensemble_fp[day] - expected) > 1e-9:
+            regressions.append(f'{day} ensemble CIC-benign FP: now {ensemble_fp[day]:.2f}%, was {expected:.2f}%')
+    if regressions:
+        raise SystemExit('FATAL: batch 13 numbers drifted on a re-run that should be byte-for-byte identical '
+                          '(Model A/B/ensemble rule unchanged this batch) -- not safe to report batch 14\'s '
+                          'out-of-sample numbers against a harness that may itself have moved:\n  ' +
+                          '\n  '.join(regressions))
+    print('ok: lab held-out detected/FP, CIC Hulk/GoldenEye ensemble recall, and CIC-benign ensemble FP (both days) '
+          'all match batch 13\'s own committed numbers exactly\n')
+
+    # --- Batch 14: out-of-sample CIC attack classes (never in tsc.CIC_TRAIN_LABELS -- see module docstring).
+    print('== BATCH 14: out-of-sample CIC attack classes (never anchored by Model A\'s training) ==')
+    print(f'Model A tau={tau_a:.6f}   Model B ({model_b_label}) tau={model_b_tau:.6f}\n')
+    oos_sources = [(label, args.wednesday_npz) for label in tsc.CIC_HOLDOUT_WED_LABELS] + \
+                  [(label, args.friday_npz) for label in tsc.CIC_HOLDOUT_FRI_LABELS]
+    oos_results = {}
+    for label, npz_path in oos_sources:
+        feats, _epochs, src_ips = tsc.load_npz_bucket(npz_path, label)
+        if len(feats) == 0:
+            raise SystemExit(f"FATAL: out-of-sample bucket {label!r} in {npz_path} is empty -- cannot evaluate.")
+        res_a = tsc.score_cic_block(feats, src_ips, w_a, tau_a, known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
+        res_b = tsc.score_cic_block(feats, src_ips, model_b_w, model_b_tau, known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
+        res_ens = score_cic_block_ensemble(feats, src_ips, w_a, tau_a, model_b_w, model_b_tau,
+                                            known_attacker_ip=tsc.KNOWN_ATTACKER_IP)
+        oos_results[label] = {'n': res_a['n'], 'model_a': res_a, 'model_b': res_b, 'ensemble': res_ens}
+        print(f"  {label:20s} n={res_a['n']:6d}  Model A solo {tsc.pct(res_a['alerts'], res_a['n']):>8s}  "
+              f"Model B solo {tsc.pct(res_b['alerts'], res_b['n']):>8s}  "
+              f"Ensemble {tsc.pct(res_ens['alerts'], res_ens['n']):>8s}")
+
+    print('\n-- interpretation (bins pre-registered before these numbers were looked at; see module docstring) --')
+    oos_interpretation = {}
+    for label, r in oos_results.items():
+        a_pct = 100 * r['model_a']['alerts'] / r['n']
+        b_pct = 100 * r['model_b']['alerts'] / r['n']
+        ens_pct = 100 * r['ensemble']['alerts'] / r['n']
+        if ens_pct - a_pct >= OOS_ENSEMBLE_LIFT_PCT:
+            bucket = 'ensemble meaningfully outperforms Model A alone (Model B contributes real coverage here)'
+        elif a_pct >= OOS_NEAR_ZERO_PCT:
+            bucket = 'Model A alone meaningfully nonzero (some anchor generalization beyond the literal two classes)'
+        else:
+            bucket = 'near-zero across the board (expected: the anchor is signature-specific, not a general detector)'
+        oos_interpretation[label] = {'model_a_pct': a_pct, 'model_b_pct': b_pct, 'ensemble_pct': ens_pct, 'bucket': bucket}
+        print(f'  {label:20s} {bucket}')
+
     if args.out_json:
         payload = {
             'batch': 13,
@@ -396,6 +497,17 @@ def main():
             'ensemble': {'cic_recall_pct': ensemble_recall, 'cic_benign_fp_pct': ensemble_fp,
                          'lab_holdout': ensemble_lab},
             'verdict': {'lab_ok': lab_ok, 'recall_ok': recall_ok, 'fp_ok': fp_ok, 'overall_good_candidate': overall},
+            'batch_14_out_of_sample': {
+                'method': 'diagnostic/exploratory, not a pass/fail gate -- see module docstring and '
+                          'PREREGISTRATION.md\'s batch 14 addendum',
+                'regression_check_against_batch_13': 'ok (no drift; see stdout)',
+                'classes': {label: {'n': r['n'],
+                                     'model_a_recall_pct': 100 * r['model_a']['alerts'] / r['n'],
+                                     'model_b_recall_pct': 100 * r['model_b']['alerts'] / r['n'],
+                                     'ensemble_recall_pct': 100 * r['ensemble']['alerts'] / r['n'],
+                                     'interpretation': oos_interpretation[label]['bucket']}
+                            for label, r in oos_results.items()},
+            },
         }
         with open(args.out_json, 'w') as fh:
             json.dump(payload, fh, indent=2)
