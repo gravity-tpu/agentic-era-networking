@@ -10,6 +10,8 @@ import { computeBaselinesFor } from '../../src/sdn/eval-baselines.js';
 import { admitInstall } from '../../src/sdn/install-gate.js';
 
 const PEERS = ['10.0.2.1', '10.0.2.119'];
+/** Absolute vacuity floor for the mutation check, next to the relative one (measured today: 38 of 52, about 73%). */
+const MIN_KILLED_PERCENT = 60;
 const confined = () => buildPort1IsolationPolicy(undefined, undefined, undefined, PEERS);
 const strict = { requireConfinedUplinkArp: true };
 const uplinkArp = (rules: readonly IsolationRule[]) => rules.filter((r) => r.flowMod.match?.inPort === ZODIAC_PORT_UPLINK && r.flowMod.match.etherType === ETH_TYPE_ARP);
@@ -93,7 +95,9 @@ describe('A10 uplink -> workload ARP confinement (opt-in)', () => {
     expect(b.mutants.total).toBeGreaterThan(o.mutants.total); // the extra peer rule adds mutants
     expect(b.mutants.killed * o.mutants.total).toBeGreaterThanOrEqual(o.mutants.killed * b.mutants.total);
     expect(b.survivedMutants.length).toBe(b.mutants.survived);
-    // dropping a peer rule must be caught: it is the one thing this change adds that a survivor would hide
-    expect(b.survivedMutants.filter((id: string) => id.startsWith('drop-rule:p2-arp-allow-'))).toEqual([]);
+    expect(b.mutants.killed * 100).toBeGreaterThanOrEqual(b.mutants.total * MIN_KILLED_PERCENT);
+    // Any mutant of a peer rule other than a priority raise (which changes nothing: no rule overlaps it) must be caught.
+    const peerSurvivors = b.survivedMutants.filter((id: string) => id.includes('p2-arp-allow-') && !id.startsWith('raise-priority:'));
+    expect(peerSurvivors).toEqual([]);
   });
 });
