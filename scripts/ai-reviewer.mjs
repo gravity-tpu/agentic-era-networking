@@ -193,6 +193,34 @@ One paragraph overall assessment. Include an approval verdict:
 
 Keep your language concise, technical, and grounded in network engineering principles. Reference specific file names and line numbers from the diff where relevant.`;
 
+// ─── Local-model gatekeeper prompt ────────────────────────────────────────────────
+// Measured on qwen3.8:27b (think=medium) over the frontier-selection diff, which has two known integer-accounting
+// violations: with the plain prompt the model listed neither as critical in 0 of 5 runs; with this opening, both in
+// 4 of 4 runs, and 1 false "CHANGES REQUESTED" in 6 runs over two diffs with no known critical issue. One of the
+// examples resembles the known defect, so this shows the model applies the rule, not that it finds new defect types.
+// Used for the local Ollama tier only: it has not been measured on the cloud models.
+export const GATEKEEPER_PREAMBLE = `You are a strict Senior Network & Systems Architect acting as a code gatekeeper. Audit the git diff against the repository invariants below. Do not offer stylistic tips under Critical Issues or Warnings; those sections are only for violations and risks.
+
+Hard rules (a violation is a Critical Issue, and the verdict MUST be ❌ CHANGES REQUESTED):
+- Integer accounting: any floating-point arithmetic (true division \`/\` on counts, \`parseFloat\`, \`Math.round(x * 100)\`, float literals like 0.9, \`float(...)\`, \`/ 100.0\`) that feeds a gate, threshold, ranking, budget, rate or counter is a violation. Real-valued arithmetic is allowed only for a statistic that is printed and never decides anything, and the diff must say so.
+- A "suggestion" to use integers where a float decides pass/fail is NOT a suggestion. It is a violation: list it under Critical Issues.
+- Fail closed, verify before actuating, provenance: same rule, any violation is Critical.
+Only write ✅ APPROVED or 🟡 APPROVED WITH SUGGESTIONS when you found zero Critical Issues.
+
+Examples of what to catch and what to accept (from other code, not this diff):
+VIOLATION (Critical): \`if (dropped / sent > 0.05) quarantine(host)\` : a float ratio decides an action. Integer form: \`dropped * 20n > sent\`.
+VIOLATION (Critical): \`rules.sort((a, b) => a.bytes / a.rules - b.bytes / b.rules)\` : a float ranking. Integer form: compare \`a.bytes * b.rules\` with \`b.bytes * a.rules\`.
+ACCEPTABLE: \`const p95 = sorted[Math.floor(sorted.length * 95 / 100)]\` : integer index, floor of an integer product.
+ACCEPTABLE: \`console.log((hits / total).toFixed(3))\` where the value is only printed.`;
+
+const ROLE_PARAGRAPH_END_MARKER = 'The repository is a real-hardware';
+
+/** Replaces the opening role paragraph of the systems prompt with the gatekeeper preamble, keeping the invariants and format. */
+export function buildGatekeeperPrompt(basePrompt) {
+  const i = basePrompt.indexOf(ROLE_PARAGRAPH_END_MARKER);
+  return i < 0 ? basePrompt : `${GATEKEEPER_PREAMBLE}\n\n${basePrompt.slice(i)}`;
+}
+
 export const COUNCIL_CONFIGS = {
   technical: {
     title: 'Systems Review',
@@ -240,7 +268,13 @@ async function main() {
 
   let outcome;
   try {
-    outcome = await runWithFallback(FALLBACKS, activeCouncil.systemPrompt, userMessage);
+    // The gatekeeper opening is for the systems review only; the network review keeps its own rubric for every model.
+    const gatekeeperPrompt = isCCIE ? null : buildGatekeeperPrompt(activeCouncil.systemPrompt);
+    if (gatekeeperPrompt === activeCouncil.systemPrompt) {
+      console.warn('🟡  Gatekeeper prompt NOT applied: the role-paragraph marker is missing from the systems prompt, so the local model gets the plain prompt.');
+    }
+    const systemPromptByProvider = gatekeeperPrompt ? { ollama: gatekeeperPrompt } : undefined;
+    outcome = await runWithFallback(FALLBACKS, activeCouncil.systemPrompt, userMessage, { systemPromptByProvider });
   } catch (err) {
     await flushPendingTelemetry();
     if (err instanceof NoAvailableModelsError) {
@@ -269,6 +303,10 @@ async function main() {
   const warningsBody = warningsSection?.[1]?.trim() ?? '';
   const shouldBlockForWarnings = warningsBody.length > 0 &&
                                  !EMPTY_STATE_REGEX.test(warningsBody);
+
+  if (outcome.provider === 'ollama' && hasCritical) {
+    console.error('ℹ️  This verdict came from the local model, which gave 1 false CHANGES REQUESTED in 6 runs on clean diffs (one cited OpenFlow field numbers wrongly). Check each finding against the code before overriding.');
+  }
 
   if (hasCritical) {
     console.error(`🚫 ${activeCouncil.title}: Critical Issues must be resolved before pushing.`);
