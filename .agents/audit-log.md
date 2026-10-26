@@ -118,3 +118,22 @@ CI run on `main` (`ff34381`) still shows **Network Engineering Review: failure**
   code path, which is why a single Warning failed the job the same way a Critical would have. Not fixed here; worth a tool-side fix later
   (the pre-push gate's own `--strict` mode is intentionally this strict, so the behavior itself is not wrong, only the "requested" framing
   on a merge that already happened).
+
+## 6. Merges to `main` made under the owner's standing authorization (granted 2026-10-25)
+
+Merges were allowed only with green CI, no force and no protection bypass; each merge to `main` runs the GitHub Actions production deploy, which the
+owner was told about. Merge-commit style, as the repo already uses. The owner was away; all four were made on 2026-10-26.
+
+| PR | Merge commit | What | CI at merge | Gate |
+| -- | ------------ | ---- | ----------- | ---- |
+| #120 | `4a27b2b` | CI installs numpy and scipy (main's Verify job had failed since the sentinel training test was added) | Verify, AI Code Review, Network Engineering Review, Markdown: pass | pushed with `--no-verify`, row in section 4 |
+| #118 | `1b20679` | Dashboard no longer hardcodes a Gemma model | all pass | passed all six gates |
+| #117 | `0f3c6c4` | Local review tier: Qwen3.8 27B, streamed, gatekeeper prompt | all pass | pushed with `--no-verify`, row in section 4 |
+| #119 | `2096c04` | A10 opt-in uplink to workload ARP confinement (not deployed) | all pass | pushed with `--no-verify`, row in section 4 |
+
+Why the gate was bypassed on three of them: the reviewer's later passes contradicted each other or raised a false critical (#120: it said two pinned
+package versions do not exist, and PyPI lists both), the fixes for its real findings were already pushed, and the owner had allowed `--no-verify` with a row per push. The
+compensating check was CI on the pull request, green on every job before each merge, plus the section 4 rows that keep the review cleanup owed. The merges happened on
+2026-10-26 (UTC dates in the commit history may read 2026-10-26 or 2026-10-25 depending on the zone).
+
+Main's run for `2096c04` succeeded; the runs for the two earlier merge commits were cancelled by the newer ones.
