@@ -44,6 +44,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      # test/invariants/train-sentinel-weights.test.ts runs scripts/train-sentinel-weights.py, which imports numpy and scipy.
+      # The runner has neither, so that suite failed on every run since it was added. Pinned to the versions it passes with.
+      - name: Install Python test dependencies
+        run: python3 -m pip install --quiet numpy==2.5.3 scipy==1.18.1
+
       - name: Verify TypeScript Invariants (Zero Suppressions)
         run: npm run check-types
 
