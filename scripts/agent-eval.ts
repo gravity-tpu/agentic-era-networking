@@ -38,6 +38,8 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { parseProposal, triageProposal, CATEGORY_PRECEDENCE } from '../dist/sdn/proposal-triage.js';
 import { samplingRecord } from '../dist/sdn/eval-sampling.js';
+import { proposerPrompts, type PromptVersion } from '../dist/sdn/proposer-prompt.js';
+import { intentSha256 } from '../dist/sdn/intent-hash.js';
 import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 
 const INTENTS = {
@@ -67,26 +69,11 @@ const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as 
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
 const ANTHROPIC_EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-const SYSTEM_PROMPT = `You write flow rules for a 4-port OpenFlow 1.3 switch (Zodiac FX). Reply with ONE JSON array of rules and nothing else.
-Each rule is an object with exactly these fields:
-  "id": string, a short unique name
-  "priority": integer 0 to 65535 (higher wins when several rules match)
-  "outputPorts": array of integers 1 to 4; the ports the packet is sent out of; an empty array means drop
-  "match": object, every field optional, a missing field matches anything. Allowed fields:
-     "inPort": integer 1 to 4
-     "etherType": integer in DECIMAL (IPv4 is 2048, ARP is 2054)
-     "srcIp", "dstIp": dotted IPv4 string; "srcIpPrefixLen", "dstIpPrefixLen": integer 1 to 32 (omitted means /32, an exact host)
-     "srcMac", "dstMac": "aa:bb:cc:dd:ee:ff"
-Rules:
-  - A packet that matches no rule is dropped.
-  - IPv4 address fields only work together with "etherType": 2048 in the same match.
-  - The table holds at most 127 rules.
-  - Port layout: port 1 = the untrusted workload segment, port 2 = the uplink to the rest of the network, port 3 = a monitoring tap, port 4 = the controller link (do not use it).`;
 
 interface Spend { priceInCents: number; priceOutCents: number; maxCents: number; note: string }
 interface Args {
   intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number; protocol: 'A' | 'B';
-  provider: 'ollama' | 'gemini' | 'anthropic'; thinking: string; spend: Spend | null;
+  provider: 'ollama' | 'gemini' | 'anthropic'; thinking: string; spend: Spend | null; promptVersion: PromptVersion;
 }
 
 function parseArgs(argv: readonly string[]): Args {
@@ -100,6 +87,8 @@ function parseArgs(argv: readonly string[]): Args {
   if (thinkArg !== 'true' && thinkArg !== 'false') throw new Error('--think must be true or false');
   const numPredict = Number(get('--num-predict') ?? DEFAULT_NUM_PREDICT);
   if (!Number.isInteger(numPredict) || numPredict < 256 || numPredict > MAX_NUM_PREDICT) throw new Error(`--num-predict must be an integer 256 to ${MAX_NUM_PREDICT}`);
+  const promptVersion = get('--prompt-version') ?? 'v1';
+  if (promptVersion !== 'v1' && promptVersion !== 'v2') throw new Error('--prompt-version must be v1 or v2');
   const protocol = get('--protocol') ?? 'A';
   if (protocol !== 'A' && protocol !== 'B') throw new Error('--protocol must be A or B');
   const provider = get('--provider') ?? 'ollama';
@@ -122,7 +111,7 @@ function parseArgs(argv: readonly string[]): Args {
     if (maxCents < 1 || maxCents > MAX_SPEND_CENTS) throw new Error(`--max-cents must be an integer 1 to ${MAX_SPEND_CENTS}`);
     spend = { priceInCents: cents('--price-in-cents'), priceOutCents: cents('--price-out-cents'), maxCents, note: need('--price-note') };
   }
-  return { protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend };
+  return { promptVersion, protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -292,7 +281,7 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (git('status', '--porcelain', '--untracked-files=no') !== '') throw new Error('working tree has uncommitted changes to tracked files; commit first (plan section 8)');
   const spec = INTENTS[args.intent as keyof typeof INTENTS];
-  const userPrompt = `Intent: ${spec.description}\nWrite the rule set that implements this intent.`;
+  const { system: SYSTEM_PROMPT, user: userPrompt } = proposerPrompts(args.promptVersion, spec);
   const promptHash = crypto.createHash('sha256').update(SYSTEM_PROMPT + '\n---\n' + userPrompt).digest('hex');
   let model: { digest: string };
   if (args.provider === 'gemini' || args.provider === 'anthropic') {
@@ -372,7 +361,7 @@ async function main(): Promise<void> {
   const summary = {
     schema: 'agent-eval/v2', protocol: args.protocol === 'A' ? 'A (zero-shot)' : `B (verifier feedback, up to ${MAX_TURNS} turns)`, intent: args.intent, model: args.model, modelDigest: model.digest, host: args.host,
     trials: args.n, trialsRun: lines.length, ...(({ temperature, topP, seeds }) => ({ temperature, topP, seeds }))(samplingRecord(args.provider, TEMPERATURE, TOP_P, args.n)), numPredict: args.numPredict, think: args.think,
-    promptSha256: promptHash, gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
+    promptSha256: promptHash, promptVersion: args.promptVersion, intentSha256: intentSha256(spec), gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
     ...((args.provider === 'gemini' || args.provider === 'anthropic') && args.spend !== null ? {
       provider: args.provider, thinking: args.thinking, stoppedBySpendCap: capHit, abandonedTrial: abandoned,
