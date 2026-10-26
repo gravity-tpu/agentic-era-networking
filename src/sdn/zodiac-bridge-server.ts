@@ -621,6 +621,11 @@ export class ZodiacBridgeServer {
     return buildPort1IsolationPolicy(undefined, undefined, undefined, this.uplinkArpPeers);
   }
 
+  /** The verifier mode for that policy. One place decides the stance, with `isolationPolicy()` and `isolationIntent()`. */
+  private isolationVerifyOptions(): { requireConfinedUplinkArp: boolean } {
+    return { requireConfinedUplinkArp: this.uplinkArpPeers !== undefined };
+  }
+
   /** The intent the install gate checks that policy against; it must match the policy's uplink ARP stance. */
   private isolationIntent() {
     return this.uplinkArpPeers === undefined ? PORT1_ISOLATION_INTENT : port1IsolationUplinkArpIntent(this.uplinkArpPeers);
@@ -1128,7 +1133,7 @@ export class ZodiacBridgeServer {
       // data plane. On failure nothing is installed and table-miss DROP keeps Port 1 dark.
       const isolationPolicy = this.isolationPolicy();
       this.flowModXidLabels.clear();
-      const violations = verifyPort1Isolation(isolationPolicy, undefined, undefined, { requireConfinedUplinkArp: this.uplinkArpPeers !== undefined });
+      const violations = verifyPort1Isolation(isolationPolicy, undefined, undefined, this.isolationVerifyOptions());
       if (violations.length > 0) {
         this.isolationStatus = verifierRejectedStatus(violations, Date.now(), process.hrtime.bigint());
         console.error(`[!] [Bridge Server] Port 1 isolation policy REJECTED by verifier; data plane left at table-miss DROP:\n  ${violations.join('\n  ')}`);

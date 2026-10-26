@@ -83,13 +83,17 @@ describe('A10 uplink -> workload ARP confinement (opt-in)', () => {
     expect(parseUplinkArpPeers('10.0.2.1, 10.0.2.119')).toEqual(['10.0.2.1', '10.0.2.119']);
     expect(() => parseUplinkArpPeers('10.0.2.1,banana')).toThrow(/not an IPv4 address/);
     expect(() => parseUplinkArpPeers('10.0.2.1,')).toThrow(/not an IPv4 address/);
+    expect(() => parseUplinkArpPeers('10.0.2.300')).toThrow(/not an IPv4 address/);
+    expect(() => parseUplinkArpPeers('999.0.0.1')).toThrow(/not an IPv4 address/);
   });
 
-  it('single-point mutants of the confined policy are mostly rejected by the new intent (recorded, not assumed)', () => {
+  it('mutants of the confined policy are rejected at least as often as the original policy\'s, by integer cross-multiplication', () => {
     const b = computeBaselinesFor(port1IsolationUplinkArpIntent(PEERS), confined());
-    expect(b.mutants.total).toBeGreaterThan(20);
-    // every survivor must be named so a reader can judge it; the floor guards against the check going vacuous
-    expect(b.mutants.killed * 100).toBeGreaterThanOrEqual(b.mutants.total * 60);
+    const o = computeBaselinesFor(PORT1_ISOLATION_INTENT, buildPort1IsolationPolicy());
+    expect(b.mutants.total).toBeGreaterThan(o.mutants.total); // the extra peer rule adds mutants
+    expect(b.mutants.killed * o.mutants.total).toBeGreaterThanOrEqual(o.mutants.killed * b.mutants.total);
     expect(b.survivedMutants.length).toBe(b.mutants.survived);
+    // dropping a peer rule must be caught: it is the one thing this change adds that a survivor would hide
+    expect(b.survivedMutants.filter((id: string) => id.startsWith('drop-rule:p2-arp-allow-'))).toEqual([]);
   });
 });

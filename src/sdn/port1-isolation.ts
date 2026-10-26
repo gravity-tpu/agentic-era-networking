@@ -69,7 +69,9 @@ export function parseUplinkArpPeers(raw: string | undefined): readonly string[] 
   if (text.toLowerCase() === 'none') return [];
   const peers = text.split(',').map((p) => p.trim());
   for (const p of peers) {
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(p)) throw new Error(`ZODIAC_UPLINK_ARP_PEERS: "${p}" is not an IPv4 address`);
+    const octets = p.split('.');
+    const valid = /^\d{1,3}(\.\d{1,3}){3}$/.test(p) && octets.every((o) => Number(o) <= 255);
+    if (!valid) throw new Error(`ZODIAC_UPLINK_ARP_PEERS: "${p}" is not an IPv4 address`);
   }
   return peers;
 }
