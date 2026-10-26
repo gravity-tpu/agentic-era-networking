@@ -1,0 +1,310 @@
+{
+  "schema": "rejudge-recorded-runs/v1",
+  "note": "first turn of each recorded trial judged again by the current triage; no model call",
+  "rows": [
+    {
+      "run": "protocol-a-dns-confinement_v1-gemma4-26b-think-true",
+      "intent": "dns-confinement/v1",
+      "intentChangedSinceRuns": false,
+      "trials": 50,
+      "recordedAdmissible": 29,
+      "rejudgedAdmissible": 29,
+      "changed": 0,
+      "changes": {},
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-port1-isolation-v1-gemma4-26b-think-true",
+      "intent": "port1-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 48,
+      "recordedAdmissible": 5,
+      "rejudgedAdmissible": 0,
+      "changed": 5,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 5
+      },
+      "unparsable": 2
+    },
+    {
+      "run": "protocol-a-quarantine-precedence_v1-gemma4-26b-think-true",
+      "intent": "quarantine-precedence/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 4,
+      "rejudgedAdmissible": 0,
+      "changed": 4,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 4
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-tap-return-isolation_v1-gemma4-26b-think-true",
+      "intent": "tap-return-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 32,
+      "rejudgedAdmissible": 0,
+      "changed": 32,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 32
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-dns-confinement_v1-gemma4-26b-think-true",
+      "intent": "dns-confinement/v1",
+      "intentChangedSinceRuns": false,
+      "trials": 20,
+      "recordedAdmissible": 14,
+      "rejudgedAdmissible": 14,
+      "changed": 0,
+      "changes": {},
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-port1-isolation-v1-gemma4-26b-think-true",
+      "intent": "port1-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 2,
+      "rejudgedAdmissible": 0,
+      "changed": 2,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 2
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-quarantine-precedence_v1-gemma4-26b-think-true",
+      "intent": "quarantine-precedence/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 18,
+      "recordedAdmissible": 1,
+      "rejudgedAdmissible": 0,
+      "changed": 1,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 1
+      },
+      "unparsable": 2
+    },
+    {
+      "run": "protocol-b-tap-return-isolation_v1-gemma4-26b-think-true",
+      "intent": "tap-return-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 11,
+      "rejudgedAdmissible": 0,
+      "changed": 11,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 11
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-dns-confinement_v1-claude-haiku-5-5",
+      "intent": "dns-confinement/v1",
+      "intentChangedSinceRuns": false,
+      "trials": 50,
+      "recordedAdmissible": 48,
+      "rejudgedAdmissible": 48,
+      "changed": 0,
+      "changes": {},
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-port1-isolation_v1-claude-haiku-5-5",
+      "intent": "port1-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 45,
+      "rejudgedAdmissible": 0,
+      "changed": 47,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 45,
+        "ERR_INTENT_MISSING -> ERR_INTENT_LEAK": 2
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-quarantine-precedence_v1-claude-haiku-5-5",
+      "intent": "quarantine-precedence/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 48,
+      "rejudgedAdmissible": 0,
+      "changed": 49,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 48,
+        "ERR_INTENT_MISSING -> ERR_INTENT_LEAK": 1
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-tap-return-isolation_v1-claude-haiku-5-5",
+      "intent": "tap-return-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 50,
+      "rejudgedAdmissible": 0,
+      "changed": 50,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 50
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-dns-confinement_v1-claude-haiku-5-5",
+      "intent": "dns-confinement/v1",
+      "intentChangedSinceRuns": false,
+      "trials": 20,
+      "recordedAdmissible": 20,
+      "rejudgedAdmissible": 20,
+      "changed": 0,
+      "changes": {},
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-port1-isolation_v1-claude-haiku-5-5",
+      "intent": "port1-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 18,
+      "rejudgedAdmissible": 0,
+      "changed": 20,
+      "changes": {
+        "ERR_INTENT_MISSING -> ERR_INTENT_LEAK": 2,
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 18
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-quarantine-precedence_v1-claude-haiku-5-5",
+      "intent": "quarantine-precedence/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 20,
+      "rejudgedAdmissible": 0,
+      "changed": 20,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 20
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-tap-return-isolation_v1-claude-haiku-5-5",
+      "intent": "tap-return-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 20,
+      "rejudgedAdmissible": 0,
+      "changed": 20,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 20
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-dns-confinement_v1-qwen3.8-27b-think-true-n50",
+      "intent": "dns-confinement/v1",
+      "intentChangedSinceRuns": false,
+      "trials": 50,
+      "recordedAdmissible": 21,
+      "rejudgedAdmissible": 21,
+      "changed": 0,
+      "changes": {},
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-port1-isolation_v1-qwen3.8-27b-think-true-n50",
+      "intent": "port1-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 37,
+      "rejudgedAdmissible": 0,
+      "changed": 37,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 37
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-quarantine-precedence_v1-qwen3.8-27b-think-true-n50",
+      "intent": "quarantine-precedence/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 5,
+      "rejudgedAdmissible": 0,
+      "changed": 5,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 5
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-a-tap-return-isolation_v1-qwen3.8-27b-think-true-n50",
+      "intent": "tap-return-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 50,
+      "recordedAdmissible": 50,
+      "rejudgedAdmissible": 0,
+      "changed": 50,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 50
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-dns-confinement_v1-qwen3.8-27b-think-true-n20",
+      "intent": "dns-confinement/v1",
+      "intentChangedSinceRuns": false,
+      "trials": 20,
+      "recordedAdmissible": 9,
+      "rejudgedAdmissible": 9,
+      "changed": 0,
+      "changes": {},
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-port1-isolation_v1-qwen3.8-27b-think-true-n20",
+      "intent": "port1-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 16,
+      "rejudgedAdmissible": 0,
+      "changed": 16,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 16
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-quarantine-precedence_v1-qwen3.8-27b-think-true-n20",
+      "intent": "quarantine-precedence/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 3,
+      "rejudgedAdmissible": 0,
+      "changed": 3,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 3
+      },
+      "unparsable": 0
+    },
+    {
+      "run": "protocol-b-tap-return-isolation_v1-qwen3.8-27b-think-true-n20",
+      "intent": "tap-return-isolation/v1",
+      "intentChangedSinceRuns": true,
+      "trials": 20,
+      "recordedAdmissible": 20,
+      "rejudgedAdmissible": 0,
+      "changed": 20,
+      "changes": {
+        "ADMISSIBLE -> ERR_INTENT_LEAK": 20
+      },
+      "unparsable": 0
+    }
+  ],
+  "skipped": []
+}

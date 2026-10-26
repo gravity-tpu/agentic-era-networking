@@ -45,7 +45,6 @@ rule set. It does not mean the rules are correct on the wire.**
 | INTENT-3 `quarantine-precedence/v1` | 4/50: 3% to 19% | 18/20: 70% to 97% | 48/50: 87% to 99% | 20/20: 84% to 100% |
 | INTENT-4 `tap-return-isolation/v1` | 32/50: 50% to 76% | 19/20: 76% to 99% | 50/50: 93% to 100% | 20/20: 84% to 100% |
 
-
 ## Totals
 
 | | Protocol A, zero-shot (200 trials) | Protocol B, within 5 turns (80 trials) |
@@ -70,11 +69,14 @@ rule set. It does not mean the rules are correct on the wire.**
 ## What it does not show
 
 - **Not an on-wire result.** An admissible set may still misbehave on the Zodiac FX (RQ4), and the cross-intent check was not run on these sets.
-- **Comparability is partial.** The prompts match, but the verifier did not stand still: Gemma and Haiku were judged at commits from 2026-10-19 and 2026-10-20
-  (`748f43d`, `aac36f3`, `3fb0ec6`, `e132118`, `72152f3`); Qwen at `18148de`, which includes the A10 batch 1 and 2 modelling of the ARP fields. The same output could
-  get a different verdict. Re-judging the older runs with the current code would settle it and has not been done.
-- **INTENT-1 here is the pre-A10 intent.** `18148de` predates the per-host ARP confinement (PR #114). The current `PORT1_ISOLATION_INTENT` has per-host ARP clauses
-  and a different description, so these INTENT-1 numbers do not apply to it; that needs a rerun.
+- **Comparability, measured (`rejudge-recorded-runs-2026-10-26.json`, `scripts/rejudge-recorded-runs.ts`).** Gemma 4, Haiku and Qwen were judged at different commits.
+  Judging the first turn of every recorded trial again with today's verifier: for INTENT-2 (dns-confinement), **0 of 210 first-turn verdicts change**, so the INTENT-2
+  columns above are comparable across the three models. For INTENT-1, 3 and 4 the question itself moved: the A10 policy work (commit `992f3ca`, 2026-10-25) rewrote
+  INTENT-1's ARP clause to per-host, and INTENT-3 and INTENT-4 are built from `...PORT1_ISOLATION_INTENT.clauses`, so they changed with it. Re-judged against today's
+  specifications, **none** of the first-turn sets that were admissible when the runs were made are admissible now (INTENT-1: 123 to 0 of 208, INTENT-3: 81 to 0 of 208,
+  INTENT-4: 183 to 0 of 210, all three models together), because no model was asked to confine ARP per host. So the INTENT-1, 3 and 4 numbers above are valid for the
+  specifications as they were on 2026-10-18 to 2026-10-25 (the prompt hash is the same for all three models), and they say nothing about today's INTENT-1, 3 and 4, which
+  would need new runs. The evaluation plan says new intents belong in a new plan version; this change altered three of the four in place.
 - **Haiku is not sampling-matched.** The Claude arm accepts no seed and was run at its lowest effort setting (`docs/benchmarks/results/agent-evaluation/frontier-selection/README.md`).
 - **One run per cell, one model build, one machine.** Single runs, no repeats of the whole experiment; the intervals are Wilson intervals on the trials, not on run-to-run variation.
 - **Cost is not like for like.** Haiku is paid per token through the API (measured cost per admissible set is in `frontier-selection/README.md`); Qwen cost hours of the Mac's time, which is unpriced here.
