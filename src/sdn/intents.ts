@@ -155,7 +155,7 @@ export const QUARANTINE_PRECEDENCE_INTENT: IntentSpec = {
   description:
     `The isolation policy of port1-isolation/v1, plus a quarantine of host ${QUARANTINED_IP}: IPv4 sent by ${QUARANTINED_IP} into P1, ` +
     `and IPv4 addressed to ${QUARANTINED_IP} arriving from the uplink P2, must be dropped (reach no port, not even the tap), ` +
-    'even though other rules would forward it. Workload segment 10.0.2.0/24 on P1 otherwise may only exchange intra-segment IPv4 and ARP with the uplink (P2); ' +
+    'even though other rules would forward it. Workload segment 10.0.2.0/24 on P1 otherwise may only exchange intra-segment IPv4 with the uplink (P2), and ARP only when claiming one of its own known addresses; ' +
     'everything else from P1 goes only to the tap (P3); the uplink reaches P1 only for IPv4 to the segment and ARP.',
   ports: [P1, P2, P3],
   clauses: [
@@ -173,7 +173,7 @@ export const QUARANTINE_PRECEDENCE_INTENT: IntentSpec = {
 export const TAP_RETURN_ISOLATION_INTENT: IntentSpec = {
   id: 'tap-return-isolation/v1',
   description:
-    'Every frame from the workload segment on P1 must be copied to the tap (P3) for inspection; intra-segment IPv4 (10.0.2.0/24 to 10.0.2.0/24) and ARP from P1 must also reach the uplink (P2), and nothing else from P1 may reach P2. ' +
+    'Every frame from the workload segment on P1 must be copied to the tap (P3) for inspection; intra-segment IPv4 (10.0.2.0/24 to 10.0.2.0/24) and ARP from P1 claiming one of its own known addresses must also reach the uplink (P2), and nothing else from P1 may reach P2. ' +
     'Frames arriving from the tap (P3) must be returned to P1, and must never reach the uplink (P2) or go back out the tap (P3). ' +
     'From the uplink (P2) only IPv4 to the segment and ARP reach P1.',
   ports: [P1, P2, P3],
