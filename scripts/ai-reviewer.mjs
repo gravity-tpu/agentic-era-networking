@@ -215,6 +215,17 @@ ACCEPTABLE: \`console.log((hits / total).toFixed(3))\` where the value is only p
 
 const ROLE_PARAGRAPH_END_MARKER = 'The repository is a real-hardware';
 
+/**
+ * One line telling the model today's date. A model's idea of "now" stops at its training cutoff, so on a recent date it reads the
+ * diff's own timestamps as future dates and reports them as fabricated data (Invariant 6). That happened twice on PR #123 (Gemini):
+ * dates of 2026-10-26 were called future while the CI runner's own log lines carried the same date. Taken from the clock of the
+ * machine running the review, in UTC, so a pre-push review and a CI review agree.
+ */
+export function todayLine(now = new Date()) {
+  const day = now.toISOString().slice(0, 10);
+  return `Today's date is ${day} (UTC). Timestamps in the diff up to and including today are real, not future dates; flag a date only if it is later than today.`;
+}
+
 /** Replaces the opening role paragraph of the systems prompt with the gatekeeper preamble, keeping the invariants and format. */
 export function buildGatekeeperPrompt(basePrompt) {
   const i = basePrompt.indexOf(ROLE_PARAGRAPH_END_MARKER);
@@ -264,7 +275,7 @@ async function main() {
     console.log(`🟡  Diff is large (${(diff.length / 1000).toFixed(1)}k chars). Sending first ${MAX_DIFF_CHARS / 1000}k chars.\n`);
   }
 
-  const userMessage = `Please review the following git diff for the Agentic Era Networking repository according to the ${activeCouncil.label} standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
+  const userMessage = `${todayLine()}\n\nPlease review the following git diff for the Agentic Era Networking repository according to the ${activeCouncil.label} standards:\n\n\`\`\`diff\n${diffToSend}\n\`\`\``;
 
   let outcome;
   try {
