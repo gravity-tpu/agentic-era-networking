@@ -8,6 +8,21 @@ This replaces the original "autonomous, verifiable SDN control plane" roadmap, a
 
 ---
 
+## Progress at a glance (updated 2026-10-25)
+
+A manually-maintained rollup of section 2's detailed tables and section 4's sequence — update this whenever a property, scenario or sequence step's status line changes below, the same discipline as the rest of this document. Not a second source of truth: every claim here must point back to the detailed entry that supports it.
+
+| Track | Status |
+| :--- | :--- |
+| **A — Policy verifier** | 7 of 11 properties implemented (A1, A2, A4, A5, A6, A7, A11); 3 partial (A3: readback-only, not install-enforced; A8: unverifiable for the deployed table without a declared target; A10: workload→uplink direction closed and hardware-confirmed 2026-10-25, uplink→workload still open); 1 resolved by decision rather than implementation (A9, superseded by A4). Exit criteria (all of A1–A11 in CI, plus a published agent-proposal evaluation) not yet met — the evaluation is early: first results 2026-10-18, 0 of 50 zero-shot proposals admissible, 2 of 20 with verifier feedback. |
+| **B — Hardware model & conformance** | Cost model is a tested verifier dependency (done, 2026-10-14). Conformance probe is still a manual, one-off run (2026-10-12, 4 of 4 tests matched the model); the one-command automated probe over a larger packet set is not built. |
+| **C — Adversarial testing** | 2 of the 4 exit-criteria scenarios done and reproducible: scenario 1 (ARP spoof — found the A10 gap 2026-10-22, re-run against the fix 2026-10-25, now blocked) and scenario 3 (port scan). Scenario 7 (mirror-port injection) was found and mitigated as a side result, kept as a regression test, but is outside the stated 1–4 exit bar. Scenarios 2, 4 and 5 are not yet scripted; scenario 6 is partially observed only. |
+| **D — Provenance & telemetry** | Maintained; an ongoing invariant (enforced by `scripts/check-provenance.ts` and the test suite), not a checklist item with a completion state. |
+
+**Sequence (section 4):** steps 1–3 done; step 4 partial (the manual conformance probe exists, the automated one-command version doesn't); step 5 started (early agent-proposal results, far from conclusive); steps 6 and 7 not started.
+
+---
+
 ## 1. Why the scope changed
 
 Measurements on the actual hardware ([whitepaper](benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md)) set the limits the original plan had not accounted for:
