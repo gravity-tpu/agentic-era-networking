@@ -8,12 +8,15 @@ import {
 import { GATEKEEPER_PREAMBLE, TECHNICAL_SYSTEM_PROMPT, CCIE_SYSTEM_PROMPT, buildGatekeeperPrompt } from '../../scripts/ai-reviewer.mjs';
 
 const METRICS = path.join(os.tmpdir(), `zodiac-ollama-streaming-test-${process.pid}.json`);
+/** The part of the request body these tests read back. */
+type ChatBody = { stream?: boolean; think?: string; messages: Array<{ role: string; content: string }>; options?: { num_predict?: number } };
+type Capture = { body?: ChatBody };
 const ND = (...objs: unknown[]) => objs.map((o) => JSON.stringify(o)).join('\n') + '\n';
 
 /** A fetch whose body arrives as the given byte chunks, so a line can be split across chunks. */
-function streamFetch(chunks: string[], capture?: { body?: any }) {
-  return vi.fn(async (_url: string, init: any) => {
-    if (capture) capture.body = JSON.parse(init.body);
+function streamFetch(chunks: string[], capture?: Capture) {
+  return vi.fn(async (_url: string, init: { body: string }) => {
+    if (capture) capture.body = JSON.parse(init.body) as ChatBody;
     const enc = new TextEncoder();
     return new Response(new ReadableStream({
       start(c) { for (const ch of chunks) c.enqueue(enc.encode(ch)); c.close(); },
@@ -35,12 +38,12 @@ describe('callOllama streaming: fail closed on an incomplete or empty answer', (
   });
 
   it('sends stream:true and the think level, and omits think when unset', async () => {
-    const cap: { body?: any } = {};
+    const cap: Capture = {};
     vi.stubGlobal('fetch', streamFetch([ND({ message: { content: 'ok' } }, done())], cap));
     await call({ think: 'medium', numPredict: 123 });
     expect(cap.body).toMatchObject({ stream: true, think: 'medium', options: { num_predict: 123 } });
     await call();
-    expect('think' in cap.body).toBe(false);
+    expect(Object.keys(cap.body ?? {})).not.toContain('think');
   });
 
   it('rejects a thinking-only response (the empty answer think=xhigh produced)', async () => {
@@ -96,13 +99,13 @@ describe('runWithFallback with the local tier', () => {
   });
 
   it('uses the per-provider system prompt for that provider only, and reports the provider that answered', async () => {
-    const cap: { body?: any } = {};
+    const cap: Capture = {};
     vi.stubGlobal('fetch', streamFetch([ND({ message: { content: 'ok' } }, done())], cap));
     const out = await runWithFallback(
       [{ model: 'local', provider: 'ollama', baseUrl: 'http://x', timeoutMs: 5000 }],
       'BASE', 'user', { globalTimeoutMs: 10_000, systemPromptByProvider: { ollama: 'LOCAL' } },
     );
-    expect(cap.body.messages[0].content).toBe('LOCAL');
+    expect(cap.body?.messages[0]?.content).toBe('LOCAL');
     expect(out).toMatchObject({ result: 'ok', model: 'local', provider: 'ollama' });
   });
 });
@@ -115,7 +118,7 @@ describe('Ollama limits are bounded (Invariant 5)', () => {
   });
 
   it('the configured local tier streams long enough for a reasoning model and carries the think level', () => {
-    const local = buildModelFallbacks().find((f: any) => f.provider === 'ollama');
+    const local = buildModelFallbacks().find((f: { provider: string }) => f.provider === 'ollama');
     if (!local) return; // CI or SKIP_OLLAMA: the local tier is not built
     expect(local.model).toBe('qwen3.8:27b');
     expect(local.timeoutMs).toBeGreaterThanOrEqual(300_000);
