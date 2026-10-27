@@ -91,7 +91,10 @@ detector**, and should not be described as one.
 **Batches 15-16: option 3, a structurally different unified architecture.** Per the owner's explicit instruction
 ("option 2 then option 3, in that order"), this tested whether a single, jointly-trained architecture could match
 the ensemble's numbers without needing two separately-fitted models. Batch 15 read the real kernel math, confirmed
-the Jetson's measured compute budget has ~369x headroom (so compute was never the limiting factor), diagnosed from
+the Jetson's measured compute budget has ~369x headroom (so compute was never the limiting factor — this figure was
+later re-derived directly against the live kernel during production integration and corrected to ~0.164ms, ~6x
+headroom under the <1.0ms budget, still comfortable but a real measured number rather than this archived one; see
+"Production integration" below), diagnosed from
 the committed weight vectors that the CIC/lab conflict moves at least 5 of 10 weights together (ruling out a
 single-interaction-term fix), and designed a 23-parameter jointly-fit gate over two full sub-kernels. A smoke test
 looked mechanistically promising. Batch 16 completed the full-scale run: it **failed** the pre-registered bar (lab
@@ -171,18 +174,32 @@ budget than the batch-scale budgets used throughout this campaign. None of these
 the decision was to ship the verified 6/13-recall, 2/9-FP point now rather than open a new, open-ended research
 line before closing this one out.
 
-Its outputs
-(`scripts/eval-sentinel-ensemble.py`, `docs/benchmarks/results/sentinel-training-two-anchor/trained-weights-two-anchor-batch10-2026-10-25.json`
-as Model A plus the original hardcoded `sr.W`, threshold raised to `0.19`, as Model B) are not wired into
-`scripts/gpu-sdn-anomaly-sentinel.py` as of this document — that integration was explicitly out of scope for the
-autonomous training campaign itself and required the owner's decision first, which has now been made (accept the
-6/13-recall, 2/9-FP point; deploy opt-in). The owner-approved integration requirements are: two weight-set configs
-instead of one, two independent `AdaptiveThresholdController` instances (each tracking its own EMA from its own
-model's loss stream, not shared), two kernel inferences per window with the compute cost reconfirmed against the
-live Jetson kernel (not just the ~369x headroom figure cited from archived design docs), the quarantine dispatch
-path OR-combining both models' alerts with the reason field disclosing which fired, shipped as an opt-in path that
-is strongly recommended over the single-model default, and a live end-to-end validation against the real deployed
-kernel before it is trusted. See the production-integration PR for the actual implementation and live test results.
+## Production integration
+
+`scripts/gpu-sdn-anomaly-sentinel.py` now has an opt-in `--enable-ensemble` flag (default off — zero behavior change
+to the pre-existing single-model path unless explicitly passed) implementing batch 17's recommended configuration:
+Model A = `trained-weights-two-anchor-batch10-2026-10-25.json` (tau=0.187660), Model B = the original compiled-in
+baseline (tau=0.19), each with its own independent `AdaptiveThresholdController` (separate EMA state, never
+shared), alerting if either fires, with the quarantine reason field disclosing exactly which model(s) fired.
+
+**A real, serious bug was found and fixed during the required live validation, not before it.** The native CUDA
+engine's weight buffer (`d_weights` in `src/gpu/gpu_anomaly_kernel.cu`) is a single, process-global static pointer
+with no per-instance state. Two `Gpu1DAutoencoder` Python instances in one process (Model A and Model B) silently
+shared it: whichever instance's constructor loaded weights LAST determined what BOTH instances' inference calls
+actually ran against, for the rest of the process's life. The first live `--enable-ensemble` run on the Jetson
+showed this directly — Model A and Model B reported byte-identical losses on every single window, despite genuinely
+different weights being loaded. This could not have been caught by the offline evaluation batches (9-18), which
+never ran two native-engine instances in one process, or by a Mac-only smoke test (the non-CUDA fallback path has
+no shared native state to collide on). Fixed by having each instance re-upload its own weights immediately before
+its own inference call, every window, only when `--enable-ensemble` is set — zero added cost to the default path.
+Re-measured live on the Jetson after the fix, with the two models genuinely producing different losses: this is
+where the corrected ~0.164ms compute-cost figure above comes from (up from an earlier, bug-confounded ~0.102ms
+estimate that had unknowingly measured two calls against the same weights).
+
+Still ahead of a non-opt-in default: broader live validation against real tap traffic (this integration's live test
+used synthetic demo-mode traffic against the real kernel, confirming correctness and cost, not real-world detection
+behavior), and the scope-limit disclosure is now in the module docstring, the `--enable-ensemble` startup banner,
+and this document — not yet in any operator dashboard, if one exists.
 
 **Disclose, don't paper over, the scope limit from batch 14.** Whatever gets deployed should be described
 accurately: a detector tuned for CIC-IDS2017's Hulk/GoldenEye-style volumetric floods and the lab's own flood/scan
