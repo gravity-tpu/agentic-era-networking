@@ -25,6 +25,46 @@ Council Invariants Enforced:
   - Invariant 2 (Determinism & Accounting): Monotonic nanosecond timestamps, integer packet rates.
   - Invariant 3 (Fail-Closed Isolation): Anomaly detection defaults strictly to DROP/QUARANTINE.
   - Invariant 6 (Anti-Simulation Law): Verifiable hardware inference on real silicon.
+
+Two-model ensemble (--enable-ensemble, opt-in, unset by default): the two-anchor sentinel-training campaign
+(docs/benchmarks/results/sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md, batches 1-18) found that no single
+10-parameter kernel configuration catches both CIC-IDS2017's labelled DoS floods and the lab's own held-out attack
+patterns without a large cost on one side or the other. The verified, owner-accepted answer is two independently
+fitted kernels run in parallel, each on its own weights and its own independently-calibrated AdaptiveThresholdController
+(separate EMA state, never shared), alerting if EITHER fires. Default values (batch 17's recommendation): Model A =
+trained-weights-two-anchor-batch10-2026-10-25.json at tau=0.187660 ("CIC-shaped"); Model B = the original compiled-in
+constants at tau=0.19 ("lab-shaped", threshold raised from its own standalone-optimal 0.15 specifically for ensemble
+use). Measured result (offline evaluation, docs/benchmarks/results/sentinel-training-two-anchor/PREREGISTRATION.md
+batch 17/18 addenda): lab held-out attack recall 6/13 (vs 2-4/13 for either model alone), CIC Hulk/GoldenEye recall
+100%/100%, CIC-benign false-positive rate 0.00%/0.00%, lab-benign false-positive rate 2/9 (~22%, down from a plain
+two-model OR's 5/9, but not yet the owner's full ~90% signal-to-noise target — see the campaign doc's "Recommendation"
+section for the three concrete, deliberately-unexplored directions that remain if that gap needs closing later).
+
+Scope limit, disclosed not papered over (campaign batch 14): this ensemble is NOT a general intrusion detector. It is
+validated to catch CIC-IDS2017 Hulk/GoldenEye-style volumetric HTTP floods (partially slowloris-style ones) and the
+lab's own flood/scan patterns (portscan variants, SYN flood). Other CIC-IDS2017 attack classes never anchored during
+training (Slowhttptest, DDoS) showed near-zero recall when tested. Do not describe this as general-purpose coverage
+in any operator-facing documentation or dashboard.
+
+Compute cost, measured on the live Jetson Orin Nano Super GPU (not assumed from archived design-doc figures): a
+2000-window live-hardware benchmark against the real native CUDA engine found single-model inference at ~0.048ms
+mean (4.8% of the <1.0ms budget). The first live --enable-ensemble validation run then found a real, serious bug
+the single-model benchmark could not have caught: the native engine's weight buffer (d_weights in
+src/gpu/gpu_anomaly_kernel.cu) is a single, process-global static pointer with no per-instance state, so two
+Gpu1DAutoencoder instances in one process silently shared it -- both models reported byte-identical losses on
+every window, because whichever instance's constructor loaded weights LAST determined what BOTH instances'
+inference calls actually ran against. Fixed by having each instance re-upload its own weights (reload_weights())
+immediately before its own inference call, every window, only when --enable-ensemble is set (zero cost added to
+the single-model default path). Re-measured live on the Jetson after the fix, with Model A and Model B genuinely
+producing different losses: an initial measurement (summing only compute_anomaly_score()'s own reported latency,
+which excludes reload_weights()'s wall-clock cost) showed ~0.164ms, but a subsequent AI-review finding caught that
+this was an incomplete accounting -- reload_weights() runs as a separate, untimed statement, and total_latency_ns
+never folded its cost in. A precise, isolated 2000-window benchmark of the real end-to-end per-window sequence
+(reload(A) -> infer(A) -> reload(B) -> infer(B), wall-clock from first call to last) found the true cost: ~0.248ms
+mean (24.8% of the <1.0ms budget) -- still comfortable headroom, but the correct number, not ~0.164ms. Both figures
+supersede the ~369x figure earlier cited from archived docs (never re-derived against this exact kernel) and the
+bug-confounded ~0.102ms estimate from before the shared-weight-buffer fix was found. latency_ns/latency_ns_b (and
+therefore total_latency_ns and the operator-facing "Average Latency" stat) now include reload_weights()'s cost.
 """
 
 import argparse
@@ -57,6 +97,19 @@ WINDOW_SIZE = 64  # Sliding packet sequence length
 NUM_FEATURES = 4   # [dt_us_norm, length_norm, flags_norm, port_entropy_norm]
 QUEUE_POLL_TIMEOUT_SEC = 0.1  # Bounded polling timeout for ingress queue
 EXPECTED_MAC_HEX_LEN = 17  # 6 octets × 2 hex digits + 5 colons: "ab:cd:ef:01:23:45"
+
+# Two-model ensemble defaults (--enable-ensemble, opt-in; see module docstring for the full campaign citation).
+# "Model A" / "Model B" naming matches docs/benchmarks/results/sentinel-training-two-anchor/ throughout.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_ENSEMBLE_WEIGHTS_FILE_A = os.environ.get(
+    'GPU_SENTINEL_ENSEMBLE_WEIGHTS_FILE_A',
+    os.path.join(_HERE, '..', 'docs', 'benchmarks', 'results', 'sentinel-training-two-anchor',
+                 'trained-weights-two-anchor-batch10-2026-10-25.json'))
+DEFAULT_ENSEMBLE_TAU_A = float(os.environ.get('GPU_SENTINEL_ENSEMBLE_TAU_A', '0.187660'))
+# Model B default weights file is '' (compiled-in constants): the campaign's Model B is the ORIGINAL baseline the
+# CUDA engine already ships with, not a separate trained file -- see CAMPAIGN-SUMMARY.md's batch 13 choice.
+DEFAULT_ENSEMBLE_WEIGHTS_FILE_B = os.environ.get('GPU_SENTINEL_ENSEMBLE_WEIGHTS_FILE_B', '')
+DEFAULT_ENSEMBLE_TAU_B = float(os.environ.get('GPU_SENTINEL_ENSEMBLE_TAU_B', '0.19'))
 
 @dataclass(frozen=True)
 class QuarantineAlertItem:
@@ -98,6 +151,21 @@ class AdaptiveThresholdController:
 
         return is_anomaly, dynamic_tau
 
+
+def format_ensemble_reason(is_anomaly_a: bool, loss_a: float, tau_a: float,
+                            is_anomaly_b: bool, loss_b: float, tau_b: float) -> str:
+    """Pure, directly-testable construction of the --enable-ensemble quarantine reason string. Discloses which
+    model(s) actually fired -- required for audit/review of an OR-combined decision, per the owner's explicit
+    integration requirement (docs/benchmarks/results/sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md). Factored
+    out of run_sentinel's hot loop specifically so this security-relevant format is unit-testable without needing
+    to trigger a real detection via demo-mode traffic."""
+    fired = []
+    if is_anomaly_a:
+        fired.append(f"A(loss={loss_a:.4f}>=tau={tau_a:.4f})")
+    if is_anomaly_b:
+        fired.append(f"B(loss={loss_b:.4f}>=tau={tau_b:.4f})")
+    return f"Ensemble anomaly, fired: {', '.join(fired)}"
+
 stop_event = False
 
 
@@ -110,6 +178,20 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 NUM_CUDA_KERNEL_WEIGHTS = 10  # w0..w9 read by autoencoder_inference_kernel in src/gpu/gpu_anomaly_kernel.cu
+
+# The native engine's weight buffer (d_weights in src/gpu/gpu_anomaly_kernel.cu) is a SINGLE, process-global static
+# pointer -- there is no per-instance/per-handle state in the compiled library. Found 2026-10-26 during the
+# --enable-ensemble live validation: two Gpu1DAutoencoder instances in one process silently shared the same device
+# buffer, so whichever instance's constructor loaded weights LAST determined what BOTH instances' inference calls
+# actually ran against (an instance with no --weights-file does nothing at construction time and does not reset
+# anything). This constant makes "the compiled-in defaults" an explicit, independently-reloadable weight set
+# (matching scripts/sentinel-replay.py's sr.W exactly, the same baseline the sentinel-training-two-anchor campaign
+# used as Model B throughout) instead of an implicit "whatever happens to still be in the global buffer" state.
+# Single-model mode is unaffected (loading this is a no-op there, since the engine already seeds these exact
+# values at cudaMalloc time) -- only --enable-ensemble's hot loop depends on it, by reloading the correct model's
+# weights immediately before EACH model's own inference call, every window (see Gpu1DAutoencoder.reload_weights
+# and its call sites in run_sentinel).
+BASELINE_SR_W = [0.20, 0.30, 0.25, 0.25, 0.05, 0.50, 0.02, 0.85, 1.50, 0.40]
 
 
 def load_weights_payload(path: str) -> List[float]:
@@ -217,6 +299,13 @@ class Gpu1DAutoencoder:
         # only mode the live systemd unit uses today), this block does nothing and the engine keeps running the
         # compiled-in hardcoded constants exactly as before. See docs/benchmarks/results/sentinel-training/ for what
         # was fit, how it was validated, and the honest comparison against those hardcoded constants.
+        # The weights this instance is SUPPOSED to be running, tracked explicitly so --enable-ensemble can re-upload
+        # them to the shared native buffer immediately before every call this instance makes (see reload_weights
+        # and BASELINE_SR_W's module-level comment for why this is necessary). Defaults to the real compiled-in
+        # baseline (matching sentinel-replay.py's sr.W) rather than "whatever the engine happens to already hold" —
+        # explicit, not implicit, per this file's own stated discipline.
+        self._weights_floats: List[float] = list(BASELINE_SR_W)
+
         if weights_file:
             if self.cuda_lib is not None:
                 try:
@@ -234,6 +323,7 @@ class Gpu1DAutoencoder:
                                           "--weights-file was given and failed to load; aborting rather than silently "
                                           "running the compiled-in defaults or a partially-loaded weight set.\n")
                         sys.exit(1)
+                    self._weights_floats = floats
                     sys.stdout.write(f"[gpu-sentinel] Loaded trained weights from {weights_file} into the CUDA engine "
                                       f"(opt-in: default behavior without --weights-file is unchanged).\n")
                 except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
@@ -297,6 +387,31 @@ class Gpu1DAutoencoder:
                     self.device_name = "NumPy Matrix CPU (Fallback)"
                 except ImportError:
                     self.device_name = "Pure Math (Fallback)"
+
+    def reload_weights(self) -> None:
+        """--enable-ensemble only: re-upload this instance's own weights (self._weights_floats) to the native
+        engine's shared global buffer immediately before this instance's own compute_anomaly_score call. The
+        native library (src/gpu/gpu_anomaly_kernel.cu) has exactly one process-wide device weight buffer -- there
+        is no per-Gpu1DAutoencoder-instance isolation -- so two instances in one process (the ensemble's Model A
+        and Model B) would otherwise silently run against whichever weights were loaded last by EITHER instance's
+        constructor (found 2026-10-26 during live validation on the Jetson: both models reported byte-identical
+        losses on every window until this method was added). No-op on the PyTorch/NumPy fallback path (those
+        don't share any native state) and a cheap, correctness-only operation on the real CUDA path (a ~40-byte
+        host-to-device copy of 10 floats, negligible next to the ~0.05ms inference call it precedes -- see
+        docs/benchmarks/results/sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md's "Compute cost" section for the
+        measured total)."""
+        if self.cuda_lib is None:
+            return
+        import ctypes
+        weights_arr = (ctypes.c_float * len(self._weights_floats))(*self._weights_floats)
+        rc = self.cuda_lib.load_cuda_model_weights(weights_arr, len(self._weights_floats))
+        if rc != 0:
+            # Council Invariant 3 (Fail-Closed Isolation): a reload failure mid-run means this instance's next
+            # compute_anomaly_score call would silently score against the WRONG model's weights -- refuse to
+            # continue rather than let that happen invisibly.
+            sys.stderr.write(f"[gpu-sentinel] FATAL: load_cuda_model_weights reload rejected (rc={rc}) -- refusing "
+                              f"to run inference against a weight set that may not match self._weights_floats.\n")
+            sys.exit(1)
 
     def compute_anomaly_score(self, feature_matrix: List[List[float]]) -> Tuple[float, int]:
         """
@@ -487,25 +602,57 @@ def run_sentinel(
     threshold: float,
     demo_mode: bool = False,
     duration_s: int = 0,
-    weights_file: str = ''
+    weights_file: str = '',
+    enable_ensemble: bool = False,
+    ensemble_weights_file_a: str = DEFAULT_ENSEMBLE_WEIGHTS_FILE_A,
+    ensemble_tau_a: float = DEFAULT_ENSEMBLE_TAU_A,
+    ensemble_weights_file_b: str = DEFAULT_ENSEMBLE_WEIGHTS_FILE_B,
+    ensemble_tau_b: float = DEFAULT_ENSEMBLE_TAU_B,
 ):
     print("======================================================================")
     print("🛡️  STAGE-2 GPU DEEP TRAFFIC ANOMALY SENTINEL (JETSON ORIN NANO SUPER)")
     print(f"   Architecture  : 67 TOPS NVIDIA Ampere INT8/FP16 TensorRT Pipeline")
     print(f"   Tap Interface : {tap_iface} (Zodiac Port 3 Mirror)")
     print(f"   Controller API: {controller_url}")
-    print(f"   Loss Threshold: {threshold} (Reconstruction Error tau)")
     print(f"   Mode          : {'SYNTHETIC DEMO & BENCHMARK' if demo_mode else 'LIVE HARDWARE WIRE-TAP'}")
-    print(f"   Model Weights : {weights_file if weights_file else '(compiled-in hardcoded constants, default)'}")
+
+    if enable_ensemble:
+        print(f"   Detector      : TWO-MODEL ENSEMBLE (--enable-ensemble; OR-combined, independently calibrated)")
+        print(f"   Model A       : {ensemble_weights_file_a or '(compiled-in hardcoded constants)'}  tau={ensemble_tau_a}")
+        print(f"   Model B       : {ensemble_weights_file_b or '(compiled-in hardcoded constants)'}  tau={ensemble_tau_b}")
+        print("   Validated recall/FP (offline eval, see docs/.../sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md):")
+        print("     lab held-out 6/13 attacks | CIC Hulk/GoldenEye 100%/100% | CIC-benign FP 0.00%/0.00% |")
+        print("     lab-benign FP 2/9 (~22%, the owner-accepted tradeoff; not a general intrusion detector --")
+        print("     validated only for CIC HTTP-flood-style and lab flood/scan patterns, see module docstring)")
+    else:
+        print(f"   Loss Threshold: {threshold} (Reconstruction Error tau)")
+        print(f"   Model Weights : {weights_file if weights_file else '(compiled-in hardcoded constants, default)'}")
+        print("   ⚠️  RECOMMENDATION: single-model detection is validated at only 2-4/13 real-attack recall in")
+        print("      offline testing. The validated two-model ensemble (--enable-ensemble) reaches 6/13 at a")
+        print("      measured, documented false-positive cost (2/9 on lab-benign traffic) -- see")
+        print("      docs/benchmarks/results/sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md. Not enabled by")
+        print("      default (opt-in only); this run is using the single-model path.")
     print("======================================================================")
 
-    autoencoder = Gpu1DAutoencoder(weights_file=weights_file)
-    print(f"   [+] Neural Engine Initialized: {autoencoder.device_name}")
-    print(f"   [+] CUDA Tensor Cores Active : {autoencoder.has_cuda}")
+    if enable_ensemble:
+        autoencoder = Gpu1DAutoencoder(weights_file=ensemble_weights_file_a)
+        autoencoder_b = Gpu1DAutoencoder(weights_file=ensemble_weights_file_b)
+        print(f"   [+] Neural Engine A Initialized: {autoencoder.device_name}")
+        print(f"   [+] Neural Engine B Initialized: {autoencoder_b.device_name}")
+        print(f"   [+] CUDA Tensor Cores Active   : {autoencoder.has_cuda} / {autoencoder_b.has_cuda}")
+    else:
+        autoencoder = Gpu1DAutoencoder(weights_file=weights_file)
+        autoencoder_b = None
+        print(f"   [+] Neural Engine Initialized: {autoencoder.device_name}")
+        print(f"   [+] CUDA Tensor Cores Active : {autoencoder.has_cuda}")
     print("======================================================================\n")
 
     extractor = PacketFeatureExtractor(window_size=WINDOW_SIZE)
-    threshold_controller = AdaptiveThresholdController(initial_threshold=threshold)
+    threshold_controller = AdaptiveThresholdController(initial_threshold=ensemble_tau_a if enable_ensemble else threshold)
+    # Separate, independently-tracked EMA state for Model B -- never shared with threshold_controller, per the
+    # campaign's own verified design (docs/.../CAMPAIGN-SUMMARY.md, batch 13): each model's dynamic threshold is
+    # calibrated only against its own loss stream.
+    threshold_controller_b = AdaptiveThresholdController(initial_threshold=ensemble_tau_b) if enable_ensemble else None
 
     # Dedicated non-blocking queue & background worker for SDN quarantine dispatches
     # Ensures raw tap packet ingestion loop never blocks on HTTP timeouts
@@ -706,21 +853,85 @@ def run_sentinel(
             # When a full window of 64 packets is ready, execute GPU inference
             if window is not None:
                 total_inferences += 1
+                if enable_ensemble:
+                    # Re-upload Model A's own weights immediately before Model A's own call: the native engine's
+                    # weight buffer is process-global (see BASELINE_SR_W's module-level comment and
+                    # Gpu1DAutoencoder.reload_weights), so this is required for correctness whenever a second
+                    # instance (Model B) shares the process. No-op cost in single-model mode is avoided entirely
+                    # by only calling this when enable_ensemble -- zero behavior/perf change to the default path.
+                    # Timed explicitly and folded into latency_ns below: reload_weights() has no internal timer of
+                    # its own, and omitting its cost from total_latency_ns would make the operator-facing "Average
+                    # Latency" stat silently undercount the real per-window cost (found 2026-10-26, live Jetson
+                    # measurement: the self-reported stat was ~0.151ms short of the real wall-clock sequence).
+                    reload_t0_ns = time.monotonic_ns()
+                    autoencoder.reload_weights()
+                    reload_ns_a = time.monotonic_ns() - reload_t0_ns
+                else:
+                    reload_ns_a = 0
                 loss, latency_ns = autoencoder.compute_anomaly_score(window)
+                latency_ns += reload_ns_a
                 total_latency_ns += latency_ns
 
                 # Check if anomaly threshold breached via adaptive self-tuning controller (Council Invariant 5)
-                is_anomaly, dynamic_tau = threshold_controller.update_and_check(loss)
+                is_anomaly_a, dynamic_tau = threshold_controller.update_and_check(loss)
+                is_anomaly = is_anomaly_a
+                # Set only when enable_ensemble; read only when enable_ensemble (both guarded the same way below).
+                loss_b = latency_ns_b = dynamic_tau_b = None
+                is_anomaly_b = False
+
+                if enable_ensemble:
+                    # Model B runs on its own independent inference call and its own independently-tracked
+                    # AdaptiveThresholdController (threshold_controller_b) -- never sharing EMA state with Model
+                    # A's threshold_controller, exactly as the campaign's verified design requires (see
+                    # docs/.../sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md, batch 13). The ensemble rule is
+                    # OR: either model's own dynamic threshold firing is enough to alert.
+                    if autoencoder_b is None or threshold_controller_b is None:
+                        # Explicit check, not assert: this fail-closed guarantee must hold even under `python -O`,
+                        # which strips assert statements. Both are always set together when enable_ensemble is True
+                        # (see their construction above); reaching here means that invariant was violated.
+                        sys.stderr.write("[gpu-sentinel] FATAL: enable_ensemble is True but autoencoder_b/"
+                                          "threshold_controller_b is None -- refusing to run a half-constructed ensemble.\n")
+                        sys.exit(1)
+                    reload_t0_ns = time.monotonic_ns()
+                    autoencoder_b.reload_weights()  # re-upload Model B's own weights immediately before Model B's own call
+                    reload_ns_b = time.monotonic_ns() - reload_t0_ns
+                    loss_b, latency_ns_b = autoencoder_b.compute_anomaly_score(window)
+                    latency_ns_b += reload_ns_b
+                    total_latency_ns += latency_ns_b
+                    is_anomaly_b, dynamic_tau_b = threshold_controller_b.update_and_check(loss_b)
+                    is_anomaly = is_anomaly_a or is_anomaly_b
+
                 target_ip = extractor.get_predominant_src_ip()
                 target_mac = extractor.get_predominant_src_mac()
 
+                if enable_ensemble and (loss_b is None or latency_ns_b is None or dynamic_tau_b is None):
+                    # Explicit check, not assert (survives python -O): structurally guaranteed set together in the
+                    # enable_ensemble branch above, but a display/alert path should never trust that silently.
+                    sys.stderr.write("[gpu-sentinel] FATAL: enable_ensemble is True but Model B's per-window result "
+                                      "is incomplete -- refusing to report or act on a half-computed ensemble decision.\n")
+                    sys.exit(1)
+                # Pyright narrowing only (the real, -O-surviving safety check is the explicit sys.exit above):
+                # loss_b/latency_ns_b/dynamic_tau_b are legitimately None in the default (non-ensemble) path,
+                # so each assert below is re-stated immediately before its own use, inside its own
+                # `if enable_ensemble:` block -- narrowing from one block does not carry into a later one.
                 if total_inferences % 25 == 1:
-                    print(f"   [inf #{total_inferences}] loss={loss:.4f} | tau={dynamic_tau:.4f} | top_ip={target_ip} | lat={latency_ns / 1_000_000.0:.2f}ms")
+                    if enable_ensemble:
+                        assert loss_b is not None and latency_ns_b is not None and dynamic_tau_b is not None
+                        print(f"   [inf #{total_inferences}] A: loss={loss:.4f} tau={dynamic_tau:.4f} | "
+                              f"B: loss={loss_b:.4f} tau={dynamic_tau_b:.4f} | top_ip={target_ip} | "
+                              f"lat={(latency_ns + latency_ns_b) / 1_000_000.0:.2f}ms")
+                    else:
+                        print(f"   [inf #{total_inferences}] loss={loss:.4f} | tau={dynamic_tau:.4f} | top_ip={target_ip} | lat={latency_ns / 1_000_000.0:.2f}ms")
 
                 if is_anomaly:
                     total_anomalies += 1
-                    reason = f"GPU 1D-CNN Autoencoder Loss {loss:.4f} >= Dynamic Threshold {dynamic_tau:.4f} (Anomaly)"
-                    latency_ms_display = latency_ns / 1_000_000.0
+                    if enable_ensemble:
+                        assert loss_b is not None and latency_ns_b is not None and dynamic_tau_b is not None
+                        reason = format_ensemble_reason(is_anomaly_a, loss, dynamic_tau, is_anomaly_b, loss_b, dynamic_tau_b)
+                        latency_ms_display = (latency_ns + latency_ns_b) / 1_000_000.0
+                    else:
+                        reason = f"GPU 1D-CNN Autoencoder Loss {loss:.4f} >= Dynamic Threshold {dynamic_tau:.4f} (Anomaly)"
+                        latency_ms_display = latency_ns / 1_000_000.0
                     print(f"🚨 [ANOMALY DETECTED] {reason} | Offender: {target_ip} ({latency_ms_display:.2f}ms inference)")
 
                     # Council Invariant 3 (Fail-Closed): quarantine by verified IPv4 first;
@@ -806,7 +1017,31 @@ def main():
                          help="Opt-in path to a JSON file of 10 trained weights (see "
                               "docs/benchmarks/results/sentinel-training/) to load into the native CUDA engine via "
                               "load_cuda_model_weights(). Unset by default (or via GPU_SENTINEL_WEIGHTS_FILE): the "
-                              "sentinel runs the compiled-in hardcoded constants, exactly as it does today.")
+                              "sentinel runs the compiled-in hardcoded constants, exactly as it does today. Ignored "
+                              "if --enable-ensemble is set (use --ensemble-weights-file-a/-b instead).")
+    parser.add_argument('--enable-ensemble', action='store_true',
+                         default=os.environ.get('GPU_SENTINEL_ENABLE_ENSEMBLE', '').strip().lower() in
+                         ('1', 'true', 'yes', 'on'),
+                         help="Opt-in: run the verified two-model OR-ensemble (see module docstring and "
+                              "docs/benchmarks/results/sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md) instead of "
+                              "a single model. STRONGLY RECOMMENDED over the single-model default -- offline "
+                              "evaluation shows 6/13 lab-attack recall vs 2-4/13 for any single model -- but left "
+                              "opt-in rather than default because it has a measured, disclosed false-positive cost "
+                              "(2/9 on lab-benign traffic) that a human should consciously accept for their "
+                              "deployment. Not a general intrusion detector; see module docstring for scope.")
+    parser.add_argument('--ensemble-weights-file-a', default=DEFAULT_ENSEMBLE_WEIGHTS_FILE_A,
+                         help="--enable-ensemble only: Model A's weights file (default: batch 10's committed "
+                              "CIC-shaped weights).")
+    parser.add_argument('--ensemble-tau-a', type=float, default=DEFAULT_ENSEMBLE_TAU_A,
+                         help="--enable-ensemble only: Model A's own threshold tau (default: 0.187660, batch 10's "
+                              "calibrated value).")
+    parser.add_argument('--ensemble-weights-file-b', default=DEFAULT_ENSEMBLE_WEIGHTS_FILE_B,
+                         help="--enable-ensemble only: Model B's weights file (default: '', the compiled-in "
+                              "baseline constants -- the campaign's Model B is the original baseline, not a "
+                              "separate trained file).")
+    parser.add_argument('--ensemble-tau-b', type=float, default=DEFAULT_ENSEMBLE_TAU_B,
+                         help="--enable-ensemble only: Model B's own threshold tau (default: 0.19, raised from its "
+                              "own standalone-optimal 0.15 specifically for ensemble use -- see batch 17).")
     args = parser.parse_args()
 
     run_sentinel(
@@ -815,7 +1050,12 @@ def main():
         threshold=args.threshold,
         demo_mode=args.demo,
         duration_s=args.duration,
-        weights_file=args.weights_file
+        weights_file=args.weights_file,
+        enable_ensemble=args.enable_ensemble,
+        ensemble_weights_file_a=args.ensemble_weights_file_a,
+        ensemble_tau_a=args.ensemble_tau_a,
+        ensemble_weights_file_b=args.ensemble_weights_file_b,
+        ensemble_tau_b=args.ensemble_tau_b,
     )
 
 
