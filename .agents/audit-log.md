@@ -124,7 +124,7 @@ CI run on `main` (`ff34381`) still shows **Network Engineering Review: failure**
 ## 6. Merges to `main` made under the owner's standing authorization (granted 2026-10-25)
 
 Merges were allowed only with green CI, no force and no protection bypass; each merge to `main` runs the GitHub Actions production deploy, which the
-owner was told about. Merge-commit style, as the repo already uses. The owner was away; all four were made on 2026-10-26.
+owner was told about. Merge-commit style, as the repo already uses. The owner was away for most of this; all nine were made on 2026-10-26.
 
 | PR | Merge commit | What | CI at merge | Gate |
 | -- | ------------ | ---- | ----------- | ---- |
@@ -132,6 +132,11 @@ owner was told about. Merge-commit style, as the repo already uses. The owner wa
 | #118 | `1b20679` | Dashboard no longer hardcodes a Gemma model | all pass | passed all six gates |
 | #117 | `0f3c6c4` | Local review tier: Qwen3.8 27B, streamed, gatekeeper prompt | all pass | pushed with `--no-verify`, row in section 4 |
 | #119 | `2096c04` | A10 opt-in uplink to workload ARP confinement (not deployed) | all pass | pushed with `--no-verify`, row in section 4 |
+| #121 | `f251620` | Qwen3.8 27B proposer results and the re-judge | all pass | passed all six gates (local Qwen tier reviewed) |
+| #122 | `01ae7c8` | Test types and the owed section 4 review dispositions | all pass | passed all six gates |
+| #124 | `a723781` | The reviewer is told today's date (two false "future date" criticals on #123) | all pass | passed all six gates |
+| #123 | `65760b8` | Plan v2: prompt v2, intent hashes, freeze test, section 10; the first review run failed twice on the date claim and passed after #124 | all pass after the re-run | passed all six gates |
+| #126 | `c5ba110` | Plan amendment 1: INTENT-3 and INTENT-4 descriptions | all pass | passed all six gates (local tier skipped while the Mac ran the registered Qwen queue) |
 
 Why the gate was bypassed on three of them: the reviewer's later passes contradicted each other or raised a false critical (#120: it said two pinned
 package versions do not exist, and PyPI lists both), the fixes for its real findings were already pushed, and the owner had allowed `--no-verify` with a row per push. The

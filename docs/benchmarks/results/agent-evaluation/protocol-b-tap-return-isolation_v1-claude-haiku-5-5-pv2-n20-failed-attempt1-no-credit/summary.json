@@ -1,0 +1,50 @@
+{
+  "schema": "agent-eval/v2",
+  "protocol": "B (verifier feedback, up to 5 turns)",
+  "intent": "tap-return-isolation/v1",
+  "model": "claude-haiku-5-5",
+  "modelDigest": "Claude Haiku 5.5 claude-haiku-5-5",
+  "host": "https://api.anthropic.com",
+  "trials": 20,
+  "trialsRun": 20,
+  "temperature": null,
+  "topP": null,
+  "seeds": "provider-default",
+  "numPredict": 16384,
+  "think": false,
+  "promptSha256": "1522adfcf5bc5920ae1882c40485dc7aced086e7ade7852b544d2098757bbe9c",
+  "promptVersion": "v2",
+  "intentSha256": "66af9abcd91211c60d9c7ad166f5317c33d1176e9ee7b5711daa2cd0b0f3dde1",
+  "gitCommit": "65760b8735468ae93b85a34d6d295b1837b88c56",
+  "startedAt": "2026-10-26T17:18:45.170Z",
+  "counts": {
+    "ERR_SYNTAX": 0,
+    "ERR_TABLE_OVERFLOW": 0,
+    "ERR_PREREQUISITE": 0,
+    "ERR_HAIRPIN": 0,
+    "ERR_AMBIGUITY": 0,
+    "ERR_SHADOWED": 0,
+    "ERR_INTENT_LEAK": 0,
+    "ERR_INTENT_MISSING": 0,
+    "ERR_UNCHECKABLE": 0,
+    "ADMISSIBLE": 0,
+    "TRANSPORT_FAILURE": 20
+  },
+  "provider": "anthropic",
+  "thinking": "low",
+  "stoppedBySpendCap": false,
+  "abandonedTrial": null,
+  "usage": {
+    "promptTokens": 0,
+    "outputTokens": 0,
+    "thoughtTokens": 0
+  },
+  "pricing": {
+    "inCentsPer1M": 10,
+    "outCentsPer1M": 50,
+    "note": "Anthropic first-party API rates as used for the 2026-10-20 Haiku runs; not re-verified 2026-10-26"
+  },
+  "costMicroUsd": "0",
+  "maxCents": 200,
+  "note": "abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour"
+}
