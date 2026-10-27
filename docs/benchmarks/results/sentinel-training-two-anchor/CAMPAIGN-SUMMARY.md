@@ -10,9 +10,15 @@ production, and tried two successive, independent fixes (batch 17: recalibrating
 component; batch 18: a diagnostic plus a joint Model-A/Model-B tau sweep).** They live on their own local, unpushed
 branch, `feat/sentinel-ensemble-fp-reduction`, based on current `main` post-PR-#125-merge — NOT on
 `feat/sentinel-two-anchor-training`, which is already fully merged. See the batch 17/18 sections below and
-`PREREGISTRATION.md`'s batch 17/18 addenda for the full write-up. Nothing in either branch is final in the sense of
-being merged, deployed, or acted on; this write-up is for the project owner to read and decide what, if anything, to
-do next.
+`PREREGISTRATION.md`'s batch 17/18 addenda for the full write-up.
+
+**Decision (owner, 2026-10-26): accept batch 17's tau_B=0.19 point (6/13 lab recall, 2/9 lab-benign FP) as this
+architecture's practical ceiling.** Batch 18 showed this is a real, four-way-converged limit of the specific kernel
+and feature set used throughout this campaign, not an under-searched tuning gap — see "What this does and does not
+prove" under Recommendation below for exactly what is and is not proven. Richer features, a different nonlinear
+model class, or a larger optimizer budget remain open as deliberate future research, not pursued here. Production
+integration (opt-in, strongly recommended; live cost reconfirmation; live end-to-end validation) follows in a
+separate PR.
 
 ## The problem
 
@@ -137,29 +143,46 @@ dedicated lab-benign anchor term for Model A's training, or a deterministic pre-
 
 ## Recommendation
 
-**Deploy consideration: batch 13's two-model ensemble, with batch 17's tau_B=0.19 recalibration as the owner-facing
-alternative for lower lab-benign false positives**, not any single unified kernel. Batch 13's ensemble (Model A =
-batch 10's weights, Model B = baseline `sr.W` at its own standalone tau=0.15) is the only configuration in 16 batches
-to clear CIC recall, CIC-benign FP, and lab-attack recall simultaneously, verified against the real scoring functions
-and independently checked for leakage/degenerate solutions before being accepted. **This comes with a real, disclosed
-cost, not a free win: lab-benign false positives rise to 5/9 (56%), worse than either component model alone (Model A
-1/9, Model B 4/9) — the expected consequence of ORing two models' alerts together.** Materially better real-attack
-recall at roughly double the false-alert rate on ordinary lab traffic is the actual tradeoff batch 13 recommended,
-and whether that's acceptable was explicitly left for the reviewer — the owner reviewed it and said no, prompting
-batch 17. **Batch 17's tau_B=0.19 variant (same two weight sets, Model B's tau raised from 0.15 to 0.19) is a
-disclosed, real alternative point on the same tradeoff curve: lab-benign FP 2/9 instead of 5/9, at the cost of lab
-held-out detection 6/13 instead of 10/13, with CIC recall/FP unaffected or improved.** Neither point reaches the
-owner's full ~90% signal/noise goal; which point (or whether to keep searching for a better one, e.g. jointly
-retuning Model A's own tau) is a decision for the owner, not resolved by this campaign. Its outputs
+**Decided: deploy batch 17's tau_B=0.19 variant** — Model A (batch 10's weights, unchanged) OR Model B (the original
+baseline `sr.W`, with tau raised from its own standalone-optimal 0.15 to 0.19). Lab held-out detection 6/13,
+lab-benign FP 2/9 (~22%), CIC Hulk/GoldenEye recall 100%/100%, CIC-benign FP 0.00%/0.00%.
+
+The owner's actual target was tighter — roughly a 90% signal-to-noise ratio on alerts (lab-benign FP near ~10%).
+Batch 18 tested whether that target was reachable with this architecture: a full joint tau_A/tau_B grid (25 points,
+ranges derived from each model's own measured loss distribution, not guessed) found that the two remaining
+lab-benign false positives at tau_B=0.19 have **split root causes** — `benign-bulk-tcp-2mbit` is Model A firing
+(its loss genuinely overlaps Hulk/GoldenEye's loss range, a real feature-space collision, not a miscalibrated
+threshold), `benign-ping-20pps` is Model B firing. Since two different models cause the two remaining alerts, no
+single threshold adjustment on either model can remove both. The one grid point that did reach FP≤1/9
+(`tau_A=0.30, tau_B=0.19`) did so by desensitizing Model A so much that Hulk recall collapsed to 1% and GoldenEye to
+43% — proving FP≤1/9 and detected≥6/13 are not mutually exclusive in principle, but not achievable together without
+destroying the recall this whole effort exists to get.
+
+**What this does and does not prove.** Four independent angles — architecture width (batch 4), a jointly-trained
+gate (batches 15-16), threshold tuning alone (batch 17), and threshold tuning jointly (batch 18) — all converge on
+essentially the same ceiling for this specific kernel family and feature set. That is real, verified evidence of a
+limit in *this* design space (a small, mostly-linear, 4-features-per-packet, weight-tied autoencoder kernel), not
+proof that no cheap detector could ever separate `benign-bulk-tcp-2mbit` from a volumetric HTTP flood. Three
+concrete, untried directions remain open for later, deliberate research rather than another quick batch: (1) richer
+features (e.g. inter-arrival timing variance, port diversity) that might carry the discriminating signal the current
+4 features don't; (2) a genuinely different nonlinear model class, since the one nonlinear form tried (a jointly-
+trained gate) failed on optimization, not because no solution exists; (3) a substantially larger optimizer search
+budget than the batch-scale budgets used throughout this campaign. None of these were pursued here deliberately —
+the decision was to ship the verified 6/13-recall, 2/9-FP point now rather than open a new, open-ended research
+line before closing this one out.
+
+Its outputs
 (`scripts/eval-sentinel-ensemble.py`, `docs/benchmarks/results/sentinel-training-two-anchor/trained-weights-two-anchor-batch10-2026-10-25.json`
-as Model A plus the original hardcoded `sr.W` as Model B) are not wired into
-`scripts/gpu-sdn-anomaly-sentinel.py` — that integration was explicitly out of scope for this autonomous campaign
-and needs the owner's review first. Batch 13's own report scoped roughly what it would take: two weight-set
-configs instead of one, two independent `AdaptiveThresholdController` instances (each tracking its own EMA from its
-own model's loss stream), two kernel inferences per window (cheap given the measured ~369x compute headroom, but
-should be confirmed against the live kernel rather than assumed), the quarantine dispatch path OR-combining both
-models' alerts with the reason field disclosing which fired, and a fresh end-to-end validation against the live
-kernel before this becomes a non-opt-in default path.
+as Model A plus the original hardcoded `sr.W`, threshold raised to `0.19`, as Model B) are not wired into
+`scripts/gpu-sdn-anomaly-sentinel.py` as of this document — that integration was explicitly out of scope for the
+autonomous training campaign itself and required the owner's decision first, which has now been made (accept the
+6/13-recall, 2/9-FP point; deploy opt-in). The owner-approved integration requirements are: two weight-set configs
+instead of one, two independent `AdaptiveThresholdController` instances (each tracking its own EMA from its own
+model's loss stream, not shared), two kernel inferences per window with the compute cost reconfirmed against the
+live Jetson kernel (not just the ~369x headroom figure cited from archived design docs), the quarantine dispatch
+path OR-combining both models' alerts with the reason field disclosing which fired, shipped as an opt-in path that
+is strongly recommended over the single-model default, and a live end-to-end validation against the real deployed
+kernel before it is trusted. See the production-integration PR for the actual implementation and live test results.
 
 **Disclose, don't paper over, the scope limit from batch 14.** Whatever gets deployed should be described
 accurately: a detector tuned for CIC-IDS2017's Hulk/GoldenEye-style volumetric floods and the lab's own flood/scan
