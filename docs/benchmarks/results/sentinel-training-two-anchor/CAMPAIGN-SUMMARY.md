@@ -92,7 +92,7 @@ detector**, and should not be described as one.
 ("option 2 then option 3, in that order"), this tested whether a single, jointly-trained architecture could match
 the ensemble's numbers without needing two separately-fitted models. Batch 15 read the real kernel math, confirmed
 the Jetson's measured compute budget has ~369x headroom (so compute was never the limiting factor — this figure was
-later re-derived directly against the live kernel during production integration and corrected to ~0.164ms, ~6x
+later re-derived directly against the live kernel during production integration and corrected to ~0.248ms, ~4x
 headroom under the <1.0ms budget, still comfortable but a real measured number rather than this archived one; see
 "Production integration" below), diagnosed from
 the committed weight vectors that the CIC/lab conflict moves at least 5 of 10 weights together (ruling out a
@@ -192,9 +192,14 @@ different weights being loaded. This could not have been caught by the offline e
 never ran two native-engine instances in one process, or by a Mac-only smoke test (the non-CUDA fallback path has
 no shared native state to collide on). Fixed by having each instance re-upload its own weights immediately before
 its own inference call, every window, only when `--enable-ensemble` is set — zero added cost to the default path.
-Re-measured live on the Jetson after the fix, with the two models genuinely producing different losses: this is
-where the corrected ~0.164ms compute-cost figure above comes from (up from an earlier, bug-confounded ~0.102ms
-estimate that had unknowingly measured two calls against the same weights).
+Re-measured live on the Jetson after the fix, with the two models genuinely producing different losses: an initial
+figure of ~0.164ms summed only `compute_anomaly_score()`'s own reported latency, which excludes `reload_weights()`'s
+wall-clock cost — a second, AI-review-caught accounting gap (the same one `total_latency_ns` had). A precise,
+isolated 2000-window benchmark of the real end-to-end sequence (reload(A) → infer(A) → reload(B) → infer(B),
+wall-clock from first call to last) found the true per-window cost: ~0.248ms, ~4x headroom under the <1.0ms budget —
+this is the figure cited above, superseding both the incomplete ~0.164ms figure and the earlier, bug-confounded
+~0.102ms estimate that had unknowingly measured two calls against the same (shared-buffer) weights.
+`total_latency_ns` (and the operator-facing "Average Latency" stat) now includes `reload_weights()`'s cost.
 
 Still ahead of a non-opt-in default: broader live validation against real tap traffic (this integration's live test
 used synthetic demo-mode traffic against the real kernel, confirming correctness and cost, not real-world detection

@@ -56,11 +56,15 @@ every window, because whichever instance's constructor loaded weights LAST deter
 inference calls actually ran against. Fixed by having each instance re-upload its own weights (reload_weights())
 immediately before its own inference call, every window, only when --enable-ensemble is set (zero cost added to
 the single-model default path). Re-measured live on the Jetson after the fix, with Model A and Model B genuinely
-producing different losses: sequential two-model inference (reload + inference, both models, the actual ensemble
-cost) averages ~0.164ms (16.4% of the <1.0ms budget) -- comfortable headroom, a real measured number including
-the reload overhead, not the ~369x figure earlier cited from archived docs (which was never re-derived against
-this exact kernel, and is superseded by this measurement) nor the bug-confounded ~0.102ms estimate from before the
-fix was found.
+producing different losses: an initial measurement (summing only compute_anomaly_score()'s own reported latency,
+which excludes reload_weights()'s wall-clock cost) showed ~0.164ms, but a subsequent AI-review finding caught that
+this was an incomplete accounting -- reload_weights() runs as a separate, untimed statement, and total_latency_ns
+never folded its cost in. A precise, isolated 2000-window benchmark of the real end-to-end per-window sequence
+(reload(A) -> infer(A) -> reload(B) -> infer(B), wall-clock from first call to last) found the true cost: ~0.248ms
+mean (24.8% of the <1.0ms budget) -- still comfortable headroom, but the correct number, not ~0.164ms. Both figures
+supersede the ~369x figure earlier cited from archived docs (never re-derived against this exact kernel) and the
+bug-confounded ~0.102ms estimate from before the shared-weight-buffer fix was found. latency_ns/latency_ns_b (and
+therefore total_latency_ns and the operator-facing "Average Latency" stat) now include reload_weights()'s cost.
 """
 
 import argparse
@@ -855,8 +859,17 @@ def run_sentinel(
                     # Gpu1DAutoencoder.reload_weights), so this is required for correctness whenever a second
                     # instance (Model B) shares the process. No-op cost in single-model mode is avoided entirely
                     # by only calling this when enable_ensemble -- zero behavior/perf change to the default path.
+                    # Timed explicitly and folded into latency_ns below: reload_weights() has no internal timer of
+                    # its own, and omitting its cost from total_latency_ns would make the operator-facing "Average
+                    # Latency" stat silently undercount the real per-window cost (found 2026-10-26, live Jetson
+                    # measurement: the self-reported stat was ~0.151ms short of the real wall-clock sequence).
+                    reload_t0_ns = time.monotonic_ns()
                     autoencoder.reload_weights()
+                    reload_ns_a = time.monotonic_ns() - reload_t0_ns
+                else:
+                    reload_ns_a = 0
                 loss, latency_ns = autoencoder.compute_anomaly_score(window)
+                latency_ns += reload_ns_a
                 total_latency_ns += latency_ns
 
                 # Check if anomaly threshold breached via adaptive self-tuning controller (Council Invariant 5)
@@ -872,9 +885,18 @@ def run_sentinel(
                     # A's threshold_controller, exactly as the campaign's verified design requires (see
                     # docs/.../sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md, batch 13). The ensemble rule is
                     # OR: either model's own dynamic threshold firing is enough to alert.
-                    assert autoencoder_b is not None and threshold_controller_b is not None  # both set together, enable_ensemble-guarded
+                    if autoencoder_b is None or threshold_controller_b is None:
+                        # Explicit check, not assert: this fail-closed guarantee must hold even under `python -O`,
+                        # which strips assert statements. Both are always set together when enable_ensemble is True
+                        # (see their construction above); reaching here means that invariant was violated.
+                        sys.stderr.write("[gpu-sentinel] FATAL: enable_ensemble is True but autoencoder_b/"
+                                          "threshold_controller_b is None -- refusing to run a half-constructed ensemble.\n")
+                        sys.exit(1)
+                    reload_t0_ns = time.monotonic_ns()
                     autoencoder_b.reload_weights()  # re-upload Model B's own weights immediately before Model B's own call
+                    reload_ns_b = time.monotonic_ns() - reload_t0_ns
                     loss_b, latency_ns_b = autoencoder_b.compute_anomaly_score(window)
+                    latency_ns_b += reload_ns_b
                     total_latency_ns += latency_ns_b
                     is_anomaly_b, dynamic_tau_b = threshold_controller_b.update_and_check(loss_b)
                     is_anomaly = is_anomaly_a or is_anomaly_b
@@ -882,9 +904,19 @@ def run_sentinel(
                 target_ip = extractor.get_predominant_src_ip()
                 target_mac = extractor.get_predominant_src_mac()
 
+                if enable_ensemble and (loss_b is None or latency_ns_b is None or dynamic_tau_b is None):
+                    # Explicit check, not assert (survives python -O): structurally guaranteed set together in the
+                    # enable_ensemble branch above, but a display/alert path should never trust that silently.
+                    sys.stderr.write("[gpu-sentinel] FATAL: enable_ensemble is True but Model B's per-window result "
+                                      "is incomplete -- refusing to report or act on a half-computed ensemble decision.\n")
+                    sys.exit(1)
+                # Pyright narrowing only (the real, -O-surviving safety check is the explicit sys.exit above):
+                # loss_b/latency_ns_b/dynamic_tau_b are legitimately None in the default (non-ensemble) path,
+                # so each assert below is re-stated immediately before its own use, inside its own
+                # `if enable_ensemble:` block -- narrowing from one block does not carry into a later one.
                 if total_inferences % 25 == 1:
                     if enable_ensemble:
-                        assert loss_b is not None and latency_ns_b is not None and dynamic_tau_b is not None  # set together above
+                        assert loss_b is not None and latency_ns_b is not None and dynamic_tau_b is not None
                         print(f"   [inf #{total_inferences}] A: loss={loss:.4f} tau={dynamic_tau:.4f} | "
                               f"B: loss={loss_b:.4f} tau={dynamic_tau_b:.4f} | top_ip={target_ip} | "
                               f"lat={(latency_ns + latency_ns_b) / 1_000_000.0:.2f}ms")
@@ -894,7 +926,7 @@ def run_sentinel(
                 if is_anomaly:
                     total_anomalies += 1
                     if enable_ensemble:
-                        assert loss_b is not None and latency_ns_b is not None and dynamic_tau_b is not None  # set together above
+                        assert loss_b is not None and latency_ns_b is not None and dynamic_tau_b is not None
                         reason = format_ensemble_reason(is_anomaly_a, loss, dynamic_tau, is_anomaly_b, loss_b, dynamic_tau_b)
                         latency_ms_display = (latency_ns + latency_ns_b) / 1_000_000.0
                     else:
@@ -988,7 +1020,8 @@ def main():
                               "sentinel runs the compiled-in hardcoded constants, exactly as it does today. Ignored "
                               "if --enable-ensemble is set (use --ensemble-weights-file-a/-b instead).")
     parser.add_argument('--enable-ensemble', action='store_true',
-                         default=bool(os.environ.get('GPU_SENTINEL_ENABLE_ENSEMBLE', '')),
+                         default=os.environ.get('GPU_SENTINEL_ENABLE_ENSEMBLE', '').strip().lower() in
+                         ('1', 'true', 'yes', 'on'),
                          help="Opt-in: run the verified two-model OR-ensemble (see module docstring and "
                               "docs/benchmarks/results/sentinel-training-two-anchor/CAMPAIGN-SUMMARY.md) instead of "
                               "a single model. STRONGLY RECOMMENDED over the single-model default -- offline "

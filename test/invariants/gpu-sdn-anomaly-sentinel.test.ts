@@ -31,9 +31,22 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const SCRIPT_PATH = path.resolve(REPO_ROOT, 'scripts/gpu-sdn-anomaly-sentinel.py');
 
-function runPython(driver: string, args: string[] = []): any {
+function runPython<T>(driver: string, args: string[] = []): T {
   const r = execFileSync('python3', ['-c', driver, ...args], { encoding: 'utf8', timeout: 30000 });
-  return JSON.parse(r.trim().split('\n').pop() ?? '{}');
+  return JSON.parse(r.trim().split('\n').pop() ?? '{}') as T;
+}
+
+interface EnsembleDefaults {
+  weights_file_a: string;
+  weights_file_a_exists: boolean;
+  tau_a: number;
+  weights_file_b: string;
+  tau_b: number;
+}
+
+interface BaselineWeightsCheck {
+  gpu_sentinel_baseline: number[];
+  sentinel_replay_w: number[];
 }
 
 const IMPORT_DRIVER_PREFIX = `
@@ -43,7 +56,7 @@ mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
 `;
 
 describe('scripts/gpu-sdn-anomaly-sentinel.py: --enable-ensemble defaults', () => {
-  const out = runPython(IMPORT_DRIVER_PREFIX + `
+  const out = runPython<EnsembleDefaults>(IMPORT_DRIVER_PREFIX + `
 print(json.dumps({
     'weights_file_a': mod.DEFAULT_ENSEMBLE_WEIGHTS_FILE_A,
     'weights_file_a_exists': __import__('os').path.exists(mod.DEFAULT_ENSEMBLE_WEIGHTS_FILE_A),
@@ -75,8 +88,30 @@ print(json.dumps({
   });
 });
 
+describe('BASELINE_SR_W: the three sources of truth for "the compiled-in defaults" must never silently diverge', () => {
+  // gpu-sdn-anomaly-sentinel.py's BASELINE_SR_W claims to match scripts/sentinel-replay.py's sr.W exactly (the
+  // same baseline the sentinel-training-two-anchor campaign used as Model B throughout). A third source -- the
+  // CUDA kernel's own compiled-in default_weights array in src/gpu/gpu_anomaly_kernel.cu -- cannot be checked
+  // from TypeScript tests without a CUDA toolchain, but was confirmed by hand against this same array when
+  // BASELINE_SR_W was introduced; this test pins the two sources that CAN be checked in CI.
+  const SENTINEL_REPLAY_PATH = path.resolve(REPO_ROOT, 'scripts/sentinel-replay.py');
+
+  it('BASELINE_SR_W matches scripts/sentinel-replay.py\'s sr.W exactly', () => {
+    const out = runPython<BaselineWeightsCheck>(IMPORT_DRIVER_PREFIX + `
+replay_spec = importlib.util.spec_from_file_location('sr', sys.argv[2])
+sr = importlib.util.module_from_spec(replay_spec); replay_spec.loader.exec_module(sr)
+print(json.dumps({
+    'gpu_sentinel_baseline': list(mod.BASELINE_SR_W),
+    'sentinel_replay_w': [float(x) for x in sr.W],
+}))
+`, [SCRIPT_PATH, SENTINEL_REPLAY_PATH]);
+    expect(out.gpu_sentinel_baseline).toHaveLength(out.sentinel_replay_w.length);
+    out.gpu_sentinel_baseline.forEach((w, i) => expect(w).toBeCloseTo(out.sentinel_replay_w[i], 6));
+  });
+});
+
 describe('format_ensemble_reason: the quarantine audit-trail string', () => {
-  const callDriver = (a: boolean, la: number, ta: number, b: boolean, lb: number, tb: number) => runPython(IMPORT_DRIVER_PREFIX + `
+  const callDriver = (a: boolean, la: number, ta: number, b: boolean, lb: number, tb: number) => runPython<string>(IMPORT_DRIVER_PREFIX + `
 print(json.dumps(mod.format_ensemble_reason(${a ? 'True' : 'False'}, ${la}, ${ta}, ${b ? 'True' : 'False'}, ${lb}, ${tb})))
 `, [SCRIPT_PATH]);
 
