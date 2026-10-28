@@ -3,7 +3,10 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 const SCRIPT = path.resolve(__dirname, '../../scripts/analyze-arp-capture.py');
-const run = (text: string) => JSON.parse(execFileSync('python3', [SCRIPT], { input: text, encoding: 'utf8' }));
+/** The part of the analyzer's JSON these tests read. */
+interface ArpSender { senderMac: string; kind: string; senderIp: string; target: string; destMac: string; count: number; first: string; last: string }
+interface ArpSummary { frames: number; arpFrames: number; distinctKinds: number; nonArpLines: Record<string, number>; senders: ArpSender[]; framesPerHour: Record<string, number> }
+const run = (text: string): ArpSummary => JSON.parse(execFileSync('python3', [SCRIPT], { input: text, encoding: 'utf8' })) as ArpSummary;
 
 const REQ = '2026-10-26 12:47:17.597568 28:94:01:8b:70:e5 > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 192.168.0.254 tell 192.168.0.240, length 46';
 const GARP = '2026-10-26 17:50:47.100000 b8:27:eb:79:ff:0a > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 42: Request who-has 10.0.2.52 tell 10.0.2.52, length 28';
@@ -16,10 +19,10 @@ describe('analyze-arp-capture', () => {
     const s = run([REQ, REQ, GARP, REPLY, REQ].join('\n') + '\n');
     expect(s.frames).toBe(5);
     expect(s.arpFrames).toBe(5);
-    const nets = s.senders.find((x: any) => x.senderIp === '192.168.0.240');
+    const nets = s.senders.find((x: ArpSender) => x.senderIp === '192.168.0.240');
     expect(nets).toMatchObject({ count: 3, kind: 'request', target: '192.168.0.254', senderMac: '28:94:01:8b:70:e5' });
-    expect(s.senders.find((x: any) => x.kind === 'reply')).toMatchObject({ senderIp: '10.0.2.1', target: 'aa:bb:cc:dd:ee:ff', count: 1 });
-    expect(s.senders.find((x: any) => x.senderIp === '10.0.2.52')).toMatchObject({ kind: 'announcement', target: '10.0.2.52', count: 1 });
+    expect(s.senders.find((x: ArpSender) => x.kind === 'reply')).toMatchObject({ senderIp: '10.0.2.1', target: 'aa:bb:cc:dd:ee:ff', count: 1 });
+    expect(s.senders.find((x: ArpSender) => x.senderIp === '10.0.2.52')).toMatchObject({ kind: 'announcement', target: '10.0.2.52', count: 1 });
     expect(s.distinctKinds).toBe(3);
   });
 
