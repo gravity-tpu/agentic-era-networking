@@ -75,13 +75,16 @@ function summarizeCostPages(pages) {
       return;
     }
     if (!node || typeof node !== 'object') return;
-    if (typeof node.amount === 'string' || typeof node.amount === 'number') {
+    // Require `currency` alongside `amount`, not just any numeric `amount` field: a billable cost
+    // line item always reports its currency, so this excludes unrelated amount-shaped fields (e.g.
+    // a credit-adjustment or quota count) that would otherwise silently inflate the total.
+    if ((typeof node.amount === 'string' || typeof node.amount === 'number') && typeof node.currency === 'string' && node.currency.length > 0) {
       const amount = Number(node.amount);
       if (Number.isFinite(amount)) {
         const key = node.model || node.workspace_id || node.description || 'unlabeled';
         byKey.set(key, (byKey.get(key) ?? 0) + amount);
         total += amount;
-        currency = node.currency ?? currency;
+        currency = node.currency;
       }
     }
     for (const v of Object.values(node)) visit(v);
