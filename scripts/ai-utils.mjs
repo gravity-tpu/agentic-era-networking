@@ -103,7 +103,10 @@ export function buildModelFallbacks(filterTier = null) {
     });
   }
 
-  const tiers = filterTier ? [filterTier] : ['pro', 'fast'];
+  // Cost control: try the cheap tier before the expensive one. Local Ollama failing (unreachable,
+  // model not pulled, crashed) does not mean the diff needs deep reasoning — escalate to 'pro'
+  // (gemini-pro-latest / claude-opus-4-8 / gpt-4o) only if every 'fast' model also fails or times out.
+  const tiers = filterTier ? [filterTier] : ['fast', 'pro'];
 
   for (const tier of tiers) {
     const entry = routing[tier] ?? {};
@@ -136,6 +139,61 @@ export const OLLAMA_MAX_LINE_CHARS = 1_000_000;
 export function boundedInt(value, fallback, min, max) {
   if (typeof value !== 'number' || !Number.isInteger(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+// ─── Static review context (prompt-caching prefix) ─────────────────────────────
+// .agents/network-context.md and .agents/rules/network-engineering-principles.md are the project's
+// own documented sources of truth for live topology/VLAN/table-budget state and the network review
+// rubric (see AGENTS.md). Loaded here so the network review is grounded in the real files instead of
+// only the hardcoded CCIE_SYSTEM_PROMPT text, and placed first in the prompt (a fixed, byte-identical
+// prefix across calls) so Anthropic's explicit cache_control -- and OpenAI/Gemini's automatic prompt
+// caching, which also requires the cached span to be an unchanged prefix -- can actually hit.
+// Anthropic's minimum cacheable block size is ~1024 tokens (Opus/Sonnet); below that, cache_control is
+// a harmless no-op, so ANTHROPIC_CACHE_MIN_CHARS below gates whether it's worth the extra request shape.
+export const ANTHROPIC_CACHE_MIN_CHARS = 4_000; // ~1k tokens at ~4 chars/token
+
+let _cachedStaticNetworkContext;
+
+/**
+ * Reads network-context.md + network-engineering-principles.md once per process and returns their
+ * concatenation (or '' if neither is present -- this is a review-quality enhancement, not a
+ * correctness invariant, so a missing file fails open with a warning rather than blocking review).
+ */
+export function loadStaticNetworkContext() {
+  if (_cachedStaticNetworkContext !== undefined) return _cachedStaticNetworkContext;
+  const files = [
+    { path: join(ROOT, '.agents', 'network-context.md'), label: 'network-context.md' },
+    { path: join(ROOT, '.agents', 'rules', 'network-engineering-principles.md'), label: 'network-engineering-principles.md' },
+  ];
+  const sections = [];
+  for (const { path: filePath, label } of files) {
+    if (!existsSync(filePath)) {
+      console.warn(`🟡  Static review context file not found, skipping: ${label}`);
+      continue;
+    }
+    try {
+      sections.push(`--- ${label} ---\n${readFileSync(filePath, 'utf-8')}`);
+    } catch (err) {
+      console.warn(`🟡  Failed to read static review context file ${label}:`, err.message);
+    }
+  }
+  _cachedStaticNetworkContext = sections.join('\n\n');
+  return _cachedStaticNetworkContext;
+}
+
+/**
+ * Builds the Anthropic `system` field as cache-eligible content blocks: the static context first
+ * (marked `cache_control: ephemeral` so repeat calls within the ~5 min TTL pay ~10% of input price
+ * for it, per Anthropic's prompt caching), then the review rubric. Falls back to a plain string
+ * (no array, no cache_control) when there is no static context or it is too small to cache usefully --
+ * callAnthropic accepts either shape since it passes `system` straight through to the API.
+ */
+export function buildAnthropicSystemWithCache(staticPrefix, restPrompt) {
+  if (!staticPrefix || staticPrefix.length < ANTHROPIC_CACHE_MIN_CHARS) return restPrompt;
+  return [
+    { type: 'text', text: staticPrefix, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: restPrompt },
+  ];
 }
 
 export const DEFAULT_GLOBAL_TIMEOUT_MS = 180_000;
@@ -660,11 +718,13 @@ export async function recordOllamaInferenceMetrics(data, model = 'qwen3.8:27b', 
  * Council Invariant 6: Physical truth & Epistemic Telemetry Provenance.
  * Council Invariant 2: Deterministic BigInt counters guarded by serialized queue.
  */
-export async function recordCloudInferenceMetrics(provider, model, promptTokensCount, completionTokensCount, filePath = WORKSTATION_METRICS_FILE) {
+export async function recordCloudInferenceMetrics(provider, model, promptTokensCount, completionTokensCount, filePath = WORKSTATION_METRICS_FILE, cacheTokens = {}) {
   return enqueueTelemetryMutation(filePath, async () => {
     let totalPromptTokens = 0n;
     let totalCompletionTokens = 0n;
     let totalCloudTokens = 0n;
+    let totalCacheCreationTokens = 0n;
+    let totalCacheReadTokens = 0n;
     let currentData = {};
 
     if (existsSync(filePath)) {
@@ -675,6 +735,8 @@ export async function recordCloudInferenceMetrics(provider, model, promptTokensC
           totalPromptTokens = parseBigIntSafe(currentData.totalPromptTokens);
           totalCompletionTokens = parseBigIntSafe(currentData.totalCompletionTokens);
           totalCloudTokens = parseBigIntSafe(currentData.totalCloudTokens);
+          totalCacheCreationTokens = parseBigIntSafe(currentData.totalCacheCreationTokens);
+          totalCacheReadTokens = parseBigIntSafe(currentData.totalCacheReadTokens);
         }
       } catch (readErr) {
         if (readErr?.code !== 'ENOENT') {
@@ -692,10 +754,18 @@ export async function recordCloudInferenceMetrics(provider, model, promptTokensC
     const edgeComputeRatioPct = allTokens > 0n
       ? Number((totalLocalTokens * 100n) / allTokens)
       : 100;
+    // Cache tokens are informational only (Anthropic prompt caching): a cache-read token costs ~10%
+    // of a regular input token and a cache-creation token ~1.25x, but promptTokensCount above already
+    // reflects whatever the provider billed, so these are never added into totalCloudTokens -- doing
+    // so would double-count and defeat the point of measuring the savings (Invariant 6: real numbers).
+    const newCacheCreationTokens = totalCacheCreationTokens + parseBigIntSafe(cacheTokens.creation);
+    const newCacheReadTokens = totalCacheReadTokens + parseBigIntSafe(cacheTokens.read);
 
     const updated = {
       ...currentData,
       totalCloudTokens: newCloudTokens.toString(),
+      totalCacheCreationTokens: newCacheCreationTokens.toString(),
+      totalCacheReadTokens: newCacheReadTokens.toString(),
       lastCloudProvider: provider,
       lastCloudModel: model,
       edgeComputeRatioPct,
@@ -841,7 +911,10 @@ export async function callAnthropic(model, systemPrompt, userMessage, signal) {
   }
   const data = await res.json();
   if (data.usage) {
-    trackTelemetryTask(recordCloudInferenceMetrics('anthropic', model, data.usage.input_tokens, data.usage.output_tokens));
+    trackTelemetryTask(recordCloudInferenceMetrics('anthropic', model, data.usage.input_tokens, data.usage.output_tokens, undefined, {
+      creation: data.usage.cache_creation_input_tokens,
+      read: data.usage.cache_read_input_tokens,
+    }));
   }
   const content = data.content?.[0]?.text;
   if (!content || typeof content !== 'string' || !content.trim()) {

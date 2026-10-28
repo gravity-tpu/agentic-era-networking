@@ -32,6 +32,7 @@
     "review:staged": "node scripts/ai-reviewer.mjs",
     "review:last": "node scripts/ai-reviewer.mjs --last",
     "review:head": "node scripts/ai-reviewer.mjs --head",
+    "cost:audit": "node scripts/cost-audit.mjs",
     "setup-hooks": "bash scripts/install-hooks.sh",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

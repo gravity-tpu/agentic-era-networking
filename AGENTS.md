@@ -59,6 +59,7 @@ The packet-forwarding and infrastructure rules (control/data plane separation, f
 - Write the failing test first for a new verifier property; negative states (link down, zero traffic, sensor fault) are tested as rigorously as positive ones.
 - Do not describe unimplemented work as implemented. The roadmap and README status tables are the source of truth for state.
 - AI review (`npm run review`) is a second reader, not a verifier. Model output is not evidence of correctness.
+- Model and subagent calls cost real money (tracked in `/tmp/zodiac-workstation-telemetry.json`'s `edgeComputeRatioPct`, `totalCloudTokens`, `totalCacheReadTokens` — see `npm run cost:audit`). Prefer one focused pass over spawning a subagent for routine, single-step work; reserve subagents/forks for genuinely independent research or for verifying a claim adversarially. An iterative campaign (training, sweeps, multi-batch evaluation) should have an explicit stopping condition and a named decision-maker for when to keep going, not an open-ended "keep iterating."
 
 ---
 

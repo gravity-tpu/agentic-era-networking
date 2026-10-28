@@ -302,59 +302,84 @@ echo ""
 #   non-zero but no API key = skipped gracefully (exit 0 via reviewer)
 echo -e "${BOLD}[Gate 6/6] AI Review — AI code review (strict: no warnings, no criticals)${RESET}"
 
-COUNCIL_PASS=false
-COUNCIL_ATTEMPT=0
-MAX_COUNCIL_ATTEMPTS=3
-
-while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
-  COUNCIL_ATTEMPT=$((COUNCIL_ATTEMPT + 1))
-
-  if [ "$COUNCIL_ATTEMPT" -gt 1 ]; then
-    echo ""
-    echo -e "${YELLOW}  ↻ AI Review attempt ${COUNCIL_ATTEMPT}/${MAX_COUNCIL_ATTEMPTS} — re-evaluating after fixes...${RESET}"
-    echo ""
+# Cost control: skip the (potentially cloud-billed) AI review entirely when every changed file is
+# docs/non-code, matching .github/workflows/ai-review.yml's paths-ignore exactly so local and CI
+# behavior agree. Requires FILES_TO_SCAN to be non-empty -- an empty list means we could not determine
+# scope (new branch, detached push), and a gate that cannot determine scope must not skip itself.
+is_docs_only_push() {
+  local f
+  if [ ${#FILES_TO_SCAN[@]} -eq 0 ]; then
+    return 1
   fi
+  for f in "${FILES_TO_SCAN[@]}"; do
+    case "$f" in
+      *.md|.gitignore|scratch/*|.env*) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
 
-  # Capture exit code without aborting the script (set -e is active).
-  # Export GITHUB_BEFORE/GITHUB_SHA so the reviewer uses the same diff range
-  # as GitHub Actions (PUSH_BEFORE..PUSH_AFTER rather than HEAD~1..HEAD),
-  # ensuring local and CI reviews are identical for multi-commit pushes.
-  COUNCIL_EXIT=0
-  GITHUB_BEFORE="$PUSH_BEFORE" GITHUB_SHA="$PUSH_AFTER" \
-    node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
+if is_docs_only_push; then
+  echo -e "  ${GREEN}✓ Skipped — push touches only docs/non-code files (same paths-ignore as .github/workflows/ai-review.yml):${RESET}"
+  printf '      %s\n' "${FILES_TO_SCAN[@]}"
+  COUNCIL_PASS=true
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  COUNCIL_PASS=false
+  COUNCIL_ATTEMPT=0
+  MAX_COUNCIL_ATTEMPTS=3
 
-  if [ "$COUNCIL_EXIT" -eq 0 ]; then
-    echo -e "  ${GREEN}✓ AI Review passed — no Critical Issues or Warnings${RESET}"
-    COUNCIL_PASS=true
-    PASS_COUNT=$((PASS_COUNT + 1))
-    break
-  elif [ "$COUNCIL_EXIT" -eq 1 ]; then
-    echo -e "  ${RED}✗ AI Review: Critical Issues detected${RESET}"
-    if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
-      echo -e "  ${YELLOW}  Fix the Critical Issues above, then run: git commit --amend && git push${RESET}"
-      echo -e "  ${YELLOW}  The hook will re-evaluate automatically on next push.${RESET}"
+  while [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; do
+    COUNCIL_ATTEMPT=$((COUNCIL_ATTEMPT + 1))
+
+    if [ "$COUNCIL_ATTEMPT" -gt 1 ]; then
+      echo ""
+      echo -e "${YELLOW}  ↻ AI Review attempt ${COUNCIL_ATTEMPT}/${MAX_COUNCIL_ATTEMPTS} — re-evaluating after fixes...${RESET}"
+      echo ""
     fi
-  elif [ "$COUNCIL_EXIT" -eq 2 ]; then
-    echo -e "  ${YELLOW}⚠ AI Review: Warnings detected${RESET}"
-    if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
-      echo -e "  ${YELLOW}  Resolve the Warnings above, then re-push.${RESET}"
+
+    # Capture exit code without aborting the script (set -e is active).
+    # Export GITHUB_BEFORE/GITHUB_SHA so the reviewer uses the same diff range
+    # as GitHub Actions (PUSH_BEFORE..PUSH_AFTER rather than HEAD~1..HEAD),
+    # ensuring local and CI reviews are identical for multi-commit pushes.
+    COUNCIL_EXIT=0
+    GITHUB_BEFORE="$PUSH_BEFORE" GITHUB_SHA="$PUSH_AFTER" \
+      node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
+
+    if [ "$COUNCIL_EXIT" -eq 0 ]; then
+      echo -e "  ${GREEN}✓ AI Review passed — no Critical Issues or Warnings${RESET}"
+      COUNCIL_PASS=true
+      PASS_COUNT=$((PASS_COUNT + 1))
+      break
+    elif [ "$COUNCIL_EXIT" -eq 1 ]; then
+      echo -e "  ${RED}✗ AI Review: Critical Issues detected${RESET}"
+      if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
+        echo -e "  ${YELLOW}  Fix the Critical Issues above, then run: git commit --amend && git push${RESET}"
+        echo -e "  ${YELLOW}  The hook will re-evaluate automatically on next push.${RESET}"
+      fi
+    elif [ "$COUNCIL_EXIT" -eq 2 ]; then
+      echo -e "  ${YELLOW}⚠ AI Review: Warnings detected${RESET}"
+      if [ "$COUNCIL_ATTEMPT" -lt "$MAX_COUNCIL_ATTEMPTS" ]; then
+        echo -e "  ${YELLOW}  Resolve the Warnings above, then re-push.${RESET}"
+      fi
+    else
+      # Fail-closed (Hassabis: Verification Asymmetry / Fail-Closed Bounds):
+      # Any exit code other than 0, 1, or 2 means the reviewer itself crashed
+      # (OOM, uncaught exception, SIGKILL, command-not-found, etc.).
+      # A verification gate that cannot execute MUST block the push, not silently
+      # pass. If AI APIs are unavailable, the reviewer exits 0 internally before
+      # Node even exits abnormally — this path is a genuine runtime failure.
+      echo -e "  ${RED}✗ AI Review crashed (exit code $COUNCIL_EXIT). Push blocked.${RESET}"
+      echo -e "  ${YELLOW}  Check that node is installed and GEMINI_API_KEY / ANTHROPIC_API_KEY is set.${RESET}"
+      echo -e "  ${YELLOW}  Emergency bypass (audited): git push --no-verify${RESET}"
     fi
-  else
-    # Fail-closed (Hassabis: Verification Asymmetry / Fail-Closed Bounds):
-    # Any exit code other than 0, 1, or 2 means the reviewer itself crashed
-    # (OOM, uncaught exception, SIGKILL, command-not-found, etc.).
-    # A verification gate that cannot execute MUST block the push, not silently
-    # pass. If AI APIs are unavailable, the reviewer exits 0 internally before
-    # Node even exits abnormally — this path is a genuine runtime failure.
-    echo -e "  ${RED}✗ AI Review crashed (exit code $COUNCIL_EXIT). Push blocked.${RESET}"
-    echo -e "  ${YELLOW}  Check that node is installed and GEMINI_API_KEY / ANTHROPIC_API_KEY is set.${RESET}"
-    echo -e "  ${YELLOW}  Emergency bypass (audited): git push --no-verify${RESET}"
+  done
+
+  if [ "$COUNCIL_PASS" = false ]; then
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    FAILURES+=("AI Review: unresolved Critical Issues or Warnings after ${MAX_COUNCIL_ATTEMPTS} attempts")
   fi
-done
-
-if [ "$COUNCIL_PASS" = false ]; then
-  FAIL_COUNT=$((FAIL_COUNT + 1))
-  FAILURES+=("AI Review: unresolved Critical Issues or Warnings after ${MAX_COUNCIL_ATTEMPTS} attempts")
 fi
 
 echo ""
