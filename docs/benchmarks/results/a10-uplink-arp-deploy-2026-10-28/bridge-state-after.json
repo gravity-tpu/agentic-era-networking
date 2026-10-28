@@ -1,0 +1,46 @@
+{
+  "port1Isolation": {
+    "state": "verified",
+    "confirmed": [
+      "p1-ipv4-intra-segment",
+      "p1-arp-allow-10.0.2.50",
+      "p1-arp-allow-10.0.2.52",
+      "p1-default-tap-only",
+      "p2-ipv4-to-segment",
+      "p3-tap-return"
+    ],
+    "mismatches": [],
+    "switchErrors": [],
+    "checkedAtMs": 1793159946168,
+    "checkedAtMonoNs": "214334237836496",
+    "actions": {
+      "status": "confirmed",
+      "confirmed": [
+        "p1-ipv4-intra-segment",
+        "p1-arp-allow-10.0.2.50",
+        "p1-arp-allow-10.0.2.52",
+        "p1-default-tap-only",
+        "p2-ipv4-to-segment",
+        "p3-tap-return"
+      ],
+      "mismatches": [],
+      "unconfirmed": [],
+      "switchReportsActions": true,
+      "tableMiss": "drops"
+    },
+    "provenForwarding": true,
+    "checkedAgeMs": 44733,
+    "ageStatus": "ok"
+  },
+  "openflow": {
+    "status": "Connected",
+    "version": "1.3",
+    "datapathId": "0x70b3d58740c9",
+    "activeTables": 10,
+    "activeFlows": 0,
+    "tableLookups": "59",
+    "tableMatches": "59",
+    "lastHeartbeatLatencyNs": "958574",
+    "rules": []
+  }
+}

@@ -1,4 +1,6 @@
-# A10, uplink to workload ARP confinement (opt-in, built 2026-10-26, not deployed)
+# A10, uplink to workload ARP confinement (opt-in, built 2026-10-26, deployed with peers `none` on 2026-10-27)
+
+**Status 2026-10-28:** deployed on the live bridge with `ZODIAC_UPLINK_ARP_PEERS=none` on the owner's approval, after the 24-hour capture; switch readback verified 6 of 6 rules. Evidence and what was not shown: `docs/benchmarks/results/a10-uplink-arp-deploy-2026-10-28/README.md`. The sections below are the original design and runbook.
 
 ## What exists
 
