@@ -73,12 +73,18 @@ async function fetchAllPages(url, headers) {
   return pages;
 }
 
+// Matches genuine token-count field names (…_tokens, or exactly "tokens") while excluding fields that
+// contain "token" but are not counts -- a price, limit, or quota expressed per-token would otherwise
+// be silently summed alongside real counts.
+const TOKEN_COUNT_FIELD_RE = /(^|_)tokens?($|_)/i;
+const NON_COUNT_FIELD_RE = /price|limit|quota|budget|rate/i;
+
 /**
  * Walks the response generically rather than assuming an exact field layout (the Usage API's precise
  * response shape was not independently verified against live documentation before writing this --
  * only Anthropic support's description of the endpoint's existence/availability was). For every object
- * that has a string `model` field, sums every numeric field whose name contains "token" (case-
- * insensitive), one level of nesting deep (covers a plausible `cache_creation: { ephemeral_5m_input_tokens,
+ * that has a string `model` field, sums every numeric field that looks like a token count, exactly one
+ * level of nesting deep (covers a plausible `cache_creation: { ephemeral_5m_input_tokens,
  * ephemeral_1h_input_tokens }` shape without hardcoding it). Grouped by (model, field name) so the
  * output shows exactly what the API returned rather than a value computed from an assumed shape.
  */
@@ -88,13 +94,14 @@ function summarizeUsagePages(pages) {
 
   function sumTokenFields(obj, model, depth) {
     for (const [field, value] of Object.entries(obj)) {
-      if (/token/i.test(field) && (typeof value === 'number' || typeof value === 'string')) {
+      const looksLikeTokenCount = TOKEN_COUNT_FIELD_RE.test(field) && !NON_COUNT_FIELD_RE.test(field);
+      if (looksLikeTokenCount && (typeof value === 'number' || typeof value === 'string')) {
         const n = Number(value);
         if (Number.isFinite(n)) {
           const key = `${model} :: ${field}`;
           byModelField.set(key, (byModelField.get(key) ?? 0) + n);
         }
-      } else if (depth < 2 && value && typeof value === 'object' && !Array.isArray(value)) {
+      } else if (depth < 1 && value && typeof value === 'object' && !Array.isArray(value)) {
         sumTokenFields(value, model, depth + 1);
       }
     }
@@ -169,7 +176,7 @@ async function main() {
       const fields = [...byModelField.entries()].filter(([k]) => k.startsWith(`${model} :: `)).sort((a, b) => b[1] - a[1]);
       for (const [key, count] of fields) {
         const field = key.slice(`${model} :: `.length);
-        console.log(`    ${field.padEnd(32)} ${count.toLocaleString()}`);
+        console.log(`    ${field.padEnd(32)} ${count.toString()}`);
       }
     }
   } catch (err) {
