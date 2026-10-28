@@ -1,20 +1,29 @@
 /**
- * cost-audit.mjs — Anthropic Admin API cost/usage report, plus this repo's own cloud-call telemetry.
+ * cost-audit.mjs — Anthropic Usage Admin API token report, plus this repo's own cloud-call telemetry.
  *
  * Why this exists: the two cost levers in scripts/ai-utils.mjs (cheap-tier-first model routing,
  * Anthropic prompt caching for the network review) are informed guesses about where spend goes.
  * This script pulls the actual numbers so they can be confirmed or corrected, instead of optimizing
  * blind (Invariant 6: measured, not assumed).
  *
- * Requires an Anthropic ADMIN API key (starts with sk-ant-admin..., distinct from a regular
- * ANTHROPIC_API_KEY; created by an organization admin in the Anthropic Console under
- * Settings -> Admin API keys). A regular API key does not have access to these endpoints and will
- * get a 403/404 -- that is a real, reportable failure, not something this script papers over.
+ * Requires an Anthropic ADMIN API key. As of 2026-10-27 (confirmed via Anthropic support, ticket
+ * re: org 2bcd120f-2675-4457-bcdd-667c3f311eb5), the Console's "Admin API keys" UI from older docs no
+ * longer exists as a separate page on non-Enterprise plans: an admin-scoped key is created by (1)
+ * Organization Settings -> API Keys -> Service Accounts -> create a service account with the Admin
+ * role, then (2) Organization Settings -> API Keys -> Create Key -> set "Linked account" to that
+ * service account. A regular personal-account key does not have access to this endpoint and gets a
+ * 403 -- that is a real, reportable failure, not something this script papers over.
+ *
+ * Reports TOKEN usage, not dollar cost: the cost_report / spend-limits endpoints are Enterprise-plan
+ * only (confirmed 403 "Missing permissions" on a Platform-plan Admin key, per the same ticket). The
+ * Console's Usage page (platform.claude.com/usage) shows actual billed dollars with the same
+ * breakdown and CSV export; this script's token counts are for cross-checking the caching/routing
+ * levers (e.g. cache_read vs. uncached input tokens), not for an authoritative dollar figure.
  *
  * Usage:
- *   ANTHROPIC_ADMIN_KEY=sk-ant-admin-... node scripts/cost-audit.mjs [--days N]
+ *   ANTHROPIC_ADMIN_KEY=sk-ant-... node scripts/cost-audit.mjs [--days N] [--bucket 1m|1h|1d]
  *
- * This only reports what Anthropic billed. It does NOT cover Google/OpenAI spend (check those
+ * This only reports what Anthropic metered. It does NOT cover Google/OpenAI spend (check those
  * providers' own billing consoles) or local Ollama (zero marginal $ cost by construction).
  */
 
@@ -26,6 +35,9 @@ loadEnv();
 const args = process.argv.slice(2);
 const daysArgIndex = args.indexOf('--days');
 const DAYS = daysArgIndex >= 0 && args[daysArgIndex + 1] ? Math.max(1, Math.min(365, parseInt(args[daysArgIndex + 1], 10) || 30)) : 30;
+const bucketArgIndex = args.indexOf('--bucket');
+const VALID_BUCKETS = new Set(['1m', '1h', '1d']);
+const BUCKET_WIDTH = bucketArgIndex >= 0 && VALID_BUCKETS.has(args[bucketArgIndex + 1]) ? args[bucketArgIndex + 1] : '1d';
 
 const ADMIN_KEY = process.env.ANTHROPIC_ADMIN_KEY;
 
@@ -61,13 +73,32 @@ async function fetchAllPages(url, headers) {
   return pages;
 }
 
-/** Sums every numeric `amount`-shaped field it can find, grouped by the clearest available
- * dimension (model, then workspace, then 'unlabeled'). Walks generically rather than assuming a
- * fixed response shape, since this script's job is to surface what the API actually returns. */
-function summarizeCostPages(pages) {
-  const byKey = new Map();
-  let total = 0;
-  let currency = null;
+/**
+ * Walks the response generically rather than assuming an exact field layout (the Usage API's precise
+ * response shape was not independently verified against live documentation before writing this --
+ * only Anthropic support's description of the endpoint's existence/availability was). For every object
+ * that has a string `model` field, sums every numeric field whose name contains "token" (case-
+ * insensitive), one level of nesting deep (covers a plausible `cache_creation: { ephemeral_5m_input_tokens,
+ * ephemeral_1h_input_tokens }` shape without hardcoding it). Grouped by (model, field name) so the
+ * output shows exactly what the API returned rather than a value computed from an assumed shape.
+ */
+function summarizeUsagePages(pages) {
+  const byModelField = new Map(); // key: `${model} :: ${field}` -> summed count
+  const models = new Set();
+
+  function sumTokenFields(obj, model, depth) {
+    for (const [field, value] of Object.entries(obj)) {
+      if (/token/i.test(field) && (typeof value === 'number' || typeof value === 'string')) {
+        const n = Number(value);
+        if (Number.isFinite(n)) {
+          const key = `${model} :: ${field}`;
+          byModelField.set(key, (byModelField.get(key) ?? 0) + n);
+        }
+      } else if (depth < 2 && value && typeof value === 'object' && !Array.isArray(value)) {
+        sumTokenFields(value, model, depth + 1);
+      }
+    }
+  }
 
   function visit(node) {
     if (Array.isArray(node)) {
@@ -75,22 +106,14 @@ function summarizeCostPages(pages) {
       return;
     }
     if (!node || typeof node !== 'object') return;
-    // Require `currency` alongside `amount`, not just any numeric `amount` field: a billable cost
-    // line item always reports its currency, so this excludes unrelated amount-shaped fields (e.g.
-    // a credit-adjustment or quota count) that would otherwise silently inflate the total.
-    if ((typeof node.amount === 'string' || typeof node.amount === 'number') && typeof node.currency === 'string' && node.currency.length > 0) {
-      const amount = Number(node.amount);
-      if (Number.isFinite(amount)) {
-        const key = node.model || node.workspace_id || node.description || 'unlabeled';
-        byKey.set(key, (byKey.get(key) ?? 0) + amount);
-        total += amount;
-        currency = node.currency;
-      }
+    if (typeof node.model === 'string' && node.model.length > 0) {
+      models.add(node.model);
+      sumTokenFields(node, node.model, 0);
     }
     for (const v of Object.values(node)) visit(v);
   }
   pages.forEach(visit);
-  return { byKey, total, currency: currency ?? 'USD (assumed; API did not report a currency field)' };
+  return { byModelField, models };
 }
 
 function printLocalTelemetry() {
@@ -116,35 +139,42 @@ async function main() {
   printLocalTelemetry();
 
   if (!ADMIN_KEY) {
-    console.log(`\n── Anthropic Admin API cost report ──`);
+    console.log(`\n── Anthropic Usage API token report ──`);
     console.log('  Skipped: ANTHROPIC_ADMIN_KEY is not set.');
-    console.log('  Create one at console.anthropic.com -> Settings -> Admin API keys (requires an org admin role),');
-    console.log('  then re-run: ANTHROPIC_ADMIN_KEY=sk-ant-admin-... node scripts/cost-audit.mjs');
+    console.log('  Create one: Organization Settings -> API Keys -> Service Accounts -> create one with the Admin');
+    console.log('  role, then API Keys -> Create Key -> Linked account = that service account.');
+    console.log('  Then re-run: ANTHROPIC_ADMIN_KEY=sk-ant-... node scripts/cost-audit.mjs');
+    console.log('  For actual billed dollars (not just token counts), see platform.claude.com/usage directly --');
+    console.log('  the cost_report Admin API endpoint is Enterprise-plan only.');
     return;
   }
 
   const headers = { 'x-api-key': ADMIN_KEY, 'anthropic-version': ANTHROPIC_VERSION };
   const startingAt = isoDaysAgo(DAYS);
 
-  console.log(`\n── Anthropic Admin API cost report (last ${DAYS} days, since ${startingAt}) ──`);
+  console.log(`\n── Anthropic Usage API token report (last ${DAYS} days, since ${startingAt}, bucket=${BUCKET_WIDTH}) ──`);
+  console.log('  Token counts only -- for billed dollars, see platform.claude.com/usage.');
   try {
-    const url = `${API_BASE}/cost_report?starting_at=${encodeURIComponent(startingAt)}&group_by[]=model`;
+    const url = `${API_BASE}/usage_report/messages?starting_at=${encodeURIComponent(startingAt)}&bucket_width=${BUCKET_WIDTH}&group_by[]=model`;
     const pages = await fetchAllPages(url, headers);
-    const { byKey, total, currency } = summarizeCostPages(pages);
-    if (byKey.size === 0) {
-      console.log('  API responded but no cost line items were found in the expected shape.');
+    const { byModelField, models } = summarizeUsagePages(pages);
+    if (byModelField.size === 0) {
+      console.log('  API responded but no model-attributed token fields were found in the expected shape.');
       console.log('  Raw first page (for manual inspection):');
       console.log(JSON.stringify(pages[0], null, 2).slice(0, 4000));
       return;
     }
-    const sorted = [...byKey.entries()].sort((a, b) => b[1] - a[1]);
-    for (const [key, amount] of sorted) {
-      console.log(`  ${key.padEnd(28)} ${amount.toFixed(2)} ${currency}`);
+    for (const model of [...models].sort()) {
+      console.log(`  ${model}:`);
+      const fields = [...byModelField.entries()].filter(([k]) => k.startsWith(`${model} :: `)).sort((a, b) => b[1] - a[1]);
+      for (const [key, count] of fields) {
+        const field = key.slice(`${model} :: `.length);
+        console.log(`    ${field.padEnd(32)} ${count.toLocaleString()}`);
+      }
     }
-    console.log(`  ${'TOTAL'.padEnd(28)} ${total.toFixed(2)} ${currency}`);
   } catch (err) {
-    console.error(`  🚫 Cost report request failed: ${err.message}`);
-    console.error('  This is a real failure (bad/missing admin key, no admin role, or an API shape change) -- not silently skipped.');
+    console.error(`  🚫 Usage report request failed: ${err.message}`);
+    console.error('  This is a real failure (bad/missing admin key, insufficient permissions, or an API shape change) -- not silently skipped.');
     process.exitCode = 1;
   }
 }
