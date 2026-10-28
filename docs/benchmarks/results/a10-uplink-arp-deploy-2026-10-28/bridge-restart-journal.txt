@@ -1,0 +1,13 @@
+Oct 27 23:59:04 jetson-orin systemd[1]: Stopping Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking...
+Oct 27 23:59:04 jetson-orin zodiac-bridge[41626]: [!] Stopping ZodiacBridgeServer...
+Oct 27 23:59:04 jetson-orin systemd[1]: Stopped Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking.
+Oct 27 23:59:04 jetson-orin zodiac-bridge[309680]: [!] [Bridge Server] Experiment install endpoints ENABLED (ZODIAC_EXPERIMENT_ENDPOINTS=1): arbitrary pre-verified rule sets can be installed for bounded periods.
+Oct 27 23:59:05 jetson-orin systemd[1]: Started Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking.
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [!] [Install gate] startup policy: A8 (7900 pps at 572 B): unverifiable (advisory, not refused): p1-ipv4-intra-segment: forwarding rule matches more than in_port; only in_port-only forwarding rules were measur
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+Oct 27 23:59:06 jetson-orin zodiac-bridge[309680]: [+] [Bridge Server] Isolation readback VERIFIED: 6/6 rules confirmed on switch (7 total entries); actions confirmed (output ports and table-miss drop).

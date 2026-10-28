@@ -2,7 +2,7 @@
 
 A 24-hour, read-only capture of ARP on the Jetson's O3 interface (`enx9c69d39ddcc0`), which mirrors the Zodiac P2 link (NETGEAR #2 port 4) in both directions. It was taken to
 find which uplink-side hosts legitimately send ARP toward the workload, so the opt-in confinement of uplink to workload ARP (PR #119, `ZODIAC_UPLINK_ARP_PEERS`) can be given a peer
-list from evidence. **Nothing was changed on any host and no packet was sent.** The proposal at the end is not approved and not deployed.
+list from evidence. **Nothing was changed on any host and no packet was sent.** The proposal at the end was later approved by the owner and deployed; the section below is kept as it was written.
 
 | Item | Value |
 | :--- | :--- |
@@ -40,7 +40,7 @@ There is **no ARP reply** in the capture, **no ARP from any uplink-side host ask
 - One switch, one day, one window; ARP only, not other traffic; the capture is of the link, not of port 1.
 - It does not show that the confined policy installs and behaves on the switch: that is the deployment step, which has not been done.
 
-## Proposal (not approved, not deployed)
+## Proposal (approved and deployed 2026-10-27: see `../a10-uplink-arp-deploy-2026-10-28/README.md`)
 
 Set `ZODIAC_UPLINK_ARP_PEERS=none` on the bridge as the default, and add an experiment's uplink-side host as a peer only while the experiment runs. The deployment needs: pulling the merged code on the Jetson
 (its repo is at `72659d7`; `main` also carries an unrelated display and telemetry change), building it, setting the variable in `/etc/zodiac/zodiac-bridge.env`, and a `sudo systemctl restart zodiac-bridge`.
