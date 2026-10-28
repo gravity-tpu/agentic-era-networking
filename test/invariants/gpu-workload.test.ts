@@ -111,9 +111,10 @@ describe('Jetson Orin GPU Workload Invariants (gpu-workload)', () => {
         encoding: 'utf8',
         timeout: 10000,
         // No test here asserts on stderr. On real hardware without a Jetson/thermal sysfs present
-        // (this Mac), the script fails open with expected stderr notes ("cannot read ...telemetry.json",
-        // "telemetry HTTP poll failed") that execSync otherwise inherits straight to the console on
-        // every run of this suite. Suppress; stdout (what the assertions below check) is unaffected.
+        // (this Mac), the script degrades gracefully and reports missing hardware via expected stderr
+        // notes ("cannot read ...telemetry.json", "telemetry HTTP poll failed") that execSync otherwise
+        // inherits straight to the console on every run of this suite. Suppress; stdout (what the
+        // assertions below check) is unaffected.
         stdio: ['ignore', 'pipe', 'ignore'],
       });
 
@@ -132,9 +133,10 @@ describe('Jetson Orin GPU Workload Invariants (gpu-workload)', () => {
         encoding: 'utf8',
         timeout: 10000,
         // No test here asserts on stderr. On real hardware without a Jetson/thermal sysfs present
-        // (this Mac), the script fails open with expected stderr notes ("cannot read ...telemetry.json",
-        // "telemetry HTTP poll failed") that execSync otherwise inherits straight to the console on
-        // every run of this suite. Suppress; stdout (what the assertions below check) is unaffected.
+        // (this Mac), the script degrades gracefully and reports missing hardware via expected stderr
+        // notes ("cannot read ...telemetry.json", "telemetry HTTP poll failed") that execSync otherwise
+        // inherits straight to the console on every run of this suite. Suppress; stdout (what the
+        // assertions below check) is unaffected.
         stdio: ['ignore', 'pipe', 'ignore'],
       });
 
@@ -154,9 +156,10 @@ describe('Jetson Orin GPU Workload Invariants (gpu-workload)', () => {
         encoding: 'utf8',
         timeout: 10000,
         // No test here asserts on stderr. On real hardware without a Jetson/thermal sysfs present
-        // (this Mac), the script fails open with expected stderr notes ("cannot read ...telemetry.json",
-        // "telemetry HTTP poll failed") that execSync otherwise inherits straight to the console on
-        // every run of this suite. Suppress; stdout (what the assertions below check) is unaffected.
+        // (this Mac), the script degrades gracefully and reports missing hardware via expected stderr
+        // notes ("cannot read ...telemetry.json", "telemetry HTTP poll failed") that execSync otherwise
+        // inherits straight to the console on every run of this suite. Suppress; stdout (what the
+        // assertions below check) is unaffected.
         stdio: ['ignore', 'pipe', 'ignore'],
       });
 

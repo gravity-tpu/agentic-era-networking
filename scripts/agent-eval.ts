@@ -316,8 +316,10 @@ const BATCH_POLL_INTERVAL_MS = 30_000;
 const BATCH_MAX_WAIT_MS = 24 * 60 * 60 * 1000;
 const BATCH_MAX_POLL_ATTEMPTS = Math.ceil(BATCH_MAX_WAIT_MS / BATCH_POLL_INTERVAL_MS);
 /** Rough, deliberately conservative token-count estimate for a pre-flight spend check only (never for billing or
- * scoring): ~4 characters per token is an overestimate for most English/code text, which is the safe direction here. */
-function roughTokenEstimate(text: string): number { return Math.ceil(text.length / 4); }
+ * scoring): ~4 characters per token is an overestimate for most English/code text, which is the safe direction here.
+ * (length + 3) >> 2 is ceil(length / 4) for non-negative length, as a pure integer right-shift with no float
+ * division intermediate (unlike the equivalent Math.ceil(length / 4)). */
+function roughTokenEstimate(text: string): number { return (text.length + 3) >> 2; }
 
 interface BatchTrialResult { seed: number; turn: GeminiTurn | null; error: string | null }
 
