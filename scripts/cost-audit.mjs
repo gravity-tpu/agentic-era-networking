@@ -20,6 +20,14 @@
  * breakdown and CSV export; this script's token counts are for cross-checking the caching/routing
  * levers (e.g. cache_read vs. uncached input tokens), not for an authoritative dollar figure.
  *
+ * Response shape (confirmed 2026-10-28 against the live reference at
+ * platform.claude.com/docs/en/api/admin/usage_report/retrieve_messages, not guessed): a top-level
+ * { data: [ { starting_at, ending_at, results: [ { model, uncached_input_tokens,
+ * cache_read_input_tokens, output_tokens, cache_creation: { ephemeral_1h_input_tokens,
+ * ephemeral_5m_input_tokens }, ... } ] } ], has_more, next_page }. parseMessagesUsageReport below reads
+ * these exact fields; see test/invariants/cost-audit-usage-schema.test.ts, which pins it against the
+ * documentation's own example response, independent of live credentials.
+ *
  * Usage:
  *   ANTHROPIC_ADMIN_KEY=sk-ant-... node scripts/cost-audit.mjs [--days N] [--bucket 1m|1h|1d]
  *
@@ -29,6 +37,8 @@
 
 import { loadEnv, WORKSTATION_METRICS_FILE } from './ai-utils.mjs';
 import { existsSync, readFileSync } from 'fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 loadEnv();
 
@@ -41,7 +51,9 @@ const BUCKET_WIDTH = bucketArgIndex >= 0 && VALID_BUCKETS.has(args[bucketArgInde
 
 const ADMIN_KEY = process.env.ANTHROPIC_ADMIN_KEY;
 
-const ANTHROPIC_VERSION = '2023-06-01';
+// Matches the live reference doc's own example request (platform.claude.com/docs/en/api/admin/usage_report/
+// retrieve_messages, fetched 2026-10-28): Authorization: Bearer, not x-api-key, and this dated version string.
+const ANTHROPIC_VERSION = '2026-10-21';
 const API_BASE = 'https://api.anthropic.com/v1/organizations';
 
 function isoDaysAgo(days) {
@@ -73,54 +85,48 @@ async function fetchAllPages(url, headers) {
   return pages;
 }
 
-// Matches genuine token-count field names (…_tokens, or exactly "tokens") while excluding fields that
-// contain "token" but are not counts -- a price, limit, or quota expressed per-token would otherwise
-// be silently summed alongside real counts.
-const TOKEN_COUNT_FIELD_RE = /(^|_)tokens?($|_)/i;
-const NON_COUNT_FIELD_RE = /price|limit|quota|budget|rate/i;
+// The exact token-count fields on a Usage API result item, per the confirmed schema (module docstring).
+// cache_creation's two fields are one level nested; everything else is a direct field on the result.
+const DIRECT_TOKEN_FIELDS = ['uncached_input_tokens', 'cache_read_input_tokens', 'output_tokens'];
+const CACHE_CREATION_FIELDS = ['ephemeral_1h_input_tokens', 'ephemeral_5m_input_tokens'];
 
 /**
- * Walks the response generically rather than assuming an exact field layout (the Usage API's precise
- * response shape was not independently verified against live documentation before writing this --
- * only Anthropic support's description of the endpoint's existence/availability was). For every object
- * that has a string `model` field, sums every numeric field that looks like a token count, exactly one
- * level of nesting deep (covers a plausible `cache_creation: { ephemeral_5m_input_tokens,
- * ephemeral_1h_input_tokens }` shape without hardcoding it). Grouped by (model, field name) so the
- * output shows exactly what the API returned rather than a value computed from an assumed shape.
+ * Parses a Messages Usage Report response (one or more pages of { data: [{ results: [...] }] }) into
+ * per-model token-count totals, using the exact field names from the confirmed schema (module
+ * docstring) rather than a generic/guessed walk. A `results` item with a non-string `model` (null,
+ * when the request didn't group_by model) is skipped with a count in `unattributed`, since summing it
+ * under a fabricated model label would misattribute real usage (Invariant 6).
  */
-function summarizeUsagePages(pages) {
+export function parseMessagesUsageReport(pages) {
   const byModelField = new Map(); // key: `${model} :: ${field}` -> summed count
   const models = new Set();
+  let unattributed = 0;
 
-  function sumTokenFields(obj, model, depth) {
-    for (const [field, value] of Object.entries(obj)) {
-      const looksLikeTokenCount = TOKEN_COUNT_FIELD_RE.test(field) && !NON_COUNT_FIELD_RE.test(field);
-      if (looksLikeTokenCount && (typeof value === 'number' || typeof value === 'string')) {
-        const n = Number(value);
-        if (Number.isFinite(n)) {
-          const key = `${model} :: ${field}`;
-          byModelField.set(key, (byModelField.get(key) ?? 0) + n);
+  const add = (model, field, value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return;
+    const key = `${model} :: ${field}`;
+    byModelField.set(key, (byModelField.get(key) ?? 0) + value);
+  };
+
+  for (const page of pages) {
+    const buckets = Array.isArray(page?.data) ? page.data : [];
+    for (const bucket of buckets) {
+      const results = Array.isArray(bucket?.results) ? bucket.results : [];
+      for (const result of results) {
+        if (typeof result?.model !== 'string' || result.model.length === 0) {
+          unattributed += 1;
+          continue;
         }
-      } else if (depth < 1 && value && typeof value === 'object' && !Array.isArray(value)) {
-        sumTokenFields(value, model, depth + 1);
+        const model = result.model;
+        models.add(model);
+        for (const field of DIRECT_TOKEN_FIELDS) add(model, field, result[field]);
+        if (result.cache_creation && typeof result.cache_creation === 'object') {
+          for (const field of CACHE_CREATION_FIELDS) add(model, `cache_creation.${field}`, result.cache_creation[field]);
+        }
       }
     }
   }
-
-  function visit(node) {
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (!node || typeof node !== 'object') return;
-    if (typeof node.model === 'string' && node.model.length > 0) {
-      models.add(node.model);
-      sumTokenFields(node, node.model, 0);
-    }
-    for (const v of Object.values(node)) visit(v);
-  }
-  pages.forEach(visit);
-  return { byModelField, models };
+  return { byModelField, models, unattributed };
 }
 
 function printLocalTelemetry() {
@@ -156,7 +162,7 @@ async function main() {
     return;
   }
 
-  const headers = { 'x-api-key': ADMIN_KEY, 'anthropic-version': ANTHROPIC_VERSION };
+  const headers = { Authorization: `Bearer ${ADMIN_KEY}`, 'anthropic-version': ANTHROPIC_VERSION };
   const startingAt = isoDaysAgo(DAYS);
 
   console.log(`\n── Anthropic Usage API token report (last ${DAYS} days, since ${startingAt}, bucket=${BUCKET_WIDTH}) ──`);
@@ -164,9 +170,10 @@ async function main() {
   try {
     const url = `${API_BASE}/usage_report/messages?starting_at=${encodeURIComponent(startingAt)}&bucket_width=${BUCKET_WIDTH}&group_by[]=model`;
     const pages = await fetchAllPages(url, headers);
-    const { byModelField, models } = summarizeUsagePages(pages);
+    const { byModelField, models, unattributed } = parseMessagesUsageReport(pages);
     if (byModelField.size === 0) {
-      console.log('  API responded but no model-attributed token fields were found in the expected shape.');
+      console.log('  API responded but no model-attributed results were found (empty range, or a shape this script');
+      console.log('  no longer matches -- see the module docstring for the schema this parser expects).');
       console.log('  Raw first page (for manual inspection):');
       console.log(JSON.stringify(pages[0], null, 2).slice(0, 4000));
       return;
@@ -179,6 +186,9 @@ async function main() {
         console.log(`    ${field.padEnd(32)} ${count.toString()}`);
       }
     }
+    if (unattributed > 0) {
+      console.log(`  (${unattributed} result item(s) had no model attribution -- re-run with the default group_by[]=model)`);
+    }
   } catch (err) {
     console.error(`  🚫 Usage report request failed: ${err.message}`);
     console.error('  This is a real failure (bad/missing admin key, insufficient permissions, or an API shape change) -- not silently skipped.');
@@ -186,4 +196,8 @@ async function main() {
   }
 }
 
-main();
+// Guarded (not a bare top-level call) so this module can be imported for testing -- e.g.
+// test/invariants/cost-audit-usage-schema.test.ts -- without running main()'s network/env side effects.
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main();
+}
