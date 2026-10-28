@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry, MAX_PENDING_TELEMETRY_TASKS, getPendingTelemetryTaskCount, buildModelFallbacks } from '../../scripts/ai-utils.mjs';
+import { describe, it, expect, vi } from 'vitest';
+import { toTimeoutBigInt, readErrorBody, DEFAULT_GLOBAL_TIMEOUT_MS_BIGINT, trackTelemetryTask, flushPendingTelemetry, MAX_PENDING_TELEMETRY_TASKS, getPendingTelemetryTaskCount, buildModelFallbacks, loadStaticNetworkContext, buildAnthropicSystemWithCache, ANTHROPIC_CACHE_MIN_CHARS } from '../../scripts/ai-utils.mjs';
 
 
 
@@ -142,34 +142,52 @@ describe('AI Reviewer Utils: Asynchronous Telemetry Task Registry', () => {
   });
 
   it('handles rejected background telemetry tasks without crashing flushPendingTelemetry', async () => {
-    const failingTask = new Promise<void>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Simulated telemetry failure'));
-      }, 10);
-    });
+    // This deliberately exercises the real stderr.write warning path (not a mock of the production
+    // code), so it emits a genuine "[ai-utils] Pending telemetry task rejected: ..." line on every
+    // run. Spying on stderr here only silences the expected, asserted-on noise from polluting every
+    // test run's output (and anything, human or model, that reads it); production behavior is untouched.
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const failingTask = new Promise<void>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Simulated telemetry failure'));
+        }, 10);
+      });
 
-    trackTelemetryTask(failingTask);
-    await expect(flushPendingTelemetry(500)).resolves.not.toThrow();
+      trackTelemetryTask(failingTask);
+      await expect(flushPendingTelemetry(500)).resolves.not.toThrow();
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Simulated telemetry failure'));
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 
   it('enforces maximum in-flight capacity and prunes settled tasks to zero', async () => {
-    const resolvers: (() => void)[] = [];
-    for (let i = 0; i < MAX_PENDING_TELEMETRY_TASKS + 5; i++) {
-      const p = new Promise<void>((resolve) => {
-        resolvers.push(resolve);
-      });
-      trackTelemetryTask(p);
-    }
+    // Pushing MAX_PENDING_TELEMETRY_TASKS + 5 tasks deliberately triggers the real backpressure
+    // warning 5 times; spied for the same reason as above (expected noise, asserted on, not printed).
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const resolvers: (() => void)[] = [];
+      for (let i = 0; i < MAX_PENDING_TELEMETRY_TASKS + 5; i++) {
+        const p = new Promise<void>((resolve) => {
+          resolvers.push(resolve);
+        });
+        trackTelemetryTask(p);
+      }
 
-    expect(getPendingTelemetryTaskCount()).toBe(MAX_PENDING_TELEMETRY_TASKS);
+      expect(getPendingTelemetryTaskCount()).toBe(MAX_PENDING_TELEMETRY_TASKS);
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('telemetry queue saturated'));
 
-    // Resolving all pending tasks
-    for (const r of resolvers) {
-      r();
+      // Resolving all pending tasks
+      for (const r of resolvers) {
+        r();
+      }
+      await flushPendingTelemetry(1000);
+      // Invariant: all settled tasks MUST be pruned from registry to prevent monotonic memory leaks
+      expect(getPendingTelemetryTaskCount()).toBe(0);
+    } finally {
+      stderrSpy.mockRestore();
     }
-    await flushPendingTelemetry(1000);
-    // Invariant: all settled tasks MUST be pruned from registry to prevent monotonic memory leaks
-    expect(getPendingTelemetryTaskCount()).toBe(0);
   });
 });
 
@@ -180,8 +198,10 @@ describe('AI Reviewer Utils: buildModelFallbacks Invariants', () => {
       process.env.SKIP_OLLAMA = '1';
       const fallbacks = buildModelFallbacks();
       expect(fallbacks.length).toBeGreaterThan(0);
+      // Cost control: the cheap 'fast' tier is tried before the expensive 'pro' tier (see
+      // buildModelFallbacks' tiers comment) -- gemini-3.8-flash, not gemini-pro-latest, leads.
       expect(fallbacks[0].provider).toBe('google');
-      expect(fallbacks[0].model).toBe('gemini-pro-latest');
+      expect(fallbacks[0].model).toBe('gemini-3.8-flash');
     } finally {
       if (orig !== undefined) {
         process.env.SKIP_OLLAMA = orig;
@@ -205,5 +225,42 @@ describe('AI Reviewer Utils: buildModelFallbacks Invariants', () => {
         delete process.env.PREFER_GEMINI;
       }
     }
+  });
+});
+
+describe('AI Reviewer Utils: static review context (prompt-caching prefix)', () => {
+  it('loads both network-context.md and network-engineering-principles.md from disk', () => {
+    const context = loadStaticNetworkContext();
+    expect(context).toContain('network-context.md');
+    expect(context).toContain('network-engineering-principles.md');
+    // Real file content, not a placeholder -- both files are tens of KB (see repo root .agents/).
+    expect(context.length).toBeGreaterThan(ANTHROPIC_CACHE_MIN_CHARS);
+  });
+
+  it('is read once and memoized across repeated calls (no repeat disk I/O per review)', () => {
+    const first = loadStaticNetworkContext();
+    const second = loadStaticNetworkContext();
+    expect(second).toBe(first);
+  });
+});
+
+describe('AI Reviewer Utils: buildAnthropicSystemWithCache', () => {
+  it('returns a cache_control-marked content-block array when the prefix is large enough', () => {
+    const prefix = 'x'.repeat(ANTHROPIC_CACHE_MIN_CHARS);
+    const result = buildAnthropicSystemWithCache(prefix, 'rest of the prompt');
+    expect(Array.isArray(result)).toBe(true);
+    expect(result[0]).toEqual({ type: 'text', text: prefix, cache_control: { type: 'ephemeral' } });
+    expect(result[1]).toEqual({ type: 'text', text: 'rest of the prompt' });
+  });
+
+  it('falls back to a plain string when the prefix is empty (no caching overhead for nothing)', () => {
+    const result = buildAnthropicSystemWithCache('', 'rest of the prompt');
+    expect(result).toBe('rest of the prompt');
+  });
+
+  it('falls back to a plain string when the prefix is below the minimum cacheable size', () => {
+    const tinyPrefix = 'x'.repeat(ANTHROPIC_CACHE_MIN_CHARS - 1);
+    const result = buildAnthropicSystemWithCache(tinyPrefix, 'rest of the prompt');
+    expect(result).toBe('rest of the prompt');
   });
 });

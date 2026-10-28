@@ -59,6 +59,9 @@ The packet-forwarding and infrastructure rules (control/data plane separation, f
 - Write the failing test first for a new verifier property; negative states (link down, zero traffic, sensor fault) are tested as rigorously as positive ones.
 - Do not describe unimplemented work as implemented. The roadmap and README status tables are the source of truth for state.
 - AI review (`npm run review`) is a second reader, not a verifier. Model output is not evidence of correctness.
+- Model and subagent calls cost real money (tracked in `/tmp/zodiac-workstation-telemetry.json`'s `edgeComputeRatioPct`, `totalCloudTokens`, `totalCacheReadTokens` — see `npm run cost:audit`).
+  - **Subagents/forks**: default to one focused pass. Spawning a subagent is justified only when the work is genuinely independent of what you're already doing (so it can run in parallel without the result depending on your in-progress context) or is adversarial verification of a specific claim you want checked without your own bias. It is not justified for routine, single-step work, for "just in case" exploration, or as a substitute for reading the code yourself. A multi-step campaign (training, sweeps, multi-batch evaluation) must have an explicit stopping condition and a named decision-maker for continuing, never an open-ended "keep spawning agents until it looks good."
+  - **Offline/non-interactive cloud-LLM work**: if a task does not need an answer before the next action (training-data generation, bulk evaluation, grading many samples — e.g. `scripts/agent-eval.ts --batch`, Anthropic provider, protocol A), use the provider's Batch API rather than synchronous calls. Batches cost roughly half as much per token and are the correct default for anything that already tolerates a wait; reach for synchronous calls only when a human or another step is waiting on the result immediately.
 
 ---
 

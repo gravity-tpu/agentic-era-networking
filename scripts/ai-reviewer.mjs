@@ -14,7 +14,7 @@
 import { execSync } from 'child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadEnv, buildModelFallbacks, runWithFallback, NoAvailableModelsError, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff, flushPendingTelemetry, DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS } from './ai-utils.mjs';
+import { loadEnv, buildModelFallbacks, runWithFallback, NoAvailableModelsError, ROOT, GIT_DIFF_OPTIONS, sanitizeDiff, flushPendingTelemetry, DEFAULT_TELEMETRY_DRAIN_TIMEOUT_MS, loadStaticNetworkContext, buildAnthropicSystemWithCache } from './ai-utils.mjs';
 
 loadEnv();
 
@@ -284,7 +284,26 @@ async function main() {
     if (gatekeeperPrompt === activeCouncil.systemPrompt) {
       console.warn('🟡  Gatekeeper prompt NOT applied: the role-paragraph marker is missing from the systems prompt, so the local model gets the plain prompt.');
     }
-    const systemPromptByProvider = gatekeeperPrompt ? { ollama: gatekeeperPrompt } : undefined;
+    const systemPromptByProvider = gatekeeperPrompt ? { ollama: gatekeeperPrompt } : {};
+
+    // Network review only: ground cloud models in the actual network-context.md / network-engineering-
+    // principles.md files (AGENTS.md's documented sources of truth), placed as a fixed prefix so repeat
+    // calls within the cache TTL are cheap. Skipped for ollama (local, free, and already budget-constrained
+    // on think tokens) and for the systems review (not described as using these files; keeps this review's
+    // behavior unchanged to limit blast radius).
+    if (isCCIE) {
+      const staticContext = loadStaticNetworkContext();
+      if (staticContext) {
+        systemPromptByProvider.anthropic = buildAnthropicSystemWithCache(staticContext, activeCouncil.systemPrompt);
+        // OpenAI and Gemini cache automatically (no explicit cache_control field) when an identical
+        // prefix recurs within their own short rolling window, as long as the shared text leads the
+        // prompt -- so plain string concatenation, prefix-first, is enough to make them eligible too.
+        const concatenated = `${staticContext}\n\n${activeCouncil.systemPrompt}`;
+        systemPromptByProvider.openai = concatenated;
+        systemPromptByProvider.google = concatenated;
+      }
+    }
+
     outcome = await runWithFallback(FALLBACKS, activeCouncil.systemPrompt, userMessage, { systemPromptByProvider });
   } catch (err) {
     await flushPendingTelemetry();
