@@ -73,8 +73,10 @@ echo "pod $POD"
 SSH=(ssh -p "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$IP")
 "${SSH[@]}" 'mkdir -p /workspace/in /workspace/out'
 
-git bundle create /tmp/zodiac-eval-repo.bundle HEAD
-scp -P "$PORT" /tmp/zodiac-eval-repo.bundle "root@$IP:/workspace/in/repo.bundle"
+BUNDLE="/tmp/zodiac-eval-repo.$$.bundle"   # per-launcher path: parallel launchers must not share one file
+git bundle create "$BUNDLE" HEAD
+scp -P "$PORT" "$BUNDLE" "root@$IP:/workspace/in/repo.bundle"
+rm -f "$BUNDLE"
 scp -P "$PORT" -r "$ADAPTER_SRC" "root@$IP:/workspace/in/proposer-adapter"
 git show HEAD:scripts/runpod/eval-lora-pod.sh | "${SSH[@]}" 'cat > /workspace/in/eval-lora-pod.sh && chmod +x /workspace/in/eval-lora-pod.sh'
 "${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
