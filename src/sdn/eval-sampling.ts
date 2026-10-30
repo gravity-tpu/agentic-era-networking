@@ -6,7 +6,7 @@
  * carrying the nominal 0.2 / 0.95 that the Ollama and Gemini arms really used. Pure: no I/O.
  */
 
-export type EvalProvider = 'ollama' | 'gemini' | 'anthropic';
+export type EvalProvider = 'ollama' | 'gemini' | 'anthropic' | 'llama';
 
 export interface SamplingRecord {
   readonly temperature: number | null;

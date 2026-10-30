@@ -58,7 +58,10 @@
     "probe:flows": "node --experimental-strip-types scripts/zodiac-flow-probe.ts",
     "bench:calibrate": "node --experimental-strip-types scripts/calibrate-capture.ts",
     "lora:dataset:proposer": "tsc && node --experimental-strip-types scripts/build-proposer-lora-dataset.ts",
-    "lora:dataset:reviewer": "tsc && node --experimental-strip-types scripts/build-reviewer-lora-dataset.ts"
+    "lora:dataset:reviewer": "tsc && node --experimental-strip-types scripts/build-reviewer-lora-dataset.ts",
+    "lora:eval:llama": "node --experimental-strip-types scripts/eval-lora-llama-server.ts",
+    "lora:eval:live": "bash scripts/test-live-lora-adapters.sh",
+    "lora:train:cloud": "bash scripts/runpod/launch-train-lora.sh"
   },
   "keywords": [
     "networking",
