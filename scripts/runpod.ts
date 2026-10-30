@@ -16,9 +16,10 @@
  *   node --env-file=.env.local --experimental-strip-types scripts/runpod.ts <command> [flags]
  *   balance | gpus | plan | create | status | terminate <podId> | sweep [--dry-run]
  *   plan|create flags: --gpu <id> --cloud secure|community --minutes <n> --label <s>
- *                      [--image <ref>] [--cmd <shell>] [--disk-gb <n>] [--cap-usd <n>] [--yes]
+ *                      [--image <ref>] [--cmd <shell>] [--disk-gb <n>] [--cap-usd <n>] [--ssh-pubkey <file>] [--yes]
  */
 
+import { readFile } from 'node:fs/promises';
 import {
   DEFAULT_RUN_CAP_MICROS,
   decodePodDeadline,
@@ -180,9 +181,11 @@ function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-function wrapCommand(cmd: string | undefined, timeoutSeconds: bigint): string[] {
+function wrapCommand(cmd: string | undefined, timeoutSeconds: bigint, withSsh: boolean): string[] {
   const inner = cmd === undefined ? `sleep ${timeoutSeconds.toString()}` : cmd;
-  const script = `timeout -k ${KILL_GRACE_SECONDS} ${timeoutSeconds.toString()} bash -c ${shellQuote(inner)}; exit $?`;
+  // The image's /start.sh brings up sshd (from PUBLIC_KEY) and then blocks; run it beside the bounded command.
+  const ssh = withSsh ? '(/start.sh &) ; ' : '';
+  const script = `${ssh}timeout -k ${KILL_GRACE_SECONDS} ${timeoutSeconds.toString()} bash -c ${shellQuote(inner)}; exit $?`;
   return ['bash', '-c', script];
 }
 
@@ -191,6 +194,8 @@ interface PodInfo {
   readonly name: string;
   readonly desiredStatus?: string;
   readonly costPerHr?: string | number;
+  readonly publicIp?: string | null;
+  readonly portMappings?: Record<string, number> | null;
 }
 
 async function terminateVerified(podId: string): Promise<void> {
@@ -217,6 +222,15 @@ async function cmdCreate(flags: Flags): Promise<void> {
   }
   const diskGb = parsePositiveInt(flags.values.get('disk-gb') ?? String(DEFAULT_DISK_GB), 'disk-gb', BigInt(MAX_DISK_GB));
   const deadline = BigInt(Math.floor(Date.now() / 1000)) + plan.timeoutSeconds + BigInt(KILL_GRACE_SECONDS) + 60n;
+  const pubKeyPath = flags.values.get('ssh-pubkey');
+  const env: Record<string, string> = {};
+  if (pubKeyPath !== undefined) {
+    const key = (await readFile(pubKeyPath, 'utf8')).trim();
+    if (!/^ssh-(ed25519|rsa) /.test(key) && !/^sk-ssh-ed25519@openssh\.com /.test(key)) {
+      throw new Error(`ERR_USAGE: ${pubKeyPath} is not an SSH public key`);
+    }
+    env['PUBLIC_KEY'] = key;
+  }
   const body = {
     name: encodePodName(need(flags, 'label'), deadline),
     imageName: flags.values.get('image') ?? DEFAULT_IMAGE,
@@ -227,7 +241,9 @@ async function cmdCreate(flags: Flags): Promise<void> {
     containerDiskInGb: Number(diskGb),
     volumeInGb: 0,
     ports: ['22/tcp'],
-    dockerStartCmd: wrapCommand(flags.values.get('cmd'), plan.timeoutSeconds),
+    supportPublicIp: true,
+    env,
+    dockerStartCmd: wrapCommand(flags.values.get('cmd'), plan.timeoutSeconds, pubKeyPath !== undefined),
   };
   const pod = (await restOk('POST', '/pods', body)) as PodInfo;
   console.log(`created ${pod.id} (${pod.name})`);
@@ -258,6 +274,23 @@ async function cmdSweep(flags: Flags): Promise<void> {
     if (!flags.switches.has('dry-run')) await terminateVerified(pod.id);
   }
   console.log(`sweep: ${pods.length} pod(s), ${overdue} overdue`);
+}
+
+const SSH_WAIT_ATTEMPTS = 60;
+const SSH_WAIT_INTERVAL_MS = 10_000;
+
+/** Prints `<ip> <port>` for the pod's SSH port once Runpod has assigned them; fails closed on timeout. */
+async function cmdSshTarget(podId: string): Promise<void> {
+  for (let attempt = 0; attempt < SSH_WAIT_ATTEMPTS; attempt++) {
+    const pod = (await restOk('GET', `/pods/${podId}`)) as PodInfo;
+    const port = pod.portMappings?.['22'];
+    if (pod.publicIp && port !== undefined) {
+      console.log(`${pod.publicIp} ${port}`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, SSH_WAIT_INTERVAL_MS));
+  }
+  throw new Error(`ERR_SSH_TARGET_TIMEOUT: pod ${podId} has no public ip/port 22 mapping after ${SSH_WAIT_ATTEMPTS} polls`);
 }
 
 async function main(): Promise<void> {
@@ -291,8 +324,13 @@ async function main(): Promise<void> {
     }
     case 'sweep':
       return cmdSweep(flags);
+    case 'ssh-target': {
+      const id = flags.positional[0];
+      if (id === undefined) throw new Error('ERR_USAGE: ssh-target <podId>');
+      return cmdSshTarget(id);
+    }
     default:
-      throw new Error('ERR_USAGE: balance | gpus | plan | create | status | terminate <podId> | sweep');
+      throw new Error('ERR_USAGE: balance | gpus | plan | create | status | terminate <podId> | sweep | ssh-target <podId>');
   }
 }
 
