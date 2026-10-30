@@ -39,7 +39,7 @@ for _ in $(seq 1 60); do curl -sf http://127.0.0.1:11434/api/tags >/dev/null && 
 # already-installed (older) transformers alone otherwise.
 pip install -q -U transformers peft accelerate huggingface_hub sentencepiece
 git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
-(cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize -j"$(nproc)")
+(cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize llama-export-lora -j"$(nproc)")
 # Converter environment, isolated: llama.cpp's requirements pin transformers<5 and replace torch with a CPU build, which
 # broke the merge environment on the first full launch.
 python3 -m venv "$W/convenv"
@@ -65,17 +65,32 @@ if [ "$STOP_AFTER" = toolchain ]; then echo "toolchain ok $(date -u +%FT%TZ)"; t
 #    library Modelfile's TEMPLATE/RENDERER/PARSER/PARAMETER lines and only FROM replaced.
 ollama pull "$BASE_OLLAMA"
 ollama show "$BASE_OLLAMA" --modelfile > "$W/library.Modelfile"
-build_arm() { # name adapter
-  local name="$1" adapter="$2" dir="$W/$1-merged"
-  python3 "$W/repo/scripts/runpod/merge-lora.py" --base "$BASE_HF" --adapter "$adapter" --out "$dir"
-  "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" "$dir" --outtype f16 --outfile "$W/$name-f16.gguf"
-  "$W/llama.cpp/build/bin/llama-quantize" "$W/$name-f16.gguf" "$W/$name-q4_k_m.gguf" Q4_K_M
+# Arms L3/C3 are built in GGUF space from the ORIGINAL checkpoint. A transformers merge-and-save drops the model's trailing
+# next-token-prediction layer (blk.64), and the resulting GGUF cannot be loaded by Ollama ("tensor blk.64.attn_norm.weight not
+# found", run 3 salvage, 2026-10-30). L3 = base f16 + llama-export-lora of the adapter GGUF, then Q4_K_M; C3 = base f16, then Q4_K_M.
+base_f16() {
+  [ -f "$W/base-f16.gguf" ] && return 0
+  local base; base=$(python3 -c "from huggingface_hub import snapshot_download as s; print(s('$BASE_HF'))")
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" "$base" --outtype f16 --outfile "$W/base-f16.gguf"
+}
+build_arm() { # name adapter-gguf|none
+  local name="$1" adapter="$2" src
+  base_f16
+  if [ "$adapter" = none ]; then
+    src="$W/base-f16.gguf"
+  else
+    "$W/llama.cpp/build/bin/llama-export-lora" -m "$W/base-f16.gguf" --lora "$adapter" -o "$W/$name-f16.gguf"
+    src="$W/$name-f16.gguf"
+  fi
+  "$W/llama.cpp/build/bin/llama-quantize" "$src" "$W/$name-q4_k_m.gguf" Q4_K_M
+  [ "$adapter" = none ] || rm -f "$W/$name-f16.gguf"
   sed "s|^FROM .*|FROM $W/$name-q4_k_m.gguf|" "$W/library.Modelfile" > "$W/$name.Modelfile"
   ollama create "zodiac-$name:q4_k_m" -f "$W/$name.Modelfile"   # explicit tag: /api/tags lists "name:tag" and agent-eval matches the name exactly
-  cp "$dir/merge-record.json" "$OUT/$name-merge-record.json"
   sha256sum "$W/$name-q4_k_m.gguf" > "$OUT/$name-q4_k_m.sha256"
-  rm -rf "$dir" "$W/$name-f16.gguf"   # disk: keep only the quantized file
+  # Fail closed before 50 trials: the model must actually load and answer.
+  curl -sf -m 600 http://127.0.0.1:11434/api/chat -d "{\"model\":\"zodiac-$name:q4_k_m\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with OK\"}],\"stream\":false,\"options\":{\"num_predict\":16}}" | grep -q '"message"'
 }
+
 ollama list > "$OUT/versions.txt"; ollama --version >> "$OUT/versions.txt"
 
 run_arm() { # arm model
@@ -95,7 +110,7 @@ run_arm() { # arm model
 for arm in $ARMS; do
   case "$arm" in
     B3) run_arm B3 "$BASE_OLLAMA" ;;
-    L3) build_arm L3 /workspace/in/proposer-adapter/dpo-adapter; run_arm L3 zodiac-L3:q4_k_m ;;
+    L3) build_arm L3 /workspace/in/proposer-adapter/zodiac-proposer-dpo-lora.gguf; run_arm L3 zodiac-L3:q4_k_m ;;
     C3) build_arm C3 none; run_arm C3 zodiac-C3:q4_k_m ;;
     *) echo "unknown arm $arm"; exit 2 ;;
   esac
