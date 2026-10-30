@@ -47,6 +47,12 @@ In the registered Plan v2 evaluation ([`docs/benchmarks/results/agent-evaluation
      → create-pod (1× A100 80GB, US-KS-2, $1.79/hr)          7. Download compact bundle to Mac & delete-pod (204)
 ```
 
+> [!TIP]
+> **Runpod Cost Optimization — Spot vs. On-Demand:**
+>
+> - **Community Cloud / Spot Instances:** Use for quick data-scoring, short pilot validations, or hyperparameter sweeps (~40% cheaper).
+> - **Secure Cloud On-Demand:** Reserve strictly for longer, multi-epoch fine-tuning runs where instance interruptions would waste base-model download and checkpointing time.
+
 ---
 
 ## 3. Training Run Summary (2026-10-29)
