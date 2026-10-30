@@ -22,6 +22,7 @@ IN=/workspace/in; OUT=/workspace/out; W=/workspace/work
 mkdir -p "$OUT" "$W"
 exec > >(tee -a "$OUT/pod.log") 2>&1
 echo "start $(date -u +%FT%TZ) intents=$INTENTS n=$N arms=$ARMS"
+nvidia-smi -L > "$OUT/gpu.txt" 2>&1 || true
 
 # 0. OS packages the installers and the llama.cpp build need (the pod image lacks zstd, found on the first launch).
 export DEBIAN_FRONTEND=noninteractive

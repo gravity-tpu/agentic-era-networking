@@ -26,16 +26,29 @@ while [ $# -gt 0 ]; do case "$1" in
 [ -f "$ADAPTER_SRC/dpo-adapter/adapter_model.safetensors" ] || { echo "adapter not found at $ADAPTER_SRC" >&2; exit 1; }
 
 RP=(npm run -s runpod --)
-POD=""
+POD=""; GPU_USED=""
 cleanup() {
   if [ -n "$POD" ]; then "${RP[@]}" terminate "$POD" || echo "!! TERMINATE FAILED for $POD: run 'npm run runpod -- terminate $POD' now" >&2; fi
 }
 trap cleanup EXIT
 
-CREATE=("${RP[@]}" create --gpu "$GPU" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250)
-if [ -z "$YES" ]; then "${CREATE[@]}"; exit 0; fi
-POD=$("${CREATE[@]}" --yes | sed -n 's/^created \([^ ]*\) .*/\1/p')
-[ -n "$POD" ] || { echo "could not parse pod id" >&2; exit 1; }
+# --gpu takes one GPU id or a comma-separated preference list. Community capacity is thin, so create is retried across the
+# list (CREATE_ROUNDS rounds, CREATE_WAIT s apart). The per-run cap is enforced by `runpod.ts create` for every candidate:
+# a GPU too expensive for --minutes under the cap is refused and the next one is tried.
+CREATE_ROUNDS="${CREATE_ROUNDS:-20}"; CREATE_WAIT="${CREATE_WAIT:-60}"
+IFS=',' read -r -a GPU_LIST <<<"$GPU"
+create_args() { printf '%s\n' create --gpu "$1" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250; }
+if [ -z "$YES" ]; then for g in "${GPU_LIST[@]}"; do mapfile -t A < <(create_args "$g"); "${RP[@]}" "${A[@]}" || true; done; exit 0; fi
+for round in $(seq 1 "$CREATE_ROUNDS"); do
+  for g in "${GPU_LIST[@]}"; do
+    mapfile -t A < <(create_args "$g")
+    if out=$("${RP[@]}" "${A[@]}" --yes 2>&1); then POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"; break 2; fi
+    echo "create failed on $g (round $round/$CREATE_ROUNDS): $(tail -1 <<<"$out" | cut -c1-140)"
+  done
+  sleep "$CREATE_WAIT"
+done
+[ -n "$POD" ] || { echo "could not create a pod on any of: $GPU" >&2; exit 1; }
+echo "gpu $GPU_USED"
 echo "pod $POD"
 
 read -r IP PORT < <("${RP[@]}" ssh-target "$POD")
