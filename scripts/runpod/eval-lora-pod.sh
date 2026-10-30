@@ -10,6 +10,7 @@ trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /works
 # Backstop: any non-zero exit that left neither marker (signal, set -e in a context ERR misses) still reports FAILED.
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
+WAIT_FOR_GO_MAX_SECONDS="${WAIT_FOR_GO_MAX_SECONDS:-5400}"   # bound on the gate wait (named, configurable); the pod limit is only the outer backstop
 WAIT_FOR_GO="${WAIT_FOR_GO:-}"   # non-empty: finish setup, then hold before any trial until /workspace/in/GO exists (plan section 11.3 stage gate)
 STOP_AFTER="${STOP_AFTER:-}"   # "toolchain": exit 0 after steps 0-2 (cheap-GPU shakedown, no model download)
 INTENTS="${INTENTS:-quarantine-precedence/v1}"
@@ -76,6 +77,7 @@ base_f16() {
 }
 build_arm() { # name adapter-gguf|none
   local name="$1" adapter="$2" src
+  if [ "$adapter" != none ] && [ ! -f "$adapter" ]; then echo "adapter GGUF not found: $adapter"; return 1; fi
   base_f16
   if [ "$adapter" = none ]; then
     src="$W/base-f16.gguf"
@@ -89,7 +91,8 @@ build_arm() { # name adapter-gguf|none
   ollama create "zodiac-$name:q4_k_m" -f "$W/$name.Modelfile"   # explicit tag: /api/tags lists "name:tag" and agent-eval matches the name exactly
   sha256sum "$W/$name-q4_k_m.gguf" > "$OUT/$name-q4_k_m.sha256"
   # Fail closed before 50 trials: the model must actually load and answer.
-  curl -sf -m 600 http://127.0.0.1:11434/api/chat -d "{\"model\":\"zodiac-$name:q4_k_m\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with OK\"}],\"stream\":false,\"options\":{\"num_predict\":16}}" | grep -q '"message"'
+  curl -sf -m 600 http://127.0.0.1:11434/api/chat -d "{\"model\":\"zodiac-$name:q4_k_m\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with OK\"}],\"stream\":false,\"options\":{\"num_predict\":16}}" \
+    | python3 -c 'import sys, json; d = json.load(sys.stdin); sys.exit(0 if "error" not in d and d.get("message", {}).get("role") == "assistant" else 1)'
 }
 
 ollama list > "$OUT/versions.txt"; ollama --version >> "$OUT/versions.txt"
@@ -98,7 +101,11 @@ run_arm() { # arm model
   local arm="$1" model="$2" pids=() rc=0
   if [ -n "$WAIT_FOR_GO" ]; then   # setup is done and the model answers; hold until the stage gate is opened
     echo "ready, waiting for /workspace/in/GO $(date -u +%FT%TZ)"
-    until [ -e /workspace/in/GO ]; do sleep 10; done
+    local waited=0
+    until [ -e /workspace/in/GO ]; do
+      [ "$waited" -lt "$WAIT_FOR_GO_MAX_SECONDS" ] || { echo "no GO within ${WAIT_FOR_GO_MAX_SECONDS}s; giving up"; return 1; }
+      sleep 10; waited=$((waited + 10))
+    done
     echo "GO received $(date -u +%FT%TZ)"
   fi
   for intent in $INTENTS; do
