@@ -1,0 +1,21 @@
+{
+  "schema": "proposer-lora-training-run/v1",
+  "task": "proposer",
+  "source": "synthetic_verifier_grounded",
+  "baseModel": "Qwen/Qwen3.8-27B",
+  "ollamaBase": "qwen3.8:27b",
+  "mode": "both",
+  "loraR": 16,
+  "loraAlpha": 32,
+  "seed": 42,
+  "datasetGitCommit": "3850a3a93758f4a2711a7e86173ef023015fddf6",
+  "heldOutBenchmarkHashes": [
+    "dbd30d4265caec03e274ad66c9336157969e72f1ba3b30e0f680c72434e780ed",
+    "e632d34f157f69ff57016ff3fb06dfe3cbdf0e0c4c898dc66db0e104c1d50041",
+    "0fad17b4c7254f0207f986a2e582fb408eb1d061d8e18a96e700bded879679e4",
+    "04bf2c63c9b4e2d85abb04154582672594b30d03db3a0b145491342797c08183"
+  ],
+  "finalAdapterDir": "/workspace/proposer-lora-out/dpo-adapter",
+  "modelfile": "/workspace/proposer-lora-out/Modelfile.proposer-lora",
+  "wallNs": "850158421071"
+}

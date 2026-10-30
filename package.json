@@ -55,7 +55,9 @@
     "workstation:agent": "node --experimental-strip-types scripts/workstation-agent.ts",
     "bench:dataplane": "node --experimental-strip-types scripts/zodiac-dataplane-bench.ts",
     "probe:flows": "node --experimental-strip-types scripts/zodiac-flow-probe.ts",
-    "bench:calibrate": "node --experimental-strip-types scripts/calibrate-capture.ts"
+    "bench:calibrate": "node --experimental-strip-types scripts/calibrate-capture.ts",
+    "lora:dataset:proposer": "tsc && node --experimental-strip-types scripts/build-proposer-lora-dataset.ts",
+    "lora:dataset:reviewer": "tsc && node --experimental-strip-types scripts/build-reviewer-lora-dataset.ts"
   },
   "keywords": [
     "networking",

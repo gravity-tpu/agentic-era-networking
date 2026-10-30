@@ -14,7 +14,7 @@
 import type { IntentSpec } from './intent-spec.js';
 import { DEFAULT_WORKLOAD_HOSTS } from './port1-isolation.js';
 
-export type PromptVersion = 'v1' | 'v2';
+export type PromptVersion = 'v1' | 'v2' | 'v3';
 
 export const PROPOSER_SYSTEM_PROMPT_V1 = `You write flow rules for a 4-port OpenFlow 1.3 switch (Zodiac FX). Reply with ONE JSON array of rules and nothing else.
 Each rule is an object with exactly these fields:
@@ -41,12 +41,18 @@ export const PROPOSER_SYSTEM_PROMPT_V2 = PROPOSER_SYSTEM_PROMPT_V1.replace(
   `$1${ARP_FIELD_LINE}`,
 );
 
+const ANTISPOOF_RULE_LINE =
+  '\n  - Port 1 is an untrusted segment (source addresses may be spoofed): every IPv4 forwarding rule on inPort 1 that outputs to port 2 must constrain "srcIp" (and "srcIpPrefixLen") to the workload segment, and "intra-segment IPv4" means both "srcIp" and "dstIp" are constrained to that segment.';
+
+/** v2 with one extra bullet clarifying anti-spoofing on port 1 and intra-segment IPv4 matching. */
+export const PROPOSER_SYSTEM_PROMPT_V3 = `${PROPOSER_SYSTEM_PROMPT_V2}${ANTISPOOF_RULE_LINE}`;
+
 export function proposerPrompts(version: PromptVersion, spec: IntentSpec): { readonly system: string; readonly user: string } {
   if (version === 'v1') {
     return { system: PROPOSER_SYSTEM_PROMPT_V1, user: `Intent: ${spec.description}\nWrite the rule set that implements this intent.` };
   }
   return {
-    system: PROPOSER_SYSTEM_PROMPT_V2,
+    system: version === 'v3' ? PROPOSER_SYSTEM_PROMPT_V3 : PROPOSER_SYSTEM_PROMPT_V2,
     user:
       `Intent: ${spec.description}\nKnown workload host addresses: ${DEFAULT_WORKLOAD_HOSTS.join(', ')}.\n` +
       'Write the rule set that implements this intent.',

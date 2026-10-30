@@ -55,3 +55,11 @@ vitest.log
 .vercel
 .env*
 scripts/local-relay.mjs
+
+# Large ML / LoRA Binary Weights (>100 MB; keep JSON provenance & Modelfiles in git)
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+

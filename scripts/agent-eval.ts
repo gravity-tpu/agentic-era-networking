@@ -106,7 +106,7 @@ function parseArgs(argv: readonly string[]): Args {
   const numPredict = Number(get('--num-predict') ?? DEFAULT_NUM_PREDICT);
   if (!Number.isInteger(numPredict) || numPredict < 256 || numPredict > MAX_NUM_PREDICT) throw new Error(`--num-predict must be an integer 256 to ${MAX_NUM_PREDICT}`);
   const promptVersion = get('--prompt-version') ?? 'v1';
-  if (promptVersion !== 'v1' && promptVersion !== 'v2') throw new Error('--prompt-version must be v1 or v2');
+  if (promptVersion !== 'v1' && promptVersion !== 'v2' && promptVersion !== 'v3') throw new Error('--prompt-version must be v1, v2 or v3');
   const protocol = get('--protocol') ?? 'A';
   if (protocol !== 'A' && protocol !== 'B') throw new Error('--protocol must be A or B');
   const provider = get('--provider') ?? 'ollama';
@@ -369,7 +369,7 @@ async function anthropicBatchAll(model: string, messages: ReadonlyArray<{ role: 
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  if (git('status', '--porcelain', '--untracked-files=no') !== '') throw new Error('working tree has uncommitted changes to tracked files; commit first (plan section 8)');
+  if (git('status', '--porcelain') !== '') throw new Error('working tree is dirty; commit first (plan section 8)');
   const spec = INTENTS[args.intent as keyof typeof INTENTS];
   const { system: SYSTEM_PROMPT, user: userPrompt } = proposerPrompts(args.promptVersion, spec);
   const promptHash = crypto.createHash('sha256').update(SYSTEM_PROMPT + '\n---\n' + userPrompt).digest('hex');

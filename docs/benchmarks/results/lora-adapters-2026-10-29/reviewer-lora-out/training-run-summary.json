@@ -1,0 +1,16 @@
+{
+  "schema": "reviewer-lora-training-run/v1",
+  "task": "reviewer",
+  "source": "synthetic_verifier_grounded",
+  "baseModel": "Qwen/Qwen3.8-27B",
+  "ollamaBase": "qwen3.8:27b",
+  "mode": "both",
+  "loraR": 16,
+  "loraAlpha": 32,
+  "seed": 42,
+  "datasetGitCommit": "3850a3a93758f4a2711a7e86173ef023015fddf6",
+  "heldOutBenchmarkHashes": null,
+  "finalAdapterDir": "/workspace/reviewer-lora-out/dpo-adapter",
+  "modelfile": "/workspace/reviewer-lora-out/Modelfile.reviewer-lora",
+  "wallNs": "1056070418972"
+}

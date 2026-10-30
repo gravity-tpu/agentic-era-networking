@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { proposerPrompts, PROPOSER_SYSTEM_PROMPT_V1, PROPOSER_SYSTEM_PROMPT_V2 } from '../../src/sdn/proposer-prompt.js';
+import { proposerPrompts, PROPOSER_SYSTEM_PROMPT_V1, PROPOSER_SYSTEM_PROMPT_V2, PROPOSER_SYSTEM_PROMPT_V3 } from '../../src/sdn/proposer-prompt.js';
 import { DEFAULT_WORKLOAD_HOSTS } from '../../src/sdn/port1-isolation.js';
 import { DNS_CONFINEMENT_INTENT, PORT1_ISOLATION_INTENT } from '../../src/sdn/intents.js';
 import { parseProposal } from '../../src/sdn/proposal-triage.js';
@@ -50,5 +50,20 @@ describe('proposer prompt v2', () => {
     // the prompt says "exact host only": the parser enforces it (a prefix length other than 32 is a syntax error)
     const bad = [{ id: 'a', priority: 200, outputPorts: [2], match: { inPort: 1, etherType: 2054, arpSpa: DEFAULT_WORKLOAD_HOSTS[0], arpSpaPrefixLen: 24 } }];
     expect(parseProposal(JSON.stringify(bad)).ok).toBe(false);
+  });
+});
+
+describe('proposer prompt v3', () => {
+  it('adds exactly one anti-spoofing and intra-segment clarification rule to v2, leaving v1 and v2 unchanged', () => {
+    const extra = PROPOSER_SYSTEM_PROMPT_V3.split('\n').filter((l) => !PROPOSER_SYSTEM_PROMPT_V2.split('\n').includes(l));
+    expect(extra).toHaveLength(1);
+    expect(extra[0]).toMatch(/srcIp/);
+    expect(extra[0]).toMatch(/dstIp/);
+    expect(extra[0]).toMatch(/intra-segment IPv4/);
+
+    const v2 = proposerPrompts('v2', PORT1_ISOLATION_INTENT);
+    const v3 = proposerPrompts('v3', PORT1_ISOLATION_INTENT);
+    expect(v3.user).toBe(v2.user);
+    expect(sha(v3.system, v3.user)).not.toBe(sha(v2.system, v2.user));
   });
 });
