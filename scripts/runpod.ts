@@ -6,6 +6,8 @@
  * Invariant 4: `create` is a dry run unless `--yes` is passed; a person approves each launch.
  * Invariant 3: refuses when the price is unknown, the estimate exceeds the cap or the balance, or the
  *   pod reports a higher hourly price than was planned (it is terminated immediately).
+ * Placement (owner policy 2026-10-30): score and sweep run on Community Cloud spot, train on Secure Cloud
+ *   on-demand only (src/infra/runpod-budget.ts placementFor); spot runs are capped in length.
  * Invariant 5: per-run cap defaults to $5 (RUNPOD_RUN_CAP_USD may lower it; the code ceiling bounds it).
  *
  * The API key is read from RUNPOD_API_KEY and is never printed or passed into a pod. Every pod runs its
@@ -15,7 +17,7 @@
  * Usage:
  *   node --env-file=.env.local --experimental-strip-types scripts/runpod.ts <command> [flags]
  *   balance | gpus | plan | create | status | terminate <podId> | sweep [--dry-run]
- *   plan|create flags: --gpu <id> --cloud secure|community --minutes <n> --label <s>
+ *   plan|create flags: --gpu <id> --kind score|sweep|train --minutes <n> --label <s> [--on-demand]
  *                      [--image <ref>] [--cmd <shell>] [--disk-gb <n>] [--cap-usd <n>] [--ssh-pubkey <file>] [--yes]
  */
 
@@ -27,7 +29,11 @@ import {
   formatMicros,
   isExpired,
   parseUsdToMicros,
+  placementFor,
+  checkPlacementDuration,
   planRun,
+  type JobKind,
+  type Placement,
 } from '../src/infra/runpod-budget.ts';
 
 const REST = 'https://rest.runpod.io/v1';
@@ -36,8 +42,6 @@ const DEFAULT_IMAGE = 'runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu
 const DEFAULT_DISK_GB = 100;
 const MAX_DISK_GB = 500;
 const KILL_GRACE_SECONDS = 30;
-
-type Cloud = 'secure' | 'community';
 
 interface Flags {
   readonly positional: readonly string[];
@@ -57,7 +61,7 @@ function parseFlags(argv: readonly string[]): Flags {
     }
     const name = arg.slice(2);
     const next = argv[i + 1];
-    if (name === 'yes' || name === 'dry-run') {
+    if (name === 'yes' || name === 'dry-run' || name === 'on-demand') {
       switches.add(name);
     } else if (next === undefined || next.startsWith('--')) {
       throw new Error(`ERR_USAGE: --${name} needs a value`);
@@ -141,10 +145,12 @@ function need(flags: Flags, name: string): string {
   return v;
 }
 
-function parseCloud(flags: Flags): Cloud {
-  const c = flags.values.get('cloud') ?? 'secure';
-  if (c !== 'secure' && c !== 'community') throw new Error(`ERR_USAGE: --cloud must be secure|community`);
-  return c;
+function parsePlacement(flags: Flags): { kind: JobKind; placement: Placement } {
+  const kind = need(flags, 'kind');
+  if (kind !== 'score' && kind !== 'sweep' && kind !== 'train') {
+    throw new Error('ERR_USAGE: --kind must be score|sweep|train');
+  }
+  return { kind, placement: placementFor(kind, { onDemand: flags.switches.has('on-demand') }) };
 }
 
 function parsePositiveInt(raw: string, name: string, max: bigint): bigint {
@@ -161,20 +167,24 @@ function capMicros(flags: Flags): bigint {
 
 async function buildPlan(flags: Flags) {
   const gpu = need(flags, 'gpu');
-  const cloud = parseCloud(flags);
+  const { kind, placement } = parsePlacement(flags);
+  const cloud = placement.cloud;
   const minutes = parsePositiveInt(need(flags, 'minutes'), 'minutes', 24n * 60n);
   const types = await gpuTypes();
   const match = types.find((g) => g.id === gpu);
   if (match === undefined) throw new Error(`ERR_UNKNOWN_GPU: ${gpu}`);
   const price = cloud === 'secure' ? match.securePrice : match.communityPrice;
   const ratePerHourMicros = price === null || price === undefined ? 0n : parseUsdToMicros(price);
+  const spotCheck = checkPlacementDuration(placement, minutes * 60n);
+  if (!spotCheck.ok) throw new Error(`${spotCheck.code}: ${spotCheck.detail}`);
+  // The on-demand price of the chosen cloud is the planning price, also for spot: a spot pod costs at most that.
   const plan = planRun({
     capMicros: capMicros(flags),
     ratePerHourMicros,
     balanceMicros: await balanceMicros(),
     requestedSeconds: minutes * 60n,
   });
-  return { gpu, cloud, minutes, ratePerHourMicros, plan };
+  return { gpu, kind, placement, cloud, minutes, ratePerHourMicros, plan };
 }
 
 function shellQuote(s: string): string {
@@ -211,10 +221,10 @@ async function terminateVerified(podId: string): Promise<void> {
 }
 
 async function cmdCreate(flags: Flags): Promise<void> {
-  const { gpu, cloud, minutes, ratePerHourMicros, plan } = await buildPlan(flags);
+  const { gpu, kind, placement, cloud, minutes, ratePerHourMicros, plan } = await buildPlan(flags);
   if (!plan.ok) throw new Error(`${plan.code}: ${plan.detail}`);
   console.log(
-    `plan: ${gpu} (${cloud}) ${minutes.toString()} min @ ${formatMicros(ratePerHourMicros)}/hr -> worst case ${formatMicros(plan.estimatedMicros)} (cap ${formatMicros(capMicros(flags))})`,
+    `plan: ${kind} on ${gpu} (${cloud} ${placement.interruptible ? 'spot' : 'on-demand'}) ${minutes.toString()} min @ ${formatMicros(ratePerHourMicros)}/hr -> worst case ${formatMicros(plan.estimatedMicros)} (cap ${formatMicros(capMicros(flags))})`,
   );
   if (!flags.switches.has('yes')) {
     console.log('dry run: pass --yes to launch');
@@ -237,7 +247,7 @@ async function cmdCreate(flags: Flags): Promise<void> {
     gpuTypeIds: [gpu],
     gpuCount: 1,
     cloudType: cloud === 'secure' ? 'SECURE' : 'COMMUNITY',
-    interruptible: false,
+    interruptible: placement.interruptible,
     containerDiskInGb: Number(diskGb),
     volumeInGb: 0,
     ports: ['22/tcp'],
@@ -306,8 +316,8 @@ async function main(): Promise<void> {
       }
       return;
     case 'plan': {
-      const { gpu, cloud, minutes, ratePerHourMicros, plan } = await buildPlan(flags);
-      console.log(`${gpu} (${cloud}) ${minutes.toString()} min @ ${formatMicros(ratePerHourMicros)}/hr`);
+      const { gpu, kind, placement, cloud, minutes, ratePerHourMicros, plan } = await buildPlan(flags);
+      console.log(`${kind} on ${gpu} (${cloud} ${placement.interruptible ? 'spot' : 'on-demand'}) ${minutes.toString()} min @ ${formatMicros(ratePerHourMicros)}/hr`);
       console.log(plan.ok ? `OK worst case ${formatMicros(plan.estimatedMicros)}` : `REFUSED ${plan.code}: ${plan.detail}`);
       process.exitCode = plan.ok ? 0 : 1;
       return;

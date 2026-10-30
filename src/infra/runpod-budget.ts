@@ -106,3 +106,49 @@ export function decodePodDeadline(name: string): bigint | null {
 export function isExpired(deadlineEpochSeconds: bigint, nowEpochSeconds: bigint): boolean {
   return nowEpochSeconds >= deadlineEpochSeconds;
 }
+
+/**
+ * Placement policy (owner, 2026-10-30): Community Cloud spot for quick scoring and sweeps, Secure Cloud
+ * on-demand reserved for longer multi-epoch fine-tuning. A preempted spot pod loses its container disk, so
+ * spot runs are bounded (Invariant 5) and must be restartable; training is never placed on spot.
+ */
+export type JobKind = 'score' | 'sweep' | 'train';
+export type Cloud = 'secure' | 'community';
+export interface Placement {
+  readonly cloud: Cloud;
+  readonly interruptible: boolean;
+}
+
+/** Longest run allowed on an interruptible pod. */
+export const MAX_SPOT_SECONDS = 3n * 3600n;
+
+export function placementFor(kind: JobKind, opts: { readonly onDemand?: boolean } = {}): Placement {
+  switch (kind) {
+    case 'train':
+      if (opts.onDemand === true) {
+        throw new Error('ERR_PLACEMENT: training is already Secure on-demand; --on-demand only applies to score and sweep');
+      }
+      return { cloud: 'secure', interruptible: false };
+    case 'score':
+    case 'sweep':
+      // Never Secure: the override moves the pod off spot, not onto the reserved tier.
+      return { cloud: 'community', interruptible: opts.onDemand !== true };
+    default:
+      throw new Error(`ERR_PLACEMENT: unknown job kind ${JSON.stringify(kind)}`);
+  }
+}
+
+export type PlacementCheck =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly code: 'ERR_SPOT_TOO_LONG'; readonly detail: string };
+
+export function checkPlacementDuration(placement: Placement, seconds: bigint): PlacementCheck {
+  if (placement.interruptible && seconds > MAX_SPOT_SECONDS) {
+    return {
+      ok: false,
+      code: 'ERR_SPOT_TOO_LONG',
+      detail: `${seconds.toString()} s exceeds the ${MAX_SPOT_SECONDS.toString()} s spot ceiling; use --on-demand or split the job`,
+    };
+  }
+  return { ok: true };
+}
