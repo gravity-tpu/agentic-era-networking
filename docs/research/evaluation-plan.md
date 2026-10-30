@@ -187,7 +187,7 @@ Qwen: about 9 to 10 hours of the Mac's time for the 4 intents (the 2026-10-25 an
 
 The registered runs finished on 2026-10-27 and are reported in `docs/benchmarks/results/agent-evaluation/proposer-v2-qwen3.8-haiku-5-5.md`, with the analysis fixed in section 10.3: the same metrics as section 6, the INTENT-2 v1 against v2 control, and the earlier numbers kept separate. Nothing in sections 1 to 10.6 was edited after the runs began, apart from amendment 1 (section 10.6), which was written before any Qwen run on INTENT-3 or INTENT-4.
 
-## 11. Plan v3 addendum: verifier-grounded LoRA proposer (DRAFT, not registered until the owner approves it and it is committed before any run)
+## 11. Plan v3 addendum: verifier-grounded LoRA proposer (pre-registered 2026-10-29, approved by the owner, before any v3 data)
 
 Nothing in sections 1 to 10 is edited. This section is written, and committed, before any run it describes. Runs happen on an ephemeral Runpod pod (`scripts/runpod.ts`, per-run cap 5 USD), not on the Mac.
 
