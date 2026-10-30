@@ -31,6 +31,11 @@
  *     --intent dns-confinement/v1 --n 3 --thinking low --num-predict 16000 --price-in-cents 1000 --price-out-cents 5000 \
  *     --max-cents 100 --price-note "<source and date>" --out <dir>
  *
+ * Seed shards (--shard i/k, any provider but --batch): run only seeds i, i+k, i+2k, ... of 1..N so that k processes can share one
+ * model server; each trial is identical to the unsharded one. Each shard writes its own --out; scripts/merge-eval-shards.ts joins
+ * them and refuses unless the shards agree on provenance and cover seeds 1..N exactly once. Every finished trial is also appended to
+ * trials.partial.jsonl so a killed run keeps what it finished.
+ *
  * Batch mode (--batch, --provider anthropic --protocol A only): this run is offline/non-interactive by construction (no
  * one is waiting on a per-trial answer), so it is submitted as a single Anthropic Message Batch instead of N sequential
  * requests -- same model, same prompt, same sampling; only the transport changes -- at the Message Batches API's lower
@@ -58,6 +63,7 @@ import { parseProposal, triageProposal, CATEGORY_PRECEDENCE } from '../dist/sdn/
 import { samplingRecord } from '../dist/sdn/eval-sampling.js';
 import { proposerPrompts, type PromptVersion } from '../dist/sdn/proposer-prompt.js';
 import { intentSha256 } from '../dist/sdn/intent-hash.js';
+import { parseShardSpec, shardSeeds, type ShardSpec } from '../dist/sdn/eval-shards.js';
 import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 
 const INTENTS = {
@@ -91,7 +97,7 @@ const ANTHROPIC_EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 
 interface Spend { priceInCents: number; priceOutCents: number; maxCents: number; note: string }
 interface Args {
   intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number; protocol: 'A' | 'B';
-  provider: 'ollama' | 'gemini' | 'anthropic'; thinking: string; spend: Spend | null; promptVersion: PromptVersion; batch: boolean;
+  provider: 'ollama' | 'gemini' | 'anthropic'; thinking: string; spend: Spend | null; promptVersion: PromptVersion; batch: boolean; shard: ShardSpec | null;
 }
 
 function parseArgs(argv: readonly string[]): Args {
@@ -132,7 +138,10 @@ function parseArgs(argv: readonly string[]): Args {
   const batch = argv.includes('--batch');
   if (batch && provider !== 'anthropic') throw new Error('--batch is only implemented for --provider anthropic (Gemini has its own batch mode, not yet wired here; Ollama has no per-token $ cost to batch against)');
   if (batch && protocol !== 'A') throw new Error('--batch requires --protocol A: protocol B\'s verifier-feedback turns depend on the prior turn\'s actual reply, which this implementation does not batch round-by-round');
-  return { promptVersion, protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend, batch };
+  const shardArg = get('--shard');
+  if (shardArg !== undefined && batch) throw new Error('--shard cannot be combined with --batch (a batch is one submission)');
+  const shard = shardArg === undefined ? null : parseShardSpec(shardArg, n);
+  return { promptVersion, protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend, batch, shard };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -435,7 +444,8 @@ async function main(): Promise<void> {
     }
     process.stderr.write(`[batch] completed: ${results.length} results scored\n`);
   } else {
-    for (let seed = 1; seed <= args.n; seed++) {
+    const seedsToRun = args.shard === null ? Array.from({ length: args.n }, (_, i) => i + 1) : shardSeeds(args.n, args.shard);
+    for (const seed of seedsToRun) {
       if (overCap()) { capHit = true; break; }
       const t0 = process.hrtime.bigint();
       let record: Record<string, unknown>;
@@ -486,6 +496,8 @@ async function main(): Promise<void> {
       record['wallNs'] = (process.hrtime.bigint() - t0).toString();
       counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
       lines.push(JSON.stringify(record));
+      // Salvage log: trials.jsonl is written once at the end, so a run killed by a time limit would otherwise lose every trial.
+      await fs.appendFile(path.join(args.out, 'trials.partial.jsonl'), JSON.stringify(record) + '\n');
       process.stderr.write(`seed ${seed}/${args.n}: ${String(record['category'])}\n`);
     }
   }
@@ -501,6 +513,7 @@ async function main(): Promise<void> {
       costMicroUsd: (costUnits / 100n).toString(), // 1e6 cost units = 1 cent = 10,000 micro-USD, so micro-USD = units / 100
       maxCents: args.spend.maxCents,
     } : {}),
+    ...(args.shard === null ? {} : { shard: { index: args.shard.index, count: args.shard.count, seedsRun: shardSeeds(args.n, args.shard) } }),
     note: 'abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour',
   };
   await fs.writeFile(path.join(args.out, 'trials.jsonl'), lines.join('\n') + '\n');
