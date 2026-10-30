@@ -7,6 +7,10 @@ import {
   encodePodName,
   decodePodDeadline,
   isExpired,
+  placementFor,
+  checkPlacementDuration,
+  MAX_SPOT_SECONDS,
+  type JobKind,
   type RunRequest,
 } from '../../src/infra/runpod-budget.js';
 
@@ -84,5 +88,37 @@ describe('pod name deadline encoding (sweep terminates overdue pods)', () => {
     expect(isExpired(100n, 100n)).toBe(true);
     expect(isExpired(100n, 99n)).toBe(false);
     expect(isExpired(99n, 100n)).toBe(true);
+  });
+});
+
+describe('placementFor (Secure on-demand is reserved for training)', () => {
+  it('training is Secure Cloud on-demand and cannot be moved', () => {
+    expect(placementFor('train')).toEqual({ cloud: 'secure', interruptible: false });
+    expect(() => placementFor('train', { onDemand: true })).toThrow(/ERR_PLACEMENT/);
+  });
+  it('scoring and sweeps default to Community Cloud spot', () => {
+    for (const kind of ['score', 'sweep'] as const) {
+      expect(placementFor(kind)).toEqual({ cloud: 'community', interruptible: true });
+    }
+  });
+  it('an explicit on-demand override stays on Community Cloud, never Secure', () => {
+    expect(placementFor('score', { onDemand: true })).toEqual({ cloud: 'community', interruptible: false });
+  });
+  it('rejects unknown kinds (fail closed)', () => {
+    expect(() => placementFor('whatever' as JobKind)).toThrow(/ERR_PLACEMENT/);
+  });
+});
+
+describe('spot duration bound (preemption risk grows with run length)', () => {
+  it('refuses a spot run longer than the named ceiling', () => {
+    const over = MAX_SPOT_SECONDS + 1n;
+    expect(checkPlacementDuration({ cloud: 'community', interruptible: true }, over)).toMatchObject({
+      ok: false,
+      code: 'ERR_SPOT_TOO_LONG',
+    });
+    expect(checkPlacementDuration({ cloud: 'community', interruptible: true }, MAX_SPOT_SECONDS).ok).toBe(true);
+  });
+  it('does not bound on-demand runs here (the cap bounds them)', () => {
+    expect(checkPlacementDuration({ cloud: 'secure', interruptible: false }, 24n * 3600n).ok).toBe(true);
   });
 });
