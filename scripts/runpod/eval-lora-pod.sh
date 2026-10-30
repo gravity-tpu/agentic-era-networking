@@ -71,7 +71,7 @@ build_arm() { # name adapter
   "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" "$dir" --outtype f16 --outfile "$W/$name-f16.gguf"
   "$W/llama.cpp/build/bin/llama-quantize" "$W/$name-f16.gguf" "$W/$name-q4_k_m.gguf" Q4_K_M
   sed "s|^FROM .*|FROM $W/$name-q4_k_m.gguf|" "$W/library.Modelfile" > "$W/$name.Modelfile"
-  ollama create "zodiac-$name" -f "$W/$name.Modelfile"
+  ollama create "zodiac-$name:q4_k_m" -f "$W/$name.Modelfile"   # explicit tag: /api/tags lists "name:tag" and agent-eval matches the name exactly
   cp "$dir/merge-record.json" "$OUT/$name-merge-record.json"
   sha256sum "$W/$name-q4_k_m.gguf" > "$OUT/$name-q4_k_m.sha256"
   rm -rf "$dir" "$W/$name-f16.gguf"   # disk: keep only the quantized file
@@ -95,8 +95,8 @@ run_arm() { # arm model
 for arm in $ARMS; do
   case "$arm" in
     B3) run_arm B3 "$BASE_OLLAMA" ;;
-    L3) build_arm L3 /workspace/in/proposer-adapter/dpo-adapter; run_arm L3 zodiac-L3 ;;
-    C3) build_arm C3 none; run_arm C3 zodiac-C3 ;;
+    L3) build_arm L3 /workspace/in/proposer-adapter/dpo-adapter; run_arm L3 zodiac-L3:q4_k_m ;;
+    C3) build_arm C3 none; run_arm C3 zodiac-C3:q4_k_m ;;
     *) echo "unknown arm $arm"; exit 2 ;;
   esac
   ollama stop "$BASE_OLLAMA" 2>/dev/null || true
