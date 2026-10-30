@@ -61,17 +61,30 @@ build_arm() { # name adapter
 ollama list > "$OUT/versions.txt"; ollama --version >> "$OUT/versions.txt"
 
 run_arm() { # arm model
-  local arm="$1" model="$2" pids=() rc=0
+  # Seeds of one intent are split into SHARDS strided shards (agent-eval --shard i/k) that run concurrently against
+  # the one Ollama server (OLLAMA_NUM_PARALLEL=$PARALLEL), then merged into the canonical result directory. Each
+  # trial is identical to a sequential one (same seed, prompt, sampling). Shards of a failed process are not merged.
+  local arm="$1" model="$2" pids=() rc=0 n_intents shards
+  n_intents=$(wc -w <<<"$INTENTS")
+  shards=$(( PARALLEL / n_intents )); [ "$shards" -ge 1 ] || shards=1; [ "$shards" -le "$N" ] || shards=$N
+  mkdir -p "$OUT/shards"
   for intent in $INTENTS; do
-    # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
-    (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
-      --host http://127.0.0.1:11434 --model "$model" --intent "$intent" --n "$N" \
-      --prompt-version v3 --protocol A --think true --num-predict 32768 \
-      --out "$OUT/protocol-a-${intent//\//_}-$arm-pv3-n$N") &
-    pids+=($!)
+    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N"
+    for i in $(seq 1 "$shards"); do
+      # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
+      (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
+        --host http://127.0.0.1:11434 --model "$model" --intent "$intent" --n "$N" --shard "$i/$shards" \
+        --prompt-version v3 --protocol A --think true --num-predict 32768 \
+        --out "$OUT/shards/$base-shard$i") &
+      pids+=($!)
+    done
   done
   for p in "${pids[@]}"; do wait "$p" || rc=1; done
-  return $rc
+  [ "$rc" = 0 ] || { echo "a shard failed for arm $arm; not merging"; return 1; }
+  for intent in $INTENTS; do
+    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N"
+    (cd "$W/repo" && node --experimental-strip-types --no-warnings scripts/merge-eval-shards.ts --out "$OUT/$base" "$OUT/shards/$base"-shard*)
+  done
 }
 
 for arm in $ARMS; do
