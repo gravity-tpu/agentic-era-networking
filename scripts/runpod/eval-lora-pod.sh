@@ -66,6 +66,7 @@ run_arm() { # arm model
   # trial is identical to a sequential one (same seed, prompt, sampling). Shards of a failed process are not merged.
   local arm="$1" model="$2" pids=() rc=0 n_intents shards
   n_intents=$(wc -w <<<"$INTENTS")
+  [ "$n_intents" -ge 1 ] || { echo "no intents given"; return 1; }
   shards=$(( PARALLEL / n_intents )); [ "$shards" -ge 1 ] || shards=1; [ "$shards" -le "$N" ] || shards=$N
   mkdir -p "$OUT/shards"
   for intent in $INTENTS; do
@@ -82,8 +83,10 @@ run_arm() { # arm model
   for p in "${pids[@]}"; do wait "$p" || rc=1; done
   [ "$rc" = 0 ] || { echo "a shard failed for arm $arm; not merging"; return 1; }
   for intent in $INTENTS; do
-    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N"
-    (cd "$W/repo" && node --experimental-strip-types --no-warnings scripts/merge-eval-shards.ts --out "$OUT/$base" "$OUT/shards/$base"-shard*)
+    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N" dirs=()
+    for i in $(seq 1 "$shards"); do dirs+=("$OUT/shards/$base-shard$i"); done   # explicit list, no glob over stale dirs
+    (cd "$W/repo" && node --experimental-strip-types --no-warnings scripts/merge-eval-shards.ts --out "$OUT/$base" "${dirs[@]}") \
+      || { echo "merge failed for $intent ($arm)"; return 1; }
   done
 }
 
