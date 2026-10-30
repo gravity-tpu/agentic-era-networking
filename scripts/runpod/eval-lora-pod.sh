@@ -63,10 +63,11 @@ ollama list > "$OUT/versions.txt"; ollama --version >> "$OUT/versions.txt"
 run_arm() { # arm model
   local arm="$1" model="$2" pids=() rc=0
   for intent in $INTENTS; do
-    node --experimental-strip-types --no-warnings "$W/repo/scripts/agent-eval.ts" \
+    # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
+    (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
       --host http://127.0.0.1:11434 --model "$model" --intent "$intent" --n "$N" \
       --prompt-version v3 --protocol A --think true --num-predict 32768 \
-      --out "$OUT/protocol-a-${intent//\//_}-$arm-pv3-n$N" &
+      --out "$OUT/protocol-a-${intent//\//_}-$arm-pv3-n$N") &
     pids+=($!)
   done
   for p in "${pids[@]}"; do wait "$p" || rc=1; done
