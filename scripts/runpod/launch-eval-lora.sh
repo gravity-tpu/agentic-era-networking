@@ -37,12 +37,11 @@ trap cleanup EXIT
 # a GPU too expensive for --minutes under the cap is refused and the next one is tried.
 CREATE_ROUNDS="${CREATE_ROUNDS:-20}"; CREATE_WAIT="${CREATE_WAIT:-60}"
 IFS=',' read -r -a GPU_LIST <<<"$GPU"
-create_args() { printf '%s\n' create --gpu "$1" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250; }
-if [ -z "$YES" ]; then for g in "${GPU_LIST[@]}"; do mapfile -t A < <(create_args "$g"); "${RP[@]}" "${A[@]}" || true; done; exit 0; fi
+do_create() { "${RP[@]}" create --gpu "$1" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250 "${@:2}"; }   # no mapfile: macOS bash is 3.2
+if [ -z "$YES" ]; then for g in "${GPU_LIST[@]}"; do do_create "$g" || true; done; exit 0; fi
 for round in $(seq 1 "$CREATE_ROUNDS"); do
   for g in "${GPU_LIST[@]}"; do
-    mapfile -t A < <(create_args "$g")
-    if out=$("${RP[@]}" "${A[@]}" --yes 2>&1); then POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"; break 2; fi
+    if out=$(do_create "$g" --yes 2>&1); then POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"; break 2; fi
     echo "create failed on $g (round $round/$CREATE_ROUNDS): $(tail -1 <<<"$out" | cut -c1-140)"
   done
   sleep "$CREATE_WAIT"
