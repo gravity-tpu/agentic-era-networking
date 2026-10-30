@@ -39,20 +39,38 @@ CREATE_ROUNDS="${CREATE_ROUNDS:-20}"; CREATE_WAIT="${CREATE_WAIT:-60}"
 IFS=',' read -r -a GPU_LIST <<<"$GPU"
 do_create() { "${RP[@]}" create --gpu "$1" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250 "${@:2}"; }   # no mapfile: macOS bash is 3.2
 if [ -z "$YES" ]; then for g in "${GPU_LIST[@]}"; do do_create "$g" || true; done; exit 0; fi
+# A community host can hand out a pod whose ssh port never answers (seen 2026-10-30: TCP timeout for 20 minutes). A pod must accept
+# ssh within SSH_READY_SECONDS or it is terminated and the next candidate is tried.
+SSH_READY_SECONDS="${SSH_READY_SECONDS:-420}"
+ssh_ready() { # ip port
+  local deadline=$(( $(date +%s) + SSH_READY_SECONDS ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    ssh -p "$2" -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@$1" true 2>/dev/null && return 0
+    sleep 6
+  done
+  return 1
+}
+IP=""; PORT=""
 for round in $(seq 1 "$CREATE_ROUNDS"); do
   for g in "${GPU_LIST[@]}"; do
-    if out=$(do_create "$g" --yes 2>&1); then POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"; break 2; fi
+    if out=$(do_create "$g" --yes 2>&1); then
+      POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"
+      echo "pod $POD ($g)"
+      if read -r IP PORT < <("${RP[@]}" ssh-target "$POD") && ssh_ready "$IP" "$PORT"; then break 2; fi
+      echo "pod $POD on $g did not accept ssh within ${SSH_READY_SECONDS}s; terminating it and trying the next candidate"
+      "${RP[@]}" terminate "$POD" || echo "!! TERMINATE FAILED for $POD: run 'npm run runpod -- terminate $POD' now" >&2
+      POD=""; GPU_USED=""
+      continue
+    fi
     echo "create failed on $g (round $round/$CREATE_ROUNDS): $(tail -1 <<<"$out" | cut -c1-140)"
   done
   sleep "$CREATE_WAIT"
 done
-[ -n "$POD" ] || { echo "could not create a pod on any of: $GPU" >&2; exit 1; }
+[ -n "$POD" ] || { echo "could not start a reachable pod on any of: $GPU" >&2; exit 1; }
 echo "gpu $GPU_USED"
 echo "pod $POD"
 
-read -r IP PORT < <("${RP[@]}" ssh-target "$POD")
 SSH=(ssh -p "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$IP")
-for _ in $(seq 1 30); do "${SSH[@]}" true 2>/dev/null && break; sleep 5; done
 "${SSH[@]}" 'mkdir -p /workspace/in /workspace/out'
 
 git bundle create /tmp/zodiac-eval-repo.bundle HEAD
