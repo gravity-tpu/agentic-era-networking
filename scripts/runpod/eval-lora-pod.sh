@@ -10,6 +10,7 @@ trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /works
 # Backstop: any non-zero exit that left neither marker (signal, set -e in a context ERR misses) still reports FAILED.
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
+WAIT_FOR_GO="${WAIT_FOR_GO:-}"   # non-empty: finish setup, then hold before any trial until /workspace/in/GO exists (plan section 11.3 stage gate)
 STOP_AFTER="${STOP_AFTER:-}"   # "toolchain": exit 0 after steps 0-2 (cheap-GPU shakedown, no model download)
 INTENTS="${INTENTS:-quarantine-precedence/v1}"
 N="${N:-50}"
@@ -95,6 +96,11 @@ ollama list > "$OUT/versions.txt"; ollama --version >> "$OUT/versions.txt"
 
 run_arm() { # arm model
   local arm="$1" model="$2" pids=() rc=0
+  if [ -n "$WAIT_FOR_GO" ]; then   # setup is done and the model answers; hold until the stage gate is opened
+    echo "ready, waiting for /workspace/in/GO $(date -u +%FT%TZ)"
+    until [ -e /workspace/in/GO ]; do sleep 10; done
+    echo "GO received $(date -u +%FT%TZ)"
+  fi
   for intent in $INTENTS; do
     # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
     (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
