@@ -186,3 +186,38 @@ Qwen: about 9 to 10 hours of the Mac's time for the 4 intents (the 2026-10-25 an
 ### 10.7 Results
 
 The registered runs finished on 2026-10-27 and are reported in `docs/benchmarks/results/agent-evaluation/proposer-v2-qwen3.8-haiku-5-5.md`, with the analysis fixed in section 10.3: the same metrics as section 6, the INTENT-2 v1 against v2 control, and the earlier numbers kept separate. Nothing in sections 1 to 10.6 was edited after the runs began, apart from amendment 1 (section 10.6), which was written before any Qwen run on INTENT-3 or INTENT-4.
+
+## 11. Plan v3 addendum: verifier-grounded LoRA proposer (DRAFT, not registered until the owner approves it and it is committed before any run)
+
+Nothing in sections 1 to 10 is edited. This section is written, and committed, before any run it describes. Runs happen on an ephemeral Runpod pod (`scripts/runpod.ts`, per-run cap 5 USD), not on the Mac.
+
+### 11.1 Question
+
+Does the proposer adapter trained on 2026-10-29 (`docs/benchmarks/results/lora-adapters-2026-10-29/`, 1,466 SFT examples and 1,434 DPO pairs, 15 training steps, training scenarios hash-disjoint from INTENT-1 to 4) raise zero-shot admissibility over the same base model under the same prompt? Abstract evaluation only (RQ1 to RQ3): verdicts come from `src/sdn/proposal-triage.ts`; admissible means the verifier accepts the rule set, not that it is correct on the wire.
+
+### 11.2 Arms (Protocol A, N = 50 per intent, temperature 0.2, top-p 0.95, seeds 1..50, `think: true`, `num_predict` 32768, prompt v3 for every arm)
+
+| Arm | Weights | Serving |
+| :--- | :--- | :--- |
+| B3 (base) | `qwen3.8:27b` from the Ollama library (digest recorded in every summary) | Ollama 0.34.4 on the pod |
+| L3 (adapter) | `Qwen/Qwen3.8-27B` bf16 with the DPO adapter merged, converted and quantized to Q4_K_M with llama.cpp | Ollama 0.34.4 on the pod, the library Modelfile's TEMPLATE, RENDERER, PARSER and PARAMETER lines kept, FROM replaced |
+| C3 (pipeline control) | `Qwen/Qwen3.8-27B` bf16 with no adapter, through the same convert and quantize steps as L3 | as L3 |
+
+L3 against C3 is the adapter effect. B3 against C3 is the effect of re-quantizing outside the Ollama library, reported so that a quantization difference is not credited to the adapter. B3 is also the arm comparable with the registered v2 data (sections 10.2 and 10.7), which used prompt v2: the prompt effect (v2 to v3) is reported separately and never merged.
+
+### 11.3 Scope and stages (each stage needs the owner's approval of its cost before launch)
+
+- **Stage 1:** INTENT-3 (`quarantine-precedence/v1`, where the v2 gap was 1/50), arms B3, L3 and C3, N = 50.
+- **Stage 2, only if Stage 1 ran to completion:** INTENT-1, 2 and 4, same arms and N.
+- Protocol B is not run in this addendum.
+
+### 11.4 Analysis, fixed in advance
+
+Admissible counts with 95% Wilson intervals, the category of every failure, distinct outputs and transport failures per cell (section 6); L3 against C3 and B3 against C3 per intent. No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed; no cell is re-run to improve a number. A run cut short by its time limit is reported with its `trialsRun`, never as a full cell.
+
+### 11.5 What this will not show
+
+- Prompt v3 was written after the v2 failures on these same intents were read (README of the adapter directory), so v3 results are not held out in prompt terms; only the adapter's training data is disjoint (checked by `assertDisjointFromBenchmark`).
+- A 15-step run is a small training run, one seed, one adapter. A DPO reward accuracy of 100% on verifier-generated pairs is a training statistic, not evidence about INTENT-1 to 4.
+- Merging then quantizing can lose part of a LoRA delta, so L3 may understate the adapter; the runtime-adapter route (llama.cpp `--lora`) is not tested here.
+- On-wire behaviour (RQ4), and run-to-run variation (one run per cell).
