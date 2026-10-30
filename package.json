@@ -18,6 +18,7 @@
     "lint:md": "markdownlint -c .markdownlint.json \"**/*.md\" --ignore node_modules",
     "lint:md:fix": "markdownlint -c .markdownlint.json --fix \"**/*.md\" --ignore node_modules",
     "lint": "npm run check-types && npm run lint:md",
+    "runpod": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/runpod.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "council:review": "node scripts/ai-reviewer.mjs",
