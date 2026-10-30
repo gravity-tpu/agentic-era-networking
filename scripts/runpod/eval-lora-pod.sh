@@ -5,8 +5,10 @@
 # Inputs (uploaded by scripts/runpod/launch-eval-lora.sh into /workspace/in): repo.bundle, proposer-adapter/.
 # Output: /workspace/out (agent-eval result dirs, pod.log, versions.txt) and the marker /workspace/out/DONE.
 # Fails closed: any step failing stops the script (set -e) and leaves /workspace/out/FAILED.
-set -euo pipefail
+set -Eeuo pipefail   # -E: the ERR trap also fires inside functions (it did not on the 2026-10-30 run 3: the pod died silently)
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
+# Backstop: any non-zero exit that left neither marker (signal, set -e in a context ERR misses) still reports FAILED.
+trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
 STOP_AFTER="${STOP_AFTER:-}"   # "toolchain": exit 0 after steps 0-2 (cheap-GPU shakedown, no model download)
 INTENTS="${INTENTS:-quarantine-precedence/v1}"
@@ -23,7 +25,7 @@ echo "start $(date -u +%FT%TZ) intents=$INTENTS n=$N arms=$ARMS"
 
 # 0. OS packages the installers and the llama.cpp build need (the pod image lacks zstd, found on the first launch).
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils
+apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils python3-venv
 
 # 1. Toolchain (Node 22, Ollama pinned to the version of the registered runs, llama.cpp CPU build for convert/quantize).
 if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
@@ -32,10 +34,25 @@ fi
 curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="$OLLAMA_VERSION" sh
 OLLAMA_NUM_PARALLEL="$PARALLEL" OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=24h nohup ollama serve > "$W/ollama.log" 2>&1 &
 for _ in $(seq 1 60); do curl -sf http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 2; done
-pip install -q "transformers" peft accelerate huggingface_hub sentencepiece
+# Merge environment: the image's CUDA torch plus a transformers new enough to know qwen3_5. -U matters: pip leaves an
+# already-installed (older) transformers alone otherwise.
+pip install -q -U transformers peft accelerate huggingface_hub sentencepiece
 git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
 (cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize -j"$(nproc)")
-pip install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt"
+# Converter environment, isolated: llama.cpp's requirements pin transformers<5 and replace torch with a CPU build, which
+# broke the merge environment on the first full launch.
+python3 -m venv "$W/convenv"
+"$W/convenv/bin/pip" install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt"
+# Fail fast, before any 55 GB download: both environments must be able to do their job.
+python3 - <<'PY'
+import torch, transformers
+from transformers import AutoConfig
+assert torch.cuda.is_available(), "torch in the merge environment has no CUDA"
+c = AutoConfig.from_pretrained("Qwen/Qwen3.8-27B", trust_remote_code=True)
+print("merge env ok: transformers", transformers.__version__, "torch", torch.__version__, "model_type", c.model_type)
+PY
+"$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" --help > /dev/null
+{ python3 -m pip list 2>/dev/null | grep -iE '^(transformers|peft|torch|accelerate) '; echo --- convenv; "$W/convenv/bin/pip" list 2>/dev/null | grep -iE '^(transformers|torch|gguf) '; } > "$OUT/pip-versions.txt"
 
 # 2. Repo at the pinned commit (bundle keeps the commit hash; agent-eval refuses a dirty tree).
 git clone -q "$IN/repo.bundle" "$W/repo"
@@ -50,7 +67,7 @@ ollama show "$BASE_OLLAMA" --modelfile > "$W/library.Modelfile"
 build_arm() { # name adapter
   local name="$1" adapter="$2" dir="$W/$1-merged"
   python3 "$W/repo/scripts/runpod/merge-lora.py" --base "$BASE_HF" --adapter "$adapter" --out "$dir"
-  python3 "$W/llama.cpp/convert_hf_to_gguf.py" "$dir" --outtype f16 --outfile "$W/$name-f16.gguf"
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" "$dir" --outtype f16 --outfile "$W/$name-f16.gguf"
   "$W/llama.cpp/build/bin/llama-quantize" "$W/$name-f16.gguf" "$W/$name-q4_k_m.gguf" Q4_K_M
   sed "s|^FROM .*|FROM $W/$name-q4_k_m.gguf|" "$W/library.Modelfile" > "$W/$name.Modelfile"
   ollama create "zodiac-$name" -f "$W/$name.Modelfile"
