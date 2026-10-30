@@ -8,6 +8,7 @@
 set -euo pipefail
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
 
+STOP_AFTER="${STOP_AFTER:-}"   # "toolchain": exit 0 after steps 0-2 (cheap-GPU shakedown, no model download)
 INTENTS="${INTENTS:-quarantine-precedence/v1}"
 N="${N:-50}"
 ARMS="${ARMS:-B3 L3 C3}"
@@ -19,6 +20,10 @@ IN=/workspace/in; OUT=/workspace/out; W=/workspace/work
 mkdir -p "$OUT" "$W"
 exec > >(tee -a "$OUT/pod.log") 2>&1
 echo "start $(date -u +%FT%TZ) intents=$INTENTS n=$N arms=$ARMS"
+
+# 0. OS packages the installers and the llama.cpp build need (the pod image lacks zstd, found on the first launch).
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils
 
 # 1. Toolchain (Node 22, Ollama pinned to the version of the registered runs, llama.cpp CPU build for convert/quantize).
 if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
@@ -35,6 +40,8 @@ pip install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt
 # 2. Repo at the pinned commit (bundle keeps the commit hash; agent-eval refuses a dirty tree).
 git clone -q "$IN/repo.bundle" "$W/repo"
 (cd "$W/repo" && git rev-parse HEAD > "$OUT/repo-commit.txt" && npm ci --ignore-scripts --no-audit --no-fund && npx prisma generate && npx tsc)
+
+if [ "$STOP_AFTER" = toolchain ]; then echo "toolchain ok $(date -u +%FT%TZ)"; touch "$OUT/DONE"; exit 0; fi
 
 # 3. Arms. B3 = library model. L3/C3 = merge (or plain re-save), convert, quantize, then ollama create with the
 #    library Modelfile's TEMPLATE/RENDERER/PARSER/PARAMETER lines and only FROM replaced.
