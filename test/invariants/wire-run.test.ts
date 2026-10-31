@@ -17,6 +17,8 @@ import {
   captureFilterFor,
   rawSendPython,
   coverageFlowsFor,
+  captureShell,
+  setDirName,
 } from '../../src/sdn/wire-run.js';
 import { candidateFlows, predictOutcome, FlowMode, addressUniverse } from '../../src/sdn/wire-flows.js';
 import type { WireRuleSet } from '../../src/sdn/wire-flows.js';
@@ -213,5 +215,40 @@ describe('coverageFlowsFor: one sendable flow per intent clause, so the wire tes
     const a = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands()).flows.map((f) => f.id);
     const b = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands()).flows.map((f) => f.id);
     expect(a).toEqual(b);
+  });
+});
+
+describe('captureShell: the tcpdump command of one capture window', () => {
+  it('lets tcpdump set promiscuous mode: a capture NIC that is not already promiscuous must see unicast frames not addressed to it (the first smoke run missed every unicast IPv4 frame on O2 with -p)', () => {
+    const cmd = captureShell({ iface: 'enx9c69d39dd0a6', filter: 'udp dst port 41000', stamp: '1-41000', name: 'O2', seconds: 7, sudo: false });
+    expect(cmd).not.toMatch(/\s-p\s/);
+    expect(cmd).toContain("tcpdump -i enx9c69d39dd0a6 -nn -e -l 'udp dst port 41000'");
+    expect(cmd).toContain('timeout 7 ');
+  });
+  it('prefixes sudo only when asked', () => {
+    expect(captureShell({ iface: 'eth0', filter: 'arp', stamp: 's', name: 'L', seconds: 7, sudo: true })).toContain('sudo -n timeout 7 tcpdump');
+    expect(captureShell({ iface: 'eth0', filter: 'arp', stamp: 's', name: 'L', seconds: 7, sudo: false })).not.toContain('sudo');
+  });
+  it('rejects an unsafe interface name, filter, stamp, name or window instead of building a shell command from it', () => {
+    const ok = { iface: 'eth0', filter: 'arp', stamp: 's1', name: 'O2', seconds: 7, sudo: false };
+    expect(() => captureShell({ ...ok, iface: "eth0'; rm -rf /" })).toThrow(RangeError);
+    expect(() => captureShell({ ...ok, filter: "arp'; rm -rf /; '" })).toThrow(RangeError);
+    expect(() => captureShell({ ...ok, stamp: 'a b' })).toThrow(RangeError);
+    expect(() => captureShell({ ...ok, name: '../x' })).toThrow(RangeError);
+    expect(() => captureShell({ ...ok, seconds: 0 })).toThrow(RangeError);
+    expect(() => captureShell({ ...ok, seconds: 61 })).toThrow(RangeError);
+  });
+  it('accepts the filters the harness builds', () => {
+    expect(() => captureShell({ iface: 'eth0', filter: 'arp and ether src 02:00:00:00:00:01', stamp: 's', name: 'L', seconds: 7, sudo: false })).not.toThrow();
+  });
+});
+
+describe('setDirName: evidence is kept per rule set', () => {
+  it('differs for the same flow in different sets and is filesystem-safe', () => {
+    const a = setDirName({ intent: 'port1-isolation/v1', kind: 'reference', id: 'reference' });
+    const b = setDirName({ intent: 'dns-confinement/v1', kind: 'reference', id: 'reference' });
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^[A-Za-z0-9_.-]+$/);
+    expect(setDirName({ intent: 'x/v1', kind: 'model-admissible', id: 'weird id/with:chars' })).toMatch(/^[A-Za-z0-9_.-]+$/);
   });
 });
