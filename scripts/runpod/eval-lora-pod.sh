@@ -85,7 +85,7 @@ l4_adapter_gguf() {
   if [ -f "$d/zodiac-proposer-dpo-lora.gguf" ]; then echo "$d/zodiac-proposer-dpo-lora.gguf"; return 0; fi
   [ -f "$d/dpo-adapter/adapter_model.safetensors" ] || { echo "L4: neither an adapter GGUF nor a PEFT adapter found in $d" >&2; return 1; }
   local base; base=$(python3 -c "from huggingface_hub import snapshot_download as s; print(s('$BASE_HF'))")
-  "$W/convenv/bin/python" "$W/llama.cpp/convert_lora_to_gguf.py" --base "$base" "$d/dpo-adapter" -o "$W/L4-lora.gguf" --outtype f16 >&2 || { rm -f "$W/L4-lora.gguf"; return 1; }
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_lora_to_gguf.py" --base "$base" "$d/dpo-adapter" --outfile "$W/L4-lora.gguf" --outtype f16 >&2 || { rm -f "$W/L4-lora.gguf"; return 1; }
   echo "$W/L4-lora.gguf"
 }
 
