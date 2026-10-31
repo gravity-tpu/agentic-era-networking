@@ -333,3 +333,39 @@ Haiku: well under 2 USD of API credit (the eight valid section 10 Haiku runs cos
 ### 14.6 Limits
 
 Runpod spend stays within the owner's total of 50 USD and the 5 USD per-run cap; Claude API spend stays within the per-run caps above. If a step would exceed the 50 USD total, it is not started and the situation is reported instead (in particular the conditional Protocol B, which needs about 8 USD beyond the rest).
+
+## 15. Plan v7 addendum (DRAFT, not registered): an adapter trained on a changed design
+
+**Status: a draft by the operator (a Claude Code session), written after the L4 follow-up observations (`docs/benchmarks/results/agent-evaluation/l4-adapter-2026-10-31/README.md`). Nothing in this section is registered or authorised: no run starts until the owner approves it and a commit registers the final text before any data. Sections 1 to 14 are unchanged. The dataset generator changes in 15.2 are not implemented.**
+
+### 15.1 Why
+
+L4 (80 SFT and 90 DPO steps, about half the data) scored 145 of 300 against 248 for the control (section 14 results). Afterwards measured: 60 of 69 long failed outputs are repetition loops (median ratio of distinct ids 0.08) and 22 of 119 syntax failures are empty answers after long generation; the training set has 32 distinct scenarios seen about 20 times each, no thinking in any target, and the v2 system prompt while the evaluation used v3. A full epoch of the same recipe would show the same 32 scenarios about twice as often as L4 did. None of these is established as the cause; the design below varies them so that a result is interpretable.
+
+### 15.2 Design
+
+1. **Dataset v2 (to be implemented, tested first).** At least 256 distinct scenarios (addresses, ports, host counts and clause counts varied within the existing four families and two or three added compositions), the v3 system prompt, the same verifier-grounded filtering and the same disjointness checks (`assertDisjointFromBenchmark`, the benchmark's subnets and intent hashes; the structural similarity to the families is by design and is reported). The generator must reject any example the verifier does not accept as the target.
+2. **Thinking handling (the owner chooses before registration):** (a) evaluate both the adapter and its control with `think: false`, which needs a new control arm because every earlier cell used `think: true`; or (b) keep `think: true` and train on targets that include thinking, obtained by rejection sampling from the base model (outputs the verifier accepted, thinking kept), which needs a new sampling run and its cost. This draft recommends (a) for the first experiment: it changes one thing, costs less and needs no new data collection.
+3. **Arms.** L5: SFT only, learning rate 1e-4 (named and bounded, not adapted), at most one epoch of dataset v2, evaluated before any DPO stage. C5: the same pipeline without the adapter under the same thinking setting. DPO is a second experiment, started only if the stopping rule in 15.3 passes.
+4. **Smoke gate before any 300-trial evaluation.** After SFT, 20 zero-shot samples on training-family scenarios and 20 on three held-out-from-training scenarios: if more than 10% of the 40 are syntax failures the run is reported as failed to train and not evaluated further (L4's rate was 119 of 300).
+5. **Evaluation.** Protocol A, prompt v3, N = 50 per intent, the six intents of section 14.2 item 3, one run per cell, single-stream pods (section 14 results: concurrency gains nothing per pod), a lifetime extension within the cap decided before launch and never by a blocking question while a pod is running.
+
+### 15.3 Analysis and stopping rules, fixed in advance
+
+The metrics of section 6 per cell, plus the share of syntax failures and the repetition ratio of long outputs (as measured in the L4 addendum) so that the failure mode is compared and not only the count. L5 is compared with C5 (the adapter effect) and, descriptively, with L3 and L4. The experiment stops, and the owner decides whether to continue, when any of the following holds: the smoke gate fails; the six-intent total of L5 is below C5's by more than the run-to-run margin of section 12; or spend reaches 25 USD for this section. No campaign continues without that decision.
+
+### 15.4 What this will not show
+
+One adapter, one seed, one run per cell; whether the adapter helps under `think: true` (if option (a) is chosen); whether DPO helps; any result on the wire (RQ4).
+
+### 15.5 Cost and time (estimates from the L4 runs, not measurements for this workload)
+
+Training: the L4 pod cost about 3.9 USD for 130 minutes (1.79 USD per hour); a larger dataset under a 130-minute budget costs the same, and one epoch of dataset v2 may need more. Evaluation: about 2.4 USD per single-intent pod (L4 reruns), so about 14 USD for L5 on six intents and as much again for C5 (about 28 USD), which is above this section's 25 USD limit: L5 and C5 on the three intents where L3 and C3 differed most would cost about 14 USD and is the proposed first step.
+
+### 15.6 Limits
+
+Runpod spend within the owner's total and the 5 USD per-run cap (a pod needing more is split before launch); the 25 USD limit of 15.3; the named decision-maker for continuing is the owner.
+
+### 15.7 Decisions needed from the owner
+
+The thinking option in 15.2 item 2; whether dataset v2 generator work is worth building before any run; whether the first step is the three-intent subset of 15.5.

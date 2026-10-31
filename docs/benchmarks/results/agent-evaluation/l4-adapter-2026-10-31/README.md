@@ -43,6 +43,15 @@ Admissible out of 50, Protocol A, prompt v3. C3 and L3 from `../lora-v3-2026-10-
 - **What that does and does not say.** The adapter's output, when it parses, is often admissible; the loss is concentrated in output that is cut off or degenerates. This is an observation about this one half-trained adapter. No experiment here separates a cause (the stopped-early SFT/DPO schedule, the merge-then-quantize route, the repeated-token pattern, or something else), and I do not claim one.
 - **It does not replace the L3 finding.** The 15-step adapter's gains (INTENT-3, INTENT-7) and losses (INTENT-5, 6) are in the earlier READMEs; L4 here shows that more steps of this recipe did not make the adapter better, and that it was not stable across the steps taken.
 
+## Follow-up observations (no new runs, measured 2026-10-31)
+
+Measured afterwards on the recorded cells (`cells/*/trials.jsonl`) and on the training set regenerated with `scripts/build-proposer-lora-dataset.ts` at main. They are measurements, not tests of a cause.
+
+- **The 119 `ERR_SYNTAX` trials fall into three shapes.** 94 are long outputs (more than 1,300 characters, median about 14,500, maximum about 35,000); 22 are empty (the model generated 5,000 to 25,000 tokens, presumably thinking, then stopped with no answer); 3 are short. Of the 69 long outputs that contain at least two rule ids, 60 are heavily repetitive: the median ratio of distinct ids to ids written is 0.08, so a few rules are repeated until the generation ends. Admissible L4 outputs on port1-isolation and dns-quarantine are short (median about 1,100 characters).
+- **The training set is small in distinct content.** It has 32 scenarios: 32 zero-shot rows and 1,434 repair rows that reuse the same 32 prompts. L4 saw 640 SFT examples, so each scenario about 20 times, at a learning rate of 2e-4.
+- **The targets differ from the evaluation setting in two ways.** Every training target is a final answer of at most 1,211 characters (median 883) with no thinking block, while the evaluation ran with `think: true` and the harder intents need answers of about 2,000 characters. The training system prompt is the v2 text (`src/sdn/proposer-lora-dataset.ts`), the evaluation used v3 (v2 plus the anti-spoofing line).
+- **What this does not say.** These facts are consistent with an adapter overfitted to a few scenarios, but no run here varies the data, the learning rate, the thinking setting or the prompt, so none of them is established as the cause. They are the reason plan section 15 (a draft) proposes a changed design and not a longer run of this one.
+
 ## Deviations from the registered protocol and incidents
 
 None changed an arm's prompts, seeds, sampling or the verifier.
