@@ -9,9 +9,8 @@
  * Invariant 2: integer arithmetic only (the checksum is a 16-bit ones'-complement sum).
  */
 
-import { matchesPacket, ipv4ToUint } from './intent-spec.js';
+import { matchesPacket } from './intent-spec.js';
 import type { IntentSpec, PacketClass } from './intent-spec.js';
-import { UPLINK_HOST_IP, REAL_WORKLOAD_HOSTS, WORKLOAD_SUBNET_BASE, WORKLOAD_SUBNET_PREFIX_LEN } from './wire-flows.js';
 import type { WireFlow } from './wire-flows.js';
 
 const ETH_HEADER = 14;
@@ -130,30 +129,21 @@ export function m2Verdict(expectation: IntentExpectation, observed: readonly num
 
 export type SendPlan =
   | { readonly via: 'raw-from-node' }
-  | { readonly via: 'udp-from-mac'; readonly aliasIp: string | null }
+  | { readonly via: 'raw-from-uplink-node' }
   | { readonly via: 'unsendable'; readonly reason: string };
-
-const inWorkloadSubnet = (ip: string): boolean => (ipv4ToUint(ip) >>> (32 - WORKLOAD_SUBNET_PREFIX_LEN)) === (ipv4ToUint(WORKLOAD_SUBNET_BASE) >>> (32 - WORKLOAD_SUBNET_PREFIX_LEN));
 
 /**
  * How the testbed would send a flow, or why it cannot. Every frame entering port 1 is a raw frame from a workload node's NIC carrying the flow's
- * exact header fields (so a real host's own address, an alias and a forged source are one mechanism). Frames entering port 2 come from the Mac
- * through its kernel stack, so only IPv4 to a destination in the workload subnet is possible (anything else would leave the lab by the router
- * and never reach the switch), to a real workload host (the kernel must resolve it by ARP), from the Mac's own address or from an alias on the workload subnet. There is no sender for ARP from the uplink
- * side or for frames entering port 3. An unsendable flow is reported with its reason and never counted as agreement.
+ * exact header fields (so a real host's own address, an alias and a forged source are one mechanism). Every frame entering port 2 is a raw frame
+ * from the uplink-side Linux node, whose NIC sits on the isolated uplink VLAN (owner, 2026-10-31) with the switch's P2 link and nothing else. There
+ * is no sender for frames entering port 3 (the capture NICs are receive-only; decision 8). An unsendable flow is reported with its reason and never
+ * counted as agreement.
  */
 export function sendPlanFor(flow: WireFlow): SendPlan {
   const p = flow.packet;
   if (p.inPort === 1) return { via: 'raw-from-node' };
-  if (p.inPort !== 2) return { via: 'unsendable', reason: `no sender can inject into port ${p.inPort} (the capture NICs are receive-only; decision 8, 2026-10-31)` };
-  if (p.etherType !== 0x0800) return { via: 'unsendable', reason: 'no Linux sender on the uplink side: the Mac cannot send an ARP frame with a chosen sender address' };
-  const src = p.srcIp ?? '';
-  const dst = p.dstIp ?? '';
-  if (!inWorkloadSubnet(dst)) return { via: 'unsendable', reason: 'the Mac would route a destination outside the workload subnet to the internet, not through the switch; it would leave the lab' };
-  if (!REAL_WORKLOAD_HOSTS.includes(dst)) return { via: 'unsendable', reason: 'no host answers ARP for that workload address, so the Mac kernel cannot send the frame (a static neighbour entry is not built)' };
-  if (src === UPLINK_HOST_IP) return { via: 'udp-from-mac', aliasIp: null };
-  if (inWorkloadSubnet(src)) return { via: 'udp-from-mac', aliasIp: src };
-  return { via: 'unsendable', reason: 'the source is neither the Mac nor an address the Mac can alias on the workload subnet' };
+  if (p.inPort === 2) return { via: 'raw-from-uplink-node' };
+  return { via: 'unsendable', reason: `no sender can inject into port ${p.inPort} (the capture NICs are receive-only; decision 8, 2026-10-31)` };
 }
 
 /** The capture filter that counts exactly the frames of one flow in its own window: UDP by its unique destination port, ARP by the flow's source MAC. */
@@ -183,4 +173,26 @@ export function rawSendPython(iface: string, framesHex: readonly string[], spaci
     "print('sent')",
     '',
   ].join('\n');
+}
+
+export interface CoverageFlows { readonly flows: WireFlow[]; /** clause ids (and 'default-deny') no candidate flow reaches */ readonly uncovered: string[] }
+
+/**
+ * One sendable flow per intent clause, and one for the default-deny class, so that a wire run tests the intent itself (M2) and not only the
+ * agreement of a set with the model: whatever the rule sets do, the intent says what each class of packet must and may do. Each clause is
+ * represented by the least demanding candidate flow (lowest mode, then entry port, then id) whose first matching clause it is. A class no candidate
+ * reaches is reported as uncovered, never dropped.
+ */
+export function coverageFlowsFor(spec: IntentSpec, candidates: readonly WireFlow[]): CoverageFlows {
+  const best = new Map<string, WireFlow>();
+  for (const f of candidates) {
+    if (sendPlanFor(f).via === 'unsendable') continue;
+    const id = intentExpectation(spec, f.packet).clauseId;
+    const cur = best.get(id);
+    const better = cur === undefined || f.mode < cur.mode || (f.mode === cur.mode && (f.packet.inPort < cur.packet.inPort || (f.packet.inPort === cur.packet.inPort && f.id < cur.id)));
+    if (better) best.set(id, f);
+  }
+  const wanted = [...spec.clauses.map((c) => c.id), 'default-deny'];
+  const flows = wanted.flatMap((id) => { const f = best.get(id); return f === undefined ? [] : [f]; });
+  return { flows, uncovered: wanted.filter((id) => !best.has(id)) };
 }

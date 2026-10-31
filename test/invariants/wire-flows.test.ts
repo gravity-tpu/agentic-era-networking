@@ -59,12 +59,15 @@ describe('candidateFlows and the modes a flow needs', () => {
     const f = flows.find((x) => x.packet.inPort === 1 && x.packet.etherType === 0x0800 && x.packet.srcIp === '8.8.8.8' && x.packet.dstIp === '10.0.0.119');
     expect(f?.mode).toBe(FlowMode.Forged);
   });
-  it('an ARP claim from the uplink side for an address the Mac cannot own is not sendable, so it is never a candidate', () => {
-    expect(flows.some((x) => x.packet.inPort === 2 && x.packet.etherType === 0x0806 && x.packet.arpSpa === '8.8.8.8')).toBe(false);
+  it('a frame entering port 2 is sent as a raw frame from the uplink-side Linux node, so it needs a forged frame (any source, ARP included)', () => {
+    const ip = flows.find((x) => x.packet.inPort === 2 && x.packet.etherType === 0x0800 && x.packet.srcIp === '10.0.2.53' && x.packet.dstIp === '10.0.0.119');
+    expect(ip?.mode).toBe(FlowMode.Forged);
+    const arp = flows.find((x) => x.packet.inPort === 2 && x.packet.etherType === 0x0806 && x.packet.arpSpa === '8.8.8.8' && x.packet.arpTpa === '10.0.2.50');
+    expect(arp?.mode).toBe(FlowMode.Forged);
   });
-  it('an ARP claim from the uplink side for an alias on the workload subnet needs an alias', () => {
-    const arp = flows.find((x) => x.packet.inPort === 2 && x.packet.etherType === 0x0806 && x.packet.arpSpa === '10.0.2.53' && x.packet.arpTpa === '10.0.2.50');
-    expect(arp?.mode).toBe(FlowMode.Alias);
+  it('there is no port 2 flow that needs only real hosts or aliases: the Mac is no longer a sender', () => {
+    const noForge = candidateFlows(['10.0.2.50', '10.0.2.53', '8.8.8.8'], FlowMode.Alias);
+    expect(noForge.some((x) => x.packet.inPort === 2)).toBe(false);
   });
   it('restricting the allowed mode removes the flows that need more', () => {
     const real = candidateFlows(['10.0.2.50', '10.0.2.53', '8.8.8.8'], FlowMode.Real);

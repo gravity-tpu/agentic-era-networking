@@ -27,7 +27,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { predictOutcome } from '../dist/sdn/wire-flows.js';
 import type { WireFlow, WireRule } from '../dist/sdn/wire-flows.js';
-import { buildArpRequestFrame, buildUdpFrame, captureFilterFor, rawSendPython, sendPlanFor, ipBytes } from '../dist/sdn/wire-run.js';
+import { buildArpRequestFrame, buildUdpFrame, captureFilterFor, rawSendPython, sendPlanFor } from '../dist/sdn/wire-run.js';
 import { runSession } from '../dist/sdn/wire-session.js';
 import type { BridgeState, InstallResult, RestoreResult, Rig, RigFlowResult, SessionSet } from '../dist/sdn/wire-session.js';
 import { TARGETS } from './wire-common.ts';
@@ -39,9 +39,11 @@ const BRIDGE_URL = process.env['CONFORMANCE_BRIDGE_URL'] ?? 'http://127.0.0.1:13
 const TOKEN_FILE = path.join(os.homedir(), '.zodiac-experiment-token');
 const JETSON = 'jetson';
 const NODE_SENDER = 'agentic-node-01'; // sends every port 1 frame as a raw frame from its workload NIC
-const LISTENER = process.env['CONFORMANCE_LISTENER_HOST'] ?? 'agentic-node-02'; // sees what the switch sends out of port 1
+const UPLINK_SENDER = 'agentic-node-01'; // sends every port 2 frame as a raw frame from its USB NIC on the isolated uplink VLAN (owner moved it there 2026-10-31)
+const UPLINK_IF = 'eth1';
+const LISTENER = process.env['CONFORMANCE_LISTENER_HOST'] ?? 'rpi-hailo'; // sees what the switch sends out of port 1 (passwordless sudo, tcpdump present)
+const LISTENER_IF = 'eth0'; // rpi-hailo's workload NIC
 const WORKLOAD_IF = 'eth0';
-const MAC_IF = 'en0';
 const O2_IF = 'enx9c69d39dd0a6'; // Zodiac P3 tap NIC
 const O3_IF = 'enx9c69d39ddcc0'; // switch #2 P3: mirror of the Zodiac P2 link
 const DATAGRAMS_PER_FLOW = 5;
@@ -127,31 +129,22 @@ class RealRig implements Rig {
     if (plan.via === 'unsendable') return { sent: false, reason: plan.reason, observedPorts: [], evidence: {} };
     const filter = captureFilterFor(flow, tag);
     const stamp = `${process.pid}-${tag}`;
-    const cap = (iface: string, f: string, sudo: boolean): string => `rm -f /tmp/conf-${stamp}-${f}.txt /tmp/conf-${stamp}-${f}.err; (${sudo ? 'sudo -n ' : ''}timeout ${CAPTURE_SECONDS} tcpdump -i ${iface} -nn -e -l -p '${filter}' > /tmp/conf-${stamp}-${f}.txt 2>/tmp/conf-${stamp}-${f}.err &)`;
+    // The Jetson's capture NICs are already promiscuous (-p keeps tcpdump from changing that); the workload listener must be promiscuous to see flooded frames not addressed to it.
+    const cap = (iface: string, f: string, sudo: boolean): string => `rm -f /tmp/conf-${stamp}-${f}.txt /tmp/conf-${stamp}-${f}.err; (${sudo ? 'sudo -n ' : ''}timeout ${CAPTURE_SECONDS} tcpdump -i ${iface} -nn -e -l ${sudo ? '' : '-p '}'${filter}' > /tmp/conf-${stamp}-${f}.txt 2>/tmp/conf-${stamp}-${f}.err &)`;
     const ready = (f: string): string => `grep -q 'listening on' /tmp/conf-${stamp}-${f}.err`;
     const wait = (names: string[]): string => `for i in $(seq 1 ${CAPTURE_START_POLLS}); do if ${names.map(ready).join(' && ')}; then echo started; exit 0; fi; sleep ${CAPTURE_POLL_MS / 1000}; done; echo timeout`;
     const needListener = flow.packet.inPort === 2;
     const jetsonStarted = await ssh(JETSON, `${cap(O2_IF, 'O2', false)}; ${cap(O3_IF, 'O3', false)}; ${wait(['O2', 'O3'])}`);
-    const listenerStarted = needListener ? await ssh(LISTENER, `${cap(WORKLOAD_IF, 'L', true)}; ${wait(['L'])}`) : 'started';
+    const listenerStarted = needListener ? await ssh(LISTENER, `${cap(LISTENER_IF, 'L', true)}; ${wait(['L'])}`) : 'started';
     if (jetsonStarted.trim() !== 'started' || listenerStarted.trim() !== 'started') throw new Error(`a capture was not listening within ${CAPTURE_START_POLLS * CAPTURE_POLL_MS} ms; refusing to send ${flow.id}`);
 
-    if (plan.via === 'raw-from-node') {
+    {
       const p = flow.packet;
       const frames = p.etherType === 0x0806
         ? Array.from({ length: ARP_FRAMES_PER_FLOW }, () => hex(buildArpRequestFrame({ srcMac: p.srcMac, spa: p.arpSpa ?? '', tpa: p.arpTpa ?? '' })))
         : Array.from({ length: DATAGRAMS_PER_FLOW }, (_, i) => hex(buildUdpFrame({ srcMac: p.srcMac, dstMac: p.dstMac, srcIp: p.srcIp ?? '', dstIp: p.dstIp ?? '', dstPort: tag, payload: Buffer.from(`zodiac-conf-${tag}-${i}`) })));
-      await pyRemote(NODE_SENDER, rawSendPython(WORKLOAD_IF, frames, FRAME_SPACING_MS), true);
-    } else {
-      const dst = flow.packet.dstIp ?? '';
-      ipBytes(dst);
-      const alias = plan.aliasIp;
-      if (alias !== null) { ipBytes(alias); await execFileP('sudo', ['-n', 'ifconfig', MAC_IF, 'alias', alias, '255.255.255.255'], { timeout: 15_000 }); }
-      try {
-        const code = `import socket,time\ns=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)\n${alias === null ? '' : `s.bind(('${alias}',0))\n`}for i in range(${DATAGRAMS_PER_FLOW}):\n    s.sendto(b'zodiac-conf-%d'%i,('${dst}',${tag}))\n    time.sleep(${FRAME_SPACING_MS / 1000})\n`;
-        await execFileP('python3', ['-c', code], { timeout: 30_000 });
-      } finally {
-        if (alias !== null) await execFileP('sudo', ['-n', 'ifconfig', MAC_IF, '-alias', alias], { timeout: 15_000 });
-      }
+      const [host, iface] = plan.via === 'raw-from-node' ? [NODE_SENDER, WORKLOAD_IF] : [UPLINK_SENDER, UPLINK_IF];
+      await pyRemote(host, rawSendPython(iface, frames, FRAME_SPACING_MS), true);
     }
     await sleep(CAPTURE_SECONDS - FLOW_SETTLE_S + 0.5);
     const o2 = await ssh(JETSON, `cat /tmp/conf-${stamp}-O2.txt`);
@@ -189,6 +182,14 @@ async function main(): Promise<void> {
   if (!dry && approve !== indexHash) throw new Error(`refusing to touch the switch: --approve must be the SHA-256 of this bundle's index.json (${indexHash}); the owner approves each session's bundle by hash`);
   const index = JSON.parse(indexText) as IndexEntry[];
   const flowsByIntent = JSON.parse(await fs.readFile(path.join(bundleDir, 'flows.json'), 'utf-8')) as Record<string, WireFlow[]>;
+  // Clause-coverage flows (amendment A2) run on references only: they test the intent itself, in both entry directions.
+  const coverage = JSON.parse(await fs.readFile(path.join(bundleDir, 'coverage-flows.json'), 'utf-8').catch(() => '{}')) as Record<string, { flows: WireFlow[] }>;
+  const flowsFor = (set: SessionSet): WireFlow[] => {
+    const base = flowsByIntent[set.intent.id] ?? [];
+    if (set.kind !== 'reference') return base;
+    const seen = new Set(base.map((f) => f.id));
+    return [...base, ...(coverage[set.intent.id]?.flows ?? []).filter((f) => !seen.has(f.id))];
+  };
   const picked = index.filter((e) => (e.installable ?? true) && (only === undefined || `${e.intent} ${e.kind} ${e.id}`.includes(only))).slice(0, limit);
   if (picked.length === 0) throw new Error('no rule sets matched');
   await fs.mkdir(outDir, { recursive: true });
@@ -198,7 +199,7 @@ async function main(): Promise<void> {
     const target = TARGETS.find((t) => t.intent.id === e.intent);
     if (target === undefined) throw new Error(`unknown intent ${e.intent}`);
     const file = JSON.parse(await fs.readFile(path.join(bundleDir, e.file), 'utf-8')) as RuleSetFile;
-    const flowsSeconds = (flowsByIntent[e.intent]?.length ?? 0) * (CAPTURE_SECONDS + 3);
+    const flowsSeconds = (e.kind === 'reference' ? flowsFor({ kind: 'reference', intent: target.intent } as SessionSet).length : (flowsByIntent[e.intent]?.length ?? 0)) * (CAPTURE_SECONDS + 3);
     const ttlSeconds = Math.max(file.ttlSeconds, flowsSeconds + 30);
     sets.push({ id: e.id, kind: e.kind, intent: target.intent, rules: file.rules, body: { label: file.label, ttlSeconds, rules: file.rules } });
   }
@@ -208,13 +209,13 @@ async function main(): Promise<void> {
     await fs.writeFile(path.join(outDir, 'provenance.json'), JSON.stringify({
       origin: 'physical_capture', plan: 'docs/research/evaluation-plan.md section 16', bundleIndexSha256: indexHash, approvedBy: 'owner, by hash (--approve)',
       harnessCommit: (await execFileP('git', ['rev-parse', 'HEAD'])).stdout.trim(), startedAtEt: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET',
-      observation: { O2: O2_IF, O3: O3_IF, listener: LISTENER, sender: NODE_SENDER }, framesPerFlow: { udp: DATAGRAMS_PER_FLOW, arp: ARP_FRAMES_PER_FLOW },
+      observation: { O2: O2_IF, O3: O3_IF, listener: `${LISTENER} ${LISTENER_IF}`, port1Sender: `${NODE_SENDER} ${WORKLOAD_IF}`, port2Sender: `${UPLINK_SENDER} ${UPLINK_IF}` }, framesPerFlow: { udp: DATAGRAMS_PER_FLOW, arp: ARP_FRAMES_PER_FLOW },
     }, null, 1) + '\n');
   }
 
   let stopRequested = false;
   process.on('SIGINT', () => { stopRequested = true; process.stderr.write('stop requested: finishing the current rule set, restoring, then stopping\n'); });
-  const result = await runSession(rig, sets, flowsByIntent, { shouldStop: () => stopRequested });
+  const result = await runSession(rig, sets, flowsFor, { shouldStop: () => stopRequested });
 
   const sent = result.results.flatMap((r) => r.flows.filter((f) => f.sent));
   const unsent = result.results.flatMap((r) => r.flows.filter((f) => !f.sent));
