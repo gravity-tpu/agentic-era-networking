@@ -292,3 +292,35 @@ The metrics of section 6 (admissible counts with 95% Wilson intervals, the categ
 ### 13.6 What this will not show
 
 That structural size means difficulty for a model; anything about intents outside this one switch topology and these ten addresses; whether verifier-accepted rule sets behave correctly on the wire (RQ4); one run per cell; the reference policies are the author's, and the verifier is the only judge.
+
+## 14. Plan v6 addendum: a frontier baseline, a properly trained adapter, and a conditional Protocol B (requested by the owner 2026-10-31, registered by this commit before any of these runs)
+
+Sections 1 to 13 are unchanged. The owner left the sequencing of these runs to the operator (a Claude Code session) within the limits in section 14.6.
+
+### 14.1 Why
+
+- **The adapter evaluated so far is a smoke-test adapter.** It was trained with `--max-steps 15 --grad-accum 4` at batch size 1: about 60 of its 1,466 SFT examples and 60 of its 1,434 DPO pairs (about 4%). Sections 11 and 12 therefore say what a 4% adapter does, not what the adapter idea does.
+- **There is no frontier arm under prompt v3.** The registered Haiku runs of section 10 used prompt v2 on four intents.
+
+### 14.2 Runs
+
+1. **Haiku 5.5 under prompt v3 (arm H3).** Claude Haiku 5.5 through the Message Batches API, Protocol A, prompt v3, N = 50 per intent on all eight intents (INTENT-1 to 8), effort `low`, `num_predict` 16384, no seed (the Claude arm accepts none), one run per cell, a spend cap of 100 cents per run (priced at the non-batch rates of section 10.2, so the cap is conservative). Compared with the other arms only descriptively: its sampling differs (section 9, D4).
+2. **A trained adapter (arm L4).** The same dataset, builder, base model and hyperparameters as the section 11 adapter (`Qwen/Qwen3.8-27B`, LoRA r = 16, alpha = 32, batch size 1, gradient accumulation 8, seed 42), but trained for up to one epoch of SFT (183 steps) and one of DPO (179 steps) instead of 15 steps, under a wall-clock budget so a pod time limit cannot destroy the result: training stops gracefully when the budget is reached, the adapter is saved, and the steps actually completed are recorded and reported. The training data stays disjoint from every benchmark intent (hash and subnet checks, `assertDisjointFromBenchmark`). L4 is built for evaluation exactly as L3 is (section 13 pipeline: GGUF-space merge from the original checkpoint, Q4_K_M).
+3. **L4 evaluation.** Protocol A, prompt v3, N = 50 per intent, on INTENT-1, INTENT-3, INTENT-5, INTENT-6, INTENT-7 and INTENT-8 (the two intents where L3 differed most from the control, and the four new ones): 300 trials, one run per cell, two pods of three intents each. The comparisons are L4 against C3 (the adapter effect) and L4 against L3 (the effect of training length), using the C3 and L3 cells already recorded in sections 11 and 13.
+4. **Conditional Protocol B on the new intents (section 12 design).** Run only if, for at least one of INTENT-5 to 8, the C3 cell of section 13 is below 47 of 50 (the saturation threshold of section 13.2), and only for the intents that meet that condition: arms L3 and C3, N = 20 per intent, prompt v3. If no new intent meets it, it is not run and the saturation is reported.
+
+### 14.3 Analysis, fixed in advance
+
+The metrics of section 6 per cell (admissible counts with 95% Wilson intervals, failure categories, distinct outputs, transport failures); for Protocol B the metrics of section 12.3. No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed. Results are never merged with those of other sections. Run-to-run variation (section 12: same-seed runs differ by a few trials per cell) is a stated limit on any difference of a few trials. If L4 is trained for fewer steps than planned because of the wall-clock budget, it is still evaluated and labelled with the steps done.
+
+### 14.4 What this will not show
+
+One adapter, one training run, one seed set; Haiku's sampling differs from the local arms; the adapter served at run time (`llama-server --lora`) is not tested; on-wire behaviour (RQ4); whether any intent is hard for a model for reasons other than the structure measured in section 13.2.
+
+### 14.5 Cost and time (estimates, not measurements for these workloads)
+
+Haiku: well under 2 USD of API credit (the eight valid section 10 Haiku runs cost about 0.27 USD). L4 training: a Secure Cloud pod at 1.79 USD per hour for up to 165 minutes, about 4.9 USD at most. L4 evaluation: two Community pods of about 4.1 USD each. Conditional Protocol B: about 4 USD per arm.
+
+### 14.6 Limits
+
+Runpod spend stays within the owner's total of 50 USD and the 5 USD per-run cap; Claude API spend stays within the per-run caps above. If a step would exceed the 50 USD total, it is not started and the situation is reported instead (in particular the conditional Protocol B, which needs about 8 USD beyond the rest).
