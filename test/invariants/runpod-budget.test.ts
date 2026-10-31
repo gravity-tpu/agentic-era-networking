@@ -96,13 +96,22 @@ describe('placementFor (Secure on-demand is reserved for training)', () => {
     expect(placementFor('train')).toEqual({ cloud: 'secure', interruptible: false });
     expect(() => placementFor('train', { onDemand: true })).toThrow(/ERR_PLACEMENT/);
   });
-  it('scoring and sweeps default to Community Cloud spot', () => {
+  it('scoring and sweeps default to Community Cloud ON-DEMAND (Runpod no longer offers spot pods)', () => {
     for (const kind of ['score', 'sweep'] as const) {
-      expect(placementFor(kind)).toEqual({ cloud: 'community', interruptible: true });
+      expect(placementFor(kind)).toEqual({ cloud: 'community', interruptible: false });
     }
   });
-  it('an explicit on-demand override stays on Community Cloud, never Secure', () => {
+  it('spot is an explicit opt-in for scoring and sweeps, and is still never Secure', () => {
+    for (const kind of ['score', 'sweep'] as const) {
+      expect(placementFor(kind, { spot: true })).toEqual({ cloud: 'community', interruptible: true });
+    }
+  });
+  it('--on-demand stays accepted (existing launchers pass it) and means the default', () => {
     expect(placementFor('score', { onDemand: true })).toEqual({ cloud: 'community', interruptible: false });
+  });
+  it('training can be neither spot nor moved, and the two flags contradict each other', () => {
+    expect(() => placementFor('train', { spot: true })).toThrow(/ERR_PLACEMENT/);
+    expect(() => placementFor('score', { onDemand: true, spot: true })).toThrow(/contradict/);
   });
   it('rejects unknown kinds (fail closed)', () => {
     expect(() => placementFor('whatever' as JobKind)).toThrow(/ERR_PLACEMENT/);
