@@ -1,0 +1,19 @@
+{
+ "origin": "physical_capture",
+ "plan": "docs/research/evaluation-plan.md section 16",
+ "bundleIndexSha256": "fa2d3ecce7553348938536fa75b6a73359ae7a0ee7c3aab6474932496d382e5c",
+ "approvedBy": "owner, by hash (--approve)",
+ "harnessCommit": "125e4574885464b7fe562c0b299bedd1e49c6c7f",
+ "startedAtEt": "10/31/2026, 2:31:06 PM ET",
+ "observation": {
+  "O2": "enx9c69d39dd0a6",
+  "O3": "enx9c69d39ddcc0",
+  "listener": "rpi-hailo eth0",
+  "port1Sender": "agentic-node-01 eth0",
+  "port2Sender": "agentic-node-01 eth1"
+ },
+ "framesPerFlow": {
+  "udp": 5,
+  "arp": 3
+ }
+}

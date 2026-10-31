@@ -1,0 +1,23 @@
+{
+ "schema": "conformance-run/v2",
+ "dryRun": false,
+ "bundleIndexSha256": "4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc",
+ "ruleSets": 8,
+ "flowsSent": 28,
+ "m1Agree": 17,
+ "m1Disagree": 11,
+ "m2Compliant": 24,
+ "m2NonCompliant": 4,
+ "flowsNotSent": 0,
+ "notSentReasons": {},
+ "byKind": {
+  "reference": {
+   "sets": 8,
+   "flows": 28,
+   "m1Agree": 17,
+   "m2Compliant": 24
+  }
+ },
+ "stoppedBecause": null,
+ "skippedSets": []
+}
