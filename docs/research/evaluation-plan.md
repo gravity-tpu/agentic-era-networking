@@ -221,3 +221,12 @@ Admissible counts with 95% Wilson intervals, the category of every failure, dist
 - A 15-step run is a small training run, one seed, one adapter. A DPO reward accuracy of 100% on verifier-generated pairs is a training statistic, not evidence about INTENT-1 to 4.
 - Merging then quantizing can lose part of a LoRA delta, so L3 may understate the adapter; the runtime-adapter route (llama.cpp `--lora`) is not tested here.
 - On-wire behaviour (RQ4), and run-to-run variation (one run per cell).
+
+### 11.6 Results and deviations (recorded 2026-10-30, after the runs)
+
+Sections 11.1 to 11.5 are unchanged. The runs are reported in `docs/benchmarks/results/agent-evaluation/lora-v3-2026-10-30/README.md`, with the metrics fixed in section 11.4. Stage 1 (INTENT-3) completed for all three arms before Stage 2 (INTENT-1, 2, 4) ran any trial. Departures from the text above, each with its evidence in that README:
+
+- **Merge route.** The adapter was merged in f16 GGUF space with `llama-export-lora`, not in bf16: a transformers merge-and-save drops the model's trailing next-token-prediction layer and the GGUF then fails to load in Ollama.
+- **Infrastructure reruns (section 11.4).** The first L3 build produced an unloadable model (no trial used); L3 Stage 1 was run by hand on the rebuilt model. The first complete C3 INTENT-3 run was lost when a launcher failed before download, and the cell was rerun; both attempts are listed.
+- **Scheduling.** Stage 1 cells ran one stream at a time, Stage 2 cells three concurrent streams per server, so results are compared within a stage only.
+- **Run commits differ per arm** (`scripts/agent-eval.ts` and `src/sdn/` are identical across them).
