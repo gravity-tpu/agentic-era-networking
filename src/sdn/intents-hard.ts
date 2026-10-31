@@ -5,8 +5,8 @@
  * has seen them, and every one is reported whatever a model scores; whether they are harder for a model is the empirical question, not an assumption.
  *
  * Each description is built from the same parameters as its clauses, so the text cannot drift from the specification (the contradiction plan
- * amendment 1 fixed in INTENT-3 and 4). All addresses lie in 10.0.2.0/24, the held-out benchmark subnet, so no training scenario can contain them
- * (`assertDisjointFromBenchmark`). Independent of `intents.ts`, whose four intents stay frozen.
+ * amendment 1 fixed in INTENT-3 and 4). All addresses lie in 10.0.2.0/24, the held-out benchmark subnet; `assertDisjointFromBenchmark` rejects any training
+ * scenario that references that subnet, so no training example can contain them, and test/invariants/hard-intents.test.ts checks that every address here stays inside it. Independent of `intents.ts`, whose four intents stay frozen.
  */
 
 import type { IntentClause, IntentSpec } from './intent-spec.js';
@@ -38,10 +38,11 @@ export const FILE_SERVER_IP = '10.0.2.20';
 
 const [HOST_A, HOST_B] = DEFAULT_WORKLOAD_HOSTS as readonly [string, string];
 
-const quarantineClauses = (hosts: readonly string[]): IntentClause[] =>
+/** Two DROP clauses per host. `bareIds` drops the host from the ids, for an intent with exactly one quarantined host (dns-quarantine/v1). */
+const quarantineClauses = (hosts: readonly string[], bareIds = false): IntentClause[] =>
   hosts.flatMap((h) => [
-    { id: `quarantine-src-${h}`, match: { inPort: P1, etherType: ETH_TYPE_IPV4, srcIp: h, srcIpPrefixLen: 32 }, mustReach: [], mayReach: [] },
-    { id: `quarantine-dst-${h}`, match: { inPort: P2, etherType: ETH_TYPE_IPV4, dstIp: h, dstIpPrefixLen: 32 }, mustReach: [], mayReach: [] },
+    { id: bareIds ? 'quarantine-src' : `quarantine-src-${h}`, match: { inPort: P1, etherType: ETH_TYPE_IPV4, srcIp: h, srcIpPrefixLen: 32 }, mustReach: [], mayReach: [] },
+    { id: bareIds ? 'quarantine-dst' : `quarantine-dst-${h}`, match: { inPort: P2, etherType: ETH_TYPE_IPV4, dstIp: h, dstIpPrefixLen: 32 }, mustReach: [], mayReach: [] },
   ]);
 
 /** INTENT-5: the isolation policy plus a quarantine of three hosts, both directions (six DROPs that must outrank every forwarding rule). */
@@ -67,7 +68,7 @@ export function dnsQuarantineIntent(host: string): IntentSpec {
       `${DNS_CONFINEMENT_INTENT.description} In addition, host ${host} is quarantined: IPv4 sent by ${host} into P1 (even to the resolver ${DNS_RESOLVER_IP}) ` +
       `and IPv4 addressed to ${host} arriving from the uplink P2 (even from the resolver) must be dropped (reach no port, not even the tap).`,
     ports: [P1, P2, P3],
-    clauses: [...quarantineClauses([host]).map((c) => ({ ...c, id: c.id.replace(`-${host}`, '') })), ...DNS_CONFINEMENT_INTENT.clauses],
+    clauses: [...quarantineClauses([host], true), ...DNS_CONFINEMENT_INTENT.clauses],
   };
 }
 
