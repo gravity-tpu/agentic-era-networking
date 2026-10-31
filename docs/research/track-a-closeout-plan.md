@@ -27,6 +27,8 @@ It shows, for the flows sent, whether the packets the model predicts appear at t
    **Bundle selection, fixed before any wire data.** Per intent: the reference; up to 8 distinct model-admissible sets drawn by a seeded rule stratified over arms (every arm that has an admissible set, including L3 and L4); and the surviving mutants of the reference. The seed and the resulting `index.json` hash are recorded in a new plan section 16 (registered by its commit, before any wire run).
 4. **Pre-register** in plan section 16: flows, bundle rule, the two measures (agreement with the verifier's model; observed behaviour against the intent's own expectation), repeats, stopping rules, and the approval step.
 
+**Phase 0 harness: built 2026-10-31** (`scripts/conformance-run-v2.ts`; offline-tested; real rig not yet validated; amendment A1 in plan section 16.10 lists what the build revealed, including that the registered bundle exercises only port 1 ingress).
+
 ### Phase 1: bench readiness (owner present; estimate half a day)
 
 Read-only flow probe (`npm run probe:flows`), capture NICs linked at 5000M, the mirror-port ingress re-tests (VLAN isolation re-tested after any switch change), bridge idle with no attention flag, the SSH tunnel and experiment token, the harness `--dry-run`, then the four references on the wire as a smoke test. The smoke run measures the real time per rule set (the 2026-10-20 run did not record its duration).
