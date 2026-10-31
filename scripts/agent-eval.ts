@@ -685,6 +685,8 @@ async function main(): Promise<void> {
       record['wallNs'] = (process.hrtime.bigint() - t0).toString();
       counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
       lines.push(JSON.stringify(record));
+      // Salvage log: trials.jsonl is written once at the end, so a run killed by a time limit would otherwise lose every finished trial.
+      await fs.appendFile(path.join(args.out, 'trials.partial.jsonl'), JSON.stringify(record) + '\n');
       process.stderr.write(`seed ${seed}/${args.n}: ${String(record['category'])}\n`);
     }
   }
