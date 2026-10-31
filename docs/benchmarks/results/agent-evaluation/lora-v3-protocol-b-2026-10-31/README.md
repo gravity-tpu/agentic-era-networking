@@ -4,7 +4,7 @@ The runs of plan section 12 (`docs/research/evaluation-plan.md`), registered by 
 from `src/sdn/proposal-triage.ts`; nothing was installed on the switch. **Admissible means the verifier accepts the rule set, not that it is correct on the wire.**
 Protocol B: up to 5 turns, the verifier's detail lines returned after each rejected turn; prompt v3, N = 20 per intent (seeds 1 to 20), temperature 0.2, top-p 0.95, `think: true`, `num_predict` 32768, one run per cell.
 Arms L3 (adapter) and C3 (no adapter) are built as in `../lora-v3-2026-10-30/README.md` (GGUF-space merge from the original checkpoint, Q4_K_M, Ollama 0.34.4). One NVIDIA A100 SXM4 80GB pod per arm (Runpod Community Cloud), the four intents running concurrently against one Ollama server.
-Run commit `c58b695`; `scripts/agent-eval.ts` and `src/sdn/` are identical to the Stage 2 run commit `02ec648` (checked with `git diff`).
+Run commit `c58b695` (permanent tag `provenance/protocol-b-run-c58b695`; the same change is `e7ca232` on `main`); `scripts/agent-eval.ts` and `src/sdn/` are identical to the Stage 2 run commit `02ec648` (tag `provenance/section11-stage2-run-02ec648`; checked with `git diff`).
 
 ## Results
 
