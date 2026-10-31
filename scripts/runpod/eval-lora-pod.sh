@@ -10,9 +10,12 @@ trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /works
 # Backstop: any non-zero exit that left neither marker (signal, set -e in a context ERR misses) still reports FAILED.
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
+PROTOCOL="${PROTOCOL:-A}"   # agent-eval protocol: A (zero-shot) or B (verifier feedback, up to 5 turns)
 WAIT_FOR_GO_MAX_SECONDS="${WAIT_FOR_GO_MAX_SECONDS:-5400}"   # bound on the gate wait (named, configurable); the pod limit is only the outer backstop
 WAIT_FOR_GO="${WAIT_FOR_GO:-}"   # non-empty: finish setup, then hold before any trial until /workspace/in/GO exists (plan section 11.3 stage gate)
 STOP_AFTER="${STOP_AFTER:-}"   # "toolchain": exit 0 after steps 0-2 (cheap-GPU shakedown, no model download)
+case "$PROTOCOL" in A|B) ;; *) echo "PROTOCOL must be A or B" >&2; exit 2;; esac
+PROTOCOL_LC=$(tr "AB" "ab" <<<"$PROTOCOL")
 INTENTS="${INTENTS:-quarantine-precedence/v1}"
 N="${N:-50}"
 ARMS="${ARMS:-B3 L3 C3}"
@@ -112,8 +115,8 @@ run_arm() { # arm model
     # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
     (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
       --host http://127.0.0.1:11434 --model "$model" --intent "$intent" --n "$N" \
-      --prompt-version v3 --protocol A --think true --num-predict 32768 \
-      --out "$OUT/protocol-a-${intent//\//_}-$arm-pv3-n$N") &
+      --prompt-version v3 --protocol "$PROTOCOL" --think true --num-predict 32768 \
+      --out "$OUT/protocol-${PROTOCOL_LC}-${intent//\//_}-$arm-pv3-n$N") &
     pids+=($!)
   done
   for p in "${pids[@]}"; do wait "$p" || rc=1; done
