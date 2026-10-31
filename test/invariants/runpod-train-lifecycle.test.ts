@@ -53,13 +53,13 @@ describe('Runpod LoRA Training Lifecycle Invariants', () => {
   });
 
   it('dry-run execution without --yes plans the training launch safely', () => {
-    // If working tree is dirty, launch-train-lora.sh safely refuses to run
+    // If the working tree is dirty, or there is no .env.local (a fresh worktree or CI), launch-train-lora.sh stops before any API call
     const res = runScript(['--minutes', '60', '--task', 'proposer']);
     if (res.status === 0) {
       expect(res.stdout).toContain('Planned Runpod Launch');
     } else {
       const output = `${res.stdout}\n${res.stderr}`;
-      expect(output).toMatch(/refusing: working tree is dirty|RUNPOD_API_KEY|fetch failed|ERR_OVER_CAP|ERR_BALANCE/);
+      expect(output).toMatch(/refusing: working tree is dirty|RUNPOD_API_KEY|\.env\.local: not found|fetch failed|ERR_OVER_CAP|ERR_BALANCE/);
     }
   });
 
