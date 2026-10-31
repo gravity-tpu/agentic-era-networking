@@ -370,9 +370,9 @@ Runpod spend within the owner's total and the 5 USD per-run cap (a pod needing m
 
 The thinking option in 15.2 item 2; whether dataset v2 generator work is worth building before any run; whether the first step is the three-intent subset of 15.5.
 
-## 16. Plan v8 addendum (DRAFT until the owner confirms): the on-wire conformance run of the evaluation's rule sets (RQ4)
+## 16. Plan v8 addendum (registered 2026-10-31): the on-wire conformance run of the evaluation's rule sets (RQ4)
 
-**Status: a draft by the operator (a Claude Code session) for the owner's confirmation. It becomes the pre-registration when the owner confirms it in the session and a commit records that; no wire run starts before then. Sections 1 to 15 are unchanged. The conformance harness changes in 16.8 are not implemented. Nothing here installs anything: each session installs only a bundle the owner has approved by hash, with the owner present (Invariant 4).**
+**Status: registered by the commit that contains this line, before any wire data. The owner read the text and confirmed it in the session on 2026-10-31. Sections 1 to 15 are unchanged. The conformance harness changes in 16.8 were not built when this was registered. Nothing here installs anything: each session installs only a bundle the owner has approved by hash, with the owner present (Invariant 4). Any change to the bundle, the flows or the analysis after this commit is a recorded amendment, not an edit.**
 
 ### 16.1 Question
 
@@ -409,3 +409,13 @@ A session stops, with the isolation policy restored and read back, on: a restore
 ### 16.9 What this will not show
 
 Exhaustive correctness on the wire; behaviour on traffic outside the chosen flows (L4 ports and VLAN are not modelled); frames arriving from the tap; more than one switch and one firmware (0.86); the time and cost of a session (unmeasured: the Phase 1 smoke run measures it).
+
+### 16.10 Amendments (the registered text above is unchanged)
+
+**A1, 2026-10-31, before any wire data: harness implementation (`scripts/conformance-run-v2.ts`, `src/sdn/wire-run.ts`, `src/sdn/wire-session.ts`).** The harness of 16.8 is built and tested offline (a fake rig with mutation-checked safety behaviour; a dry run of the whole bundle, 132 rule sets and 513 flow checks, all agreeing under M1 and M2 for a perfect switch). The real hardware rig is written but **not validated**: the first bench session (plan Phase 1) runs the four references as a smoke test and amends this section and the code before any other rule set is installed. What the build fixed or revealed:
+
+1. **One sending mechanism for port 1.** Every frame entering port 1 is a raw frame from `agentic-node-01`'s workload NIC carrying the flow's exact header fields (the flows' MACs are placeholders), so a real host's own address, an alias and a forged source are the same mechanism. A flow tagged "real host" in 16.3 is therefore sent as a raw frame, not by that host's own stack; the switch sees the same fields. A rule set that matches a MAC is refused by the runner (its prediction would be unreliable); none is in the bundle.
+2. **Port 2 senders are narrower than 16.3 assumed.** The Mac can send IPv4 to a real workload host only (its kernel must resolve the destination by ARP); a destination outside the workload subnet would be routed to the internet by the lab router, not through the switch; there is no sender for ARP with a chosen sender address from the uplink side. `sendPlanFor` reports each such flow as unsendable with its reason, and the runner never counts it as agreement.
+3. **Consequence for coverage, not yet fixed.** All 513 flow checks in the registered bundle enter port 1 (the greedy cover found no sendable port 2 flow that separated any set). The uplink side, including the ARP behaviour that INTENT-7 and the deployed A10 uplink confinement are about, is therefore untested by this bundle. This is reported as a limit of the run. An uplink-side Linux sender (for example the Jetson's lab-LAN interface) would close it; that needs the owner's decision and is not assumed.
+4. **Observation of port 1 egress** is a promiscuous capture on a workload node (default `agentic-node-02`, overridable), not a listener bound to the target host as in the 2026-10-20 run; this is Phase 1 validation.
+5. **Approval by hash is enforced in code:** a non-dry run refuses unless `--approve` equals the SHA-256 of the bundle's `index.json` (tested).
