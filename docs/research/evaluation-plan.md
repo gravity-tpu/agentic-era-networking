@@ -370,9 +370,9 @@ Runpod spend within the owner's total and the 5 USD per-run cap (a pod needing m
 
 The thinking option in 15.2 item 2; whether dataset v2 generator work is worth building before any run; whether the first step is the three-intent subset of 15.5.
 
-## 16. Plan v8 addendum (DRAFT until the owner confirms): the on-wire conformance run of the evaluation's rule sets (RQ4)
+## 16. Plan v8 addendum (registered 2026-10-31): the on-wire conformance run of the evaluation's rule sets (RQ4)
 
-**Status: a draft by the operator (a Claude Code session) for the owner's confirmation. It becomes the pre-registration when the owner confirms it in the session and a commit records that; no wire run starts before then. Sections 1 to 15 are unchanged. The conformance harness changes in 16.8 are not implemented. Nothing here installs anything: each session installs only a bundle the owner has approved by hash, with the owner present (Invariant 4).**
+**Status: registered by the commit that contains this line, before any wire data. The owner read the text and confirmed it in the session on 2026-10-31. Sections 1 to 15 are unchanged. The conformance harness changes in 16.8 were not built when this was registered. Nothing here installs anything: each session installs only a bundle the owner has approved by hash, with the owner present (Invariant 4). Any change to the bundle, the flows or the analysis after this commit is a recorded amendment, not an edit.**
 
 ### 16.1 Question
 
