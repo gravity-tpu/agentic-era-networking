@@ -1,0 +1,86 @@
+{
+ "label": "model-admissible port1-isolation/v1 protocol-a-port1-isolation_v1-qwen3.8-27b-think-true-pv2-n50#25",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-ipv4-intra-segment-to-uplink",
+   "priority": 200,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-claim-10.0.2.50",
+   "priority": 200,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-claim-10.0.2.52",
+   "priority": 200,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-segment",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-catchall-to-tap",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  }
+ ],
+ "meta": {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-port1-isolation_v1-qwen3.8-27b-think-true-pv2-n50#25",
+  "arm": "qwen3.8:27b",
+  "seed": 20261031
+ }
+}

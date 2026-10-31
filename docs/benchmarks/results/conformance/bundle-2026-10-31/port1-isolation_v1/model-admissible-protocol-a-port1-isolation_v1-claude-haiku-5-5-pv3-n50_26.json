@@ -1,0 +1,86 @@
+{
+ "label": "model-admissible port1-isolation/v1 protocol-a-port1-isolation_v1-claude-haiku-5-5-pv3-n50#26",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-ipv4-intra-to-uplink",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-known-host-50-to-uplink",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-known-host-52-to-uplink",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-other-to-tap",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment-to-p1",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  }
+ ],
+ "meta": {
+  "intent": "port1-isolation/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-port1-isolation_v1-claude-haiku-5-5-pv3-n50#26",
+  "arm": "claude-haiku-5-5",
+  "seed": 20261031
+ }
+}

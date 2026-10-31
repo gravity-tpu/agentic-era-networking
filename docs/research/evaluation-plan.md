@@ -369,3 +369,43 @@ Runpod spend within the owner's total and the 5 USD per-run cap (a pod needing m
 ### 15.7 Decisions needed from the owner
 
 The thinking option in 15.2 item 2; whether dataset v2 generator work is worth building before any run; whether the first step is the three-intent subset of 15.5.
+
+## 16. Plan v8 addendum (DRAFT until the owner confirms): the on-wire conformance run of the evaluation's rule sets (RQ4)
+
+**Status: a draft by the operator (a Claude Code session) for the owner's confirmation. It becomes the pre-registration when the owner confirms it in the session and a commit records that; no wire run starts before then. Sections 1 to 15 are unchanged. The conformance harness changes in 16.8 are not implemented. Nothing here installs anything: each session installs only a bundle the owner has approved by hash, with the owner present (Invariant 4).**
+
+### 16.1 Question
+
+Does the switch do what the verifier's model says it does for the rule sets the evaluation produced, and does it do what the intent says? Two measures, kept apart. **M1, agreement with the model:** for each rule set and flow, the ports where a frame is observed against the ports the verifier's own match function predicts (`predictOutcome`, `src/sdn/wire-flows.ts`, the same priority-order semantics as `scripts/conformance-run.ts`). **M2, behaviour against the intent:** for each flow, the first intent clause that matches the packet gives the ports it must reach and may reach (`src/sdn/intent-spec.ts`); the observation is compliant if every must-reach port that the testbed can observe was seen and nothing outside may-reach was seen. A verifier-admitted set that fails M2 on the wire while agreeing on M1 would mean the intent's own reading of the model is wrong; one that fails M1 means the model or the firmware differs from what the verifier assumes.
+
+### 16.2 The bundle, fixed before any wire data
+
+`scripts/select-wire-bundle.ts` with seed 20261031 over the recorded cells of `docs/benchmarks/results/agent-evaluation/` (reproduced by `test/invariants/wire-bundle.test.ts`): **132 rule sets** in `docs/benchmarks/results/conformance/bundle-2026-10-31/`, `index.json` SHA-256 `4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc`. Per intent: the reference; every surviving mutant that some chosen flow can tell from the reference; up to 8 recorded model-proposed sets that a chosen flow can tell from the reference, drawn round-robin over the models that produced them; and 2 surviving mutants and 2 recorded sets that no flow can tell from the reference (equivalence controls: they test only that the switch agrees with the model's equivalence, and are reported separately). tap-return-isolation has no separable set, so it contributes its reference and four controls.
+
+### 16.3 The flows
+
+`flows.json` of the same directory (SHA-256 `ce9637fe846f6054feca9b5716741ae56e30f0a4b8334ff160420a94f205376d`): 3 to 6 flows per intent, chosen by a greedy cover from candidates the testbed can send: a real host's own address, an alias on a workload node, or a forged frame from a workload NIC (all accepted by the owner, 2026-10-31). **No frame is injected into port 3** (owner, 2026-10-31): how rule sets treat frames arriving from the tap is not tested and is reported as untested. Each sender capability is a declaration to be validated at the bench in Phase 1; a flow that cannot be sent is removed by a recorded amendment commit before any rule set goes on the wire, and the sets only it separated are then reported as separable by no testable flow.
+
+### 16.4 Procedure
+
+Per rule set: install through the guarded experiment endpoint (`POST /api/experiment/install`: bounds, A5/A6/A7 re-checks, table-miss drop, readback, bridge time limit and switch-side hard timeout), send each flow (5 UDP datagrams, or the kernel's 3 ARP requests), capture at O2, O3 and the port 1 listener, restore the isolation policy and read it back. Raw captures with SHA-256 and a provenance record are kept for every set. The session's bundle is approved by the owner by `index.json` hash and the owner is present.
+
+### 16.5 Repeats
+
+20 rule sets, drawn by the same seed from the bundle's separable sets, are run three times in different sessions, to measure ordering and timing effects. A set whose three runs disagree with each other is a finding about the harness or the firmware before it is a finding about the model.
+
+### 16.6 Analysis, fixed in advance
+
+M1 and M2 per flow and per rule set, with 95% Wilson intervals on the per-flow agreement rate; counts split by kind (reference, surviving mutant, model-admissible by the model that produced it, equivalence control); every disagreement as a numbered finding with the capture that shows it. A disagreement becomes a test and, where the verifier needs it, a new property in track A. The earlier run (2026-10-20) had 290 of 290 flow checks in agreement; no direction is predicted here, and an all-agree result is stated with its interval, not as a proof about the switch.
+
+### 16.7 Stopping rules and limits
+
+A session stops, with the isolation policy restored and read back, on: a restore or readback that does not verify, a bridge attention flag, an unexpected change in the O3 capture's baseline, or the owner's call. A disagreement is data and does not stop a session. No rule set outside the approved bundle is installed. The total number of sessions is not capped here: each continues only with the owner present.
+
+### 16.8 What must be built first (not done)
+
+`scripts/conformance-run.ts` has five hard-coded flows (F1 to F5) and predicts with its own copy of the match function; it must read `flows.json`, use `predictOutcome`, send IPv4 and ARP flows from aliases and forged sources, compute M2, and set up and tear down the workload aliases reversibly. It is tested offline against a fake bridge before it touches the switch.
+
+### 16.9 What this will not show
+
+Exhaustive correctness on the wire; behaviour on traffic outside the chosen flows (L4 ports and VLAN are not modelled); frames arriving from the tap; more than one switch and one firmware (0.86); the time and cost of a session (unmeasured: the Phase 1 smoke run measures it).

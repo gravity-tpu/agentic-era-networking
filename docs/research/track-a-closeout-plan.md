@@ -23,7 +23,8 @@ It shows, for the flows sent, whether the packets the model predicts appear at t
 1. Correct the stale ROADMAP and README statements (first commit of this branch).
 2. **Flow feasibility table. Done 2026-10-31** (`docs/benchmarks/results/wire-flows-2026-10-31/README.md`, `src/sdn/wire-flows.ts`): 3 to 7 flows per intent separate every set the model can tell from the reference; only 4 to 9 of each intent's 6 to 18 surviving mutants are separable at all (the rest are equivalent over the modelled fields); tap-return-isolation has nothing to separate; injection into port 3 from the O2 capture NIC would separate more sets but changes the ground-truth arrangement (decision 8). The original step text follows.
    **Flow feasibility table.** For each of the eight intents, derive the flows from its exact packet classes (A11) that the testbed can send and observe, as the owner approves: where an address has no real host, either an IP alias on a workload node (reversible, documented) or a frame with a forged source sent from a workload NIC (the untrusted segment; needs the owner's explicit approval per intent). Extend the flow set beyond the five of 2026-10-20 to include ICMP and TCP SYN and, for the uplink-facing intents, uplink-side senders, until each reference is separable from its mutants on at least the classes the intent names. Report how many sets each flow separates, as the 2026-10-20 report did.
-3. **Bundle selection, fixed before any wire data.** Per intent: the reference; up to 8 distinct model-admissible sets drawn by a seeded rule stratified over arms (every arm that has an admissible set, including L3 and L4); and the surviving mutants of the reference. The seed and the resulting `index.json` hash are recorded in a new plan section 16 (registered by its commit, before any wire run).
+3. **Bundle selection. Done 2026-10-31** (seed 20261031, 132 rule sets, `docs/benchmarks/results/conformance/bundle-2026-10-31/`, reproduced by a test; registered as plan section 16 once the owner confirms it). The original step text follows.
+   **Bundle selection, fixed before any wire data.** Per intent: the reference; up to 8 distinct model-admissible sets drawn by a seeded rule stratified over arms (every arm that has an admissible set, including L3 and L4); and the surviving mutants of the reference. The seed and the resulting `index.json` hash are recorded in a new plan section 16 (registered by its commit, before any wire run).
 4. **Pre-register** in plan section 16: flows, bundle rule, the two measures (agreement with the verifier's model; observed behaviour against the intent's own expectation), repeats, stopping rules, and the approval step.
 
 ### Phase 1: bench readiness (owner present; estimate half a day)
@@ -63,7 +64,7 @@ Scenarios 2 (MAC and IP spoofing inside the workload segment), 4 (flood to sessi
 6. Independent review: the owner.
 7. Track C scenarios 2, 4 and 5 are part of this close-out (Phase 6; scenario 6 with them).
 
-**Open (raised by the Phase 0 results):** 8. Injecting frames into port 3 by transmitting from the O2 capture NIC would let the wire run test how rule sets treat frames from the tap (it separates 2 to 10 more recorded sets per intent), but the capture NICs are receive-only today because they are the ground truth, and the mirror-port injection finding (scenario 7) shows why. Approve for the conformance runs only, or leave port 3 ingress untested?
+8. Injecting frames into port 3 from the O2 capture NIC (to test how rule sets treat frames from the tap): **not approved for now** (owner, 2026-10-31); port 3 ingress stays untested and is reported as such.
 
 ## 5. What this plan will not deliver
 

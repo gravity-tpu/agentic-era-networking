@@ -1,0 +1,138 @@
+{
+ "label": "surviving-mutant per-host-allowlist/v1 drop-rule:p1-default-tap-only",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-a-to-resolver",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.1",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-a-to-fileserver",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.20",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-b-to-resolver",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.52",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.1",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-arp-allow-10.0.2.50",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-allow-10.0.2.52",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p2-resolver-to-segment",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-fileserver-to-a",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.20",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.50",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p3-tap-return",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "per-host-allowlist/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p1-default-tap-only",
+  "arm": "mutation",
+  "seed": 20261031
+ }
+}

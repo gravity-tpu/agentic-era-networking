@@ -1,0 +1,142 @@
+{
+ "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-C3-pv3-n50#5",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-host50-to-resolver",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1-host50-to-fileserver",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "dstIp": "10.0.2.20"
+   }
+  },
+  {
+   "id": "p1-host52-to-resolver",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.52",
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1-arp-spa50",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-spa52",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-catchall-to-tap",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-resolver-to-segment",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-fileserver-to-host50",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.20",
+    "dstIp": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-catchall-drop",
+   "priority": 10,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  },
+  {
+   "id": "p3-tap-to-p1",
+   "priority": 10,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "per-host-allowlist/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-per-host-allowlist_v1-C3-pv3-n50#5",
+  "arm": "zodiac-C3:q4_k_m",
+  "seed": 20261031
+ }
+}

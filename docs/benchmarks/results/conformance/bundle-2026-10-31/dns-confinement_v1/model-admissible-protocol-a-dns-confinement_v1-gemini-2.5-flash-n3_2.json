@@ -1,0 +1,91 @@
+{
+ "label": "model-admissible dns-confinement/v1 protocol-a-dns-confinement_v1-gemini-2.5-flash-n3#2",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1_to_dns_resolver",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1_to_p2_arp",
+   "priority": 90,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1_to_p3_catchall",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2_from_dns_resolver",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2_to_p1_arp",
+   "priority": 90,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2_drop_catchall",
+   "priority": 10,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  },
+  {
+   "id": "p3_to_p1",
+   "priority": 50,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "dns-confinement/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-dns-confinement_v1-gemini-2.5-flash-n3#2",
+  "arm": "gemini-2.5-flash",
+  "seed": 20261031
+ }
+}

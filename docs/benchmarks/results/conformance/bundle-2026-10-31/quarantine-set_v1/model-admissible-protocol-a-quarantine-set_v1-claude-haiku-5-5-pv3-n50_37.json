@@ -1,0 +1,152 @@
+{
+ "label": "model-admissible quarantine-set/v1 protocol-a-quarantine-set_v1-claude-haiku-5-5-pv3-n50#37",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "quar-src-51",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51",
+    "srcIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quar-src-53",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.53",
+    "srcIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quar-src-54",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.54",
+    "srcIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quar-dst-51",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quar-dst-53",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.53",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quar-dst-54",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.54",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "seg-intra-p1-to-p2",
+   "priority": 500,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "seg-intra-p2-to-p1",
+   "priority": 500,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "arp-p1-known-50",
+   "priority": 400,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "arp-p1-known-52",
+   "priority": 400,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "arp-p2-to-p1",
+   "priority": 400,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-to-tap",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  }
+ ],
+ "meta": {
+  "intent": "quarantine-set/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-quarantine-set_v1-claude-haiku-5-5-pv3-n50#37",
+  "arm": "claude-haiku-5-5",
+  "seed": 20261031
+ }
+}

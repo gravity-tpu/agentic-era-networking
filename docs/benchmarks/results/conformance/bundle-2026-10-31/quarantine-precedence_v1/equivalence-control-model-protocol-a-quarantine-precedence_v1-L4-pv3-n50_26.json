@@ -1,0 +1,141 @@
+{
+ "label": "equivalence-control-model quarantine-precedence/v1 protocol-a-quarantine-precedence_v1-L4-pv3-n50#26",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-ipv4-intra-segment",
+   "priority": 100,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-ipv4-fallback-tap",
+   "priority": 50,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048
+   }
+  },
+  {
+   "id": "p1-ipv4-quarantine-10.0.2.51",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "p1-arp-allow-10.0.2.50",
+   "priority": 100,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-allow-10.0.2.52",
+   "priority": 100,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-arp-fallback-tap",
+   "priority": 50,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-other-tap-only",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-ipv4-quarantine-10.0.2.51",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p3-tap-return",
+   "priority": 10,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "quarantine-precedence/v1",
+  "kind": "equivalence-control-model",
+  "id": "protocol-a-quarantine-precedence_v1-L4-pv3-n50#26",
+  "arm": "zodiac-L4:q4_k_m",
+  "seed": 20261031
+ }
+}

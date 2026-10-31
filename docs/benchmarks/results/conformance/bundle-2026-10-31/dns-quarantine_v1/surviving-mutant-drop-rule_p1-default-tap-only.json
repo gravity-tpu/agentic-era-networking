@@ -1,0 +1,99 @@
+{
+ "label": "surviving-mutant dns-quarantine/v1 drop-rule:p1-default-tap-only",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "quarantine-src",
+   "priority": 300,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51",
+    "srcIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "quarantine-dst",
+   "priority": 300,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-ipv4-to-resolver",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.1",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-arp",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-ipv4-from-resolver",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p3-tap-return",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "dns-quarantine/v1",
+  "kind": "surviving-mutant",
+  "id": "drop-rule:p1-default-tap-only",
+  "arm": "mutation",
+  "seed": 20261031
+ }
+}

@@ -1,0 +1,143 @@
+{
+ "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#11",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-host50-dns",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.1",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-host50-fileserver",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.20",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-host52-dns",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.52",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.1",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-arp-host50",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-host52",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-default-to-tap",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-dns-to-segment",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-fileserver-to-host50",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.20",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.50",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p3-tap-to-p1",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "per-host-allowlist/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#11",
+  "arm": "claude-haiku-5-5",
+  "seed": 20261031
+ }
+}
