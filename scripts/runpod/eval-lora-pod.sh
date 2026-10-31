@@ -78,6 +78,17 @@ base_f16() {
   local base; base=$(python3 -c "from huggingface_hub import snapshot_download as s; print(s('$BASE_HF'))")
   "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" "$base" --outtype f16 --outfile "$W/base-f16.gguf"
 }
+# L4 (plan section 14): the properly trained adapter. Use the adapter GGUF produced on the training pod if it was uploaded with the adapter
+# directory; otherwise convert the PEFT adapter here, so a failed conversion on the training pod does not block the evaluation.
+l4_adapter_gguf() {
+  local d=/workspace/in/proposer-adapter
+  if [ -f "$d/zodiac-proposer-dpo-lora.gguf" ]; then echo "$d/zodiac-proposer-dpo-lora.gguf"; return 0; fi
+  [ -f "$d/dpo-adapter/adapter_model.safetensors" ] || { echo "L4: neither an adapter GGUF nor a PEFT adapter found in $d" >&2; return 1; }
+  local base; base=$(python3 -c "from huggingface_hub import snapshot_download as s; print(s('$BASE_HF'))")
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_lora_to_gguf.py" --base "$base" "$d/dpo-adapter" -o "$W/L4-lora.gguf" --outtype f16 >&2 || { rm -f "$W/L4-lora.gguf"; return 1; }
+  echo "$W/L4-lora.gguf"
+}
+
 build_arm() { # name adapter-gguf|none
   local name="$1" adapter="$2" src
   if [ "$adapter" != none ] && [ ! -f "$adapter" ]; then echo "adapter GGUF not found: $adapter"; return 1; fi
@@ -128,6 +139,7 @@ for arm in $ARMS; do
     B3) run_arm B3 "$BASE_OLLAMA" ;;
     L3) build_arm L3 /workspace/in/proposer-adapter/zodiac-proposer-dpo-lora.gguf; run_arm L3 zodiac-L3:q4_k_m ;;
     C3) build_arm C3 none; run_arm C3 zodiac-C3:q4_k_m ;;
+    L4) L4_GGUF=$(l4_adapter_gguf); build_arm L4 "$L4_GGUF"; run_arm L4 zodiac-L4:q4_k_m ;;
     *) echo "unknown arm $arm"; exit 2 ;;
   esac
   ollama stop "$BASE_OLLAMA" 2>/dev/null || true
