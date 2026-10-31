@@ -1,0 +1,1064 @@
+{
+ "port1-isolation/v1": {
+  "survivors": 13,
+  "recorded": 46,
+  "addresses": 9,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 36,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 240,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 36,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 380,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 36,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 580,
+    "survivorsSeparated": 7,
+    "recordedSeparated": 46,
+    "flows": [
+     {
+      "id": "p3-ip-10.0.0.119-10.0.0.119",
+      "mode": 3
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "dns-confinement/v1": {
+  "survivors": 11,
+  "recorded": 307,
+  "addresses": 6,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 3,
+    "recordedSeparated": 304,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.0.119",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "remove-output:p1-ipv4-to-resolver:3",
+     "raise-priority:p1-ipv4-to-resolver",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-ipv4-from-resolver",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 240,
+    "survivorsSeparated": 4,
+    "recordedSeparated": 304,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.0-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-to-resolver",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-ipv4-from-resolver",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 380,
+    "survivorsSeparated": 4,
+    "recordedSeparated": 304,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.0-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-to-resolver",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-ipv4-from-resolver",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 580,
+    "survivorsSeparated": 6,
+    "recordedSeparated": 304,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p3-arp-10.0.0.119-10.0.0.119",
+      "mode": 3
+     },
+     {
+      "id": "p1-ip-10.0.2.0-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-to-resolver",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-ipv4-from-resolver",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "quarantine-precedence/v1": {
+  "survivors": 13,
+  "recorded": 86,
+  "addresses": 9,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 80,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 240,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 80,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 380,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 80,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 580,
+    "survivorsSeparated": 7,
+    "recordedSeparated": 83,
+    "flows": [
+     {
+      "id": "p3-arp-10.0.0.119-10.0.0.119",
+      "mode": 3
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "tap-return-isolation/v1": {
+  "survivors": 6,
+  "recorded": 47,
+  "addresses": 9,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 0,
+    "recordedSeparated": 0,
+    "flows": [],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 240,
+    "survivorsSeparated": 0,
+    "recordedSeparated": 0,
+    "flows": [],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 380,
+    "survivorsSeparated": 0,
+    "recordedSeparated": 0,
+    "flows": [],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 580,
+    "survivorsSeparated": 0,
+    "recordedSeparated": 0,
+    "flows": [],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "quarantine-set/v1": {
+  "survivors": 17,
+  "recorded": 63,
+  "addresses": 11,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 57,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src-10.0.2.51",
+     "raise-priority:quarantine-dst-10.0.2.51",
+     "raise-priority:quarantine-src-10.0.2.53",
+     "raise-priority:quarantine-dst-10.0.2.53",
+     "raise-priority:quarantine-src-10.0.2.54",
+     "raise-priority:quarantine-dst-10.0.2.54",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 380,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 57,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src-10.0.2.51",
+     "raise-priority:quarantine-dst-10.0.2.51",
+     "raise-priority:quarantine-src-10.0.2.53",
+     "raise-priority:quarantine-dst-10.0.2.53",
+     "raise-priority:quarantine-src-10.0.2.54",
+     "raise-priority:quarantine-dst-10.0.2.54",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 552,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 57,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src-10.0.2.51",
+     "raise-priority:quarantine-dst-10.0.2.51",
+     "raise-priority:quarantine-src-10.0.2.53",
+     "raise-priority:quarantine-dst-10.0.2.53",
+     "raise-priority:quarantine-src-10.0.2.54",
+     "raise-priority:quarantine-dst-10.0.2.54",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 840,
+    "survivorsSeparated": 7,
+    "recordedSeparated": 61,
+    "flows": [
+     {
+      "id": "p3-arp-10.0.0.119-10.0.0.119",
+      "mode": 3
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src-10.0.2.51",
+     "raise-priority:quarantine-dst-10.0.2.51",
+     "raise-priority:quarantine-src-10.0.2.53",
+     "raise-priority:quarantine-dst-10.0.2.53",
+     "raise-priority:quarantine-src-10.0.2.54",
+     "raise-priority:quarantine-dst-10.0.2.54",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "dns-quarantine/v1": {
+  "survivors": 13,
+  "recorded": 72,
+  "addresses": 9,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 4,
+    "recordedSeparated": 55,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.51",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "remove-match-field:quarantine-src:inPort",
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "remove-output:p1-ipv4-to-resolver:3",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 240,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 55,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.51",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.0-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "remove-match-field:quarantine-src:inPort",
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 380,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 55,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.51",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.0-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "remove-match-field:quarantine-src:inPort",
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 580,
+    "survivorsSeparated": 8,
+    "recordedSeparated": 55,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p3-ip-10.0.2.51-10.0.2.51",
+      "mode": 3
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.0-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:quarantine-src",
+     "raise-priority:quarantine-dst",
+     "raise-priority:p1-arp",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "uplink-arp-confinement/v1": {
+  "survivors": 14,
+  "recorded": 51,
+  "addresses": 13,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 42,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp-allow-10.0.2.1",
+     "raise-priority:p2-arp-allow-10.0.2.254",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 552,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 42,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp-allow-10.0.2.1",
+     "raise-priority:p2-arp-allow-10.0.2.254",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 756,
+    "survivorsSeparated": 5,
+    "recordedSeparated": 42,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp-allow-10.0.2.1",
+     "raise-priority:p2-arp-allow-10.0.2.254",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 1148,
+    "survivorsSeparated": 7,
+    "recordedSeparated": 50,
+    "flows": [
+     {
+      "id": "p3-arp-10.0.0.119-10.0.0.119",
+      "mode": 3
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.50",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-ipv4-intra-segment",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-ipv4-to-segment",
+     "raise-priority:p2-arp-allow-10.0.2.1",
+     "raise-priority:p2-arp-allow-10.0.2.254",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ },
+ "per-host-allowlist/v1": {
+  "survivors": 18,
+  "recorded": 78,
+  "addresses": 14,
+  "perMode": {
+   "real hosts only": {
+    "candidates": 32,
+    "survivorsSeparated": 4,
+    "recordedSeparated": 60,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     }
+    ],
+    "unseparatedSurvivors": [
+     "remove-output:p1-a-to-resolver:3",
+     "raise-priority:p1-a-to-resolver",
+     "remove-output:p1-a-to-fileserver:3",
+     "raise-priority:p1-a-to-fileserver",
+     "remove-output:p1-b-to-resolver:3",
+     "raise-priority:p1-b-to-resolver",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-resolver-to-segment",
+     "raise-priority:p2-fileserver-to-a",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ aliases": {
+    "candidates": 650,
+    "survivorsSeparated": 7,
+    "recordedSeparated": 60,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.1",
+      "mode": 1
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.20",
+      "mode": 1
+     },
+     {
+      "id": "p1-ip-10.0.2.52-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-a-to-resolver",
+     "raise-priority:p1-a-to-fileserver",
+     "raise-priority:p1-b-to-resolver",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-resolver-to-segment",
+     "raise-priority:p2-fileserver-to-a",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ forged frames": {
+    "candidates": 870,
+    "survivorsSeparated": 7,
+    "recordedSeparated": 60,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.1",
+      "mode": 1
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.20",
+      "mode": 1
+     },
+     {
+      "id": "p1-ip-10.0.2.52-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-a-to-resolver",
+     "raise-priority:p1-a-to-fileserver",
+     "raise-priority:p1-b-to-resolver",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-resolver-to-segment",
+     "raise-priority:p2-fileserver-to-a",
+     "raise-priority:p2-arp",
+     "drop-rule:p3-tap-return",
+     "remove-output:p3-tap-return:1",
+     "raise-priority:p3-tap-return"
+    ]
+   },
+   "+ injection on port 3": {
+    "candidates": 1320,
+    "survivorsSeparated": 9,
+    "recordedSeparated": 60,
+    "flows": [
+     {
+      "id": "p1-arp-10.0.2.50-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-arp-10.0.2.51-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p3-arp-10.0.0.119-10.0.0.119",
+      "mode": 3
+     },
+     {
+      "id": "p1-arp-10.0.2.52-10.0.0.119",
+      "mode": 0
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.1",
+      "mode": 1
+     },
+     {
+      "id": "p1-ip-10.0.2.50-10.0.2.20",
+      "mode": 1
+     },
+     {
+      "id": "p1-ip-10.0.2.52-10.0.2.1",
+      "mode": 1
+     }
+    ],
+    "unseparatedSurvivors": [
+     "raise-priority:p1-a-to-resolver",
+     "raise-priority:p1-a-to-fileserver",
+     "raise-priority:p1-b-to-resolver",
+     "raise-priority:p1-arp-allow-10.0.2.50",
+     "raise-priority:p1-arp-allow-10.0.2.52",
+     "raise-priority:p2-resolver-to-segment",
+     "raise-priority:p2-fileserver-to-a",
+     "raise-priority:p2-arp",
+     "raise-priority:p3-tap-return"
+    ]
+   }
+  }
+ }
+}
