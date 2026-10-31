@@ -6,6 +6,8 @@
  * `/api/sdn/allow` route and the quarantine path sent FlowMods with no check of the resulting table. `admitInstall` takes the table the
  * switch would hold AFTER the install (current rules plus the proposed ones) and refuses, naming the property and the rules, if any
  * of these fail:
+ *   - A3 default drop: no rule uses priority 0, the table-miss DROP's priority, and every priority is a whole number from 0 to 65535. The table-miss entry itself is installed
+ *     and read back by the bridge (action-readback.ts), not part of this table, so this keeps a proposal from replacing it with a default allow; it does not prove the entry is there
  *   - A2 hairpin: a rule outputs to its own ingress port, including a rule with no in_port that wins a packet arriving on a port it outputs to
  *   - A5 shadowed, A6 conflicting or duplicate rules, OpenFlow prerequisites, unmodelled match fields (rule-hygiene.ts)
  *   - A7 table budget with a quarantine reserve (capacity-budget.ts)
@@ -26,7 +28,11 @@ import { classifyDeployedShape } from './deployed-cost-model.js';
 import { checkQuarantinePrecedence, defaultIsQuarantine } from './quarantine-precedence.js';
 import { ZODIAC_PORT_TAP, ZODIAC_PORT_UPLINK, ZODIAC_PORT_WORKLOAD, type IsolationRule } from './port1-isolation.js';
 
-export type GateProperty = 'A2' | 'A4' | 'A5' | 'A6' | 'A7' | 'A8' | 'A11' | 'prerequisite' | 'unmodelled' | 'uncheckable';
+export type GateProperty = 'A2' | 'A3' | 'A4' | 'A5' | 'A6' | 'A7' | 'A8' | 'A11' | 'prerequisite' | 'unmodelled' | 'uncheckable';
+
+/** Priority of the table-miss DROP. Reserved: the bridge installs it, and no rule of a proposal or of the current table may use it. */
+export const TABLE_MISS_PRIORITY = 0;
+const MAX_OPENFLOW_PRIORITY = 65535;
 
 export interface GateViolation {
   readonly property: GateProperty;
@@ -65,6 +71,13 @@ export function admitInstall(input: GateInput): GateResult {
   const refuse = (property: GateProperty, ruleIds: readonly string[], detail: string): void => { violations.push({ property, ruleIds, detail }); };
 
   try {
+    for (const r of rules) {
+      const prio = r.flowMod.priority;
+      if (!Number.isInteger(prio) || prio < TABLE_MISS_PRIORITY || prio > MAX_OPENFLOW_PRIORITY) refuse('A3', [r.id], `${r.id} has priority ${String(prio)}, not a whole number from ${TABLE_MISS_PRIORITY} to ${MAX_OPENFLOW_PRIORITY}`);
+      else if (prio === TABLE_MISS_PRIORITY) refuse('A3', [r.id], `${r.id} is at priority ${TABLE_MISS_PRIORITY}, which belongs to the table-miss DROP: a rule there could replace the default drop with a default allow, and how the firmware breaks a tie at that priority is unmeasured`);
+    }
+    notes.push(`A3: the table-miss DROP (priority ${TABLE_MISS_PRIORITY}) is not part of this table; the bridge installs it and reads it back, and no rule here uses that priority`);
+
     for (const r of rules) {
       const m = r.flowMod.match;
       if (m?.inPort !== undefined && (r.flowMod.outputPorts ?? []).includes(m.inPort)) refuse('A2', [r.id], `${r.id} outputs to its own ingress port ${m.inPort}`);

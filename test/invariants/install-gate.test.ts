@@ -178,3 +178,38 @@ describe('the quarantine constants that must agree across modules', () => {
     expect(policy.length + 1 + MAX_QUARANTINE_MAX_ACTIVE).toBeLessThanOrEqual(FLOW_TABLE_CAPACITY);
   });
 });
+
+describe('admitInstall: A3 default drop (priority 0 is the table-miss DROP and is not the proposal\'s to use)', () => {
+  it('refuses a proposed wildcard rule at priority 0 that forwards: it would replace the default drop with a default allow', () => {
+    const r = admitInstall({ current: policy, proposed: [rule('default-allow', 0, [2], {})] });
+    expect(r.admitted).toBe(false);
+    expect(r.violations.some((v) => v.property === 'A3' && v.ruleIds.includes('default-allow'))).toBe(true);
+  });
+
+  it('refuses any proposed rule at priority 0, even a narrow one: that priority belongs to the table-miss, and ties there are unmeasured', () => {
+    const r = admitInstall({ current: policy, proposed: [rule('narrow-zero', 0, [2], { inPort: 1, etherType: 0x0800, srcIp: '10.0.2.50', srcIpPrefixLen: 32 })] });
+    expect(r.violations.some((v) => v.property === 'A3')).toBe(true);
+  });
+
+  it('refuses a proposed rule with a priority below 0 or above 65535 or that is not a whole number (nothing malformed can reach the switch)', () => {
+    for (const p of [-1, 65536, 1.5, Number.NaN]) {
+      const r = admitInstall({ current: policy, proposed: [rule('odd', p, [2], { inPort: 1, etherType: 0x0800, srcIp: '10.0.2.50', srcIpPrefixLen: 32 })] });
+      expect(r.violations.some((v) => v.property === 'A3' || v.property === 'uncheckable'), `priority ${p}`).toBe(true);
+    }
+  });
+
+  it('refuses a current-table rule at priority 0 as well: a table that already lacks the default drop must not be extended', () => {
+    const r = admitInstall({ current: [...policy, rule('stale-default-allow', 0, [2], {})], proposed: [] });
+    expect(r.violations.some((v) => v.property === 'A3' && v.ruleIds.includes('stale-default-allow'))).toBe(true);
+  });
+
+  it('does not touch an ordinary rule at priority 1 or above', () => {
+    const r = admitInstall({ current: policy, proposed: [rule('ok', 1, [3], { inPort: 1, etherType: 0x0806, arpSpa: '10.0.2.50' })] });
+    expect(r.violations.some((v) => v.property === 'A3')).toBe(false);
+  });
+
+  it('says so in the notes that the table-miss itself is installed and read back by the bridge, not part of this table', () => {
+    const r = admitInstall({ current: policy, proposed: [] });
+    expect(r.notes.some((n) => n.startsWith('A3'))).toBe(true);
+  });
+});
