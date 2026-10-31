@@ -65,4 +65,4 @@ Flows chosen (forged frames allowed, no injection):
 
 ## What this does not show
 
-The sender capabilities are declarations from `.agents/network-context.md`, to be validated at the bench in Phase 1 (for example whether the Mac can really send an ARP claim for an alias address, and whether a workload NIC can send the forged frames). Sets that differ only in fields the model does not track (L4 ports, VLAN) are not distinguished here at all. The flow budget (24) and the greedy cover are choices, not optima.
+The sender capabilities are declarations from `.agents/network-context.md`, to be validated at the bench in Phase 1 (for example whether the Mac can really send an ARP claim for an alias address, and whether a workload NIC can send the forged frames). Sets that differ only in fields the model does not track (L4 ports, VLAN) are not distinguished here at all. The flow budget (24) and the greedy cover are choices, not optima: ties between equally useful flows are broken by lower mode and then by id, so the chosen set is deterministic but not unique, and a smaller cover may exist.

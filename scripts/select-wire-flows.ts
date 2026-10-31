@@ -38,7 +38,7 @@ const TARGETS: ReadonlyArray<{ intent: IntentSpec; reference: () => readonly Iso
 
 const toSet = (id: string, rules: readonly IsolationRule[]): WireRuleSet => ({
   id,
-  rules: rules.map((r) => ({ id: r.id, priority: r.flowMod.priority, outputPorts: [...(r.flowMod.outputPorts ?? [])], match: Object.fromEntries(Object.entries(r.flowMod.match ?? {}).filter(([, v]) => v !== undefined)) })),
+  rules: rules.map((r) => ({ id: r.id, priority: r.flowMod.priority, outputPorts: [...(r.flowMod.outputPorts ?? [])], match: { ...(r.flowMod.match ?? {}) } })),
 });
 const canonical = (s: WireRuleSet): string => JSON.stringify(s.rules.map((r) => [r.priority, [...r.outputPorts].sort(), Object.entries(r.match).sort()]).sort());
 
@@ -51,12 +51,12 @@ function recordedSets(root: string, intent: IntentSpec): WireRuleSet[] {
       if (e.isDirectory()) { walk(p); continue; }
       if (e.name !== 'trials.jsonl') continue;
       let summary: { intent?: string };
-      try { summary = JSON.parse(fs.readFileSync(path.join(d, 'summary.json'), 'utf8')) as { intent?: string }; } catch { continue; }
+      try { summary = JSON.parse(fs.readFileSync(path.join(d, 'summary.json'), 'utf8')) as { intent?: string }; } catch (err) { process.stderr.write(`skipped ${d}: no readable summary.json (${err instanceof Error ? err.message : String(err)})\n`); continue; }
       if (summary.intent !== intent.id) continue;
       for (const line of fs.readFileSync(p, 'utf8').trim().split('\n')) {
         let t: { admissibleAtTurn?: number | null; turns?: Array<{ response?: string }>; seed?: number };
-        try { t = JSON.parse(line) as typeof t; } catch { continue; }
-        const at = t.admissibleAtTurn; if (!at || !t.turns) continue;
+        try { t = JSON.parse(line) as typeof t; } catch (err) { process.stderr.write(`skipped a malformed line in ${p}: ${err instanceof Error ? err.message : String(err)}\n`); continue; }
+        const at = t.admissibleAtTurn; if (!at || !t.turns) continue; // admissibleAtTurn is 1-based: turn 1 is turns[0]
         const response = t.turns[at - 1]?.response; if (response === undefined) continue;
         const pr = parseProposal(response); if (!pr.ok) continue;
         if (triageProposal(pr.rules, intent).category !== 'ADMISSIBLE') continue;

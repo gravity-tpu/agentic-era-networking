@@ -46,7 +46,7 @@ export interface WireFlow {
   readonly observable: readonly number[];
 }
 
-export interface WireRule { readonly id: string; readonly priority: number; readonly outputPorts: readonly number[]; readonly match: Record<string, unknown> }
+export interface WireRule { readonly id: string; readonly priority: number; readonly outputPorts: readonly number[]; readonly match: FlowModMatchOptions }
 export interface WireRuleSet { readonly id: string; readonly rules: readonly WireRule[] }
 
 const inWorkloadSubnet = (ip: string): boolean => (ipv4ToUint(ip) >>> (32 - WORKLOAD_SUBNET_PREFIX_LEN)) === (ipv4ToUint(WORKLOAD_SUBNET_BASE) >>> (32 - WORKLOAD_SUBNET_PREFIX_LEN));
@@ -81,7 +81,7 @@ export function candidateFlows(addresses: readonly string[], allowed: FlowMode):
         for (const dst of all) {
           const mode = maxMode(sourceMode(inPort, etherType, src), destinationMode(dst));
           if (mode > allowed) continue;
-          const srcMac = `02:00:00:00:00:0${inPort}`;
+          const srcMac = `02:00:00:00:00:${inPort.toString(16).padStart(2, '0')}`;
           const packet: PacketClass = etherType === ETH_TYPE_ARP_INTENT
             ? { inPort, etherType, srcMac, dstMac: 'ff:ff:ff:ff:ff:ff', arpSpa: src, arpTpa: dst }
             : { inPort, etherType, srcMac, dstMac: '02:00:00:00:00:fe', srcIp: src, dstIp: dst };
@@ -93,21 +93,25 @@ export function candidateFlows(addresses: readonly string[], allowed: FlowMode):
   return out;
 }
 
+/** Prefix lengths a match may carry: whole numbers 0 to 32 (a fractional or out-of-range length is rejected, not guessed at). */
+export const MAX_PREFIX_LEN = 32;
+
 /** Addresses a collection of rule sets mentions, plus the first and last address of each prefix and the addresses just outside it. */
 export function addressUniverse(sets: readonly WireRuleSet[], extra: readonly string[] = []): string[] {
   const out = new Set<string>(extra);
-  const add = (n: number): void => { if (n >= 0 && n <= 0xffff_ffff) out.add(uintToIpv4(n)); };
-  const fields: ReadonlyArray<readonly [string, string]> = [['srcIp', 'srcIpPrefixLen'], ['dstIp', 'dstIpPrefixLen'], ['arpSpa', 'arpSpaPrefixLen'], ['arpTpa', 'arpTpaPrefixLen']];
+  const add = (n: bigint): void => { if (n >= 0n && n <= 0xffff_ffffn) out.add(uintToIpv4(Number(n))); };
+  const fields: ReadonlyArray<readonly [keyof FlowModMatchOptions, keyof FlowModMatchOptions]> = [['srcIp', 'srcIpPrefixLen'], ['dstIp', 'dstIpPrefixLen'], ['arpSpa', 'arpSpaPrefixLen'], ['arpTpa', 'arpTpaPrefixLen']];
   for (const s of sets) {
     for (const r of s.rules) {
       for (const [f, p] of fields) {
         const v = r.match[f];
         if (typeof v !== 'string') continue;
-        const len = typeof r.match[p] === 'number' ? (r.match[p] as number) : 32;
-        const base = ipv4ToUint(v);
-        const size = 2 ** (32 - len);
-        const lo = Math.floor(base / size) * size;
-        add(lo - 1); add(lo); add(lo + size - 1); add(lo + size);
+        const rawLen = r.match[p];
+        const len = rawLen === undefined ? MAX_PREFIX_LEN : rawLen;
+        if (typeof len !== 'number' || !Number.isInteger(len) || len < 0 || len > MAX_PREFIX_LEN) throw new RangeError(`${s.id}/${r.id}: ${String(p)} must be a whole number from 0 to ${MAX_PREFIX_LEN}, got ${String(rawLen)}`);
+        const size = 1n << BigInt(MAX_PREFIX_LEN - len);
+        const lo = (BigInt(ipv4ToUint(v)) / size) * size;
+        add(lo - 1n); add(lo); add(lo + size - 1n); add(lo + size);
       }
     }
   }
@@ -118,7 +122,7 @@ export function addressUniverse(sets: readonly WireRuleSet[], extra: readonly st
 export function predictOutcome(rules: readonly WireRule[], flow: WireFlow): number[] {
   const sorted = [...rules].sort((a, b) => b.priority - a.priority);
   for (const r of sorted) {
-    if (!matchesPacket(r.match as FlowModMatchOptions, flow.packet)) continue;
+    if (!matchesPacket(r.match, flow.packet)) continue;
     return [...new Set(r.outputPorts)].filter((p) => flow.observable.includes(p)).sort((a, b) => a - b);
   }
   return [];
@@ -134,9 +138,13 @@ export interface FlowSelection {
 
 const key = (ports: readonly number[]): string => ports.join(',');
 
+/** Upper bound on candidates x other sets (Invariant 5): the separation matrix is built in full. About 400,000 cells at most today. */
+export const MAX_SEPARATION_CELLS = 5_000_000;
+
 /** Greedy cover: repeatedly take the flow that separates the most not-yet-separated sets from `reference`, up to `maxFlows`. Ties: lower mode, then id. */
-export function selectFlows(candidates: readonly WireFlow[], reference: WireRuleSet, others: readonly WireRuleSet[], maxFlows: number): FlowSelection {
+export function selectFlows(candidates: readonly WireFlow[], reference: WireRuleSet, others: readonly WireRuleSet[], maxFlows: number, maxCells: number = MAX_SEPARATION_CELLS): FlowSelection {
   if (!Number.isInteger(maxFlows) || maxFlows < 0) throw new RangeError(`maxFlows must be a non-negative integer, got ${maxFlows}`);
+  if (candidates.length * others.length > maxCells) throw new RangeError(`${candidates.length} candidate flows x ${others.length} sets exceeds ${maxCells}; narrow the address universe or the pool`);
   const refOutcome = candidates.map((f) => key(predictOutcome(reference.rules, f)));
   const diff: boolean[][] = candidates.map((f, i) => others.map((o) => key(predictOutcome(o.rules, f)) !== refOutcome[i]));
   const covered = new Array<boolean>(others.length).fill(false);

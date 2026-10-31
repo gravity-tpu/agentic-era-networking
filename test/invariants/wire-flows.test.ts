@@ -6,16 +6,18 @@
 import { describe, it, expect } from 'vitest';
 import { buildPort1IsolationPolicy, ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP } from '../../src/sdn/port1-isolation.js';
 import { generateMutants } from '../../src/sdn/rule-mutations.js';
+import type { FlowModMatchOptions } from '../../src/sdn/openflow-types.js';
 import {
   predictOutcome,
   candidateFlows,
+  addressUniverse,
   selectFlows,
   FlowMode,
   type WireFlow,
   type WireRuleSet,
 } from '../../src/sdn/wire-flows.js';
 
-const rs = (id: string, rules: ReadonlyArray<{ id: string; priority: number; outputPorts: number[]; match: Record<string, unknown> }>): WireRuleSet => ({ id, rules });
+const rs = (id: string, rules: ReadonlyArray<{ id: string; priority: number; outputPorts: number[]; match: FlowModMatchOptions }>): WireRuleSet => ({ id, rules });
 const flow = (id: string, over: Partial<WireFlow['packet']> & { inPort: number }): WireFlow => ({
   id,
   mode: FlowMode.Real,
@@ -68,6 +70,25 @@ describe('candidateFlows and the modes a flow needs', () => {
     const real = candidateFlows(['10.0.2.50', '10.0.2.53', '8.8.8.8'], FlowMode.Real);
     expect(real.every((x) => x.mode === FlowMode.Real)).toBe(true);
     expect(real.length).toBeLessThan(flows.length);
+  });
+});
+
+describe('input validation', () => {
+  it('rejects a prefix length that is not a whole number from 0 to 32 (no silent guess)', () => {
+    const bad = (len: number): WireRuleSet => rs('bad', [{ id: 'r', priority: 1, outputPorts: [2], match: { inPort: 1, etherType: 0x0800, srcIp: '10.0.2.0', srcIpPrefixLen: len } }]);
+    for (const len of [-1, 33, 0.5, Number.NaN]) expect(() => addressUniverse([bad(len)])).toThrow(RangeError);
+    expect(() => addressUniverse([bad(0)])).not.toThrow();
+  });
+  it('adds the first and last address of a prefix and the addresses just outside it', () => {
+    const set = rs('p', [{ id: 'r', priority: 1, outputPorts: [2], match: { inPort: 1, etherType: 0x0800, srcIp: '10.0.2.77', srcIpPrefixLen: 24 } }]);
+    expect(addressUniverse([set]).sort()).toEqual(['10.0.1.255', '10.0.2.0', '10.0.2.255', '10.0.3.0']);
+  });
+  it('refuses a separation matrix larger than its bound', () => {
+    const many = Array.from({ length: 3 }, (_, i) => rs(`s${i}`, []));
+    const cands = candidateFlows(['10.0.2.50'], FlowMode.PortThree);
+    expect(() => selectFlows(cands, rs('ref', []), many, 1)).not.toThrow();
+    expect(() => selectFlows(cands, rs('ref', []), many, 1, cands.length * many.length - 1)).toThrow(RangeError);
+    expect(() => selectFlows(cands, rs('ref', []), many, 1, cands.length * many.length)).not.toThrow();
   });
 });
 
