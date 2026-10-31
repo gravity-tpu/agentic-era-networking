@@ -1,0 +1,24 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible dns-confinement/v1 protocol-a-dns-confinement_v1-gemini-3.6-flash-n3#2",
+ "rulesRequested": 6,
+ "entriesSeen": 7,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-dns-out",
+  "p1-arp-out",
+  "p1-fallback-tap",
+  "p2-dns-in",
+  "p2-arp-in",
+  "p3-return-p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+ "atMs": 1793479349485
+}

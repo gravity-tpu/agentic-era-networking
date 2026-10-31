@@ -1,0 +1,40 @@
+2026-10-31T18:05:00Z campaign v2 armed; bundle index sha256 4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc; results in /tmp/zodiac-wire-runs/20261031T180500Z
+2026-10-31T18:05:00Z experiment state not usable yet (token wrong, bridge busy or attention set); waiting
+2026-10-31T18:14:37Z experiment state not usable yet (token wrong, bridge busy or attention set); waiting
+2026-10-31T18:16:08Z bridge state idle with no attention: starting
+2026-10-31T18:16:08Z session smoke-references begins
+2026-10-31T18:21:02Z session smoke-references ended with exit 0: {"sets":8,"flows":28,"m1Disagree":11,"m2NonCompliant":4,"notSent":0,"stopped":null}
+2026-10-31T18:21:02Z SMOKE GATE FAILED: not proceeding; the runner restored the policy. See /tmp/zodiac-wire-runs/20261031T180500Z/smoke-references
+2026-10-31T18:21:02Z bridge idle after the failed smoke
+--- campaign v3 launch 2026-10-31T18:44:54Z
+2026-10-31T18:44:55Z campaign v3 armed; bundle index sha256 4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc; results in /tmp/zodiac-wire-runs/20261031T184455Z
+2026-10-31T18:44:55Z bridge state idle with no attention: starting
+2026-10-31T18:44:55Z session smoke-references begins
+2026-10-31T18:49:48Z session smoke-references ended with exit 0: {"sets":8,"flows":28,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T18:49:48Z smoke gate passed: the 8 references agree with the model on every port-1 flow
+2026-10-31T18:50:09Z uplink VLAN verified (node-01 eth1 on the P4 link, node-02 USB NIC absent, forwarding 0)
+2026-10-31T18:50:09Z session coverage-references begins
+2026-10-31T19:02:02Z session coverage-references ended with exit 0: {"sets":8,"flows":70,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T19:02:02Z session intent-port1-isolation_v1 begins
+2026-10-31T19:13:47Z session intent-port1-isolation_v1 ended with exit 0: {"sets":18,"flows":72,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T19:13:47Z session intent-dns-confinement_v1 begins
+2026-10-31T19:15:56Z [repeats] armed: waiting for campaign v3 to finish cleanly (/tmp/zodiac-wire-runs/20261031T184455Z/DONE)
+2026-10-31T19:22:27Z session intent-dns-confinement_v1 ended with exit 0: {"sets":17,"flows":51,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T19:22:27Z session intent-quarantine-precedence_v1 begins
+2026-10-31T19:34:11Z session intent-quarantine-precedence_v1 ended with exit 0: {"sets":18,"flows":72,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T19:34:11Z session intent-quarantine-set_v1 begins
+2026-10-31T19:45:56Z session intent-quarantine-set_v1 ended with exit 0: {"sets":18,"flows":72,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T19:45:56Z session intent-dns-quarantine_v1 begins
+2026-10-31T19:55:03Z session intent-dns-quarantine_v1 ended with exit 0: {"sets":18,"flows":54,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T19:55:03Z session intent-uplink-arp-confinement_v1 begins
+2026-10-31T20:06:44Z session intent-uplink-arp-confinement_v1 ended with exit 0: {"sets":18,"flows":72,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T20:06:44Z session intent-per-host-allowlist_v1 begins
+2026-10-31T20:25:53Z session intent-per-host-allowlist_v1 ended with exit 0: {"sets":20,"flows":120,"m1Disagree":0,"m2NonCompliant":0,"notSent":0,"stopped":null}
+2026-10-31T20:25:53Z campaign complete. Results in /tmp/zodiac-wire-runs/20261031T184455Z. REMINDER FOR THE OWNER: restore the NETGEAR VLANs (node-01's port back to the lab VLAN, node-02/ports as before).
+2026-10-31T20:26:03Z [repeats] repeat session 1 begins
+2026-10-31T20:37:48Z [repeats] repeat session 1 ended with exit 0: {"sets":20,"flows":71,"m1Disagree":0,"m2NonCompliant":0,"stopped":null}
+2026-10-31T20:37:48Z [repeats] repeat session 2 begins
+2026-10-31T20:49:33Z [repeats] repeat session 2 ended with exit 0: {"sets":20,"flows":71,"m1Disagree":0,"m2NonCompliant":0,"stopped":null}
+2026-10-31T20:49:33Z [repeats] repeat session 3 begins
+2026-10-31T21:01:19Z [repeats] repeat session 3 ended with exit 0: {"sets":20,"flows":71,"m1Disagree":0,"m2NonCompliant":0,"stopped":null}
+2026-10-31T21:01:19Z [repeats] repeats complete. Results in /tmp/zodiac-wire-runs/20261031T191556Z-repeats

@@ -1,0 +1,25 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible port1-isolation/v1 protocol-b-port1-isolation_v1-C3-pv3-n20#20",
+ "rulesRequested": 7,
+ "entriesSeen": 8,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-intra-ipv4",
+  "p1-arp-claim-50",
+  "p1-arp-claim-52",
+  "p1-catchall-to-tap",
+  "p2-ipv4-to-segment",
+  "p2-arp-to-segment",
+  "p2-catchall-drop"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "7/7 rules confirmed, 8 entries including the table-miss",
+ "atMs": 1793473636905
+}

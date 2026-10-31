@@ -1,0 +1,26 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible quarantine-precedence/v1 protocol-a-quarantine-precedence_v1-claude-haiku-5-5-pv2-n50#15",
+ "rulesRequested": 8,
+ "entriesSeen": 9,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quarantine-drop-src-51",
+  "quarantine-drop-dst-51",
+  "p1-intra-ipv4-to-uplink",
+  "p1-arp-known-50-to-uplink",
+  "p1-arp-known-52-to-uplink",
+  "uplink-ipv4-to-segment-to-p1",
+  "uplink-arp-to-p1",
+  "p1-everything-else-to-tap"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "8/8 rules confirmed, 9 entries including the table-miss",
+ "atMs": 1793474785549
+}

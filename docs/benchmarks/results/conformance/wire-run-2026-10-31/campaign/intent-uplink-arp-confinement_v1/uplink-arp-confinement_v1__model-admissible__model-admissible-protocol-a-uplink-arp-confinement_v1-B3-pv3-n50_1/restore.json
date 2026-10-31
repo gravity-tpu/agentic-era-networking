@@ -1,0 +1,24 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "restore",
+ "label": "model-admissible uplink-arp-confinement/v1 protocol-a-uplink-arp-confinement_v1-B3-pv3-n50#1",
+ "rulesRequested": 6,
+ "entriesSeen": 7,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-intra-segment",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p1-default-tap-only",
+  "p2-ipv4-to-segment",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+ "atMs": 1793476814458
+}
