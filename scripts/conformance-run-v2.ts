@@ -170,10 +170,11 @@ async function main(): Promise<void> {
   const get = (k: string): string | undefined => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
   const bundleDir = get('--bundle');
   const outDir = get('--out');
-  if (bundleDir === undefined || outDir === undefined) throw new Error('usage: conformance-run-v2.ts --bundle <dir> --out <dir> [--only <substring>] [--limit <n>] (--dry-run | --approve <index.json sha256>)');
+  if (bundleDir === undefined || outDir === undefined) throw new Error('usage: conformance-run-v2.ts --bundle <dir> --out <dir> [--only <substring>] [--ids-file <repeats.json>] [--limit <n>] (--dry-run | --approve <index.json sha256>)');
   const dry = argv.includes('--dry-run');
   const approve = get('--approve');
   const only = get('--only');
+  const idsFile = get('--ids-file');
   const limitRaw = get('--limit');
   const limit = limitRaw === undefined ? MAX_RULESETS : Number(limitRaw);
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_RULESETS) throw new Error(`--limit must be an integer 1 to ${MAX_RULESETS}`);
@@ -191,7 +192,18 @@ async function main(): Promise<void> {
     const seen = new Set(base.map((f) => f.id));
     return [...base, ...(coverage[set.intent.id]?.flows ?? []).filter((f) => !seen.has(f.id))];
   };
-  const picked = index.filter((e) => (e.installable ?? true) && (only === undefined || `${e.intent} ${e.kind} ${e.id}`.includes(only))).slice(0, limit);
+  // --ids-file: run exactly the sets listed in a repeats.json (plan 16.5). It cannot be combined with --only or --limit (a partial repeat must not pass for a full one),
+  // its shape is checked, and every listed set must exist in the bundle and be installable, or the run refuses.
+  let wanted: Array<{ intent: string; id: string }> | null = null;
+  if (idsFile !== undefined) {
+    if (only !== undefined || limitRaw !== undefined) throw new Error('--ids-file cannot be combined with --only or --limit: a repeat session runs all the listed sets');
+    const parsed = JSON.parse(await fs.readFile(idsFile, 'utf-8')) as { sets?: unknown };
+    if (!Array.isArray(parsed.sets) || parsed.sets.length === 0 || !parsed.sets.every((x) => typeof x === 'object' && x !== null && typeof (x as { intent?: unknown }).intent === 'string' && typeof (x as { id?: unknown }).id === 'string')) throw new Error('--ids-file is not a repeats file: expected {"sets":[{"intent":...,"id":...},...]}');
+    wanted = parsed.sets as Array<{ intent: string; id: string }>;
+    const bad = wanted.filter((w) => !index.some((e) => e.intent === w.intent && e.id === w.id && (e.installable ?? true)));
+    if (bad.length > 0) throw new Error(`--ids-file lists sets that are not in the bundle or not installable: ${bad.map((m) => `${m.intent} ${m.id}`).join('; ')}`);
+  }
+  const picked = index.filter((e) => (e.installable ?? true) && (only === undefined || `${e.intent} ${e.kind} ${e.id}`.includes(only)) && (wanted === null || wanted.some((w) => w.intent === e.intent && w.id === e.id))).slice(0, limit);
   if (picked.length === 0) throw new Error('no rule sets matched');
   await fs.mkdir(outDir, { recursive: true });
 

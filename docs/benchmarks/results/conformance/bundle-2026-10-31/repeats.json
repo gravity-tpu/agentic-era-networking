@@ -1,0 +1,86 @@
+{
+ "seed": 20261031,
+ "count": 20,
+ "sets": [
+  {
+   "intent": "port1-isolation/v1",
+   "id": "model-admissible-protocol-a-port1-isolation_v1-claude-haiku-5-5-pv3-n50_19"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-2.5-flash-n3_2"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-3-flash-preview-n3_1"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-3.1-pro-preview-n3_3"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-3.5-flash-lite-n3_2"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-3.6-flash-n3_2"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-3.8-flash-n3_1"
+  },
+  {
+   "intent": "dns-confinement/v1",
+   "id": "model-admissible-protocol-a-dns-confinement_v1-gemini-4-argon-n3_1"
+  },
+  {
+   "intent": "quarantine-set/v1",
+   "id": "surviving-mutant-remove-output_p1-arp-allow-10.0.2.50_3"
+  },
+  {
+   "intent": "dns-quarantine/v1",
+   "id": "model-admissible-protocol-a-dns-quarantine_v1-B3-pv3-n50_24"
+  },
+  {
+   "intent": "uplink-arp-confinement/v1",
+   "id": "model-admissible-protocol-a-uplink-arp-confinement_v1-C3-pv3-n50_23"
+  },
+  {
+   "intent": "dns-quarantine/v1",
+   "id": "model-admissible-protocol-a-dns-quarantine_v1-L3-pv3-n50_2"
+  },
+  {
+   "intent": "per-host-allowlist/v1",
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-L4-pv3-n50_24"
+  },
+  {
+   "intent": "dns-quarantine/v1",
+   "id": "model-admissible-protocol-a-dns-quarantine_v1-claude-haiku-5-5-pv3-n50_21"
+  },
+  {
+   "intent": "uplink-arp-confinement/v1",
+   "id": "surviving-mutant-remove-output_p1-ipv4-intra-segment_3"
+  },
+  {
+   "intent": "port1-isolation/v1",
+   "id": "model-admissible-protocol-a-port1-isolation_v1-B3-pv3-n50_13"
+  },
+  {
+   "intent": "dns-quarantine/v1",
+   "id": "model-admissible-protocol-a-dns-quarantine_v1-C3-pv3-n50_12"
+  },
+  {
+   "intent": "uplink-arp-confinement/v1",
+   "id": "model-admissible-protocol-a-uplink-arp-confinement_v1-L3-pv3-n50_7"
+  },
+  {
+   "intent": "port1-isolation/v1",
+   "id": "model-admissible-protocol-a-port1-isolation_v1-claude-haiku-5-5-pv3-n50_26"
+  },
+  {
+   "intent": "port1-isolation/v1",
+   "id": "surviving-mutant-drop-rule_p1-default-tap-only"
+  }
+ ]
+}
