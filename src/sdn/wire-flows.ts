@@ -16,8 +16,9 @@
  *   Forged      a raw frame from a workload NIC with a source outside the workload subnet or an ARP claim for an address the sender does not own.
  *   PortThree   a frame injected into port 3 (the tap) by transmitting from the O2 capture NIC. The capture NICs are receive-only today (they are the
  *               ground truth), so this needs the owner's explicit approval; without it no rule set can be tested for how it treats frames from the tap.
- *   Unavailable the testbed has no sender for it (for example forged ARP from the uplink side: the Mac cannot forge a sender address).
- * Frames entering port 1 are the untrusted segment's; forged frames are only ever sent from workload NICs.
+ *   Unavailable the testbed has no sender for it.
+ * Frames entering port 1 are the untrusted segment's and come from a workload NIC. Frames entering port 2 come from one Linux node whose USB NIC the owner
+ * placed on the isolated uplink VLAN (2026-10-31) with the Zodiac's P2 link: the only other host on that segment, so a forged frame there reaches no cache.
  */
 
 import { matchesPacket, ipv4ToUint, uintToIpv4, ETH_TYPE_IPV4_INTENT, ETH_TYPE_ARP_INTENT } from './intent-spec.js';
@@ -31,7 +32,7 @@ export type FlowMode = (typeof FlowMode)[keyof typeof FlowMode];
 export const WORKLOAD_SUBNET_BASE = '10.0.2.0';
 export const WORKLOAD_SUBNET_PREFIX_LEN = 24;
 export const REAL_WORKLOAD_HOSTS: readonly string[] = ['10.0.2.50', '10.0.2.51', '10.0.2.52'];
-/** The Mac on the uplink side (lab LAN), the real sender for flows entering port 2. */
+/** The Mac on the lab LAN: a real destination address for flows leaving port 1, no longer a sender. */
 export const UPLINK_HOST_IP = '10.0.0.119';
 /** Ports the testbed can send into, and the ports it can see traffic leave by (O2/O3 captures, and a listener for port 1). */
 export const SENDABLE_IN_PORTS: readonly number[] = [1, 2, 3];
@@ -52,16 +53,14 @@ export interface WireRuleSet { readonly id: string; readonly rules: readonly Wir
 const inWorkloadSubnet = (ip: string): boolean => (ipv4ToUint(ip) >>> (32 - WORKLOAD_SUBNET_PREFIX_LEN)) === (ipv4ToUint(WORKLOAD_SUBNET_BASE) >>> (32 - WORKLOAD_SUBNET_PREFIX_LEN));
 
 /** The mode the sender address of a flow needs, by the port the frame enters. */
-function sourceMode(inPort: number, etherType: number, src: string): FlowMode {
+function sourceMode(inPort: number, _etherType: number, src: string): FlowMode {
   if (inPort === 3) return FlowMode.PortThree;
   if (inPort === 1) {
     if (REAL_WORKLOAD_HOSTS.includes(src)) return FlowMode.Real;
     return inWorkloadSubnet(src) ? FlowMode.Alias : FlowMode.Forged;
   }
-  // Entering port 2: the Mac, with its own address or an alias on the workload subnet. It cannot forge an ARP sender address.
-  if (src === UPLINK_HOST_IP) return FlowMode.Real;
-  if (inWorkloadSubnet(src)) return FlowMode.Alias;
-  return etherType === ETH_TYPE_ARP_INTENT ? FlowMode.Unavailable : FlowMode.Forged;
+  // Entering port 2: a raw frame from the uplink-side Linux node (node-01's USB NIC on the isolated uplink VLAN), so any source, ARP included, is a forged frame.
+  return FlowMode.Forged;
 }
 
 function destinationMode(dst: string): FlowMode {

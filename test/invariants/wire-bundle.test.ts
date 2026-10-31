@@ -18,8 +18,8 @@ describe('wire bundle selection', () => {
   const out = mkdtempSync(path.join(tmpdir(), 'wire-bundle-'));
   execFileSync('node', ['--experimental-strip-types', '--no-warnings', path.join(ROOT, 'scripts/select-wire-bundle.ts'), RESULTS, out], { cwd: ROOT, encoding: 'utf8', timeout: 120_000 });
 
-  it('regenerates the committed index, flows and manifest byte for byte', () => {
-    for (const f of ['index.json', 'flows.json', 'manifest.json']) expect(read(path.join(out, f))).toBe(read(path.join(BUNDLE, f)));
+  it('regenerates the committed index, flows, coverage flows and manifest byte for byte', () => {
+    for (const f of ['index.json', 'flows.json', 'coverage-flows.json', 'manifest.json']) expect(read(path.join(out, f))).toBe(read(path.join(BUNDLE, f)));
   });
 
   it('every indexed rule set exists in the committed bundle and is installable within the bridge bounds', () => {

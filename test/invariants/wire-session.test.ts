@@ -135,6 +135,15 @@ describe('runSession', () => {
     expect(out.stoppedBecause).toMatch(/requested/);
   });
 
+  it('accepts a per-set flow source: extra flows for a reference only', async () => {
+    const log: Log = { calls: [] };
+    const extra: WireFlow = { ...flowA, id: 'p1-ip-extra', packet: { ...flowA.packet, dstIp: '10.0.2.51' } };
+    const src = (s: SessionSet): readonly WireFlow[] => (s.kind === 'reference' ? [flowA, flowB, extra] : [flowA, flowB]);
+    const out = await runSession(fakeRig(log), [set('ref', refRules, 'reference'), set('m', refRules, 'model-admissible')], src, {});
+    expect(out.results[0]!.flows).toHaveLength(3);
+    expect(out.results[1]!.flows).toHaveLength(2);
+  });
+
   it('refuses a run that would run out of unique tags', async () => {
     const many = Array.from({ length: Math.ceil(MAX_UDP_TAGS / 2) + 1 }, (_, i) => set(`s${i}`, refRules));
     await expect(runSession(fakeRig({ calls: [] }), many, flows, {})).rejects.toThrow(/tags/);

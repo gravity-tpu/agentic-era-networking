@@ -16,6 +16,7 @@ import {
   sendPlanFor,
   captureFilterFor,
   rawSendPython,
+  coverageFlowsFor,
 } from '../../src/sdn/wire-run.js';
 import { candidateFlows, predictOutcome, FlowMode, addressUniverse } from '../../src/sdn/wire-flows.js';
 import type { WireRuleSet } from '../../src/sdn/wire-flows.js';
@@ -137,30 +138,15 @@ describe('sendPlanFor: how the testbed would send a flow, or why it cannot', () 
     expect(sendPlanFor(ip(1, '10.0.2.53', '8.8.8.8'))).toEqual({ via: 'raw-from-node' });
     expect(sendPlanFor(arp(1, '10.0.2.50', '10.0.0.119'))).toEqual({ via: 'raw-from-node' });
   });
-  it('sends a port 2 IPv4 flow from the Mac only to a destination in the workload subnet', () => {
-    expect(sendPlanFor(ip(2, '10.0.0.119', '10.0.2.52'))).toEqual({ via: 'udp-from-mac', aliasIp: null });
-    expect(sendPlanFor(ip(2, '10.0.2.119', '10.0.2.52'))).toEqual({ via: 'udp-from-mac', aliasIp: '10.0.2.119' });
+  it('sends every port 2 frame, IPv4 or ARP, as a raw frame from the uplink-side Linux node (the isolated uplink segment holds only that node and the switch)', () => {
+    expect(sendPlanFor(ip(2, '10.0.0.119', '10.0.2.52'))).toEqual({ via: 'raw-from-uplink-node' });
+    expect(sendPlanFor(ip(2, '8.8.8.8', '10.0.2.53'))).toEqual({ via: 'raw-from-uplink-node' });
+    expect(sendPlanFor(arp(2, '10.0.2.1', '10.0.2.50'))).toEqual({ via: 'raw-from-uplink-node' });
   });
-  it('cannot send a port 2 flow whose destination is outside the workload subnet: the Mac would send it to the internet, not to the switch', () => {
-    const p = sendPlanFor(ip(2, '10.0.0.119', '8.8.8.8'));
+  it('cannot send into port 3 (the capture NICs are receive-only; decision 8)', () => {
+    const p = sendPlanFor(ip(3, '10.0.2.50', '10.0.2.52'));
     expect(p.via).toBe('unsendable');
-    expect((p as { reason: string }).reason).toMatch(/internet|leave/);
-  });
-  it('cannot send a port 2 ARP flow (no Linux sender on the uplink side) or a port 3 flow', () => {
-    expect(sendPlanFor(arp(2, '10.0.0.119', '10.0.2.50')).via).toBe('unsendable');
-    expect(sendPlanFor(ip(3, '10.0.2.50', '10.0.2.52')).via).toBe('unsendable');
-  });
-  it('cannot send a port 2 flow from a source that is neither the Mac nor in the workload subnet', () => {
-    expect(sendPlanFor(ip(2, '8.8.8.8', '10.0.2.52')).via).toBe('unsendable');
-  });
-});
-
-describe('sendPlanFor: a port 2 destination must be a real host', () => {
-  it('cannot send to a workload address no host answers for', () => {
-    const f = { id: 'x', mode: 1 as const, observable: [1, 3], packet: { inPort: 2, etherType: 0x0800, srcMac: '02:00:00:00:00:02', dstMac: '02:00:00:00:00:fe', srcIp: '10.0.0.119', dstIp: '10.0.2.53' } };
-    const p = sendPlanFor(f);
-    expect(p.via).toBe('unsendable');
-    expect((p as { reason: string }).reason).toMatch(/ARP/);
+    expect((p as { reason: string }).reason).toMatch(/port 3/);
   });
 });
 
@@ -193,5 +179,39 @@ describe('rawSendPython', () => {
     expect(() => rawSendPython('eth0', Array.from({ length: 11 }, () => 'aa'), 0)).toThrow(RangeError);
     expect(() => rawSendPython('eth0', ['aa'], -1)).toThrow(RangeError);
     expect(() => rawSendPython('eth0', ['aa'], 2001)).toThrow(RangeError);
+  });
+});
+
+describe('coverageFlowsFor: one sendable flow per intent clause, so the wire tests the intent itself', () => {
+  const cands = (extra: string[] = []) => candidateFlows(addressUniverse([], ['10.0.2.50', '10.0.2.52', '10.0.0.119', '8.8.8.8', ...extra]), FlowMode.Forged);
+  it('covers every clause of INTENT-1 and the default-deny class, with the first matching clause deciding', () => {
+    const { flows, uncovered } = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands());
+    // the only classes the testbed cannot send are the ones entering port 3 (decision 8); they are reported, not dropped
+    const needsPort3 = PORT1_ISOLATION_INTENT.clauses.filter((c) => c.match.inPort === 3).map((c) => c.id);
+    expect(uncovered).toEqual(needsPort3);
+    expect(needsPort3.length).toBeGreaterThan(0);
+    const ids = new Set(flows.map((f) => intentExpectation(PORT1_ISOLATION_INTENT, f.packet).clauseId));
+    for (const c of PORT1_ISOLATION_INTENT.clauses.filter((c) => c.match.inPort !== 3)) expect(ids.has(c.id)).toBe(true);
+    expect(ids.has('default-deny')).toBe(true);
+  });
+  it('includes flows entering port 2 where the intent has uplink clauses (the uplink side is tested)', () => {
+    const { flows } = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands());
+    expect(flows.some((f) => f.packet.inPort === 2)).toBe(true);
+    expect(flows.some((f) => f.packet.inPort === 1)).toBe(true);
+  });
+  it('prefers the least demanding way to send a flow', () => {
+    const { flows } = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands());
+    const one = flows.find((f) => f.packet.inPort === 1 && intentExpectation(PORT1_ISOLATION_INTENT, f.packet).clauseId === 'p1-ipv4-intra-segment');
+    expect(one?.mode).toBe(FlowMode.Real);
+  });
+  it('can fail: with too few candidates a clause is reported uncovered, not silently dropped', () => {
+    const only = candidateFlows(['10.0.2.50'], FlowMode.Real);
+    const { uncovered } = coverageFlowsFor(PORT1_ISOLATION_INTENT, only);
+    expect(uncovered.length).toBeGreaterThan(0);
+  });
+  it('is deterministic', () => {
+    const a = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands()).flows.map((f) => f.id);
+    const b = coverageFlowsFor(PORT1_ISOLATION_INTENT, cands()).flows.map((f) => f.id);
+    expect(a).toEqual(b);
   });
 });

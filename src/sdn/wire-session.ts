@@ -57,6 +57,10 @@ export interface SetResult {
   readonly flows: FlowResult[];
 }
 
+/** The flows to send for a set: by intent, or chosen per set (for example extra coverage flows on a reference). */
+export type FlowSource = Readonly<Record<string, readonly WireFlow[]>> | ((set: SessionSet) => readonly WireFlow[]);
+const flowsOf = (src: FlowSource, s: SessionSet): readonly WireFlow[] => (typeof src === 'function' ? src(s) : (src[s.intent.id] ?? []));
+
 export interface SessionOptions { readonly shouldStop?: () => boolean }
 export interface SessionResult { readonly results: SetResult[]; readonly stoppedBecause: string | null }
 
@@ -69,8 +73,8 @@ function requireIdle(s: BridgeState, when: string): string | null {
   return null;
 }
 
-export async function runSession(rig: Rig, sets: readonly SessionSet[], flowsByIntent: Readonly<Record<string, readonly WireFlow[]>>, opts: SessionOptions): Promise<SessionResult> {
-  const planned = sets.reduce((n, s) => n + (flowsByIntent[s.intent.id]?.length ?? 0), 0);
+export async function runSession(rig: Rig, sets: readonly SessionSet[], flowsByIntent: FlowSource, opts: SessionOptions): Promise<SessionResult> {
+  const planned = sets.reduce((n, s) => n + flowsOf(flowsByIntent, s).length, 0);
   if (planned > MAX_UDP_TAGS) throw new RangeError(`${planned} flows exceed the ${MAX_UDP_TAGS} unique UDP tags; split the run`);
   const start = requireIdle(await rig.bridgeState(), 'before the session');
   if (start !== null) throw new Error(start);
@@ -90,7 +94,7 @@ export async function runSession(rig: Rig, sets: readonly SessionSet[], flowsByI
     const install = await rig.install(s);
     try {
       if (install.ok) {
-        for (const flow of flowsByIntent[s.intent.id] ?? []) {
+        for (const flow of flowsOf(flowsByIntent, s)) {
           const tag = UDP_TAG_BASE + tagCounter++;
           const r = await rig.runFlow(flow, tag);
           if (!r.sent) { flows.push({ flowId: flow.id, tag, sent: false, reason: r.reason ?? 'not sent' }); continue; }

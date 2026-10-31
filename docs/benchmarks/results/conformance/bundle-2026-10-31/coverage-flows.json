@@ -1,0 +1,1165 @@
+{
+ "port1-isolation/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.50",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.50"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.52-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.52",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.51",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return"
+  ]
+ },
+ "dns-confinement/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.0-10.0.2.1",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.0",
+     "dstIp": "10.0.2.1"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.2.1-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.1",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return",
+   "default-deny"
+  ]
+ },
+ "quarantine-precedence/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.51",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.51",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.51"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.50",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.50"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.52-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.52",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.51",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return"
+  ]
+ },
+ "tap-return-isolation/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.50",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.50"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.52-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.52",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.51",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return"
+  ]
+ },
+ "quarantine-set/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.51",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.51",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.51"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.53-10.0.0.119",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.53",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.53",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.53"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.54-10.0.0.119",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.54",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.54",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.54"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.50",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.50"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.52-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.52",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.51",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return"
+  ]
+ },
+ "dns-quarantine/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.51",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.51",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.51"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.0-10.0.2.1",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.0",
+     "dstIp": "10.0.2.1"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.2.1-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.1",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return",
+   "default-deny"
+  ]
+ },
+ "uplink-arp-confinement/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.50",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.50"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.52-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.52",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.51",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.2.1-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.1",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.2.254-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.254",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return"
+  ]
+ },
+ "per-host-allowlist/v1": {
+  "flows": [
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.1",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.1"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.50-10.0.2.20",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.50",
+     "dstIp": "10.0.2.20"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-ip-10.0.2.52-10.0.2.1",
+    "mode": 1,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.52",
+     "dstIp": "10.0.2.1"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.50-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.50",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.52-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.52",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p1-arp-10.0.2.51-10.0.0.119",
+    "mode": 0,
+    "packet": {
+     "inPort": 1,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:01",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.2.51",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     2,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.2.1-10.0.2.0",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.1",
+     "dstIp": "10.0.2.0"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.2.20-10.0.2.50",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.2.20",
+     "dstIp": "10.0.2.50"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-arp-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2054,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "ff:ff:ff:ff:ff:ff",
+     "arpSpa": "10.0.0.119",
+     "arpTpa": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   },
+   {
+    "id": "p2-ip-10.0.0.119-10.0.0.119",
+    "mode": 2,
+    "packet": {
+     "inPort": 2,
+     "etherType": 2048,
+     "srcMac": "02:00:00:00:00:02",
+     "dstMac": "02:00:00:00:00:fe",
+     "srcIp": "10.0.0.119",
+     "dstIp": "10.0.0.119"
+    },
+    "observable": [
+     1,
+     3
+    ]
+   }
+  ],
+  "uncovered": [
+   "p3-tap-return",
+   "default-deny"
+  ]
+ }
+}

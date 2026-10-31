@@ -19,6 +19,7 @@ import { generateMutants } from '../dist/sdn/rule-mutations.js';
 import { triageProposal } from '../dist/sdn/proposal-triage.js';
 import { ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP } from '../dist/sdn/port1-isolation.js';
 import { FlowMode, addressUniverse, candidateFlows, selectFlows } from '../dist/sdn/wire-flows.js';
+import { coverageFlowsFor } from '../dist/sdn/wire-run.js';
 import type { WireRule, WireRuleSet } from '../dist/sdn/wire-flows.js';
 import { TARGETS, toSet, recordedSets } from './wire-common.ts';
 
@@ -75,6 +76,7 @@ function main(): void {
   const next = rng(seed);
   const index: Array<Record<string, unknown>> = [];
   const flowsOut: Record<string, unknown> = {};
+  const coverageOut: Record<string, unknown> = {};
   const counts: Record<string, Record<string, number>> = {};
 
   for (const { intent, reference } of TARGETS) {
@@ -89,6 +91,10 @@ function main(): void {
     const sel = selectFlows(cands, refSet, pool, MAX_FLOWS);
     const sep = new Set(sel.separated);
     flowsOut[intent.id] = sel.flows.map((f) => ({ id: f.id, mode: f.mode, packet: f.packet, observable: f.observable }));
+    // Clause coverage: one sendable flow per intent clause and for default-deny, run on the reference only, so the wire tests the intent itself in both entry directions.
+    const specAsRules: WireRuleSet = { id: 'intent', rules: intent.clauses.map((c) => ({ id: c.id, priority: 0, outputPorts: [...c.mustReach], match: c.match })) };
+    const cov = coverageFlowsFor(intent, candidateFlows(addressUniverse([refSet, specAsRules, ...pool]), FlowMode.Forged));
+    coverageOut[intent.id] = { flows: cov.flows.map((f) => ({ id: f.id, mode: f.mode, packet: f.packet, observable: f.observable })), uncovered: cov.uncovered };
 
     const chosen: Array<{ kind: string; set: WireRuleSet; arm: string }> = [{ kind: 'reference', set: refSet, arm: 'reference' }];
     const instOk = <T extends WireRuleSet>(s: T): boolean => installable(s.rules);
@@ -114,6 +120,7 @@ function main(): void {
   const indexText = JSON.stringify(index, null, 1) + '\n';
   fs.writeFileSync(path.join(out, 'index.json'), indexText);
   fs.writeFileSync(path.join(out, 'flows.json'), JSON.stringify(flowsOut, null, 1) + '\n');
+  fs.writeFileSync(path.join(out, 'coverage-flows.json'), JSON.stringify(coverageOut, null, 1) + '\n');
   const manifest = { seed, maxFlows: MAX_FLOWS, maxModelSets: MAX_MODEL_SETS, equivalenceControls: EQUIVALENCE_CONTROLS, mode: 'forged frames allowed, no injection into port 3', ruleSets: index.length, indexSha256: crypto.createHash('sha256').update(indexText).digest('hex'), counts };
   fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');
   process.stdout.write(`${JSON.stringify(manifest, null, 1)}\n`);
