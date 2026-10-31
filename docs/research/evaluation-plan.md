@@ -255,3 +255,40 @@ One run per cell, one seed set, one adapter; prompt v3 was written after the v2 
 ### 12.6 Results (recorded 2026-10-31, after the runs)
 
 Sections 12.1 to 12.5 are unchanged. The runs are reported in `docs/benchmarks/results/agent-evaluation/lora-v3-protocol-b-2026-10-31/README.md`. Both arms were admissible on 80 of 80 trials within 5 turns, so the ceiling stated in section 12.4 was reached and the primary comparison does not discriminate; no trial needed more than 2 turns. No departure from the registered design.
+
+## 13. Plan v5 addendum: four additional intents (requested by the owner 2026-10-31, registered by this commit before any model has seen them)
+
+Sections 1 to 12 are unchanged; the four evaluated intents (INTENT-1 to 4) stay frozen. Section numbering assumes the results sections of the open pull requests for plan sections 11.6 and 12 are merged; renumber at merge if they are not.
+
+### 13.1 Why
+
+Under prompt v3 the three intents INTENT-1, 2 and 4 are at or near the ceiling: the control arm (C3) reached 47, 50 and 50 of 50 in Protocol A, and Protocol B reached 80 of 80 within 5 turns for both arms (results of sections 11 and 12). A benchmark that all arms pass cannot tell them apart. The additional intents add interacting constraints, so that a result on them can differ between arms.
+
+### 13.2 The intents, chosen by structure
+
+They are defined in `src/sdn/intents-hard.ts` with hand-written reference policies in `src/sdn/intent-references-hard.ts`. **They were chosen for their structure before any model saw them, none is dropped whatever a model scores, and an intent on which every arm scores 47 or more of 50 is reported as saturated, not removed.** Every description is built from the same parameters as its clauses, and a test requires it to name every address its clauses use (the contradiction amendment 1 fixed). All addresses lie in 10.0.2.0/24, the held-out benchmark subnet, so no training scenario can contain them.
+
+| Id | What it adds | Clauses | Reference rules | Priority tiers | Named addresses |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| quarantine-set/v1 (INTENT-5) | INTENT-3 with three quarantined hosts, both directions: six DROPs that must outrank every forwarding rule | 13 | 13 | 4 | 3 |
+| dns-quarantine/v1 (INTENT-6) | DNS confinement with one host quarantined, so the resolver exception and the quarantine overlap | 9 | 8 | 4 | 2 |
+| uplink-arp-confinement/v1 (INTENT-7) | isolation with ARP from the uplink allowed only for two named peers (A10's second direction) | 9 | 8 | 3 | 2 |
+| per-host-allowlist/v1 (INTENT-8) | two workload hosts with different destination allowlists and a return path that is asymmetric per source | 11 | 10 | 3 | 2 |
+
+For comparison the same measures for the evaluated four (pinned by `test/invariants/hard-intents.test.ts`): INTENT-1 7, 7, 3, 0; INTENT-2 7, 6, 3, 1; INTENT-3 9, 9, 4, 1; INTENT-4 7, 7, 3, 0. INTENT-5 and 8 are larger than every evaluated intent on clauses and reference rules; INTENT-6 and 7 are larger than INTENT-1, 2 and 4 and comparable to INTENT-3. These measures are crude proxies: structural size is not a claim about difficulty for a model, which is what the evaluation measures.
+
+### 13.3 What a verdict proves
+
+The same as for the evaluated intents (section 7 and `src/sdn/proposal-triage.ts`): over every packet class the rules and the intent can distinguish, the rule set has no hairpin, no equal-priority conflict, no shadowed rule and no leak or omission. Each reference policy is accepted by the verifier, a set of targeted breakages per intent is rejected, and between 73% and 82% of the mutants of each reference are rejected (the survivors are mostly neutral: a priority raised on a rule that is already on top, a tap copy removed where the intent only says a rule may make it).
+
+### 13.4 Evaluation proposed (not yet run: launching needs the owner's approval of the cost)
+
+Protocol A, prompt v3, N = 50 per intent (seeds 1 to 50), temperature 0.2, top-p 0.95, `think: true`, `num_predict` 32768, on the arms B3, C3 and L3 of section 11.2, one run per cell: 200 trials per arm, 600 in all. One Runpod pod per arm with the four intents running concurrently (four streams per server), the same scheduling for every arm. Cost estimated from the section 11 and 12 runs at about 4.6 USD per pod for a 200-minute limit (the per-run cap is 5 USD), about 14 USD in all; this is an estimate, not a measurement for this workload.
+
+### 13.5 Analysis, fixed in advance
+
+The metrics of section 6 (admissible counts with 95% Wilson intervals, the category of every failure, distinct outputs, transport failures), reported per intent and per arm; L3 against C3 is the adapter effect and B3 against C3 the quantization route, as in section 11.2. No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed. Results are never merged with the earlier sections' data. Run-to-run variation measured in section 12 (same-seed runs differ by a few trials per cell at N = 20) is a stated limit on any per-intent difference of a few trials.
+
+### 13.6 What this will not show
+
+That structural size means difficulty for a model; anything about intents outside this one switch topology and these ten addresses; whether verifier-accepted rule sets behave correctly on the wire (RQ4); one run per cell; the reference policies are the author's, and the verifier is the only judge.
