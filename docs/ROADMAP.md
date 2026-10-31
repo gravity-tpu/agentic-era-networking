@@ -83,6 +83,8 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 
 **Exit criteria:** A1 to A11 enforced in CI; every rejection returns the violated property and the offending rules; the agent-proposal evaluation is published with its method and failure cases.
 
+**Where each property is checked, enforced and tested** (2026-10-31): [docs/research/track-a-ci-matrix.md](research/track-a-ci-matrix.md), kept honest by `test/invariants/track-a-matrix.test.ts`.
+
 ### Track B: Hardware model and conformance
 
 Turn the benchmark from a report into an input to the verifier, and check that the switch behaves as modeled.
