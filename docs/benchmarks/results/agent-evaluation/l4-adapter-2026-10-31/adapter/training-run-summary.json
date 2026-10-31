@@ -1,0 +1,33 @@
+{
+  "schema": "proposer-lora-training-run/v1",
+  "task": "proposer",
+  "source": "synthetic_verifier_grounded",
+  "baseModel": "Qwen/Qwen3.8-27B",
+  "ollamaBase": "qwen3.8:27b",
+  "mode": "both",
+  "loraR": 16,
+  "loraAlpha": 32,
+  "seed": 42,
+  "datasetGitCommit": "bfec96af2062db9bc2f94be7076f37ecb372f8b4",
+  "heldOutBenchmarkHashes": [
+    "dbd30d4265caec03e274ad66c9336157969e72f1ba3b30e0f680c72434e780ed",
+    "e632d34f157f69ff57016ff3fb06dfe3cbdf0e0c4c898dc66db0e104c1d50041",
+    "0fad17b4c7254f0207f986a2e582fb408eb1d061d8e18a96e700bded879679e4",
+    "04bf2c63c9b4e2d85abb04154582672594b30d03db3a0b145491342797c08183"
+  ],
+  "batchSize": 1,
+  "gradAccum": 8,
+  "maxStepsArg": -1,
+  "timeBudgetSeconds": 7800,
+  "sftExamples": 1466,
+  "sftStepsDone": 80,
+  "sftExamplesSeen": 640,
+  "sftStoppedByDeadline": true,
+  "dpoPairs": 1434,
+  "dpoStepsDone": 90,
+  "dpoPairsSeen": 720,
+  "dpoStoppedByDeadline": true,
+  "finalAdapterDir": "/workspace/work/proposer-out/dpo-adapter",
+  "modelfile": "/workspace/work/proposer-out/Modelfile.proposer-lora",
+  "wallNs": "7844539707182"
+}
