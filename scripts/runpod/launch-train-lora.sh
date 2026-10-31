@@ -8,7 +8,7 @@
 #
 # Usage:
 #   scripts/runpod/launch-train-lora.sh --minutes 180 [--gpu "NVIDIA A100-SXM4-80GB"] \
-#     [--task proposer|reviewer|both] [--max-steps 15] [--grad-accum 4] \
+#     [--task proposer|reviewer|both] [--max-steps 15] [--grad-accum 4] [--time-budget-seconds N] \
 #     [--out DIR] [--yes]
 #
 # Invariants:
@@ -25,6 +25,7 @@ TASK="both"
 MAX_STEPS="15"
 GRAD_ACCUM="4"
 LEARNING_RATE="5e-5"
+TIME_BUDGET_SECONDS="0"
 YES=""
 OUT="docs/benchmarks/results/lora-adapters-$(date -u +%Y%m%d)"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
@@ -39,6 +40,7 @@ while [ $# -gt 0 ]; do
     --max-steps) MAX_STEPS="$2"; shift 2 ;;
     --grad-accum) GRAD_ACCUM="$2"; shift 2 ;;
     --learning-rate) LEARNING_RATE="$2"; shift 2 ;;
+    --time-budget-seconds) TIME_BUDGET_SECONDS="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --pubkey) PUBKEY="$2"; shift 2 ;;
     --disk-gb) DISK_GB="$2"; shift 2 ;;
@@ -125,7 +127,7 @@ scp -P "$PORT" -o StrictHostKeyChecking=accept-new scripts/runpod/train-lora-pod
 "${SSH[@]}" 'chmod +x /workspace/in/train-lora-pod.sh'
 
 echo "=== Launching in-pod training supervisor ==="
-"${SSH[@]}" "TASK='$TASK' MAX_STEPS='$MAX_STEPS' GRAD_ACCUM='$GRAD_ACCUM' LEARNING_RATE='$LEARNING_RATE' nohup /workspace/in/train-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
+"${SSH[@]}" "TASK='$TASK' MAX_STEPS='$MAX_STEPS' GRAD_ACCUM='$GRAD_ACCUM' LEARNING_RATE='$LEARNING_RATE' TIME_BUDGET_SECONDS='$TIME_BUDGET_SECONDS' nohup /workspace/in/train-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
 
 # Bounded polling loop: maximum iterations = (MINUTES * 60 / POLL_SECONDS) + 15
 MAX_POLLS=$(( (MINUTES * 60 / POLL_SECONDS) + 15 ))
