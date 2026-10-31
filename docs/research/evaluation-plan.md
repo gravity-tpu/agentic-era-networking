@@ -230,3 +230,33 @@ Sections 11.1 to 11.5 are unchanged. The runs are reported in `docs/benchmarks/r
 - **Infrastructure reruns (section 11.4).** The first L3 build produced an unloadable model (no trial used); L3 Stage 1 was run by hand on the rebuilt model. The first complete C3 INTENT-3 run was lost when a launcher failed before download, and the cell was rerun; both attempts are listed.
 - **Scheduling.** Stage 1 cells ran one stream at a time, Stage 2 cells three concurrent streams per server, so results are compared within a stage only.
 - **Run commits differ per arm** (`scripts/agent-eval.ts` and `src/sdn/` are identical across them).
+
+## 12. Plan v4 addendum: Protocol B for the adapter (requested by the owner 2026-10-31, registered by this commit before any Protocol B data)
+
+Sections 1 to 11 are unchanged. Section 11.3 left Protocol B out; this section adds it for the two arms that isolate the adapter. Runs happen on ephemeral Runpod pods (`scripts/runpod/`, per-run cap 5 USD).
+
+### 12.1 Question
+
+The adapter was trained mostly on verifier repair traces (1,434 of its examples, `src/sdn/proposer-lora-dataset.ts`). Given the deterministic verifier's feedback, does the adapted model (L3) repair a rejected proposal faster or more often than the same pipeline without the adapter (C3)? Abstract evaluation only (RQ1 to RQ3); admissible means the verifier accepts the rule set, not that it is correct on the wire.
+
+### 12.2 Design
+
+| Item | Value |
+| :--- | :--- |
+| Arms | L3 and C3 as in section 11.2, built the way section 11.6 records for the Stage 1 and 2 runs (GGUF-space merge from the original checkpoint, Q4_K_M, Ollama 0.34.4). B3 is not run. |
+| Protocol | B of section 5: up to 5 turns, the verifier's detail lines (at most 12) returned after each rejected turn (`scripts/agent-eval.ts`) |
+| Prompt, sampling | prompt v3, temperature 0.2, top-p 0.95, `think: true`, `num_predict` 32768, seeds 1 to 20 |
+| Intents and budget | INTENT-1 to 4, N = 20 per intent per arm (the section 10.2 budget), one run per cell: 80 trials per arm |
+| Scheduling | one pod per arm, the four intents running concurrently against one Ollama server; identical for both arms |
+
+### 12.3 Metrics, fixed in advance
+
+Per cell and over all 80 trials per arm: admissible on turn 1; admissible within 5 turns (95% Wilson interval); for the trials that became admissible, the turn at which they did; trials still failing after 5 turns, with the final category; distinct turn-1 outputs; transport failures. The primary comparison is L3 against C3 on admissible within 5 turns. The secondary comparison is the distribution of the turn of repair among eventually admissible trials (mean turns to admissibility).
+
+### 12.4 Analysis rules
+
+No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed. Results are never merged with Protocol A or with the section 10 data. The registered v2 Protocol B run of the base model reached 79 of 80 within 5 turns (section 10.7), so a ceiling is likely under v3: if both arms are near 80 of 80, the primary comparison will not discriminate and the secondary measure is the informative one. That is stated here so that it is not discovered afterwards.
+
+### 12.5 What this will not show
+
+One run per cell, one seed set, one adapter; prompt v3 was written after the v2 failures on these intents were read; turn-1 outputs for seeds 1 to 20 repeat the Protocol A conditions only if seeded runs reproduce; the adapter served at run time (`llama-server --lora`) is not tested; on-wire behaviour (RQ4) is not tested.
