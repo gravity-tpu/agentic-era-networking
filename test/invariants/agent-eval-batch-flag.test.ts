@@ -32,10 +32,28 @@ describe('scripts/agent-eval.ts --batch: scope validation runs before any networ
     expect(stderr).toContain('--batch is only implemented for --provider anthropic');
   });
 
-  it('rejects --batch with --protocol B (verifier-feedback turns are not batched round-by-round)', () => {
+  it('rejects --batch with --provider llama', () => {
+    const { status, stderr } = runAgentEval(['--provider', 'llama', '--batch', '--intent', 'dns-confinement/v1', '--n', '1', '--out', '/tmp/agent-eval-batch-test']);
+    expect(status).not.toBe(0);
+    expect(stderr).toContain('--batch is only implemented for --provider anthropic');
+  });
+
+  it('rejects --batch with --protocol B without --allow-multi-round', () => {
     const { status, stderr } = runAgentEval(['--provider', 'anthropic', '--protocol', 'B', '--batch', '--intent', 'dns-confinement/v1', '--n', '1', '--out', '/tmp/agent-eval-batch-test', '--price-in-cents', '1', '--price-out-cents', '1', '--max-cents', '1', '--price-note', 'x']);
     expect(status).not.toBe(0);
     expect(stderr).toContain('--batch requires --protocol A');
+  });
+
+  it('accepts --batch with --protocol B when --allow-multi-round is specified', () => {
+    const { stderr } = runAgentEval(['--provider', 'anthropic', '--protocol', 'B', '--batch', '--allow-multi-round', '--intent', 'dns-confinement/v1', '--n', '1', '--out', '/tmp/agent-eval-batch-test', '--price-in-cents', '1', '--price-out-cents', '1', '--max-cents', '1', '--price-note', 'x']);
+    expect(stderr).not.toContain('--batch requires --protocol A');
+    expect(stderr).toContain('missing --model');
+  });
+
+  it('accepts --provider llama with default host (fails later on missing --model)', () => {
+    const { stderr } = runAgentEval(['--provider', 'llama', '--intent', 'dns-confinement/v1', '--n', '1', '--out', '/tmp/agent-eval-batch-test']);
+    expect(stderr).not.toContain('--provider must be');
+    expect(stderr).toContain('missing --model');
   });
 
   it('accepts --batch with --provider anthropic and the default --protocol A (fails later, on --model, not on scope)', () => {

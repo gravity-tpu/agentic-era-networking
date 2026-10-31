@@ -221,3 +221,115 @@ Admissible counts with 95% Wilson intervals, the category of every failure, dist
 - A 15-step run is a small training run, one seed, one adapter. A DPO reward accuracy of 100% on verifier-generated pairs is a training statistic, not evidence about INTENT-1 to 4.
 - Merging then quantizing can lose part of a LoRA delta, so L3 may understate the adapter; the runtime-adapter route (llama.cpp `--lora`) is not tested here.
 - On-wire behaviour (RQ4), and run-to-run variation (one run per cell).
+
+### 11.6 Results and deviations (recorded 2026-10-30, after the runs)
+
+Sections 11.1 to 11.5 are unchanged. The runs are reported in `docs/benchmarks/results/agent-evaluation/lora-v3-2026-10-30/README.md`, with the metrics fixed in section 11.4. Stage 1 (INTENT-3) completed for all three arms before Stage 2 (INTENT-1, 2, 4) ran any trial. Departures from the text above, each with its evidence in that README:
+
+- **Merge route.** The adapter was merged in f16 GGUF space with `llama-export-lora`, not in bf16: a transformers merge-and-save drops the model's trailing next-token-prediction layer and the GGUF then fails to load in Ollama.
+- **Infrastructure reruns (section 11.4).** The first L3 build produced an unloadable model (no trial used); L3 Stage 1 was run by hand on the rebuilt model. The first complete C3 INTENT-3 run was lost when a launcher failed before download, and the cell was rerun; both attempts are listed.
+- **Scheduling.** Stage 1 cells ran one stream at a time, Stage 2 cells three concurrent streams per server, so results are compared within a stage only.
+- **Run commits differ per arm** (`scripts/agent-eval.ts` and `src/sdn/` are identical across them).
+
+## 12. Plan v4 addendum: Protocol B for the adapter (requested by the owner 2026-10-31, registered by this commit before any Protocol B data)
+
+Sections 1 to 11 are unchanged. Section 11.3 left Protocol B out; this section adds it for the two arms that isolate the adapter. Runs happen on ephemeral Runpod pods (`scripts/runpod/`, per-run cap 5 USD).
+
+### 12.1 Question
+
+The adapter was trained mostly on verifier repair traces (1,434 of its examples, `src/sdn/proposer-lora-dataset.ts`). Given the deterministic verifier's feedback, does the adapted model (L3) repair a rejected proposal faster or more often than the same pipeline without the adapter (C3)? Abstract evaluation only (RQ1 to RQ3); admissible means the verifier accepts the rule set, not that it is correct on the wire.
+
+### 12.2 Design
+
+| Item | Value |
+| :--- | :--- |
+| Arms | L3 and C3 as in section 11.2, built the way section 11.6 records for the Stage 1 and 2 runs (GGUF-space merge from the original checkpoint, Q4_K_M, Ollama 0.34.4). B3 is not run. |
+| Protocol | B of section 5: up to 5 turns, the verifier's detail lines (at most 12) returned after each rejected turn (`scripts/agent-eval.ts`) |
+| Prompt, sampling | prompt v3, temperature 0.2, top-p 0.95, `think: true`, `num_predict` 32768, seeds 1 to 20 |
+| Intents and budget | INTENT-1 to 4, N = 20 per intent per arm (the section 10.2 budget), one run per cell: 80 trials per arm |
+| Scheduling | one pod per arm, the four intents running concurrently against one Ollama server; identical for both arms |
+
+### 12.3 Metrics, fixed in advance
+
+Per cell and over all 80 trials per arm: admissible on turn 1; admissible within 5 turns (95% Wilson interval); for the trials that became admissible, the turn at which they did; trials still failing after 5 turns, with the final category; distinct turn-1 outputs; transport failures. The primary comparison is L3 against C3 on admissible within 5 turns. The secondary comparison is the distribution of the turn of repair among eventually admissible trials (mean turns to admissibility).
+
+### 12.4 Analysis rules
+
+No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed. Results are never merged with Protocol A or with the section 10 data. The registered v2 Protocol B run of the base model reached 79 of 80 within 5 turns (section 10.7), so a ceiling is likely under v3: if both arms are near 80 of 80, the primary comparison will not discriminate and the secondary measure is the informative one. That is stated here so that it is not discovered afterwards.
+
+### 12.5 What this will not show
+
+One run per cell, one seed set, one adapter; prompt v3 was written after the v2 failures on these intents were read; turn-1 outputs for seeds 1 to 20 repeat the Protocol A conditions only if seeded runs reproduce; the adapter served at run time (`llama-server --lora`) is not tested; on-wire behaviour (RQ4) is not tested.
+
+### 12.6 Results (recorded 2026-10-31, after the runs)
+
+Sections 12.1 to 12.5 are unchanged. The runs are reported in `docs/benchmarks/results/agent-evaluation/lora-v3-protocol-b-2026-10-31/README.md`. Both arms were admissible on 80 of 80 trials within 5 turns, so the ceiling stated in section 12.4 was reached and the primary comparison does not discriminate; no trial needed more than 2 turns. No departure from the registered design.
+
+## 13. Plan v5 addendum: four additional intents (requested by the owner 2026-10-31, registered by this commit before any model has seen them)
+
+Sections 1 to 12 are unchanged; the four evaluated intents (INTENT-1 to 4) stay frozen. Section numbering assumes the results sections of the open pull requests for plan sections 11.6 and 12 are merged; renumber at merge if they are not.
+
+### 13.1 Why
+
+Under prompt v3 the three intents INTENT-1, 2 and 4 are at or near the ceiling: the control arm (C3) reached 47, 50 and 50 of 50 in Protocol A, and Protocol B reached 80 of 80 within 5 turns for both arms (results of sections 11 and 12). A benchmark that all arms pass cannot tell them apart. The additional intents add interacting constraints, so that a result on them can differ between arms.
+
+### 13.2 The intents, chosen by structure
+
+They are defined in `src/sdn/intents-hard.ts` with hand-written reference policies in `src/sdn/intent-references-hard.ts`. **They were chosen for their structure before any model saw them, none is dropped whatever a model scores, and an intent on which every arm scores 47 or more of 50 is reported as saturated, not removed.** Every description is built from the same parameters as its clauses, and a test requires it to name every address its clauses use (the contradiction amendment 1 fixed). All addresses lie in 10.0.2.0/24, the held-out benchmark subnet, so no training scenario can contain them.
+
+| Id | What it adds | Clauses | Reference rules | Priority tiers | Named addresses |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| quarantine-set/v1 (INTENT-5) | INTENT-3 with three quarantined hosts, both directions: six DROPs that must outrank every forwarding rule | 13 | 13 | 4 | 3 |
+| dns-quarantine/v1 (INTENT-6) | DNS confinement with one host quarantined, so the resolver exception and the quarantine overlap | 9 | 8 | 4 | 2 |
+| uplink-arp-confinement/v1 (INTENT-7) | isolation with ARP from the uplink allowed only for two named peers (A10's second direction) | 9 | 8 | 3 | 2 |
+| per-host-allowlist/v1 (INTENT-8) | two workload hosts with different destination allowlists and a return path that is asymmetric per source | 11 | 10 | 3 | 2 |
+
+For comparison the same measures for the evaluated four (pinned by `test/invariants/hard-intents.test.ts`): INTENT-1 7, 7, 3, 0; INTENT-2 7, 6, 3, 1; INTENT-3 9, 9, 4, 1; INTENT-4 7, 7, 3, 0. INTENT-5 and 8 are larger than every evaluated intent on clauses and reference rules; INTENT-6 and 7 are larger than INTENT-1, 2 and 4 and comparable to INTENT-3. These measures are crude proxies: structural size is not a claim about difficulty for a model, which is what the evaluation measures.
+
+### 13.3 What a verdict proves
+
+The same as for the evaluated intents (section 7 and `src/sdn/proposal-triage.ts`): over every packet class the rules and the intent can distinguish, the rule set has no hairpin, no equal-priority conflict, no shadowed rule and no leak or omission. Each reference policy is accepted by the verifier, a set of targeted breakages per intent is rejected, and between 73% and 82% of the mutants of each reference are rejected (the survivors are mostly neutral: a priority raised on a rule that is already on top, a tap copy removed where the intent only says a rule may make it).
+
+### 13.4 Evaluation proposed (not yet run: launching needs the owner's approval of the cost)
+
+Protocol A, prompt v3, N = 50 per intent (seeds 1 to 50), temperature 0.2, top-p 0.95, `think: true`, `num_predict` 32768, on the arms B3, C3 and L3 of section 11.2, one run per cell: 200 trials per arm, 600 in all. One Runpod pod per arm with the four intents running concurrently (four streams per server), the same scheduling for every arm. Cost estimated from the section 11 and 12 runs at about 4.6 USD per pod for a 200-minute limit (the per-run cap is 5 USD), about 14 USD in all; this is an estimate, not a measurement for this workload.
+
+### 13.5 Analysis, fixed in advance
+
+The metrics of section 6 (admissible counts with 95% Wilson intervals, the category of every failure, distinct outputs, transport failures), reported per intent and per arm; L3 against C3 is the adapter effect and B3 against C3 the quantization route, as in section 11.2. No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed. Results are never merged with the earlier sections' data. Run-to-run variation measured in section 12 (same-seed runs differ by a few trials per cell at N = 20) is a stated limit on any per-intent difference of a few trials.
+
+### 13.6 What this will not show
+
+That structural size means difficulty for a model; anything about intents outside this one switch topology and these ten addresses; whether verifier-accepted rule sets behave correctly on the wire (RQ4); one run per cell; the reference policies are the author's, and the verifier is the only judge.
+
+## 14. Plan v6 addendum: a frontier baseline, a properly trained adapter, and a conditional Protocol B (requested by the owner 2026-10-31, registered by this commit before any of these runs)
+
+Sections 1 to 13 are unchanged. The owner left the sequencing of these runs to the operator (a Claude Code session) within the limits in section 14.6.
+
+### 14.1 Why
+
+- **The adapter evaluated so far is a smoke-test adapter.** It was trained with `--max-steps 15 --grad-accum 4` at batch size 1: about 60 of its 1,466 SFT examples and 60 of its 1,434 DPO pairs (about 4%). Sections 11 and 12 therefore say what a 4% adapter does, not what the adapter idea does.
+- **There is no frontier arm under prompt v3.** The registered Haiku runs of section 10 used prompt v2 on four intents.
+
+### 14.2 Runs
+
+1. **Haiku 5.5 under prompt v3 (arm H3).** Claude Haiku 5.5 through the Message Batches API, Protocol A, prompt v3, N = 50 per intent on all eight intents (INTENT-1 to 8), effort `low`, `num_predict` 16384, no seed (the Claude arm accepts none), one run per cell, a spend cap of 100 cents per run (priced at the non-batch rates of section 10.2, so the cap is conservative). Compared with the other arms only descriptively: its sampling differs (section 9, D4).
+2. **A trained adapter (arm L4).** The same dataset, builder, base model and hyperparameters as the section 11 adapter (`Qwen/Qwen3.8-27B`, LoRA r = 16, alpha = 32, batch size 1, gradient accumulation 8, seed 42), but trained for up to one epoch of SFT (183 steps) and one of DPO (179 steps) instead of 15 steps, under a wall-clock budget so a pod time limit cannot destroy the result: training stops gracefully when the budget is reached, the adapter is saved, and the steps actually completed are recorded and reported. The training data stays disjoint from every benchmark intent (hash and subnet checks, `assertDisjointFromBenchmark`). L4 is built for evaluation exactly as L3 is (section 13 pipeline: GGUF-space merge from the original checkpoint, Q4_K_M).
+3. **L4 evaluation.** Protocol A, prompt v3, N = 50 per intent, on INTENT-1, INTENT-3, INTENT-5, INTENT-6, INTENT-7 and INTENT-8 (the two intents where L3 differed most from the control, and the four new ones): 300 trials, one run per cell, two pods of three intents each. The comparisons are L4 against C3 (the adapter effect) and L4 against L3 (the effect of training length), using the C3 and L3 cells already recorded in sections 11 and 13.
+4. **Conditional Protocol B on the new intents (section 12 design).** Run only if, for at least one of INTENT-5 to 8, the C3 cell of section 13 is below 47 of 50 (the saturation threshold of section 13.2), and only for the intents that meet that condition: arms L3 and C3, N = 20 per intent, prompt v3. If no new intent meets it, it is not run and the saturation is reported.
+
+### 14.3 Analysis, fixed in advance
+
+The metrics of section 6 per cell (admissible counts with 95% Wilson intervals, failure categories, distinct outputs, transport failures); for Protocol B the metrics of section 12.3. No prediction is made about direction or size. A cell is relaunched only for an infrastructure failure, with both attempts kept and listed. Results are never merged with those of other sections. Run-to-run variation (section 12: same-seed runs differ by a few trials per cell) is a stated limit on any difference of a few trials. If L4 is trained for fewer steps than planned because of the wall-clock budget, it is still evaluated and labelled with the steps done.
+
+### 14.4 What this will not show
+
+One adapter, one training run, one seed set; Haiku's sampling differs from the local arms; the adapter served at run time (`llama-server --lora`) is not tested; on-wire behaviour (RQ4); whether any intent is hard for a model for reasons other than the structure measured in section 13.2.
+
+### 14.5 Cost and time (estimates, not measurements for these workloads)
+
+Haiku: well under 2 USD of API credit (the eight valid section 10 Haiku runs cost about 0.27 USD). L4 training: a Secure Cloud pod at 1.79 USD per hour for up to 165 minutes, about 4.9 USD at most. L4 evaluation: two Community pods of about 4.1 USD each. Conditional Protocol B: about 4 USD per arm.
+
+### 14.6 Limits
+
+Runpod spend stays within the owner's total of 50 USD and the 5 USD per-run cap; Claude API spend stays within the per-run caps above. If a step would exceed the 50 USD total, it is not started and the situation is reported instead (in particular the conditional Protocol B, which needs about 8 USD beyond the rest).

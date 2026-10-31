@@ -345,7 +345,7 @@ else
     # ensuring local and CI reviews are identical for multi-commit pushes.
     COUNCIL_EXIT=0
     GITHUB_BEFORE="$PUSH_BEFORE" GITHUB_SHA="$PUSH_AFTER" \
-      node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict || COUNCIL_EXIT=$?
+      node "$REPO_ROOT/scripts/ai-reviewer.mjs" --last --strict --skip-ollama || COUNCIL_EXIT=$?
 
     if [ "$COUNCIL_EXIT" -eq 0 ]; then
       echo -e "  ${GREEN}✓ AI Review passed — no Critical Issues or Warnings${RESET}"

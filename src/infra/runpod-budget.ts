@@ -108,9 +108,11 @@ export function isExpired(deadlineEpochSeconds: bigint, nowEpochSeconds: bigint)
 }
 
 /**
- * Placement policy (owner, 2026-10-30): Community Cloud spot for quick scoring and sweeps, Secure Cloud
- * on-demand reserved for longer multi-epoch fine-tuning. A preempted spot pod loses its container disk, so
- * spot runs are bounded (Invariant 5) and must be restartable; training is never placed on spot.
+ * Placement policy (owner, 2026-10-30): Community Cloud for quick scoring and sweeps, Secure Cloud on-demand
+ * reserved for longer multi-epoch fine-tuning. Runpod stopped offering spot pods (pod creation fails with
+ * "Spot pods are no longer offered", seen 2026-10-30), so Community ON-DEMAND is the default for scoring and
+ * sweeps and spot is an explicit opt-in (`spot: true`, CLI `--spot`). A preempted spot pod loses its container
+ * disk, so spot runs are bounded (Invariant 5) and must be restartable; training is never placed on spot.
  */
 export type JobKind = 'score' | 'sweep' | 'train';
 export type Cloud = 'secure' | 'community';
@@ -122,17 +124,20 @@ export interface Placement {
 /** Longest run allowed on an interruptible pod. */
 export const MAX_SPOT_SECONDS = 3n * 3600n;
 
-export function placementFor(kind: JobKind, opts: { readonly onDemand?: boolean } = {}): Placement {
+export function placementFor(kind: JobKind, opts: { readonly onDemand?: boolean; readonly spot?: boolean } = {}): Placement {
   switch (kind) {
     case 'train':
-      if (opts.onDemand === true) {
-        throw new Error('ERR_PLACEMENT: training is already Secure on-demand; --on-demand only applies to score and sweep');
+      if (opts.onDemand === true || opts.spot === true) {
+        throw new Error('ERR_PLACEMENT: training is already Secure on-demand; --on-demand and --spot only apply to score and sweep');
       }
       return { cloud: 'secure', interruptible: false };
     case 'score':
     case 'sweep':
-      // Never Secure: the override moves the pod off spot, not onto the reserved tier.
-      return { cloud: 'community', interruptible: opts.onDemand !== true };
+      if (opts.onDemand === true && opts.spot === true) {
+        throw new Error('ERR_PLACEMENT: --on-demand and --spot contradict each other');
+      }
+      // Never Secure: scoring and sweeps stay on Community Cloud. On-demand is the default; spot only on request.
+      return { cloud: 'community', interruptible: opts.spot === true };
     default:
       throw new Error(`ERR_PLACEMENT: unknown job kind ${JSON.stringify(kind)}`);
   }
@@ -147,7 +152,7 @@ export function checkPlacementDuration(placement: Placement, seconds: bigint): P
     return {
       ok: false,
       code: 'ERR_SPOT_TOO_LONG',
-      detail: `${seconds.toString()} s exceeds the ${MAX_SPOT_SECONDS.toString()} s spot ceiling; use --on-demand or split the job`,
+      detail: `${seconds.toString()} s exceeds the ${MAX_SPOT_SECONDS.toString()} s spot ceiling; drop --spot or split the job`,
     };
   }
   return { ok: true };

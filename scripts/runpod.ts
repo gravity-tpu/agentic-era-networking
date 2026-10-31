@@ -6,7 +6,7 @@
  * Invariant 4: `create` is a dry run unless `--yes` is passed; a person approves each launch.
  * Invariant 3: refuses when the price is unknown, the estimate exceeds the cap or the balance, or the
  *   pod reports a higher hourly price than was planned (it is terminated immediately).
- * Placement (owner policy 2026-10-30): score and sweep run on Community Cloud spot, train on Secure Cloud
+ * Placement (owner policy 2026-10-30): score and sweep run on Community Cloud (on-demand by default: Runpod no longer offers spot; --spot opts in), train on Secure Cloud
  *   on-demand only (src/infra/runpod-budget.ts placementFor); spot runs are capped in length.
  * Invariant 5: per-run cap defaults to $5 (RUNPOD_RUN_CAP_USD may lower it; the code ceiling bounds it).
  *
@@ -17,7 +17,7 @@
  * Usage:
  *   node --env-file=.env.local --experimental-strip-types scripts/runpod.ts <command> [flags]
  *   balance | gpus | plan | create | status | terminate <podId> | sweep [--dry-run]
- *   plan|create flags: --gpu <id> --kind score|sweep|train --minutes <n> --label <s> [--on-demand]
+ *   plan|create flags: --gpu <id> --kind score|sweep|train --minutes <n> --label <s> [--spot] (on-demand is the default; --on-demand is accepted)
  *                      [--image <ref>] [--cmd <shell>] [--disk-gb <n>] [--cap-usd <n>] [--ssh-pubkey <file>] [--yes]
  */
 
@@ -61,7 +61,7 @@ function parseFlags(argv: readonly string[]): Flags {
     }
     const name = arg.slice(2);
     const next = argv[i + 1];
-    if (name === 'yes' || name === 'dry-run' || name === 'on-demand') {
+    if (name === 'yes' || name === 'dry-run' || name === 'on-demand' || name === 'spot') {
       switches.add(name);
     } else if (next === undefined || next.startsWith('--')) {
       throw new Error(`ERR_USAGE: --${name} needs a value`);
@@ -150,7 +150,7 @@ function parsePlacement(flags: Flags): { kind: JobKind; placement: Placement } {
   if (kind !== 'score' && kind !== 'sweep' && kind !== 'train') {
     throw new Error('ERR_USAGE: --kind must be score|sweep|train');
   }
-  return { kind, placement: placementFor(kind, { onDemand: flags.switches.has('on-demand') }) };
+  return { kind, placement: placementFor(kind, { onDemand: flags.switches.has('on-demand'), spot: flags.switches.has('spot') }) };
 }
 
 function parsePositiveInt(raw: string, name: string, max: bigint): bigint {

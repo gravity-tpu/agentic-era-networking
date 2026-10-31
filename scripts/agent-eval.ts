@@ -36,16 +36,20 @@
  * them and refuses unless the shards agree on provenance and cover seeds 1..N exactly once. Every finished trial is also appended to
  * trials.partial.jsonl so a killed run keeps what it finished.
  *
- * Batch mode (--batch, --provider anthropic --protocol A only): this run is offline/non-interactive by construction (no
+ * Llama-server arm (--provider llama, default host http://127.0.0.1:11436): for local Metal/CUDA inference
+ * with llama-server / llama.cpp or any OpenAI-compatible /v1/chat/completions endpoint (e.g. evaluating LoRA
+ * adapters directly). Runs Protocol A (zero-shot) or Protocol B (multi-turn verifier feedback loop).
+ *   node --experimental-strip-types scripts/agent-eval.ts --provider llama --model qwen3.8-27b-proposer-lora \
+ *     --intent quarantine-precedence/v1 --n 10 --protocol B --out <dir>
+ *
+ * Batch mode (--batch, --provider anthropic): this run is offline/non-interactive by construction (no
  * one is waiting on a per-trial answer), so it is submitted as a single Anthropic Message Batch instead of N sequential
  * requests -- same model, same prompt, same sampling; only the transport changes -- at the Message Batches API's lower
  * per-token price (see https://platform.claude.com/docs/en/build-with-claude/batch-processing; pass the batch-rate prices
- * via --price-in-cents/--price-out-cents, this script does not discount them for you). Scoped to protocol A because every
- * trial's request is then independent (no turn depends on a prior turn's reply, and Claude does not accept a seed so
- * every trial's request body is already byte-identical); protocol B's verifier-feedback loop makes a trial's turn 2
- * depend on turn 1's actual output, which the current implementation does not attempt to batch round-by-round. --batch is
- * rejected for --provider gemini or ollama: Gemini has its own batch mode but this script does not implement it yet
- * (undocumented here rather than guessed at), and local Ollama inference has no per-token $ cost to batch against.
+ * via --price-in-cents/--price-out-cents, this script does not discount them for you). Defaults to Protocol A (single batch);
+ * Protocol B performs round-by-round batching with verifier feedback when --allow-multi-round is specified (fail closed by default).
+ * --batch is rejected for --provider gemini, ollama, or llama: Gemini has its own batch mode not yet wired here, and local
+ * Ollama/Llama inference has no per-token $ cost to batch against.
  * The spend cap is checked before submission (a conservative upper-bound estimate: N x max_tokens x price-out, plus a
  * character-based estimate of prompt tokens x price-in), not reactively mid-run, because a batch is paid for as a whole
  * once submitted and cannot be stopped partway through the way the sequential loop can.
@@ -65,13 +69,16 @@ import { proposerPrompts, type PromptVersion } from '../dist/sdn/proposer-prompt
 import { intentSha256 } from '../dist/sdn/intent-hash.js';
 import { parseShardSpec, shardSeeds, type ShardSpec } from '../dist/sdn/eval-shards.js';
 import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
+import { HARD_INTENTS } from '../dist/sdn/intents-hard.js';
 
-const INTENTS = {
+// The four evaluated intents (plan sections 3 and 10) and the four additional ones (plan section 13, src/sdn/intents-hard.ts).
+const INTENTS: Record<string, typeof PORT1_ISOLATION_INTENT> = {
   [PORT1_ISOLATION_INTENT.id]: PORT1_ISOLATION_INTENT,
   [DNS_CONFINEMENT_INTENT.id]: DNS_CONFINEMENT_INTENT,
   [QUARANTINE_PRECEDENCE_INTENT.id]: QUARANTINE_PRECEDENCE_INTENT,
   [TAP_RETURN_ISOLATION_INTENT.id]: TAP_RETURN_ISOLATION_INTENT,
-} as const;
+  ...Object.fromEntries(HARD_INTENTS.map((spec) => [spec.id, spec])),
+};
 const MAX_N = 200;
 const MAX_TURNS = 5; // Protocol B: the plan's iteration cap
 const MAX_FEEDBACK_LINES = 12; // verifier detail lines returned to the model per turn
@@ -97,7 +104,8 @@ const ANTHROPIC_EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 
 interface Spend { priceInCents: number; priceOutCents: number; maxCents: number; note: string }
 interface Args {
   intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number; protocol: 'A' | 'B';
-  provider: 'ollama' | 'gemini' | 'anthropic'; thinking: string; spend: Spend | null; promptVersion: PromptVersion; batch: boolean; shard: ShardSpec | null;
+  provider: 'ollama' | 'gemini' | 'anthropic' | 'llama'; thinking: string; spend: Spend | null; promptVersion: PromptVersion; batch: boolean; shard: ShardSpec | null;
+  allowMultiRound: boolean;
 }
 
 function parseArgs(argv: readonly string[]): Args {
@@ -116,7 +124,7 @@ function parseArgs(argv: readonly string[]): Args {
   const protocol = get('--protocol') ?? 'A';
   if (protocol !== 'A' && protocol !== 'B') throw new Error('--protocol must be A or B');
   const provider = get('--provider') ?? 'ollama';
-  if (provider !== 'ollama' && provider !== 'gemini' && provider !== 'anthropic') throw new Error('--provider must be ollama, gemini or anthropic');
+  if (provider !== 'ollama' && provider !== 'gemini' && provider !== 'anthropic' && provider !== 'llama') throw new Error('--provider must be ollama, gemini, anthropic or llama');
   const thinking = get('--thinking') ?? 'default';
   if (thinking !== 'default' && !/^\d+$/.test(thinking) && !(THINKING_LEVELS as readonly string[]).includes(thinking)) {
     throw new Error(`--thinking must be default, an integer budget, or one of ${THINKING_LEVELS.join('|')}`);
@@ -136,12 +144,14 @@ function parseArgs(argv: readonly string[]): Args {
     spend = { priceInCents: cents('--price-in-cents'), priceOutCents: cents('--price-out-cents'), maxCents, note: need('--price-note') };
   }
   const batch = argv.includes('--batch');
-  if (batch && provider !== 'anthropic') throw new Error('--batch is only implemented for --provider anthropic (Gemini has its own batch mode, not yet wired here; Ollama has no per-token $ cost to batch against)');
-  if (batch && protocol !== 'A') throw new Error('--batch requires --protocol A: protocol B\'s verifier-feedback turns depend on the prior turn\'s actual reply, which this implementation does not batch round-by-round');
+  const allowMultiRound = argv.includes('--allow-multi-round');
+  if (batch && provider !== 'anthropic') throw new Error('--batch is only implemented for --provider anthropic (Gemini has its own batch mode, not yet wired here; Ollama and Llama have no per-token $ cost to batch against)');
+  if (batch && protocol !== 'A' && !allowMultiRound) throw new Error('--batch requires --protocol A: protocol B\'s verifier-feedback turns depend on the prior turn\'s actual reply, which this implementation does not batch round-by-round (pass --allow-multi-round to opt in to multi-round batching)');
+  const host = provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : (get('--host') ?? (provider === 'llama' ? 'http://127.0.0.1:11436' : need('--host')));
   const shardArg = get('--shard');
   if (shardArg !== undefined && batch) throw new Error('--shard cannot be combined with --batch (a batch is one submission)');
   const shard = shardArg === undefined ? null : parseShardSpec(shardArg, n);
-  return { promptVersion, protocol, intent, model: need('--model'), host: provider === 'gemini' ? GEMINI_BASE : provider === 'anthropic' ? ANTHROPIC_BASE : need('--host'), n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend, batch, shard };
+  return { promptVersion, protocol, intent, model: need('--model'), host, n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend, batch, shard, allowMultiRound };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -191,6 +201,39 @@ async function ollamaChat(host: string, body: Record<string, unknown>): Promise<
   take(pending);
   if (!finished) throw new Error('stream ended before the final chunk');
   return { message: { content }, eval_count: last['eval_count'], done_reason: last['done_reason'] };
+}
+
+async function llamaChat(
+  host: string,
+  messages: Array<{ role: string; content: string }>,
+  options: { model: string; temperature: number; top_p: number; seed: number; num_predict: number },
+): Promise<{ content: string; evalCount: number; promptTokens: number; completionTokens: number }> {
+  const url = `${host.replace(/\/+$/, '')}/v1/chat/completions`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: options.model,
+      messages,
+      temperature: options.temperature,
+      top_p: options.top_p,
+      seed: options.seed,
+      max_tokens: options.num_predict,
+    }),
+    signal: AbortSignal.timeout(TURN_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`/v1/chat/completions answered ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+  };
+  const content = data.choices?.[0]?.message?.content ?? '';
+  const promptTokens = data.usage?.prompt_tokens ?? 0;
+  const completionTokens = data.usage?.completion_tokens ?? 0;
+  return { content, evalCount: completionTokens, promptTokens, completionTokens };
 }
 
 interface GeminiTurn { content: string; promptTokens: number; outputTokens: number; thoughtTokens: number; finishReason: string | null }
@@ -331,21 +374,20 @@ const BATCH_MAX_POLL_ATTEMPTS = Math.ceil(BATCH_MAX_WAIT_MS / BATCH_POLL_INTERVA
 function roughTokenEstimate(text: string): number { return (text.length + 3) >> 2; }
 
 interface BatchTrialResult { seed: number; turn: GeminiTurn | null; error: string | null }
+interface BatchRequestItem { seed: number; messages: ReadonlyArray<{ role: string; content: string }> }
 
-/**
- * Submits N identical requests (one per seed) as a single Anthropic Message Batch, polls for completion, and
- * returns each seed's result. Valid only for protocol A (parseArgs enforces this): every request is independent
- * (no turn depends on a prior turn's reply) and Claude accepts no seed parameter, so the N requests are already
- * byte-identical except for the custom_id used to match results back to seeds -- this is exactly what batching
- * is for. The spend cap must be checked by the caller BEFORE calling this: once submitted, a batch is billed for
- * whatever it processes and cannot be partially stopped the way the sequential loop's reactive check can.
- */
-async function anthropicBatchAll(model: string, messages: ReadonlyArray<{ role: string; content: string }>, opts: { numPredict: number; thinking: string }, n: number): Promise<BatchTrialResult[]> {
+async function anthropicBatchRequests(
+  model: string,
+  items: readonly BatchRequestItem[],
+  opts: { numPredict: number; thinking: string },
+): Promise<BatchTrialResult[]> {
   const client = await anthropicClient();
-  const params = anthropicMessageParams(model, messages, opts);
-  const requests = Array.from({ length: n }, (_, i) => ({ custom_id: `seed-${i + 1}`, params }));
+  const requests = items.map((item) => ({
+    custom_id: `seed-${item.seed}`,
+    params: anthropicMessageParams(model, item.messages, opts),
+  }));
   const created = await client.messages.batches.create({ requests });
-  process.stderr.write(`[batch] submitted ${n} requests as batch ${created.id}; polling every ${BATCH_POLL_INTERVAL_MS / 1000}s (bound: ${BATCH_MAX_WAIT_MS / 3_600_000}h)...\n`);
+  process.stderr.write(`[batch] submitted ${items.length} requests as batch ${created.id}; polling every ${BATCH_POLL_INTERVAL_MS / 1000}s (bound: ${BATCH_MAX_WAIT_MS / 3_600_000}h)...\n`);
 
   let batch = created;
   for (let attempt = 1; attempt <= BATCH_MAX_POLL_ATTEMPTS && batch.processing_status !== 'ended'; attempt++) {
@@ -373,7 +415,16 @@ async function anthropicBatchAll(model: string, messages: ReadonlyArray<{ role: 
       bySeed.set(seed, { seed, turn: null, error: detail });
     }
   }
-  return Array.from({ length: n }, (_, i) => bySeed.get(i + 1) ?? { seed: i + 1, turn: null, error: 'missing from batch results (no line with this custom_id)' });
+  return items.map((item) => bySeed.get(item.seed) ?? { seed: item.seed, turn: null, error: 'missing from batch results (no line with this custom_id)' });
+}
+
+/**
+ * Submits N identical requests (one per seed) as a single Anthropic Message Batch, polls for completion, and
+ * returns each seed's result.
+ */
+async function anthropicBatchAll(model: string, messages: ReadonlyArray<{ role: string; content: string }>, opts: { numPredict: number; thinking: string }, n: number): Promise<BatchTrialResult[]> {
+  const items = Array.from({ length: n }, (_, i) => ({ seed: i + 1, messages }));
+  return anthropicBatchRequests(model, items, opts);
 }
 
 async function main(): Promise<void> {
@@ -386,6 +437,20 @@ async function main(): Promise<void> {
   if (args.provider === 'gemini' || args.provider === 'anthropic') {
     const info = args.provider === 'gemini' ? await geminiModelInfo(args.model) : await anthropicModelInfo(args.model);
     model = { digest: `${info.displayName} ${info.version}` };
+  } else if (args.provider === 'llama') {
+    const healthUrl = `${args.host.replace(/\/+$/, '')}/health`;
+    const healthRes = await fetch(healthUrl, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }).catch((err: unknown) => {
+      process.stderr.write(`[llama] /health check failed (${err instanceof Error ? err.message : String(err)}), falling back to /v1/models\n`);
+      return null;
+    });
+    if (healthRes === null || !healthRes.ok) {
+      const modelsUrl = `${args.host.replace(/\/+$/, '')}/v1/models`;
+      const modelsRes = await fetch(modelsUrl, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      if (!modelsRes.ok) {
+        throw new Error(`endpoint at ${args.host} not reachable or healthy (health: ${healthRes ? healthRes.status : 'unreachable'}, models: ${modelsRes.status})`);
+      }
+    }
+    model = { digest: args.model };
   } else {
     const tags = (await ollama(args.host, '/api/tags'))['models'] as Array<{ name: string; digest: string }>;
     const found = tags.find((m) => m.name === args.model);
@@ -405,44 +470,166 @@ async function main(): Promise<void> {
   const overCap = (): boolean => args.spend !== null && costUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT;
   let abandoned: { seed: number; turnsUsed: number } | null = null; // a trial stopped mid-way by the spend cap: not scored, its spend is counted
   if (args.batch) {
-    // Batch mode: protocol A + Anthropic only (parseArgs enforces this). See the module docstring's "Batch mode"
-    // section for why this is scoped the way it is.
     if (args.spend === null) throw new Error('spend limits missing for batch mode');
-    const messages: Array<{ role: string; content: string }> = [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }];
-    // Pre-flight, fail-closed spend check: a batch is billed for whatever it processes once submitted and cannot
-    // be partially stopped, so refuse BEFORE submitting rather than discover an overage after paying for it.
-    // Worst case: every one of the n trials uses the full --num-predict output budget, plus a conservative
-    // character-based estimate of the (fixed, identical-per-trial) prompt's token count.
-    const estimatedPromptTokens = roughTokenEstimate(SYSTEM_PROMPT + userPrompt);
-    const estimatedCostUnits = BigInt(args.n) * (BigInt(estimatedPromptTokens) * BigInt(args.spend.priceInCents) + BigInt(args.numPredict) * BigInt(args.spend.priceOutCents));
+    const initialPromptTokens = BigInt(roughTokenEstimate(SYSTEM_PROMPT + userPrompt));
+    let worstCaseTrialUnits: bigint;
+    if (args.protocol === 'B') {
+      // Estimate feedback token volume per rejection: MAX_FEEDBACK_LINES (5) * 30 tokens/line + wrapper text ~= 175 tokens
+      const feedbackEstimate = BigInt(MAX_FEEDBACK_LINES * 30 + 25);
+      const t = BigInt(MAX_TURNS);
+      // In multi-turn chat, turn k includes conversation history: initial prompt + (k-1) * (numPredict + feedback)
+      // Total input across T turns = T * P_0 + (T * (T - 1) / 2) * (numPredict + feedback)
+      const worstCasePromptTokens = t * initialPromptTokens + ((t * (t - 1n)) / 2n) * (BigInt(args.numPredict) + feedbackEstimate);
+      const worstCaseOutputTokens = t * BigInt(args.numPredict);
+      worstCaseTrialUnits = worstCasePromptTokens * BigInt(args.spend.priceInCents) + worstCaseOutputTokens * BigInt(args.spend.priceOutCents);
+    } else {
+      worstCaseTrialUnits = initialPromptTokens * BigInt(args.spend.priceInCents) + BigInt(args.numPredict) * BigInt(args.spend.priceOutCents);
+    }
+    const estimatedCostUnits = BigInt(args.n) * worstCaseTrialUnits;
     if (estimatedCostUnits >= BigInt(args.spend.maxCents) * COST_UNITS_PER_CENT) {
       throw new Error(`refusing to submit: worst-case estimated cost (${(estimatedCostUnits / COST_UNITS_PER_CENT).toString()} cents) would meet or exceed --max-cents (${args.spend.maxCents}); lower --n or --num-predict, or raise --max-cents`);
     }
-    const batchT0 = process.hrtime.bigint();
-    const results = await anthropicBatchAll(args.model, messages, { numPredict: args.numPredict, thinking: args.thinking }, args.n);
-    // All trials in a batch complete together: wallNs is the whole batch's wall time, not an independent
-    // per-trial measurement the way the sequential loop's is. batchJob: true discloses this on every record.
-    const batchWallNs = (process.hrtime.bigint() - batchT0).toString();
-    for (const r of results) {
-      let record: Record<string, unknown>;
-      if (r.turn !== null) {
-        const p = parseProposal(r.turn.content);
-        const verdict = p.ok ? triageProposal(p.rules, spec) : { category: p.category, categories: [p.category], details: [p.detail] };
-        const usageFields = { evalCount: r.turn.outputTokens + r.turn.thoughtTokens, doneReason: r.turn.finishReason, promptTokens: r.turn.promptTokens, outputTokens: r.turn.outputTokens, thoughtTokens: r.turn.thoughtTokens };
-        promptTotal += r.turn.promptTokens;
-        outputTotal += r.turn.outputTokens;
-        thoughtTotal += r.turn.thoughtTokens;
-        costUnits += BigInt(r.turn.promptTokens) * BigInt(args.spend.priceInCents) + BigInt(r.turn.outputTokens + r.turn.thoughtTokens) * BigInt(args.spend.priceOutCents);
-        const turnRecord = { turn: 1, category: verdict.category, categories: verdict.categories, details: verdict.details, ruleCount: p.ok ? p.rules.length : null, ...usageFields, response: r.turn.content };
-        record = { seed: r.seed, ok: true, category: verdict.category, firstCategory: verdict.category, turnsUsed: 1, admissibleAtTurn: verdict.category === 'ADMISSIBLE' ? 1 : null, turns: [turnRecord], batchJob: true };
-      } else {
-        record = { seed: r.seed, ok: false, category: 'TRANSPORT_FAILURE', turnsUsed: 0, turns: [], details: [r.error ?? 'unknown batch error'], batchJob: true };
+
+    if (args.protocol === 'B') {
+      const batchT0 = process.hrtime.bigint();
+      interface TrialState {
+        seed: number;
+        messages: Array<{ role: string; content: string }>;
+        turns: Array<Record<string, unknown>>;
+        done: boolean;
+        category: string;
+        firstCategory: string;
+        admissibleAtTurn: number | null;
+        error?: string;
       }
-      record['wallNs'] = batchWallNs;
-      counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
-      lines.push(JSON.stringify(record));
+
+      const trials: TrialState[] = Array.from({ length: args.n }, (_, i) => ({
+        seed: i + 1,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }],
+        turns: [],
+        done: false,
+        category: 'TRANSPORT_FAILURE',
+        firstCategory: 'TRANSPORT_FAILURE',
+        admissibleAtTurn: null,
+      }));
+
+      for (let round = 1; round <= MAX_TURNS; round++) {
+        const active = trials.filter((t) => !t.done);
+        if (active.length === 0) break;
+        if (overCap()) {
+          capHit = true;
+          process.stderr.write(`[batch] spend cap reached (${(costUnits / COST_UNITS_PER_CENT).toString()} >= ${args.spend.maxCents} cents); aborting remaining rounds fail-closed.\n`);
+          for (const t of active) {
+            t.done = true;
+            t.category = 'TRANSPORT_FAILURE';
+            t.error = `spend cap reached before round ${round}`;
+          }
+          break;
+        }
+        process.stderr.write(`[batch] round ${round}/${MAX_TURNS}: submitting ${active.length} active trials...\n`);
+        const reqs = active.map((t) => ({ seed: t.seed, messages: t.messages }));
+        const results = await anthropicBatchRequests(args.model, reqs, { numPredict: args.numPredict, thinking: args.thinking });
+
+        for (const r of results) {
+          const t = trials.find((trial) => trial.seed === r.seed);
+          if (!t) continue;
+          if (r.turn !== null) {
+            const p = parseProposal(r.turn.content);
+            const verdict = p.ok ? triageProposal(p.rules, spec) : { category: p.category, categories: [p.category], details: [p.detail] };
+            const usageFields = { evalCount: r.turn.outputTokens + r.turn.thoughtTokens, doneReason: r.turn.finishReason, promptTokens: r.turn.promptTokens, outputTokens: r.turn.outputTokens, thoughtTokens: r.turn.thoughtTokens };
+            promptTotal += r.turn.promptTokens;
+            outputTotal += r.turn.outputTokens;
+            thoughtTotal += r.turn.thoughtTokens;
+            costUnits += BigInt(r.turn.promptTokens) * BigInt(args.spend.priceInCents) + BigInt(r.turn.outputTokens + r.turn.thoughtTokens) * BigInt(args.spend.priceOutCents);
+
+            const turnRecord = { turn: round, category: verdict.category, categories: verdict.categories, details: verdict.details, ruleCount: p.ok ? p.rules.length : null, ...usageFields, response: r.turn.content };
+            t.turns.push(turnRecord);
+            if (round === 1) t.firstCategory = verdict.category;
+
+            if (verdict.category === 'ADMISSIBLE') {
+              t.done = true;
+              t.category = 'ADMISSIBLE';
+              t.admissibleAtTurn = round;
+            } else if (round < MAX_TURNS) {
+              if (overCap()) {
+                capHit = true;
+                t.done = true;
+                t.category = 'TRANSPORT_FAILURE';
+                t.error = `spend cap reached after round ${round}`;
+              } else {
+                t.messages.push({ role: 'assistant', content: r.turn.content });
+                t.messages.push({
+                  role: 'user',
+                  content: `The verifier rejected that rule set.\n${verdict.details.slice(0, MAX_FEEDBACK_LINES).join('\n')}\nFix every problem and reply with the complete corrected JSON array only.`,
+                });
+              }
+            } else {
+              t.done = true;
+              t.category = verdict.category;
+            }
+          } else {
+            t.done = true;
+            t.category = 'TRANSPORT_FAILURE';
+            t.error = r.error ?? 'unknown batch error';
+            if (round === 1) t.firstCategory = 'TRANSPORT_FAILURE';
+          }
+        }
+        if (overCap()) {
+          capHit = true;
+          process.stderr.write(`[batch] spend cap reached after round ${round}; terminating active trials fail-closed.\n`);
+          for (const t of trials.filter((tr) => !tr.done)) {
+            t.done = true;
+            t.category = 'TRANSPORT_FAILURE';
+            t.error = `spend cap reached after round ${round}`;
+          }
+          break;
+        }
+      }
+
+      const batchWallNs = (process.hrtime.bigint() - batchT0).toString();
+      for (const t of trials) {
+        const record: Record<string, unknown> = {
+          seed: t.seed,
+          ok: t.category === 'ADMISSIBLE',
+          category: t.category,
+          firstCategory: t.firstCategory,
+          turnsUsed: t.turns.length,
+          admissibleAtTurn: t.admissibleAtTurn,
+          turns: t.turns,
+          batchJob: true,
+          wallNs: batchWallNs,
+          ...(t.error ? { details: [t.error] } : {}),
+        };
+        counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
+        lines.push(JSON.stringify(record));
+      }
+      process.stderr.write(`[batch] multi-round protocol B completed: ${trials.length} results scored\n`);
+    } else {
+      const messages: Array<{ role: string; content: string }> = [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userPrompt }];
+      const batchT0 = process.hrtime.bigint();
+      const results = await anthropicBatchAll(args.model, messages, { numPredict: args.numPredict, thinking: args.thinking }, args.n);
+      const batchWallNs = (process.hrtime.bigint() - batchT0).toString();
+      for (const r of results) {
+        let record: Record<string, unknown>;
+        if (r.turn !== null) {
+          const p = parseProposal(r.turn.content);
+          const verdict = p.ok ? triageProposal(p.rules, spec) : { category: p.category, categories: [p.category], details: [p.detail] };
+          const usageFields = { evalCount: r.turn.outputTokens + r.turn.thoughtTokens, doneReason: r.turn.finishReason, promptTokens: r.turn.promptTokens, outputTokens: r.turn.outputTokens, thoughtTokens: r.turn.thoughtTokens };
+          promptTotal += r.turn.promptTokens;
+          outputTotal += r.turn.outputTokens;
+          thoughtTotal += r.turn.thoughtTokens;
+          costUnits += BigInt(r.turn.promptTokens) * BigInt(args.spend.priceInCents) + BigInt(r.turn.outputTokens + r.turn.thoughtTokens) * BigInt(args.spend.priceOutCents);
+          const turnRecord = { turn: 1, category: verdict.category, categories: verdict.categories, details: verdict.details, ruleCount: p.ok ? p.rules.length : null, ...usageFields, response: r.turn.content };
+          record = { seed: r.seed, ok: verdict.category === 'ADMISSIBLE', category: verdict.category, firstCategory: verdict.category, turnsUsed: 1, admissibleAtTurn: verdict.category === 'ADMISSIBLE' ? 1 : null, turns: [turnRecord], batchJob: true };
+        } else {
+          record = { seed: r.seed, ok: false, category: 'TRANSPORT_FAILURE', turnsUsed: 0, turns: [], details: [r.error ?? 'unknown batch error'], batchJob: true };
+        }
+        record['wallNs'] = batchWallNs;
+        counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
+        lines.push(JSON.stringify(record));
+      }
+      process.stderr.write(`[batch] completed: ${results.length} results scored\n`);
     }
-    process.stderr.write(`[batch] completed: ${results.length} results scored\n`);
   } else {
     const seedsToRun = args.shard === null ? Array.from({ length: args.n }, (_, i) => i + 1) : shardSeeds(args.n, args.shard);
     for (const seed of seedsToRun) {
@@ -470,6 +657,21 @@ async function main(): Promise<void> {
             // the output price includes thinking tokens (ai.google.dev pricing page, recorded in the summary note)
             costUnits += BigInt(g.promptTokens) * BigInt(args.spend.priceInCents) + BigInt(g.outputTokens + g.thoughtTokens) * BigInt(args.spend.priceOutCents);
             usageFields = { evalCount: g.outputTokens + g.thoughtTokens, doneReason: g.finishReason, promptTokens: g.promptTokens, outputTokens: g.outputTokens, thoughtTokens: g.thoughtTokens };
+          } else if (args.provider === 'llama') {
+            const r = await llamaChat(args.host, messages, {
+              model: args.model,
+              temperature: TEMPERATURE,
+              top_p: TOP_P,
+              seed,
+              num_predict: args.numPredict,
+            });
+            content = r.content;
+            promptTotal += r.promptTokens;
+            outputTotal += r.completionTokens;
+            if (args.spend !== null) {
+              costUnits += BigInt(r.promptTokens) * BigInt(args.spend.priceInCents) + BigInt(r.completionTokens) * BigInt(args.spend.priceOutCents);
+            }
+            usageFields = { evalCount: r.evalCount, promptTokens: r.promptTokens, outputTokens: r.completionTokens };
           } else {
             const r = await ollamaChat(args.host, {
               model: args.model, think: args.think, messages,
@@ -496,7 +698,7 @@ async function main(): Promise<void> {
       record['wallNs'] = (process.hrtime.bigint() - t0).toString();
       counts.set(String(record['category']), (counts.get(String(record['category'])) ?? 0) + 1);
       lines.push(JSON.stringify(record));
-      // Salvage log: trials.jsonl is written once at the end, so a run killed by a time limit would otherwise lose every trial.
+      // Salvage log: trials.jsonl is written once at the end, so a run killed by a time limit would otherwise lose every finished trial.
       await fs.appendFile(path.join(args.out, 'trials.partial.jsonl'), JSON.stringify(record) + '\n');
       process.stderr.write(`seed ${seed}/${args.n}: ${String(record['category'])}\n`);
     }
@@ -506,12 +708,14 @@ async function main(): Promise<void> {
     trials: args.n, trialsRun: lines.length, ...(({ temperature, topP, seeds }) => ({ temperature, topP, seeds }))(samplingRecord(args.provider, TEMPERATURE, TOP_P, args.n)), numPredict: args.numPredict, think: args.think,
     promptSha256: promptHash, promptVersion: args.promptVersion, intentSha256: intentSha256(spec), gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
-    ...((args.provider === 'gemini' || args.provider === 'anthropic') && args.spend !== null ? {
+    ...((args.provider === 'gemini' || args.provider === 'anthropic' || args.provider === 'llama') ? {
       provider: args.provider, thinking: args.thinking, stoppedBySpendCap: capHit, abandonedTrial: abandoned,
       usage: { promptTokens: promptTotal, outputTokens: outputTotal, thoughtTokens: thoughtTotal },
-      pricing: { inCentsPer1M: args.spend.priceInCents, outCentsPer1M: args.spend.priceOutCents, note: args.spend.note },
-      costMicroUsd: (costUnits / 100n).toString(), // 1e6 cost units = 1 cent = 10,000 micro-USD, so micro-USD = units / 100
-      maxCents: args.spend.maxCents,
+      ...(args.spend !== null ? {
+        pricing: { inCentsPer1M: args.spend.priceInCents, outCentsPer1M: args.spend.priceOutCents, note: args.spend.note },
+        costMicroUsd: (costUnits / 100n).toString(), // 1e6 cost units = 1 cent = 10,000 micro-USD, so micro-USD = units / 100
+        maxCents: args.spend.maxCents,
+      } : {}),
     } : {}),
     ...(args.shard === null ? {} : { shard: { index: args.shard.index, count: args.shard.count, seedsRun: shardSeeds(args.n, args.shard) } }),
     note: 'abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour',

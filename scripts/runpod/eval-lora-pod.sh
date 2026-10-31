@@ -5,10 +5,17 @@
 # Inputs (uploaded by scripts/runpod/launch-eval-lora.sh into /workspace/in): repo.bundle, proposer-adapter/.
 # Output: /workspace/out (agent-eval result dirs, pod.log, versions.txt) and the marker /workspace/out/DONE.
 # Fails closed: any step failing stops the script (set -e) and leaves /workspace/out/FAILED.
-set -euo pipefail
+set -Eeuo pipefail   # -E: the ERR trap also fires inside functions (it did not on the 2026-10-30 run 3: the pod died silently)
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
+# Backstop: any non-zero exit that left neither marker (signal, set -e in a context ERR misses) still reports FAILED.
+trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
+PROTOCOL="${PROTOCOL:-A}"   # agent-eval protocol: A (zero-shot) or B (verifier feedback, up to 5 turns)
+WAIT_FOR_GO_MAX_SECONDS="${WAIT_FOR_GO_MAX_SECONDS:-5400}"   # bound on the gate wait (named, configurable); the pod limit is only the outer backstop
+WAIT_FOR_GO="${WAIT_FOR_GO:-}"   # non-empty: finish setup, then hold before any trial until /workspace/in/GO exists (plan section 11.3 stage gate)
 STOP_AFTER="${STOP_AFTER:-}"   # "toolchain": exit 0 after steps 0-2 (cheap-GPU shakedown, no model download)
+case "$PROTOCOL" in A|B) ;; *) echo "PROTOCOL must be A or B" >&2; exit 2;; esac
+PROTOCOL_LC=$(tr "AB" "ab" <<<"$PROTOCOL")
 INTENTS="${INTENTS:-quarantine-precedence/v1}"
 N="${N:-50}"
 ARMS="${ARMS:-B3 L3 C3}"
@@ -20,10 +27,11 @@ IN=/workspace/in; OUT=/workspace/out; W=/workspace/work
 mkdir -p "$OUT" "$W"
 exec > >(tee -a "$OUT/pod.log") 2>&1
 echo "start $(date -u +%FT%TZ) intents=$INTENTS n=$N arms=$ARMS"
+nvidia-smi -L > "$OUT/gpu.txt" 2>&1 || true
 
 # 0. OS packages the installers and the llama.cpp build need (the pod image lacks zstd, found on the first launch).
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils
+apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils python3-venv
 
 # 1. Toolchain (Node 22, Ollama pinned to the version of the registered runs, llama.cpp CPU build for convert/quantize).
 if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
@@ -32,10 +40,25 @@ fi
 curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="$OLLAMA_VERSION" sh
 OLLAMA_NUM_PARALLEL="$PARALLEL" OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=24h nohup ollama serve > "$W/ollama.log" 2>&1 &
 for _ in $(seq 1 60); do curl -sf http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 2; done
-pip install -q "transformers" peft accelerate huggingface_hub sentencepiece
+# Merge environment: the image's CUDA torch plus a transformers new enough to know qwen3_5. -U matters: pip leaves an
+# already-installed (older) transformers alone otherwise.
+pip install -q -U transformers peft accelerate huggingface_hub sentencepiece
 git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
-(cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize -j"$(nproc)")
-pip install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt"
+(cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize llama-export-lora -j"$(nproc)")
+# Converter environment, isolated: llama.cpp's requirements pin transformers<5 and replace torch with a CPU build, which
+# broke the merge environment on the first full launch.
+python3 -m venv "$W/convenv"
+"$W/convenv/bin/pip" install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt"
+# Fail fast, before any 55 GB download: both environments must be able to do their job.
+python3 - <<'PY'
+import torch, transformers
+from transformers import AutoConfig
+assert torch.cuda.is_available(), "torch in the merge environment has no CUDA"
+c = AutoConfig.from_pretrained("Qwen/Qwen3.8-27B", trust_remote_code=True)
+print("merge env ok: transformers", transformers.__version__, "torch", torch.__version__, "model_type", c.model_type)
+PY
+"$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" --help > /dev/null
+{ python3 -m pip list 2>/dev/null | grep -iE '^(transformers|peft|torch|accelerate) '; echo --- convenv; "$W/convenv/bin/pip" list 2>/dev/null | grep -iE '^(transformers|torch|gguf) '; } > "$OUT/pip-versions.txt"
 
 # 2. Repo at the pinned commit (bundle keeps the commit hash; agent-eval refuses a dirty tree).
 git clone -q "$IN/repo.bundle" "$W/repo"
@@ -47,17 +70,45 @@ if [ "$STOP_AFTER" = toolchain ]; then echo "toolchain ok $(date -u +%FT%TZ)"; t
 #    library Modelfile's TEMPLATE/RENDERER/PARSER/PARAMETER lines and only FROM replaced.
 ollama pull "$BASE_OLLAMA"
 ollama show "$BASE_OLLAMA" --modelfile > "$W/library.Modelfile"
-build_arm() { # name adapter
-  local name="$1" adapter="$2" dir="$W/$1-merged"
-  python3 "$W/repo/scripts/runpod/merge-lora.py" --base "$BASE_HF" --adapter "$adapter" --out "$dir"
-  python3 "$W/llama.cpp/convert_hf_to_gguf.py" "$dir" --outtype f16 --outfile "$W/$name-f16.gguf"
-  "$W/llama.cpp/build/bin/llama-quantize" "$W/$name-f16.gguf" "$W/$name-q4_k_m.gguf" Q4_K_M
-  sed "s|^FROM .*|FROM $W/$name-q4_k_m.gguf|" "$W/library.Modelfile" > "$W/$name.Modelfile"
-  ollama create "zodiac-$name" -f "$W/$name.Modelfile"
-  cp "$dir/merge-record.json" "$OUT/$name-merge-record.json"
-  sha256sum "$W/$name-q4_k_m.gguf" > "$OUT/$name-q4_k_m.sha256"
-  rm -rf "$dir" "$W/$name-f16.gguf"   # disk: keep only the quantized file
+# Arms L3/C3 are built in GGUF space from the ORIGINAL checkpoint. A transformers merge-and-save drops the model's trailing
+# next-token-prediction layer (blk.64), and the resulting GGUF cannot be loaded by Ollama ("tensor blk.64.attn_norm.weight not
+# found", run 3 salvage, 2026-10-30). L3 = base f16 + llama-export-lora of the adapter GGUF, then Q4_K_M; C3 = base f16, then Q4_K_M.
+base_f16() {
+  [ -f "$W/base-f16.gguf" ] && return 0
+  local base; base=$(python3 -c "from huggingface_hub import snapshot_download as s; print(s('$BASE_HF'))")
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" "$base" --outtype f16 --outfile "$W/base-f16.gguf"
 }
+# L4 (plan section 14): the properly trained adapter. Use the adapter GGUF produced on the training pod if it was uploaded with the adapter
+# directory; otherwise convert the PEFT adapter here, so a failed conversion on the training pod does not block the evaluation.
+l4_adapter_gguf() {
+  local d=/workspace/in/proposer-adapter
+  if [ -f "$d/zodiac-proposer-dpo-lora.gguf" ]; then echo "$d/zodiac-proposer-dpo-lora.gguf"; return 0; fi
+  [ -f "$d/dpo-adapter/adapter_model.safetensors" ] || { echo "L4: neither an adapter GGUF nor a PEFT adapter found in $d" >&2; return 1; }
+  local base; base=$(python3 -c "from huggingface_hub import snapshot_download as s; print(s('$BASE_HF'))")
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_lora_to_gguf.py" --base "$base" "$d/dpo-adapter" -o "$W/L4-lora.gguf" --outtype f16 >&2 || { rm -f "$W/L4-lora.gguf"; return 1; }
+  echo "$W/L4-lora.gguf"
+}
+
+build_arm() { # name adapter-gguf|none
+  local name="$1" adapter="$2" src
+  if [ "$adapter" != none ] && [ ! -f "$adapter" ]; then echo "adapter GGUF not found: $adapter"; return 1; fi
+  base_f16
+  if [ "$adapter" = none ]; then
+    src="$W/base-f16.gguf"
+  else
+    "$W/llama.cpp/build/bin/llama-export-lora" -m "$W/base-f16.gguf" --lora "$adapter" -o "$W/$name-f16.gguf"
+    src="$W/$name-f16.gguf"
+  fi
+  "$W/llama.cpp/build/bin/llama-quantize" "$src" "$W/$name-q4_k_m.gguf" Q4_K_M
+  [ "$adapter" = none ] || rm -f "$W/$name-f16.gguf"
+  sed "s|^FROM .*|FROM $W/$name-q4_k_m.gguf|" "$W/library.Modelfile" > "$W/$name.Modelfile"
+  ollama create "zodiac-$name:q4_k_m" -f "$W/$name.Modelfile"   # explicit tag: /api/tags lists "name:tag" and agent-eval matches the name exactly
+  sha256sum "$W/$name-q4_k_m.gguf" > "$OUT/$name-q4_k_m.sha256"
+  # Fail closed before 50 trials: the model must actually load and answer.
+  curl -sf -m 600 http://127.0.0.1:11434/api/chat -d "{\"model\":\"zodiac-$name:q4_k_m\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with OK\"}],\"stream\":false,\"options\":{\"num_predict\":16}}" \
+    | python3 -c 'import sys, json; d = json.load(sys.stdin); sys.exit(0 if "error" not in d and d.get("message", {}).get("role") == "assistant" else 1)'
+}
+
 ollama list > "$OUT/versions.txt"; ollama --version >> "$OUT/versions.txt"
 
 run_arm() { # arm model
@@ -68,6 +119,15 @@ run_arm() { # arm model
   n_intents=$(wc -w <<<"$INTENTS")
   [ "$n_intents" -ge 1 ] || { echo "no intents given"; return 1; }
   shards=$(( PARALLEL / n_intents )); [ "$shards" -ge 1 ] || shards=1; [ "$shards" -le "$N" ] || shards=$N
+  if [ -n "$WAIT_FOR_GO" ]; then   # setup is done and the model answers; hold until the stage gate is opened
+    echo "ready, waiting for /workspace/in/GO $(date -u +%FT%TZ)"
+    local waited=0
+    until [ -e /workspace/in/GO ]; do
+      [ "$waited" -lt "$WAIT_FOR_GO_MAX_SECONDS" ] || { echo "no GO within ${WAIT_FOR_GO_MAX_SECONDS}s; giving up"; return 1; }
+      sleep 10; waited=$((waited + 10))
+    done
+    echo "GO received $(date -u +%FT%TZ)"
+  fi
   mkdir -p "$OUT/shards"
   for intent in $INTENTS; do
     local base="protocol-a-${intent//\//_}-$arm-pv3-n$N"
@@ -75,7 +135,7 @@ run_arm() { # arm model
       # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
       (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
         --host http://127.0.0.1:11434 --model "$model" --intent "$intent" --n "$N" --shard "$i/$shards" \
-        --prompt-version v3 --protocol A --think true --num-predict 32768 \
+        --prompt-version v3 --protocol "$PROTOCOL" --think true --num-predict 32768 \
         --out "$OUT/shards/$base-shard$i") &
       pids+=($!)
     done
@@ -93,8 +153,9 @@ run_arm() { # arm model
 for arm in $ARMS; do
   case "$arm" in
     B3) run_arm B3 "$BASE_OLLAMA" ;;
-    L3) build_arm L3 /workspace/in/proposer-adapter/dpo-adapter; run_arm L3 zodiac-L3 ;;
-    C3) build_arm C3 none; run_arm C3 zodiac-C3 ;;
+    L3) build_arm L3 /workspace/in/proposer-adapter/zodiac-proposer-dpo-lora.gguf; run_arm L3 zodiac-L3:q4_k_m ;;
+    C3) build_arm C3 none; run_arm C3 zodiac-C3:q4_k_m ;;
+    L4) L4_GGUF=$(l4_adapter_gguf); build_arm L4 "$L4_GGUF"; run_arm L4 zodiac-L4:q4_k_m ;;
     *) echo "unknown arm $arm"; exit 2 ;;
   esac
   ollama stop "$BASE_OLLAMA" 2>/dev/null || true

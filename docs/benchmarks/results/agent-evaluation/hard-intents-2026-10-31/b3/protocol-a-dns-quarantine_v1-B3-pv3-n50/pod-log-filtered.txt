@@ -1,0 +1,847 @@
+start 2026-10-31T02:05:00Z intents=quarantine-set/v1 dns-quarantine/v1 uplink-arp-confinement/v1 per-host-allowlist/v1 n=50 arms=B3
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 24286 files and directories currently installed.)
+Preparing to unpack .../00-python3.10_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking python3.10 (3.10.12-1~22.04.18) over (3.10.12-1~22.04.9) ...
+Preparing to unpack .../01-libpython3.10-stdlib_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking libpython3.10-stdlib:amd64 (3.10.12-1~22.04.18) over (3.10.12-1~22.04.9) ...
+Preparing to unpack .../02-python3.10-minimal_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking python3.10-minimal (3.10.12-1~22.04.18) over (3.10.12-1~22.04.9) ...
+Preparing to unpack .../03-libpython3.10-minimal_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking libpython3.10-minimal:amd64 (3.10.12-1~22.04.18) over (3.10.12-1~22.04.9) ...
+Preparing to unpack .../04-ca-certificates_20260816ubuntu0.22.04.1_all.deb ...
+Unpacking ca-certificates (20260816ubuntu0.22.04.1) over (20240203~22.04.1) ...
+Selecting previously unselected package pci.ids.
+Preparing to unpack .../05-pci.ids_0.0~2022.01.22-1ubuntu0.1_all.deb ...
+Unpacking pci.ids (0.0~2022.01.22-1ubuntu0.1) ...
+Selecting previously unselected package libpci3:amd64.
+Preparing to unpack .../06-libpci3_1%3a3.7.0-6_amd64.deb ...
+Unpacking libpci3:amd64 (1:3.7.0-6) ...
+Selecting previously unselected package libuv1:amd64.
+Preparing to unpack .../07-libuv1_1.43.0-1ubuntu0.1_amd64.deb ...
+Unpacking libuv1:amd64 (1.43.0-1ubuntu0.1) ...
+Selecting previously unselected package pciutils.
+Preparing to unpack .../08-pciutils_1%3a3.7.0-6_amd64.deb ...
+Unpacking pciutils (1:3.7.0-6) ...
+Selecting previously unselected package libarchive13:amd64.
+Preparing to unpack .../09-libarchive13_3.6.0-1ubuntu1.9_amd64.deb ...
+Unpacking libarchive13:amd64 (3.6.0-1ubuntu1.9) ...
+Preparing to unpack .../10-curl_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking curl (7.81.0-1ubuntu1.30) over (7.81.0-1ubuntu1.20) ...
+Preparing to unpack .../11-libcurl4_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking libcurl4:amd64 (7.81.0-1ubuntu1.30) over (7.81.0-1ubuntu1.20) ...
+Selecting previously unselected package libjsoncpp25:amd64.
+Preparing to unpack .../12-libjsoncpp25_1.9.5-3_amd64.deb ...
+Unpacking libjsoncpp25:amd64 (1.9.5-3) ...
+Selecting previously unselected package librhash0:amd64.
+Preparing to unpack .../13-librhash0_1.4.2-1ubuntu1_amd64.deb ...
+Unpacking librhash0:amd64 (1.4.2-1ubuntu1) ...
+Selecting previously unselected package dh-elpa-helper.
+Preparing to unpack .../14-dh-elpa-helper_2.0.9ubuntu1_all.deb ...
+Unpacking dh-elpa-helper (2.0.9ubuntu1) ...
+Selecting previously unselected package emacsen-common.
+Preparing to unpack .../15-emacsen-common_3.0.4_all.deb ...
+Unpacking emacsen-common (3.0.4) ...
+Selecting previously unselected package cmake-data.
+Preparing to unpack .../16-cmake-data_3.22.1-1ubuntu1.22.04.2_all.deb ...
+Unpacking cmake-data (3.22.1-1ubuntu1.22.04.2) ...
+Selecting previously unselected package cmake.
+Preparing to unpack .../17-cmake_3.22.1-1ubuntu1.22.04.2_amd64.deb ...
+Unpacking cmake (3.22.1-1ubuntu1.22.04.2) ...
+Preparing to unpack .../18-git_1%3a2.34.1-1ubuntu1.18_amd64.deb ...
+Unpacking git (1:2.34.1-1ubuntu1.18) over (1:2.34.1-1ubuntu1.12) ...
+Selecting previously unselected package python3-pip-whl.
+Preparing to unpack .../19-python3-pip-whl_22.0.2+dfsg-1ubuntu0.7_all.deb ...
+Unpacking python3-pip-whl (22.0.2+dfsg-1ubuntu0.7) ...
+Selecting previously unselected package python3-setuptools-whl.
+Preparing to unpack .../20-python3-setuptools-whl_59.6.0-1.2ubuntu0.22.04.3_all.deb ...
+Unpacking python3-setuptools-whl (59.6.0-1.2ubuntu0.22.04.3) ...
+Selecting previously unselected package python3.10-venv.
+Preparing to unpack .../21-python3.10-venv_3.10.12-1~22.04.18_amd64.deb ...
+Unpacking python3.10-venv (3.10.12-1~22.04.18) ...
+Selecting previously unselected package python3-venv.
+Preparing to unpack .../22-python3-venv_3.10.6-1~22.04.1_amd64.deb ...
+Unpacking python3-venv (3.10.6-1~22.04.1) ...
+Selecting previously unselected package zstd.
+Preparing to unpack .../23-zstd_1.4.8+dfsg-3build1_amd64.deb ...
+Unpacking zstd (1.4.8+dfsg-3build1) ...
+Setting up python3-setuptools-whl (59.6.0-1.2ubuntu0.22.04.3) ...
+Setting up pci.ids (0.0~2022.01.22-1ubuntu0.1) ...
+Setting up libarchive13:amd64 (3.6.0-1ubuntu1.9) ...
+Setting up ca-certificates (20260816ubuntu0.22.04.1) ...
+Updating certificates in /etc/ssl/certs...
+rehash: warning: skipping ca-certificates.crt,it does not contain exactly one certificate or CRL
+17 added, 43 removed; done.
+Setting up libuv1:amd64 (1.43.0-1ubuntu0.1) ...
+Setting up emacsen-common (3.0.4) ...
+Setting up dh-elpa-helper (2.0.9ubuntu1) ...
+Setting up libpython3.10-minimal:amd64 (3.10.12-1~22.04.18) ...
+Setting up libjsoncpp25:amd64 (1.9.5-3) ...
+Setting up git (1:2.34.1-1ubuntu1.18) ...
+Setting up libpci3:amd64 (1:3.7.0-6) ...
+Setting up librhash0:amd64 (1.4.2-1ubuntu1) ...
+Setting up libcurl4:amd64 (7.81.0-1ubuntu1.30) ...
+Setting up cmake-data (3.22.1-1ubuntu1.22.04.2) ...
+Setting up curl (7.81.0-1ubuntu1.30) ...
+Setting up zstd (1.4.8+dfsg-3build1) ...
+Setting up python3-pip-whl (22.0.2+dfsg-1ubuntu0.7) ...
+Setting up python3.10-minimal (3.10.12-1~22.04.18) ...
+Setting up libpython3.10-stdlib:amd64 (3.10.12-1~22.04.18) ...
+Setting up pciutils (1:3.7.0-6) ...
+Setting up cmake (3.22.1-1ubuntu1.22.04.2) ...
+Setting up python3.10 (3.10.12-1~22.04.18) ...
+Setting up python3.10-venv (3.10.12-1~22.04.18) ...
+Setting up python3-venv (3.10.6-1~22.04.1) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.9) ...
+Processing triggers for mailcap (3.70+nmu1ubuntu1) ...
+Processing triggers for ca-certificates (20260816ubuntu0.22.04.1) ...
+Updating certificates in /etc/ssl/certs...
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+[38;5;79m2026-10-31 02:05:18 - Installing pre-requisites[0m
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+Hit:1 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64  InRelease
+Hit:2 http://security.ubuntu.com/ubuntu jammy-security InRelease
+Hit:3 http://archive.ubuntu.com/ubuntu jammy InRelease
+Hit:4 http://archive.ubuntu.com/ubuntu jammy-updates InRelease
+Hit:5 http://archive.ubuntu.com/ubuntu jammy-backports InRelease
+Hit:6 https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy InRelease
+Reading package lists...
+Building dependency tree...
+Reading state information...
+178 packages can be upgraded. Run 'apt list --upgradable' to see them.
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+ca-certificates is already the newest version (20260816ubuntu0.22.04.1).
+curl is already the newest version (7.81.0-1ubuntu1.30).
+The following additional packages will be installed:
+  dirmngr gnupg-l10n gnupg-utils gpg gpg-agent gpg-wks-client gpg-wks-server
+  gpgconf gpgsm gpgv
+Suggested packages:
+  dbus-user-session pinentry-gnome3 tor parcimonie xloadimage scdaemon
+The following NEW packages will be installed:
+  apt-transport-https
+The following packages will be upgraded:
+  dirmngr gnupg gnupg-l10n gnupg-utils gpg gpg-agent gpg-wks-client
+  gpg-wks-server gpgconf gpgsm gpgv
+11 upgraded, 1 newly installed, 0 to remove and 167 not upgraded.
+Need to get 2249 kB of archives.
+After this operation, 170 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpg-wks-client amd64 2.2.27-3ubuntu2.5 [62.7 kB]
+Get:2 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 dirmngr amd64 2.2.27-3ubuntu2.5 [293 kB]
+Get:3 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpg-wks-server amd64 2.2.27-3ubuntu2.5 [57.6 kB]
+Get:4 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gnupg-utils amd64 2.2.27-3ubuntu2.5 [309 kB]
+Get:5 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpg-agent amd64 2.2.27-3ubuntu2.5 [209 kB]
+Get:6 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpg amd64 2.2.27-3ubuntu2.5 [519 kB]
+Get:7 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpgconf amd64 2.2.27-3ubuntu2.5 [94.3 kB]
+Get:8 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gnupg-l10n all 2.2.27-3ubuntu2.5 [54.5 kB]
+Get:9 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gnupg all 2.2.27-3ubuntu2.5 [315 kB]
+Get:10 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpgsm amd64 2.2.27-3ubuntu2.5 [197 kB]
+Get:11 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gpgv amd64 2.2.27-3ubuntu2.5 [137 kB]
+Get:12 http://archive.ubuntu.com/ubuntu jammy-updates/universe amd64 apt-transport-https all 2.4.14 [1510 B]
+debconf: delaying package configuration, since apt-utils is not installed
+Fetched 2249 kB in 1s (2233 kB/s)
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 27446 files and directories currently installed.)
+Preparing to unpack .../00-gpg-wks-client_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpg-wks-client (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../01-dirmngr_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking dirmngr (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../02-gpg-wks-server_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpg-wks-server (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../03-gnupg-utils_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gnupg-utils (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../04-gpg-agent_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpg-agent (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../05-gpg_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpg (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../06-gpgconf_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpgconf (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../07-gnupg-l10n_2.2.27-3ubuntu2.5_all.deb ...
+Unpacking gnupg-l10n (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../08-gnupg_2.2.27-3ubuntu2.5_all.deb ...
+Unpacking gnupg (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../09-gpgsm_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpgsm (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Preparing to unpack .../10-gpgv_2.2.27-3ubuntu2.5_amd64.deb ...
+Unpacking gpgv (2.2.27-3ubuntu2.5) over (2.2.27-3ubuntu2.1) ...
+Setting up gpgv (2.2.27-3ubuntu2.5) ...
+Selecting previously unselected package apt-transport-https.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 27446 files and directories currently installed.)
+Preparing to unpack .../apt-transport-https_2.4.14_all.deb ...
+Unpacking apt-transport-https (2.4.14) ...
+Setting up apt-transport-https (2.4.14) ...
+Setting up gnupg-l10n (2.2.27-3ubuntu2.5) ...
+Setting up gpgconf (2.2.27-3ubuntu2.5) ...
+Setting up gpg (2.2.27-3ubuntu2.5) ...
+Setting up gnupg-utils (2.2.27-3ubuntu2.5) ...
+Setting up gpg-agent (2.2.27-3ubuntu2.5) ...
+Setting up gpgsm (2.2.27-3ubuntu2.5) ...
+Setting up dirmngr (2.2.27-3ubuntu2.5) ...
+Setting up gpg-wks-server (2.2.27-3ubuntu2.5) ...
+Setting up gpg-wks-client (2.2.27-3ubuntu2.5) ...
+Setting up gnupg (2.2.27-3ubuntu2.5) ...
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+Hit:1 http://security.ubuntu.com/ubuntu jammy-security InRelease
+Hit:2 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64  InRelease
+Get:3 https://deb.nodesource.com/node_22.x nodistro InRelease [12.1 kB]
+Hit:4 http://archive.ubuntu.com/ubuntu jammy InRelease
+Hit:5 http://archive.ubuntu.com/ubuntu jammy-updates InRelease
+Hit:6 http://archive.ubuntu.com/ubuntu jammy-backports InRelease
+Hit:7 https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy InRelease
+Get:8 https://deb.nodesource.com/node_22.x nodistro/main amd64 Packages [13.0 kB]
+Fetched 25.1 kB in 1s (18.5 kB/s)
+Reading package lists...
+Building dependency tree...
+Reading state information...
+167 packages can be upgraded. Run 'apt list --upgradable' to see them.
+[1;34m2026-10-31 02:05:29 - Repository configured successfully.[0m
+[38;5;79m2026-10-31 02:05:29 - To install Node.js, run: apt install nodejs -y[0m
+[38;5;79m2026-10-31 02:05:29 - You can use N|solid Runtime as a node.js alternative[0m
+[1;32m2026-10-31 02:05:29 - To install N|solid Runtime, run: apt install nsolid -y 
+[0m
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  nodejs
+0 upgraded, 1 newly installed, 0 to remove and 167 not upgraded.
+Need to get 37.8 MB of archives.
+After this operation, 236 MB of additional disk space will be used.
+Get:1 https://deb.nodesource.com/node_22.x nodistro/main amd64 nodejs amd64 22.23.4-1nodesource1 [37.8 MB]
+debconf: delaying package configuration, since apt-utils is not installed
+Fetched 37.8 MB in 1s (28.8 MB/s)
+Selecting previously unselected package nodejs.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 27450 files and directories currently installed.)
+Preparing to unpack .../nodejs_22.23.4-1nodesource1_amd64.deb ...
+Unpacking nodejs (22.23.4-1nodesource1) ...
+Setting up nodejs (22.23.4-1nodesource1) ...
+>>> Installing ollama to /usr/local
+>>> Downloading ollama-linux-amd64.tar.zst
+#=#=#                                                                         
+##O#-#                                                                        
+##O=#  #                                                                      
+                                                                           0.0%
+                                                                           0.2%
+                                                                           0.5%
+                                                                           0.8%
+#                                                                          1.5%
+#                                                                          1.8%
+#                                                                          2.1%
+#                                                                          2.3%
+#                                                                          2.7%
+##                                                                         3.3%
+##                                                                         3.8%
+###                                                                        4.4%
+###                                                                        5.3%
+####                                                                       6.2%
+#####                                                                      7.1%
+#####                                                                      7.7%
+######                                                                     8.4%
+######                                                                     8.9%
+######                                                                     9.7%
+#######                                                                   10.4%
+########                                                                  11.2%
+########                                                                  11.9%
+#########                                                                 12.7%
+#########                                                                 13.7%
+##########                                                                14.7%
+##########                                                                14.9%
+##########                                                                15.2%
+###########                                                               15.7%
+###########                                                               16.3%
+############                                                              16.7%
+############                                                              17.5%
+#############                                                             18.4%
+#############                                                             19.3%
+##############                                                            20.2%
+###############                                                           21.0%
+###############                                                           21.8%
+################                                                          22.7%
+################                                                          23.4%
+#################                                                         24.4%
+##################                                                        25.3%
+##################                                                        26.1%
+###################                                                       27.1%
+####################                                                      28.3%
+#####################                                                     29.2%
+#####################                                                     29.9%
+#####################                                                     30.4%
+######################                                                    30.6%
+######################                                                    31.1%
+#######################                                                   32.3%
+########################                                                  33.4%
+########################                                                  34.6%
+#########################                                                 35.5%
+##########################                                                36.7%
+###########################                                               37.7%
+############################                                              38.9%
+############################                                              39.6%
+#############################                                             40.3%
+#############################                                             41.3%
+##############################                                            42.3%
+###############################                                           43.2%
+################################                                          44.6%
+#################################                                         45.9%
+#################################                                         47.0%
+##################################                                        48.0%
+###################################                                       48.8%
+###################################                                       49.4%
+####################################                                      50.3%
+####################################                                      51.2%
+#####################################                                     51.7%
+######################################                                    52.9%
+#######################################                                   54.4%
+#######################################                                   55.3%
+########################################                                  56.4%
+#########################################                                 57.1%
+#########################################                                 58.3%
+##########################################                                58.6%
+##########################################                                58.9%
+###########################################                               60.0%
+###########################################                               61.0%
+############################################                              62.1%
+#############################################                             63.0%
+##############################################                            64.1%
+##############################################                            64.9%
+###############################################                           66.0%
+################################################                          66.8%
+#################################################                         68.2%
+#################################################                         69.1%
+##################################################                        69.8%
+##################################################                        70.6%
+###################################################                       71.3%
+####################################################                      72.4%
+####################################################                      73.4%
+#####################################################                     74.6%
+######################################################                    75.6%
+######################################################                    75.7%
+######################################################                    75.8%
+######################################################                    75.8%
+######################################################                    75.9%
+######################################################                    75.9%
+######################################################                    76.0%
+######################################################                    76.4%
+#######################################################                   76.7%
+########################################################                  78.3%
+#########################################################                 79.3%
+#########################################################                 80.3%
+##########################################################                81.3%
+###########################################################               82.3%
+############################################################              83.6%
+#############################################################             85.2%
+#############################################################             86.1%
+##############################################################            87.0%
+###############################################################           88.1%
+################################################################          89.5%
+################################################################          90.1%
+#################################################################         91.4%
+##################################################################        92.8%
+###################################################################       93.9%
+####################################################################      95.1%
+#####################################################################     96.2%
+#####################################################################     97.2%
+######################################################################    98.2%
+######################################################################    98.6%
+#######################################################################   99.4%
+#######################################################################   99.8%
+######################################################################## 100.0%
+>>> Creating ollama user...
+>>> Adding ollama user to video group...
+>>> Adding current user to ollama group...
+>>> Creating ollama systemd service...
+WARNING: systemd is not running
+>>> NVIDIA GPU installed.
+>>> The Ollama API is now available at 127.0.0.1:11434.
+>>> Install complete. Run "ollama" from the command line.
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+httpcore 1.0.7 requires h11<0.15,>=0.13, but you have h11 0.16.0 which is incompatible.
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+[notice] A new release of pip is available: 25.0.1 -> 26.2.2
+[notice] To update, run: python -m pip install --upgrade pip
+CMAKE_BUILD_TYPE=Release
+CMake Warning at vendor/cpp-httplib/CMakeLists.txt:154 (message):
+  OpenSSL not found, HTTPS support disabled
+[  0%] Building CXX object common/CMakeFiles/llama-common-base.dir/build-info.cpp.o
+[  0%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-backend.cpp.o
+[  0%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml.c.o
+[  0%] Building CXX object vendor/cpp-httplib/CMakeFiles/cpp-httplib.dir/httplib.cpp.o
+[  0%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-alloc.c.o
+[  3%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-backend-meta.cpp.o
+[  3%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml.cpp.o
+[  3%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-threading.cpp.o
+[  3%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-opt.cpp.o
+[  3%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-quants.c.o
+[  6%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/gguf.cpp.o
+[  6%] Linking CXX static library libllama-common-base.a
+[  6%] Built target llama-common-base
+[  6%] Linking CXX shared library ../../bin/libggml-base.so
+[  6%] Built target ggml-base
+[  6%] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.c.o
+[  6%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/repack.cpp.o
+[  6%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/tiled/tiled-kernel.cpp.o
+[  6%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.cpp.o
+[  9%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/hbm.cpp.o
+[  9%] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/quants.c.o
+[  9%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/unary-ops.cpp.o
+[ 12%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/traits.cpp.o
+[ 12%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/mmq.cpp.o
+[ 12%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/amx.cpp.o
+[ 12%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ops.cpp.o
+[ 12%] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/quants.c.o
+[ 12%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/tiled/tiled.cpp.o
+[ 12%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/binary-ops.cpp.o
+[ 16%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/vec.cpp.o
+[ 16%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/llamafile/sgemm.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/repack.cpp.o
+[ 19%] Linking CXX shared library ../../bin/libggml-cpu.so
+[ 19%] Built target ggml-cpu
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml.dir/ggml-backend-reg.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml.dir/ggml-backend-dl.cpp.o
+[ 22%] Linking CXX shared library ../../bin/libggml.so
+[ 22%] Built target ggml
+[ 22%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_9_cxx.cxx.o
+[ 22%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_10_cxx.cxx.o
+[ 22%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_1_cxx.cxx.o
+[ 22%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_6_cxx.cxx.o
+[ 22%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_8_cxx.cxx.o
+[ 25%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_7_cxx.cxx.o
+[ 25%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_5_cxx.cxx.o
+[ 25%] Building CXX object src/CMakeFiles/llama.dir/llama-arch.cpp.o
+[ 25%] Building CXX object src/CMakeFiles/llama.dir/llama.cpp.o
+[ 25%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_4_cxx.cxx.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_3_cxx.cxx.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/llama-chat.cpp.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_2_cxx.cxx.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/llama-cparams.cpp.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/llama-graph.cpp.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/llama-hparams.cpp.o
+[ 29%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_0_cxx.cxx.o
+[ 32%] Building CXX object src/CMakeFiles/llama.dir/llama-adapter.cpp.o
+[ 32%] Building CXX object src/CMakeFiles/llama.dir/llama-batch.cpp.o
+[ 32%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/llama.dir/llama-context.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/llama.dir/llama-io.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/llama.dir/llama-grammar.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsv4.cpp.o
+[ 38%] Building CXX object src/CMakeFiles/llama.dir/llama-impl.cpp.o
+[ 38%] Building CXX object src/CMakeFiles/llama.dir/llama-memory.cpp.o
+[ 38%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsa-iswa.cpp.o
+[ 38%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-msa.cpp.o
+[ 41%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsa.cpp.o
+[ 41%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid-idx.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/llama.dir/llama-moe-cache.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid-iswa.cpp.o
+[ 48%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-quant.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-model.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-model-loader.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-sampler.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-mmap.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-model-saver.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/llama-vocab.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/unicode-data.cpp.o
+[ 51%] Building CXX object src/CMakeFiles/llama.dir/unicode.cpp.o
+[ 51%] Linking CXX static library libcpp-httplib.a
+[ 51%] Built target cpp-httplib
+[ 54%] Linking CXX shared library ../bin/libllama.so
+[ 54%] Built target llama
+[ 54%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/parsers.cpp.o
+[ 54%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/functionary-v3-2.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/cohere2moe.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/deepseek.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/kimi-k2.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/gigachat-v3.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/harmony-xml.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/gemma4.cpp.o
+[ 58%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/ling3.cpp.o
+[ 61%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/gpt-oss.cpp.o
+[ 61%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/k2-horizon.cpp.o
+[ 64%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/minimax-m3.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/muse-glimmer.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/kimi-k3.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/lfm2.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/minicpm5.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/arg.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/llm-jp-harmony.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/ministral3.cpp.o
+[ 67%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/muse-spark.cpp.o
+[ 74%] Building CXX object common/CMakeFiles/llama-common.dir/console.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/qwen3-coder.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/chat-diff-analyzer.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/chat.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-generator.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-helpers.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/debug.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/chat-peg-parser.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/translate-gemma.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/common.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/download.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/fit.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/file-lock.cpp.o
+[ 80%] Building CXX object common/CMakeFiles/llama-common.dir/hf-cache.cpp.o
+[ 83%] Building CXX object common/CMakeFiles/llama-common.dir/json.cpp.o
+[ 83%] Building CXX object common/CMakeFiles/llama-common.dir/llguidance.cpp.o
+[ 83%] Building CXX object common/CMakeFiles/llama-common.dir/json-schema-to-grammar.cpp.o
+[ 83%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-cache.cpp.o
+[ 83%] Building CXX object common/CMakeFiles/llama-common.dir/imatrix-loader.cpp.o
+[ 83%] Building CXX object common/CMakeFiles/llama-common.dir/json-schema.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-mod.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/log.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/preset.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/peg-parser.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/speculative.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/reasoning-budget.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-map.cpp.o
+[ 87%] Building CXX object common/CMakeFiles/llama-common.dir/trie.cpp.o
+[ 90%] Building CXX object common/CMakeFiles/llama-common.dir/sampling.cpp.o
+[ 90%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/parser.cpp.o
+[ 90%] Building CXX object common/CMakeFiles/llama-common.dir/unicode.cpp.o
+[ 90%] Building CXX object common/CMakeFiles/llama-common.dir/subproc.cpp.o
+[ 93%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/lexer.cpp.o
+[ 93%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/runtime.cpp.o
+[ 93%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/value.cpp.o
+[ 93%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/string.cpp.o
+[ 96%] Building CXX object common/CMakeFiles/llama-common.dir/jinja/caps.cpp.o
+[ 96%] Linking CXX shared library ../bin/libllama-common.so
+[ 96%] Built target llama-common
+[ 96%] Building CXX object tools/quantize/CMakeFiles/llama-quantize-impl.dir/quantize.cpp.o
+[ 96%] Linking CXX shared library ../../bin/libllama-quantize-impl.so
+[ 96%] Built target llama-quantize-impl
+[100%] Building CXX object tools/quantize/CMakeFiles/llama-quantize.dir/main.cpp.o
+[100%] Linking CXX executable ../../bin/llama-quantize
+[100%] Built target llama-quantize
+Consolidate compiler generated dependencies of target llama-common-base
+Consolidate compiler generated dependencies of target cpp-httplib
+Consolidate compiler generated dependencies of target ggml-base
+[  0%] Built target llama-common-base
+[  0%] Built target cpp-httplib
+[  6%] Built target ggml-base
+Consolidate compiler generated dependencies of target ggml-cpu
+[ 19%] Built target ggml-cpu
+Consolidate compiler generated dependencies of target ggml
+[ 22%] Built target ggml
+Consolidate compiler generated dependencies of target llama
+[ 54%] Built target llama
+Consolidate compiler generated dependencies of target llama-common
+[ 96%] Built target llama-common
+[100%] Building CXX object tools/export-lora/CMakeFiles/llama-export-lora.dir/export-lora.cpp.o
+[100%] Linking CXX executable ../../bin/llama-export-lora
+[100%] Built target llama-export-lora
+[notice] A new release of pip is available: 24.0 -> 26.2.2
+[notice] To update, run: python3 -m pip install --upgrade pip
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+merge env ok: transformers 5.22.1 torch 2.8.0.dev20250319+cu128 model_type qwen3_5
+Note: switching to 'fffcbcdfa8e84bb178b0510dbb0d5f7b7a2e3db1'.
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+  git switch -c <new-branch-name>
+Or undo this operation with:
+  git switch -
+Turn off this advice by setting config variable advice.detachedHead to false
+added 268 packages in 6s
+npm notice
+npm notice New major version of npm available! 10.9.9 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+Loaded Prisma config from prisma.config.ts.
+Prisma schema loaded from prisma/schema.prisma.
+✔ Generated Prisma Client (v7.10.1) to ./node_modules/@prisma/client in 125ms
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+seed 1/50: ADMISSIBLE
+seed 1/50: ADMISSIBLE
+seed 1/50: ADMISSIBLE
+seed 1/50: ADMISSIBLE
+seed 2/50: ADMISSIBLE
+seed 2/50: ADMISSIBLE
+seed 2/50: ADMISSIBLE
+seed 2/50: ADMISSIBLE
+seed 3/50: ADMISSIBLE
+seed 3/50: ADMISSIBLE
+seed 3/50: ADMISSIBLE
+seed 3/50: ADMISSIBLE
+seed 4/50: ADMISSIBLE
+seed 4/50: ADMISSIBLE
+seed 4/50: ERR_INTENT_LEAK
+seed 4/50: ADMISSIBLE
+seed 5/50: ADMISSIBLE
+seed 5/50: ADMISSIBLE
+seed 5/50: ERR_INTENT_MISSING
+seed 5/50: ADMISSIBLE
+seed 6/50: ADMISSIBLE
+seed 6/50: ADMISSIBLE
+seed 6/50: ADMISSIBLE
+seed 6/50: ADMISSIBLE
+seed 7/50: ADMISSIBLE
+seed 7/50: ADMISSIBLE
+seed 7/50: ADMISSIBLE
+seed 7/50: ADMISSIBLE
+seed 8/50: ERR_INTENT_LEAK
+seed 8/50: ADMISSIBLE
+seed 8/50: ADMISSIBLE
+seed 8/50: ADMISSIBLE
+seed 9/50: ADMISSIBLE
+seed 9/50: ADMISSIBLE
+seed 9/50: ADMISSIBLE
+seed 9/50: ADMISSIBLE
+seed 10/50: ADMISSIBLE
+seed 10/50: ADMISSIBLE
+seed 10/50: ADMISSIBLE
+seed 10/50: ADMISSIBLE
+seed 11/50: ADMISSIBLE
+seed 11/50: ADMISSIBLE
+seed 11/50: ADMISSIBLE
+seed 11/50: ADMISSIBLE
+seed 12/50: ADMISSIBLE
+seed 12/50: ADMISSIBLE
+seed 12/50: ADMISSIBLE
+seed 12/50: ADMISSIBLE
+seed 13/50: ADMISSIBLE
+seed 13/50: ADMISSIBLE
+seed 13/50: ADMISSIBLE
+seed 13/50: ADMISSIBLE
+seed 14/50: ERR_INTENT_LEAK
+seed 14/50: ADMISSIBLE
+seed 14/50: ADMISSIBLE
+seed 14/50: ADMISSIBLE
+seed 15/50: ADMISSIBLE
+seed 15/50: ADMISSIBLE
+seed 15/50: ADMISSIBLE
+seed 15/50: ADMISSIBLE
+seed 16/50: ADMISSIBLE
+seed 16/50: ADMISSIBLE
+seed 16/50: ADMISSIBLE
+seed 16/50: ADMISSIBLE
+seed 17/50: ERR_INTENT_LEAK
+seed 17/50: ADMISSIBLE
+seed 17/50: ADMISSIBLE
+seed 17/50: ADMISSIBLE
+seed 18/50: ADMISSIBLE
+seed 18/50: ADMISSIBLE
+seed 18/50: ERR_INTENT_MISSING
+seed 18/50: ADMISSIBLE
+seed 19/50: ADMISSIBLE
+seed 19/50: ADMISSIBLE
+seed 19/50: ERR_INTENT_MISSING
+seed 19/50: ADMISSIBLE
+seed 20/50: ERR_INTENT_LEAK
+seed 20/50: ADMISSIBLE
+seed 20/50: ADMISSIBLE
+seed 20/50: ADMISSIBLE
+seed 21/50: ADMISSIBLE
+seed 21/50: ADMISSIBLE
+seed 21/50: ADMISSIBLE
+seed 21/50: ADMISSIBLE
+seed 22/50: ERR_INTENT_LEAK
+seed 22/50: ADMISSIBLE
+seed 22/50: ADMISSIBLE
+seed 22/50: ADMISSIBLE
+seed 23/50: ERR_INTENT_LEAK
+seed 23/50: ADMISSIBLE
+seed 23/50: ADMISSIBLE
+seed 23/50: ADMISSIBLE
+seed 24/50: ERR_INTENT_LEAK
+seed 24/50: ADMISSIBLE
+seed 24/50: ERR_INTENT_MISSING
+seed 24/50: ADMISSIBLE
+seed 25/50: ADMISSIBLE
+seed 25/50: ADMISSIBLE
+seed 25/50: ADMISSIBLE
+seed 25/50: ADMISSIBLE
+seed 26/50: ERR_INTENT_LEAK
+seed 26/50: ADMISSIBLE
+seed 26/50: ADMISSIBLE
+seed 26/50: ADMISSIBLE
+seed 27/50: ADMISSIBLE
+seed 27/50: ADMISSIBLE
+seed 27/50: ERR_INTENT_MISSING
+seed 27/50: ADMISSIBLE
+seed 28/50: ERR_INTENT_LEAK
+seed 28/50: ADMISSIBLE
+seed 28/50: ADMISSIBLE
+seed 28/50: ADMISSIBLE
+seed 29/50: ERR_INTENT_LEAK
+seed 29/50: ADMISSIBLE
+seed 29/50: ADMISSIBLE
+seed 29/50: ADMISSIBLE
+seed 30/50: ADMISSIBLE
+seed 30/50: ADMISSIBLE
+seed 30/50: ADMISSIBLE
+seed 30/50: ADMISSIBLE
+seed 31/50: ADMISSIBLE
+seed 31/50: ADMISSIBLE
+seed 31/50: ERR_INTENT_LEAK
+seed 31/50: ADMISSIBLE
+seed 32/50: ADMISSIBLE
+seed 32/50: ADMISSIBLE
+seed 32/50: ERR_INTENT_LEAK
+seed 32/50: ADMISSIBLE
+seed 33/50: ADMISSIBLE
+seed 33/50: ADMISSIBLE
+seed 33/50: ADMISSIBLE
+seed 33/50: ADMISSIBLE
+seed 34/50: ERR_INTENT_LEAK
+seed 34/50: ADMISSIBLE
+seed 34/50: ADMISSIBLE
+seed 34/50: ADMISSIBLE
+seed 35/50: ADMISSIBLE
+seed 35/50: ADMISSIBLE
+seed 35/50: ERR_INTENT_MISSING
+seed 35/50: ADMISSIBLE
+seed 36/50: ERR_INTENT_LEAK
+seed 36/50: ADMISSIBLE
+seed 36/50: ADMISSIBLE
+seed 36/50: ADMISSIBLE
+seed 37/50: ADMISSIBLE
+seed 37/50: ADMISSIBLE
+seed 37/50: ADMISSIBLE
+seed 37/50: ADMISSIBLE
+seed 38/50: ADMISSIBLE
+seed 38/50: ADMISSIBLE
+seed 38/50: ERR_INTENT_MISSING
+seed 38/50: ADMISSIBLE
+seed 39/50: ADMISSIBLE
+seed 39/50: ADMISSIBLE
+seed 39/50: ADMISSIBLE
+seed 39/50: ADMISSIBLE
+seed 40/50: ERR_INTENT_LEAK
+seed 40/50: ADMISSIBLE
+seed 40/50: ADMISSIBLE
+seed 40/50: ADMISSIBLE
+seed 41/50: ADMISSIBLE
+seed 41/50: ADMISSIBLE
+seed 41/50: ERR_INTENT_MISSING
+seed 41/50: ADMISSIBLE
+seed 42/50: ERR_INTENT_LEAK
+seed 42/50: ADMISSIBLE
+seed 42/50: ERR_INTENT_LEAK
+seed 42/50: ERR_INTENT_LEAK
+seed 43/50: ADMISSIBLE
+seed 43/50: ADMISSIBLE
+seed 43/50: ADMISSIBLE
+seed 43/50: ADMISSIBLE
+seed 44/50: ADMISSIBLE
+seed 44/50: ADMISSIBLE
+seed 44/50: ADMISSIBLE
+seed 44/50: ADMISSIBLE
+seed 45/50: ERR_INTENT_LEAK
+seed 45/50: ADMISSIBLE
+seed 45/50: ERR_INTENT_MISSING
+seed 45/50: ADMISSIBLE
+seed 46/50: TRANSPORT_FAILURE
+seed 46/50: ADMISSIBLE
+seed 46/50: ADMISSIBLE
+seed 46/50: ADMISSIBLE
+seed 47/50: ADMISSIBLE
+seed 47/50: ADMISSIBLE
+seed 47/50: TRANSPORT_FAILURE
+seed 47/50: ERR_INTENT_MISSING
+seed 48/50: ADMISSIBLE
+seed 48/50: ERR_INTENT_LEAK
+seed 48/50: ADMISSIBLE
+seed 49/50: TRANSPORT_FAILURE
+seed 48/50: ADMISSIBLE
+seed 49/50: ADMISSIBLE
+seed 49/50: ADMISSIBLE
+seed 50/50: ADMISSIBLE
+{"ERR_SYNTAX":0,"ERR_TABLE_OVERFLOW":0,"ERR_PREREQUISITE":0,"ERR_HAIRPIN":0,"ERR_AMBIGUITY":0,"ERR_SHADOWED":0,"ERR_INTENT_LEAK":0,"ERR_INTENT_MISSING":0,"ERR_UNCHECKABLE":0,"ADMISSIBLE":48,"TRANSPORT_FAILURE":2}
+seed 49/50: ADMISSIBLE
+seed 50/50: ERR_INTENT_LEAK
+{"ERR_SYNTAX":0,"ERR_TABLE_OVERFLOW":0,"ERR_PREREQUISITE":0,"ERR_HAIRPIN":0,"ERR_AMBIGUITY":0,"ERR_SHADOWED":0,"ERR_INTENT_LEAK":17,"ERR_INTENT_MISSING":0,"ERR_UNCHECKABLE":0,"ADMISSIBLE":33,"TRANSPORT_FAILURE":0}
+seed 50/50: ADMISSIBLE
+{"ERR_SYNTAX":0,"ERR_TABLE_OVERFLOW":0,"ERR_PREREQUISITE":0,"ERR_HAIRPIN":0,"ERR_AMBIGUITY":0,"ERR_SHADOWED":0,"ERR_INTENT_LEAK":1,"ERR_INTENT_MISSING":0,"ERR_UNCHECKABLE":0,"ADMISSIBLE":48,"TRANSPORT_FAILURE":1}
+seed 50/50: ADMISSIBLE
+{"ERR_SYNTAX":0,"ERR_TABLE_OVERFLOW":0,"ERR_PREREQUISITE":0,"ERR_HAIRPIN":0,"ERR_AMBIGUITY":0,"ERR_SHADOWED":0,"ERR_INTENT_LEAK":4,"ERR_INTENT_MISSING":10,"ERR_UNCHECKABLE":0,"ADMISSIBLE":36,"TRANSPORT_FAILURE":0}
+done 2026-10-31T05:29:04Z

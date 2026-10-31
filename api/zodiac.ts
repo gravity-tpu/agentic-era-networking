@@ -475,7 +475,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       // Persist to Neon Postgres (10-second batched cadence, Ghemawat Backpressure Invariant)
       // In serverless, un-awaited promises are killed on res.end(), so await with a configurable Dean latency deadline.
       if (!isPersistingTelemetry()) {
-        const timeoutMs = Number(process.env['TELEMETRY_PERSIST_TIMEOUT_MS'] ?? 1500);
+        const timeoutMs = Number(process.env['TELEMETRY_PERSIST_TIMEOUT_MS'] ?? 5000);
         let timerId: NodeJS.Timeout | undefined;
         const timeoutPromise = new Promise<{ timedOut: true; error?: undefined }>((resolve) => {
           timerId = setTimeout(() => resolve({ timedOut: true }), timeoutMs);

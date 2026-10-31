@@ -12,42 +12,74 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-GPU="NVIDIA A100-SXM4-80GB"; MINUTES=""; INTENTS="quarantine-precedence/v1"; N=50; ARMS="B3 L3 C3"; YES=""; STOP_AFTER=""; KIND="score"; ONDEMAND=""
+GPU="NVIDIA A100-SXM4-80GB"; MINUTES=""; INTENTS="quarantine-precedence/v1"; N=50; ARMS="B3 L3 C3"; YES=""; STOP_AFTER=""; KIND="score"; ONDEMAND=""; WAIT_FOR_GO=""; PROTOCOL="A"
 OUT="/tmp/zodiac-lora-eval-$(date -u +%Y%m%dT%H%M%SZ)"
 ADAPTER_SRC="${ADAPTER_SRC:-$(git rev-parse --git-common-dir)/../docs/benchmarks/results/lora-adapters-2026-10-29/proposer-lora-out}"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 POLL_SECONDS=120
 while [ $# -gt 0 ]; do case "$1" in
   --gpu) GPU="$2"; shift 2;; --minutes) MINUTES="$2"; shift 2;; --intents) INTENTS="$2"; shift 2;;
-  --n) N="$2"; shift 2;; --arms) ARMS="$2"; shift 2;; --stop-after) STOP_AFTER="$2"; shift 2;; --kind) KIND="$2"; shift 2;; --on-demand) ONDEMAND=--on-demand; shift;; --out) OUT="$2"; shift 2;; --yes) YES=--yes; shift;;
+  --n) N="$2"; shift 2;; --arms) ARMS="$2"; shift 2;; --stop-after) STOP_AFTER="$2"; shift 2;; --kind) KIND="$2"; shift 2;; --wait-for-go) WAIT_FOR_GO=1; shift;; --protocol) PROTOCOL="$2"; shift 2;; --on-demand) ONDEMAND=--on-demand; shift;; --out) OUT="$2"; shift 2;; --yes) YES=--yes; shift;;
   *) echo "unknown arg $1" >&2; exit 2;; esac; done
 [ -n "$MINUTES" ] || { echo "--minutes is required" >&2; exit 2; }
 [ -z "$(git status --porcelain)" ] || { echo "refusing: working tree is dirty" >&2; exit 1; }
 [ -f "$ADAPTER_SRC/dpo-adapter/adapter_model.safetensors" ] || { echo "adapter not found at $ADAPTER_SRC" >&2; exit 1; }
 
 RP=(npm run -s runpod --)
-POD=""
+POD=""; GPU_USED=""
 cleanup() {
   if [ -n "$POD" ]; then "${RP[@]}" terminate "$POD" || echo "!! TERMINATE FAILED for $POD: run 'npm run runpod -- terminate $POD' now" >&2; fi
 }
 trap cleanup EXIT
 
-CREATE=("${RP[@]}" create --gpu "$GPU" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250)
-if [ -z "$YES" ]; then "${CREATE[@]}"; exit 0; fi
-POD=$("${CREATE[@]}" --yes | sed -n 's/^created \([^ ]*\) .*/\1/p')
-[ -n "$POD" ] || { echo "could not parse pod id" >&2; exit 1; }
+# --gpu takes one GPU id or a comma-separated preference list. Community capacity is thin, so create is retried across the
+# list (CREATE_ROUNDS rounds, CREATE_WAIT s apart). The per-run cap is enforced by `runpod.ts create` for every candidate:
+# a GPU too expensive for --minutes under the cap is refused and the next one is tried.
+CREATE_ROUNDS="${CREATE_ROUNDS:-20}"; CREATE_WAIT="${CREATE_WAIT:-60}"
+IFS=',' read -r -a GPU_LIST <<<"$GPU"
+do_create() { "${RP[@]}" create --gpu "$1" --minutes "$MINUTES" --kind "$KIND" ${ONDEMAND:+"$ONDEMAND"} --label "lora-eval" --ssh-pubkey "$PUBKEY" --disk-gb 250 "${@:2}"; }   # no mapfile: macOS bash is 3.2
+if [ -z "$YES" ]; then for g in "${GPU_LIST[@]}"; do do_create "$g" || true; done; exit 0; fi
+# A community host can hand out a pod whose ssh port never answers (seen 2026-10-30: TCP timeout for 20 minutes). A pod must accept
+# ssh within SSH_READY_SECONDS or it is terminated and the next candidate is tried.
+SSH_READY_SECONDS="${SSH_READY_SECONDS:-420}"
+ssh_ready() { # ip port
+  local deadline=$(( $(date +%s) + SSH_READY_SECONDS ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    ssh -p "$2" -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@$1" true 2>/dev/null && return 0
+    sleep 6
+  done
+  return 1
+}
+IP=""; PORT=""
+for round in $(seq 1 "$CREATE_ROUNDS"); do
+  for g in "${GPU_LIST[@]}"; do
+    if out=$(do_create "$g" --yes 2>&1); then
+      POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"
+      echo "pod $POD ($g)"
+      if read -r IP PORT < <("${RP[@]}" ssh-target "$POD") && ssh_ready "$IP" "$PORT"; then break 2; fi
+      echo "pod $POD on $g did not accept ssh within ${SSH_READY_SECONDS}s; terminating it and trying the next candidate"
+      "${RP[@]}" terminate "$POD" || echo "!! TERMINATE FAILED for $POD: run 'npm run runpod -- terminate $POD' now" >&2
+      POD=""; GPU_USED=""
+      continue
+    fi
+    echo "create failed on $g (round $round/$CREATE_ROUNDS): $(tail -1 <<<"$out" | cut -c1-140)"
+  done
+  sleep "$CREATE_WAIT"
+done
+[ -n "$POD" ] || { echo "could not start a reachable pod on any of: $GPU" >&2; exit 1; }
+echo "gpu $GPU_USED"
 echo "pod $POD"
 
-read -r IP PORT < <("${RP[@]}" ssh-target "$POD")
 SSH=(ssh -p "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$IP")
-for _ in $(seq 1 30); do "${SSH[@]}" true 2>/dev/null && break; sleep 5; done
 "${SSH[@]}" 'mkdir -p /workspace/in /workspace/out'
 
-git bundle create /tmp/zodiac-eval-repo.bundle HEAD
-scp -P "$PORT" /tmp/zodiac-eval-repo.bundle "root@$IP:/workspace/in/repo.bundle"
+BUNDLE="/tmp/zodiac-eval-repo.$$.bundle"   # per-launcher path: parallel launchers must not share one file
+git bundle create "$BUNDLE" HEAD
+scp -P "$PORT" "$BUNDLE" "root@$IP:/workspace/in/repo.bundle"
+rm -f "$BUNDLE"
 scp -P "$PORT" -r "$ADAPTER_SRC" "root@$IP:/workspace/in/proposer-adapter"
 git show HEAD:scripts/runpod/eval-lora-pod.sh | "${SSH[@]}" 'cat > /workspace/in/eval-lora-pod.sh && chmod +x /workspace/in/eval-lora-pod.sh'
-"${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
+"${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' WAIT_FOR_GO='$WAIT_FOR_GO' PROTOCOL='$PROTOCOL' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
 
 while true; do
   state=$("${SSH[@]}" 'if [ -e /workspace/out/DONE ]; then echo DONE; elif [ -e /workspace/out/FAILED ]; then echo FAILED; else echo RUNNING; fi' 2>/dev/null || echo UNREACHABLE)
