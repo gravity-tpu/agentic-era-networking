@@ -17,6 +17,7 @@ MAX_STEPS="${MAX_STEPS:-15}"
 GRAD_ACCUM="${GRAD_ACCUM:-4}"
 LEARNING_RATE="${LEARNING_RATE:-5e-5}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
+TIME_BUDGET_SECONDS="${TIME_BUDGET_SECONDS:-0}"   # graceful wall-clock budget for both training stages (0 = none); see train-proposer-lora.py
 
 IN=/workspace/in
 OUT=/workspace/out
@@ -24,14 +25,15 @@ W=/workspace/work
 mkdir -p "$OUT" "$W"
 exec > >(tee -a "$OUT/pod.log") 2>&1
 echo "=== Zodiac LoRA Cloud Trainer Starting $(date -u +%FT%TZ) ==="
-echo "task=$TASK base_model=$BASE_MODEL max_steps=$MAX_STEPS grad_accum=$GRAD_ACCUM lr=$LEARNING_RATE"
+echo "task=$TASK base_model=$BASE_MODEL max_steps=$MAX_STEPS grad_accum=$GRAD_ACCUM lr=$LEARNING_RATE time_budget_s=$TIME_BUDGET_SECONDS"
 
 # 0. System packages
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils
 
 # 1. Python environment and dependencies
-pip install -q transformers peft trl accelerate huggingface_hub sentencepiece datasets bitsandbytes gguf
+# -U: pip leaves an already-installed (older) transformers alone otherwise, and an old one does not recognise this model's architecture.
+pip install -q -U transformers peft trl accelerate huggingface_hub sentencepiece datasets bitsandbytes gguf
 
 # 2. Build / clone llama.cpp for GGUF conversion
 git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
@@ -67,17 +69,10 @@ train_and_convert() {
     --base-model "$BASE_MODEL" \
     --batch-size "$BATCH_SIZE" \
     --grad-accum "$GRAD_ACCUM" \
-    --max-steps "$MAX_STEPS"
+    --max-steps "$MAX_STEPS" \
+    --time-budget-seconds "$TIME_BUDGET_SECONDS"
 
-  # Convert DPO adapter to GGUF format
-  echo "--- Converting $role DPO adapter to GGUF ---"
-  python3 "$W/llama.cpp/convert_lora_to_gguf.py" \
-    --base "$BASE_MODEL" \
-    "$work_dir/dpo-adapter" \
-    -o "$OUT/zodiac-${role}-dpo-lora.gguf" \
-    --outtype f16
-
-  # Stage artifacts into output
+  # Stage the trained adapter BEFORE the optional GGUF conversion: a conversion failure must not lose a finished run.
   mkdir -p "$target_out"
   cp -r "$work_dir/dpo-adapter" "$target_out/"
   if [ -d "$work_dir/sft-adapter" ]; then
@@ -88,7 +83,19 @@ train_and_convert() {
     cp "$work_dir/Modelfile.${role}-lora" "$target_out/"
   fi
 
-  sha256sum "$OUT/zodiac-${role}-dpo-lora.gguf" > "$OUT/zodiac-${role}-dpo-lora.sha256"
+  # Convert the DPO adapter to GGUF. Not fatal: on failure the PEFT adapter above is already staged, an explicit marker is written and
+  # the conversion can be redone elsewhere (the evaluation pods have llama.cpp and the base model).
+  echo "--- Converting $role DPO adapter to GGUF ---"
+  if python3 "$W/llama.cpp/convert_lora_to_gguf.py" \
+    --base "$BASE_MODEL" \
+    "$work_dir/dpo-adapter" \
+    -o "$OUT/zodiac-${role}-dpo-lora.gguf" \
+    --outtype f16; then
+    sha256sum "$OUT/zodiac-${role}-dpo-lora.gguf" > "$OUT/zodiac-${role}-dpo-lora.sha256"
+  else
+    echo "WARN: GGUF conversion failed for $role; the PEFT adapter is staged in $target_out" | tee -a "$OUT/pod.log"
+    touch "$OUT/GGUF-CONVERSION-FAILED-${role}"
+  fi
   echo "--- $role training & GGUF conversion complete ---"
 }
 

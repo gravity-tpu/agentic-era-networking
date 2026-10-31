@@ -37,6 +37,10 @@ import time
 EXPECTED_PROPOSER_SCHEMA = "proposer-lora-dataset/v1"
 EXPECTED_REVIEWER_SCHEMA = "reviewer-lora-dataset/v1"
 EXPECTED_SOURCE = "synthetic_verifier_grounded"
+
+# Share of --time-budget-seconds the SFT stage may use (integer percent); DPO gets the rest. Named so it is not a buried constant (Invariant 5).
+SFT_BUDGET_SHARE_PERCENT = 45
+MAX_TIME_BUDGET_SECONDS = 86_400
 FORBIDDEN_SUBNET_PREFIX = "10.0.2."
 FORBIDDEN_INTENT_IDS = frozenset({
     "port1-isolation/v1",
@@ -194,13 +198,34 @@ def _filter_cfg_kwargs(cfg_cls, kwargs: dict) -> dict:
     return out
 
 
+def make_deadline_callback(base_cls, deadline_ns: int, clock=time.monotonic_ns):
+    """A Trainer callback that asks training to stop once the monotonic clock reaches `deadline_ns` (Invariant 2: integer monotonic time).
+
+    Stopping is graceful: `train()` returns, the caller saves the adapter, and the steps actually done are recorded, so a pod time limit
+    cannot destroy a long run. `base_cls` is `transformers.TrainerCallback` (passed in so this stays importable without GPU packages).
+    """
+
+    class DeadlineStop(base_cls):
+        def __init__(self) -> None:
+            super().__init__()
+            self.stopped = False
+
+        def on_step_end(self, args, state, control, **kwargs):
+            if clock() >= deadline_ns:
+                control.should_training_stop = True
+                self.stopped = True
+            return control
+
+    return DeadlineStop()
+
+
 def run_cloud_training(args: argparse.Namespace, dataset_summary: dict, start_ns: int) -> dict:
     # Imported lazily so --validate-only runs in CI without GPU packages installed.
     import gc
     import torch
     from datasets import load_dataset
     from peft import LoraConfig, PeftModel
-    from transformers import AutoTokenizer
+    from transformers import AutoTokenizer, TrainerCallback
     from trl import DPOConfig, DPOTrainer, SFTConfig, SFTTrainer
 
     peft_config = LoraConfig(
@@ -215,6 +240,12 @@ def run_cloud_training(args: argparse.Namespace, dataset_summary: dict, start_ns
     tokenizer = AutoTokenizer.from_pretrained(args.base_model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    budget_ns = args.time_budget_seconds * 1_000_000_000
+    sft_deadline_ns = start_ns + budget_ns * SFT_BUDGET_SHARE_PERCENT // 100
+    dpo_deadline_ns = start_ns + budget_ns
+    sft_steps = dpo_steps = sft_examples = dpo_pairs = None
+    sft_stopped = dpo_stopped = False
 
     sft_out = os.path.join(args.out_dir, "sft-adapter")
     dpo_out = os.path.join(args.out_dir, "dpo-adapter")
@@ -245,14 +276,19 @@ def run_cloud_training(args: argparse.Namespace, dataset_summary: dict, start_ns
             },
         )
         sft_cfg = SFTConfig(**sft_kwargs)
+        sft_cb = make_deadline_callback(TrainerCallback, sft_deadline_ns) if budget_ns > 0 else None
         trainer = SFTTrainer(
             model=model,
             args=sft_cfg,
             train_dataset=sft_ds,
             processing_class=tokenizer,
             peft_config=peft_config,
+            callbacks=[sft_cb] if sft_cb else None,
         )
         trainer.train()
+        sft_steps = int(trainer.state.global_step)
+        sft_examples = len(sft_ds)
+        sft_stopped = bool(sft_cb and sft_cb.stopped)
         trainer.save_model(sft_out)
         tokenizer.save_pretrained(sft_out)
         final_adapter = sft_out
@@ -292,6 +328,7 @@ def run_cloud_training(args: argparse.Namespace, dataset_summary: dict, start_ns
             },
         )
         dpo_cfg = DPOConfig(**dpo_kwargs)
+        dpo_cb = make_deadline_callback(TrainerCallback, dpo_deadline_ns) if budget_ns > 0 else None
         dpo_trainer = DPOTrainer(
             model=model,
             ref_model=None,
@@ -299,8 +336,12 @@ def run_cloud_training(args: argparse.Namespace, dataset_summary: dict, start_ns
             train_dataset=dpo_ds,
             processing_class=tokenizer,
             peft_config=dpo_peft,
+            callbacks=[dpo_cb] if dpo_cb else None,
         )
         dpo_trainer.train()
+        dpo_steps = int(dpo_trainer.state.global_step)
+        dpo_pairs = len(dpo_ds)
+        dpo_stopped = bool(dpo_cb and dpo_cb.stopped)
         dpo_trainer.save_model(dpo_out)
         tokenizer.save_pretrained(dpo_out)
         final_adapter = dpo_out
@@ -325,6 +366,18 @@ def run_cloud_training(args: argparse.Namespace, dataset_summary: dict, start_ns
         "seed": args.seed,
         "datasetGitCommit": dataset_summary.get("gitCommit"),
         "heldOutBenchmarkHashes": dataset_summary.get("heldOutBenchmarkHashes"),
+        "batchSize": args.batch_size,
+        "gradAccum": args.grad_accum,
+        "maxStepsArg": args.max_steps,
+        "timeBudgetSeconds": args.time_budget_seconds,
+        "sftExamples": sft_examples,
+        "sftStepsDone": sft_steps,
+        "sftExamplesSeen": None if sft_steps is None else sft_steps * args.batch_size * args.grad_accum,
+        "sftStoppedByDeadline": sft_stopped,
+        "dpoPairs": dpo_pairs,
+        "dpoStepsDone": dpo_steps,
+        "dpoPairsSeen": None if dpo_steps is None else dpo_steps * args.batch_size * args.grad_accum,
+        "dpoStoppedByDeadline": dpo_stopped,
         "finalAdapterDir": final_adapter,
         "modelfile": modelfile_path,
         "wallNs": str(wall_ns),
@@ -352,8 +405,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--max-seq-len", type=int, default=DEFAULT_MAX_SEQ_LEN)
     ap.add_argument("--max-steps", type=int, default=-1, help="Optional cap on training steps (-1 for full epochs)")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--time-budget-seconds", type=int, default=0, help="Wall-clock budget for both stages from process start; training stops gracefully and the adapter is saved when it is reached (0 = no budget)")
     ap.add_argument("--validate-only", action="store_true", help="Run fail-closed dataset checks and write Modelfile without GPU training")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if not 0 <= args.time_budget_seconds <= MAX_TIME_BUDGET_SECONDS:
+        ap.error(f"--time-budget-seconds must be 0 to {MAX_TIME_BUDGET_SECONDS}")
+    return args
 
 
 def main() -> None:
