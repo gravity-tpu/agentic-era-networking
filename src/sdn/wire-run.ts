@@ -196,3 +196,31 @@ export function coverageFlowsFor(spec: IntentSpec, candidates: readonly WireFlow
   const flows = wanted.flatMap((id) => { const f = best.get(id); return f === undefined ? [] : [f]; });
   return { flows, uncovered: wanted.filter((id) => !best.has(id)) };
 }
+
+export interface CaptureSpec { readonly iface: string; readonly filter: string; readonly stamp: string; readonly name: string; readonly seconds: number; readonly sudo: boolean }
+
+const CAP_IFACE_RE = /^[A-Za-z][A-Za-z0-9]{0,29}$/;
+const CAP_FILTER_RE = /^[A-Za-z0-9 :.-]{1,120}$/;
+const CAP_STAMP_RE = /^[A-Za-z0-9-]{1,40}$/;
+const CAP_NAME_RE = /^[A-Za-z0-9]{1,10}$/;
+export const MAX_CAPTURE_SECONDS = 60;
+
+/**
+ * The shell command that starts one tcpdump capture window in the background and writes its output and its stderr to /tmp. tcpdump is left to set
+ * promiscuous mode itself (no -p): the first smoke run on 2026-10-31 passed -p, and the O2 NIC, which is not promiscuous, dropped every unicast
+ * frame not addressed to it, so every IPv4 tap copy was missed. Every interpolated field is validated; nothing else reaches the shell.
+ */
+export function captureShell(c: CaptureSpec): string {
+  if (!CAP_IFACE_RE.test(c.iface)) throw new RangeError(`bad interface name ${JSON.stringify(c.iface)}`);
+  if (!CAP_FILTER_RE.test(c.filter)) throw new RangeError(`bad capture filter ${JSON.stringify(c.filter)}`);
+  if (!CAP_STAMP_RE.test(c.stamp)) throw new RangeError(`bad capture stamp ${JSON.stringify(c.stamp)}`);
+  if (!CAP_NAME_RE.test(c.name)) throw new RangeError(`bad capture name ${JSON.stringify(c.name)}`);
+  if (!Number.isInteger(c.seconds) || c.seconds < 1 || c.seconds > MAX_CAPTURE_SECONDS) throw new RangeError(`capture window must be a whole number of seconds from 1 to ${MAX_CAPTURE_SECONDS}`);
+  const f = `/tmp/conf-${c.stamp}-${c.name}`;
+  return `rm -f ${f}.txt ${f}.err; (${c.sudo ? 'sudo -n ' : ''}timeout ${c.seconds} tcpdump -i ${c.iface} -nn -e -l '${c.filter}' > ${f}.txt 2> ${f}.err &)`;
+}
+
+/** A filesystem-safe directory name for one rule set's evidence, so the same flow in different sets never overwrites another set's captures. */
+export function setDirName(s: { readonly intent: string; readonly kind: string; readonly id: string }): string {
+  return `${s.intent}__${s.kind}__${s.id}`.replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 150);
+}

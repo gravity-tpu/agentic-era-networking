@@ -1,0 +1,276 @@
+{
+ "summary": {
+  "schema": "conformance-run/v2",
+  "dryRun": false,
+  "bundleIndexSha256": "fa2d3ecce7553348938536fa75b6a73359ae7a0ee7c3aab6474932496d382e5c",
+  "ruleSets": 1,
+  "flowsSent": 5,
+  "m1Agree": 2,
+  "m1Disagree": 3,
+  "m2Compliant": 2,
+  "m2NonCompliant": 3,
+  "flowsNotSent": 0,
+  "notSentReasons": {},
+  "byKind": {
+   "reference": {
+    "sets": 1,
+    "flows": 5,
+    "m1Agree": 2,
+    "m2Compliant": 2
+   }
+  },
+  "stoppedBecause": null,
+  "skippedSets": []
+ },
+ "results": [
+  {
+   "id": "reference",
+   "kind": "reference",
+   "intent": "port1-isolation/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "reference port1-isolation/v1 reference",
+    "rulesRequested": 7,
+    "entriesSeen": 8,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "7/7 rules confirmed, 8 entries including the table-miss",
+    "atMs": 1793471468526
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "reference port1-isolation/v1 reference",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793471519224
+   },
+   "flows": [
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.50",
+     "tag": 41000,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [],
+     "m1": {
+      "agrees": false,
+      "seenNotPredicted": [],
+      "predictedNotSeen": [
+       2,
+       3
+      ]
+     },
+     "expectation": {
+      "clauseId": "p1-ipv4-intra-segment",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": false,
+      "leaks": [],
+      "missing": [
+       2
+      ]
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.52",
+     "tag": 41001,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [],
+     "m1": {
+      "agrees": false,
+      "seenNotPredicted": [],
+      "predictedNotSeen": [
+       2,
+       3
+      ]
+     },
+     "expectation": {
+      "clauseId": "p1-ipv4-intra-segment",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": false,
+      "leaks": [],
+      "missing": [
+       2
+      ]
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.51-10.0.2.51",
+     "tag": 41002,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [],
+     "m1": {
+      "agrees": false,
+      "seenNotPredicted": [],
+      "predictedNotSeen": [
+       2,
+       3
+      ]
+     },
+     "expectation": {
+      "clauseId": "p1-ipv4-intra-segment",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": false,
+      "leaks": [],
+      "missing": [
+       2
+      ]
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.52",
+     "tag": 41003,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-ipv4-intra-segment",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "21da8f25235b9c5b5a1d331a03f1546fc90203b77ba5ccd7dff6d282c5c2ad94",
+      "O3": "1ee75cc0aa7fda8ca296aaa6f54ba646be2a6d35ec521231c8371dcc1f224510"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.51",
+     "tag": 41004,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-ipv4-intra-segment",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "f9d13ecb0cbaae6ab83f53dff50a2ee8d2f83b67453c5068d7b7570fbca7382d",
+      "O3": "825b0afb26b1c2168c5e42e988e3249fd29aadb4e7b33012b0f1cafdb79d63b3"
+     }
+    }
+   ]
+  }
+ ]
+}

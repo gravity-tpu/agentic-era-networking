@@ -27,7 +27,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { predictOutcome } from '../dist/sdn/wire-flows.js';
 import type { WireFlow, WireRule } from '../dist/sdn/wire-flows.js';
-import { buildArpRequestFrame, buildUdpFrame, captureFilterFor, rawSendPython, sendPlanFor } from '../dist/sdn/wire-run.js';
+import { buildArpRequestFrame, buildUdpFrame, captureFilterFor, captureShell, rawSendPython, sendPlanFor, setDirName } from '../dist/sdn/wire-run.js';
 import { runSession } from '../dist/sdn/wire-session.js';
 import type { BridgeState, InstallResult, RestoreResult, Rig, RigFlowResult, SessionSet } from '../dist/sdn/wire-session.js';
 import { TARGETS } from './wire-common.ts';
@@ -103,8 +103,8 @@ class PredictionRig implements Rig {
 // ─── Real rig (PHASE 1 VALIDATION OWED, see the header) ──────────────────────
 class RealRig implements Rig {
   private setDir: string;
-  constructor(outDir: string) { this.setDir = outDir; }
-  setCurrentDir(d: string): void { this.setDir = d; }
+  private readonly outDir: string;
+  constructor(outDir: string) { this.outDir = outDir; this.setDir = outDir; }
 
   async bridgeState(): Promise<BridgeState> {
     const s = await bridge('GET', '/api/experiment/state');
@@ -112,6 +112,8 @@ class RealRig implements Rig {
     return { phase: String(s.json['phase']), attention: s.json['attention'] === null ? null : String(s.json['attention']) };
   }
   async install(set: SessionSet): Promise<InstallResult> {
+    this.setDir = path.join(this.outDir, setDirName({ intent: set.intent.id, kind: set.kind, id: set.id }));
+    await fs.mkdir(this.setDir, { recursive: true });
     const r = await bridge('POST', '/api/experiment/install', set.body);
     const report = { httpStatus: r.status, ...r.json };
     await fs.writeFile(path.join(this.setDir, 'install.json'), JSON.stringify(report, null, 1) + '\n');
@@ -129,8 +131,7 @@ class RealRig implements Rig {
     if (plan.via === 'unsendable') return { sent: false, reason: plan.reason, observedPorts: [], evidence: {} };
     const filter = captureFilterFor(flow, tag);
     const stamp = `${process.pid}-${tag}`;
-    // The Jetson's capture NICs are already promiscuous (-p keeps tcpdump from changing that); the workload listener must be promiscuous to see flooded frames not addressed to it.
-    const cap = (iface: string, f: string, sudo: boolean): string => `rm -f /tmp/conf-${stamp}-${f}.txt /tmp/conf-${stamp}-${f}.err; (${sudo ? 'sudo -n ' : ''}timeout ${CAPTURE_SECONDS} tcpdump -i ${iface} -nn -e -l ${sudo ? '' : '-p '}'${filter}' > /tmp/conf-${stamp}-${f}.txt 2>/tmp/conf-${stamp}-${f}.err &)`;
+    const cap = (iface: string, f: string, sudo: boolean): string => captureShell({ iface, filter, stamp, name: f, seconds: CAPTURE_SECONDS, sudo });
     const ready = (f: string): string => `grep -q 'listening on' /tmp/conf-${stamp}-${f}.err`;
     const wait = (names: string[]): string => `for i in $(seq 1 ${CAPTURE_START_POLLS}); do if ${names.map(ready).join(' && ')}; then echo started; exit 0; fi; sleep ${CAPTURE_POLL_MS / 1000}; done; echo timeout`;
     const needListener = flow.packet.inPort === 2;
