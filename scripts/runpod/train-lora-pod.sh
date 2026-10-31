@@ -89,7 +89,7 @@ train_and_convert() {
   if python3 "$W/llama.cpp/convert_lora_to_gguf.py" \
     --base "$BASE_MODEL" \
     "$work_dir/dpo-adapter" \
-    -o "$OUT/zodiac-${role}-dpo-lora.gguf" \
+    --outfile "$OUT/zodiac-${role}-dpo-lora.gguf" \
     --outtype f16; then
     sha256sum "$OUT/zodiac-${role}-dpo-lora.gguf" > "$OUT/zodiac-${role}-dpo-lora.sha256"
   else

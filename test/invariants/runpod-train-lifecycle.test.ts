@@ -69,6 +69,9 @@ describe('Runpod LoRA Training Lifecycle Invariants', () => {
     expect(content).toContain('/workspace/out/FAILED');
     expect(content).toContain('/workspace/out/DONE');
     expect(content).toContain('convert_lora_to_gguf.py');
+    // llama.cpp's convert_lora_to_gguf.py takes --outfile, not -o (the adapter GGUF conversion failed on that flag, 2026-10-31).
+    expect(content).toMatch(/convert_lora_to_gguf\.py[\s\S]{0,300}--outfile/);
+    expect(content).not.toMatch(/convert_lora_to_gguf\.py[\s\S]{0,300}\s-o\s/);
     expect(content).toContain('--validate-only');
   });
 });
