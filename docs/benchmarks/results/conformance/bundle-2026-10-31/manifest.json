@@ -1,0 +1,89 @@
+{
+ "seed": 20261031,
+ "maxFlows": 24,
+ "maxModelSets": 8,
+ "equivalenceControls": 2,
+ "mode": "forged frames allowed, no injection into port 3",
+ "ruleSets": 132,
+ "indexSha256": "4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc",
+ "counts": {
+  "port1-isolation/v1": {
+   "flows": 4,
+   "poolSurvivors": 13,
+   "poolRecorded": 46,
+   "reference": 1,
+   "surviving-mutant": 5,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "dns-confinement/v1": {
+   "flows": 3,
+   "poolSurvivors": 11,
+   "poolRecorded": 307,
+   "reference": 1,
+   "surviving-mutant": 4,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "quarantine-precedence/v1": {
+   "flows": 4,
+   "poolSurvivors": 13,
+   "poolRecorded": 86,
+   "reference": 1,
+   "surviving-mutant": 5,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "tap-return-isolation/v1": {
+   "flows": 0,
+   "poolSurvivors": 6,
+   "poolRecorded": 47,
+   "reference": 1,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "quarantine-set/v1": {
+   "flows": 4,
+   "poolSurvivors": 17,
+   "poolRecorded": 63,
+   "reference": 1,
+   "surviving-mutant": 5,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "dns-quarantine/v1": {
+   "flows": 3,
+   "poolSurvivors": 13,
+   "poolRecorded": 72,
+   "reference": 1,
+   "surviving-mutant": 5,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "uplink-arp-confinement/v1": {
+   "flows": 4,
+   "poolSurvivors": 14,
+   "poolRecorded": 51,
+   "reference": 1,
+   "surviving-mutant": 5,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  },
+  "per-host-allowlist/v1": {
+   "flows": 6,
+   "poolSurvivors": 18,
+   "poolRecorded": 78,
+   "reference": 1,
+   "surviving-mutant": 7,
+   "model-admissible": 8,
+   "equivalence-control-mutant": 2,
+   "equivalence-control-model": 2
+  }
+ }
+}

@@ -1,0 +1,93 @@
+{
+ "label": "equivalence-control-model dns-confinement/v1 protocol-b-dns-confinement_v1-L3-pv3-n20#6",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-ipv4-dns",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1-arp",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-tap-only",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-dns-reply",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-drop",
+   "priority": 100,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  },
+  {
+   "id": "p3-return",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "dns-confinement/v1",
+  "kind": "equivalence-control-model",
+  "id": "protocol-b-dns-confinement_v1-L3-pv3-n20#6",
+  "arm": "zodiac-L3:q4_k_m",
+  "seed": 20261031
+ }
+}

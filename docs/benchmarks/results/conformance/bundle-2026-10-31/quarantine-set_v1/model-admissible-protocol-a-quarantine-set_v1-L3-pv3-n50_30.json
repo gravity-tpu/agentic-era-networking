@@ -1,0 +1,154 @@
+{
+ "label": "model-admissible quarantine-set/v1 protocol-a-quarantine-set_v1-L3-pv3-n50#30",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "q-p1-10.0.2.51",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "q-p1-10.0.2.53",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.53"
+   }
+  },
+  {
+   "id": "q-p1-10.0.2.54",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.54"
+   }
+  },
+  {
+   "id": "q-p2-10.0.2.51",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "q-p2-10.0.2.53",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.53"
+   }
+  },
+  {
+   "id": "q-p2-10.0.2.54",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.54"
+   }
+  },
+  {
+   "id": "p1-ipv4-intra-segment",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-claim-10.0.2.50",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-claim-10.0.2.52",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-else-tap",
+   "priority": 50,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-else-drop",
+   "priority": 50,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  }
+ ],
+ "meta": {
+  "intent": "quarantine-set/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-quarantine-set_v1-L3-pv3-n50#30",
+  "arm": "zodiac-L3:q4_k_m",
+  "seed": 20261031
+ }
+}

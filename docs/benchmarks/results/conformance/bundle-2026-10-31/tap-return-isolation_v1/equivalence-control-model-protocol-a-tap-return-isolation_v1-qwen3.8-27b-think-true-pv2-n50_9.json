@@ -1,0 +1,107 @@
+{
+ "label": "equivalence-control-model tap-return-isolation/v1 protocol-a-tap-return-isolation_v1-qwen3.8-27b-think-true-pv2-n50#9",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-intra-ipv4-to-uplink",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-spa-50-to-uplink",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-spa-52-to-uplink",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-default-tap-only",
+   "priority": 10,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p3-return-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-to-p1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-default-drop",
+   "priority": 10,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  }
+ ],
+ "meta": {
+  "intent": "tap-return-isolation/v1",
+  "kind": "equivalence-control-model",
+  "id": "protocol-a-tap-return-isolation_v1-qwen3.8-27b-think-true-pv2-n50#9",
+  "arm": "qwen3.8:27b",
+  "seed": 20261031
+ }
+}

@@ -9,66 +9,15 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
-import { BASELINE_TARGETS } from '../dist/sdn/eval-baselines.js';
-import { HARD_INTENTS } from '../dist/sdn/intents-hard.js';
-import { buildQuarantineSetPolicy, buildDnsQuarantinePolicy, buildUplinkArpConfinementPolicy, buildPerHostAllowlistPolicy } from '../dist/sdn/intent-references-hard.js';
 import { generateMutants } from '../dist/sdn/rule-mutations.js';
-import { parseProposal, triageProposal } from '../dist/sdn/proposal-triage.js';
+import { triageProposal } from '../dist/sdn/proposal-triage.js';
 import { ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP } from '../dist/sdn/port1-isolation.js';
-import type { IsolationRule } from '../dist/sdn/port1-isolation.js';
-import type { IntentSpec } from '../dist/sdn/intent-spec.js';
 import { FlowMode, addressUniverse, candidateFlows, selectFlows } from '../dist/sdn/wire-flows.js';
-import type { WireRuleSet } from '../dist/sdn/wire-flows.js';
+import { TARGETS, toSet, recordedSets } from './wire-common.ts';
 
 const DEFAULT_MAX_FLOWS = 24;
 const MAX_FLOWS_CEILING = 200; // Invariant 5: bounded
 const MODES: ReadonlyArray<readonly [string, FlowMode]> = [['real hosts only', FlowMode.Real], ['+ aliases', FlowMode.Alias], ['+ forged frames', FlowMode.Forged], ['+ injection on port 3', FlowMode.PortThree]];
-
-const HARD_REFERENCES: Record<string, () => readonly IsolationRule[]> = {
-  'quarantine-set/v1': () => buildQuarantineSetPolicy(),
-  'dns-quarantine/v1': () => buildDnsQuarantinePolicy(),
-  'uplink-arp-confinement/v1': () => buildUplinkArpConfinementPolicy(),
-  'per-host-allowlist/v1': () => buildPerHostAllowlistPolicy(),
-};
-const TARGETS: ReadonlyArray<{ intent: IntentSpec; reference: () => readonly IsolationRule[] }> = [
-  ...BASELINE_TARGETS,
-  ...HARD_INTENTS.map((intent) => ({ intent, reference: HARD_REFERENCES[intent.id] ?? (() => { throw new Error(`no reference for ${intent.id}`); }) })),
-];
-
-const toSet = (id: string, rules: readonly IsolationRule[]): WireRuleSet => ({
-  id,
-  rules: rules.map((r) => ({ id: r.id, priority: r.flowMod.priority, outputPorts: [...(r.flowMod.outputPorts ?? [])], match: { ...(r.flowMod.match ?? {}) } })),
-});
-const canonical = (s: WireRuleSet): string => JSON.stringify(s.rules.map((r) => [r.priority, [...r.outputPorts].sort(), Object.entries(r.match).sort()]).sort());
-
-/** Distinct admissible rule sets the evaluation recorded for this intent (the turn at which each trial became admissible). */
-function recordedSets(root: string, intent: IntentSpec): WireRuleSet[] {
-  const seen = new Map<string, WireRuleSet>();
-  const walk = (d: string): void => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (e.name !== 'trials.jsonl') continue;
-      let summary: { intent?: string };
-      try { summary = JSON.parse(fs.readFileSync(path.join(d, 'summary.json'), 'utf8')) as { intent?: string }; } catch (err) { process.stderr.write(`skipped ${d}: no readable summary.json (${err instanceof Error ? err.message : String(err)})\n`); continue; }
-      if (summary.intent !== intent.id) continue;
-      for (const line of fs.readFileSync(p, 'utf8').trim().split('\n')) {
-        let t: { admissibleAtTurn?: number | null; turns?: Array<{ response?: string }>; seed?: number };
-        try { t = JSON.parse(line) as typeof t; } catch (err) { process.stderr.write(`skipped a malformed line in ${p}: ${err instanceof Error ? err.message : String(err)}\n`); continue; }
-        const at = t.admissibleAtTurn; if (!at || !t.turns) continue; // admissibleAtTurn is 1-based: turn 1 is turns[0]
-        const response = t.turns[at - 1]?.response; if (response === undefined) continue;
-        const pr = parseProposal(response); if (!pr.ok) continue;
-        if (triageProposal(pr.rules, intent).category !== 'ADMISSIBLE') continue;
-        const s = toSet(`${path.basename(d)}#${t.seed ?? '?'}`, pr.rules);
-        const k = canonical(s);
-        if (!seen.has(k)) seen.set(k, s);
-      }
-    }
-  };
-  walk(root);
-  return [...seen.values()];
-}
 
 function main(): void {
   const argv = process.argv.slice(2);
@@ -86,7 +35,7 @@ function main(): void {
     const survivors = generateMutants(ref, [ZODIAC_PORT_WORKLOAD, ZODIAC_PORT_UPLINK, ZODIAC_PORT_TAP])
       .filter((m) => triageProposal(m.rules, intent).category === 'ADMISSIBLE')
       .map((m) => toSet(m.id, m.rules));
-    const recorded = recordedSets(root, intent);
+    const recorded = recordedSets(root, intent).map((r) => r.set);
     const addresses = addressUniverse([refSet, ...survivors, ...recorded]);
     const perMode: Record<string, unknown> = {};
     for (const [label, mode] of MODES) {

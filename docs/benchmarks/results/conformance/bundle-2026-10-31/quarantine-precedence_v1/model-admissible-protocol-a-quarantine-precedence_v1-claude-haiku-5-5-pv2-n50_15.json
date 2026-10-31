@@ -1,0 +1,106 @@
+{
+ "label": "model-admissible quarantine-precedence/v1 protocol-a-quarantine-precedence_v1-claude-haiku-5-5-pv2-n50#15",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "quarantine-drop-src-51",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "quarantine-drop-dst-51",
+   "priority": 1000,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51"
+   }
+  },
+  {
+   "id": "p1-intra-ipv4-to-uplink",
+   "priority": 500,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-known-50-to-uplink",
+   "priority": 500,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-known-52-to-uplink",
+   "priority": 500,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "uplink-ipv4-to-segment-to-p1",
+   "priority": 400,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "uplink-arp-to-p1",
+   "priority": 400,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-everything-else-to-tap",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  }
+ ],
+ "meta": {
+  "intent": "quarantine-precedence/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-quarantine-precedence_v1-claude-haiku-5-5-pv2-n50#15",
+  "arm": "claude-haiku-5-5",
+  "seed": 20261031
+ }
+}

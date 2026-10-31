@@ -1,0 +1,102 @@
+{
+ "label": "equivalence-control-model uplink-arp-confinement/v1 protocol-b-uplink-arp-confinement_v1-L3-pv3-n20#11",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-intra-ipv4",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-10.0.2.50",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-10.0.2.52",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-tap-only",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-to-seg",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp-10.0.2.1",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p2-arp-10.0.2.254",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.254"
+   }
+  }
+ ],
+ "meta": {
+  "intent": "uplink-arp-confinement/v1",
+  "kind": "equivalence-control-model",
+  "id": "protocol-b-uplink-arp-confinement_v1-L3-pv3-n20#11",
+  "arm": "zodiac-L3:q4_k_m",
+  "seed": 20261031
+ }
+}

@@ -1,0 +1,142 @@
+{
+ "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-B3-pv3-n50#8",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-50-to-dns",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1-50-to-file",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.50",
+    "dstIp": "10.0.2.20"
+   }
+  },
+  {
+   "id": "p1-52-to-dns",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.52",
+    "dstIp": "10.0.2.1"
+   }
+  },
+  {
+   "id": "p1-arp-50",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-52",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-catchall",
+   "priority": 50,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-dns-to-seg",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-file-to-50",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.20",
+    "dstIp": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-catchall",
+   "priority": 50,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  },
+  {
+   "id": "p3-to-p1",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "per-host-allowlist/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-per-host-allowlist_v1-B3-pv3-n50#8",
+  "arm": "qwen3.8:27b",
+  "seed": 20261031
+ }
+}

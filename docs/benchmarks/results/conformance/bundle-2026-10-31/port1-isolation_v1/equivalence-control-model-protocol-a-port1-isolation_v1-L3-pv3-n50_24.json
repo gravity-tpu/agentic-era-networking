@@ -1,0 +1,89 @@
+{
+ "label": "equivalence-control-model port1-isolation/v1 protocol-a-port1-isolation_v1-L3-pv3-n50#24",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-intra-ipv4",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p1-arp-claim-50",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.50"
+   }
+  },
+  {
+   "id": "p1-arp-claim-52",
+   "priority": 200,
+   "outputPorts": [
+    2,
+    3
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054,
+    "arpSpa": "10.0.2.52"
+   }
+  },
+  {
+   "id": "p1-else-tap",
+   "priority": 100,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-to-segment",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 200,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  }
+ ],
+ "meta": {
+  "intent": "port1-isolation/v1",
+  "kind": "equivalence-control-model",
+  "id": "protocol-a-port1-isolation_v1-L3-pv3-n50#24",
+  "arm": "zodiac-L3:q4_k_m",
+  "seed": 20261031
+ }
+}

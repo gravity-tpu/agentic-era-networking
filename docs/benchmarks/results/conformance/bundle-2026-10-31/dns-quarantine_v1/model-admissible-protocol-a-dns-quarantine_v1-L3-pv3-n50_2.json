@@ -1,0 +1,115 @@
+{
+ "label": "model-admissible dns-quarantine/v1 protocol-a-dns-quarantine_v1-L3-pv3-n50#2",
+ "ttlSeconds": 60,
+ "rules": [
+  {
+   "id": "p1-quarantine-51-out",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.51",
+    "srcIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p2-quarantine-51-in",
+   "priority": 200,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "dstIp": "10.0.2.51",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-ipv4-dns",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2048,
+    "srcIp": "10.0.2.0",
+    "srcIpPrefixLen": 24,
+    "dstIp": "10.0.2.1",
+    "dstIpPrefixLen": 32
+   }
+  },
+  {
+   "id": "p1-arp",
+   "priority": 100,
+   "outputPorts": [
+    2
+   ],
+   "match": {
+    "inPort": 1,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p1-else-tap",
+   "priority": 50,
+   "outputPorts": [
+    3
+   ],
+   "match": {
+    "inPort": 1
+   }
+  },
+  {
+   "id": "p2-ipv4-resolver-to-seg",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2048,
+    "srcIp": "10.0.2.1",
+    "srcIpPrefixLen": 32,
+    "dstIp": "10.0.2.0",
+    "dstIpPrefixLen": 24
+   }
+  },
+  {
+   "id": "p2-arp",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 2,
+    "etherType": 2054
+   }
+  },
+  {
+   "id": "p2-else-drop",
+   "priority": 50,
+   "outputPorts": [],
+   "match": {
+    "inPort": 2
+   }
+  },
+  {
+   "id": "p3-tap-return",
+   "priority": 100,
+   "outputPorts": [
+    1
+   ],
+   "match": {
+    "inPort": 3
+   }
+  }
+ ],
+ "meta": {
+  "intent": "dns-quarantine/v1",
+  "kind": "model-admissible",
+  "id": "protocol-a-dns-quarantine_v1-L3-pv3-n50#2",
+  "arm": "zodiac-L3:q4_k_m",
+  "seed": 20261031
+ }
+}
