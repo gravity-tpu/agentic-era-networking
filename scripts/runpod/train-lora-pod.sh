@@ -8,7 +8,7 @@
 # Outputs: /workspace/out containing adapter safetensors, GGUF weights, Modelfiles,
 #          training summaries, and the terminal marker /workspace/out/DONE (or /workspace/out/FAILED).
 # Fails closed (Invariant 3 & 4): any failing step halts immediately via trap.
-set -euo pipefail
+set -Eeuo pipefail
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
 
 TASK="${TASK:-both}"
@@ -31,7 +31,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq && apt-get install -y -qq zstd cmake build-essential git curl ca-certificates pciutils
 
 # 1. Python environment and dependencies
-pip install -q transformers peft trl accelerate huggingface_hub sentencepiece datasets bitsandbytes
+pip install -q transformers peft trl accelerate huggingface_hub sentencepiece datasets bitsandbytes gguf
 
 # 2. Build / clone llama.cpp for GGUF conversion
 git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"

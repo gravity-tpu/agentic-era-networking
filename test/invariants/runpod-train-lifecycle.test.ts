@@ -65,7 +65,7 @@ describe('Runpod LoRA Training Lifecycle Invariants', () => {
 
   it('train-lora-pod.sh defines fail-closed trap and required output markers', () => {
     const content = readFileSync(path.join(REPO_ROOT, 'scripts/runpod/train-lora-pod.sh'), 'utf8');
-    expect(content).toContain('set -euo pipefail');
+    expect(content).toMatch(/set -E?euo pipefail/);
     expect(content).toContain('/workspace/out/FAILED');
     expect(content).toContain('/workspace/out/DONE');
     expect(content).toContain('convert_lora_to_gguf.py');
