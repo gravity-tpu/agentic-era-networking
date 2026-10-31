@@ -260,3 +260,7 @@ No prediction is made about direction or size. A cell is relaunched only for an 
 ### 12.5 What this will not show
 
 One run per cell, one seed set, one adapter; prompt v3 was written after the v2 failures on these intents were read; turn-1 outputs for seeds 1 to 20 repeat the Protocol A conditions only if seeded runs reproduce; the adapter served at run time (`llama-server --lora`) is not tested; on-wire behaviour (RQ4) is not tested.
+
+### 12.6 Results (recorded 2026-10-31, after the runs)
+
+Sections 12.1 to 12.5 are unchanged. The runs are reported in `docs/benchmarks/results/agent-evaluation/lora-v3-protocol-b-2026-10-31/README.md`. Both arms were admissible on 80 of 80 trials within 5 turns, so the ceiling stated in section 12.4 was reached and the primary comparison does not discriminate; no trial needed more than 2 turns. No departure from the registered design.
