@@ -156,17 +156,23 @@ describe('per-host-allowlist/v1: different destinations per workload host, asymm
     const wide = replace(ref, 'p2-fileserver-to-a', (r) => ({ ...r, flowMod: { ...r.flowMod, match: { ...r.flowMod.match, dstIp: '10.0.2.0', dstIpPrefixLen: 24 } } }));
     expect(kinds(wide, PER_HOST_ALLOWLIST_INTENT)).toContain('leak');
   });
+  it('does not require the tap copy: the clauses say a permitted packet may, not must, reach the tap', () => {
+    const noTap = replace(ref, 'p1-a-to-resolver', (r) => ({ ...r, flowMod: { ...r.flowMod, outputPorts: [2] } }));
+    expect(checkIntent(noTap, PER_HOST_ALLOWLIST_INTENT).satisfied).toBe(true);
+  });
   it('rejects the plain isolation policy (both hosts could reach every segment host)', () => {
     expect(kinds(buildPort1IsolationPolicy(), PER_HOST_ALLOWLIST_INTENT)).not.toEqual([]);
   });
 });
 
 describe('the intents can fail broadly: mutants of each reference are mostly rejected', () => {
+  // Floors are the measured rejection rates rounded down (77/94, 45/58, 38/52, 60/78); plan section 13.3 states 73% to 82%, so a regression shows here.
+  const FLOORS: Record<string, number> = { 'quarantine-set/v1': 0.81, 'dns-quarantine/v1': 0.77, 'uplink-arp-confinement/v1': 0.73, 'per-host-allowlist/v1': 0.76 };
   for (const [spec, ref] of REFERENCES) {
-    it(`${spec.id}: at least 60% of mutants are rejected`, () => {
+    it(`${spec.id}: at least ${Math.round(FLOORS[spec.id]! * 100)}% of mutants are rejected`, () => {
       const score = scoreMutants(generateMutants(ref, spec.ports), (rules) => triageProposal(rules, spec).category !== 'ADMISSIBLE');
       expect(score.total).toBeGreaterThan(10);
-      expect(score.killed.length / score.total).toBeGreaterThanOrEqual(0.6);
+      expect(score.killed.length / score.total).toBeGreaterThanOrEqual(FLOORS[spec.id]!);
     });
   }
 });
