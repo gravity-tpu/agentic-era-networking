@@ -846,7 +846,10 @@
     if (isFetching) return;
     isFetching = true;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    // Allow 10s budget on cold initial load across Wi-Fi / SSH tunnels; 4s budget on subsequent delta polls
+    const isInitialFetch = timeSeriesBuffer.length === 0;
+    const timeoutMs = isInitialFetch ? 10000 : 4000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       // Include ?since=<ts> so the server returns only new timeSeries points (delta),
@@ -2931,6 +2934,9 @@
     } else if (range === '7d') {
       durationHours = 168;
       pointCount = 112;
+    } else if (range === '30d') {
+      durationHours = 720;
+      pointCount = 120;
     }
 
     const points = [];
@@ -6018,7 +6024,8 @@ Please connect the physical switch via USB to execute '${command}' on device har
   // Asynchronously query historical downsampled telemetry from Neon Postgres (up to 30 days)
   async function fetchHistoricalRange(range) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutMs = (range === '7d' || range === '30d') ? 15000 : 8000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const res = await fetch(`/api/zodiac?range=${encodeURIComponent(range)}`, {

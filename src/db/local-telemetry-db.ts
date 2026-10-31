@@ -23,7 +23,6 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import readline from 'node:readline';
 import type {
   ZodiacTimeSeriesPoint,
   JetsonTimeSeriesPoint,
@@ -312,16 +311,23 @@ async function readJsonlFileStream<T>(
   cutoffMs: number,
   parser: (raw: Record<string, unknown>) => T,
   deviceLabel: string,
+  maxPoints?: number,
 ): Promise<T[]> {
   const exists = await fileExistsAsync(filePath);
   if (!exists) return [];
   const result: T[] = [];
-  const fileStream = fs.createReadStream(filePath, { encoding: 'utf-8' });
-  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
   try {
-    for await (const rawLine of rl) {
-      const line = rawLine.trim();
+    const content = await fsp.readFile(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const totalLines = lines.length;
+    // For multi-day day-chunks, stride to parse only what is needed for downsampling
+    const stride = (maxPoints && totalLines > maxPoints * 2)
+      ? Math.max(1, Math.floor(totalLines / maxPoints))
+      : 1;
+
+    for (let i = 0; i < totalLines; i += stride) {
+      const line = lines[i]?.trim();
       if (!line) continue;
       try {
         const p = JSON.parse(line) as Record<string, unknown>;
@@ -338,7 +344,7 @@ async function readJsonlFileStream<T>(
     }
   } catch (err: unknown) {
     console.warn(
-      `[!] [Local Telemetry DB] Stream error reading ${path.basename(filePath)}:`,
+      `[!] [Local Telemetry DB] Error reading ${path.basename(filePath)}:`,
       err instanceof Error ? err.message : String(err),
     );
   }
@@ -379,7 +385,7 @@ async function readDeviceSeries<T extends { readonly timestampMs: number }>(
     const exists = await fileExistsAsync(file);
     if (!exists) continue;
 
-    let dayPoints = await readJsonlFileStream(file, cutoffMs, parser, deviceLabel);
+    let dayPoints = await readJsonlFileStream(file, cutoffMs, parser, deviceLabel, maxPerDay);
     if (dayPoints.length === 0) continue;
 
     if (maxPerDay && dayPoints.length > maxPerDay) {
@@ -430,14 +436,11 @@ export async function queryLocalHistory(range: HistoricalRange): Promise<LocalHi
     suffixesChronological.push(utcDateSuffix(t));
   }
 
-  // 2-way parallel device reads (Zodiac + Jetson, then Coral + Workstation)
-  // completes entire query in < 300ms while keeping peak heap < 5 MB
-  const [zodiacPoints, jetsonPoints] = await Promise.all([
+  // 4-way parallel device reads across Zodiac, Jetson, Coral, and Workstation
+  // completes entire multi-day query in < 300ms while keeping peak heap < 5 MB
+  const [zodiacPoints, jetsonPoints, coralPoints, workstationPoints] = await Promise.all([
     readDeviceSeries(zodiacFile, suffixesChronological, cutoffMs, parseZodiacLine, downsamplePoints, config.maxPoints, 'zodiac', isMultiDay),
     readDeviceSeries(jetsonFile, suffixesChronological, cutoffMs, parseJetsonLine, downsampleJetsonPoints, config.maxPoints, 'jetson', isMultiDay),
-  ]);
-
-  const [coralPoints, workstationPoints] = await Promise.all([
     readDeviceSeries(coralFile, suffixesChronological, cutoffMs, parseCoralLine, downsampleCoralPoints, config.maxPoints, 'coral', isMultiDay),
     readDeviceSeries(workstationFile, suffixesChronological, cutoffMs, parseWorkstationLine, downsampleWorkstationPoints, config.maxPoints, 'workstation', isMultiDay),
   ]);

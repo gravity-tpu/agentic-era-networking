@@ -138,7 +138,7 @@ export function getPrismaClient(): PrismaClient | null {
 let lastPersistedTimestampMs = 0;
 let isPersisting = false;
 const BATCH_INTERVAL_MS = 10_000; // 10 seconds cadence
-const DB_TIMEOUT_MS = 2500; // 2.5s execution deadline for DB queries (Dean Latency Invariant)
+const DB_TIMEOUT_MS = 6000; // 6s execution deadline for DB queries (Dean Latency Invariant)
 
 export function isPersistingTelemetry(): boolean {
   return isPersisting;

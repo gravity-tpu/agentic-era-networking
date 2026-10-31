@@ -101,3 +101,33 @@ npm run switch:service:uninstall
 Per Invariant 3 (Fail Closed), untrusted or adversarial pivot nodes (such as the Raspberry Pi 5 workload host) must never maintain permanent standing routes or systemd units pointing to management hardware.
 
 The supervisor script (`zodiac-netgear-tunnel-supervisor.sh`) connects over SSH and executes a trapped session (`trap cleanup EXIT INT TERM HUP`). Ephemeral routes exist on the pivot **only while the operator's SSH session is actively connected**. When the Mac disconnects, sleeps, or reboots, the remote trap automatically sanitizes all routes and IP aliases immediately.
+
+---
+
+## Local Telemetry Bridge Tunnel (`com.zodiac.bridge-tunnel`)
+
+This LaunchAgent maintains a persistent, self-healing SSH port forward from the Mac operator terminal to the Jetson Orin Nano's Zodiac Bridge server (`http://localhost:3003/`) across reboots, sleep/wake, and Wi-Fi reconnections.
+
+### Endpoints
+
+- **Live Dashboard:** `http://localhost:3003/`
+- **Hardware Telemetry:** `http://localhost:3003/api/zodiac?summary=1`
+- **Authenticated Local Operator:** `http://localhost:3003/api/auth/me`
+
+### Installation & Management
+
+Installed as a user-level LaunchAgent (`~/Library/LaunchAgents/com.zodiac.bridge-tunnel.plist`):
+
+```bash
+# Install and activate (macOS launchd supervisor):
+npm run bridge:service:install
+
+# Check status of LaunchAgent, local port, and HTTP probes:
+npm run bridge:service:status
+
+# Restart supervisor:
+npm run bridge:service:restart
+
+# Uninstall LaunchAgent:
+npm run bridge:service:uninstall
+```

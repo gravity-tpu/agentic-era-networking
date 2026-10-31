@@ -1860,9 +1860,41 @@ export class ZodiacBridgeServer {
         return;
       }
 
+      // Dean Latency Budget & Bounded Initial Live Wire Payload:
+      // When client initializes (?since is absent), return the recent live window
+      // (up to 360 points = 15 minutes of 2.5s telemetry) rather than the full 3600-point
+      // in-memory retention buffer. This drops wire payload from ~8.9 MB down to ~600 KB,
+      // preventing AbortController timeouts (>4s) over Wi-Fi / SSH tunnels on initial load.
+      const MAX_INITIAL_LIVE_POINTS = 360;
+      const sliceInitialLive = <T>(arr: readonly T[] | undefined): T[] => {
+        if (!arr || arr.length === 0) return [];
+        return arr.length > MAX_INITIAL_LIVE_POINTS ? arr.slice(-MAX_INITIAL_LIVE_POINTS) : [...arr];
+      };
+
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(this.serializeSnapshot(this.cachedSnapshot));
+      res.end(this.serializeSnapshot({
+        ...this.cachedSnapshot,
+        timeSeries: sliceInitialLive(this.cachedSnapshot.timeSeries),
+        ...(this.cachedSnapshot.jetson ? {
+          jetson: { ...this.cachedSnapshot.jetson, timeSeries: sliceInitialLive(this.cachedSnapshot.jetson.timeSeries) },
+        } : {}),
+        ...(this.cachedSnapshot.coral ? {
+          coral: { ...this.cachedSnapshot.coral, timeSeries: sliceInitialLive(this.cachedSnapshot.coral.timeSeries) },
+        } : {}),
+        ...(this.cachedSnapshot.workstation ? {
+          workstation: { ...this.cachedSnapshot.workstation, timeSeries: sliceInitialLive(this.cachedSnapshot.workstation.timeSeries) },
+        } : {}),
+        ...(this.cachedSnapshot.rpi5 ? {
+          rpi5: { ...this.cachedSnapshot.rpi5, timeSeries: sliceInitialLive(this.cachedSnapshot.rpi5.timeSeries) },
+        } : {}),
+        ...(this.cachedSnapshot.rpi3_1 ? {
+          rpi3_1: { ...this.cachedSnapshot.rpi3_1, timeSeries: sliceInitialLive(this.cachedSnapshot.rpi3_1.timeSeries) },
+        } : {}),
+        ...(this.cachedSnapshot.rpi3_2 ? {
+          rpi3_2: { ...this.cachedSnapshot.rpi3_2, timeSeries: sliceInitialLive(this.cachedSnapshot.rpi3_2.timeSeries) },
+        } : {}),
+      }));
       return;
     }
 
@@ -3142,7 +3174,7 @@ export class ZodiacBridgeServer {
         method: 'POST',
         headers,
         body: payload,
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!res.ok) {
