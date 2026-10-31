@@ -177,3 +177,16 @@ describe('against the real reference policy and its mutants', () => {
     expect(forged.unseparated.length).toBeGreaterThan(0);
   });
 });
+
+describe('degenerate frames: an IPv4 frame whose source and destination address are identical', () => {
+  const flows = candidateFlows(['10.0.2.50', '10.0.2.52', '8.8.8.8'], FlowMode.Forged);
+  it('is never a candidate: the hardware does not forward it (finding F1, 2026-10-31: 3 of 3 hosts), so it cannot be a gate flow', () => {
+    expect(flows.some((f) => f.packet.etherType === 0x0800 && f.packet.srcIp === f.packet.dstIp)).toBe(false);
+  });
+  it('keeps the other IPv4 flows between the same addresses', () => {
+    expect(flows.some((f) => f.packet.etherType === 0x0800 && f.packet.inPort === 1 && f.packet.srcIp === '10.0.2.50' && f.packet.dstIp === '10.0.2.52')).toBe(true);
+  });
+  it('keeps an ARP request whose sender and target address are identical: that is a real gratuitous ARP, not a land-style frame', () => {
+    expect(flows.some((f) => f.packet.etherType === 0x0806 && f.packet.arpSpa === f.packet.arpTpa)).toBe(true);
+  });
+});

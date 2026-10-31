@@ -78,6 +78,9 @@ export function candidateFlows(addresses: readonly string[], allowed: FlowMode):
     for (const etherType of [ETH_TYPE_IPV4_INTENT, ETH_TYPE_ARP_INTENT]) {
       for (const src of all) {
         for (const dst of all) {
+          // An IPv4 frame with identical source and destination address (a land-style packet) is not a flow: the hardware does not forward it (finding F1,
+          // 2026-10-31: 3 of 3 hosts, nothing seen on O2 or O3 while the model predicts forwarding), so it would only make a gate flow fail. A gratuitous ARP (spa equals tpa) is kept.
+          if (etherType === ETH_TYPE_IPV4_INTENT && src === dst) continue;
           const mode = maxMode(sourceMode(inPort, etherType, src), destinationMode(dst));
           if (mode > allowed) continue;
           const srcMac = `02:00:00:00:00:${inPort.toString(16).padStart(2, '0')}`;
