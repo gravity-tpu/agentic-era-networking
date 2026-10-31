@@ -63,13 +63,16 @@ import { samplingRecord } from '../dist/sdn/eval-sampling.js';
 import { proposerPrompts, type PromptVersion } from '../dist/sdn/proposer-prompt.js';
 import { intentSha256 } from '../dist/sdn/intent-hash.js';
 import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
+import { HARD_INTENTS } from '../dist/sdn/intents-hard.js';
 
-const INTENTS = {
+// The four evaluated intents (plan sections 3 and 10) and the four additional ones (plan section 13, src/sdn/intents-hard.ts).
+const INTENTS: Record<string, typeof PORT1_ISOLATION_INTENT> = {
   [PORT1_ISOLATION_INTENT.id]: PORT1_ISOLATION_INTENT,
   [DNS_CONFINEMENT_INTENT.id]: DNS_CONFINEMENT_INTENT,
   [QUARANTINE_PRECEDENCE_INTENT.id]: QUARANTINE_PRECEDENCE_INTENT,
   [TAP_RETURN_ISOLATION_INTENT.id]: TAP_RETURN_ISOLATION_INTENT,
-} as const;
+  ...Object.fromEntries(HARD_INTENTS.map((spec) => [spec.id, spec])),
+};
 const MAX_N = 200;
 const MAX_TURNS = 5; // Protocol B: the plan's iteration cap
 const MAX_FEEDBACK_LINES = 12; // verifier detail lines returned to the model per turn
