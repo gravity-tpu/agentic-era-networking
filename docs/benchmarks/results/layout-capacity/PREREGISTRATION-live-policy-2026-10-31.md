@@ -28,3 +28,5 @@ Preconditions, checked and recorded before the run: the isolation status reads `
 ## Limits stated now
 
 One switch, firmware 0.86; **one traffic path**: a frame matched by `p1-default-tap-only` at priority 150, after the four priority-200 rules (frames matched by other rules, for example intra-segment IPv4 to P2 and P3, are not measured); UDP only; a Python paced sender; quarantines installed after the policy (the restart path re-sends them before it, a layout this does not cover); switch CPU not read.
+
+_Added 2026-10-31, after the first attempt and before the valid run: the method as written assumes two things that were no longer true, a resolvable destination for the sender and a promiscuous tap NIC; the first attempt was invalid for that reason (kept in `run-2026-10-31-live-policy-failed-attempt-1/`) and the valid run added a temporary static neighbor entry and a background capture holding promiscuous mode. The text above is unchanged. Results: [`README-live-policy-2026-10-31.md`](README-live-policy-2026-10-31.md)._
