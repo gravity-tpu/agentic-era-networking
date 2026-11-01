@@ -177,6 +177,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True); ap.add_argument('--ks', default='0,2,4,8'); ap.add_argument('--rounds', type=int, default=2); ap.add_argument('--max-pps', type=int, default=MAX_OFFERED_PPS)
     ap.add_argument('--allow-js', default=None, help='measure with this many inert allow rules (ascending, cumulative, k = 0) instead of quarantines, e.g. 0,4,8')
+    ap.add_argument('--allow-quarantines', type=int, default=0, help='with --allow-js: also hold this many quarantine DROPs (installed after the allow rules), the mixed table the gate evaluates under a declared target')
     ap.add_argument('--allow-priority', type=int, default=120, help='priority of the allow rules: between p3-tap-return (100) and the measured rule (150), or above the policy (300)')
     a = ap.parse_args()
     MAX_OFFERED_PPS = min(a.max_pps, MAX_OFFERED_PPS)
@@ -194,7 +195,7 @@ def main():
         'senderSha256': hashlib.sha256(SENDER_SRC.encode()).hexdigest(),
         'harnessSha256': hashlib.sha256(open(__file__, 'rb').read()).hexdigest(),
         'params': {'startPps': START_PPS, 'stepFactor': STEP_FACTOR, 'maxOfferedPps': MAX_OFFERED_PPS, 'stepSeconds': STEP_SECONDS, 'saturationRatio': SAT_RATIO, 'payloadBytes': PAYLOAD,
-                   'sender': f'{NODE01} {SENDER_IP} via {SENDER_IF} to {DST_IP}', 'observe': f'Jetson {TAP_IF} rx_packets (Zodiac P3 link)', 'quarantineIps': QUARANTINE_IPS, 'allowRuleCounts': allow_js, 'allowPriority': a.allow_priority if allow_js is not None else None},
+                   'sender': f'{NODE01} {SENDER_IP} via {SENDER_IF} to {DST_IP}', 'observe': f'Jetson {TAP_IF} rx_packets (Zodiac P3 link)', 'quarantineIps': QUARANTINE_IPS, 'allowRuleCounts': allow_js, 'allowPriority': a.allow_priority if allow_js is not None else None, 'allowQuarantines': a.allow_quarantines if allow_js is not None else None},
         'quarantineEnvelope': 'bridge defaults (propose mode, approve through the local API; cap 8, ttl 300 s)',
     }
     json.dump(prov, open(os.path.join(a.out, 'provenance.json'), 'w'), indent=1)
@@ -207,9 +208,10 @@ def main():
             order = ks if rnd % 2 == 1 else list(reversed(ks))
             for k in order:
                 if allow_js is not None:
-                    log(f'round {rnd}: {k} allow rule(s) at priority {a.allow_priority}, no quarantines')
+                    log(f'round {rnd}: {k} allow rule(s) at priority {a.allow_priority}, {a.allow_quarantines} quarantine(s)')
                     set_quarantines(0)
                     ensure_allow_rules(k, a.allow_priority)
+                    if a.allow_quarantines > 0: set_quarantines(a.allow_quarantines)
                 else:
                     log(f'round {rnd}: installing {k} quarantine(s)')
                     set_quarantines(k)
@@ -219,7 +221,7 @@ def main():
                 sat = [s for s in steps if s.get('saturated')]
                 cap = sat[0]['medianBusyDeliveredPps'] if sat else None
                 log(f'  k={k}: capacity {cap if cap is not None else "not reached"} pps')
-                results.append({'round': rnd, 'k': k, 'idlePps': round(idle, 2), 'capacityPps': cap, 'steps': steps})
+                results.append({'round': rnd, 'k': k, 'quarantines': a.allow_quarantines if allow_js is not None else k, 'idlePps': round(idle, 2), 'capacityPps': cap, 'steps': steps})
                 json.dump(results, open(os.path.join(a.out, 'results.json'), 'w'))
                 set_quarantines(0)
                 time.sleep(8)

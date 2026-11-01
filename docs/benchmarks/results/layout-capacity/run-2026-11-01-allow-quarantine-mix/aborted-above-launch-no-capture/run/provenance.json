@@ -1,0 +1,47 @@
+{
+ "startedEt": "2026-11-01 18:12:58 ET",
+ "bridgeCommit": [
+  "6dd6f8e867663ef614c0fa112b697fc05cbf5476",
+  "main",
+  "3"
+ ],
+ "bridgeDistSha256": "64ee69a134b049849229221bddaf517e1566055d3b3aa53bb9e0ae39081e70a7",
+ "senderSha256": "4eccef8e7cf9d777e7bbea7f4e3a6201abc585b72b1d8f52df5a6d6504fc2a68",
+ "harnessSha256": "f0162523cf55648f0502dc876354a99a2c663d5ced214b9da24c09798974f489",
+ "params": {
+  "startPps": 2000,
+  "stepFactor": 1.2,
+  "maxOfferedPps": 16000,
+  "stepSeconds": 12,
+  "saturationRatio": 0.97,
+  "payloadBytes": 572,
+  "sender": "agentic-node-01 10.0.2.50 via eth0 to 10.0.0.119",
+  "observe": "Jetson enx9c69d39dd0a6 rx_packets (Zodiac P3 link)",
+  "quarantineIps": [
+   "10.0.2.101",
+   "10.0.2.102",
+   "10.0.2.103",
+   "10.0.2.104",
+   "10.0.2.105",
+   "10.0.2.106",
+   "10.0.2.107",
+   "10.0.2.108",
+   "10.0.2.109",
+   "10.0.2.110",
+   "10.0.2.111",
+   "10.0.2.112",
+   "10.0.2.113",
+   "10.0.2.114",
+   "10.0.2.115",
+   "10.0.2.116"
+  ],
+  "allowRuleCounts": [
+   0,
+   4,
+   8
+  ],
+  "allowPriority": 300,
+  "allowQuarantines": 8
+ },
+ "quarantineEnvelope": "bridge defaults (propose mode, approve through the local API; cap 8, ttl 300 s)"
+}

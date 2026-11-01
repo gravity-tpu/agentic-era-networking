@@ -1,0 +1,41 @@
+[2026-11-01 16:02:00 ET] round 1: 0 allow rule(s) at priority 120, 8 quarantine(s)
+[2026-11-01 16:02:22 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 16:02:39 ET]   k=0 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1951 pps
+[2026-11-01 16:02:58 ET]   k=0 offered   2400 (sent    2400/s): delivered ratio 0.822, median busy rate    2340 pps
+[2026-11-01 16:03:15 ET]   k=0 re-probe at 2400: ratio 0.987
+[2026-11-01 16:03:34 ET]   k=0 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2841 pps
+[2026-11-01 16:03:54 ET]   k=0 offered   3456 (sent    3456/s): delivered ratio 0.986, median busy rate    3368 pps
+[2026-11-01 16:04:13 ET]   k=0 offered   4147 (sent    4147/s): delivered ratio 0.986, median busy rate    4042 pps
+[2026-11-01 16:04:33 ET]   k=0 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4903 pps
+[2026-11-01 16:04:52 ET]   k=0 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5883 pps
+[2026-11-01 16:05:12 ET]   k=0 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    7059 pps
+[2026-11-01 16:05:32 ET]   k=0 offered   8598 (sent    8598/s): delivered ratio 0.969, median busy rate    8234 pps
+[2026-11-01 16:05:48 ET]   k=0 re-probe at 8598: ratio 0.969
+[2026-11-01 16:05:48 ET]   k=0: capacity 8234 pps
+[2026-11-01 16:06:02 ET] round 1: 4 allow rule(s) at priority 120, 8 quarantine(s)
+[2026-11-01 16:06:24 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 16:06:41 ET]   k=4 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1973 pps
+[2026-11-01 16:07:01 ET]   k=4 offered   2400 (sent    2400/s): delivered ratio 0.987, median busy rate    2367 pps
+[2026-11-01 16:07:20 ET]   k=4 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2812 pps
+[2026-11-01 16:07:40 ET]   k=4 offered   3456 (sent    3456/s): delivered ratio 0.987, median busy rate    3369 pps
+[2026-11-01 16:07:59 ET]   k=4 offered   4147 (sent    4147/s): delivered ratio 0.986, median busy rate    4077 pps
+[2026-11-01 16:08:19 ET]   k=4 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4903 pps
+[2026-11-01 16:08:38 ET]   k=4 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5883 pps
+[2026-11-01 16:08:58 ET]   k=4 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    6980 pps
+[2026-11-01 16:09:18 ET]   k=4 offered   8598 (sent    8598/s): delivered ratio 0.914, median busy rate    7765 pps
+[2026-11-01 16:09:34 ET]   k=4 re-probe at 8598: ratio 0.838
+[2026-11-01 16:09:34 ET]   k=4: capacity 7765 pps
+[2026-11-01 16:09:48 ET] round 1: 8 allow rule(s) at priority 120, 8 quarantine(s)
+[2026-11-01 16:10:12 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 16:10:28 ET]   k=8 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1952 pps
+[2026-11-01 16:10:48 ET]   k=8 offered   2400 (sent    2400/s): delivered ratio 0.987, median busy rate    2340 pps
+[2026-11-01 16:11:08 ET]   k=8 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2834 pps
+[2026-11-01 16:11:27 ET]   k=8 offered   3456 (sent    3456/s): delivered ratio 0.986, median busy rate    3408 pps
+[2026-11-01 16:11:47 ET]   k=8 offered   4147 (sent    4147/s): delivered ratio 0.987, median busy rate    4088 pps
+[2026-11-01 16:12:07 ET]   k=8 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4852 pps
+[2026-11-01 16:12:26 ET]   k=8 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5818 pps
+[2026-11-01 16:12:46 ET]   k=8 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    6980 pps
+[2026-11-01 16:13:06 ET]   k=8 offered   8598 (sent    8598/s): delivered ratio 0.914, median busy rate    7824 pps
+[2026-11-01 16:13:22 ET]   k=8 re-probe at 8598: ratio 0.816
+[2026-11-01 16:13:22 ET]   k=8: capacity 7824 pps
+[2026-11-01 16:13:42 ET] finished; quarantines left: 0; isolation verified: True
