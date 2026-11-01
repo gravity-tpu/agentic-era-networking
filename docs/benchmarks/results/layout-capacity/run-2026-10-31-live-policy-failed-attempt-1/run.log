@@ -1,0 +1,41 @@
+[2026-10-31 22:43:34 ET] round 1: installing 0 quarantine(s)
+[2026-10-31 22:43:44 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:44:01 ET]   k=0 offered   2000 (sent    2000/s): delivered ratio 0.000, median busy rate       1 pps
+[2026-10-31 22:44:17 ET]   k=0 re-probe at 2000: ratio 0.001
+[2026-10-31 22:44:17 ET]   k=0: capacity 1 pps
+[2026-10-31 22:44:31 ET] round 1: installing 2 quarantine(s)
+[2026-10-31 22:44:41 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:44:58 ET]   k=2 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:45:14 ET]   k=2 re-probe at 2000: ratio 0.001
+[2026-10-31 22:45:14 ET]   k=2: capacity 1 pps
+[2026-10-31 22:45:29 ET] round 1: installing 4 quarantine(s)
+[2026-10-31 22:45:41 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:45:57 ET]   k=4 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:46:14 ET]   k=4 re-probe at 2000: ratio 0.001
+[2026-10-31 22:46:14 ET]   k=4: capacity 1 pps
+[2026-10-31 22:46:27 ET] round 1: installing 8 quarantine(s)
+[2026-10-31 22:46:41 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:46:58 ET]   k=8 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:47:14 ET]   k=8 re-probe at 2000: ratio 0.001
+[2026-10-31 22:47:14 ET]   k=8: capacity 1 pps
+[2026-10-31 22:47:28 ET] round 2: installing 8 quarantine(s)
+[2026-10-31 22:47:42 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:47:58 ET]   k=8 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:48:15 ET]   k=8 re-probe at 2000: ratio 0.001
+[2026-10-31 22:48:15 ET]   k=8: capacity 1 pps
+[2026-10-31 22:48:29 ET] round 2: installing 4 quarantine(s)
+[2026-10-31 22:48:40 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:48:57 ET]   k=4 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:49:13 ET]   k=4 re-probe at 2000: ratio 0.001
+[2026-10-31 22:49:13 ET]   k=4: capacity 1 pps
+[2026-10-31 22:49:27 ET] round 2: installing 2 quarantine(s)
+[2026-10-31 22:49:38 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:49:55 ET]   k=2 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:50:11 ET]   k=2 re-probe at 2000: ratio 0.001
+[2026-10-31 22:50:11 ET]   k=2: capacity 1 pps
+[2026-10-31 22:50:25 ET] round 2: installing 0 quarantine(s)
+[2026-10-31 22:50:35 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-10-31 22:50:52 ET]   k=0 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-10-31 22:51:08 ET]   k=0 re-probe at 2000: ratio 0.001
+[2026-10-31 22:51:08 ET]   k=0: capacity 1 pps
+[2026-10-31 22:51:26 ET] finished; quarantines left: 0; isolation verified: True
