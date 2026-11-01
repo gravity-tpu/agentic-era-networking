@@ -51,6 +51,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  vi.stubEnv('ZODIAC_UPLINK_ARP_PEERS', 'none'); // the live configuration: the table the cost model measured
   controller = new ZodiacController();
   bridge = new ZodiacBridgeServer(controller);
   sendSpy = vi.spyOn(controller.openFlow, 'sendFlowModOptions').mockImplementation(() => 1);
@@ -111,6 +112,7 @@ describe('the quarantine install is gated', () => {
 
 describe('a declared throughput target (A8)', () => {
   it('is advisory for quarantines: containment is never refused for throughput, but the shortfall is logged', async () => {
+    vi.stubEnv('ZODIAC_UPLINK_ARP_PEERS', 'none'); // the live configuration: the table the cost model measured
     vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '12000'); // the deployed table cannot meet this even at k=1
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const b = new ZodiacBridgeServer(new ZodiacController());
@@ -219,6 +221,7 @@ describe('the gate writes an audit trail', () => {
   });
 
   it('records an advisory throughput shortfall as an advisory event, and the quarantine still goes through', () => {
+    vi.stubEnv('ZODIAC_UPLINK_ARP_PEERS', 'none'); // the live configuration: the table the cost model measured
     vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '12000');
     const b = new ZodiacBridgeServer(new ZodiacController());
     expect(b.requestQuarantine({ targetIp: '10.0.2.50', reason: 'rate', approved: true, peer: '127.0.0.1' }).status).toBe(200);

@@ -41,8 +41,8 @@ The method, the predictions and what each outcome would mean were fixed in [`PRE
 
 ## What this says, and what follows
 
-- The deployed cost model's coefficients describe the live table on this path. Per the pre-registration, the model's shape check (`classifyDeployedShape`, which today accepts the builder's default seven-rule policy and rejects the live six-rule table) may now be changed to recognise the live table explicitly, keeping the coefficients, with a test. **That code change is not made by this commit**; it is the next step, taken on this evidence.
-- Until that change is deployed, A8 stays `unverifiable` for the live policy and the bridge's startup log says so.
+- The deployed cost model's coefficients describe the live table on this path. Per the pre-registration, the model's shape check (`classifyDeployedShape`, which today accepts the builder's default seven-rule policy and rejects the live six-rule table) may now be changed to recognise the live table explicitly, keeping the coefficients, with a test. The code change was made afterwards, in a separate change: `classifyDeployedShape` compares against the measured live table (no uplink ARP peers) and the builder's default seven-rule table is now `unverifiable`.
+- Until that change is deployed to the Jetson (update, build, restart the bridge), A8 stays `unverifiable` for the live policy and the bridge's startup log says so.
 - The capacity target of 6,000 pps declared on the live bridge is about 74% of the 8,140 pps mean capacity at k = 8 (the envelope's full depth), which leaves the margin below the roughly 77% bound derived from the session loss seen at 1.3 to 2.3 times capacity in the 2026-10-04 ladder.
 
 ## Deviations and incidents

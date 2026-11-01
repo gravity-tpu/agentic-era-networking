@@ -93,9 +93,17 @@ describe('domain and target checks', () => {
 });
 
 describe('classifyDeployedShape', () => {
-  const policy = buildPort1IsolationPolicy();
+  // The table the 2026-10-31 hardware run measured: the live policy, uplink ARP peers `none` (six rules). The builder's default (open uplink ARP, seven rules) was never measured.
+  const policy = buildPort1IsolationPolicy(undefined, undefined, undefined, []);
   const drop = (id: string, ip: string, priority = 65535, extra: Record<string, unknown> = {}): IsolationRule => ({
     id, flowMod: { command: FlowModCommand.OFPFC_ADD, priority, outputPorts: [], match: { etherType: 0x0800, srcIp: ip, srcIpPrefixLen: 32, ...extra } },
+  });
+
+  it('does not model the builder\'s default policy (open uplink ARP, seven rules): that table was never measured', () => {
+    const r = classifyDeployedShape(buildPort1IsolationPolicy());
+    expect(r.modelled).toBe(false);
+    expect(buildPort1IsolationPolicy().length).toBe(policy.length + 1);
+    expect((r as { reason: string }).reason).toMatch(/measured/);
   });
 
   it('models the deployed policy alone and with quarantine DROPs after it', () => {
@@ -121,5 +129,26 @@ describe('classifyDeployedShape', () => {
     expect(classifyDeployedShape([...policy, drop('quarantine-a', '10.0.2.101', 65535, { dstIp: '10.0.2.5' })]).modelled).toBe(false);
     expect(classifyDeployedShape([...policy, { id: 'quarantine-b', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 65535, outputPorts: [], match: { etherType: 0x0800, srcIp: '10.0.2.0', srcIpPrefixLen: 24 } } }]).modelled).toBe(false);
     expect(classifyDeployedShape([...policy, drop('quarantine-c', '10.0.2.101', 100)]).modelled).toBe(false);
+  });
+});
+
+describe('the 2026-10-31 live-policy run (docs/benchmarks/results/layout-capacity/run-2026-10-31-live-policy)', () => {
+  interface LiveRow { round: number; k: number; capacityPps: number }
+  const LIVE = JSON.parse(readFileSync('docs/benchmarks/results/layout-capacity/run-2026-10-31-live-policy/results.json', 'utf-8')) as LiveRow[];
+  const BAND = 0.05; // the pre-registered band (PREREGISTRATION-live-policy-2026-10-31.md, prediction 1)
+  const meanTimeUs = (k: number): number => { const rows = LIVE.filter((r) => r.k === k); return rows.reduce((a, r) => a + 1e6 / r.capacityPps, 0) / rows.length; };
+
+  it('has both rounds at every k', () => {
+    for (const k of [0, 2, 4, 8]) expect(LIVE.filter((r) => r.k === k)).toHaveLength(2);
+  });
+  it('the model is within the pre-registered 5% of the measured per-packet time at every k', () => {
+    for (const k of [0, 2, 4, 8]) {
+      const modelUs = Number(deployedPacketTimePs(DEPLOYED_PAYLOAD_BYTES, BigInt(k))) / 1e6;
+      expect(Math.abs(meanTimeUs(k) - modelUs) / modelUs, `k=${k}`).toBeLessThanOrEqual(BAND);
+    }
+  });
+  it('can fail: a model with the earlier benchmark\'s per-quarantine slope (4.24 us) would not pass the same check', () => {
+    const worst = [0, 2, 4, 8].map((k) => { const wrong = 80.0 + 4.24 * k; return Math.abs(meanTimeUs(k) - wrong) / wrong; });
+    expect(Math.max(...worst)).toBeGreaterThan(BAND);
   });
 });

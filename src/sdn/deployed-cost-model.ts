@@ -34,6 +34,14 @@ const PER_QUARANTINE_PS = 5_420_000n;
 /** Same claimed accuracy as zodiac-cost-model.ts. The worst clean saturated step in the stored artifact is about 13,000 ppm off. */
 export const DEPLOYED_TOLERANCE_PPM = 20_000n;
 
+/**
+ * The uplink ARP peer list of the policy the hardware measured: none, which is the live bridge's setting (`ZODIAC_UPLINK_ARP_PEERS=none`, six rules). The builder's
+ * default (peers unset, an open uplink ARP rule, seven rules) is a different table that no run measured, so it is not modelled. The 2026-10-20 run measured the same
+ * match path behind the same number of rules (the older six-rule policy), and the 2026-10-31 run re-measured the live table itself and confirmed the coefficients below
+ * within 1.5% at every k (docs/benchmarks/results/layout-capacity/README-live-policy-2026-10-31.md).
+ */
+export const MEASURED_UPLINK_ARP_PEERS: readonly string[] = [];
+
 export class DeployedCostDomainError extends Error {
   constructor(message: string) {
     super(message);
@@ -77,16 +85,16 @@ function canon(r: { id: string; flowMod: FlowModOptions }): string {
 }
 
 /**
- * The table the hardware run measured: exactly the deployed isolation policy, in its order, followed by quarantine DROPs. Each DROP is an
+ * The table the hardware runs measured: exactly the live isolation policy (uplink ARP peers none), in its order, followed by quarantine DROPs. Each DROP is an
  * add with no output, matching only eth_type IPv4 and an exact /32 source, at a priority above every policy rule.
  */
 export function classifyDeployedShape(rules: readonly IsolationRule[]): DeployedShapeResult {
   const no = (reason: string): DeployedShapeResult => ({ modelled: false, reason });
-  const policy = buildPort1IsolationPolicy();
-  if (rules.length < policy.length) return no(`${rules.length} rules; the deployed table has the ${policy.length}-rule isolation policy first`);
+  const policy = buildPort1IsolationPolicy(undefined, undefined, undefined, MEASURED_UPLINK_ARP_PEERS);
+  if (rules.length < policy.length) return no(`${rules.length} rules; the measured table has the ${policy.length}-rule live isolation policy first (uplink ARP peers none)`);
   for (const [i, p] of policy.entries()) {
     const r = rules[i];
-    if (r === undefined || canon(r) !== canon(p)) return no(`rule ${i + 1} is not the deployed policy's ${p.id}, in order; only the deployed policy followed by quarantine DROPs was measured`);
+    if (r === undefined || canon(r) !== canon(p)) return no(`rule ${i + 1} is not the measured live policy's ${p.id}, in order; only the live policy (uplink ARP peers none) followed by quarantine DROPs was measured`);
   }
   const maxPolicyPriority = Math.max(...policy.map((p) => p.flowMod.priority));
   const quarantineRuleIds: string[] = [];
