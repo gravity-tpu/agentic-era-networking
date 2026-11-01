@@ -211,7 +211,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 4. **B conformance probe**: the first manual run was done on 2026-10-12 (T1 to T4, all matched, see track B); the one-command probe (`scripts/conformance-run.ts`) ran on 2026-10-20 (58 rule sets, five flows); next is a larger packet set and repeats.
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
 6. **C scenarios 2 to 6**, then the end-to-end scenario in section 3.
-7. **Independent review of the policy and the property list by a network engineer**, before publishing results. This can happen earlier; it should not happen later.
+7. **Independent review of the policy and the property list by a network engineer**, before publishing results. This can happen earlier; it should not happen later. The reviewer (the owner) has a reading list and questions in [docs/research/independent-review-packet.md](research/independent-review-packet.md) (2026-10-31); not yet done.
 
 ## 5. Deferred or dropped
 
