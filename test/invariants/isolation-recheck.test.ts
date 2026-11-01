@@ -543,3 +543,61 @@ describe('the timer', () => {
     expect(off.reads()).toBe(0);
   });
 });
+
+describe('the onReading hook (the repair governor needs the FRESH reading, not the stored status)', () => {
+  const noTableMiss = (): FlowStatsEntry[] => faithful().filter((_, i) => i !== 0); // the priority-0 entry is first in the fixture
+  const forwardingTableMiss = (): FlowStatsEntry[] => {
+    const bufs = [entryFrom(tableMissMod, applyActions(outputAction(2))), ...flowMods.map((fm) => entryFrom(fm))];
+    return entriesOf(bufs);
+  };
+
+  it('is called with the fresh candidate of every successful, interpreted read, including a clean one while the stored status is still mismatch', async () => {
+    const seen: IsolationStatus[] = [];
+    const t = make(verifiedStatus(), 10_000, { onReading: (c) => { seen.push(c); } });
+    await t.rc.runOnce();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.state).toBe('verified');
+    t.useRead(ok(noTableMiss));
+    await t.rc.runOnce();
+    expect(t.status().state).toBe('mismatch');
+    expect(seen[1]?.actions?.tableMiss).toBe('absent');
+    t.useRead(ok(faithful));
+    await t.rc.runOnce(); // a clean read while the stored status is still mismatch: the early return in interpret, but the hook still sees it
+    expect(t.status().state).toBe('mismatch');
+    expect(seen[2]?.state).toBe('verified');
+    expect(seen[2]?.actions?.tableMiss).toBe('drops');
+  });
+
+  it('sees a forwarding table-miss as `forwards`', async () => {
+    const seen: IsolationStatus[] = [];
+    const t = make(verifiedStatus(), 10_000, { onReading: (c) => { seen.push(c); } });
+    t.useRead(ok(forwardingTableMiss));
+    await t.rc.runOnce();
+    expect(seen[0]?.actions?.tableMiss).toBe('forwards');
+  });
+
+  it('is not called for a failed read, or when the check was skipped (not eligible, or the lock is held)', async () => {
+    const seen: IsolationStatus[] = [];
+    const t = make(verifiedStatus(), 10_000, { onReading: (c) => { seen.push(c); } });
+    t.useRead(fails());
+    await t.rc.runOnce();
+    expect(seen).toEqual([]);
+    t.useRead(ok(faithful));
+    t.lock.tryAcquire();
+    await t.rc.runOnce();
+    expect(seen).toEqual([]);
+    t.lock.release();
+    const pending = make(pendingReadbackStatus(), 10_000, { onReading: (c) => { seen.push(c); } });
+    await pending.rc.runOnce();
+    expect(seen).toEqual([]);
+  });
+
+  it('a hook that throws cannot fail the check or change what it recorded', async () => {
+    const t = make(verifiedStatus(), 10_000, { onReading: () => { throw new Error('hook bug'); } });
+    t.useRead(ok(noTableMiss));
+    const outcome = await t.rc.runOnce();
+    expect(outcome).toBe('changed');
+    expect(t.status().state).toBe('mismatch');
+    expect(t.logs.some((l) => /hook bug/.test(l.text))).toBe(true);
+  });
+});

@@ -52,9 +52,9 @@ export function safeHeaderText(value: string | readonly string[] | undefined, ma
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-export type GateAuditRoute = 'allow' | 'quarantine' | 'startup' | 'approve' | 'experiment';
+export type GateAuditRoute = 'allow' | 'quarantine' | 'startup' | 'approve' | 'experiment' | 'repair';
 /** `refused`: the gate refused a table. `advisory`: a throughput shortfall it let through. `caller_refused`: a state-changing route refused who was asking, before any rule was read. */
-export type GateAuditEvent = 'refused' | 'advisory' | 'caller_refused';
+export type GateAuditEvent = 'refused' | 'advisory' | 'caller_refused' | 'repair' | 'repair_exhausted';
 
 /** What a record keeps of a violation. The gate's own violations fit it; a caller refusal uses the property `caller`. */
 export interface GateAuditViolation {

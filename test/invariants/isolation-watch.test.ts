@@ -157,7 +157,7 @@ describe('delivery', () => {
 describe('parseObservation', () => {
   it('reads the bridge payload', () => {
     const o = parseObservation({ port1Isolation: { state: 'verified', checkedAgeMs: 5000, mismatches: [], actions: { tableMiss: 'drops' } } });
-    expect(o).toEqual({ kind: 'status', state: 'verified', tableMiss: 'drops', checkedAgeMs: 5000, mismatches: 0 });
+    expect(o).toEqual({ kind: 'status', state: 'verified', tableMiss: 'drops', checkedAgeMs: 5000, mismatches: 0, repair: null }); // a bridge without auto-repair reports none
   });
   it('treats a payload it cannot read as unreachable, never as ok', () => {
     for (const bad of [null, {}, { port1Isolation: null }, { port1Isolation: { state: 5 } }, 'x']) expect(parseObservation(bad).kind).toBe('unreachable');
@@ -175,5 +175,49 @@ describe('parseWatchConfig', () => {
   });
   it('requires the critical threshold not to exceed the generic one (a lost table-miss must never be slower than a generic mismatch)', () => {
     expect(() => parseWatchConfig({ ISOLATION_WATCH_BAD_POLLS: '2', ISOLATION_WATCH_CRITICAL_POLLS: '3' })).toThrow(RangeError);
+  });
+});
+
+describe('auto-repair events (the bridge re-sends the default DROP by itself; a person must hear about it)', () => {
+  const withRepair = (totalRepairs: number, extra: Partial<{ exhausted: boolean; lastTrigger: string | null; enabled: boolean }> = {}): Observation => ({
+    ...ok, repair: { enabled: true, totalRepairs, exhausted: false, lastTrigger: totalRepairs > 0 ? 'forwards' : null, ...extra },
+  });
+  it('sends one high-priority message when the repair count goes up, and none for the first observation or an unchanged count', () => {
+    const r = rig();
+    expect(r.poll(withRepair(0))).toEqual([]);
+    expect(r.poll(withRepair(0))).toEqual([]);
+    const m = r.poll(withRepair(1));
+    expect(kinds(m)).toEqual(['repair']);
+    expect(m[0]?.priority).toBe('high');
+    expect(m[0]?.body).toMatch(/default DROP/);
+    expect(m[0]?.body).toMatch(/forwards/);
+    expect(r.poll(withRepair(1))).toEqual([]);
+    expect(kinds(r.poll(withRepair(2)))).toEqual(['repair']);
+  });
+  it('does not announce a repair that happened before the watcher started (the first observation is the baseline), nor a counter reset by a bridge restart', () => {
+    const r = rig();
+    expect(r.poll(withRepair(5))).toEqual([]);
+    expect(r.poll(withRepair(0))).toEqual([]); // the bridge restarted: counters are new
+    expect(kinds(r.poll(withRepair(1)))).toEqual(['repair']);
+  });
+  it('an exhausted repair budget is critical: urgent after 2 polls, saying a person is needed', () => {
+    const r = rig();
+    r.poll(withRepair(3, { exhausted: true }));
+    const m = r.poll(withRepair(3, { exhausted: true }));
+    expect(kinds(m)).toEqual(['alert']);
+    expect(m[0]?.priority).toBe('urgent');
+    expect(m[0]?.body).toMatch(/person/);
+    expect(classify(withRepair(3, { exhausted: true }), DEFAULT_WATCH_CONFIG)).toBe('critical');
+  });
+  it('an older bridge without repair information produces no repair messages and no error', () => {
+    const r = rig();
+    for (let i = 0; i < 3; i++) expect(r.poll(ok)).toEqual([]);
+  });
+  it('parseObservation reads the repair block, and ignores a malformed one', () => {
+    const base = { state: 'verified', checkedAgeMs: 5000, mismatches: [], actions: { tableMiss: 'drops' } };
+    const good = parseObservation({ port1Isolation: { ...base, repair: { enabled: true, totalRepairs: 2, exhausted: false, lastTrigger: 'absent', repairsInWindow: 1 } } });
+    expect(good).toMatchObject({ kind: 'status', repair: { enabled: true, totalRepairs: 2, exhausted: false, lastTrigger: 'absent' } });
+    const bad = parseObservation({ port1Isolation: { ...base, repair: { totalRepairs: 'many' } } });
+    expect(bad).toMatchObject({ kind: 'status', repair: null });
   });
 });
