@@ -85,6 +85,8 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 
 **Rejection detail (2026-10-31):** `test/invariants/rejection-detail.test.ts` checks every refusal of the install gate over the 196 mutants of the four original references (tripwire: the count and the properties they trigger are pinned) and four deliberately broken tables: each violation names its property, gives a reason and names the offending rules; the one case with no rule to blame (an intent clause whose packets fall to the table-miss, A11 `missing`) must name the clause instead; table-wide properties (A7, A8, a check that could not run) may name none. Mutation-checked: dropping the rule names from hygiene refusals fails it. It covers the install gate, not the evaluation triage's own categories.
 
+**Where each property is checked, enforced and tested** (2026-10-31): [docs/research/track-a-ci-matrix.md](research/track-a-ci-matrix.md), kept honest by `test/invariants/track-a-matrix.test.ts`.
+
 ### Track B: Hardware model and conformance
 
 Turn the benchmark from a report into an input to the verifier, and check that the switch behaves as modeled.
