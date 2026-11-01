@@ -1,0 +1,30 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible quarantine-set/v1 protocol-a-quarantine-set_v1-claude-haiku-5-5-pv3-n50#37",
+ "rulesRequested": 12,
+ "entriesSeen": 13,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quar-src-51",
+  "quar-src-53",
+  "quar-src-54",
+  "quar-dst-51",
+  "quar-dst-53",
+  "quar-dst-54",
+  "seg-intra-p1-to-p2",
+  "seg-intra-p2-to-p1",
+  "arp-p1-known-50",
+  "arp-p1-known-52",
+  "arp-p2-to-p1",
+  "p1-other-to-tap"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "12/12 rules confirmed, 13 entries including the table-miss",
+ "atMs": 1793475488463
+}

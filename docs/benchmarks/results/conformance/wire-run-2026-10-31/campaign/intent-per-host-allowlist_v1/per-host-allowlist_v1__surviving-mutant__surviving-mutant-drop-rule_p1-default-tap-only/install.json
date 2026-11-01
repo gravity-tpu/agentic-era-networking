@@ -1,0 +1,27 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "surviving-mutant per-host-allowlist/v1 drop-rule:p1-default-tap-only",
+ "rulesRequested": 9,
+ "entriesSeen": 10,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-a-to-resolver",
+  "p1-a-to-fileserver",
+  "p1-b-to-resolver",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p2-resolver-to-segment",
+  "p2-fileserver-to-a",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "9/9 rules confirmed, 10 entries including the table-miss",
+ "atMs": 1793477551778
+}

@@ -1,0 +1,33 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "equivalence-control-model quarantine-set/v1 protocol-a-quarantine-set_v1-L4-pv3-n50#24",
+ "rulesRequested": 15,
+ "entriesSeen": 16,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quarantine-src-10.0.2.51",
+  "quarantine-src-10.0.2.53",
+  "quarantine-src-10.0.2.54",
+  "quarantine-dst-10.0.2.51",
+  "quarantine-dst-10.0.2.53",
+  "quarantine-dst-10.0.2.54",
+  "p1-ipv4-intra-segment",
+  "p1-ipv4-tap-only",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p1-arp-tap-only",
+  "p1-everything-else-tap",
+  "p2-ipv4-to-segment",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "15/15 rules confirmed, 16 entries including the table-miss",
+ "atMs": 1793475918552
+}

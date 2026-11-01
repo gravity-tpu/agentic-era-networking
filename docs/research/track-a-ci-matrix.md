@@ -19,6 +19,7 @@ Track A's exit criterion is "A1 to A11 enforced in CI". This table says, for eac
 ## Related tests that apply to every refusal
 
 - `test/invariants/install-gate.test.ts` and `test/invariants/install-gate-routes.test.ts`: the gate refuses, and the routes use it.
+- `test/invariants/rejection-detail.test.ts`: every refusal names its property, a reason and the offending rules (or, for an unmet intent clause that falls to the table-miss, the clause).
 - `test/invariants/gate-audit.test.ts`: a refusal is audited.
 - `test/invariants/wire-run.test.ts`, `test/invariants/wire-session.test.ts` and `test/invariants/wire-run-dry.test.ts`: the on-wire measures and the safety behaviour of the conformance runner.
 

@@ -27,6 +27,7 @@ export const DEFAULT_BUNDLE_SEED = 20_261_031; // the date the selection rule wa
 const MAX_FLOWS = 24;
 const MAX_MODEL_SETS = 8;
 const EQUIVALENCE_CONTROLS = 2;
+const REPEAT_SETS = 20; // plan section 16.5: 20 separable sets run three times in different sessions
 const TTL_SECONDS = 60; // as scripts/export-conformance-rulesets.ts
 const BRIDGE_MAX_PRIORITY = 65534; // 65535 is reserved for quarantine
 const BRIDGE_PORTS = [1, 2, 3];
@@ -78,6 +79,7 @@ function main(): void {
   const flowsOut: Record<string, unknown> = {};
   const coverageOut: Record<string, unknown> = {};
   const counts: Record<string, Record<string, number>> = {};
+  const separable: Array<{ intent: string; id: string; arm: string }> = [];
 
   for (const { intent, reference } of TARGETS) {
     const ref = reference();
@@ -113,12 +115,16 @@ function main(): void {
       const file = `${safe(intent.id)}/${id}.json`;
       fs.writeFileSync(path.join(out, file), JSON.stringify({ label: `${kind} ${intent.id} ${set.id}`, ttlSeconds: TTL_SECONDS, rules, meta: { intent: intent.id, kind, id: set.id, arm, seed } }, null, 1) + '\n');
       index.push({ intent: intent.id, kind, id, file, arm, rules: rules.length, installable: true, priorityClamped: clamped });
+      if (kind === 'surviving-mutant' || kind === 'model-admissible') separable.push({ intent: intent.id, id, arm: kind === 'surviving-mutant' ? 'mutation' : arm });
     }
     counts[intent.id] = { flows: sel.flows.length, poolSurvivors: survivors.length, poolRecorded: recorded.length, ...c };
   }
 
+  // The repeats are drawn after every other draw, so adding them changes nothing chosen before (the index hash is unchanged).
+  const repeats = drawRoundRobin(separable, REPEAT_SETS, next);
   const indexText = JSON.stringify(index, null, 1) + '\n';
-  fs.writeFileSync(path.join(out, 'index.json'), indexText);
+  fs.writeFileSync(path.join(out, 'index.json'), indexText); // the index first: a repeats file never exists without the index it refers to
+  fs.writeFileSync(path.join(out, 'repeats.json'), JSON.stringify({ seed, count: repeats.length, sets: repeats.map((r) => ({ intent: r.intent, id: r.id })) }, null, 1) + '\n');
   fs.writeFileSync(path.join(out, 'flows.json'), JSON.stringify(flowsOut, null, 1) + '\n');
   fs.writeFileSync(path.join(out, 'coverage-flows.json'), JSON.stringify(coverageOut, null, 1) + '\n');
   const manifest = { seed, maxFlows: MAX_FLOWS, maxModelSets: MAX_MODEL_SETS, equivalenceControls: EQUIVALENCE_CONTROLS, mode: 'forged frames allowed, no injection into port 3', ruleSets: index.length, indexSha256: crypto.createHash('sha256').update(indexText).digest('hex'), counts };

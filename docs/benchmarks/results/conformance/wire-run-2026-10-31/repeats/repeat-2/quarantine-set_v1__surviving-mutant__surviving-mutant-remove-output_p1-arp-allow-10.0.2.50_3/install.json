@@ -1,0 +1,31 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "surviving-mutant quarantine-set/v1 remove-output:p1-arp-allow-10.0.2.50:3",
+ "rulesRequested": 13,
+ "entriesSeen": 14,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quarantine-src-10.0.2.51",
+  "quarantine-dst-10.0.2.51",
+  "quarantine-src-10.0.2.53",
+  "quarantine-dst-10.0.2.53",
+  "quarantine-src-10.0.2.54",
+  "quarantine-dst-10.0.2.54",
+  "p1-ipv4-intra-segment",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p1-default-tap-only",
+  "p2-ipv4-to-segment",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "13/13 rules confirmed, 14 entries including the table-miss",
+ "atMs": 1793479441364
+}

@@ -1,0 +1,27 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible dns-quarantine/v1 protocol-a-dns-quarantine_v1-C3-pv3-n50#45",
+ "rulesRequested": 9,
+ "entriesSeen": 10,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quarantine-src-p1",
+  "quarantine-dst-p2",
+  "p1-ipv4-to-dns",
+  "p1-arp-to-uplink",
+  "p1-catchall-tap",
+  "p2-resolver-to-segment",
+  "p2-arp-to-p1",
+  "p2-catchall-drop",
+  "p3-return-to-p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "9/9 rules confirmed, 10 entries including the table-miss",
+ "atMs": 1793476322294
+}

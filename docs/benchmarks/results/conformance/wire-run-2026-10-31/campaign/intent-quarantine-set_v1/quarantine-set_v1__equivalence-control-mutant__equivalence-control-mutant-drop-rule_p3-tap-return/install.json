@@ -1,0 +1,30 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "equivalence-control-mutant quarantine-set/v1 drop-rule:p3-tap-return",
+ "rulesRequested": 12,
+ "entriesSeen": 13,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quarantine-src-10.0.2.51",
+  "quarantine-dst-10.0.2.51",
+  "quarantine-src-10.0.2.53",
+  "quarantine-dst-10.0.2.53",
+  "quarantine-src-10.0.2.54",
+  "quarantine-dst-10.0.2.54",
+  "p1-ipv4-intra-segment",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p1-default-tap-only",
+  "p2-ipv4-to-segment",
+  "p2-arp"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "12/12 rules confirmed, 13 entries including the table-miss",
+ "atMs": 1793475840215
+}

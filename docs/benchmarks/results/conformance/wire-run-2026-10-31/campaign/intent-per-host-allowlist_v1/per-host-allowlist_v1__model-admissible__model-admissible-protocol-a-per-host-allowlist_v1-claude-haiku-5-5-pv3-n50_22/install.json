@@ -1,0 +1,28 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#22",
+ "rulesRequested": 10,
+ "entriesSeen": 11,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-h50-dns",
+  "p1-h50-fileserver",
+  "p1-h52-dns",
+  "p1-arp-h50",
+  "p1-arp-h52",
+  "p1-default-to-tap",
+  "p2-dns-reply-to-segment",
+  "p2-fileserver-reply-h50",
+  "p2-arp-to-p1",
+  "p3-tap-to-p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+ "atMs": 1793477952637
+}

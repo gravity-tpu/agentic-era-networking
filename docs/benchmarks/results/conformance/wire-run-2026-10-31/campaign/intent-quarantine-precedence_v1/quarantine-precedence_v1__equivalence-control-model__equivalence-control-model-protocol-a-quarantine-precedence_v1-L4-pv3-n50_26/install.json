@@ -1,0 +1,29 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "equivalence-control-model quarantine-precedence/v1 protocol-a-quarantine-precedence_v1-L4-pv3-n50#26",
+ "rulesRequested": 11,
+ "entriesSeen": 12,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-intra-segment",
+  "p1-ipv4-fallback-tap",
+  "p1-ipv4-quarantine-10.0.2.51",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p1-arp-fallback-tap",
+  "p1-other-tap-only",
+  "p2-ipv4-to-segment",
+  "p2-ipv4-quarantine-10.0.2.51",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "11/11 rules confirmed, 12 entries including the table-miss",
+ "atMs": 1793475214754
+}

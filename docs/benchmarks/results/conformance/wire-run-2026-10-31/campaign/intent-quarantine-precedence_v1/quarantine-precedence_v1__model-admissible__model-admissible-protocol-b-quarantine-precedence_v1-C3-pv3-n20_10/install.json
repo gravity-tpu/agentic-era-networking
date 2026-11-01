@@ -1,0 +1,27 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible quarantine-precedence/v1 protocol-b-quarantine-precedence_v1-C3-pv3-n20#10",
+ "rulesRequested": 9,
+ "entriesSeen": 10,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "quarantine-src-51-p1",
+  "quarantine-dst-51-p2",
+  "arp-p1-claim-50",
+  "arp-p1-claim-52",
+  "arp-p2-to-p1",
+  "ipv4-p1-intra-seg",
+  "ipv4-p2-to-seg",
+  "p1-catchall-tap",
+  "p2-catchall-drop"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "9/9 rules confirmed, 10 entries including the table-miss",
+ "atMs": 1793475019214
+}

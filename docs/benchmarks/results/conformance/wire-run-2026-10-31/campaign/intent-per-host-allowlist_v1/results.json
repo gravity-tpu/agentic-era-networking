@@ -1,0 +1,5522 @@
+{
+ "summary": {
+  "schema": "conformance-run/v2",
+  "dryRun": false,
+  "bundleIndexSha256": "4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc",
+  "ruleSets": 20,
+  "flowsSent": 120,
+  "m1Agree": 120,
+  "m1Disagree": 0,
+  "m2Compliant": 120,
+  "m2NonCompliant": 0,
+  "flowsNotSent": 0,
+  "notSentReasons": {},
+  "byKind": {
+   "reference": {
+    "sets": 1,
+    "flows": 6,
+    "m1Agree": 6,
+    "m2Compliant": 6
+   },
+   "surviving-mutant": {
+    "sets": 7,
+    "flows": 42,
+    "m1Agree": 42,
+    "m2Compliant": 42
+   },
+   "model-admissible": {
+    "sets": 8,
+    "flows": 48,
+    "m1Agree": 48,
+    "m2Compliant": 48
+   },
+   "equivalence-control-mutant": {
+    "sets": 2,
+    "flows": 12,
+    "m1Agree": 12,
+    "m2Compliant": 12
+   },
+   "equivalence-control-model": {
+    "sets": 2,
+    "flows": 12,
+    "m1Agree": 12,
+    "m2Compliant": 12
+   }
+  },
+  "stoppedBecause": null,
+  "skippedSets": []
+ },
+ "results": [
+  {
+   "id": "reference",
+   "kind": "reference",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "reference per-host-allowlist/v1 reference",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477206010
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "reference per-host-allowlist/v1 reference",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477261796
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41000,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "7a612701e8415b35a97fc3028940c33497f05c91259c3687060d29f4c55c2a65",
+      "O3": "d0fbecf84ca2a9786586fbae6e04c332e9b28112e46629ba51701554c39c4b41"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41001,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "2e2774e496c7b506589f31bb880e294aebc2a95c07e1caaaeaedae9a1e83b834",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41002,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "3995885b913312a5a5d676231679c37cd6fa20c558ff07671c8bde3bd73afeee",
+      "O3": "0871e7e179a2814ee1f53967d8fbad5d9646af4cce675bc25f7b5449097ff8d0"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41003,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "649ce75f2b72757123ce51f58e911d3d2e7a36eb790f0b2d6ff347c0f8554ed3",
+      "O3": "a1bdd8ba4dac5e9c91afdc24b309b5bad032354745c2206aba26a9d370176b44"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41004,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "dfb836ac53a7346a31775e2a1eb6cf751cb150050bc41129869df6f867387432",
+      "O3": "d81956009f4cff157f04963c972f1bb4cb0baa8cf64eabd70766a267bb5d6ad8"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41005,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "03b193c13abd1a8b9efac6c114f67fe018124fd24e9a6aa3b2513e27c59d7403",
+      "O3": "958f8692f65081a85bb4323161850e445a6f6505316562bfacb790040e80451f"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-remove-output_p1-a-to-resolver_3",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-a-to-resolver:3",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477263352
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-a-to-resolver:3",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477318681
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41006,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "eb0a5844fae55be089a962f8d5ef7d2d5ee634a6861452de6eb9c976860aac89",
+      "O3": "201515de1478b3ff90722cd221a3987f9aea0f1c2180334c3576df7bc6649924"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41007,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "88422900c2e4a555e19f7d697fae3e1f36cc699073ec2b3d133421c40e209741",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41008,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "6c49f4c8e0e0bf225de211b1143841951d206e6c0d5cb0ab42a9694cea443e63",
+      "O3": "fb8f6ea60d01d3c61a2838d96c6f3c327e8d7059df17d112bb0af4acf4ddd7b5"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41009,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "33439f3171ebbdeba0f27a93e791b7a6de59119fd1a997f86bbcae87056fd6c9"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41010,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "546a5e2570694ae26f13d27c42e8e62985f2222d2baaedad0dedf58e31cf7cae",
+      "O3": "7a730cd31c392aa1e97d7aae8e6e21cb4f7650106ad60ce40c8d21df9ff2e369"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41011,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "f7ce944171e33e5c8138e1aeed7b6f6b472e63f8acc4b324bc9309c4b7fe4d77",
+      "O3": "37637105ab2ef1c97e03fa6b2534871169b15b61c044d81dbe7656942b341ee2"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-remove-output_p1-a-to-fileserver_3",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-a-to-fileserver:3",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477320227
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-a-to-fileserver:3",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477378975
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41012,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "27ac3d0ce332ac7042a12ea48a5313b728c6473d8f70378875fca9ac7f30ef21",
+      "O3": "54ba1422d3cda257c2bff177d4d130983213afe7645672b4d9fa8a1cb4610255"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41013,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "424e2240d604f24395515d708953979da2f60ec0f28bea849df3e880c6c5b5ed",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41014,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "77c259a4cc9ed490b4252c427d9bfb189a5a6db20b77789a8b4ec7854181a1b1",
+      "O3": "7ddf4d5e58f07d21adde94f542a9fc26aec175bec870bcb01c0b23bf8477aa36"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41015,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a6cc1a917634f5290fb5a1f4c39dd040615728b27eb1a175315d947ae414ade8",
+      "O3": "e0b69b2f9bc67ec507b91aeff6182629b9370bcb05afc99ec19addde9d5f6cf7"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41016,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "42fc09becb8ad9a83f541872faf462fe933d02d7cda6f22d4c1334c1df2a6413"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41017,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "45d42bff8a9d1aead17be50720151e8998feb66f6539dc44aebce2e48e2968ed",
+      "O3": "8a3d252a270f9d842d8771adf2b67b207cafed1d408cb98a761d636b5b17d099"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-remove-output_p1-b-to-resolver_3",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-b-to-resolver:3",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477380518
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-b-to-resolver:3",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477436172
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41018,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "4485865e48724501f7b2120ccd78f5a14cb95af7a89f008c2b1e555d1c97a3ce",
+      "O3": "2bbc2f4f7013d190425a14779832d074cd5d07dbec5f6436537b485b4c8b6c28"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41019,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a981791acf701e53b7a0d2bcd902eac7a5d49233d76a7bf89bad8cea4f9853a9",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41020,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "bc26239ab982fe8ee492627dd8e41ce0ac88820dce36b2b2a601a37ba1755a9a",
+      "O3": "1005ed5adaf938b89ddd36bdd278fe79a8fd4964ac27bbca54e65300b737bf55"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41021,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "60e6c0b9344c2b952d60906d9391f1ae4f0763a7c4ff18f8b1bc5fed87397a31",
+      "O3": "a352ae38f9325734a5ae7bb383480cd221542513cfb00cadc868c795e44ba869"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41022,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "6cebcc29a978e1f77fd972f15a260325dfee47c67e5e0ef0ed0a64df46706e24",
+      "O3": "e1c571e775af966904748c09611e5db3adbb11972350c9772275935ee2bb832b"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41023,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "831b4d645b47853f67c7e95d139b6fb5f94c71a5de986cf661090953af3706d8"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-remove-output_p1-arp-allow-10.0.2.50_3",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-arp-allow-10.0.2.50:3",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477437709
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-arp-allow-10.0.2.50:3",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477493089
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41024,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "f1ca4540d7dce6344ddc3cd8fa3c947f77ea5283ee40d788d44ede833e06fd8f"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41025,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "07a7cb8ffccfae26acba460b7024cad1ad0ac301facd77483b4d1dfb6c01311e",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41026,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "76ae2587e1d1ea854a1d54e8f31b7f4af2251596eee5391960321355a4cde3aa",
+      "O3": "763ddfe13c4cc11ef08ce81cfc964f9b4c66b841bdb364d204c7530e5a442e01"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41027,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "9ad062c60148f6ec4fd620cbb2bbf8abe884dd1cc0c7aff73f8c6e0f66506a94",
+      "O3": "fbb2319c59f379596357a06682d64f4d3a999a5d8bd649ce7009abdc7b31a9a8"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41028,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "088cdc096411786f815df51185929e92552f15e2ca4c1c0b6a8dcd721c4e96cf",
+      "O3": "8dcf337175f7035643777b8badfae03b7bb70fa36d27ed11ff89bfb6f7b5ee58"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41029,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "50c994e636c7f981ff1ff92a1cc33e7d26aa261f4bcccdadc08dc047cf432c1e",
+      "O3": "226f39a9263a6b270d7e5c67bd07682a95aa351870a989db3a088ac4222b0f01"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-remove-output_p1-arp-allow-10.0.2.52_3",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-arp-allow-10.0.2.52:3",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477494631
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-arp-allow-10.0.2.52:3",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477550090
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41030,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "63ed18006009c73daab8269b0da0720a43106b1c7fc790f5c1d751c61fd523eb",
+      "O3": "7b25f54724bf1b48bfa6ef4e8ec5df2020d67f1b6529f0d6984c5b217e07a733"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41031,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "e04b8b5aeebeac25a938532624b16d070d6d0200a98284b964748eb11b58d390",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41032,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "201e9a33fdcb52894a4c79972822a7bc4f1efd2a64207b0ec454e4312dfaf739"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41033,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "f80e933a766d1bf891c20ab4a47b0e1202651b7a5eca5bda389aa918019293cc",
+      "O3": "8285e77bc3af34f8f7d9c82900b3cf5bb9a2bab443d01db0cfda430c5336b02c"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41034,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a87a8ddce909ab634f7c395f5b68fd21b9a4dce618f9416340991ae58103251d",
+      "O3": "59ab02c3a32d9d553395cd69f1dea24271c111386b961b2e0d7f728bcd824520"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41035,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "85a5d9aa22b7762526622cfa3cbd545e483a0049548b8cf1f6660d7172b70494",
+      "O3": "131a2f09dae008a5c9f2f3fccb3b6d104592b0658236f6d535de3b166906d3d8"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-drop-rule_p1-default-tap-only",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 drop-rule:p1-default-tap-only",
+    "rulesRequested": 9,
+    "entriesSeen": 10,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "9/9 rules confirmed, 10 entries including the table-miss",
+    "atMs": 1793477551778
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 drop-rule:p1-default-tap-only",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477607245
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41036,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "3bedcbbe299667c8ddfd8ea38f6ff83c12e717b9a6bca2952b007a3d3dbc86bf",
+      "O3": "be18cc209d82aa2bab75cd2491ac576793882e72caee56347866657ffcefe663"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41037,
+     "sent": true,
+     "predicted": [],
+     "observed": [],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41038,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a290dc22fe309f57b21d573d765f394942e6486db601aeea51e2048d0c2c6c22",
+      "O3": "20f76375378f1910d313adc9d7b2f7d449905fc7fa4122e46f4be74323d76312"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41039,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "6f716a5614bf94a294bb2a1bbaea0d7f5ad74bb70a2088a0fbfcccf0ca2ae296",
+      "O3": "7d55389a287997c48c87de97a35bca18a5773841a38e767b67284e0cea24b684"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41040,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "70b76360b4bc65ea6f2040f99d955cf0abc8e19c1ff8de2e4e2bcc8fd6151539",
+      "O3": "8dcf04bd9db6cc12961906705b6c2b9f2c8bbd10e2fda992c4f2498a4e1c2245"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41041,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "2c8ef991352de0355ac78cba5f909d4f7950c109b196d9987fe5f4a1649ee7f3",
+      "O3": "1da44f6cfc1878620647a37426de9932b2fd8c39300b69c0e5e97abd9dccbfb4"
+     }
+    }
+   ]
+  },
+  {
+   "id": "surviving-mutant-remove-output_p1-default-tap-only_3",
+   "kind": "surviving-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-default-tap-only:3",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477608899
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "surviving-mutant per-host-allowlist/v1 remove-output:p1-default-tap-only:3",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477664703
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41042,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "3f5d18d3c8e5711898995157a728399ee7b20efe3e0b56f5760959f82b390535",
+      "O3": "98e7d74f824802fee90e8f2608daf0e4e483e67f76074b2d06a9fe5460dc2c56"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41043,
+     "sent": true,
+     "predicted": [],
+     "observed": [],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41044,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "ff7859b33499ed552f0a90c5629dc2950bd0f962c03a1ae579bb70b40ceda349",
+      "O3": "571fb49411af10b01e6151622c0b78d188eccc720e5453f60699fd2dfd280ef9"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41045,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "595bc811f8925a7759dc7b742c337a340d50dc521ea1dce60163681c588e8c00",
+      "O3": "304ba9fd9273e60a66f8014fba1839adbffbb7ec53d7bafc79d0e61d2f1e0b37"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41046,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "c52d8456ad7bd96c79ad2bafa41447d44839e3a807a0a8e5ada1c31fdd4d32f6",
+      "O3": "9b9bbef3bb5530d49407b1d789b73027d2daeb3b20046a9f5cc8edb01357b706"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41047,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "b5aba1f1965e62eafc04a0f4fdee04c4f3b28bfc54fb2909324153f5f2c251fd",
+      "O3": "21569343e7928f2f5c5357b26beb9d65360210454473919fa0a2cd242d67f671"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50_11",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#11",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-host50-dns",
+     "p1-host50-fileserver",
+     "p1-host52-dns",
+     "p1-arp-host50",
+     "p1-arp-host52",
+     "p1-default-to-tap",
+     "p2-dns-to-segment",
+     "p2-fileserver-to-host50",
+     "p2-arp-to-p1",
+     "p3-tap-to-p1"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477666249
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#11",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477721923
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41048,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "fffaf7cedfd969a0048c07e9ae939fd8101498eaad9f6b8d8a6d0819e00efda0"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41049,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "b2372255a9dcd6ad50318edf558afc15a55354a308712b0e4e1b5294b90a60d1",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41050,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "a67748dbebc36e5de35636fa00d3502cec8ad0c9296e0af5218b0f00d88a6099"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41051,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "27b8cd46c2c3b7af112177bf50a122e4479da486f8f3f2ac423773702191fe57"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41052,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "7c1371ae6254c4ece20efffe7c0346ff5986e6b3952ec0cde1655425fc875854"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41053,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "e92991ca77650dc74a83db63ec19787664b246a33d51b8014d197d873ae23762"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-B3-pv3-n50_32",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-B3-pv3-n50#32",
+    "rulesRequested": 11,
+    "entriesSeen": 12,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-host50-to-dns",
+     "p1-host50-to-fileserver",
+     "p1-host52-to-dns",
+     "p1-arp-claim-50",
+     "p1-arp-claim-52",
+     "p1-catchall-to-tap",
+     "p2-dns-to-segment",
+     "p2-fileserver-to-host50",
+     "p2-arp-to-p1",
+     "p2-drop-all",
+     "p3-tap-to-p1"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "11/11 rules confirmed, 12 entries including the table-miss",
+    "atMs": 1793477723469
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-B3-pv3-n50#32",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477779181
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41054,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "d10132b955c136cbe469c5a96d40cd24170db07c0621e7b3c5a2908720dfc288"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41055,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a3dbb50b8c22943ed7ff6627786c85b02f7b3e1d60efe74a581e25bb6dda0808",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41056,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "0cab5008205dbd06f6441125a2da7ee79d80039313875bdf4be64fb935a8160b"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41057,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "1d326164c944018ede452f4cd4bc628d2db3e442e8ac2073110224ec3e2fc4ef"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41058,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "916b38651f79805e3237209a5688b53568649b37b5bf6ef363492aa0d6dc6ffa"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41059,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "40868d3bc76f4fc56bbfced06a3532e508377527899e7b76d489e2ca2ed9cbd9"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-C3-pv3-n50_5",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-C3-pv3-n50#5",
+    "rulesRequested": 11,
+    "entriesSeen": 12,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-host50-to-resolver",
+     "p1-host50-to-fileserver",
+     "p1-host52-to-resolver",
+     "p1-arp-spa50",
+     "p1-arp-spa52",
+     "p1-catchall-to-tap",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-host50",
+     "p2-arp-to-p1",
+     "p2-catchall-drop",
+     "p3-tap-to-p1"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "11/11 rules confirmed, 12 entries including the table-miss",
+    "atMs": 1793477780761
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-C3-pv3-n50#5",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477836537
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41060,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "d0e9985c03779ebdbb0bf94aedbbb39f8f1751f6e035fbb8509b0dce04e77458"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41061,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a5723dc437bb27543d400ad9f5089a87b3fe07fb8a88755bbbac2e6f45cdda19",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41062,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "772d68d46d210380318cc87f3a7de45ae115450d72dd33342f51222ddff2aa71"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41063,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "55a785d0c7afa368cf955270ab7706a70833f4a68199c6e940ec1f1c53df6fb0"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41064,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "38a0ab02c037add818e6609bef1e32ee6f80fe95f4d3f3769e90690809b6eefe"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41065,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "43ad5558887b12faa0aaec0e1bcc84078320c08e3352ea034434ce2b04e376ad"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-L3-pv3-n50_14",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L3-pv3-n50#14",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-50-to-dns",
+     "p1-ipv4-50-to-file",
+     "p1-ipv4-52-to-dns",
+     "p1-arp-spa-50",
+     "p1-arp-spa-52",
+     "p1-catchall-tap",
+     "p2-ipv4-dns-to-seg",
+     "p2-ipv4-file-to-50",
+     "p2-arp",
+     "p3-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477838083
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L3-pv3-n50#14",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477893650
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41066,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "3ad7dbfc19a04a1029c7bc47d5b41c080fe424e06e130e6a20327da159944950"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41067,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "f690b80f61018430687e5da4d8850fa3c099708089237ccd2c1384a909165e3c",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41068,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "08a5d2b3bbbdaba734984d93ffc4015d2566a3b363bdff04d88e231cb72e00a9"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41069,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "af6308c6f46e71e111cd280d048ff73e2ac46fe3c578e48dc021ff0e596d6671"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41070,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "1245a6af2077b5e3f3f90beb30807ba2f714e60b64a73bde50873df5c473435a"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41071,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "b45dfaf0bd78d72b1dedbebdb4ecc3fa57f108c0e37e2c270d6dca18a0cf048e"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-L4-pv3-n50_24",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#24",
+    "rulesRequested": 12,
+    "entriesSeen": 13,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-50-to-dns",
+     "p1-ipv4-50-to-fileserver",
+     "p1-ipv4-52-to-dns",
+     "p1-ipv4-fallback-tap",
+     "p1-arp-allow-50",
+     "p1-arp-allow-52",
+     "p1-arp-fallback-tap",
+     "p1-other-tap-only",
+     "p2-ipv4-dns-to-segment",
+     "p2-ipv4-fileserver-to-50",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "12/12 rules confirmed, 13 entries including the table-miss",
+    "atMs": 1793477895216
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#24",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793477951011
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41072,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "1b29968032b715cfb17a1f1affd6258477c0aa6147d4678d61b2498e2d001329"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41073,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "f6d0247a08d0a2c341a3442308d84bf3921933fe31d57bd0364ccc2f9bd218ef",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41074,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "c2a56e0af91c7652fe17c8133b288f2497c6a888786190ed2ce505ce7edbe656"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41075,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "79f2a3f73e80b8adff0a44ab78372e2a3402956d5adc9c8d2dc2ee684de9dbf0"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41076,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "ef147e2e2ce56104140392e0aaedb0cc7adaac831e0b83a594bded7f40c752c7"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41077,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "7536223f2457873ab384a098710eb1467a0b8c79f7adf415da526506428004c2"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50_22",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#22",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-h50-dns",
+     "p1-h50-fileserver",
+     "p1-h52-dns",
+     "p1-arp-h50",
+     "p1-arp-h52",
+     "p1-default-to-tap",
+     "p2-dns-reply-to-segment",
+     "p2-fileserver-reply-h50",
+     "p2-arp-to-p1",
+     "p3-tap-to-p1"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793477952637
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-claude-haiku-5-5-pv3-n50#22",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478008199
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41078,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "2d51a8b160facb84f6e21200e3d4164973875c7e472153da921f9d91db3a0680"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41079,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "46a0720ea4c29367bbd527a559c7ada12e8cabe90078ab0a32c6d607290bf06f",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41080,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "e1605c4869f4601c243cc354dd4bf092e2881f1572ee873d688505a73b38bdc8"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41081,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "749ea1ef5b16bb766ed07d850e728a98077e9b0f837062934cec003a8fb4bc70"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41082,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "dabd3243d068cef9d611edc91dc0eea1916e72a3433d1b7e4d031822e5b4b196"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41083,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "289c3c8d029dec2038f7878e873729c5e8c5d66a5e89481d17d6bc79cb06d5e2"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-B3-pv3-n50_8",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-B3-pv3-n50#8",
+    "rulesRequested": 11,
+    "entriesSeen": 12,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-50-to-dns",
+     "p1-50-to-file",
+     "p1-52-to-dns",
+     "p1-arp-50",
+     "p1-arp-52",
+     "p1-catchall",
+     "p2-dns-to-seg",
+     "p2-file-to-50",
+     "p2-arp",
+     "p2-catchall",
+     "p3-to-p1"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "11/11 rules confirmed, 12 entries including the table-miss",
+    "atMs": 1793478009913
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-B3-pv3-n50#8",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478066087
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41084,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "073179e139b8fbb696d9351417b74b04c4027664384ddf4f152b2731cad2b09f"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41085,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "39da34086eb2be5fa6f1d70bbba3c49a0bc8420988b32168db6f46b605e41296",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41086,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "fb9b12eed482c52b8b74f17d97c4e8fc8299b7ca6019032d3ca634a9f1314d7f"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41087,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "d8d6eb29a407a1929f5ac59b04d98f76bdde3d84b860e6bbfee2488afe676f23"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41088,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "c86a59b5e188ceb914a36bfbc1bcbe3136ebf93bf08dcd2682e4a60518be841b"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41089,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "42d1da8515e3fee1e8dc504013c3df8fa4e0fdd4940e0a73fb4068cb8dded5ae"
+     }
+    }
+   ]
+  },
+  {
+   "id": "model-admissible-protocol-a-per-host-allowlist_v1-C3-pv3-n50_18",
+   "kind": "model-admissible",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-C3-pv3-n50#18",
+    "rulesRequested": 11,
+    "entriesSeen": 12,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-50-to-dns",
+     "p1-50-to-file",
+     "p1-52-to-dns",
+     "p1-arp-50",
+     "p1-arp-52",
+     "p1-catchall-tap",
+     "p2-dns-to-seg",
+     "p2-file-to-50",
+     "p2-arp",
+     "p2-catchall-drop",
+     "p3-to-p1"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "11/11 rules confirmed, 12 entries including the table-miss",
+    "atMs": 1793478067710
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-C3-pv3-n50#18",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478123589
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41090,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "54802a5ab10786ad05930dae4f0253331a8b21636a8dfa8ee933396fc45ad804"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41091,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "f5bd96fe0a928147bac52650133badddf23609e078c4ed0f4d4d11d5fe1a2aeb",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41092,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "57aedcb062eaac28c6bdfb384c3d30013a039aaa62491c19e64a86832ecc0589"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41093,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "81b0138ca090a721cbb2e43c76d07cd4f616bd2df49f5cc7c9044c735dd0e76e"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41094,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "3603d1ddaf7b6d7947cbdb9dea07f487095cfc7d8e15ee763301ce2990783a33"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41095,
+     "sent": true,
+     "predicted": [
+      2
+     ],
+     "observed": [
+      2
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "O3": "5ce65360733f328966b5a06b11621773fa75231acd08893f530d742fcfc813a2"
+     }
+    }
+   ]
+  },
+  {
+   "id": "equivalence-control-mutant-raise-priority_p1-arp-allow-10.0.2.50",
+   "kind": "equivalence-control-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "equivalence-control-mutant per-host-allowlist/v1 raise-priority:p1-arp-allow-10.0.2.50",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793478125130
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "equivalence-control-mutant per-host-allowlist/v1 raise-priority:p1-arp-allow-10.0.2.50",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478180919
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41096,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "804d6483fea1e25d3d1e46f3b18277811f592f82fc50ee32913ff6a6ed76256e",
+      "O3": "7f6b27cdb8c3f4316e8660ccb3b9b3f83e36129256d86ebaef19a0d7d817eb76"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41097,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "9fce83d353425f7290d15923a2399a5c1dbd5a54804c878923fea736f5dcb396",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41098,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "b7387775ac4f1b241191bb1f88abee7d0d2f6512ac4aaabbcbb699db07e5e129",
+      "O3": "1b55a959147498e228146f1fe8297d95b25cedd0f061bef4451e762bf71c2386"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41099,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "5d78e9db2d05af3c668bfafb3c490eba78d75be330284ad61b8f5c1da6fd478e",
+      "O3": "7de063d0556f408f12cdb8530571832e5b8ce35fa807e242a064c54353fbf9d3"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41100,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "668cf6a951ea1b1067c6ddacd615bbfe4d9b117e2d1eac8b2c776f29845f8c21",
+      "O3": "7907e320bbdb08cd18f1ba988ecb1de71b51a55c04a5b7e064f40481077cb875"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41101,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a635b8750a08b9c52376be639ef2014aa6742242acdcc1582e7298db4183b990",
+      "O3": "d100d22be877d3812eb508f48cb35e039edc330912a5f0e6548faeeee0cfdfb9"
+     }
+    }
+   ]
+  },
+  {
+   "id": "equivalence-control-mutant-raise-priority_p2-arp",
+   "kind": "equivalence-control-mutant",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "equivalence-control-mutant per-host-allowlist/v1 raise-priority:p2-arp",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-a-to-resolver",
+     "p1-a-to-fileserver",
+     "p1-b-to-resolver",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-resolver-to-segment",
+     "p2-fileserver-to-a",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793478182462
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "equivalence-control-mutant per-host-allowlist/v1 raise-priority:p2-arp",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478238176
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41102,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "55e68bf23b516627e11409cd0ca0b49ddcf265f7e73b67e207cdffe2e04c6066",
+      "O3": "cd5d3fcd54044253e2b2b87acaf87a4c3f875f7fbf6c34e1e06ee69b8d0a7081"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41103,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "915b3e5cfbca3e6b3a6c38d9010a23a9669ee8e870f0ef1ec6c9ceff113a7e28",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41104,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "760a68e027861d1320e51dbff26fab91974ac472e9abed6673c52a0c9ebee792",
+      "O3": "2ad105b1528d837e2c3f7feaf54a6c17e2a0949a5f09706a454523fdf3e5c07a"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41105,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "14748ecd33ffcddcfad2357c6c175c41dbf2e26f41c59bc2a0219f954dd98c6b",
+      "O3": "cb6fc8df8f5b5bcf4a51fbd7f08cf4f53ac37894f61a3c478d3f8701d8be4c24"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41106,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "332e0c9a88aff3a5d149d4c588b3c83e8b5d801352a44a0cdb3b621a9c2c7d1b",
+      "O3": "4e815d5fd08c378bc39d02cf032a15a590dd01ec72992b96303908882eaf7df2"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41107,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "268a9c72c40ba31c97e95dea1018cbd53078c95b24de4848bc4eb3b740f7d3d6",
+      "O3": "73da7911b918c38c03d3aee8327c36c8cb438d78c5fc5c987fe738ef612f1094"
+     }
+    }
+   ]
+  },
+  {
+   "id": "equivalence-control-model-protocol-a-per-host-allowlist_v1-L4-pv3-n50_16",
+   "kind": "equivalence-control-model",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "equivalence-control-model per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#16",
+    "rulesRequested": 14,
+    "entriesSeen": 15,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-50-to-dns",
+     "p1-ipv4-50-to-fileserver",
+     "p1-ipv4-52-to-dns",
+     "p1-ipv4-50-tap-only",
+     "p1-ipv4-52-tap-only",
+     "p1-ipv4-other-src-tap-only",
+     "p1-arp-50",
+     "p1-arp-52",
+     "p1-arp-other-tap-only",
+     "p1-other-tap-only",
+     "p2-ipv4-dns-to-segment",
+     "p2-ipv4-fileserver-to-50",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "14/14 rules confirmed, 15 entries including the table-miss",
+    "atMs": 1793478239808
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "equivalence-control-model per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#16",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478295827
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41108,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "30a1930c7dd224f3febac08e100032ec2ab6408e38909f09471b4d53af233082",
+      "O3": "1cb4fccaf4a77e0e564a4440bdff49b1d0e96dadf190bbd8ea3d9b38f034322e"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41109,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "550165509cc1daed49c2d4dacb8a3141421bf1fb75a07dd521d52b58d058c9dd",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41110,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "cd8b51d949e97ebc65bd1c95145d168c65317f4e5ab5a01da5de8c39a68a2a56",
+      "O3": "8516eeda594df48067113dd477c4529238015909296d5c25adfbafd13784bdd3"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41111,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a082258b0d2a78a898480ff349ed2c0287feeedf49fcaf7732756e4d6551ff87",
+      "O3": "8e98532b948184bdf402c5b9e6a49291f629601f0c22e14e2f9661f006534323"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41112,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "a09f217eb0ec4f24f9320b9ce506a95b2675b3d5cecbed173dc0bb5ae0f59736",
+      "O3": "cc74975bb85383993dc00bff8c01d298d8c745456a436a191c86765a9638bfce"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41113,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "4cda8b3d821101f6696c291f7cc0270980d772f43b45f29a150f3f742a11ebaa",
+      "O3": "12724553d505c9f18a2ac4fc26ae460d5d5c123ab9f2827163412c44138700da"
+     }
+    }
+   ]
+  },
+  {
+   "id": "equivalence-control-model-protocol-a-per-host-allowlist_v1-L4-pv3-n50_40",
+   "kind": "equivalence-control-model",
+   "intent": "per-host-allowlist/v1",
+   "installed": true,
+   "restored": true,
+   "installReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "install",
+    "label": "equivalence-control-model per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#40",
+    "rulesRequested": 10,
+    "entriesSeen": 11,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-50-to-dns",
+     "p1-ipv4-50-to-fileserver",
+     "p1-ipv4-52-to-dns",
+     "p1-arp-allow-50",
+     "p1-arp-allow-52",
+     "p1-tap-only",
+     "p2-ipv4-dns-to-segment",
+     "p2-ipv4-fileserver-to-50",
+     "p2-arp",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+    "atMs": 1793478297490
+   },
+   "restoreReport": {
+    "httpStatus": 200,
+    "ok": true,
+    "ran": true,
+    "action": "restore",
+    "label": "equivalence-control-model per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#40",
+    "rulesRequested": 6,
+    "entriesSeen": 7,
+    "extraEntries": 0,
+    "tableMissEntries": 1,
+    "confirmed": [
+     "p1-ipv4-intra-segment",
+     "p1-arp-allow-10.0.2.50",
+     "p1-arp-allow-10.0.2.52",
+     "p1-default-tap-only",
+     "p2-ipv4-to-segment",
+     "p3-tap-return"
+    ],
+    "mismatches": [],
+    "actionsStatus": "confirmed",
+    "provenForwarding": true,
+    "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+    "atMs": 1793478353894
+   },
+   "flows": [
+    {
+     "flowId": "p1-arp-10.0.2.50-10.0.0.119",
+     "tag": 41114,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.50",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "da0881f1fc6d99e56570d275162eb99c6567631553ecf40344ffac7823327753",
+      "O3": "6b6e7944e9ed0a002e890b9714bf99316a9b1968d9e612179472dce2cc80f7e7"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.51-10.0.0.119",
+     "tag": 41115,
+     "sent": true,
+     "predicted": [
+      3
+     ],
+     "observed": [
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-everything-else",
+      "mustReach": [],
+      "mayReach": [
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "d98306ac1f3f78854b28e738995236f248b32edf471fe04fe4deb4e8084a3099",
+      "O3": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+     }
+    },
+    {
+     "flowId": "p1-arp-10.0.2.52-10.0.0.119",
+     "tag": 41116,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-arp-allow-10.0.2.52",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "5d97325048bd2cc3ef089ecc7d1410200ff95145c0cd80fb49cf1b47987b2f38",
+      "O3": "2a3ac8d12472b6089cd254085602123fc740e775be94c1238bd72b5791191e48"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.1",
+     "tag": 41117,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "bcdee043071319792777fa7f5755b223219b3b0609c4ae68b7a8d1ecac244747",
+      "O3": "d55a31b59e9a8bc74096c91fe751fdddff1a80c2012e6023dfea16dfc548e3f1"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.50-10.0.2.20",
+     "tag": 41118,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-a-to-fileserver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "b6b615ebe7b8f5a7f0fd20a57adfad42aca3a64302370c4bd14029c7bafa736d",
+      "O3": "e826e0001da8db07b1e370d2dca6954f1e1115050ff2722ff120aed45b7de0b4"
+     }
+    },
+    {
+     "flowId": "p1-ip-10.0.2.52-10.0.2.1",
+     "tag": 41119,
+     "sent": true,
+     "predicted": [
+      2,
+      3
+     ],
+     "observed": [
+      2,
+      3
+     ],
+     "m1": {
+      "agrees": true,
+      "seenNotPredicted": [],
+      "predictedNotSeen": []
+     },
+     "expectation": {
+      "clauseId": "p1-b-to-resolver",
+      "mustReach": [
+       2
+      ],
+      "mayReach": [
+       2,
+       3
+      ]
+     },
+     "m2": {
+      "compliant": true,
+      "leaks": [],
+      "missing": []
+     },
+     "evidence": {
+      "O2": "b1ddb7c3edf4e2c79a3278251442ef9e60d3bcee3c03baed6656274c67d650b5",
+      "O3": "b6b344037105c4ce6011003d70abfc64a6b9448a57a8efeefa3c63e774cdbf4a"
+     }
+    }
+   ]
+  }
+ ]
+}
