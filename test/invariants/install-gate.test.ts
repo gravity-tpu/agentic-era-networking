@@ -14,6 +14,8 @@ import { DEFAULT_QUARANTINE_MAX_ACTIVE, MAX_QUARANTINE_MAX_ACTIVE } from '../../
 import { FLOW_TABLE_CAPACITY } from '../../src/sdn/dataplane-benchmark.js';
 
 const policy = buildPort1IsolationPolicy();
+/** The table the hardware cost model measured (2026-10-31): the live policy, uplink ARP peers none. The default above has an open uplink ARP rule and was never measured. */
+const liveTable = buildPort1IsolationPolicy(undefined, undefined, undefined, []);
 const rule = (id: string, priority: number, outputPorts: number[], match: Record<string, unknown>): IsolationRule => ({
   id, flowMod: { command: FlowModCommand.OFPFC_ADD, priority, outputPorts, match },
 });
@@ -40,7 +42,7 @@ describe('admitInstall', () => {
   });
 
   it('says the deployed table is a measured shape when no target is declared, and gives no verdict', () => {
-    const r = admitInstall({ current: [], proposed: policy });
+    const r = admitInstall({ current: [], proposed: liveTable });
     expect(r.notes.join()).toMatch(/shape a cost model measured; no throughput target was declared/);
   });
   it('refuses a quarantine that does not outrank forwarding (A4)', () => {
@@ -102,7 +104,7 @@ describe('admitInstall', () => {
   describe('A8 with a declared throughput target', () => {
     const target = (targetPps: bigint, extra: { advisory?: boolean; payloadBytes?: bigint } = {}) =>
       ({ payloadBytes: extra.payloadBytes ?? 572n, targetPps, ...(extra.advisory !== undefined ? { advisory: extra.advisory } : {}) });
-    const withQuarantines = (n: number): IsolationRule[] => [...policy, ...Array.from({ length: n }, (_, i) => quarantine(`quarantine-${i}`, `10.0.2.${101 + i}`))];
+    const withQuarantines = (n: number): IsolationRule[] => [...liveTable, ...Array.from({ length: n }, (_, i) => quarantine(`quarantine-${i}`, `10.0.2.${101 + i}`))];
 
     it('passes a target the deployed table meets, and names the model', () => {
       const r = admitInstall({ current: withQuarantines(2), proposed: [], capacityTarget: target(8000n) });
@@ -125,9 +127,9 @@ describe('admitInstall', () => {
     });
 
     it('refuses when a target is declared but no model covers the table or payload (unverifiable is not a pass)', () => {
-      const other = admitInstall({ current: policy, proposed: [rule('extra', 10, [3], { inPort: 2, srcMac: 'aa:bb:cc:dd:ee:ff' })], capacityTarget: target(1000n) });
+      const other = admitInstall({ current: liveTable, proposed: [rule('extra', 10, [3], { inPort: 2, srcMac: 'aa:bb:cc:dd:ee:ff' })], capacityTarget: target(1000n) });
       expect(props(other)).toContain('A8');
-      const payload = admitInstall({ current: policy, proposed: [], capacityTarget: target(1000n, { payloadBytes: 64n }) });
+      const payload = admitInstall({ current: liveTable, proposed: [], capacityTarget: target(1000n, { payloadBytes: 64n }) });
       expect(props(payload)).toContain('A8');
       const depth = admitInstall({ current: withQuarantines(9), proposed: [], capacityTarget: target(1000n) });
       expect(props(depth)).toContain('A8');
@@ -137,10 +139,16 @@ describe('admitInstall', () => {
       const r = admitInstall({ current: withQuarantines(8), proposed: [], capacityTarget: target(9000n, { advisory: true }) });
       expect(r.admitted).toBe(true);
       expect(r.notes.join()).toMatch(/NOT met \(advisory, not refused\)/);
-      const u = admitInstall({ current: policy, proposed: [], capacityTarget: target(1000n, { payloadBytes: 64n, advisory: true }) });
+      const u = admitInstall({ current: liveTable, proposed: [], capacityTarget: target(1000n, { payloadBytes: 64n, advisory: true }) });
       expect(u.admitted).toBe(true);
       expect(u.notes.join()).toMatch(/unverifiable \(advisory, not refused\)/);
     });
+    it('an unmeasured table is unverifiable, not a pass: the builder\'s default policy (open uplink ARP, seven rules) with a declared target is refused', () => {
+      const r = admitInstall({ current: policy, proposed: [], capacityTarget: target(1000n) });
+      expect(props(r)).toContain('A8');
+      expect(r.violations.find((v) => v.property === 'A8')?.detail).toMatch(/measured/);
+    });
+
   });
 });
 
