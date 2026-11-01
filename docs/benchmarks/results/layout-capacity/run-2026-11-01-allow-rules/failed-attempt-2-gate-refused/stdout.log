@@ -1,0 +1,29 @@
+[2026-11-01 12:42:49 ET] round 1: 0 allow rule(s) at priority 10, no quarantines
+[2026-11-01 12:43:02 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 12:43:18 ET]   k=0 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1973 pps
+[2026-11-01 12:43:38 ET]   k=0 offered   2400 (sent    2400/s): delivered ratio 0.987, median busy rate    2341 pps
+[2026-11-01 12:43:57 ET]   k=0 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2808 pps
+[2026-11-01 12:44:17 ET]   k=0 offered   3456 (sent    3456/s): delivered ratio 0.987, median busy rate    3408 pps
+[2026-11-01 12:44:36 ET]   k=0 offered   4147 (sent    4147/s): delivered ratio 0.986, median busy rate    4087 pps
+[2026-11-01 12:44:56 ET]   k=0 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4849 pps
+[2026-11-01 12:45:16 ET]   k=0 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5817 pps
+[2026-11-01 12:45:36 ET]   k=0 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    6980 pps
+[2026-11-01 12:45:55 ET]   k=0 offered   8598 (sent    8598/s): delivered ratio 0.986, median busy rate    8375 pps
+[2026-11-01 12:46:15 ET]   k=0 offered  10317 (sent   10317/s): delivered ratio 0.986, median busy rate   10167 pps
+[2026-11-01 12:46:35 ET]   k=0 offered  12380 (sent   12380/s): delivered ratio 0.987, median busy rate   12195 pps
+[2026-11-01 12:46:54 ET]   k=0 offered  14856 (sent   14856/s): delivered ratio 0.862, median busy rate   12675 pps
+[2026-11-01 12:47:11 ET]   k=0 re-probe at 14856: ratio 0.862
+[2026-11-01 12:47:11 ET]   k=0: capacity 12675 pps
+[2026-11-01 12:47:25 ET] round 1: 4 allow rule(s) at priority 10, no quarantines
+[2026-11-01 12:47:35 ET] finished; quarantines left: 0; isolation verified: True
+Traceback (most recent call last):
+  File "/Users/andymorven/git/aen-allow/scripts/layout-capacity-run.py", line 235, in <module>
+    main()
+    ~~~~^^
+  File "/Users/andymorven/git/aen-allow/scripts/layout-capacity-run.py", line 212, in main
+    ensure_allow_rules(k, a.allow_priority)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/andymorven/git/aen-allow/scripts/layout-capacity-run.py", line 100, in ensure_allow_rules
+    if not r.get('ok') or not r.get('openFlowInstalled'): raise RuntimeError(f'could not install allow rule {n}: {r}')
+                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: could not install allow rule 1: {'ok': False, 'admitted': False, 'code': 'gate_refused', 'error': 'the resulting flow table failed the pre-install checks; nothing was sent', 'violations': [{'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in default-deny: reaches [1], which clause default-deny does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in p2-arp-other: reaches [1], which clause p2-arp-other does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in p2-arp-other: reaches [1], which clause p2-arp-other does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in p2-arp-other: reaches [1], which clause p2-arp-other does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in p2-arp-other: reaches [1], which clause p2-arp-other does not permit'}, {'property': 'A11', 'ruleIds': ['allow-1793555251085-12ils'], 'detail': 'leak in p2-arp-other: reaches [1], which clause p2-arp-other does not permit'}], 'notes': ['A3: the table-miss DROP (priority 0) is not part of this table; the bridge installs it and reads it back, and no rule here uses that priority', 'A4 holds vacuously: the table has no quarantine DROP rules', 'A8 unverifiable: p1-ipv4-intra-segment: forwarding rule matches more than in_port; only in_port-only forwarding rules were measured']}

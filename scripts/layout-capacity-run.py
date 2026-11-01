@@ -89,14 +89,14 @@ def set_quarantines(k):
     return time.monotonic()
 
 def ensure_allow_rules(j, priority):
-    """Install allow rules until exactly j are on the switch. Each matches in_port 2 and a source MAC that never appears on the wire, so it adds a
+    """Install allow rules until exactly j are on the switch. Each matches in_port 3 and a source MAC that never appears on the wire, so it adds a
     lookup entry and carries no traffic. Allow rules are only ever added here: the bridge removes them when the session restarts."""
     global ALLOW_INSTALLED
     if j < ALLOW_INSTALLED: raise RuntimeError(f'asked for {j} allow rules but {ALLOW_INSTALLED} are installed; they are only removed by a restart')
     while ALLOW_INSTALLED < j:
         n = ALLOW_INSTALLED + 1
         if n > 255: raise RuntimeError(f'allow rule {n} does not fit the one-byte MAC suffix (the {{n:02x}} below)')
-        r = api('POST', '/api/sdn/allow', {'inPort': 2, 'outPort': 1, 'priority': priority, 'srcMac': f'02:00:00:00:00:{n:02x}', 'description': 'layout capacity run: inert allow rule'})
+        r = api('POST', '/api/sdn/allow', {'inPort': 3, 'outPort': 1, 'priority': priority, 'srcMac': f'02:00:00:00:00:{n:02x}', 'description': 'layout capacity run: inert allow rule'})
         if not r.get('ok') or not r.get('openFlowInstalled'): raise RuntimeError(f'could not install allow rule {n}: {r}')
         ALLOW_INSTALLED = n
     time.sleep(2)
@@ -177,7 +177,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True); ap.add_argument('--ks', default='0,2,4,8'); ap.add_argument('--rounds', type=int, default=2); ap.add_argument('--max-pps', type=int, default=MAX_OFFERED_PPS)
     ap.add_argument('--allow-js', default=None, help='measure with this many inert allow rules (ascending, cumulative, k = 0) instead of quarantines, e.g. 0,4,8')
-    ap.add_argument('--allow-priority', type=int, default=10, help='priority of the allow rules: below the measured rule (150) or above the policy (300)')
+    ap.add_argument('--allow-priority', type=int, default=120, help='priority of the allow rules: between p3-tap-return (100) and the measured rule (150), or above the policy (300)')
     a = ap.parse_args()
     MAX_OFFERED_PPS = min(a.max_pps, MAX_OFFERED_PPS)
     ks = [int(x) for x in a.ks.split(',')]

@@ -1,0 +1,47 @@
+[2026-11-01 13:41:11 ET] round 1: 0 allow rule(s) at priority 300, no quarantines
+[2026-11-01 13:41:23 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 13:41:40 ET]   k=0 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1969 pps
+[2026-11-01 13:41:59 ET]   k=0 offered   2400 (sent    2400/s): delivered ratio 0.987, median busy rate    2368 pps
+[2026-11-01 13:42:19 ET]   k=0 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2840 pps
+[2026-11-01 13:42:39 ET]   k=0 offered   3456 (sent    3456/s): delivered ratio 0.987, median busy rate    3369 pps
+[2026-11-01 13:42:58 ET]   k=0 offered   4147 (sent    4147/s): delivered ratio 0.986, median busy rate    4044 pps
+[2026-11-01 13:43:18 ET]   k=0 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4849 pps
+[2026-11-01 13:43:38 ET]   k=0 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5883 pps
+[2026-11-01 13:43:57 ET]   k=0 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    7061 pps
+[2026-11-01 13:44:17 ET]   k=0 offered   8598 (sent    8598/s): delivered ratio 0.986, median busy rate    8375 pps
+[2026-11-01 13:44:37 ET]   k=0 offered  10317 (sent   10317/s): delivered ratio 0.986, median busy rate   10048 pps
+[2026-11-01 13:44:56 ET]   k=0 offered  12380 (sent   12380/s): delivered ratio 0.985, median busy rate   12196 pps
+[2026-11-01 13:45:16 ET]   k=0 offered  14856 (sent   14856/s): delivered ratio 0.862, median busy rate   12791 pps
+[2026-11-01 13:45:32 ET]   k=0 re-probe at 14856: ratio 0.862
+[2026-11-01 13:45:32 ET]   k=0: capacity 12791 pps
+[2026-11-01 13:45:46 ET] round 1: 4 allow rule(s) at priority 300, no quarantines
+[2026-11-01 13:45:59 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 13:46:16 ET]   k=4 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1973 pps
+[2026-11-01 13:46:36 ET]   k=4 offered   2400 (sent    2400/s): delivered ratio 0.987, median busy rate    2367 pps
+[2026-11-01 13:46:55 ET]   k=4 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2809 pps
+[2026-11-01 13:47:15 ET]   k=4 offered   3456 (sent    3456/s): delivered ratio 0.987, median busy rate    3369 pps
+[2026-11-01 13:47:34 ET]   k=4 offered   4147 (sent    4147/s): delivered ratio 0.986, median busy rate    4087 pps
+[2026-11-01 13:47:54 ET]   k=4 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4904 pps
+[2026-11-01 13:48:14 ET]   k=4 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5818 pps
+[2026-11-01 13:48:33 ET]   k=4 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    6980 pps
+[2026-11-01 13:48:53 ET]   k=4 offered   8598 (sent    8598/s): delivered ratio 0.986, median busy rate    8375 pps
+[2026-11-01 13:49:13 ET]   k=4 offered  10317 (sent   10317/s): delivered ratio 0.986, median busy rate   10162 pps
+[2026-11-01 13:49:32 ET]   k=4 offered  12380 (sent   12380/s): delivered ratio 0.888, median busy rate   10991 pps
+[2026-11-01 13:49:49 ET]   k=4 re-probe at 12380: ratio 0.888
+[2026-11-01 13:49:49 ET]   k=4: capacity 10991 pps
+[2026-11-01 13:50:03 ET] round 1: 8 allow rule(s) at priority 300, no quarantines
+[2026-11-01 13:50:16 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 13:50:32 ET]   k=8 offered   2000 (sent    2000/s): delivered ratio 0.987, median busy rate    1974 pps
+[2026-11-01 13:50:52 ET]   k=8 offered   2400 (sent    2400/s): delivered ratio 0.987, median busy rate    2340 pps
+[2026-11-01 13:51:11 ET]   k=8 offered   2880 (sent    2880/s): delivered ratio 0.987, median busy rate    2808 pps
+[2026-11-01 13:51:31 ET]   k=8 offered   3456 (sent    3456/s): delivered ratio 0.987, median busy rate    3408 pps
+[2026-11-01 13:51:51 ET]   k=8 offered   4147 (sent    4147/s): delivered ratio 0.986, median busy rate    4088 pps
+[2026-11-01 13:52:10 ET]   k=8 offered   4976 (sent    4976/s): delivered ratio 0.986, median busy rate    4911 pps
+[2026-11-01 13:52:30 ET]   k=8 offered   5971 (sent    5971/s): delivered ratio 0.986, median busy rate    5819 pps
+[2026-11-01 13:52:50 ET]   k=8 offered   7165 (sent    7165/s): delivered ratio 0.986, median busy rate    6979 pps
+[2026-11-01 13:53:09 ET]   k=8 offered   8598 (sent    8598/s): delivered ratio 0.986, median busy rate    8468 pps
+[2026-11-01 13:53:29 ET]   k=8 offered  10317 (sent   10317/s): delivered ratio 0.986, median busy rate   10160 pps
+[2026-11-01 13:53:48 ET]   k=8 offered  12380 (sent   12380/s): delivered ratio 0.888, median busy rate   10958 pps
+[2026-11-01 13:54:05 ET]   k=8 re-probe at 12380: ratio 0.888
+[2026-11-01 13:54:05 ET]   k=8: capacity 10958 pps
+[2026-11-01 13:54:23 ET] finished; quarantines left: 0; isolation verified: True
