@@ -19,7 +19,7 @@ describe('wire bundle selection', () => {
   execFileSync('node', ['--experimental-strip-types', '--no-warnings', path.join(ROOT, 'scripts/select-wire-bundle.ts'), RESULTS, out], { cwd: ROOT, encoding: 'utf8', timeout: 120_000 });
 
   it('regenerates the committed index, flows, coverage flows and manifest byte for byte', () => {
-    for (const f of ['index.json', 'flows.json', 'coverage-flows.json', 'manifest.json']) expect(read(path.join(out, f))).toBe(read(path.join(BUNDLE, f)));
+    for (const f of ['index.json', 'flows.json', 'coverage-flows.json', 'repeats.json', 'manifest.json']) expect(read(path.join(out, f))).toBe(read(path.join(BUNDLE, f)));
   });
 
   it('every indexed rule set exists in the committed bundle and is installable within the bridge bounds', () => {
@@ -44,6 +44,19 @@ describe('wire bundle selection', () => {
     expect(refs.length).toBe(8);
     const manifest = JSON.parse(read(path.join(BUNDLE, 'manifest.json'))) as { indexSha256: string };
     expect(manifest.indexSha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('repeats.json (plan 16.5): 20 distinct separable sets of the bundle, drawn by the seed', () => {
+    const index = JSON.parse(read(path.join(BUNDLE, 'index.json'))) as Array<{ intent: string; kind: string; id: string }>;
+    const rep = JSON.parse(read(path.join(BUNDLE, 'repeats.json'))) as { seed: number; count: number; sets: Array<{ intent: string; id: string }> };
+    expect(rep.count).toBe(20);
+    expect(rep.sets).toHaveLength(20);
+    expect(new Set(rep.sets.map((x) => `${x.intent}|${x.id}`)).size).toBe(20);
+    for (const x of rep.sets) {
+      const e = index.find((i) => i.intent === x.intent && i.id === x.id);
+      expect(e, `${x.intent} ${x.id} is not in the index`).toBeDefined();
+      expect(['surviving-mutant', 'model-admissible']).toContain(e?.kind);
+    }
   });
 
   it('can fail: a different seed produces a different bundle', () => {

@@ -1,0 +1,29 @@
+{
+ "schema": "conformance-run/v2",
+ "dryRun": false,
+ "bundleIndexSha256": "4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc",
+ "ruleSets": 20,
+ "flowsSent": 71,
+ "m1Agree": 71,
+ "m1Disagree": 0,
+ "m2Compliant": 71,
+ "m2NonCompliant": 0,
+ "flowsNotSent": 0,
+ "notSentReasons": {},
+ "byKind": {
+  "surviving-mutant": {
+   "sets": 3,
+   "flows": 12,
+   "m1Agree": 12,
+   "m2Compliant": 12
+  },
+  "model-admissible": {
+   "sets": 17,
+   "flows": 59,
+   "m1Agree": 59,
+   "m2Compliant": 59
+  }
+ },
+ "stoppedBecause": null,
+ "skippedSets": []
+}

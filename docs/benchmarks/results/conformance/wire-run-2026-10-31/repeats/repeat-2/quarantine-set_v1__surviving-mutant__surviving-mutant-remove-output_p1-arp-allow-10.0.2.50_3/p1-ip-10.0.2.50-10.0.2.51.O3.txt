@@ -1,0 +1,6 @@
+16:44:28.667133 02:00:00:00:00:01 > 02:00:00:00:00:fe, ethertype IPv4 (0x0800), length 61: 10.0.2.50.49152 > 10.0.2.51.41040: BCM-LI-SHIM: direction ingress, pkt-type unknown, pkt-subtype single VLAN tag, li-id 3105897
+16:44:28.867309 02:00:00:00:00:01 > 02:00:00:00:00:fe, ethertype IPv4 (0x0800), length 61: 10.0.2.50.49152 > 10.0.2.51.41040: BCM-LI-SHIM: direction ingress, pkt-type unknown, pkt-subtype single VLAN tag, li-id 3105897
+16:44:29.071846 02:00:00:00:00:01 > 02:00:00:00:00:fe, ethertype IPv4 (0x0800), length 61: 10.0.2.50.49152 > 10.0.2.51.41040: BCM-LI-SHIM: direction ingress, pkt-type unknown, pkt-subtype single VLAN tag, li-id 3105897
+16:44:29.267618 02:00:00:00:00:01 > 02:00:00:00:00:fe, ethertype IPv4 (0x0800), length 61: 10.0.2.50.49152 > 10.0.2.51.41040: BCM-LI-SHIM: direction ingress, pkt-type unknown, pkt-subtype single VLAN tag, li-id 3105897
+16:44:29.468010 02:00:00:00:00:01 > 02:00:00:00:00:fe, ethertype IPv4 (0x0800), length 61: 10.0.2.50.49152 > 10.0.2.51.41040: BCM-LI-SHIM: direction ingress, pkt-type unknown, pkt-subtype single VLAN tag, li-id 3105897
+

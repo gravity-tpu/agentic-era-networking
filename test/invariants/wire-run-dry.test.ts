@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -59,5 +59,34 @@ describe('conformance-run-v2 refuses to touch the switch without the owner\'s ap
     const r = spawnSync('node', ['--experimental-strip-types', '--no-warnings', SCRIPT, '--bundle', BUNDLE, '--out', out, '--approve', hash, '--limit', '1'], { cwd: ROOT, encoding: 'utf8', timeout: 120_000, env: { ...process.env, CONFORMANCE_BRIDGE_URL: 'http://127.0.0.1:1' } });
     expect(r.stderr).not.toMatch(/refusing to touch the switch/);
     expect(r.status).not.toBe(0); // no bridge at that address: the run fails closed
+  });
+});
+
+describe('conformance-run-v2 --ids-file (plan 16.5 repeats)', () => {
+  const out = mkdtempSync(path.join(tmpdir(), 'wire-ids-'));
+  it('runs exactly the 20 sets of repeats.json', () => {
+    const r = run(['--bundle', BUNDLE, '--out', out, '--dry-run', '--ids-file', path.join(BUNDLE, 'repeats.json')]);
+    expect(r.status).toBe(0);
+    const s = JSON.parse(r.stdout) as { ruleSets: number; m1Disagree: number; m2NonCompliant: number };
+    expect(s.ruleSets).toBe(20);
+    expect(s.m1Disagree).toBe(0);
+    expect(s.m2NonCompliant).toBe(0);
+  });
+  it('refuses when the file lists a set that is not in the bundle (nothing is run)', () => {
+    const bad = path.join(out, 'bad-ids.json');
+    writeFileSync(bad, JSON.stringify({ sets: [{ intent: 'port1-isolation/v1', id: 'no-such-set' }] }));
+    const r = run(['--bundle', BUNDLE, '--out', path.join(out, 'bad'), '--dry-run', '--ids-file', bad]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/not in the bundle/);
+  });
+  it('refuses --ids-file combined with --only or --limit, and a file that is not a repeats file', () => {
+    const ids = path.join(BUNDLE, 'repeats.json');
+    expect(run(['--bundle', BUNDLE, '--out', path.join(out, 'c1'), '--dry-run', '--ids-file', ids, '--only', 'port1']).stderr).toMatch(/cannot be combined/);
+    expect(run(['--bundle', BUNDLE, '--out', path.join(out, 'c2'), '--dry-run', '--ids-file', ids, '--limit', '3']).stderr).toMatch(/cannot be combined/);
+    const malformed = path.join(out, 'malformed.json');
+    writeFileSync(malformed, JSON.stringify({ nope: true }));
+    const r = run(['--bundle', BUNDLE, '--out', path.join(out, 'c3'), '--dry-run', '--ids-file', malformed]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/not a repeats file/);
   });
 });

@@ -1,0 +1,47 @@
+{
+ "schema": "conformance-run/v2",
+ "dryRun": false,
+ "bundleIndexSha256": "4bb9a7bdf27d503eacc2bd4c0f0d32bab24d1d93b4b2db191de940b68f7fa7dc",
+ "ruleSets": 17,
+ "flowsSent": 51,
+ "m1Agree": 51,
+ "m1Disagree": 0,
+ "m2Compliant": 51,
+ "m2NonCompliant": 0,
+ "flowsNotSent": 0,
+ "notSentReasons": {},
+ "byKind": {
+  "reference": {
+   "sets": 1,
+   "flows": 3,
+   "m1Agree": 3,
+   "m2Compliant": 3
+  },
+  "surviving-mutant": {
+   "sets": 4,
+   "flows": 12,
+   "m1Agree": 12,
+   "m2Compliant": 12
+  },
+  "model-admissible": {
+   "sets": 8,
+   "flows": 24,
+   "m1Agree": 24,
+   "m2Compliant": 24
+  },
+  "equivalence-control-mutant": {
+   "sets": 2,
+   "flows": 6,
+   "m1Agree": 6,
+   "m2Compliant": 6
+  },
+  "equivalence-control-model": {
+   "sets": 2,
+   "flows": 6,
+   "m1Agree": 6,
+   "m2Compliant": 6
+  }
+ },
+ "stoppedBecause": null,
+ "skippedSets": []
+}

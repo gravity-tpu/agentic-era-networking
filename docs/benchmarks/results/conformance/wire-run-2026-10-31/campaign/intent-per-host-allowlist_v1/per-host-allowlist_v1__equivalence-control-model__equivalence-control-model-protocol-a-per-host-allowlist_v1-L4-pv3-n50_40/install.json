@@ -1,0 +1,28 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "equivalence-control-model per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-L4-pv3-n50#40",
+ "rulesRequested": 10,
+ "entriesSeen": 11,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-50-to-dns",
+  "p1-ipv4-50-to-fileserver",
+  "p1-ipv4-52-to-dns",
+  "p1-arp-allow-50",
+  "p1-arp-allow-52",
+  "p1-tap-only",
+  "p2-ipv4-dns-to-segment",
+  "p2-ipv4-fileserver-to-50",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "10/10 rules confirmed, 11 entries including the table-miss",
+ "atMs": 1793478297490
+}

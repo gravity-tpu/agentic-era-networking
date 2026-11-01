@@ -1,0 +1,24 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible dns-confinement/v1 protocol-a-dns-confinement_v1-gemini-4-argon-n3#1",
+ "rulesRequested": 6,
+ "entriesSeen": 7,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1_dns_to_p2",
+  "p1_arp_to_p2",
+  "p1_rest_to_tap",
+  "p2_dns_to_p1",
+  "p2_arp_to_p1",
+  "p3_return_to_p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "6/6 rules confirmed, 7 entries including the table-miss",
+ "atMs": 1793478703825
+}

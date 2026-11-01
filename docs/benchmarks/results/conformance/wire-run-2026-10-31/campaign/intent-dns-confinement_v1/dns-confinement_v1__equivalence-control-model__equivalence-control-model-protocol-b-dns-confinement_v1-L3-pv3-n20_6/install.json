@@ -1,0 +1,25 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "equivalence-control-model dns-confinement/v1 protocol-b-dns-confinement_v1-L3-pv3-n20#6",
+ "rulesRequested": 7,
+ "entriesSeen": 8,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-dns",
+  "p1-arp",
+  "p1-tap-only",
+  "p2-ipv4-dns-reply",
+  "p2-arp",
+  "p2-drop",
+  "p3-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "7/7 rules confirmed, 8 entries including the table-miss",
+ "atMs": 1793474487437
+}

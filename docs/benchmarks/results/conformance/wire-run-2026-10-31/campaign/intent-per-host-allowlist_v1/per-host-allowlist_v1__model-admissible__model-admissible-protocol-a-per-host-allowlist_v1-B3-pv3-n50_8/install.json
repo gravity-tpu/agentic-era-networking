@@ -1,0 +1,29 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible per-host-allowlist/v1 protocol-a-per-host-allowlist_v1-B3-pv3-n50#8",
+ "rulesRequested": 11,
+ "entriesSeen": 12,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-50-to-dns",
+  "p1-50-to-file",
+  "p1-52-to-dns",
+  "p1-arp-50",
+  "p1-arp-52",
+  "p1-catchall",
+  "p2-dns-to-seg",
+  "p2-file-to-50",
+  "p2-arp",
+  "p2-catchall",
+  "p3-to-p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "11/11 rules confirmed, 12 entries including the table-miss",
+ "atMs": 1793478009913
+}

@@ -1,0 +1,26 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "surviving-mutant uplink-arp-confinement/v1 remove-output:p1-arp-allow-10.0.2.50:3",
+ "rulesRequested": 8,
+ "entriesSeen": 9,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-intra-segment",
+  "p1-arp-allow-10.0.2.50",
+  "p1-arp-allow-10.0.2.52",
+  "p1-default-tap-only",
+  "p2-ipv4-to-segment",
+  "p2-arp-allow-10.0.2.1",
+  "p2-arp-allow-10.0.2.254",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "8/8 rules confirmed, 9 entries including the table-miss",
+ "atMs": 1793476582401
+}

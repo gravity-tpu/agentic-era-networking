@@ -1,0 +1,27 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "model-admissible dns-quarantine/v1 protocol-a-dns-quarantine_v1-claude-haiku-5-5-pv3-n50#20",
+ "rulesRequested": 9,
+ "entriesSeen": 10,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "q-src-drop-p1",
+  "q-dst-drop-p2",
+  "p1-dns-ipv4-to-uplink",
+  "p1-arp-to-uplink",
+  "p1-other-to-tap",
+  "p2-resolver-ipv4-to-segment",
+  "p2-arp-to-p1",
+  "p2-other-drop",
+  "p3-return-to-p1"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "9/9 rules confirmed, 10 entries including the table-miss",
+ "atMs": 1793476261773
+}

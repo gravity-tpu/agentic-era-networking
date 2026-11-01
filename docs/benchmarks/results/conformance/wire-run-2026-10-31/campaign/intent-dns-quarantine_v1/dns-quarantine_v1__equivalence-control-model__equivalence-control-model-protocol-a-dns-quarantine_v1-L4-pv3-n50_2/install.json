@@ -1,0 +1,26 @@
+{
+ "httpStatus": 200,
+ "ok": true,
+ "ran": true,
+ "action": "install",
+ "label": "equivalence-control-model dns-quarantine/v1 protocol-a-dns-quarantine_v1-L4-pv3-n50#2",
+ "rulesRequested": 8,
+ "entriesSeen": 9,
+ "extraEntries": 0,
+ "tableMissEntries": 1,
+ "confirmed": [
+  "p1-ipv4-to-dns",
+  "p1-ipv4-quarantine-10.0.2.51",
+  "p1-arp",
+  "p1-tap-only",
+  "p2-ipv4-from-resolver",
+  "p2-ipv4-quarantine-10.0.2.51",
+  "p2-arp",
+  "p3-tap-return"
+ ],
+ "mismatches": [],
+ "actionsStatus": "confirmed",
+ "provenForwarding": true,
+ "detail": "8/8 rules confirmed, 9 entries including the table-miss",
+ "atMs": 1793476444179
+}
