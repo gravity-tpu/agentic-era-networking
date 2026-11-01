@@ -1,0 +1,42 @@
+# zodiac-isolation-watch.service
+# Pushes isolation problems to a person (ntfy). The bridge only reports a lost or changed table-miss DROP on a status endpoint, a dashboard badge and the
+# journal; this watcher polls that status and sends a damped, bounded set of messages. See docs/design/isolation-watch.md.
+#
+# Installation (run on the Jetson as root, after `git pull` and `npx tsc` in the repository):
+#   sudo cp deploy/jetson/zodiac-isolation-watch.service /etc/systemd/system/
+#   sudo install -m 600 -o root -g root deploy/jetson/isolation-watch.env.example /etc/zodiac/isolation-watch.env   # then edit the topic
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now zodiac-isolation-watch
+#
+# Live log tail:  journalctl -u zodiac-isolation-watch -f
+[Unit]
+Description=Zodiac isolation watcher: pushes isolation problems to ntfy
+Documentation=https://github.com/gravity-tpu/agentic-era-networking
+After=network-online.target zodiac-bridge.service
+Wants=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=zodiac
+Group=zodiac
+WorkingDirectory=/home/zodiac/agentic-era-networking
+ExecStart=/usr/bin/env node --max-old-space-size=64 dist/sdn/isolation-watch-cli.js
+EnvironmentFile=/etc/zodiac/isolation-watch.env
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=10s
+MemoryMax=128M
+MemorySwapMax=0
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zodiac-isolation-watch
+
+[Install]
+WantedBy=multi-user.target
