@@ -6,29 +6,29 @@ Pre-registration: [`../PREREGISTRATION-allow-rules-2026-11-01.md`](../PREREGISTR
 
 ## Measured
 
-Live six-rule isolation policy (firmware 0.86), no quarantines, 572 B UDP, a frame matched by `p1-default-tap-only`, throughput target off for the window. Allow rule form: `in_port 3`, an unused source MAC (`02:00:00:00:00:NN`), output P1, installed through `/api/sdn/allow`. Capacity is the median delivered rate at the first saturated step (the harness's own definition); time per packet is `1e12 / capacity` in ps, rounded to 0.01 us.
+Live six-rule isolation policy (firmware 0.86), no quarantines, 572 B UDP, a frame matched by `p1-default-tap-only`, throughput target off for the window. Allow rule form: `in_port 3`, an unused source MAC (`02:00:00:00:00:NN`), output P1, installed through `/api/sdn/allow`. Capacity is the median delivered rate at the first saturated step (the harness's own definition); time per packet is the integer division `1_000_000_000_000 // capacity` in ps, shown in whole nanoseconds (ps // 1000). All figures in the tables are integers; the prose rounds them.
 
-| Placement | Allow rules | Capacity (pps) | Time per packet (us) | Change from this run's 0 (us) |
+| Placement | Allow rules | Capacity (pps) | Time per packet (ns) | Change from this run's 0 (ns) |
 | --------- | ----------- | -------------- | -------------------- | ----------------------------- |
-| below (priority 120, under the measured rule at 150) | 0 | 12,790 | 78.19 | |
-| below | 4 | 11,925 | 83.86 | +5.67 |
-| below | 8 | 11,927 | 83.84 | +5.65 |
-| above (priority 300, above every policy rule) | 0 | 12,791 | 78.18 | |
-| above | 4 | 10,991 | 90.98 | +12.80 |
-| above | 8 | 10,958 | 91.26 | +13.08 |
+| below (priority 120, under the measured rule at 150) | 0 | 12,790 | 78,186 | |
+| below | 4 | 11,925 | 83,857 | +5,671 |
+| below | 8 | 11,927 | 83,843 | +5,657 |
+| above (priority 300, above every policy rule) | 0 | 12,791 | 78,179 | |
+| above | 4 | 10,991 | 90,983 | +12,804 |
+| above | 8 | 10,958 | 91,257 | +13,078 |
 
 One pass per count (the allow rules cannot be removed without a bridge restart, so the pass is ascending and the bridge was restarted between the two placements). The two 0-rule values, 12,790 and 12,791, were measured before and after a restart.
 
 ## Predictions
 
 1. **Below: within 5% of the same run's 0-rule capacity. Fails.** 11,925 and 11,927 are 6.8% and 6.7% lower.
-2. **Above: within 5% of `80.0 us + 5.42 us x j`. Fails.** The model gives 101.7 us at 4 rules and 123.4 us at 8; the measurement is 90.98 us and 91.26 us (10.5% and 26% below the model's times, so the model is pessimistic here, which is the safe direction for a gate, but it is wrong, not a pass).
+2. **Above: within 5% of `80.0 us + 5.42 us x j`. Fails.** The model gives 101.7 us at 4 rules and 123.4 us at 8; the measurement is 90,983 ns and 91,257 ns (about 10% and 26% below the model's times, so the model is pessimistic here, which is the safe direction for a gate, but it is wrong, not a pass).
 3. **Capacity does not rise with the count; the 0-rule values of the two runs agree within 10%. Holds** (12,790 against 12,791; no rise).
 
 ## What this shows and what it does not
 
 - Allow rules of this form cost something wherever they sit: about 5.7 us below the measured rule and about 13 us above it.
-- Between 4 and 8 rules the cost does not move (83.86 and 83.84 us below; 90.98 and 91.26 us above). That is a step, not a slope, for those two counts. **The data cannot say where the step begins** (counts 1 to 3 were not measured) **or whether it is tied to this match form** (`in_port` plus `srcMac`, unlike the quarantine DROPs); a different match form is not covered.
+- Between 4 and 8 rules the cost does not move (83,857 and 83,843 ns below; 90,983 and 91,257 ns above). That is a step, not a slope, for those two counts. **The data cannot say where the step begins** (counts 1 to 3 were not measured) **or whether it is tied to this match form** (`in_port` plus `srcMac`, unlike the quarantine DROPs); a different match form is not covered.
 - Nothing here says an allow rule that matches real traffic costs the same; these rules matched none.
 - The hardware shows effects the model of 2026-10-20 does not describe (a step for the first rules of another kind, and a placement effect). Whatever the cause, the model treats any table of this kind as `unverifiable` until it is extended from these numbers.
 
