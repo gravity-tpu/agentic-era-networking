@@ -10,6 +10,9 @@
 #   scripts/runpod/launch-train-lora.sh --minutes 180 [--gpu "NVIDIA A100-SXM4-80GB"] \
 #     [--task proposer|reviewer|both] [--max-steps 15] [--grad-accum 4] [--time-budget-seconds N] \
 #     [--out DIR] [--yes]
+# --gpu takes one GPU id or a comma-separated preference list (see scripts/runpod/launch-eval-lora.sh's comment):
+#   Secure Cloud On-Demand capacity for a given GPU can be thin, so pod creation is retried across the list, and a
+#   pod whose ssh port never answers within SSH_READY_SECONDS is terminated and the next candidate is tried.
 #
 # Invariants:
 #   - Invariant 1: No errors suppressed (set -euo pipefail).
@@ -64,7 +67,7 @@ PROPOSER_SRC="/tmp/zodiac-proposer-lora"
 REVIEWER_SRC="/tmp/zodiac-reviewer-lora"
 
 RP=(npm run -s runpod --)
-POD=""
+POD=""; GPU_USED=""
 
 cleanup() {
   if [ -n "$POD" ]; then
@@ -75,26 +78,57 @@ cleanup() {
 trap cleanup EXIT
 
 # Invariant 4: --kind train enforces Secure Cloud on-demand placement (src/infra/runpod-budget.ts)
-CREATE=("${RP[@]}" create --gpu "$GPU" --minutes "$MINUTES" --kind train --label "lora-train" --ssh-pubkey "$PUBKEY" --disk-gb "$DISK_GB")
+# Same GPU-retry + SSH-health-check pattern as launch-eval-lora.sh (ported 2026-11-01): previously this script did
+# a single-shot create and a 200s SSH loop with no proactive terminate-and-retry, so a pod whose ssh port never
+# answered just sat there billing until the EXIT trap fired at script exit -- unlike launch-eval-lora.sh, which
+# already terminates and tries the next GPU candidate within SSH_READY_SECONDS.
+CREATE_ROUNDS="${CREATE_ROUNDS:-20}"; CREATE_WAIT="${CREATE_WAIT:-60}"
+IFS=',' read -r -a GPU_LIST <<<"$GPU"
+do_create() { "${RP[@]}" create --gpu "$1" --minutes "$MINUTES" --kind train --label "lora-train" --ssh-pubkey "$PUBKEY" --disk-gb "$DISK_GB" "${@:2}"; }   # no mapfile: macOS bash is 3.2
 
 if [ -z "$YES" ]; then
   echo "=== Planned Runpod Launch (dry-run, pass --yes to execute) ==="
-  "${CREATE[@]}"
-  exit $?
+  any_ok=0
+  for g in "${GPU_LIST[@]}"; do if do_create "$g"; then any_ok=1; fi; done
+  [ "$any_ok" = 1 ] || { echo "ERR: dry run: every GPU candidate was refused (see output above)" >&2; exit 1; }
+  exit 0
 fi
 
-POD=$("${CREATE[@]}" --yes | sed -n 's/^created \([^ ]*\) .*/\1/p')
-[ -n "$POD" ] || { echo "ERR: could not parse created pod ID" >&2; exit 1; }
-echo "=== Created Runpod Secure Cloud Pod: $POD ==="
-
-read -r IP PORT < <("${RP[@]}" ssh-target "$POD")
-SSH=(ssh -p "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$IP")
-
-echo "=== Waiting for SSH readiness on root@$IP:$PORT ==="
-for _ in $(seq 1 40); do
-  if "${SSH[@]}" true 2>/dev/null; then break; fi
-  sleep 5
+SSH_READY_SECONDS="${SSH_READY_SECONDS:-420}"
+ssh_ready() { # ip port
+  local start=$SECONDS   # SECONDS is a monotonic (shell-relative) bash counter, unlike `date +%s` under an NTP step
+  while [ $(( SECONDS - start )) -lt "$SSH_READY_SECONDS" ]; do
+    ssh -p "$2" -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@$1" true 2>/dev/null && return 0
+    sleep 6
+  done
+  return 1
+}
+IP=""; PORT=""
+for round in $(seq 1 "$CREATE_ROUNDS"); do
+  for g in "${GPU_LIST[@]}"; do
+    if out=$(do_create "$g" --yes 2>&1); then
+      POD=$(sed -n 's/^created \([^ ]*\) .*/\1/p' <<<"$out"); GPU_USED="$g"
+      if [ -z "$POD" ]; then
+        echo "create on $g reported success but no pod ID could be parsed from its output; skipping ssh-target to avoid querying an empty ID" >&2
+        echo "create output was: $(tail -1 <<<"$out" | cut -c1-140)" >&2
+        GPU_USED=""
+        continue
+      fi
+      echo "=== Created Runpod Secure Cloud Pod: $POD ($g) ==="
+      if read -r IP PORT < <("${RP[@]}" ssh-target "$POD") && [ -n "$IP" ] && [ -n "$PORT" ] && ssh_ready "$IP" "$PORT"; then break 2; fi
+      echo "pod $POD on $g did not accept ssh within ${SSH_READY_SECONDS}s (or ssh-target returned no IP/port); terminating it and trying the next candidate"
+      "${RP[@]}" terminate "$POD" || echo "!! TERMINATE FAILED for $POD: run 'npm run runpod -- terminate $POD' now" >&2
+      POD=""; GPU_USED=""; IP=""; PORT=""
+      continue
+    fi
+    echo "create failed on $g (round $round/$CREATE_ROUNDS): $(tail -1 <<<"$out" | cut -c1-140)"
+  done
+  [ "$round" -eq "$CREATE_ROUNDS" ] || sleep "$CREATE_WAIT"
 done
+[ -n "$POD" ] || { echo "ERR: could not start a reachable pod on any of: $GPU" >&2; exit 1; }
+echo "=== Using GPU $GPU_USED, pod $POD ==="
+
+SSH=(ssh -p "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$IP")
 
 "${SSH[@]}" 'mkdir -p /workspace/in /workspace/out /workspace/work'
 
@@ -132,6 +166,26 @@ echo "=== Launching in-pod training supervisor ==="
 # Bounded polling loop: maximum iterations = (MINUTES * 60 / POLL_SECONDS) + 15
 MAX_POLLS=$(( (MINUTES * 60 / POLL_SECONDS) + 15 ))
 POLL_COUNT=0
+mkdir -p "$OUT"
+
+# Best-effort incremental pull of whatever has landed in /workspace/out so far (checkpoints, pod.log,
+# dataset-build artifacts). Previously the only download was the single scp after the loop, which never ran at
+# all on the FAILED, unexpected-terminal-status, or poll-budget-exhausted exit paths below -- every one of those
+# exited 1 without downloading anything, losing all training progress even though the pod was still reachable at
+# the moment of the check. Failure here is non-fatal (next poll, or the exit path, retries).
+# Known, accepted limitation (pre-existing in the single end-of-run download this replaces, not new here): `scp -r`
+# has no atomicity guard, so a pull racing a concurrent write on the pod could copy a torn last line of pod.log, or
+# (scripts/train-proposer-lora.py currently only calls trainer.save_model() once at the end of each phase, no
+# save_steps-interval checkpoints yet -- see the roadmap item for adding those) an incomplete copy of that final
+# adapter directory if a pull lands mid-save. pod.log is append-only, so only its newest line is ever at risk; a
+# mid-save adapter directory is the bigger exposure once interval checkpoints exist. Not mitigated with a staging-
+# directory/rsync merge here; worth revisiting alongside that checkpoint-interval work.
+pull_partial() {
+  local err
+  if ! err=$(scp -P "$PORT" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -r "root@$IP:/workspace/out/." "$OUT/" 2>&1); then
+    echo "  (pull failed: $(tail -1 <<<"$err" | cut -c1-200); will retry next poll)" >&2
+  fi
+}
 
 echo "=== Monitoring training progress (polling every ${POLL_SECONDS}s, max ${MAX_POLLS} attempts) ==="
 while [ "$POLL_COUNT" -lt "$MAX_POLLS" ]; do
@@ -142,8 +196,11 @@ while [ "$POLL_COUNT" -lt "$MAX_POLLS" ]; do
 
   if [[ "$STATUS" =~ TERMINATED|EXITED|CANCELLED ]]; then
     echo "ERR: Pod $POD transitioned to terminal status ($STATUS) unexpectedly" >&2
+    pull_partial
     exit 1
   fi
+
+  pull_partial
 
   # Check terminal markers
   if "${SSH[@]}" '[ -f /workspace/out/DONE ]' 2>/dev/null; then
@@ -162,14 +219,14 @@ done
 
 if [ "$POLL_COUNT" -ge "$MAX_POLLS" ]; then
   echo "ERR: reached maximum poll iterations ($MAX_POLLS) without pod completing" >&2
+  pull_partial
   exit 1
 fi
 
 echo "=== Downloading training artifacts to $OUT ==="
-mkdir -p "$OUT"
-scp -P "$PORT" -o StrictHostKeyChecking=accept-new -r "root@$IP:/workspace/out/*" "$OUT/"
+pull_partial
 
-echo "=== Artifacts downloaded successfully to $OUT ==="
+echo "=== Artifacts downloaded to $OUT ==="
 ls -lh "$OUT"
 
 # Pod is automatically destroyed by cleanup trap on EXIT
