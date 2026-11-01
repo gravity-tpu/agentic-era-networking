@@ -110,6 +110,12 @@ export interface RecheckDeps {
   readonly intervalMs: number;
   /** Repeat the unreachable-switch warning every this many failures once past the escalation threshold. Default RECHECK_REPEAT_LOG_EVERY. */
   readonly repeatLogEvery?: number;
+  /**
+   * Called with the FRESH candidate status of every successful, interpreted read, before the recovery streak decides what is stored (so it also sees a clean read
+   * while the stored status is still `mismatch`). Not called for a failed read or a skipped check. For a consumer that must judge the latest reading rather than
+   * the damped stored status (the repair governor, isolation-repair.ts). It must not throw; if it does, the throw is logged and the check is unaffected.
+   */
+  readonly onReading?: (candidate: IsolationStatus) => void;
 }
 
 /** What matters about a status for "did it change": the verdict, not the timestamps. */
@@ -276,6 +282,13 @@ export class IsolationRechecker {
     // The install path or a switch error may have moved the status while we were reading; judge against the latest.
     if (!ELIGIBLE.has(latest.state)) return 'skipped';
     const candidate = statusFromReadback(latest, verifyIsolationReadback(d.policy, entries), d.nowMs(), d.nowMonoNs());
+    if (d.onReading !== undefined) {
+      try {
+        d.onReading(candidate);
+      } catch (err: unknown) {
+        this.log('error', `Isolation re-check: the onReading hook failed (${err instanceof Error ? err.message : String(err)}); the check is unaffected.`);
+      }
+    }
 
     // Recovery (mismatch or readback_failed -> verified) needs a streak of clean readbacks; the streak is kept only by
     // the early return below, so every other path starts it over.

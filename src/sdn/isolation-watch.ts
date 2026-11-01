@@ -20,9 +20,12 @@
 export type Problem = 'bad' | 'critical' | 'stale' | 'unreachable';
 export type Classification = 'ok' | Problem;
 
+/** What the bridge reports about its own auto-repair (src/sdn/isolation-repair.ts): the isolation watcher tells a person when it acts or runs out of budget. */
+export interface RepairInfo { readonly enabled: boolean; readonly totalRepairs: number; readonly exhausted: boolean; readonly lastTrigger: string | null }
+
 export type Observation =
   | { readonly kind: 'unreachable'; readonly reason: string }
-  | { readonly kind: 'status'; readonly state: string; readonly tableMiss: string | null; readonly checkedAgeMs: number | null; readonly mismatches: number };
+  | { readonly kind: 'status'; readonly state: string; readonly tableMiss: string | null; readonly checkedAgeMs: number | null; readonly mismatches: number; readonly repair?: RepairInfo | null };
 
 export interface WatchConfig {
   readonly pollIntervalMs: number;
@@ -82,6 +85,7 @@ const OK_TABLE_MISS: ReadonlySet<string> = new Set(['drops', 'unobservable']);
 export function classify(o: Observation, cfg: WatchConfig): Classification {
   if (o.kind === 'unreachable') return 'unreachable';
   if (o.state === 'verifier_rejected') return 'critical';
+  if (o.repair?.exhausted === true) return 'critical'; // the bridge spent its repair budget and the table-miss is still wrong: a person is needed
   if (o.tableMiss !== null && CRITICAL_TABLE_MISS.has(o.tableMiss)) return 'critical';
   if (o.state !== 'verified') return 'bad'; // mismatch, readback_failed, not_installed and anything unknown: never ok
   if (o.tableMiss !== null && !OK_TABLE_MISS.has(o.tableMiss)) return 'bad';
@@ -98,16 +102,25 @@ export function parseObservation(json: unknown): Observation {
   const p = iso as { state?: unknown; checkedAgeMs?: unknown; mismatches?: unknown; actions?: { tableMiss?: unknown } | null };
   if (typeof p.state !== 'string') return bad('port1Isolation.state is not a string');
   const tm = p.actions?.tableMiss;
+  const rp = (iso as { repair?: unknown }).repair;
+  let repair: RepairInfo | null = null;
+  if (typeof rp === 'object' && rp !== null) {
+    const r = rp as { enabled?: unknown; totalRepairs?: unknown; exhausted?: unknown; lastTrigger?: unknown };
+    if (typeof r.enabled === 'boolean' && typeof r.exhausted === 'boolean' && typeof r.totalRepairs === 'number' && Number.isSafeInteger(r.totalRepairs) && r.totalRepairs >= 0) {
+      repair = { enabled: r.enabled, totalRepairs: r.totalRepairs, exhausted: r.exhausted, lastTrigger: typeof r.lastTrigger === 'string' ? r.lastTrigger : null };
+    }
+  }
   return {
     kind: 'status',
     state: p.state,
     tableMiss: typeof tm === 'string' ? tm : null,
     checkedAgeMs: typeof p.checkedAgeMs === 'number' && Number.isFinite(p.checkedAgeMs) ? p.checkedAgeMs : null,
     mismatches: Array.isArray(p.mismatches) ? p.mismatches.length : 0,
+    repair,
   };
 }
 
-export type MessageKind = 'started' | 'alert' | 'reminder' | 'recovered' | 'heartbeat';
+export type MessageKind = 'started' | 'alert' | 'reminder' | 'recovered' | 'heartbeat' | 'repair';
 export type Priority = 'low' | 'default' | 'high' | 'urgent';
 export interface WatchMessage { readonly id: number; readonly kind: MessageKind; readonly title: string; readonly body: string; readonly priority: Priority; readonly tags: readonly string[] }
 
@@ -118,7 +131,8 @@ const WHERE = 'Look at: the dashboard panel "SDN Boundary Containment", GET /api
 function describe(o: Observation | null): string {
   if (o === null) return 'no observation yet';
   if (o.kind === 'unreachable') return `the status could not be read: ${o.reason}`;
-  return `state ${o.state}, table-miss ${o.tableMiss ?? 'not reported'}, ${o.mismatches} mismatch(es), last check ${o.checkedAgeMs === null ? 'unknown' : `${Math.round(o.checkedAgeMs / 1000)} s`} ago`;
+  const rep = o.repair === undefined || o.repair === null ? '' : `, auto-repair ${o.repair.enabled ? 'on' : 'off'} (${o.repair.totalRepairs} so far${o.repair.exhausted ? ', BUDGET SPENT: a person is needed' : ''})`;
+  return `state ${o.state}, table-miss ${o.tableMiss ?? 'not reported'}, ${o.mismatches} mismatch(es), last check ${o.checkedAgeMs === null ? 'unknown' : `${Math.round(o.checkedAgeMs / 1000)} s`} ago${rep}`;
 }
 
 function alertFor(c: Problem, last: Observation | null): { title: string; body: string; priority: Priority; tags: string[] } {
@@ -140,6 +154,7 @@ export class IsolationWatcher {
   private clean = 0;
   private episode: Episode | null = null;
   private lastObservation: Observation | null = null;
+  private lastRepairTotal: number | null = null;
   private lastHeartbeatNs: bigint;
 
   constructor(private readonly cfg: WatchConfig, startNs: bigint) {
@@ -157,6 +172,7 @@ export class IsolationWatcher {
 
   observe(o: Observation, nowNs: bigint): void {
     this.lastObservation = o;
+    this.noteRepairs(o);
     const c = classify(o, this.cfg);
     if (c === 'ok') {
       this.streakClass = null; this.streak = 0; this.clean++;
@@ -173,6 +189,16 @@ export class IsolationWatcher {
       this.lastHeartbeatNs = nowNs;
       this.push('heartbeat', 'Zodiac isolation watcher: alive', `Still watching. Now: ${describe(o)}${this.episode === null ? '' : ' (a problem is open)'}.`, 'low', ['heart']);
     }
+  }
+
+  /** One message each time the bridge's own repair count goes up. The first observation is the baseline (an old repair is not announced), and a count that drops means the bridge restarted. */
+  private noteRepairs(o: Observation): void {
+    if (o.kind !== 'status' || o.repair === undefined || o.repair === null) return;
+    const total = o.repair.totalRepairs;
+    if (this.lastRepairTotal !== null && total > this.lastRepairTotal) {
+      this.push('repair', 'Zodiac isolation: the bridge repaired itself', `The bridge re-sent the default DROP by itself (the table-miss read "${o.repair.lastTrigger ?? 'wrong'}"); ${total} repair(s) so far. Something changed or removed the default drop: the repair is automatic, the cause is not. ${WHERE}`, 'high', ['wrench']);
+    }
+    this.lastRepairTotal = total;
   }
 
   private problem(c: Problem, nowNs: bigint): void {

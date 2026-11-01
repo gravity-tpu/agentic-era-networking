@@ -92,6 +92,7 @@ import {
   type IsolationStatus,
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
+import { RepairGovernor, parseRepairConfig, type RepairStatus } from './isolation-repair.js';
 import { ExperimentInstaller, parseExperimentRequest, parseExperimentSettleMs, EXPERIMENT_TOKEN_MIN_LENGTH, EXPERIMENT_MAX_BODY_BYTES } from './experiment-install.js';
 import { timingSafeEqual } from 'node:crypto';
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
@@ -156,6 +157,8 @@ export function coralDaemonEnabled(env: Readonly<Record<string, string | undefin
 // Council Invariant 5: how often the bridge re-reads the switch's flow table to re-verify the isolation policy after
 // install. Default 60 s; the exact value 0 disables it; anything else outside 10 s..1 h is a startup error.
 const ISOLATION_RECHECK_INTERVAL_MS = parseRecheckIntervalMs(process.env);
+/** After a repair, how long to wait before asking the re-check for a verifying read. */
+const ISOLATION_REPAIR_VERIFY_DELAY_MS = 5_000;
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -547,6 +550,10 @@ export class ZodiacBridgeServer {
   private readonly flowRuleRegistry: Map<string, ZodiacFlowRuleEntry> = new Map();
   /** One flow-table read at a time: shared by the on-demand probe and the periodic isolation re-check. */
   private readonly flowReadLock = new FlowReadLock();
+  /** When it may re-send the default DROP by itself (off unless ZODIAC_ISOLATION_REPAIR=1; src/sdn/isolation-repair.ts, docs/design/isolation-repair.md). */
+  private readonly repairGovernor: RepairGovernor;
+  private repairInFlight = false;
+  private lastRepairBlockedReason: string | null = null;
   private readonly isolationRechecker: IsolationRechecker;
   /**
    * The experiment install path (RQ4 conformance runs). null unless ZODIAC_EXPERIMENT_ENDPOINTS=1 AND ZODIAC_EXPERIMENT_TOKEN is set to
@@ -641,6 +648,67 @@ export class ZodiacBridgeServer {
       flowMod: { command: FlowModCommand.OFPFC_ADD, priority: e.priority, outputPorts: [], match: { etherType: 0x0800, srcIp: e.ip, srcIpPrefixLen: 32 } },
     }));
     return [...this.isolationPolicy(), ...this.allowRuleModel.values(), ...quarantines];
+  }
+
+  /** The isolation status for the status payload, with what the auto-repair governor has done (a person and the isolation watcher read this). */
+  private isolationJson(): ReturnType<typeof isolationStatusToJson> & { repair: RepairStatus } {
+    return { ...isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()), repair: this.repairGovernor.status() };
+  }
+
+  /**
+   * Called by the isolation re-check with the FRESH reading of every successful readback. Decides whether to re-send the default DROP: only the table-miss problems
+   * (absent, forwarding, unrecognised), only after several consecutive readings, never during an experiment or without a switch session, and within a bounded budget
+   * (src/sdn/isolation-repair.ts). It must never throw into the re-checker.
+   */
+  private considerRepair(candidate: IsolationStatus): void {
+    try {
+      const decision = this.repairGovernor.observe(
+        { state: candidate.state, tableMiss: candidate.actions?.tableMiss ?? null, monoNs: process.hrtime.bigint() },
+        { sessionUp: this.controller.openFlow.metrics.state === 'ESTABLISHED', experimentIdle: this.experiment === null || this.experiment.state().phase === 'idle', busy: this.flowReadLock.isHeld || this.repairInFlight },
+      );
+      if (decision.action === 'repair') {
+        this.lastRepairBlockedReason = null;
+        this.performRepair(decision.trigger, decision.readings);
+      } else if (decision.action === 'blocked') {
+        if (decision.reason !== this.lastRepairBlockedReason) console.warn(`[!] [Isolation repair] wanted to repair the default DROP but did not: ${decision.reason}.`);
+        this.lastRepairBlockedReason = decision.reason;
+      } else if (decision.action === 'exhausted') {
+        console.error('[!] [Isolation repair] the repair budget for this window is spent and the table-miss is still wrong: a person is needed (the isolation watcher will say so).');
+        this.auditRepair('repair_exhausted', candidate.actions?.tableMiss ?? 'unknown', 0);
+      }
+    } catch (err: unknown) {
+      console.error(`[!] [Isolation repair] the repair check failed (${err instanceof Error ? err.message : String(err)}); nothing was changed.`);
+    }
+  }
+
+  /** The smallest action that fixes A3: re-send the person-approved default DROP (an ADD at priority 0 replaces the entry). Nothing else on the switch is touched. */
+  private performRepair(trigger: string, readings: number): void {
+    this.repairInFlight = true;
+    try {
+      console.error(`[!] [Isolation repair] the table-miss reads "${trigger}" on ${readings} consecutive readbacks; re-sending the approved default DROP (priority 0). Everything else on the switch is left as it is.`);
+      this.controller.openFlow.sendTableMissRule(0, 'DROP');
+      this.repairGovernor.repaired(process.hrtime.bigint(), Date.now(), trigger);
+      this.auditRepair('repair', trigger, readings);
+      const timer = setTimeout(() => {
+        // verify soon, so the outcome is not left to the next timer tick; the readback, not this send, is what says whether it worked
+        void this.isolationRechecker.runOnce().catch(() => undefined).finally(() => { this.repairInFlight = false; });
+      }, ISOLATION_REPAIR_VERIFY_DELAY_MS);
+      timer.unref?.();
+    } catch (err: unknown) {
+      this.repairInFlight = false;
+      console.error(`[!] [Isolation repair] could not send the default DROP (${err instanceof Error ? err.message : String(err)}).`);
+    }
+  }
+
+  private auditRepair(event: 'repair' | 'repair_exhausted', trigger: string, readings: number): void {
+    const tableMiss: IsolationRule = { id: 'table-miss', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} } };
+    this.auditGate({
+      event, route: 'repair', peer: null, what: `isolation repair: table-miss ${trigger}`,
+      proposed: event === 'repair' ? [tableMiss] : [],
+      violations: [{ property: 'A3', ruleIds: [], detail: `table-miss ${trigger} on ${readings} consecutive readbacks` }],
+      notes: [event === 'repair' ? 're-sent the approved table-miss DROP only; the readback that follows says whether it worked' : 'repair budget spent; a person is needed'],
+      tableRules: 0,
+    });
   }
 
   /**
@@ -1000,6 +1068,7 @@ export class ZodiacBridgeServer {
     this.quarantineStateFile = resolveQuarantineStateFile(process.env);
     this.uplinkArpPeers = parseUplinkArpPeers(process.env['ZODIAC_UPLINK_ARP_PEERS']); // a malformed list throws here: the bridge does not start with the direction silently open
     this.loadPersistedQuarantines();
+    this.repairGovernor = new RepairGovernor(parseRepairConfig(process.env)); // a malformed setting throws here: the bridge does not start with auto-repair silently misconfigured
     this.isolationRechecker = new IsolationRechecker({
       policy: this.isolationPolicy(),
       read: () => readFlowStats(this.controller.openFlow, FLOW_READBACK_TIMEOUT_MS),
@@ -1017,6 +1086,7 @@ export class ZodiacBridgeServer {
       nowMs: () => Date.now(),
       nowMonoNs: () => process.hrtime.bigint(),
       intervalMs: ISOLATION_RECHECK_INTERVAL_MS,
+      onReading: (candidate) => this.considerRepair(candidate),
     });
     const experimentToken = process.env['ZODIAC_EXPERIMENT_TOKEN'] ?? '';
     if (process.env['ZODIAC_EXPERIMENT_ENDPOINTS'] === '1' && experimentToken.length >= EXPERIMENT_TOKEN_MIN_LENGTH) {
@@ -1104,7 +1174,7 @@ export class ZodiacBridgeServer {
         ...this.cachedSnapshot.rpi3_2,
         timeSeries: this.rpi3_2TimeSeries,
       } : undefined,
-      port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
+      port1Isolation: this.isolationJson(),
     };
 
     // Prune local JSONL history files older than 30 days (fast sync directory scan at startup)
@@ -2360,7 +2430,7 @@ export class ZodiacBridgeServer {
         note: 'Per-flow hardware stats (OFPT_MULTIPART_REQUEST) not yet implemented; showing controller-pushed rules only.',
         rules: Array.from(this.flowRuleRegistry.values()),
         totalRules: this.flowRuleRegistry.size,
-        port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
+        port1Isolation: this.isolationJson(),
         // non-null when an experiment's restore did not verify: the isolation policy may not be back (see experiment-install.ts)
         experimentAttention: this.experiment?.state().attention ?? null,
         timestamp: Date.now(),
@@ -3018,7 +3088,7 @@ export class ZodiacBridgeServer {
           ...liveRpi3_2,
           timeSeries: this.rpi3_2TimeSeries,
         },
-        port1Isolation: isolationStatusToJson(this.isolationStatus, process.hrtime.bigint()),
+        port1Isolation: this.isolationJson(),
       };
 
       // Council Invariant 6: Epistemic Telemetry Provenance Relay to Cloud

@@ -11,6 +11,8 @@ The bridge re-reads the switch's flow table every minute (`src/sdn/isolation-rec
 | Table-miss absent, forwarding or unrecognised, or the policy rejected by the verifier | 2 consecutive polls (about 2 minutes) | urgent |
 | Any other mismatch, `readback_failed`, `not_installed`, or an unknown state | 5 polls (outlasts the stale `mismatch` that follows an experiment session) | high |
 | Bridge unreachable, or the status says `verified` but its last check is older than 5 minutes (the re-check stopped, so `verified` is not evidence) | 3 polls | high |
+| The bridge repaired itself (its `port1Isolation.repair.totalRepairs` went up; see `docs/design/isolation-repair.md`) | immediately, one message per repair | high |
+| The bridge's repair budget is spent and the table-miss is still wrong | 2 polls (critical) | urgent |
 | Recovery | 2 consecutive clean polls | default |
 | Reminder while a problem lasts | every 30 minutes, at most 8 | as the alert |
 | Heartbeat | every 24 hours; **no heartbeat means the watcher is not running** | low |
