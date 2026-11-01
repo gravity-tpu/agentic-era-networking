@@ -88,6 +88,21 @@ def set_quarantines(k):
     if got != k: raise RuntimeError(f'expected {k} quarantine rules on the switch, the bridge reports {got}')
     return time.monotonic()
 
+def ensure_allow_rules(j, priority):
+    """Install allow rules until exactly j are on the switch. Each matches in_port 2 and a source MAC that never appears on the wire, so it adds a
+    lookup entry and carries no traffic. Allow rules are only ever added here: the bridge removes them when the session restarts."""
+    global ALLOW_INSTALLED
+    if j < ALLOW_INSTALLED: raise RuntimeError(f'asked for {j} allow rules but {ALLOW_INSTALLED} are installed; they are only removed by a restart')
+    while ALLOW_INSTALLED < j:
+        n = ALLOW_INSTALLED + 1
+        if n > 255: raise RuntimeError(f'allow rule {n} does not fit the one-byte MAC suffix (the {{n:02x}} below)')
+        r = api('POST', '/api/sdn/allow', {'inPort': 2, 'outPort': 1, 'priority': priority, 'srcMac': f'02:00:00:00:00:{n:02x}', 'description': 'layout capacity run: inert allow rule'})
+        if not r.get('ok') or not r.get('openFlowInstalled'): raise RuntimeError(f'could not install allow rule {n}: {r}')
+        ALLOW_INSTALLED = n
+    time.sleep(2)
+
+ALLOW_INSTALLED = 0
+
 def sample_idle(seconds=4):
     series = json.loads(py(JETSON, SAMPLER_SRC, [TAP_IF, str(seconds)]))
     dt = (series[-1][0] - series[0][0]) / 1e9
@@ -161,9 +176,13 @@ def main():
     global MAX_OFFERED_PPS
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True); ap.add_argument('--ks', default='0,2,4,8'); ap.add_argument('--rounds', type=int, default=2); ap.add_argument('--max-pps', type=int, default=MAX_OFFERED_PPS)
+    ap.add_argument('--allow-js', default=None, help='measure with this many inert allow rules (ascending, cumulative, k = 0) instead of quarantines, e.g. 0,4,8')
+    ap.add_argument('--allow-priority', type=int, default=10, help='priority of the allow rules: below the measured rule (150) or above the policy (300)')
     a = ap.parse_args()
     MAX_OFFERED_PPS = min(a.max_pps, MAX_OFFERED_PPS)
     ks = [int(x) for x in a.ks.split(',')]
+    allow_js = None if a.allow_js is None else sorted(int(x) for x in a.allow_js.split(','))
+    if allow_js is not None: ks = allow_js; a.rounds = 1  # the allow rules cannot be removed without a restart, so one ascending pass
     os.makedirs(a.out, exist_ok=True)
     logf = open(os.path.join(a.out, 'run.log'), 'a')
     def log(s):
@@ -175,7 +194,7 @@ def main():
         'senderSha256': hashlib.sha256(SENDER_SRC.encode()).hexdigest(),
         'harnessSha256': hashlib.sha256(open(__file__, 'rb').read()).hexdigest(),
         'params': {'startPps': START_PPS, 'stepFactor': STEP_FACTOR, 'maxOfferedPps': MAX_OFFERED_PPS, 'stepSeconds': STEP_SECONDS, 'saturationRatio': SAT_RATIO, 'payloadBytes': PAYLOAD,
-                   'sender': f'{NODE01} {SENDER_IP} via {SENDER_IF} to {DST_IP}', 'observe': f'Jetson {TAP_IF} rx_packets (Zodiac P3 link)', 'quarantineIps': QUARANTINE_IPS},
+                   'sender': f'{NODE01} {SENDER_IP} via {SENDER_IF} to {DST_IP}', 'observe': f'Jetson {TAP_IF} rx_packets (Zodiac P3 link)', 'quarantineIps': QUARANTINE_IPS, 'allowRuleCounts': allow_js, 'allowPriority': a.allow_priority if allow_js is not None else None},
         'quarantineEnvelope': 'bridge defaults (propose mode, approve through the local API; cap 8, ttl 300 s)',
     }
     json.dump(prov, open(os.path.join(a.out, 'provenance.json'), 'w'), indent=1)
@@ -187,8 +206,13 @@ def main():
         for rnd in range(1, a.rounds + 1):
             order = ks if rnd % 2 == 1 else list(reversed(ks))
             for k in order:
-                log(f'round {rnd}: installing {k} quarantine(s)')
-                set_quarantines(k)
+                if allow_js is not None:
+                    log(f'round {rnd}: {k} allow rule(s) at priority {a.allow_priority}, no quarantines')
+                    set_quarantines(0)
+                    ensure_allow_rules(k, a.allow_priority)
+                else:
+                    log(f'round {rnd}: installing {k} quarantine(s)')
+                    set_quarantines(k)
                 idle = sample_idle()
                 log(f'  idle rate on the tap NIC: {idle:.1f} pps')
                 steps = ramp(k, idle, log)
