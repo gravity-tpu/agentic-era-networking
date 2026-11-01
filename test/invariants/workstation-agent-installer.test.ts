@@ -35,6 +35,7 @@ describe.skipIf(!isMac)('install-workstation-agent.sh --dry-run', () => {
     const out = r.stdout;
     expect(out).toContain('<key>RunAtLoad</key><true/>');
     expect(out).toContain('<key>KeepAlive</key><true/>');
+    expect(out).toContain('<key>ProcessType</key><string>Interactive</string>');
     expect(out).toContain('<key>WORKSTATION_AGENT_HOST</key><string>100.64.1.2</string>');
     expect(out).toContain('<key>WORKSTATION_AGENT_PORT</key><string>11435</string>');
     expect(out).toContain(`<key>WorkingDirectory</key><string>${repo}</string>`);

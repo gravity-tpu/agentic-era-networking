@@ -24,6 +24,7 @@
 
 import http from 'node:http';
 import os from 'node:os';
+import type { Duplex } from 'node:stream';
 import { probeWorkstationHardware } from '../dist/sdn/hardware-probe.js';
 import type { WorkstationTelemetrySnapshot } from '../dist/sdn/zodiac-telemetry.js';
 
@@ -212,6 +213,15 @@ server.listen(PORT, HOST, () => {
 server.on('error', (err) => {
   process.stderr.write(`[workstation-agent] Server error: ${err.message}\n`);
   process.exit(1);
+});
+
+server.on('clientError', (err: NodeJS.ErrnoException, socket: Duplex) => {
+  process.stderr.write(`[workstation-agent] Client connection error: ${err.message}\n`);
+  if (err.code === 'ECONNRESET' || !socket.writable) {
+    socket.destroy();
+    return;
+  }
+  socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
 });
 
 const shutdown = (): void => {

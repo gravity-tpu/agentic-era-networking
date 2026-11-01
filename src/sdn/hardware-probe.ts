@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import { isIPv4 } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, type ExecException } from 'node:child_process';
 import type {
   JetsonTelemetrySnapshot,
   JetsonNetworkInterfaceTelemetry,
@@ -1450,16 +1450,33 @@ export function parseAppleSiliconGpuXml(xml: string): AppleSiliconGpuInfo {
   }
 }
 
-async function queryAppleGpuMetrics(timeoutMs: number = 200): Promise<AppleSiliconGpuInfo> {
+// Council Invariant 5 (Quoc Le): Configurable, bounded timeout for macOS child process execution (ioreg, vm_stat).
+// 1000ms default prevents false-negative kills under system load while keeping within telemetry budgets.
+export const DEFAULT_DARWIN_EXEC_TIMEOUT_MS = 1000;
+export function getDarwinExecTimeoutMs(): number {
+  const envVal = process.env['DARWIN_EXEC_TIMEOUT_MS'];
+  if (typeof envVal === 'string' && /^\d+$/.test(envVal.trim())) {
+    const parsed = Number(envVal.trim());
+    if (Number.isFinite(parsed) && parsed >= 50 && parsed <= 5000) {
+      return parsed;
+    }
+  }
+  return DEFAULT_DARWIN_EXEC_TIMEOUT_MS;
+}
+
+async function queryAppleGpuMetrics(timeoutMs?: number): Promise<AppleSiliconGpuInfo> {
   // Fail-closed platform boundary (Sanjay Ghemawat): never spawn ioreg on Linux / Jetson
   if (os.platform() !== 'darwin') {
     return OFFLINE_APPLE_GPU_METRICS;
   }
+  const effectiveTimeout = timeoutMs ?? getDarwinExecTimeoutMs();
 
   return new Promise((resolve) => {
-    execFile('ioreg', ['-r', '-c', 'IOAccelerator', '-d', '1', '-a'], { timeout: timeoutMs }, (err, stdout) => {
+    execFile('ioreg', ['-r', '-c', 'IOAccelerator', '-d', '1', '-a'], { timeout: effectiveTimeout }, (err: ExecException | null, stdout: string) => {
       if (err) {
-        process.stderr.write(`[hardware-probe] IOKit IOAccelerator query error (${(err as NodeJS.ErrnoException).code ?? err.message}): ${err.message}\n`);
+        const signal = err.signal;
+        const errDetail = signal ? `timed out after ${effectiveTimeout}ms (${signal})` : (err.code ? String(err.code) : err.message);
+        process.stderr.write(`[hardware-probe] IOKit IOAccelerator query error (${errDetail}): ${err.message}\n`);
         resolve(OFFLINE_APPLE_GPU_METRICS);
         return;
       }
@@ -1517,7 +1534,7 @@ export function parseDarwinVmStat(
 
 export async function queryDarwinMemoryMetrics(
   totalMemBytes: bigint,
-  timeoutMs: number = 200
+  timeoutMs?: number
 ): Promise<{ freeBytes: bigint; usedBytes: bigint }> {
   // Fail-closed platform boundary (Sanjay Ghemawat): never spawn vm_stat on Linux / Jetson
   if (os.platform() !== 'darwin') {
@@ -1525,12 +1542,15 @@ export async function queryDarwinMemoryMetrics(
     const usedBytes = totalMemBytes >= freeBytes ? totalMemBytes - freeBytes : 0n;
     return { freeBytes, usedBytes };
   }
+  const effectiveTimeout = timeoutMs ?? getDarwinExecTimeoutMs();
 
   return new Promise((resolve) => {
-    execFile('vm_stat', [], { timeout: timeoutMs }, (err, stdout) => {
+    execFile('vm_stat', [], { timeout: effectiveTimeout }, (err: ExecException | null, stdout: string) => {
       if (err) {
+        const signal = err.signal;
+        const errDetail = signal ? `timed out after ${effectiveTimeout}ms (${signal})` : (err.code ? String(err.code) : err.message);
         process.stderr.write(
-          `[hardware-probe] vm_stat query error (${(err as NodeJS.ErrnoException).code ?? err.message}): ${err.message}\n`
+          `[hardware-probe] vm_stat query error (${errDetail}): ${err.message}\n`
         );
         const freeBytes = BigInt(os.freemem());
         const usedBytes = totalMemBytes >= freeBytes ? totalMemBytes - freeBytes : 0n;
@@ -1942,8 +1962,8 @@ export async function probeWorkstationHardware(
 
     // Query Apple Silicon GPU via IOKit, Darwin VM memory, Ollama status, and USB tether concurrently
     const [gpuInfo, memoryMetrics, ollamaInfo, usbTether] = await Promise.all([
-      queryAppleGpuMetrics(200),
-      queryDarwinMemoryMetrics(totalMemBytes, 200),
+      queryAppleGpuMetrics(),
+      queryDarwinMemoryMetrics(totalMemBytes),
       (async (): Promise<{ online: boolean; model: NonNullable<OllamaPsResponse['models']>[number] | null; endpoint: string }> => {
         // Sanjay Ghemawat - Bounded Allocation Invariant:
         // Restrict candidate endpoints strictly to loopback and designated mesh/tether interfaces (at most 4).
