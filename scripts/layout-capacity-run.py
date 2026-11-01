@@ -93,6 +93,7 @@ def ensure_allow_rules(j, priority):
     lookup entry and carries no traffic. Allow rules are only ever added here: the bridge removes them when the session restarts."""
     global ALLOW_INSTALLED
     if j < ALLOW_INSTALLED: raise RuntimeError(f'asked for {j} allow rules but {ALLOW_INSTALLED} are installed; they are only removed by a restart')
+    if j > 255: raise RuntimeError(f'{j} allow rules do not fit the one-byte MAC suffix')
     while ALLOW_INSTALLED < j:
         n = ALLOW_INSTALLED + 1
         r = api('POST', '/api/sdn/allow', {'inPort': 2, 'outPort': 1, 'priority': priority, 'srcMac': f'02:00:00:00:00:{n:02x}', 'description': 'layout capacity run: inert allow rule'})
