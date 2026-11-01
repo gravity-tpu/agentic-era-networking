@@ -1,0 +1,5 @@
+[2026-11-01 12:41:25 ET] round 1: 0 allow rule(s) at priority 10, no quarantines
+[2026-11-01 12:41:37 ET]   idle rate on the tap NIC: 0.0 pps
+[2026-11-01 12:41:53 ET]   k=0 offered   2000 (sent    2000/s): delivered ratio 0.001, median busy rate       1 pps
+[2026-11-01 12:42:09 ET]   k=0 re-probe at 2000: ratio 0.001
+[2026-11-01 12:42:09 ET]   k=0: capacity 1 pps
