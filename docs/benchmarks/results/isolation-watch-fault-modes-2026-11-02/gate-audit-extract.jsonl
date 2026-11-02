@@ -1,0 +1,15 @@
+{"atMs": 1793637417040, "event": "fault_injected", "route": "fault", "what": "table-miss removed (strict delete of the priority-0 entry) for 600 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793637596091, "event": "repair", "route": "repair", "what": "isolation repair: table-miss absent", "notes": ["re-sent the approved table-miss DROP only; the readback that follows says whether it worked"]}
+{"atMs": 1793637787761, "event": "fault_injected", "route": "fault", "what": "table-miss replaced by a forward to P3, re-asserted every 2 s for 600 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793637967162, "event": "repair", "route": "repair", "what": "isolation repair: table-miss forwards", "notes": ["re-sent the approved table-miss DROP only; the readback that follows says whether it worked"]}
+{"atMs": 1793638087171, "event": "repair_exhausted", "route": "repair", "what": "isolation repair: table-miss forwards", "notes": ["repair budget spent; a person is needed"]}
+{"atMs": 1793638387764, "event": "fault_reverted", "route": "fault", "what": "table-miss DROP re-sent at the time limit", "notes": ["the readback that follows says whether the switch took it"]}
+{"atMs": 1793641036708, "event": "fault_injected", "route": "fault", "what": "table-miss replaced by a forward to P3, re-asserted every 2 s for 600 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793641215781, "event": "repair", "route": "repair", "what": "isolation repair: table-miss forwards", "notes": ["re-sent the approved table-miss DROP only; the readback that follows says whether it worked"]}
+{"atMs": 1793641335791, "event": "repair_exhausted", "route": "repair", "what": "isolation repair: table-miss forwards", "notes": ["repair budget spent; a person is needed"]}
+{"atMs": 1793641636712, "event": "fault_reverted", "route": "fault", "what": "table-miss DROP re-sent at the time limit", "notes": ["the readback that follows says whether the switch took it"]}
+{"atMs": 1793642065718, "event": "fault_injected", "route": "fault", "what": "table-miss replaced by a forward to P3 for 600 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793642245074, "event": "repair", "route": "repair", "what": "isolation repair: table-miss forwards", "notes": ["re-sent the approved table-miss DROP only; the readback that follows says whether it worked"]}
+{"atMs": 1793642665721, "event": "fault_reverted", "route": "fault", "what": "table-miss DROP re-sent at the time limit", "notes": ["the readback that follows says whether the switch took it"]}
+{"atMs": 1793644394345, "event": "fault_injected", "route": "fault", "what": "table-miss replaced by a forward to P3 for 240 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793644634350, "event": "fault_reverted", "route": "fault", "what": "table-miss DROP re-sent at the time limit", "notes": ["the readback that follows says whether the switch took it"]}
