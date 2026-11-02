@@ -1,0 +1,94 @@
+2026-11-02T17:32:56-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T17:32:57-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T17:32:57-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (unrecognised-write-empty): the table-miss DROP was replaced by an entry that cannot forward (variant write-empty: no output action) and that the readback cannot recognise as the DROP; the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T17:33:57-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (7 switch entries):
+2026-11-02T17:35:34-0500 zodiac-isolation-watch: 2026-11-02T22:35:34.608Z sent alert: Zodiac isolation: CRITICAL
+2026-11-02T17:38:44-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T17:38:44-0500 zodiac-bridge: [!] [Fault] pending test-fault revert cancelled: bridge stopping.
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T17:38:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T17:38:46-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (unrecognised-write-empty): the table-miss DROP was replaced by an entry that cannot forward (variant write-empty: no output action) and that the readback cannot recognise as the DROP; the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T17:39:46-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (7 switch entries):
+2026-11-02T17:48:46-0500 zodiac-bridge: [!] [Fault] test fault ended: the table-miss DROP was re-sent.
+2026-11-02T17:49:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation re-check: clean readback 1/2; staying mismatch until it holds.
+2026-11-02T17:50:46-0500 zodiac-bridge: [+] [Bridge Server] Isolation re-check: back to Isolation readback VERIFIED: 6/6 rules confirmed on switch (7 total entries); actions confirmed (output ports and table-miss drop).
+2026-11-02T17:52:35-0500 zodiac-isolation-watch: 2026-11-02T22:52:35.624Z sent recovered: Zodiac isolation recovered
+2026-11-02T17:57:28-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T17:57:30-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T17:57:30-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (unrecognised-apply-pop-vlan): the table-miss DROP was replaced by an entry that cannot forward (variant apply-pop-vlan: no output action) and that the readback cannot recognise as the DROP; the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T17:58:29-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (7 switch entries):
+2026-11-02T17:59:36-0500 zodiac-isolation-watch: 2026-11-02T22:59:36.145Z sent alert: Zodiac isolation: CRITICAL
+2026-11-02T18:00:06-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T18:00:06-0500 zodiac-bridge: [!] [Fault] pending test-fault revert cancelled: bridge stopping.
+2026-11-02T18:00:07-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T18:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T18:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T18:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T18:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T18:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T18:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T18:00:08-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (unrecognised-write-metadata): the table-miss DROP was replaced by an entry that cannot forward (variant write-metadata: no output action) and that the readback cannot recognise as the DROP; the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T18:01:07-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (7 switch entries):
+2026-11-02T18:09:20-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T18:09:20-0500 zodiac-bridge: [!] [Fault] pending test-fault revert cancelled: bridge stopping.
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T18:09:22-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T18:09:22-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (unrecognised-table-miss): the table-miss DROP was replaced by an entry that cannot forward (variant clear-actions: no output action) and that the readback cannot recognise as the DROP; the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T18:10:21-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (7 switch entries):
+2026-11-02T18:13:43-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T18:13:43-0500 zodiac-bridge: [!] [Fault] pending test-fault revert cancelled: bridge stopping.
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T18:13:45-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T18:13:45-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (forward-to-tap): the table-miss DROP was replaced by a forward to P3; the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T18:14:44-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (7 switch entries):
+2026-11-02T18:23:45-0500 zodiac-bridge: [!] [Fault] test fault ended: the table-miss DROP was re-sent.
+2026-11-02T18:24:44-0500 zodiac-bridge: [+] [Bridge Server] Isolation re-check: clean readback 1/2; staying mismatch until it holds.
+2026-11-02T18:25:44-0500 zodiac-bridge: [+] [Bridge Server] Isolation re-check: back to Isolation readback VERIFIED: 6/6 rules confirmed on switch (7 total entries); actions confirmed (output ports and table-miss drop).
+2026-11-02T18:27:37-0500 zodiac-isolation-watch: 2026-11-02T23:27:37.578Z sent recovered: Zodiac isolation recovered
+2026-11-02T18:29:00-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T18:29:02-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T18:29:02-0500 zodiac-bridge: [!] [Fault] TEST FAULT ACTIVE (delete-table-miss): the table-miss DROP was removed (strict delete of the priority-0 entry); the DROP is put back in 600 s (or at the next switch session).
+2026-11-02T18:30:01-0500 zodiac-bridge: [!] [Bridge Server] Isolation re-check: the switch no longer matches the policy. Isolation readback MISMATCH (6 switch entries):
+2026-11-02T18:30:37-0500 zodiac-isolation-watch: 2026-11-02T23:30:37.745Z poll: state mismatch, table-miss absent -> critical
+2026-11-02T18:31:36-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T18:31:36-0500 zodiac-bridge: [!] [Fault] pending test-fault revert cancelled: bridge stopping.
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T18:31:38-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
