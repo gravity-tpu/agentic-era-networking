@@ -56,7 +56,18 @@ All are sent from agentic-node-01 `eth1` into the Zodiac P2, 20 per class, inter
 
 ### Verdict rules (fixed in advance)
 
-Per class, in this order: `control_failed` if O3 (the mirror of the P2 link) does not read exactly 20 (the class did not reach the switch intact, so nothing else about it counts); `workload_reach` if any frame came out of P1 (O4: node-01 eth0 or rpi-hailo eth0), in any state; `leak` if any frame came out of P3 (O2) in a state that does not forward; `forwarding_differs` if the state forwards and O2 is not 20 (a finding, not a breach); otherwise `as_predicted`. `workload_reach` and `leak` are breaches: the run stops and the owner is told.
+Per class, in this order: `observer_invalid` if any observer's evidence is incomplete (see below; stronger than every verdict after it, never a breach, and the invalid observer's count is shown as null, not 0); `control_failed` if O3 (the mirror of the P2 link) does not read exactly 20 (the class did not reach the switch intact, so nothing else about it counts); `workload_reach` if any frame came out of P1 (O4: node-01 eth0 or rpi-hailo eth0), in any state; `leak` if any frame came out of P3 (O2) in a state that does not forward; `forwarding_differs` if the state forwards and O2 is not 20 (a finding, not a breach); otherwise `as_predicted`. `workload_reach` and `leak` are breaches: the run stops and the owner is told.
+
+### When an observer counts
+
+A failed ssh, a refused `sudo -n` or a capture that never started prints nothing, and nothing read as "0 frames" looks exactly like a correct drop (the 2026-11-02 14:28 run of the earlier script had a node-01 capture file with no "listening on" line, yet that observer reported 0). So an observer is valid only when its evidence is complete:
+
+1. Every remote command returns a structured result (return code, output, reason); a non-zero return code, a timeout or an unreachable host is a failure, never an empty string.
+2. Each capture is started detached (`setsid nohup`, standard input from `/dev/null`, so the end of the ssh session cannot signal it) and, before any frame is sent, verified listening: its stderr file must contain `listening on`. A start that fails is retried once with a fresh file; if any observer is still not listening the run aborts before sending, naming the observer and the reason.
+3. A count is read only from a capture whose tcpdump exit summary (`N packets captured`) is present, reports no packets dropped by the kernel, and equals the number of frame lines. A missing summary, a kernel drop, an unreadable file or a disagreement makes that observer INVALID with the reason, listed in `invalid_observers`; it is never read as zero. The two workload-side captures are one observer (O4), invalid if either is.
+4. The legacy single-class run reports an invalid capture as `null` with `verdict: observer_invalid`, and exits non-zero.
+
+A genuine zero is a capture that finished and whose summary says `0 packets captured`. These checks are tested offline with a scripted fake ssh (`test/invariants/table-miss-extended.test.ts`). They prove the observer ran and its two counts agree; they do not prove the frame never reached an interface the capture was not on.
 
 ### Predictions (frames seen of 20)
 
@@ -82,15 +93,15 @@ DANGEROUS. The switch has lost its OpenFlow session at 1.3 to 2.3 times its forw
 - Frames: the `experimental` class, from node-01 `eth1` into P2, at 500, 1000, 2000, 4000, 8000 pps, 10 s per step, 3 s pause, stepped up only.
 - Limits: at most 8000 pps in any state (`MAX_PPS_HARD`), and per state `drop` 8000, `forwards` 8000, `unrecognised` 4000, `absent` 2000 (lower where the switch's cost per frame is unmeasured); a step of 5 to 10 s; at most 6 steps; at most 120 s of wall time for the steps, overhead and pauses included. A plan outside these is refused before any ssh (tested). The plan above is 5 x (10 + 8) + 4 x 3 = 102 s; with the idle measurement about 110 s.
 - Why 8000 and not more: this sender (a Python raw-socket loop on node-01) was not measured; the UDP sender of `layout-capacity-run.py` offered up to 14,856 pps in the 2026-10-20 run and was flagged sender-limited only below 97% of target. 8000 pps is 0.63 of the 12,662 pps the switch forwarded on the live policy at k = 0, and by the linear model (58 µs + 4.24 µs per rule) a frame that walks all seven entries costs more than the measured path, so the modelled capacity of the table-miss path is nearer 10,000 pps (modelled, not measured). The sender is checked at run time: a step below 97% of its target rate ends the run as `sender_limited`.
-- Counting: rx_packets deltas on each NIC (a sampler 1 s before the sender and 1 s after it ends), less the idle rate of that NIC measured for 4 s just before, integers throughout. O3 is the control: below 97% of the frames sent the step is invalid. Allowance for noise: 3 frames at an observer that must read zero.
+- Counting: a sampler that gives no series makes its observer invalid (`observer_invalid`, which stops the run), never zero. rx_packets deltas on each NIC (a sampler 1 s before the sender and 1 s after it ends), less the idle rate of that NIC measured for 4 s just before, integers throughout. O3 is the control: below 97% of the frames sent the step is invalid. Allowance for noise: 3 frames at an observer that must read zero.
 
 ### What it reads, and when it stops
 
-One ssh poll of the Jetson every 2 s during each step (`POLL_COMMAND`): the bridge's isolation status (state, table-miss class, age of the reading), the OpenFlow session status and the count of OpenFlow messages received, and the bridge's own journal for this process (switch sessions, OFPT_ERROR lines, CoPP rate-limit lines, the fault's active and ended lines). It stops at the first of these, stops the sender through a stop file the sender checks every 50 ms (the sender also has a `timeout`), and prints why in `stopReason`:
+One ssh poll of the Jetson every 2 s during each step (`POLL_COMMAND`; a poll that takes longer than 8 s, `POLL_TIMEOUT_SECONDS`, counts as a failed poll, so two of them abort): the bridge's isolation status (state, table-miss class, age of the reading), the OpenFlow session status and the count of OpenFlow messages received, and the bridge's own journal for this process (switch sessions, OFPT_ERROR lines, CoPP rate-limit lines, the fault's active and ended lines). It stops at the first of these, stops the sender first of all through a stop file the sender checks every 50 ms (a test sender on node-01, not a data-plane path; if the file cannot be written the local ssh is terminated too, and the sender also has a `timeout`), and prints why in `stopReason`:
 
 | Code | Sign |
 | ---- | ---- |
-| `poll_failed` | two polls in a row could not read the bridge |
+| `poll_failed` | two polls in a row could not read the bridge (or timed out after 8 s) |
 | `session_not_connected` | the OpenFlow session status is not `Connected` |
 | `session_restarted` | the bridge logged a new switch session (the session was lost and re-made; a new session also re-sends the DROP and ends the fault) |
 | `switch_error` | a new OFPT_ERROR |
@@ -100,6 +111,7 @@ One ssh poll of the Jetson every 2 s during each step (`POLL_COMMAND`): the brid
 | `fault_time_low` | under 30 s of the fault's time limit would remain |
 | `frame_where_none_may_appear` | O4 above 3 frames in any state, or O2 above 3 in a non-forwarding state |
 | `sender_limited` | the sender did not reach 97% of the target rate |
+| `observer_invalid` / `stop_file_unusable` | a sampler gave no series; or the stop file could not be cleared before a step, so an abort could not stop the sender |
 | `no_fault` / `idle_unmeasured` | refused to start: no active fault in the journal, or an idle rate could not be read |
 
 What this proves: at each 2 s poll none of those signs was present. What it does not: a session loss repaired between two polls without a log line; and the isolation status is up to 60 s old. The status flows through `GET localhost:3003/api/zodiac/flows` and the OpenFlow session through `GET localhost:3003/api/zodiac?summary=true`, as `scripts/labelled-runs.py` reads them.

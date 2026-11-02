@@ -7,7 +7,7 @@ DANGEROUS, supervised only (owner present, workload idle, the one-at-a-time hard
   the bridge could not be read twice in a row, the switch's OpenFlow session is not Connected, the bridge logged a new switch session, the switch returned an OFPT_ERROR, the bridge logged a CoPP rate limit on packet-ins (the switch is punting unmatched frames to the controller),
   the test fault ended or was cancelled, the isolation status is not one expected for the state (a status of readback_failed, say), the fault's time limit is nearly used,
   or an observer saw a frame where none may appear (out of P1 in any state, out of P3 in a state that does not forward).
-It polls the bridge every 2 s DURING a step and, on an abort, stops the sender through a stop file it checks every 50 ms (one ssh round trip plus 50 ms); the sender is also bounded by `timeout`.
+It polls the bridge every 2 s DURING a step and, on an abort, stops the sender through a stop file it checks every 50 ms (one ssh round trip plus 50 ms); the sender is also bounded by `timeout`. The 50 ms check is acceptable because this is a test sender on node-01, not a data-plane or telemetry path.
 What it proves: that the listed signs were absent at the polls (a poll is a 2 s sample, and the isolation status itself is read from the switch only every 60 s: its age is recorded).
 It does not see a session loss that is repaired between two polls without a log line.
 
@@ -51,17 +51,16 @@ def log(msg):
 
 
 def ssh(host, cmd, timeout=30):
-    return subprocess.run(SSH + [host, cmd], capture_output=True, text=True, timeout=timeout)
+    """A structured result (lib.Remote): a failed ssh, a refused sudo or a timeout is ok=False with the reason, never an empty string."""
+    return lib.run_remote(lib.ssh_runner, host, cmd, timeout)
 
 
 def poll():
-    try:
-        r = ssh(JETSON, lib.POLL_COMMAND, timeout=20)
-    except subprocess.TimeoutExpired:
-        return {'ok': False, 'error': 'the poll timed out after 20 s'}
-    if r.returncode != 0:
-        return {'ok': False, 'error': f'ssh exit {r.returncode}: {r.stderr.strip()[:120]}'}
-    return lib.parse_poll(r.stdout)
+    """One poll. A timeout (POLL_TIMEOUT_SECONDS, so an unreachable Jetson cannot hold up the abort check for long) or a failed ssh is a failed poll, like any unreadable one."""
+    r = ssh(JETSON, lib.POLL_COMMAND, timeout=lib.POLL_TIMEOUT_SECONDS)
+    if not r.ok:
+        return {'ok': False, 'error': r.reason}
+    return lib.parse_poll(r.out)
 
 
 def start_sampler(host, iface, sudo, secs):
@@ -93,11 +92,14 @@ def measure_idle():
 
 def run_step(pps, step_s, monitor, frame_hex, idle):
     """One step. Returns (record, abort_reason or None). The sender runs remotely and is stopped through STOP_FILE on an abort."""
-    ssh(NODE01, f'sudo -n rm -f {STOP_FILE}')
+    removed = ssh(NODE01, f'sudo -n rm -f {STOP_FILE}', timeout=8)
+    if not removed.ok:
+        return {'targetPps': pps, 'verdict': {'verdict': 'stop_file_unusable', 'breach': False}}, {'code': 'stop_file_unusable', 'text': f'the stop file could not be cleared, so an abort could not stop the sender: {removed.reason}'}
     sampler_s = step_s + 1 + SAMPLER_MARGIN_S
     samplers = {k: [start_sampler(h, i, s, sampler_s) for h, i, s in v] for k, v in OBSERVERS.items()}
     time.sleep(1)
     sender = subprocess.Popen(SSH + [NODE01, f'sudo -n timeout {step_s + SENDER_SLACK_S} python3 - {UPLINK_IF} {pps} {step_s} {STOP_FILE} {frame_hex}'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    assert sender.stdin is not None
     sender.stdin.write(lib.LOAD_SENDER_SRC)
     sender.stdin.close()
     abort, polls, seen, of_msgs = None, 0, set(), []
@@ -112,8 +114,11 @@ def run_step(pps, step_s, monitor, frame_hex, idle):
             seen.add((sample['isolation_state'], sample['table_miss']))
         abort = monitor.feed(sample)
         if abort is not None:
-            ssh(NODE01, f'sudo -n touch {STOP_FILE}')
-            log(f'  ABORT ({abort["code"]}): {abort["text"]}')
+            # First thing, before the log line or anything else that can block: stop the sender. The stop file is the clean way; if it cannot be written the local ssh client is
+            # terminated too (the remote `timeout` then ends the sender within the step), and the failure is said out loud.
+            touched = ssh(NODE01, f'sudo -n touch {STOP_FILE}', timeout=5)
+            sender.terminate() if not touched.ok else None
+            log(f'  ABORT ({abort["code"]}): {abort["text"]}' + ('' if touched.ok else f' (the stop file could not be written: {touched.reason}; the sender was terminated)'))
             break
         rest = lib.POLL_INTERVAL_SECONDS * lib.NS - (time.monotonic_ns() - t0)
         if rest > 0:
@@ -123,7 +128,7 @@ def run_step(pps, step_s, monitor, frame_hex, idle):
     except subprocess.TimeoutExpired:
         sender.kill()
         out, err = '', 'sender did not exit in time and was killed'
-    ssh(NODE01, f'sudo -n rm -f {STOP_FILE}')
+    ssh(NODE01, f'sudo -n rm -f {STOP_FILE}', timeout=8)  # best effort: the next step refuses to start if it cannot clear the file
     sent = lib.parse_sender_line(out)
     observed, errors = {}, {}
     for k, ps in samplers.items():
@@ -135,6 +140,9 @@ def run_step(pps, step_s, monitor, frame_hex, idle):
             total += lib.delivered(series, idle[k][j]) if series else 0
         observed[k] = total
     rec = {'targetPps': pps, 'stepSeconds': step_s, 'polls': polls, 'ofMessagesReceivedFirstLast': [of_msgs[0], of_msgs[-1]] if of_msgs else None, 'isolationSeen': sorted(f'{a}/{b}' for a, b in seen), 'lastPoll': last, 'observed': observed, 'errors': errors, 'sender': sent, 'senderStderr': err.strip()[:150]}
+    if errors:  # an observer whose sampler gave no series has NOT counted zero: it has not counted
+        rec['verdict'] = {'verdict': 'observer_invalid', 'breach': False}
+        return rec, abort or {'code': 'observer_invalid', 'text': f'a sampler gave no series, so its observer is invalid, not zero: {errors}'}
     if sent is None:
         rec['verdict'] = {'verdict': 'sender_gave_no_result', 'breach': False}
         return rec, abort or {'code': 'sender_failed', 'text': 'the sender printed no result line'}
@@ -177,7 +185,7 @@ def main():
     if state != 'drop' and '--wait-for-fault' in sys.argv:
         deadline = time.monotonic() + WAIT_FOR_FAULT_S
         while time.monotonic() < deadline:
-            if lib.parse_poll(poll_text()).get('fault_active_epoch') is not None:
+            if poll().get('fault_active_epoch') is not None:
                 break
             time.sleep(2)
         else:
@@ -219,11 +227,6 @@ def main():
     sample = poll()
     reason = monitor.feed(sample)
     return finish(label, state, steps, reason or {'code': 'completed', 'text': f'all {len(rates)} planned steps ran and no abort condition fired'})
-
-
-def poll_text():
-    r = ssh(JETSON, lib.POLL_COMMAND, timeout=20)
-    return r.stdout
 
 
 if __name__ == '__main__':

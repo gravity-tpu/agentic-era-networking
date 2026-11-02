@@ -12,7 +12,7 @@ Table-miss states, as the owner arranges them: drop (the normal DROP), absent (s
 (a priority-0 forward to the tap, P3). With the isolation policy of src/sdn/port1-isolation.ts every class below from the uplink side reaches the table-miss: from P2 only IPv4
 destined to 10.0.2.0/24 matches a rule, and the uplink ARP peer list is empty.
 
-CLI (used by the tests): python3 scripts/table_miss_lib.py dump | judge | parse | poll | monitor | plan | step   (JSON on stdin for all but dump).
+CLI (used by the tests): python3 scripts/table_miss_lib.py dump | judge | parse | poll | monitor | plan | step | observe   (JSON on stdin for all but dump).
 """
 import json, re, sys
 from typing import Callable, Dict, List, Optional, Tuple
@@ -208,15 +208,19 @@ def expectation(state: str, name: str, n: int) -> Dict[str, object]:
     return {'O3': n, 'O2': n if forwards else 0, 'O4': 0, 'confidence': CLASSES[name].forward_confidence if forwards else 'high'}
 
 
-def judge(state: str, per_class_counts: Dict[str, Dict[str, int]], n: int) -> Dict[str, object]:
-    """Verdict per class, in this order: control_failed (O3 != n: the class did not reach the switch intact, so nothing else about it counts), workload_reach (any frame out of P1: the
-    isolation property is broken, whatever the state), leak (a frame out of P3 in a state that must not forward), forwarding_differs (state forwards, O2 != n: not a breach, a finding),
-    as_predicted. `breach` is true for workload_reach or leak."""
+def judge(state: str, per_class_counts: Dict[str, Dict[str, int]], n: int, invalid: Optional[Dict[str, str]] = None) -> Dict[str, object]:
+    """Verdict per class, in this order: observer_invalid (an observer's evidence is incomplete: its capture did not start, did not finish, dropped frames or disagrees with its own summary;
+    stronger than anything below, because a count from such an observer is not a count), control_failed (O3 != n: the class did not reach the switch intact, so nothing else about it counts),
+    workload_reach (any frame out of P1: the isolation property is broken, whatever the state), leak (a frame out of P3 in a state that must not forward), forwarding_differs (state forwards,
+    O2 != n: not a breach, a finding), as_predicted. `invalid` maps an observer (O3, O2 or O4) to the reason. `breach` is true for workload_reach or leak."""
+    invalid = invalid or {}
     rows = {}
     for name, c in per_class_counts.items():
         e = expectation(state, name, n)
         o3, o2, o4 = c.get('O3', 0), c.get('O2', 0), c.get('O4', 0)
-        if o3 != n:
+        if invalid:
+            v = 'observer_invalid'
+        elif o3 != n:
             v = 'control_failed'
         elif o4 > 0:
             v = 'workload_reach'
@@ -226,9 +230,134 @@ def judge(state: str, per_class_counts: Dict[str, Dict[str, int]], n: int) -> Di
             v = 'forwarding_differs'
         else:
             v = 'as_predicted'
-        rows[name] = {'verdict': v, 'expected': e, 'observed': {'O3': o3, 'O2': o2, 'O4': o4}}
-    return {'state': state, 'classes': rows, 'breach': any(r['verdict'] in ('workload_reach', 'leak') for r in rows.values()),
-            'valid_classes': [k for k, r in rows.items() if r['verdict'] != 'control_failed']}
+        rows[name] = {'verdict': v, 'expected': e, 'observed': {k: (None if k in invalid else x) for k, x in (('O3', o3), ('O2', o2), ('O4', o4))}}
+    return {'state': state, 'classes': rows, 'invalid_observers': invalid, 'breach': any(r['verdict'] in ('workload_reach', 'leak') for r in rows.values()),
+            'valid_classes': [k for k, r in rows.items() if r['verdict'] not in ('control_failed', 'observer_invalid')]}
+
+
+# ---- observation: a count is evidence only if the observer's capture provably ran ------------------------------------------------------------------------------
+# An ssh that fails, a `sudo -n` that is refused or a capture that never started all print nothing, and "nothing" read as "0 frames" is exactly what a correct DROP looks like. So: every
+# remote command returns a structured result (never a bare string), a capture is verified listening before any frame is sent, and a count is taken only from a capture whose tcpdump exit
+# summary ("N packets captured") is present, has no kernel drops and agrees with the number of frame lines. Anything else makes the observer INVALID, with the reason, never zero.
+
+LISTEN_RETRIES = 3          # checks of the stderr file, one second apart, per start attempt
+START_ATTEMPTS = 2          # the start is retried once, boundedly
+REMOTE_TIMEOUT_SECONDS = 30
+Runner = Callable[[str, str, int, Optional[str]], Tuple[int, str, str]]  # (host, command, timeout seconds, stdin) -> (return code, stdout, stderr); may raise subprocess.TimeoutExpired or OSError
+
+
+class Remote:
+    def __init__(self, ok: bool, rc: Optional[int], out: str, err: str, reason: str = ''):
+        self.ok, self.rc, self.out, self.err, self.reason = ok, rc, out, err, reason
+
+
+def ssh_runner(host: str, cmd: str, timeout: int, stdin: Optional[str] = None) -> Tuple[int, str, str]:
+    import subprocess
+    p = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', host, cmd], input=stdin, capture_output=True, text=True, timeout=timeout)
+    return p.returncode, p.stdout, p.stderr
+
+
+def run_remote(runner: Runner, host: str, cmd: str, timeout: int = REMOTE_TIMEOUT_SECONDS, stdin: Optional[str] = None) -> Remote:
+    """Never returns a bare string and never swallows a failure: a non-zero return code, a timeout or an OS error is `ok=False` with the reason."""
+    try:
+        rc, out, err = runner(host, cmd, timeout, stdin)
+    except Exception as e:  # subprocess.TimeoutExpired, OSError: reported as a failure of the command, not as an empty result
+        return Remote(False, None, '', '', f'{host}: {type(e).__name__}: {str(e)[:100]}')
+    if rc != 0:
+        return Remote(False, rc, out, err, f'{host}: exit {rc}: {err.strip()[:120] or "no stderr"}')
+    return Remote(True, rc, out, err)
+
+
+def capture_start_command(base: str, iface: str, sudo: bool, seconds: int, flt: str) -> str:
+    # setsid + nohup + stdin from /dev/null: when the ssh session ends the remote shell may signal its process group; a detached capture survives that, a plain `( ... &)` may not.
+    return (f"rm -f {base}.txt {base}.err; (setsid nohup {'sudo -n ' if sudo else ''}timeout {seconds} tcpdump -i {iface} -nn -e -l '{flt}' > {base}.txt 2> {base}.err < /dev/null &)")
+
+
+def start_captures(runner: Runner, observers: Dict[str, Tuple[str, str, bool]], flt: str, seconds: int, prefix: str, sleep: Callable[[float], None]) -> Dict[str, Dict[str, object]]:
+    """Starts one capture per observer and verifies each is listening (its stderr file holds `listening on`). A failed start is retried once with a fresh file name. Returns per observer
+    {'listening': bool, 'base': file base, 'reason': why not}. The caller must not send a frame unless every observer is listening."""
+    result: Dict[str, Dict[str, object]] = {}
+    for name, (host, iface, sudo) in observers.items():
+        reason = 'not attempted'
+        base = f'{prefix}-{name}'
+        for attempt in range(START_ATTEMPTS):
+            base = f'{prefix}-{name}' + ('' if attempt == 0 else '-retry')
+            started = run_remote(runner, host, capture_start_command(base, iface, sudo, seconds, flt))
+            if not started.ok:
+                reason = f'the capture could not be started: {started.reason}'
+                continue
+            reason = 'the capture never printed "listening on"'
+            for _ in range(LISTEN_RETRIES):
+                sleep(1)
+                check = run_remote(runner, host, f"grep -c 'listening on' {base}.err; true")
+                if not check.ok:
+                    reason = f'the capture file could not be read: {check.reason}'
+                elif check.out.strip() == '1':
+                    reason = ''
+                    break
+                else:
+                    reason = f'the capture never printed "listening on" (stderr so far: {run_remote(runner, host, f"head -c 150 {base}.err; true").out.strip()[:150] or "empty"})'
+            if reason == '':
+                break
+        result[name] = {'listening': reason == '', 'base': base, 'reason': reason}
+    return result
+
+
+SUMMARY = re.compile(r'(\d+) packets captured')
+DROPPED = re.compile(r'(\d+) packets dropped by kernel')
+
+
+def read_capture(runner: Runner, host: str, base: str) -> Dict[str, object]:
+    """Reads one finished capture. Valid only if tcpdump's exit summary is present, reports no kernel drops, and its packet count equals the number of frame lines in the text."""
+    r = run_remote(runner, host, f"head -c 4000 {base}.err; echo '#TXT#'; head -c 2000000 {base}.txt")
+    if not r.ok:
+        return {'valid': False, 'reason': f'the capture could not be read: {r.reason}', 'text': '', 'packets': None}
+    err, sep, text = r.out.partition('#TXT#\n')
+    if not sep:
+        return {'valid': False, 'reason': 'the capture read had no text section', 'text': '', 'packets': None}
+    m, d = SUMMARY.search(err), DROPPED.search(err)
+    if m is None:
+        return {'valid': False, 'reason': 'no "N packets captured" summary in the capture: it did not finish, or never ran', 'text': text, 'packets': None}
+    packets = int(m.group(1))
+    if d is not None and int(d.group(1)) > 0:
+        return {'valid': False, 'reason': f'the kernel dropped {d.group(1)} packets before tcpdump read them', 'text': text, 'packets': packets}
+    lines = sum(int(v['count']) for v in parse_capture(text).values())
+    if lines != packets:
+        return {'valid': False, 'reason': f'the summary says {packets} packets but the text has {lines} frame lines', 'text': text, 'packets': packets}
+    return {'valid': True, 'reason': '', 'text': text, 'packets': packets}
+
+
+def observer_group(name: str) -> str:
+    """O3_p2_mirror -> O3, O4_node01_eth0 -> O4: the two workload-side captures are one observer, invalid if either is."""
+    return name.split('_', 1)[0]
+
+
+def read_all(runner: Runner, observers: Dict[str, Tuple[str, str, bool]], bases: Dict[str, str]) -> Tuple[Dict[str, Dict[str, object]], Dict[str, str]]:
+    """Reads every capture; returns (per capture result, {observer group: reason} for each invalid one)."""
+    results = {name: read_capture(runner, host, bases[name]) for name, (host, _i, _s) in observers.items()}
+    invalid: Dict[str, str] = {}
+    for name, r in results.items():
+        if not r['valid']:
+            invalid[observer_group(name)] = (invalid[observer_group(name)] + '; ' if observer_group(name) in invalid else '') + f'{name}: {r["reason"]}'
+    return results, invalid
+
+
+class ScriptedRunner:
+    """A fake ssh for the offline tests: rules are {match, rc, out, err, times}; the first rule whose `match` is in the command and has uses left answers; no rule is an ssh failure (255)."""
+
+    def __init__(self, rules: List[dict]):
+        self.rules, self.calls = [dict(r) for r in rules], []
+
+    def __call__(self, host: str, cmd: str, timeout: int, stdin: Optional[str] = None) -> Tuple[int, str, str]:
+        self.calls.append(f'{host}: {cmd}')
+        for r in self.rules:
+            if r.get('host', host) == host and r['match'] in cmd and r.get('times', 1_000_000) > 0:
+                r['times'] = r.get('times', 1_000_000) - 1
+                if r.get('raise') == 'timeout':
+                    import subprocess
+                    raise subprocess.TimeoutExpired(cmd, timeout)
+                return r.get('rc', 0), r.get('out', ''), r.get('err', '')
+        return 255, '', 'no scripted response'
 
 
 # ---- the load test: limits, plan, delivered counts, abort logic ----------------------------------------------------------------------------------------
@@ -247,6 +376,7 @@ IDLE_MEASURE_SECONDS = 4
 MAX_TOTAL_LOAD_SECONDS = 120        # wall time of the steps, overhead and pauses included; inside a 600 s fault this leaves room for the frame-class pass first
 POLL_INTERVAL_SECONDS = 2
 MAX_CONSECUTIVE_POLL_FAILURES = 2
+POLL_TIMEOUT_SECONDS = 8            # one poll is one ssh with two curls (4 s each at most) and a journal read; a poll that takes longer counts as a failed poll
 FAULT_RESERVE_SECONDS = 30          # a step is not started unless this much of the fault's time limit remains afterwards
 LEAK_FRAMES = 3                     # idle-corrected frames at an observer that must read zero, before it counts as a breach
 CONTROL_PERMILLE_MIN = 970          # O3 must see at least this many thousandths of the frames sent, or the step is not valid (integer accounting, Invariant 2)
@@ -452,9 +582,21 @@ def _cli(argv: List[str]) -> int:
         return 0
     data = json.loads(sys.stdin.read())
     if cmd == 'judge':
-        print(json.dumps(judge(data['state'], data['counts'], data['n'])))
+        print(json.dumps(judge(data['state'], data['counts'], data['n'], data.get('invalid'))))
     elif cmd == 'parse':
         print(json.dumps(counts_by_class(data['text'], data['names'])))
+    elif cmd == 'observe':
+        runner = ScriptedRunner(data['rules'])
+        obs = {k: (v[0], v[1], bool(v[2])) for k, v in data['observers'].items()}
+        if data['op'] == 'start':
+            res = start_captures(runner, obs, data.get('filter', 'ether proto 0x88b5'), 22, '/tmp/t', lambda _s: None)
+            print(json.dumps({'result': res, 'calls': runner.calls}))
+        elif data['op'] == 'read':
+            results, invalid = read_all(runner, obs, {k: f'/tmp/t-{k}' for k in obs})
+            print(json.dumps({'results': {k: {x: y for x, y in v.items() if x != 'text'} for k, v in results.items()}, 'invalid': invalid, 'counts': {k: counts_by_class(str(v['text']), ['experimental'])['experimental']['count'] for k, v in results.items() if v['valid']}}))
+        else:
+            r = run_remote(runner, 'h', data['cmd'])
+            print(json.dumps({'ok': r.ok, 'rc': r.rc, 'out': r.out, 'reason': r.reason}))
     elif cmd == 'poll':
         print(json.dumps(parse_poll(data['text'])))
     elif cmd == 'plan':

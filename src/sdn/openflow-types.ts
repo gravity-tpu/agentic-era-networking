@@ -695,6 +695,10 @@ export type UnrecognisedTableMissVariant = (typeof UNRECOGNISED_TABLE_MISS_VARIA
 /** Instruction types a fault entry may carry, and the one action type it may carry inside them. Everything else (GOTO_TABLE, METER, EXPERIMENTER, OUTPUT, GROUP, ...) is refused. */
 const FAULT_ALLOWED_INSTRUCTIONS: ReadonlySet<number> = new Set([InstructionType.OFPIT_WRITE_METADATA, InstructionType.OFPIT_WRITE_ACTIONS, InstructionType.OFPIT_APPLY_ACTIONS, InstructionType.OFPIT_CLEAR_ACTIONS]);
 const FAULT_ALLOWED_ACTIONS: ReadonlySet<number> = new Set([ActionType.OFPAT_POP_VLAN]);
+/** OpenFlow 1.3 fixes the length of these instructions: CLEAR_ACTIONS is the 8-byte header alone, WRITE_METADATA is the header, an 8-byte metadata and an 8-byte mask. */
+const FAULT_EXACT_INSTRUCTION_LEN: ReadonlyMap<number, number> = new Map([[InstructionType.OFPIT_CLEAR_ACTIONS, 8], [InstructionType.OFPIT_WRITE_METADATA, 24]]);
+/** The exact length of each variant's instruction block, so a builder that drifts is caught here and not on the switch. */
+const VARIANT_INSTRUCTION_LEN: Readonly<Record<UnrecognisedTableMissVariant, number>> = { 'clear-actions': 8, 'write-empty': 8, 'apply-pop-vlan': 16, 'write-metadata': 24 };
 
 /** Throws unless the instruction block is made only of allowed non-forwarding instructions and actions, and is well formed to its end. Fail closed: anything it cannot read is refused. */
 export function assertNoForwardingInstructions(instructions: Buffer): void {
@@ -705,6 +709,8 @@ export function assertNoForwardingInstructions(instructions: Buffer): void {
     const len = instructions.readUInt16BE(p + 2);
     if (len < 8 || len % 8 !== 0 || p + len > instructions.length) throw new Error(`table-miss fault: bad instruction length ${len}`);
     if (!FAULT_ALLOWED_INSTRUCTIONS.has(type)) throw new Error(`table-miss fault: instruction type ${type} is not allowed (only non-forwarding instructions may be installed)`);
+    const exact = FAULT_EXACT_INSTRUCTION_LEN.get(type);
+    if (exact !== undefined && len !== exact) throw new Error(`table-miss fault: instruction type ${type} must be exactly ${exact} bytes, got ${len}`);
     if (type === InstructionType.OFPIT_WRITE_ACTIONS || type === InstructionType.OFPIT_APPLY_ACTIONS) {
       let a = p + 8;
       while (a < p + len) {
@@ -759,7 +765,9 @@ function variantInstructions(variant: UnrecognisedTableMissVariant): Buffer {
 export function buildOfpTableMissVariant(variant: UnrecognisedTableMissVariant, xid: number): Buffer {
   const instructions = variantInstructions(variant);
   assertNoForwardingInstructions(instructions);
+  if (instructions.length !== VARIANT_INSTRUCTION_LEN[variant]) throw new Error(`table-miss fault: variant ${variant} must carry ${VARIANT_INSTRUCTION_LEN[variant]} instruction bytes, built ${instructions.length}`);
   const buf = Buffer.alloc(56 + instructions.length);
+  if (buf.length % 8 !== 0) throw new Error('table-miss fault: a flow-mod must be a multiple of 8 bytes');
   buf.writeUInt8(OFP_VERSION_1_3, 0);
   buf.writeUInt8(OpenFlowType.OFPT_FLOW_MOD, 1);
   buf.writeUInt16BE(buf.length, 2);

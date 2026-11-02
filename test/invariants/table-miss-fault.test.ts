@@ -378,6 +378,18 @@ describe('the further unrecognised variants (every one safe by construction: nev
     expect(() => assertNoForwardingInstructions(Buffer.from('0004001000000000' + '0012000400000000', 'hex'))).toThrow(/bad action length/);
   });
 
+  it('is strict about instruction lengths: WRITE_METADATA is exactly 24 bytes and CLEAR_ACTIONS exactly 8, and every variant is a multiple of 8 bytes of the expected size', () => {
+    expect(() => assertNoForwardingInstructions(Buffer.from('0002001000000000' + '0000000000000000', 'hex'))).toThrow(/exactly 24/); // metadata without a mask
+    expect(() => assertNoForwardingInstructions(Buffer.from('0002002000000000' + '00'.repeat(24), 'hex'))).toThrow(/exactly 24/); // too long
+    expect(() => assertNoForwardingInstructions(Buffer.from('0005001000000000' + '0000000000000000', 'hex'))).toThrow(/exactly 8/);
+    const sizes = { 'clear-actions': 64, 'write-empty': 64, 'apply-pop-vlan': 72, 'write-metadata': 80 } as const;
+    for (const v of UNRECOGNISED_TABLE_MISS_VARIANTS) {
+      const fm = buildOfpTableMissVariant(v, 1);
+      expect(fm.length, v).toBe(sizes[v]);
+      expect(fm.length % 8, v).toBe(0);
+    }
+  });
+
   for (const mode of ['unrecognised-write-empty', 'unrecognised-apply-pop-vlan', 'unrecognised-write-metadata'] as const) {
     const variant = UNRECOGNISED_MODE_VARIANTS[mode];
     it(`${mode}: is sent as raw bytes after the verified readback, once, with one DROP put back at the limit, audited with its own id; no other flow-mod`, async () => {

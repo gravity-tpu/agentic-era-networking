@@ -323,3 +323,111 @@ describe('reading one poll of the bridge', () => {
     expect(poll('#epoch\n1\n#flows\nverified drops 1\n#summary\nConnected\n#journal\n').ok).toBe(false); // no message count
   });
 });
+
+/** An observer counts only if its capture provably ran: structured remote results, a verified start, a summary that agrees with the lines, and a verdict that outranks control_failed. A fake ssh is scripted by rule. */
+interface Rule { match: string; host?: string; rc?: number; out?: string; err?: string; times?: number; raise?: string }
+const OBS = { O3_p2_mirror: ['jetson', 'ifa', false], O4_node01_eth0: ['agentic-node-01', 'eth0', true] };
+const observe = <T>(op: string, rules: Rule[], extra: Record<string, unknown> = {}, observers: Record<string, unknown[]> = OBS): T => py<T>('observe', { op, rules, observers, ...extra });
+const FRAME = (n: number): string => `15:30:0${n}.123456 02:00:00:00:00:77 > 02:00:00:00:be:ef, ethertype Unknown (0x88b5), length 60: x`;
+const ERR = (n: number, extra = ''): string => `tcpdump: listening on ifa, link-type EN10MB\n${n} packets captured\n${n} packets received by filter\n${extra || '0 packets dropped by kernel'}\n`;
+
+describe('(a) every remote command returns a structured result, never an empty string for a failure', () => {
+  const run = (rule: Rule): { ok: boolean; rc: number | null; out: string; reason: string } => observe('cmd', [rule], { cmd: 'echo hi' });
+  it('ok only for return code 0', () => { expect(run({ match: 'echo', out: 'hi\n' })).toMatchObject({ ok: true, rc: 0, out: 'hi\n' }); });
+  it('a failed command, a refused sudo and an unreachable host are failures with their reason', () => {
+    expect(run({ match: 'echo', rc: 1, err: 'sudo: a password is required' })).toMatchObject({ ok: false, rc: 1, out: '' });
+    expect(run({ match: 'echo', rc: 1, err: 'sudo: a password is required' }).reason).toContain('a password is required');
+    expect(run({ match: 'echo', rc: 255, err: 'ssh: connect to host x port 22: No route' }).reason).toContain('exit 255');
+    expect(run({ match: 'nothing-matches' })).toMatchObject({ ok: false, rc: 255 });
+  });
+  it('a timeout is a failure, not an empty result', () => { expect(run({ match: 'echo', raise: 'timeout' })).toMatchObject({ ok: false, rc: null, out: '' }); });
+});
+
+describe('(b) each capture is verified listening before any frame is sent', () => {
+  type Started = { result: Record<string, { listening: boolean; base: string; reason: string }>; calls: string[] };
+  const listening = (host: string): Rule => ({ host, match: "grep -c 'listening on'", out: '1\n' });
+  it('reports listening when the stderr file shows "listening on", and starts detached (setsid nohup) so ending the ssh session cannot kill it', () => {
+    const r = observe<Started>('start', [{ match: 'rm -f' }, listening('jetson'), listening('agentic-node-01')]);
+    expect(r.result['O3_p2_mirror']).toMatchObject({ listening: true, reason: '' });
+    expect(r.result['O4_node01_eth0']?.listening).toBe(true);
+    expect(r.calls.filter((c) => c.includes('tcpdump')).every((c) => c.includes('setsid nohup'))).toBe(true);
+    expect(r.calls.find((c) => c.startsWith('agentic-node-01') && c.includes('tcpdump'))).toContain('sudo -n timeout');
+  });
+  it('a capture that never prints "listening on" is not listening, with the stderr it did print, after bounded checks', () => {
+    const r = observe<Started>('start', [{ match: 'rm -f' }, listening('jetson'), { host: 'agentic-node-01', match: "grep -c 'listening on'", out: '0\n' }, { host: 'agentic-node-01', match: 'head -c 150', out: 'sudo: a password is required\n' }]);
+    expect(r.result['O3_p2_mirror']?.listening).toBe(true);
+    expect(r.result['O4_node01_eth0']).toMatchObject({ listening: false });
+    expect(r.result['O4_node01_eth0']?.reason).toContain('never printed "listening on"');
+    expect(r.result['O4_node01_eth0']?.reason).toContain('a password is required');
+    expect(r.calls.filter((c) => c.startsWith('agentic-node-01') && c.includes("grep -c 'listening on'")).length).toBe(6); // 3 checks x 2 attempts: bounded
+  });
+  it('retries a failed start once, with a fresh file, and accepts it if the retry listens', () => {
+    const r = observe<Started>('start', [{ host: 'jetson', match: 'rm -f', rc: 255, err: 'ssh: timeout', times: 1 }, { match: 'rm -f' }, listening('jetson'), listening('agentic-node-01')]);
+    expect(r.result['O3_p2_mirror']).toMatchObject({ listening: true });
+    expect(r.result['O3_p2_mirror']?.base).toMatch(/-retry$/);
+  });
+  it('gives up after the one retry and says why; an ssh failure or a refused sudo is "could not be started", never "listening"', () => {
+    const r = observe<Started>('start', [{ host: 'jetson', match: 'rm -f', rc: 255, err: 'ssh: timeout' }, { host: 'agentic-node-01', match: 'rm -f', rc: 1, err: 'sudo: a password is required' }]);
+    expect(r.result['O3_p2_mirror']).toMatchObject({ listening: false });
+    expect(r.result['O3_p2_mirror']?.reason).toContain('could not be started');
+    expect(r.result['O4_node01_eth0']?.reason).toContain('a password is required');
+    expect(r.calls.filter((c) => c.startsWith('jetson') && c.includes('rm -f')).length).toBe(2);
+  });
+});
+
+describe('(c) a count is taken only from a capture whose tcpdump summary is present, drop-free and equal to the line count', () => {
+  type Read = { results: Record<string, { valid: boolean; reason: string; packets: number | null }>; invalid: Record<string, string>; counts: Record<string, number> };
+  const cap = (host: string, err: string, text: string): Rule => ({ host, match: 'head -c 4000', out: `${err}#TXT#\n${text}` });
+  const good = (host: string): Rule => cap(host, ERR(2), `${FRAME(1)}\n${FRAME(2)}\n`);
+  it('accepts a capture whose summary equals its frame lines and counts it from the lines', () => {
+    const r = observe<Read>('read', [good('jetson'), good('agentic-node-01')]);
+    expect(r.invalid).toEqual({});
+    expect(r.counts).toEqual({ O3_p2_mirror: 2, O4_node01_eth0: 2 });
+    expect(r.results['O3_p2_mirror']).toMatchObject({ valid: true, packets: 2 });
+  });
+  it('a genuine zero is valid only with a summary that says 0 packets captured', () => {
+    const r = observe<Read>('read', [cap('jetson', ERR(0), ''), good('agentic-node-01')]);
+    expect(r.invalid).toEqual({});
+    expect(r.counts['O3_p2_mirror']).toBe(0);
+  });
+  it('no summary (the capture never ran, or did not finish) is INVALID with the reason, not zero', () => {
+    const r = observe<Read>('read', [cap('jetson', 'tcpdump: listening on ifa, link-type EN10MB\n', ''), good('agentic-node-01')]);
+    expect(r.results['O3_p2_mirror']?.valid).toBe(false);
+    expect(r.invalid['O3']).toContain('no "N packets captured" summary');
+    expect(r.counts).not.toHaveProperty('O3_p2_mirror');
+    expect(observe<Read>('read', [cap('jetson', '', ''), good('agentic-node-01')]).invalid['O3']).toContain('summary');
+  });
+  it('a summary that disagrees with the frame lines, in either direction, is INVALID', () => {
+    expect(observe<Read>('read', [cap('jetson', ERR(3), `${FRAME(1)}\n${FRAME(2)}\n`), good('agentic-node-01')]).invalid['O3']).toContain('summary says 3 packets but the text has 2');
+    expect(observe<Read>('read', [cap('jetson', ERR(1), `${FRAME(1)}\n${FRAME(2)}\n`), good('agentic-node-01')]).invalid['O3']).toContain('summary says 1 packets but the text has 2');
+  });
+  it('kernel drops make the capture INVALID even when the numbers agree', () => {
+    expect(observe<Read>('read', [cap('jetson', ERR(2, '4 packets dropped by kernel'), `${FRAME(1)}\n${FRAME(2)}\n`), good('agentic-node-01')]).invalid['O3']).toContain('kernel dropped 4');
+  });
+  it('a capture that cannot be read at all (ssh failed, file missing) is INVALID, and two workload captures are one observer, invalid if either is', () => {
+    const r = observe<Read>('read', [{ host: 'jetson', match: 'head -c 4000', rc: 1, err: 'head: cannot open' }, good('agentic-node-01')]);
+    expect(r.invalid['O3']).toContain('could not be read');
+    const obs = { O4_node01_eth0: ['agentic-node-01', 'eth0', true], O4_rpi_hailo_eth0: ['rpi-hailo', 'eth0', true] };
+    const two = observe<Read>('read', [good('agentic-node-01'), { host: 'rpi-hailo', match: 'head -c 4000', rc: 255, err: 'ssh: timeout' }], {}, obs);
+    expect(Object.keys(two.invalid)).toEqual(['O4']);
+    expect(two.invalid['O4']).toContain('O4_rpi_hailo_eth0');
+  });
+});
+
+describe('(d) an invalid observer makes the verdict observer_invalid, stronger than control_failed, and lists the reason', () => {
+  const j = (counts: Counts, invalid: Record<string, string>): Judged & { invalid_observers: Record<string, string>; classes: Record<string, { verdict: string; observed: Record<string, number | null> }> } =>
+    py('judge', { state: 'drop', counts, n: 20, invalid });
+  it('outranks control_failed, workload_reach and leak, never counts as a breach, and shows the invalid observer as null, not 0', () => {
+    const r = j({ ipv6: { O3: 19, O2: 5, O4: 0 }, lldp: { O3: 20, O2: 0, O4: 3 } }, { O4: 'O4_rpi_hailo_eth0: no "N packets captured" summary' });
+    expect(r.classes['ipv6']?.verdict).toBe('observer_invalid');
+    expect(r.classes['lldp']?.verdict).toBe('observer_invalid');
+    expect(r.classes['lldp']?.observed).toEqual({ O3: 20, O2: 0, O4: null });
+    expect(r.breach).toBe(false);
+    expect(r.valid_classes).toEqual([]);
+    expect(r.invalid_observers).toEqual({ O4: 'O4_rpi_hailo_eth0: no "N packets captured" summary' });
+  });
+  it('changes nothing when every observer is valid', () => {
+    expect(j({ ipv6: { O3: 19, O2: 0, O4: 0 } }, {}).classes['ipv6']?.verdict).toBe('control_failed');
+    expect(j({ ipv6: { O3: 20, O2: 0, O4: 1 } }, {}).classes['ipv6']?.verdict).toBe('workload_reach');
+  });
+});
