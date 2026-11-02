@@ -32,12 +32,16 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 CPU_FLAVOR="cpu5c"; MINUTES=""; NETWORK_VOLUME_ID=""; SUITE_TAR=""; MODEL="mobilenet_v1"
-VCPU_COUNT="16"; YES=""; DISK_GB=160   # ephemeral container disk, not the network volume: the by-hand layer
-                                        # extraction (hailo-compile-pod.sh) needs room for the image's raw
-                                        # layer tars plus the extracted rootfs at the same time. 160 is this
-                                        # pod type's actual ceiling (confirmed live 2026-11-02: 200 was
-                                        # rejected with "Container Disk must be less than or equal to 160") --
-                                        # still a generous margin over a 9GB-compressed image.
+VCPU_COUNT="16"; YES=""; DISK_GB=60    # ephemeral container disk, not the network volume. Measured locally
+                                        # 2026-11-02: this image's layer.tar contents sum to ~17GB uncompressed
+                                        # total, and hailo-compile-pod.sh deletes each raw layer tar immediately
+                                        # after extracting it, so peak usage never approaches that doubled --
+                                        # 60GB is a generous (~3.5x) margin, not the 100-160GB first guessed
+                                        # before actually measuring it. That earlier guess likely cost real
+                                        # Secure Cloud host matches: every CPU flavor failed on capacity across
+                                        # 10 full retry rounds right after the bump to 160GB (confirmed this pod
+                                        # type's hard ceiling is 160, separately), where capacity had been
+                                        # findable at 60GB before.
 OUT="/tmp/zodiac-hailo-compile-$(date -u +%Y%m%dT%H%M%SZ)"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 IMAGE="${IMAGE:-ubuntu:22.04}"   # just the pod's own base OS now (no Docker installed into it anymore -- see
