@@ -37,3 +37,22 @@ Installed on the Jetson (`zodiac-isolation-watch`, enabled) and exercised on the
 - **Unreachable bridge:** with the thresholds shortened for the test only (`ISOLATION_WATCH_POLL_MS=10000`, `ISOLATION_WATCH_UNREACHABLE_POLLS=1`, both inside the documented bounds), the bridge was stopped for about 25 s. The first failed poll sent "Zodiac bridge unreachable" within 0.3 s; after the bridge returned, "Zodiac isolation recovered" followed after two clean polls (19 s). The overrides were removed and the service restarted at the defaults. Journal lines: `journalctl -u zodiac-isolation-watch` for 2026-11-01 22:50 to 22:53 EST.
 
 **Not validated:** detection of an absent, forwarding or unrecognised table-miss on firmware 0.86 (that classification has only run against unit-test fakes and the verified readback; no route can break the DROP on purpose, and the experiment endpoint always reinstalls it), the auto-repair path (off by default), and why the switch stops forwarding while the controller is away. That last one was measured afterwards (`docs/benchmarks/results/controller-outage-2026-11-01/`): during a 60 s bridge outage 0 of 48,000 frames on the tap path were delivered (98.7% before and after), so an unreachable bridge also means no workload connectivity through the switch; whether the flow table was cleared or the switch blocks without a controller is not known. A supervised test of the table-miss path needs a guarded way to replace the DROP for a bounded time and is not built.
+
+## Exercising it against the real switch: the test fault
+
+No route can change the table-miss, and the experiment endpoint always reinstalls the DROP, so the table-miss paths of the watcher and of the repair governor could only be tested against fakes. `src/sdn/table-miss-fault.ts` adds a deliberate, bounded fault for a supervised test. It is **off unless all of these are set** in `/etc/zodiac/zodiac-bridge.env` (anything else leaves the DROP alone and logs why):
+
+| Variable | Value |
+| :--- | :--- |
+| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (the only mode) |
+| `ZODIAC_FAULT_TABLE_MISS_ACK` | `I-ACCEPT-A-BOUNDED-FORWARDING-TABLE-MISS` (exactly) |
+| `ZODIAC_FAULT_TABLE_MISS_SECONDS` | optional, whole seconds from 60 to 900, default 240 |
+
+What it does: when the bridge starts, sends the policy, and the readback has **verified** the baseline, it replaces the table-miss DROP with a priority-0 forward to P3 (the tap, which already receives a copy of everything the workload sends, so the fault opens no new path), logs `TEST FAULT ACTIVE`, writes a `fault_injected` line to the gate audit file, and sets a timer that puts the DROP back (`fault_reverted`). It acts once per process; a new switch session re-sends the DROP and cancels a pending revert. If the readback did not verify, nothing is injected.
+
+What it is not: a path to forward untrusted traffic. While it is active the isolation status reads `mismatch` (table-miss `forwards`), which is the point. Remove the three variables and restart the bridge when the test is done; a bridge restarted with them still set will inject again.
+
+Two supervised tests use it, both with the owner present and the workload idle:
+
+1. **Detection and push (repair off, the default).** Fault for 240 s. Expected: the status goes `mismatch`, the watcher sends an urgent alert after 2 polls (about 2 minutes at the default 60 s), the DROP returns at 240 s, the watcher sends the recovery message after 2 clean polls.
+2. **Repair.** Set `ZODIAC_ISOLATION_REPAIR=1` too and a fault of 600 s or more, so the governor acts first. Expected: after 3 readings the bridge re-sends the DROP itself (`repair` audit line, one "the bridge repaired itself" push), and the status returns to `verified` well before the fault's own time limit.

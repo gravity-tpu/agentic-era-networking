@@ -93,6 +93,7 @@ import {
 } from './isolation-status.js';
 import { FlowReadLock, IsolationRechecker, parseRecheckIntervalMs } from './isolation-recheck.js';
 import { RepairGovernor, parseRepairConfig, type RepairStatus } from './isolation-repair.js';
+import { parseTableMissFault, type TableMissFaultConfig } from './table-miss-fault.js';
 import { ExperimentInstaller, parseExperimentRequest, parseExperimentSettleMs, EXPERIMENT_TOKEN_MIN_LENGTH, EXPERIMENT_MAX_BODY_BYTES } from './experiment-install.js';
 import { timingSafeEqual } from 'node:crypto';
 import { RELAY_IGNORED_PAUSE_MS, isRelayIgnoredAck, resolveCloudRelayUrl } from './relay-authority.js';
@@ -159,6 +160,8 @@ export function coralDaemonEnabled(env: Readonly<Record<string, string | undefin
 const ISOLATION_RECHECK_INTERVAL_MS = parseRecheckIntervalMs(process.env);
 /** After a repair, how long to wait before asking the re-check for a verifying read. */
 const ISOLATION_REPAIR_VERIFY_DELAY_MS = 5_000;
+/** The port the test fault forwards unmatched traffic to: P3, the tap, which already receives a copy of everything the workload sends (so the fault opens no new path). */
+const FAULT_FORWARD_PORT = 3;
 // isLocalDev is now superseded by isLanOperator defined below.
 
 // Council Invariant 5 (Quoc Le): Configurable shutdown timeout SLA to prevent fragile magic constants.
@@ -553,6 +556,10 @@ export class ZodiacBridgeServer {
   /** When it may re-send the default DROP by itself (off unless ZODIAC_ISOLATION_REPAIR=1; src/sdn/isolation-repair.ts, docs/design/isolation-repair.md). */
   private readonly repairGovernor: RepairGovernor;
   private repairInFlight = false;
+  /** A bounded, acknowledged test fault (off by default; src/sdn/table-miss-fault.ts): the table-miss DROP is replaced by a forward to the tap for a time limit, once per process. */
+  private readonly tableMissFault: TableMissFaultConfig;
+  private tableMissFaultUsed = false;
+  private tableMissFaultTimer: ReturnType<typeof setTimeout> | null = null;
   private lastRepairBlockedReason: string | null = null;
   private readonly isolationRechecker: IsolationRechecker;
   /**
@@ -698,6 +705,50 @@ export class ZodiacBridgeServer {
       this.repairInFlight = false;
       console.error(`[!] [Isolation repair] could not send the default DROP (${err instanceof Error ? err.message : String(err)}).`);
     }
+  }
+
+  /**
+   * The test fault (see table-miss-fault.ts), once per process and only after the readback verified the baseline: a priority-0 forward to the tap port replaces the DROP,
+   * and a timer puts the DROP back. Replacing it is an ADD of the same match and priority; the readback that follows is what says whether the switch took it.
+   */
+  private injectTableMissFaultOnce(): void {
+    if (!this.tableMissFault.enabled || this.tableMissFaultUsed) return;
+    this.tableMissFaultUsed = true;
+    const seconds = this.tableMissFault.durationMs / 1000;
+    const forward: IsolationRule = { id: 'fault-table-miss-forward', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [FAULT_FORWARD_PORT], match: {} } };
+    const drop: IsolationRule = { id: 'table-miss', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} } };
+    try {
+      this.controller.openFlow.sendFlowModOptions(forward.flowMod);
+    } catch (err: unknown) {
+      console.error(`[!] [Fault] could NOT send the test fault: ${err instanceof Error ? err.message : String(err)}; the table-miss is unchanged.`);
+      return;
+    }
+    console.warn(`[!] [Fault] TEST FAULT ACTIVE: the table-miss DROP was replaced by a forward to P${FAULT_FORWARD_PORT}; the DROP is put back in ${seconds} s (or at the next switch session).`);
+    this.auditFault('fault_injected', `table-miss replaced by a forward to P${FAULT_FORWARD_PORT} for ${seconds} s`, [forward], ['the DROP returns at the time limit, or when the switch session restarts']);
+    this.tableMissFaultTimer = setTimeout(() => {
+      this.tableMissFaultTimer = null;
+      try {
+        this.controller.openFlow.sendTableMissRule(0, 'DROP');
+        console.warn('[!] [Fault] test fault ended: the table-miss DROP was re-sent.');
+        this.auditFault('fault_reverted', 'table-miss DROP re-sent at the time limit', [drop], ['the readback that follows says whether the switch took it']);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[!] [Fault] test fault could NOT be ended: ${msg}; the DROP is re-sent at the next switch session, and the repair governor (if enabled) acts on the readback.`);
+        this.auditFault('fault_reverted', `table-miss DROP could NOT be re-sent: ${msg}`, [drop], ['still forwarding to the tap until the next switch session']);
+      }
+    }, this.tableMissFault.durationMs);
+    this.tableMissFaultTimer.unref?.();
+  }
+
+  private cancelTableMissFault(why: string): void {
+    if (this.tableMissFaultTimer === null) return;
+    clearTimeout(this.tableMissFaultTimer);
+    this.tableMissFaultTimer = null;
+    console.warn(`[!] [Fault] pending test-fault revert cancelled: ${why}.`);
+  }
+
+  private auditFault(event: 'fault_injected' | 'fault_reverted', what: string, proposed: readonly IsolationRule[], notes: readonly string[]): void {
+    this.auditGate({ event, route: 'fault', peer: null, what, proposed, violations: [], notes, tableRules: 0 });
   }
 
   private auditRepair(event: 'repair' | 'repair_exhausted', trigger: string, readings: number): void {
@@ -1068,6 +1119,8 @@ export class ZodiacBridgeServer {
     this.quarantineStateFile = resolveQuarantineStateFile(process.env);
     this.uplinkArpPeers = parseUplinkArpPeers(process.env['ZODIAC_UPLINK_ARP_PEERS']); // a malformed list throws here: the bridge does not start with the direction silently open
     this.loadPersistedQuarantines();
+    this.tableMissFault = parseTableMissFault(process.env);
+    for (const w of this.tableMissFault.warnings) console.warn(`[!] [Fault] ${w}`);
     this.repairGovernor = new RepairGovernor(parseRepairConfig(process.env)); // a malformed setting throws here: the bridge does not start with auto-repair silently misconfigured
     this.isolationRechecker = new IsolationRechecker({
       policy: this.isolationPolicy(),
@@ -1185,6 +1238,7 @@ export class ZodiacBridgeServer {
     // Auto-install baseline flow rules on switch connection
     this.controller.openFlow.on('ready', () => {
       this.experiment?.sessionReset(); // a new session gets the isolation policy below; forget any experiment and its time limit
+      this.cancelTableMissFault('a new switch session starts and re-sends the DROP'); // the table is rewritten from the policy: a pending fault has nothing left to revert
       // Council Invariant 3 (Fail-Closed) & CCIE Invariant NET-001 (CoPP):
       // Table-miss → DROP: Unmatched packets drop in switch hardware by default.
       // Punting unmatched traffic to CONTROLLER without rate limiting risks overwhelming
@@ -1245,6 +1299,7 @@ export class ZodiacBridgeServer {
           if (this.isolationStatus.state === 'verified') {
             console.log(`[+] [Bridge Server] ${line}`);
             this.experiment?.isolationReestablished(); // a stale experiment alarm is resolved by a verified re-install
+            this.injectTableMissFaultOnce(); // only on top of a baseline that was just verified; a failed readback leaves the table alone
           } else {
             console.error(`[!] [Bridge Server] ${line}`);
           }
@@ -1611,6 +1666,7 @@ export class ZodiacBridgeServer {
   }
 
   public async stop(): Promise<void> {
+    this.cancelTableMissFault('bridge stopping');
     this.isolationRechecker.stop();
     this.experiment?.dispose();
     if (this.quarantineSweepTimer) {
