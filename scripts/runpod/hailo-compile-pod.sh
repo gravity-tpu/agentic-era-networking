@@ -272,19 +272,26 @@ MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
 # "Aborted (core dumped)") -- this at least gives faulthandler a chance to print a Python-level stack before the
 # process dies, for the subset of native aborts that still route back through the interpreter's signal handling.
 export PYTHONFAULTHANDLER=1
-# Checkpointed imports (an earlier iteration of this script, now removed) localized an abort to
-# `import hailo_sdk_client` itself -- every earlier import (numpy, onnx, onnxruntime, torch, tensorflow,
-# hailo_platform) succeeds. strace's first run here (-s default 32, the strace default) caught the real culprit
-# -- a "Fatal Python error" dump showing the crash inside TensorFlow's convert_to_eager_tensor, called from a
-# hailo_sdk_client submodule's module-level code -- but truncated the one-line native log message that explains
-# *why* TF aborted to ~32 characters. -s 2000 keeps that run (strace is otherwise identical and still useful if
-# the crash recurs) but captures that message in full instead of needing yet another live round trip for it.
-chroot "$ROOTFS" /bin/bash -c "apt-get update -qq && apt-get install -y -qq strace" \
-  || echo 'strace install failed inside chroot (non-fatal; continuing without a trace)' >&2
-chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; strace -f -s 2000 -o /tmp/hailo-sdk-client-strace.log python3 -c 'import hailo_sdk_client'" || true
-cp "$ROOTFS/tmp/hailo-sdk-client-strace.log" "$OUT/hailo-sdk-client-strace.log" 2>/dev/null || echo "no strace log produced" >&2
-echo "--- last 80 lines of the hailo_sdk_client import strace ---"
-tail -80 "$ROOTFS/tmp/hailo-sdk-client-strace.log" 2>/dev/null || true
+# Checkpointed imports and strace (both since removed -- their diagnosis is preserved in git history and in the
+# /proc/self/exe fix above) localized and root-caused an earlier abort inside TensorFlow's
+# convert_to_eager_tensor. With that fixed, live run 2026-11-02 got further and hit a different, clean Python
+# exception instead of a hard abort: RuntimeError: random_device::random_device(const std::string&) -- libstdc++
+# failing to seed TensorFlow's eager context. Before guessing whether this is our mknod'd /dev/urandom node
+# being refused by the host's device cgroup (plausible: capabilities already confirmed to vary across hosts) or
+# the getrandom() syscall itself being blocked (a different problem, not fixable from here), test both directly
+# and cheaply rather than reasoning about it from the TF stack trace alone.
+chroot "$ROOTFS" /bin/bash -c "python3 -c '
+import os
+try:
+    print(\"getrandom() syscall:\", os.getrandom(16).hex())
+except Exception as e:
+    print(\"getrandom() syscall FAILED:\", repr(e))
+try:
+    with open(\"/dev/urandom\", \"rb\") as f:
+        print(\"/dev/urandom read:\", f.read(16).hex())
+except Exception as e:
+    print(\"/dev/urandom read FAILED:\", repr(e))
+'" || true
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
