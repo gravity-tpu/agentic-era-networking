@@ -256,9 +256,20 @@ MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
 # "Aborted (core dumped)") -- this at least gives faulthandler a chance to print a Python-level stack before the
 # process dies, for the subset of native aborts that still route back through the interpreter's signal handling.
 export PYTHONFAULTHANDLER=1
+# Checkpointed imports before the real pipeline: the venv bundles several heavy native libraries (TensorFlow,
+# ONNX Runtime, PyTorch, Hailo's own .so's) and the abort gives no indication which one is responsible --
+# whichever "checkpoint: X OK" line is LAST printed before the process dies identifies it.
 chroot "$ROOTFS" /bin/bash -c "
   set -e
   cd '$MZ_REL'
+  python3 -c 'print(\"checkpoint: python OK\")'
+  python3 -c 'import numpy; print(\"checkpoint: numpy OK\")'
+  python3 -c 'import onnx; print(\"checkpoint: onnx OK\")'
+  python3 -c 'import onnxruntime; print(\"checkpoint: onnxruntime OK\")'
+  python3 -c 'import torch; print(\"checkpoint: torch OK\")'
+  python3 -c 'import tensorflow; print(\"checkpoint: tensorflow OK\")'
+  python3 -c 'import hailo_platform; print(\"checkpoint: hailo_platform OK\")'
+  python3 -c 'import hailo_sdk_client; print(\"checkpoint: hailo_sdk_client OK\")'
   hailomz parse $MODEL
   hailomz optimize $MODEL --calib-path '$CALIB_REL'
   hailomz compile $MODEL
