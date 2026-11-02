@@ -220,7 +220,7 @@ describe('read-only gate', () => {
 describe('ReadOnlySwitchSession exposes no way to write', () => {
   it('has only the read, listen, close and subscription members', () => {
     const names = Object.getOwnPropertyNames(ReadOnlySwitchSession.prototype).filter((n) => n !== 'constructor').sort();
-    expect(names).toEqual(['close', 'listen', 'onDisconnected', 'onNotice', 'onReady', 'packetIns', 'readFlowStats', 'state']);
+    expect(names).toEqual(['close', 'listen', 'onDisconnected', 'onNotice', 'onReady', 'packetIns', 'readFlowStats', 'serverErrors', 'state']);
   });
 
   it('keeps the server out of reach: no enumerable own property on an instance holds it', () => {
