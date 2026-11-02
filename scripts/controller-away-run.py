@@ -180,8 +180,7 @@ def preflight():
         if rc != 0: raise SystemExit(f'cannot ssh to {h}: {err}')
     rc, _, _ = sh(lc.NODE01, 'sudo -n true')
     if rc != 0: raise SystemExit(f'sudo -n does not work on {lc.NODE01}: run by hand: sudo ip neigh replace {NEIGH_IP} lladdr {NEIGH_MAC} dev {NEIGH_DEV} nud permanent')
-    rc, _, _ = sh(lc.JETSON, 'sudo -n true')
-    if rc != 0: raise SystemExit(f'sudo -n does not work on {lc.JETSON}: start by hand in another terminal: sudo tcpdump -i {lc.TAP_IF} -w /dev/null  (and rerun with the capture running)')
+    # The Jetson has no passwordless sudo and needs none here: the tap capture runs as the same user, as every earlier session did (the promiscuity check below proves it works).
     rc, out, _ = sh(lc.JETSON, 'pgrep -f controller-away-probe-cli || true')
     if out: raise SystemExit(f'a probe process is already running on the Jetson ({out}); not starting')
     rc, out, _ = sh(lc.JETSON, f'test -f {PROBE_CLI} && echo yes || echo no')
@@ -204,7 +203,7 @@ def bridge_env_value(name):
 
 def setup():
     sh(lc.NODE01, f'sudo -n ip neigh replace {NEIGH_IP} lladdr {NEIGH_MAC} dev {NEIGH_DEV} nud permanent')
-    rc, out, err = sh(lc.JETSON, f"sudo -n sh -c 'nohup tcpdump -i {lc.TAP_IF} -s 64 -U -w /dev/null >/dev/null 2>&1 & echo $!'")
+    rc, out, err = sh(lc.JETSON, f"sh -c 'nohup tcpdump -i {lc.TAP_IF} -s 64 -U -w /dev/null >/dev/null 2>&1 & echo $!'")
     if rc != 0 or not out.isdigit(): raise SystemExit(f'could not start the tap capture: {err}')
     time.sleep(1.5)
     rc, prom, _ = sh(lc.JETSON, f"ip -d link show {lc.TAP_IF} | grep -o 'promiscuity [0-9]*'")
@@ -215,7 +214,7 @@ def setup():
 def teardown(tcpdump_pid):
     log('teardown')
     if tcpdump_pid is not None:
-        rc, _, err = sh(lc.JETSON, f'sudo -n kill {tcpdump_pid}'); log(f'tap capture stopped (rc {rc})')
+        rc, _, err = sh(lc.JETSON, f'kill {tcpdump_pid}'); log(f'tap capture stopped (rc {rc})')
     rc, _, err = sh(lc.NODE01, f'sudo -n ip neigh del {NEIGH_IP} dev {NEIGH_DEV}'); log(f'neighbor entry removed (rc {rc})')
     rc, prom, _ = sh(lc.JETSON, f"ip -d link show {lc.TAP_IF} | grep -o 'promiscuity [0-9]*'"); log(f'tap NIC now: {prom}')
 
