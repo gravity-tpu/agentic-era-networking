@@ -282,40 +282,69 @@ PY
 # inherited across chroot() same as any other process attribute, so they don't need to be re-passed.
 MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
 [ -d "$ROOTFS$MZ_REL" ] || { echo "bundled Hailo Model Zoo not found at $MZ_REL inside the extracted image" >&2; exit 1; }
-# PYTHONFAULTHANDLER: `hailomz parse` aborted with no Python traceback at all on the first live attempt (just
-# "Aborted (core dumped)") -- this at least gives faulthandler a chance to print a Python-level stack before the
-# process dies, for the subset of native aborts that still route back through the interpreter's signal handling.
+# PYTHONFAULTHANDLER: an earlier live run's `hailomz parse` aborted with no Python traceback at all -- this at
+# least gives faulthandler a chance to print a Python-level stack before the process dies, for the subset of
+# native aborts that still route back through the interpreter's signal handling.
 export PYTHONFAULTHANDLER=1
-# Checkpointed imports and strace (both since removed -- their diagnosis is preserved in git history and in the
-# /proc/self/exe fix above) localized and root-caused an earlier abort inside TensorFlow's
-# convert_to_eager_tensor. With that fixed, live run 2026-11-02 got further and hit a different, clean Python
-# exception instead of a hard abort: RuntimeError: random_device::random_device(const std::string&) -- libstdc++
-# failing to seed TensorFlow's eager context. Before guessing whether this is our mknod'd /dev/urandom node
-# being refused by the host's device cgroup (plausible: capabilities already confirmed to vary across hosts) or
-# the getrandom() syscall itself being blocked (a different problem, not fixable from here), test both directly
-# and cheaply rather than reasoning about it from the TF stack trace alone.
-chroot "$ROOTFS" /bin/bash -c "python3 -c '
-import os
-try:
-    print(\"getrandom() syscall:\", os.getrandom(16).hex())
-except Exception as e:
-    print(\"getrandom() syscall FAILED:\", repr(e))
-try:
-    with open(\"/dev/urandom\", \"rb\") as f:
-        print(\"/dev/urandom read:\", f.read(16).hex())
-except Exception as e:
-    print(\"/dev/urandom read FAILED:\", repr(e))
-'" || true
+# Checkpointed imports, strace, and a getrandom()/dev-urandom probe (all since removed -- their diagnosis is
+# preserved in git history and in the /proc/self/exe and FIFO-bridge fixes above) found and fixed two real
+# aborts in turn. With both fixed, live run 2026-11-02 got past every import and all the way into the actual
+# pipeline -- and then hung silently for 4+ hours with zero further output, until the launcher's own poll budget
+# ran out and terminated the pod. No crash, no progress: no visibility into what it was actually doing.
+#
+# chroot doesn't create a new PID namespace (no CAP_SYS_ADMIN for that either -- see the module header), so a
+# chrooted process's PID is visible from the OUTER, unchrooted shell too, with a real, live /proc for it (unlike
+# the chroot's own hand-stubbed /proc). That means each pipeline step can be run in the background with a bounded
+# wait, and if it's still running past that, inspected from outside: /proc/<pid>/status (running vs. blocked in
+# a syscall), /proc/<pid>/wchan (which kernel function it's blocked in), and open file descriptors -- all of
+# which need no special capability, unlike py-spy's stack dump (attempted too, but needs CAP_SYS_PTRACE, which
+# is NOT present on at least one host this was confirmed against).
+pip install -q py-spy >/dev/null 2>&1 || echo "py-spy install failed; its stack dump (if CAP_SYS_PTRACE allows it) will be unavailable" >&2
+
+diagnose_hang() {
+  local pid="$1" label="$2"
+  {
+    echo "=== hang diagnosis for $label (pid $pid) after ${3}s with no completion ==="
+    echo "--- /proc/$pid/status ---"; cat "/proc/$pid/status" 2>/dev/null
+    echo "--- /proc/$pid/wchan ---"; cat "/proc/$pid/wchan" 2>/dev/null; echo
+    echo "--- open file descriptors ---"; ls -la "/proc/$pid/fd" 2>/dev/null
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+      echo "--- child $child status ---"; cat "/proc/$child/status" 2>/dev/null
+      echo "--- child $child wchan ---"; cat "/proc/$child/wchan" 2>/dev/null; echo
+    done
+    echo "--- py-spy dump (best effort, needs CAP_SYS_PTRACE) ---"
+    py-spy dump --pid "$pid" 2>&1 || echo "py-spy failed (likely no CAP_SYS_PTRACE on this host)"
+  } > "$OUT/$label-hang-diagnosis.log" 2>&1
+  cat "$OUT/$label-hang-diagnosis.log"
+}
+
+# label, diagnosis timeout (seconds), command. Timeouts are generous and asymmetric: parse is just ONNX
+# import/graph construction (should be fast); optimize (INT8 calibration) and compile (graph allocation) are
+# the parts expected to actually be CPU-heavy and slow, not hung.
+run_pipeline_step() {
+  local label="$1" timeout_s="$2" cmd="$3"
+  echo "--- starting $label ---"
+  chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; $cmd" &
+  local pid=$! waited=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$timeout_s" ]; then
+      diagnose_hang "$pid" "$label" "$waited"
+      kill -9 "$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+      echo "$label killed after ${waited}s with no completion" >&2
+      return 1
+    fi
+    sleep 15
+    waited=$((waited + 15))
+  done
+  wait "$pid"
+}
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
-chroot "$ROOTFS" /bin/bash -c "
-  set -e
-  cd '$MZ_REL'
-  hailomz parse $MODEL
-  hailomz optimize $MODEL --calib-path '$CALIB_REL'
-  hailomz compile $MODEL
-"
+run_pipeline_step parse 600 "hailomz parse $MODEL"
+run_pipeline_step optimize 3600 "hailomz optimize $MODEL --calib-path '$CALIB_REL'"
+run_pipeline_step compile 3600 "hailomz compile $MODEL"
 
 # hailomz's own output path convention is not pinned by Hailo's docs (verified: GETTING_STARTED.rst does not
 # state where the .hef lands); search the whole workspace inside the rootfs rather than guess a single exact

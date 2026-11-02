@@ -167,9 +167,22 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
   });
 
   it('actually invokes the hailomz parse/optimize/compile pipeline, not just a diagnostic', () => {
-    expect(content).toMatch(/^\s*hailomz parse \$MODEL/m);
-    expect(content).toMatch(/^\s*hailomz optimize \$MODEL --calib-path/m);
-    expect(content).toMatch(/^\s*hailomz compile \$MODEL/m);
+    expect(content).toContain('run_pipeline_step parse');
+    expect(content).toContain('hailomz parse $MODEL');
+    expect(content).toContain('run_pipeline_step optimize');
+    expect(content).toContain('hailomz optimize $MODEL --calib-path');
+    expect(content).toContain('run_pipeline_step compile');
+    expect(content).toContain('hailomz compile $MODEL');
+  });
+
+  it('diagnoses a hung pipeline step instead of waiting silently for hours', () => {
+    // Confirmed live 2026-11-02: with every known abort fixed, the pipeline got past every import and then hung
+    // with zero further output for 4+ hours until the launcher's own poll budget ran out and killed the pod --
+    // no crash, no progress, no visibility into what it was doing. chroot doesn't create a new PID namespace, so
+    // a chrooted process's PID and its real /proc entry are both visible from the outer, unchrooted shell.
+    expect(content).toContain('diagnose_hang');
+    expect(content).toContain('/proc/$pid/wchan');
+    expect(content).toMatch(/kill -9 "\$pid"/);
   });
 
   it('stubs /proc/self/exe so TensorFlow\'s readlink-based executable-path check does not abort', () => {
