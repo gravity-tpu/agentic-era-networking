@@ -560,6 +560,7 @@ export class ZodiacBridgeServer {
   private readonly tableMissFault: TableMissFaultConfig;
   private tableMissFaultUsed = false;
   private tableMissFaultTimer: ReturnType<typeof setTimeout> | null = null;
+  private tableMissFaultReassert: ReturnType<typeof setInterval> | null = null;
   private lastRepairBlockedReason: string | null = null;
   private readonly isolationRechecker: IsolationRechecker;
   /**
@@ -712,21 +713,42 @@ export class ZodiacBridgeServer {
    * and a timer puts the DROP back. Replacing it is an ADD of the same match and priority; the readback that follows is what says whether the switch took it.
    */
   private injectTableMissFaultOnce(): void {
-    if (!this.tableMissFault.enabled || this.tableMissFaultUsed) return;
+    const cfg = this.tableMissFault;
+    if (!cfg.enabled || cfg.mode === null || this.tableMissFaultUsed) return;
     this.tableMissFaultUsed = true;
-    const seconds = this.tableMissFault.durationMs / 1000;
+    const seconds = cfg.durationMs / 1000;
     const forward: IsolationRule = { id: 'fault-table-miss-forward', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [FAULT_FORWARD_PORT], match: {} } };
+    // A strict delete matches on the entry's match and priority; the action fields are ignored by the switch and the out_port filter defaults to OFPP_ANY.
+    const remove: IsolationRule = { id: 'fault-table-miss-delete', flowMod: { command: FlowModCommand.OFPFC_DELETE_STRICT, priority: 0, outputPorts: [], match: {} } };
     const drop: IsolationRule = { id: 'table-miss', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} } };
+    const fault = cfg.mode === 'delete-table-miss' ? remove : forward;
+    let what: string;
+    if (cfg.mode === 'delete-table-miss') what = 'removed (strict delete of the priority-0 entry)';
+    else if (cfg.mode === 'forward-to-tap-sticky') what = `replaced by a forward to P${FAULT_FORWARD_PORT}, re-asserted every ${cfg.reassertMs / 1000} s`;
+    else what = `replaced by a forward to P${FAULT_FORWARD_PORT}`;
     try {
-      this.controller.openFlow.sendFlowModOptions(forward.flowMod);
+      this.controller.openFlow.sendFlowModOptions(fault.flowMod);
     } catch (err: unknown) {
       console.error(`[!] [Fault] could NOT send the test fault: ${err instanceof Error ? err.message : String(err)}; the table-miss is unchanged.`);
       return;
     }
-    console.warn(`[!] [Fault] TEST FAULT ACTIVE: the table-miss DROP was replaced by a forward to P${FAULT_FORWARD_PORT}; the DROP is put back in ${seconds} s (or at the next switch session).`);
-    this.auditFault('fault_injected', `table-miss replaced by a forward to P${FAULT_FORWARD_PORT} for ${seconds} s`, [forward], ['the DROP returns at the time limit, or when the switch session restarts']);
+    console.warn(`[!] [Fault] TEST FAULT ACTIVE (${cfg.mode}): the table-miss DROP was ${what}; the DROP is put back in ${seconds} s (or at the next switch session).`);
+    this.auditFault('fault_injected', `table-miss ${what} for ${seconds} s`, [fault], ['the DROP returns at the time limit, or when the switch session restarts']);
+    if (cfg.mode === 'forward-to-tap-sticky') {
+      // Simulates a repair that does not take: whatever re-sends the DROP is overwritten again within a couple of seconds, until the time limit.
+      this.tableMissFaultReassert = setInterval(() => {
+        try {
+          this.controller.openFlow.sendFlowModOptions(forward.flowMod);
+        } catch (err: unknown) {
+          this.stopTableMissFaultReassert();
+          console.error(`[!] [Fault] could not re-assert the test fault (${err instanceof Error ? err.message : String(err)}); no longer re-asserting.`);
+        }
+      }, cfg.reassertMs);
+      this.tableMissFaultReassert.unref?.();
+    }
     this.tableMissFaultTimer = setTimeout(() => {
       this.tableMissFaultTimer = null;
+      this.stopTableMissFaultReassert(); // first, so nothing overwrites the DROP that is about to be sent
       try {
         this.controller.openFlow.sendTableMissRule(0, 'DROP');
         console.warn('[!] [Fault] test fault ended: the table-miss DROP was re-sent.');
@@ -734,13 +756,20 @@ export class ZodiacBridgeServer {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[!] [Fault] test fault could NOT be ended: ${msg}; the DROP is re-sent at the next switch session, and the repair governor (if enabled) acts on the readback.`);
-        this.auditFault('fault_reverted', `table-miss DROP could NOT be re-sent: ${msg}`, [drop], ['still forwarding to the tap until the next switch session']);
+        this.auditFault('fault_reverted', `table-miss DROP could NOT be re-sent: ${msg}`, [drop], ['the table-miss stays as the fault left it until the next switch session']);
       }
-    }, this.tableMissFault.durationMs);
+    }, cfg.durationMs);
     this.tableMissFaultTimer.unref?.();
   }
 
+  private stopTableMissFaultReassert(): void {
+    if (this.tableMissFaultReassert === null) return;
+    clearInterval(this.tableMissFaultReassert);
+    this.tableMissFaultReassert = null;
+  }
+
   private cancelTableMissFault(why: string): void {
+    this.stopTableMissFaultReassert();
     if (this.tableMissFaultTimer === null) return;
     clearTimeout(this.tableMissFaultTimer);
     this.tableMissFaultTimer = null;

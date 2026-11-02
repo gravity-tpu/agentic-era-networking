@@ -47,11 +47,11 @@ No route can change the table-miss, and the experiment endpoint always reinstall
 
 | Variable | Value |
 | :--- | :--- |
-| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (the only mode) |
+| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (forward once), `forward-to-tap-sticky` (re-send the forward every 2 s, so a repair does not take) or `delete-table-miss` (a strict delete: the entry is absent) |
 | `ZODIAC_FAULT_TABLE_MISS_ACK` | `I-ACCEPT-A-BOUNDED-FORWARDING-TABLE-MISS` (exactly) |
 | `ZODIAC_FAULT_TABLE_MISS_SECONDS` | optional, whole seconds from 60 to 900, default 240 |
 
-What it does: when the bridge starts, sends the policy, and the readback has **verified** the baseline, it replaces the table-miss DROP with a priority-0 forward to P3 (the tap, which already receives a copy of everything the workload sends, so the fault opens no new path), logs `TEST FAULT ACTIVE`, writes a `fault_injected` line to the gate audit file, and sets a timer that puts the DROP back (`fault_reverted`). It acts once per process; a new switch session re-sends the DROP and cancels a pending revert. If the readback did not verify, nothing is injected.
+What it does: when the bridge starts, sends the policy, and the readback has **verified** the baseline, it replaces the table-miss DROP with a priority-0 forward to P3 (or, in the delete mode, removes the entry) (the tap, which already receives a copy of everything the workload sends, so the fault opens no new path), logs `TEST FAULT ACTIVE`, writes a `fault_injected` line to the gate audit file, and sets a timer that puts the DROP back (`fault_reverted`). It acts once per process; a new switch session re-sends the DROP and cancels a pending revert. If the readback did not verify, nothing is injected.
 
 What it is not: a path to forward untrusted traffic. While it is active the isolation status reads `mismatch` (table-miss `forwards`), which is the point. Remove the three variables and restart the bridge when the test is done; a bridge restarted with them still set will inject again.
 
@@ -59,3 +59,11 @@ Two supervised tests use it, both with the owner present and the workload idle:
 
 1. **Detection and push (repair off, the default).** Fault for 240 s. Expected: the status goes `mismatch`, the watcher sends an urgent alert after 2 polls (about 2 minutes at the default 60 s), the DROP returns at 240 s, the watcher sends the recovery message after 2 clean polls.
 2. **Repair.** Set `ZODIAC_ISOLATION_REPAIR=1` too and a fault of 600 s or more, so the governor acts first. Expected: after 3 readings the bridge re-sends the DROP itself (`repair` audit line, one "the bridge repaired itself" push), and the status returns to `verified` well before the fault's own time limit.
+
+More supervised tests with the other modes (owner present, workload idle; the live bridge now runs with repair on, so a test that must not be repaired sets `ZODIAC_ISOLATION_REPAIR=0` after the repair line):
+
+- **Absent table-miss** (`delete-table-miss`, 600 s, repair on). Expected: the status leaves `verified`, the watcher alerts, the bridge re-sends the DROP after 3 readings and the status returns to `verified`.
+- **A repair that does not take** (`forward-to-tap-sticky`, 600 s, repair on, `ZODIAC_ISOLATION_REPAIR_MAX_PER_WINDOW=1` and `ZODIAC_ISOLATION_REPAIR_MIN_INTERVAL_MS=60000` for the test). Expected: one repair at about 3 minutes, overwritten by the fault; 3 more bad readings later the governor reports `exhausted` (a `repair_exhausted` audit line and a critical push) and stops; at the time limit the DROP stays and, after 3 clean readings, the exhausted flag clears and the status returns to `verified`.
+- **Repeats** of the forward tests above: with repair off (`ZODIAC_ISOLATION_REPAIR=0`) and with it on.
+
+Remove every `ZODIAC_FAULT_TABLE_MISS*` line and every test override (and keep `ZODIAC_ISOLATION_REPAIR=1`) when the tests are done.
