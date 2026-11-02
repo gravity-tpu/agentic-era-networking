@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 
 const LIB = path.resolve(__dirname, '../../scripts/table_miss_lib.py');
 const TRAFFIC = path.resolve(__dirname, '../../scripts/table-miss-traffic.py');
@@ -431,3 +432,14 @@ describe('(d) an invalid observer makes the verdict observer_invalid, stronger t
     expect(j({ ipv6: { O3: 20, O2: 0, O4: 1 } }, {}).classes['ipv6']?.verdict).toBe('workload_reach');
   });
 });
+
+describe('the workload-side observer of the class pass', () => {
+  it('is rpi-hailo alone: agentic-node-01 has no tcpdump, so a node-01 capture could only ever read as a false zero', () => {
+    const src = readFileSync('scripts/table-miss-traffic.py', 'utf-8');
+    const line = src.split('\n').find((l) => l.startsWith('OBSERVERS = {')) ?? '';
+    expect(line).toContain('O4_rpi_hailo_eth0');
+    expect(line).not.toContain('node01');
+    expect(line).not.toContain('NODE01');
+  });
+});
+
