@@ -680,15 +680,97 @@ export function parseOfpPacketIn(packet: Buffer): DecodedPacketIn {
 }
 
 /**
- * A priority-0 wildcard flow-mod whose only instruction is OFPIT_CLEAR_ACTIONS: it executes as a drop (the action set is cleared and nothing is output), but it is
- * not the bare entry the controller installs as the table-miss DROP, so the readback classifies it as an unrecognised table-miss. Used only by the test fault
- * (src/sdn/table-miss-fault.ts) to exercise that class on the real switch without opening any forwarding path.
+ * Kinds of table-miss entry the test fault (src/sdn/table-miss-fault.ts) can install in place of the DROP, every one of them built so that it CANNOT forward a frame:
+ * none carries an OUTPUT, GROUP or experimenter action (enforced by `assertNoForwardingInstructions` before any bytes are returned). Each is one the readback's parser
+ * (src/sdn/flow-actions.ts) cannot recognise as the bare DROP, so it reads back as `unrecognised`:
+ *   clear-actions   one OFPIT_CLEAR_ACTIONS instruction (instruction type 5 in `otherInstructionTypes`)
+ *   write-empty     one OFPIT_WRITE_ACTIONS instruction holding an empty action set (instruction type 3)
+ *   apply-pop-vlan  one OFPIT_APPLY_ACTIONS instruction holding only OFPAT_POP_VLAN, which changes the packet and outputs nothing (action type 18 in `otherActionTypes`)
+ *   write-metadata  one OFPIT_WRITE_METADATA instruction with metadata 0 and mask 0, a no-op that sets no field and outputs nothing (instruction type 2)
+ * What the build proves: the bytes carry no forwarding instruction. It does not prove what the firmware does with the entry: it may reject it (an OFPT_ERROR) or report it differently.
  */
-export function buildOfpTableMissClearActions(xid: number): Buffer {
-  const buf = Buffer.alloc(64);
+export const UNRECOGNISED_TABLE_MISS_VARIANTS = ['clear-actions', 'write-empty', 'apply-pop-vlan', 'write-metadata'] as const;
+export type UnrecognisedTableMissVariant = (typeof UNRECOGNISED_TABLE_MISS_VARIANTS)[number];
+
+/** Instruction types a fault entry may carry, and the one action type it may carry inside them. Everything else (GOTO_TABLE, METER, EXPERIMENTER, OUTPUT, GROUP, ...) is refused. */
+const FAULT_ALLOWED_INSTRUCTIONS: ReadonlySet<number> = new Set([InstructionType.OFPIT_WRITE_METADATA, InstructionType.OFPIT_WRITE_ACTIONS, InstructionType.OFPIT_APPLY_ACTIONS, InstructionType.OFPIT_CLEAR_ACTIONS]);
+const FAULT_ALLOWED_ACTIONS: ReadonlySet<number> = new Set([ActionType.OFPAT_POP_VLAN]);
+/** OpenFlow 1.3 fixes the length of these instructions: CLEAR_ACTIONS is the 8-byte header alone, WRITE_METADATA is the header, an 8-byte metadata and an 8-byte mask. */
+const FAULT_EXACT_INSTRUCTION_LEN: ReadonlyMap<number, number> = new Map([[InstructionType.OFPIT_CLEAR_ACTIONS, 8], [InstructionType.OFPIT_WRITE_METADATA, 24]]);
+/** The exact length of each variant's instruction block, so a builder that drifts is caught here and not on the switch. */
+const VARIANT_INSTRUCTION_LEN: Readonly<Record<UnrecognisedTableMissVariant, number>> = { 'clear-actions': 8, 'write-empty': 8, 'apply-pop-vlan': 16, 'write-metadata': 24 };
+
+/** Throws unless the instruction block is made only of allowed non-forwarding instructions and actions, and is well formed to its end. Fail closed: anything it cannot read is refused. */
+export function assertNoForwardingInstructions(instructions: Buffer): void {
+  let p = 0;
+  while (p < instructions.length) {
+    if (p + 8 > instructions.length) throw new Error('table-miss fault: truncated instruction header');
+    const type = instructions.readUInt16BE(p);
+    const len = instructions.readUInt16BE(p + 2);
+    if (len < 8 || len % 8 !== 0 || p + len > instructions.length) throw new Error(`table-miss fault: bad instruction length ${len}`);
+    if (!FAULT_ALLOWED_INSTRUCTIONS.has(type)) throw new Error(`table-miss fault: instruction type ${type} is not allowed (only non-forwarding instructions may be installed)`);
+    const exact = FAULT_EXACT_INSTRUCTION_LEN.get(type);
+    if (exact !== undefined && len !== exact) throw new Error(`table-miss fault: instruction type ${type} must be exactly ${exact} bytes, got ${len}`);
+    if (type === InstructionType.OFPIT_WRITE_ACTIONS || type === InstructionType.OFPIT_APPLY_ACTIONS) {
+      let a = p + 8;
+      while (a < p + len) {
+        if (a + 8 > p + len) throw new Error('table-miss fault: truncated action header');
+        const aType = instructions.readUInt16BE(a);
+        const aLen = instructions.readUInt16BE(a + 2);
+        if (aLen < 8 || aLen % 8 !== 0 || a + aLen > p + len) throw new Error(`table-miss fault: bad action length ${aLen}`);
+        if (!FAULT_ALLOWED_ACTIONS.has(aType)) throw new Error(`table-miss fault: action type ${aType} is not allowed (an output, group or experimenter action could forward)`);
+        a += aLen;
+      }
+    }
+    p += len;
+  }
+}
+
+/** The instruction bytes of each variant. Pads are zero. */
+function variantInstructions(variant: UnrecognisedTableMissVariant): Buffer {
+  switch (variant) {
+    case 'clear-actions': {
+      const b = Buffer.alloc(8);
+      b.writeUInt16BE(InstructionType.OFPIT_CLEAR_ACTIONS, 0);
+      b.writeUInt16BE(8, 2);
+      return b;
+    }
+    case 'write-empty': {
+      const b = Buffer.alloc(8);
+      b.writeUInt16BE(InstructionType.OFPIT_WRITE_ACTIONS, 0);
+      b.writeUInt16BE(8, 2); // no actions after the header
+      return b;
+    }
+    case 'apply-pop-vlan': {
+      const b = Buffer.alloc(16);
+      b.writeUInt16BE(InstructionType.OFPIT_APPLY_ACTIONS, 0);
+      b.writeUInt16BE(16, 2); // 8 header + one 8-byte action
+      b.writeUInt16BE(ActionType.OFPAT_POP_VLAN, 8);
+      b.writeUInt16BE(8, 10); // action length; 4 pad bytes follow
+      return b;
+    }
+    case 'write-metadata': {
+      const b = Buffer.alloc(24);
+      b.writeUInt16BE(InstructionType.OFPIT_WRITE_METADATA, 0);
+      b.writeUInt16BE(24, 2); // 8 header + metadata (8) + metadata_mask (8), both zero: writes nothing
+      return b;
+    }
+  }
+}
+
+/**
+ * A priority-0 wildcard ADD flow-mod (an empty match) carrying only the instructions of `variant`. It executes as a drop (the action set stays empty and nothing is output) but is
+ * not the bare entry the controller installs as the table-miss DROP, so the readback classifies it as an unrecognised table-miss. Used only by the test fault.
+ */
+export function buildOfpTableMissVariant(variant: UnrecognisedTableMissVariant, xid: number): Buffer {
+  const instructions = variantInstructions(variant);
+  assertNoForwardingInstructions(instructions);
+  if (instructions.length !== VARIANT_INSTRUCTION_LEN[variant]) throw new Error(`table-miss fault: variant ${variant} must carry ${VARIANT_INSTRUCTION_LEN[variant]} instruction bytes, built ${instructions.length}`);
+  const buf = Buffer.alloc(56 + instructions.length);
+  if (buf.length % 8 !== 0) throw new Error('table-miss fault: a flow-mod must be a multiple of 8 bytes');
   buf.writeUInt8(OFP_VERSION_1_3, 0);
   buf.writeUInt8(OpenFlowType.OFPT_FLOW_MOD, 1);
-  buf.writeUInt16BE(64, 2);
+  buf.writeUInt16BE(buf.length, 2);
   buf.writeUInt32BE(xid, 4);
   buf.writeBigUInt64BE(0n, 8); // cookie
   buf.writeBigUInt64BE(0n, 16); // cookie_mask
@@ -705,9 +787,12 @@ export function buildOfpTableMissClearActions(xid: number): Buffer {
   buf.writeUInt16BE(1, 48); // match type OXM
   buf.writeUInt16BE(4, 50); // an empty match: header only
   buf.writeUInt32BE(0, 52); // pad to 8
-  buf.writeUInt16BE(InstructionType.OFPIT_CLEAR_ACTIONS, 56);
-  buf.writeUInt16BE(8, 58); // instruction length
-  buf.writeUInt32BE(0, 60); // pad
+  instructions.copy(buf, 56);
   return buf;
+}
+
+/** The CLEAR_ACTIONS variant: the first unrecognised table-miss, kept under its original name. */
+export function buildOfpTableMissClearActions(xid: number): Buffer {
+  return buildOfpTableMissVariant('clear-actions', xid);
 }
 

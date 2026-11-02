@@ -1,9 +1,9 @@
 /**
  * table-miss-fault.ts
  * Configuration of a bounded, acknowledged FAULT: after the isolation readback has verified the baseline, the bridge replaces the table-miss DROP with a priority-0
- * forward to the tap port (P3) or removes it, then puts the DROP back at a time limit. Three modes: `forward-to-tap` (once), `forward-to-tap-sticky` (re-asserts the
- * forward every few seconds, so a repair that re-sends the DROP does not take: it exercises the repair governor's budget), and `delete-table-miss` (a strict delete, so the
- * entry is absent), and `unrecognised-table-miss` (an entry whose only instruction is CLEAR_ACTIONS: it still drops, but the readback cannot recognise it as the DROP). Its only purpose is to let the isolation watcher (docs/design/isolation-watch.md) and the repair
+ * forward to the tap port (P3) or removes it, then puts the DROP back at a time limit. Modes: `forward-to-tap` (once), `forward-to-tap-sticky` (re-asserts the
+ * forward every few seconds, so a repair that re-sends the DROP does not take: it exercises the repair governor's budget), `delete-table-miss` (a strict delete, so the
+ * entry is absent), and four `unrecognised-*` modes (an entry that cannot forward, with only a CLEAR_ACTIONS, an empty WRITE_ACTIONS, a POP_VLAN-only APPLY_ACTIONS or a zero WRITE_METADATA instruction: it still drops, but the readback cannot recognise it as the DROP). Its only purpose is to let the isolation watcher (docs/design/isolation-watch.md) and the repair
  * governor (docs/design/isolation-repair.md) be exercised against the real switch, which nothing else can do: no route can change the table-miss and the experiment endpoint
  * always reinstalls the DROP.
  *
@@ -12,8 +12,29 @@
  * environment object, touches nothing.
  */
 
-export const TABLE_MISS_FAULT_MODES = ['forward-to-tap', 'forward-to-tap-sticky', 'delete-table-miss', 'unrecognised-table-miss'] as const;
+import type { UnrecognisedTableMissVariant } from './openflow-types.js';
+
+export const TABLE_MISS_FAULT_MODES = [
+  'forward-to-tap',
+  'forward-to-tap-sticky',
+  'delete-table-miss',
+  'unrecognised-table-miss',
+  'unrecognised-write-empty',
+  'unrecognised-apply-pop-vlan',
+  'unrecognised-write-metadata',
+] as const;
 export type TableMissFaultMode = (typeof TABLE_MISS_FAULT_MODES)[number];
+
+/**
+ * The modes that install an entry which cannot forward but which the readback cannot recognise as the DROP, and the entry each one installs (built and checked in
+ * src/sdn/openflow-types.ts). `unrecognised-table-miss` keeps its original name and meaning: a CLEAR_ACTIONS-only entry.
+ */
+export const UNRECOGNISED_MODE_VARIANTS: Readonly<Partial<Record<TableMissFaultMode, UnrecognisedTableMissVariant>>> = {
+  'unrecognised-table-miss': 'clear-actions',
+  'unrecognised-write-empty': 'write-empty',
+  'unrecognised-apply-pop-vlan': 'apply-pop-vlan',
+  'unrecognised-write-metadata': 'write-metadata',
+};
 /** How often the sticky mode re-sends the forward. Shorter than the repair verification delay (5 s), so a repair is overwritten before it is read back. */
 export const TABLE_MISS_FAULT_REASSERT_MS = 2_000;
 export const TABLE_MISS_FAULT_ACK = 'I-ACCEPT-A-BOUNDED-FORWARDING-TABLE-MISS';
