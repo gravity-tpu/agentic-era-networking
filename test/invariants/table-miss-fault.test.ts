@@ -14,11 +14,14 @@ import {
   TABLE_MISS_FAULT_DEFAULT_SECONDS,
   TABLE_MISS_FAULT_MAX_SECONDS,
   TABLE_MISS_FAULT_MIN_SECONDS,
+  TABLE_MISS_FAULT_MODES,
+  TABLE_MISS_FAULT_REASSERT_MS,
   parseTableMissFault,
 } from '../../src/sdn/table-miss-fault.js';
 import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
 import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js';
+import { RepairGovernor, parseRepairConfig } from '../../src/sdn/isolation-repair.js';
 import { parseFlowStatsReply, type FlowStatsEntry } from '../../src/sdn/dataplane-benchmark.js';
 import { buildPort1IsolationPolicy } from '../../src/sdn/port1-isolation.js';
 import { readFlowStats } from '../../src/sdn/flow-readback.js';
@@ -30,7 +33,7 @@ const ON = { ZODIAC_FAULT_TABLE_MISS: 'forward-to-tap', ZODIAC_FAULT_TABLE_MISS_
 
 describe('parseTableMissFault', () => {
   it('is off, and silent, when nothing is set', () => {
-    expect(parseTableMissFault({})).toEqual({ enabled: false, durationMs: 0, warnings: [] });
+    expect(parseTableMissFault({})).toEqual({ enabled: false, mode: null, durationMs: 0, reassertMs: 0, warnings: [] });
   });
 
   it('stays off, and says why, without the acknowledgement or with a wrong one', () => {
@@ -50,7 +53,18 @@ describe('parseTableMissFault', () => {
   });
 
   it('is on with the default time limit when both are set', () => {
-    expect(parseTableMissFault(ON)).toMatchObject({ enabled: true, durationMs: TABLE_MISS_FAULT_DEFAULT_SECONDS * 1000, warnings: [] });
+    expect(parseTableMissFault(ON)).toMatchObject({ enabled: true, mode: 'forward-to-tap', durationMs: TABLE_MISS_FAULT_DEFAULT_SECONDS * 1000, reassertMs: 0, warnings: [] });
+  });
+
+  it('knows exactly three modes, each needing the same acknowledgement: forward once, forward and keep re-asserting, and remove the entry', () => {
+    expect([...TABLE_MISS_FAULT_MODES]).toEqual(['forward-to-tap', 'forward-to-tap-sticky', 'delete-table-miss']);
+    expect(parseTableMissFault({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'forward-to-tap-sticky' })).toMatchObject({ enabled: true, mode: 'forward-to-tap-sticky', reassertMs: TABLE_MISS_FAULT_REASSERT_MS });
+    expect(parseTableMissFault({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'delete-table-miss' })).toMatchObject({ enabled: true, mode: 'delete-table-miss', reassertMs: 0 });
+    for (const mode of TABLE_MISS_FAULT_MODES) {
+      const c = parseTableMissFault({ ZODIAC_FAULT_TABLE_MISS: mode });
+      expect(c.enabled, mode).toBe(false);
+      expect(c.warnings.join(' '), mode).toContain('ZODIAC_FAULT_TABLE_MISS_ACK');
+    }
   });
 
   it('bounds the time limit: the minimum and maximum pass, anything outside or malformed turns the fault off', () => {
@@ -80,7 +94,7 @@ function makeBridge(env: Record<string, string>): ZodiacBridgeServer {
   controller = new ZodiacController();
   order = [];
   vi.spyOn(controller.openFlow, 'sendTableMissRule').mockImplementation((_p, action) => { order.push(`table-miss:${action}`); });
-  vi.spyOn(controller.openFlow, 'sendFlowModOptions').mockImplementation((fm) => { order.push(`flow-mod:p${fm.priority}:[${(fm.outputPorts ?? []).join(',')}]`); return 1; });
+  vi.spyOn(controller.openFlow, 'sendFlowModOptions').mockImplementation((fm) => { order.push(fm.command === FlowModCommand.OFPFC_DELETE_STRICT ? `delete-strict:p${fm.priority}` : `flow-mod:p${fm.priority}:[${(fm.outputPorts ?? []).join(',')}]`); return 1; });
   return new ZodiacBridgeServer(controller);
 }
 const audit = (): Array<Record<string, unknown>> => (fs.existsSync(auditFile) ? fs.readFileSync(auditFile, 'utf8').trim().split('\n').filter((l) => l !== '').map((l) => JSON.parse(l) as Record<string, unknown>) : []);
@@ -156,3 +170,92 @@ describe('the fault in the bridge', () => {
     expect(order.filter((x) => x.startsWith('table-miss'))).toEqual(['table-miss:DROP']);
   });
 });
+
+describe('the sticky and delete modes in the bridge', () => {
+  const sticky = { ...ON, ZODIAC_FAULT_TABLE_MISS: 'forward-to-tap-sticky', ZODIAC_FAULT_TABLE_MISS_SECONDS: '60' };
+
+  it('sticky: forwards once, then re-asserts the forward every few seconds (so a repair that re-sends the DROP does not take), and stops at the time limit with one DROP', async () => {
+    makeBridge(sticky);
+    controller.openFlow.emit('ready', {});
+    await settle();
+    const forwards = (): number => order.filter((x) => x === 'flow-mod:p0:[3]').length;
+    expect(forwards()).toBe(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(forwards()).toBeGreaterThanOrEqual(1 + Math.floor(10_000 / TABLE_MISS_FAULT_REASSERT_MS) - 1);
+    expect(forwards()).toBeLessThanOrEqual(1 + Math.ceil(10_000 / TABLE_MISS_FAULT_REASSERT_MS));
+    const before = order.filter((x) => x.startsWith('table-miss')).length;
+    await vi.advanceTimersByTimeAsync(60_000); // past the 60 s limit
+    expect(order.filter((x) => x.startsWith('table-miss')).length).toBe(before + 1); // exactly one DROP at the limit
+    const afterLimit = forwards();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(forwards()).toBe(afterLimit); // no more re-assertion once it ended
+    expect(audit().map((r) => r['event'])).toEqual(['fault_injected', 'fault_reverted']);
+  });
+
+  it('sticky: a new switch session cancels the re-assertion as well as the revert', async () => {
+    makeBridge(sticky);
+    controller.openFlow.emit('ready', {});
+    await settle();
+    controller.openFlow.emit('ready', {});
+    await settle();
+    order.length = 0;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(order.filter((x) => x === 'flow-mod:p0:[3]')).toEqual([]);
+    expect(order.filter((x) => x.startsWith('table-miss'))).toEqual([]);
+  });
+
+  it('sticky: stops re-asserting, loudly, if a re-assertion cannot be sent (the session is gone)', async () => {
+    makeBridge(sticky);
+    controller.openFlow.emit('ready', {});
+    await settle();
+    vi.mocked(controller.openFlow.sendFlowModOptions).mockImplementation(() => { throw new Error('switch not in ESTABLISHED state'); });
+    await vi.advanceTimersByTimeAsync(TABLE_MISS_FAULT_REASSERT_MS * 3);
+    vi.mocked(controller.openFlow.sendFlowModOptions).mockClear();
+    await vi.advanceTimersByTimeAsync(TABLE_MISS_FAULT_REASSERT_MS * 5);
+    expect(vi.mocked(controller.openFlow.sendFlowModOptions)).not.toHaveBeenCalled();
+    expect(vi.mocked(console.error).mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/Fault\].*re-assert/);
+  });
+
+  it('delete: removes the priority-0 entry with a strict delete after the verified readback, and puts the DROP back at the limit', async () => {
+    makeBridge({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'delete-table-miss', ZODIAC_FAULT_TABLE_MISS_SECONDS: '60' });
+    controller.openFlow.emit('ready', {});
+    await settle();
+    expect(order.filter((x) => x === 'delete-strict:p0')).toHaveLength(1);
+    expect(order.filter((x) => x === 'flow-mod:p0:[3]')).toEqual([]); // no forward in this mode
+    expect(order.indexOf('delete-strict:p0')).toBeGreaterThan(order.indexOf('table-miss:DROP'));
+    expect(audit().map((r) => r['event'])).toEqual(['fault_injected']);
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(order.filter((x) => x.startsWith('table-miss'))).toEqual(['table-miss:DROP', 'table-miss:DROP']);
+    expect(audit().map((r) => r['event'])).toEqual(['fault_injected', 'fault_reverted']);
+  });
+
+  it('delete: does nothing when the readback did not verify the baseline', async () => {
+    makeBridge({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'delete-table-miss' });
+    vi.mocked(readFlowStats).mockRejectedValue(new Error('readback timed out'));
+    controller.openFlow.emit('ready', {});
+    await settle();
+    expect(order.filter((x) => x === 'delete-strict:p0')).toEqual([]);
+  });
+});
+
+describe('a repair that does not take, against the governor with a sticky fault', () => {
+  it('after the budget is spent the governor stops repairing and reports exhausted, instead of fighting the fault forever', () => {
+    // The governor's own behaviour under a condition that never clears (the sticky fault re-applies the forward after each repair): pure, no clock.
+    const gov = new RepairGovernor({ ...parseRepairConfig({ ZODIAC_ISOLATION_REPAIR: '1', ZODIAC_ISOLATION_REPAIR_MAX_PER_WINDOW: '1', ZODIAC_ISOLATION_REPAIR_MIN_INTERVAL_MS: '60000' }) });
+    const ctx = { sessionUp: true, experimentIdle: true, busy: false };
+    let t = 0n;
+    const NS = 1_000_000_000n;
+    const decisions: string[] = [];
+    for (let i = 0; i < 9; i++) {
+      const monoNs = (t += 60n * NS);
+      const d = gov.observe({ state: 'mismatch', tableMiss: 'forwards', monoNs }, ctx);
+      decisions.push(d.action);
+      if (d.action === 'repair') gov.repaired(monoNs, Number(t / 1_000_000n), d.trigger); // the sticky fault overwrites it, so the next reading is bad again
+    }
+    expect(decisions.filter((a) => a === 'repair')).toHaveLength(1);
+    expect(decisions).toContain('exhausted');
+    expect(decisions.filter((a) => a === 'exhausted')).toHaveLength(1); // announced once, then silent until it clears
+    expect(decisions.indexOf('exhausted')).toBeGreaterThan(decisions.indexOf('repair'));
+  });
+});
+
