@@ -341,20 +341,16 @@ run_pipeline_step() {
 }
 
 # The /proc/self/exe fix above resolved readlink("/proc/self/exe") failing (TF's GetExecutablePath, env.cc:400).
-# Live run 2026-11-02 then hit a sibling CHECK five lines later in the same file (env.cc:405: "-1 != fd"),
-# strongly suggesting a second, distinct call -- probably open("/proc/self/exe", O_RDONLY) rather than
-# readlink() -- that the symlink alone doesn't satisfy. Testing this directly and cheaply before guessing at a
-# fix for a call we haven't actually confirmed is the one failing.
-chroot "$ROOTFS" /bin/bash -c "python3 -c '
-import os
-print(\"readlink(/proc/self/exe):\", os.readlink(\"/proc/self/exe\"))
-try:
-    fd = os.open(\"/proc/self/exe\", os.O_RDONLY)
-    print(\"open(/proc/self/exe) fd:\", fd)
-    os.close(fd)
-except Exception as e:
-    print(\"open(/proc/self/exe) FAILED:\", repr(e))
-'" || true
+# Live run 2026-11-02 then hit a sibling CHECK five lines later in the same file (env.cc:405: "-1 != fd"). A
+# direct probe of readlink()+open() on "/proc/self/exe" in isolation succeeded cleanly (fd=3), yet the same crash
+# still happened moments later in the real import -- proving the line-405 call is NOT simply open("/proc/self/
+# exe") like line 400's call was assumed to be (that assumption, based on proximity alone and not verified, was
+# wrong). Reaching for strace again (it already found the real cause once, for the line-400 check) instead of
+# guessing a second time from source-line proximity.
+chroot "$ROOTFS" /bin/bash -c "apt-get update -qq && apt-get install -y -qq strace" \
+  || echo 'strace install failed inside chroot (non-fatal; continuing without a trace)' >&2
+chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; strace -f -s 2000 -o /tmp/hailo-sdk-client-strace2.log python3 -c 'import hailo_sdk_client'" || true
+cp "$ROOTFS/tmp/hailo-sdk-client-strace2.log" "$OUT/hailo-sdk-client-strace2.log" 2>/dev/null || echo "no second strace log produced" >&2
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
