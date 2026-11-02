@@ -256,24 +256,19 @@ MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
 # "Aborted (core dumped)") -- this at least gives faulthandler a chance to print a Python-level stack before the
 # process dies, for the subset of native aborts that still route back through the interpreter's signal handling.
 export PYTHONFAULTHANDLER=1
-# Checkpointed imports before the real pipeline: the venv bundles several heavy native libraries (TensorFlow,
-# ONNX Runtime, PyTorch, Hailo's own .so's) and the abort gives no indication which one is responsible --
-# whichever "checkpoint: X OK" line is LAST printed before the process dies identifies it.
-chroot "$ROOTFS" /bin/bash -c "
-  set -e
-  cd '$MZ_REL'
-  python3 -c 'print(\"checkpoint: python OK\")'
-  python3 -c 'import numpy; print(\"checkpoint: numpy OK\")'
-  python3 -c 'import onnx; print(\"checkpoint: onnx OK\")'
-  python3 -c 'import onnxruntime; print(\"checkpoint: onnxruntime OK\")'
-  python3 -c 'import torch; print(\"checkpoint: torch OK\")'
-  python3 -c 'import tensorflow; print(\"checkpoint: tensorflow OK\")'
-  python3 -c 'import hailo_platform; print(\"checkpoint: hailo_platform OK\")'
-  python3 -c 'import hailo_sdk_client; print(\"checkpoint: hailo_sdk_client OK\")'
-  hailomz parse $MODEL
-  hailomz optimize $MODEL --calib-path '$CALIB_REL'
-  hailomz compile $MODEL
-"
+# Checkpointed imports (previous commit) localized the abort precisely to `import hailo_sdk_client` itself --
+# every earlier import (numpy, onnx, onnxruntime, torch, tensorflow, hailo_platform) succeeds. hailo_sdk_client
+# is closed-source (compiled .so, no Python source to read for what it's doing at import time) and grepping its
+# Python wrapper code for an env var that would skip hardware probing found nothing. strace is the most direct
+# way to see what it's actually trying to do right before it dies -- probably opening a PCI/device path for the
+# physical Hailo-8 accelerator (which this CPU pod obviously doesn't have) and not handling its absence
+# gracefully. Installing strace works because the chroot shares the pod's network namespace with apt.
+chroot "$ROOTFS" /bin/bash -c "apt-get update -qq && apt-get install -y -qq strace" \
+  || echo 'strace install failed inside chroot (non-fatal; continuing without a trace)' >&2
+chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; strace -f -o /tmp/hailo-sdk-client-strace.log python3 -c 'import hailo_sdk_client'" || true
+cp "$ROOTFS/tmp/hailo-sdk-client-strace.log" "$OUT/hailo-sdk-client-strace.log" 2>/dev/null || echo "no strace log produced" >&2
+echo "--- last 80 lines of the hailo_sdk_client import strace ---"
+tail -80 "$ROOTFS/tmp/hailo-sdk-client-strace.log" 2>/dev/null || true
 
 # hailomz's own output path convention is not pinned by Hailo's docs (verified: GETTING_STARTED.rst does not
 # state where the .hef lands); search the whole workspace inside the rootfs rather than guess a single exact
