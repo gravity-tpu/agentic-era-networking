@@ -12,7 +12,7 @@ Observations, all the same frame class (2,000 pps UDP, 572 B, workload side to t
   -> probe_connected (traffic while the probe holds the session; the probe installs nothing) -> [probe exits; owner's command restarts the bridge]
   -> after_bridge_back.
 """
-import importlib.util, hashlib, json, os, re, shlex, subprocess, sys, threading, time
+import collections, importlib.util, hashlib, json, os, re, shlex, subprocess, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location('lc', os.path.join(HERE, 'layout-capacity-run.py'))
@@ -37,6 +37,7 @@ WAIT_FOR_OUTAGE_S = 300            # how long to wait for the owner to stop the 
 WAIT_FOR_BRIDGE_BACK_S = 240       # after this the script reports and exits (the owner's command should have restarted it long before)
 PROBE_FIRST_READ_WAIT_S = (PROBE_RECONNECT_WAIT_MS + PROBE_READBACK_TIMEOUT_MS) // 1000 + 5
 SETTLE_AFTER_BRIDGE_BACK_S = 10    # as in scripts/outage-forwarding.py
+PROBE_HEAD_LINES, PROBE_TAIL_LINES = 100, 400   # probe output kept in memory: the first and the last lines; the rest is counted (the log file has every line)
 PROBE_ROUTE_RETRY_S = 6            # the bridge spaces its on-demand table reads by 5 s
 
 NEIGH_IP, NEIGH_MAC, NEIGH_DEV = '10.0.0.119', '02:00:00:00:00:77', 'eth0'   # the sender's destination; the MAC is locally administered and matches no rule
@@ -90,26 +91,31 @@ class Probe:
         hostarg = f' --host {shlex.quote(host)}' if host else ''
         remote = (f'cd ~/agentic-era-networking && {env}timeout -s KILL {PROBE_REMOTE_KILL_S} node {PROBE_CLI} --overall-ms {PROBE_OVERALL_MS} '
                   f'--reconnect-wait-ms {PROBE_RECONNECT_WAIT_MS} --readback-timeout-ms {PROBE_READBACK_TIMEOUT_MS} --readbacks {PROBE_READBACKS} --interval-ms {PROBE_INTERVAL_MS}{hostarg}')
-        self.remote = remote; self.lines = []; self.lock = threading.Lock(); self.proc = None; self.started = None
+        self.remote = remote; self.head = []; self.tail = collections.deque(maxlen=PROBE_TAIL_LINES); self.dropped = 0; self.lines_seen = 0; self.lock = threading.Lock(); self.proc = None; self.started = None
     def start(self):
         self.started = time.monotonic()
         self.proc = subprocess.Popen(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', lc.JETSON, self.remote], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         threading.Thread(target=self._read, daemon=True).start()
     def _read(self):
         for line in self.proc.stdout:
-            with self.lock: self.lines.append((time.monotonic(), line.rstrip('\n')))
+            with self.lock:
+                entry = (time.monotonic(), line.rstrip('\n')); self.lines_seen += 1
+                if len(self.head) < PROBE_HEAD_LINES: self.head.append(entry)
+                else:
+                    if len(self.tail) == self.tail.maxlen: self.dropped += 1
+                    self.tail.append(entry)
             log('probe| ' + line.rstrip('\n'))
+    def snapshot(self):
+        with self.lock: return list(self.head) + list(self.tail)
     def wait_line(self, pattern, timeout_s):
         """The first collected line matching `pattern`, or None; also returns early (None) if the probe has exited."""
         rx = re.compile(pattern); end = time.monotonic() + timeout_s
         while time.monotonic() < end:
-            with self.lock:
-                for t, l in self.lines:
-                    if rx.search(l): return t, l
+            for t, l in self.snapshot():
+                if rx.search(l): return t, l
             if self.proc.poll() is not None: time.sleep(0.3)  # let the reader drain, then look once more
-            with self.lock:
-                for t, l in self.lines:
-                    if rx.search(l): return t, l
+            for t, l in self.snapshot():
+                if rx.search(l): return t, l
             if self.proc.poll() is not None: return None
             time.sleep(0.2)
         return None
@@ -121,11 +127,11 @@ class Probe:
             killed = True; log('probe still running at its bound; killing it'); self.kill()
         time.sleep(0.5)
         result = None
-        with self.lock:
-            for t, l in self.lines:
-                if l.startswith('RESULT '):
-                    try: result = json.loads(l[len('RESULT '):])
-                    except ValueError: result = None
+        for t, l in self.snapshot():
+            if l.startswith('RESULT '):
+                try: result = json.loads(l[len('RESULT '):])
+                except ValueError: result = None
+        if self.dropped: log(f'probe output: {self.dropped} middle line(s) were not kept in memory ({self.lines_seen} seen; the log has all of them)')
         return self.proc.returncode, result, killed
     def kill(self):
         if self.proc is not None and self.proc.poll() is None: self.proc.terminate()
@@ -254,7 +260,7 @@ def main():
                 RES['probeFirstReadAfterDS'] = round(got[0] - D, 1)
                 observe('probe_connected', idle)
             code, result, killed = probe.finish(max(1, PROBE_OVERALL_MS / 1000 + PROBE_BACKSTOP_S - (time.monotonic() - probe.started)))
-            RES['probe'] = {'exitCode': code, 'killedAtBound': killed, 'result': result}
+            RES['probe'] = {'exitCode': code, 'killedAtBound': killed, 'result': result, 'linesSeen': probe.lines_seen, 'linesDroppedFromMemory': probe.dropped}
             log(f'probe finished: exit {code}, outcome {result.get("outcome") if result else "no RESULT line"}')
         t1 = time.monotonic()
         while not bridge_up():

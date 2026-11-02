@@ -17,6 +17,16 @@ import { buildPort1IsolationPolicy, parseUplinkArpPeers } from './port1-isolatio
 /** Margin after the overall limit before the backstop timer forces an exit; the run itself stops at the limit. */
 const BACKSTOP_GRACE_MS = 5_000;
 
+/** Closes the session, then exits with `code`. A close that rejects is reported on stderr and does not change the exit code or stop the exit. */
+export async function closeAndExit(session: { close(): Promise<void> }, code: number, exit: (code: number) => void, errlog: (msg: string) => void): Promise<void> {
+  try {
+    await session.close();
+  } catch (e: unknown) {
+    errlog(`close failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  exit(code);
+}
+
 const log = (s: string): void => { console.log(`${new Date().toISOString()} ${s}`); };
 
 function printSummary(s: ProbeSummary): void {
@@ -31,6 +41,7 @@ function printSummary(s: ProbeSummary): void {
     }
   }
   for (const n of s.notes) log(`note: ${n}`);
+  log(`server errors seen: ${s.serverErrorCount}${s.recentServerErrors.length > 0 ? ` (recent: ${s.recentServerErrors.join('; ')})` : ''}`);
   log(`OUTCOME ${s.outcome} (exit ${s.exitCode}): ${s.message}`);
   console.log(`RESULT ${JSON.stringify(s)}`);
 }
@@ -39,7 +50,7 @@ async function main(): Promise<number> {
   const cfg = parseProbeConfig(process.argv.slice(2));
   const policy = buildPort1IsolationPolicy(undefined, undefined, undefined, parseUplinkArpPeers(process.env['ZODIAC_UPLINK_ARP_PEERS']));
   const session = new ReadOnlySwitchSession();
-  const stop = (code: number): void => { void session.close().finally(() => process.exit(code)); };
+  const stop = (code: number): void => { void closeAndExit(session, code, (c) => process.exit(c), (m) => console.error(m)); };
   process.on('SIGTERM', () => { log('SIGTERM: closing'); stop(143); });
   process.on('SIGINT', () => { log('SIGINT: closing'); stop(130); });
   const backstop = setTimeout(() => {

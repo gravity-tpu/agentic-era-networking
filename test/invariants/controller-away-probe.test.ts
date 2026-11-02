@@ -28,6 +28,7 @@ import { parseFlowStatsReply } from '../../src/sdn/dataplane-benchmark.js';
 import {
   EXIT_CODES,
   PROBE_LIMITS,
+  MAX_RECORDED_SERVER_ERRORS,
   ReadOnlySwitchSession,
   assessTable,
   counterDeltas,
@@ -38,6 +39,7 @@ import {
   type ProbeConfig,
   type ProbeSummary,
 } from '../../src/sdn/controller-away-probe.js';
+import { closeAndExit } from '../../src/sdn/controller-away-probe-cli.js';
 import { entryFrom, replyOf } from '../helpers/flow-stats-fixtures.js';
 
 const policy = buildPort1IsolationPolicy();
@@ -410,5 +412,58 @@ describe('runAwayProbe against a fake switch socket', () => {
     expect(summary.outcome).toBe('equals_policy');
     expect(summary.reads).toHaveLength(1);
     expect(summary.notes.some((n) => n.includes('not attempted'))).toBe(true);
+  });
+});
+
+describe('server errors are recorded, never swallowed (Invariant 1)', () => {
+  it('delivers an error emitted before onNotice attaches, and counts it', () => {
+    const server = new OpenFlowServer();
+    const session = new ReadOnlySwitchSession(server);
+    server.emit('error', new Error('early failure'));
+    server.emit('clientError', new Error('early socket'), '10.0.0.9:1234');
+    const seen: string[] = [];
+    session.onNotice((t) => seen.push(t));
+    expect(seen).toEqual(['server error: early failure', 'socket error from 10.0.0.9:1234: early socket']);
+    server.emit('error', new Error('late failure'));
+    expect(seen).toContain('server error: late failure'); // live after attach, not duplicated
+    expect(seen.filter((t) => t.includes('late failure'))).toHaveLength(1);
+    expect(session.serverErrors().count).toBe(3n);
+  });
+
+  it('keeps only the most recent errors but counts all of them', () => {
+    const server = new OpenFlowServer();
+    const session = new ReadOnlySwitchSession(server);
+    const total = MAX_RECORDED_SERVER_ERRORS + 7;
+    for (let i = 0; i < total; i++) server.emit('error', new Error(`e${i}`));
+    const { count, recent } = session.serverErrors();
+    expect(count).toBe(BigInt(total));
+    expect(recent).toHaveLength(MAX_RECORDED_SERVER_ERRORS);
+    expect(recent[recent.length - 1]).toBe(`server error: e${total - 1}`);
+    expect(recent[0]).toBe('server error: e7');
+  });
+
+  it('reports the count and the recent errors in the result', async () => {
+    const server = new OpenFlowServer();
+    const session = new ReadOnlySwitchSession(server);
+    server.emit('error', new Error('before the run'));
+    const summary = await runAwayProbe(session, fastConfig({ reconnectWaitMs: 100 }), policy, () => undefined);
+    expect(summary.serverErrorCount).toBe('1');
+    expect(summary.recentServerErrors).toEqual(['server error: before the run']);
+  });
+});
+
+describe('closeAndExit (CLI stop path)', () => {
+  it('exits with the intended code after a clean close', async () => {
+    const exits: number[] = [];
+    await closeAndExit({ close: () => Promise.resolve() }, 143, (c) => exits.push(c), () => undefined);
+    expect(exits).toEqual([143]);
+  });
+
+  it('logs a rejected close and still exits with the intended code', async () => {
+    const exits: number[] = [];
+    const errors: string[] = [];
+    await closeAndExit({ close: () => Promise.reject(new Error('close blew up')) }, 6, (c) => exits.push(c), (m) => errors.push(m));
+    expect(exits).toEqual([6]);
+    expect(errors.join(' ')).toMatch(/close blew up/);
   });
 });

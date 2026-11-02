@@ -55,6 +55,9 @@ export const PROBE_LIMITS = {
   port: { flag: '--port', min: 1, max: 65_535, dflt: 6633 },
 } as const satisfies Record<string, Limit>;
 
+/** How many of the most recent server and socket errors are kept (and replayed to a late subscriber). Older ones are counted, not kept. */
+export const MAX_RECORDED_SERVER_ERRORS = 20;
+
 export const DEFAULT_PROBE_HOST = '0.0.0.0';
 
 export interface ProbeConfig {
@@ -165,6 +168,8 @@ export interface ProbeSession {
   readFlowStats(timeoutMs: number): Promise<FlowStatsEntry[]>;
   /** OFPT_PACKET_IN messages the switch has sent this process (all of them, including any the server's own rate limit dropped). The probe never answers one. */
   packetIns(): bigint;
+  /** Server and socket errors seen so far: the total, and the most recent ones (at most MAX_RECORDED_SERVER_ERRORS). */
+  serverErrors(): { readonly count: bigint; readonly recent: readonly string[] };
 }
 
 /** Read-only view of an OpenFlowServer. See the file comment for what is and is not enforced. */
@@ -174,9 +179,10 @@ export class ReadOnlySwitchSession implements ProbeSession {
 
   constructor(server: OpenFlowServer = new OpenFlowServer()) {
     this.#server = server;
-    // An EventEmitter with no 'error' listener throws on emit; the notices below report these instead.
-    server.on('error', () => undefined);
-    server.on('clientError', () => undefined);
+    // An EventEmitter with no 'error' listener throws on emit. These listeners record every error (bounded buffer, total counted), replay the buffer to
+    // a subscriber that attaches later, and deliver live ones to it; the result reports the count. Nothing is dropped silently.
+    server.on('error', (e: Error) => this.#recordError(`server error: ${e.message}`));
+    server.on('clientError', (e: Error, addr: string) => this.#recordError(`socket error from ${addr}: ${e.message}`));
     // Handed only to readFlowStats, below. sendRaw is the one write path the readback uses, and it is gated.
     this.#source = {
       reserveXid: () => server.reserveXid(),
@@ -189,6 +195,19 @@ export class ReadOnlySwitchSession implements ProbeSession {
       off: (event, listener) => server.off(event, listener),
     };
   }
+
+  #errors: string[] = [];
+  #errorCount = 0n;
+  readonly #noticeCallbacks: Array<(text: string) => void> = [];
+
+  #recordError(text: string): void {
+    this.#errorCount += 1n;
+    this.#errors.push(text);
+    if (this.#errors.length > MAX_RECORDED_SERVER_ERRORS) this.#errors = this.#errors.slice(-MAX_RECORDED_SERVER_ERRORS);
+    for (const cb of this.#noticeCallbacks) cb(text);
+  }
+
+  serverErrors(): { readonly count: bigint; readonly recent: readonly string[] } { return { count: this.#errorCount, recent: [...this.#errors] }; }
 
   listen(port: number, host: string): Promise<void> { return this.#server.listen(port, host); }
   close(): Promise<void> { return this.#server.close(); }
@@ -206,8 +225,8 @@ export class ReadOnlySwitchSession implements ProbeSession {
     s.on('handshakeTimeout', (addr: string) => cb(`handshake timed out (${addr})`));
     s.on('deadPeerTimeout', (addr: string) => cb(`switch stopped answering (${addr})`));
     s.on('connectionRejected', (addr: string, why: string) => cb(`connection from ${addr} rejected: ${why}`));
-    s.on('error', (e: Error) => cb(`server error: ${e.message}`));
-    s.on('clientError', (e: Error, addr: string) => cb(`socket error from ${addr}: ${e.message}`));
+    for (const text of this.#errors) cb(text); // errors that happened before this subscriber attached
+    this.#noticeCallbacks.push(cb);
   }
 }
 
@@ -382,6 +401,9 @@ export interface ProbeSummary {
   /** number of completed handshakes seen; more than 1 means the switch reconnected during the run */
   readonly handshakes: number;
   readonly packetIns: string;
+  /** server and socket errors seen (decimal string of a BigInt), and the most recent ones */
+  readonly serverErrorCount: string;
+  readonly recentServerErrors: readonly string[];
   readonly reads: readonly ReadRecord[];
   /** the first successful read decides the outcome; this says whether a later one differed in the entries (counters ignored) */
   readonly tableChangedDuringSession: boolean;
@@ -411,6 +433,7 @@ export async function runAwayProbe(
   log: (line: string) => void,
 ): Promise<ProbeSummary> {
   const t0 = process.hrtime.bigint();
+  // Integer milliseconds: a BigInt nanosecond difference divided as BigInt, then converted. No float arithmetic on durations or counters in this file.
   const elapsedMs = (): number => Number((process.hrtime.bigint() - t0) / 1_000_000n);
   const remainingMs = (): number => cfg.overallTimeoutMs - elapsedMs();
   const notes: string[] = [];
@@ -456,6 +479,8 @@ export async function runAwayProbe(
       connectedAtMs,
       handshakes,
       packetIns: session.packetIns().toString(),
+      serverErrorCount: session.serverErrors().count.toString(),
+      recentServerErrors: session.serverErrors().recent,
       reads,
       tableChangedDuringSession: tableChanged,
       counterDeltas: deltas,
