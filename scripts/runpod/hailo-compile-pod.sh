@@ -207,10 +207,24 @@ PY
 # load-bearing; if something downstream genuinely needs a working /dev/null and it's missing, that will surface
 # as its own concrete, diagnosable failure rather than this script refusing to even try.
 mkdir -p "$ROOTFS/dev"
-[ -e "$ROOTFS/dev/null" ]    || mknod -m 666 "$ROOTFS/dev/null" c 1 3    2>/dev/null || echo "mknod /dev/null failed (no CAP_MKNOD on this host?); continuing" >&2
-[ -e "$ROOTFS/dev/zero" ]    || mknod -m 666 "$ROOTFS/dev/zero" c 1 5    2>/dev/null || echo "mknod /dev/zero failed (no CAP_MKNOD on this host?); continuing" >&2
-[ -e "$ROOTFS/dev/random" ]  || mknod -m 666 "$ROOTFS/dev/random" c 1 8  2>/dev/null || echo "mknod /dev/random failed (no CAP_MKNOD on this host?); continuing" >&2
-[ -e "$ROOTFS/dev/urandom" ] || mknod -m 666 "$ROOTFS/dev/urandom" c 1 9 2>/dev/null || echo "mknod /dev/urandom failed (no CAP_MKNOD on this host?); continuing" >&2
+[ -e "$ROOTFS/dev/null" ] || mknod -m 666 "$ROOTFS/dev/null" c 1 3 2>/dev/null || echo "mknod /dev/null failed (no CAP_MKNOD on this host?); continuing" >&2
+[ -e "$ROOTFS/dev/zero" ] || mknod -m 666 "$ROOTFS/dev/zero" c 1 5 2>/dev/null || echo "mknod /dev/zero failed (no CAP_MKNOD on this host?); continuing" >&2
+# /dev/random and /dev/urandom specifically: confirmed live 2026-11-02 that even when mknod is refused here
+# (same host, same run), the getrandom() syscall itself works fine -- it's specifically libstdc++'s
+# random_device opening "/dev/urandom" *by path* that fails (RuntimeError: random_device::random_device(const
+# std::string&), from TensorFlow's eager context init, imported by hailo_sdk_client). A FIFO doesn't need
+# CAP_MKNOD at all (only char/block device nodes do), so where mknod is refused, bridge one to the pod's real
+# /dev/urandom instead: a background reader of the real device continuously feeds whatever this chroot reads
+# from the FIFO. Real device nodes are still tried first since they're simpler and don't need a live process.
+for dev in random urandom; do
+  if [ -e "$ROOTFS/dev/$dev" ]; then continue; fi
+  if mknod -m 666 "$ROOTFS/dev/$dev" c 1 9 2>/dev/null; then continue; fi
+  if mkfifo -m 666 "$ROOTFS/dev/$dev" 2>/dev/null; then
+    ( while :; do cat /dev/urandom > "$ROOTFS/dev/$dev" 2>/dev/null || break; done ) &
+  else
+    echo "neither mknod nor mkfifo worked for /dev/$dev; continuing without it" >&2
+  fi
+done
 # /etc/resolv.conf is a plain file, not a live mount -- copy the pod's own in case anything inside the chroot
 # does a DNS lookup (nothing should need to: the Suite's venv and Model Zoo are already baked into the image).
 mkdir -p "$ROOTFS/etc"
