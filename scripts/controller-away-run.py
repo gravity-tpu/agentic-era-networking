@@ -138,7 +138,7 @@ class Probe:
                 note_arrival(self.seen, self.patterns, t, text)
                 if text.startswith('RESULT ') and self.result is None:
                     try: self.result = json.loads(text[len('RESULT '):])
-                    except ValueError: self.result = None
+                    except ValueError as e: self.result = None; log(f'warning: the probe RESULT line is not valid JSON ({e}); treating the result as missing')
                 if len(self.head) < PROBE_HEAD_LINES: self.head.append(entry)
                 else:
                     if len(self.tail) == self.tail.maxlen: self.dropped += 1
