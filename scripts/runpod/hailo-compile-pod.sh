@@ -363,36 +363,38 @@ run_pipeline_step() {
 }
 
 # strace (run from the OUTER pod OS -- chroot doesn't create a new PID namespace, so a chrooted process's PID
-# and its real /proc entry are both visible from outside, and the Suite's own extracted rootfs has no working
-# apt [no gpgv/gpgv2/gpgv1], so installing strace has to happen out here regardless) already found two real
-# causes this way: the /proc/self/exe and /proc/self/cmdline fixes above. The hang diagnosis from a full live run
-# (2026-11-02, after both of those fixes) showed `hailomz parse` blocked with wchan "wait_for_partner" -- the
-# kernel's FIFO-open wait state, used only for named pipes, never anonymous pipes from pipe()/pipe2(). No FIFO
-# under our own control was involved (mknod succeeded for /dev/random and /dev/urandom on that host, so our FIFO
-# fallback for those wasn't even in play), and no mkfifo call appears anywhere in hailo_sdk_client/hailo_platform/
-# hailo_sdk_server's Python source -- so whatever opens a FIFO here does it from native code or creates one at
-# runtime, invisible to a static source grep. Tracing the real `hailomz parse` invocation itself (not just the
-# isolated import, which is a different process and apparently doesn't reach this far) for mkfifo/open/connect
-# calls.
+# and its real /proc entry are both visible from outside) already found two real causes this way: the
+# /proc/self/exe and /proc/self/cmdline fixes above. It also showed `hailomz parse` blocked with wchan
+# "wait_for_partner" (the kernel's FIFO-open wait state) -- but tracing every syscall during Python's
+# import-heavy startup turned out to be far too slow to actually reach that point: a 500s-bounded trace (live
+# run 2026-11-02) only got as far as routine library imports and libcuda.so probing, the same ground a plain,
+# untraced run covers in a few real seconds, because ptrace-based syscall interception adds massive per-call
+# overhead exactly where this code opens the most files. strace is the wrong tool for a hang this deep into a
+# busy startup sequence.
 #
-# A 120s bound (an earlier version of this line) was not long enough: that trace only reached as far as routine
-# `requests`/urllib3/charset_normalizer imports (plus one harmless bind() to ::1 -- urllib3's own, unrelated,
-# IPv6-availability probe) before being cut off, nowhere near the actual FIFO wait. 500s leaves the real
-# run_pipeline_step attempt below only a 100s bound of its own if this one doesn't finish in time, but it already
-# doesn't (every attempt so far has hung the full 600s), so this trades a little of that step's own timeout
-# budget for visibility into what happens in the final ~400s that the earlier, shorter trace never reached.
-apt-get install -y -qq strace || echo 'strace install failed on the outer OS (non-fatal; continuing without a trace)' >&2
-# mkfifo(3) is a glibc wrapper around mknod()/mknodat() (with S_IFIFO in the mode bits), not a syscall of its
-# own -- confirmed live 2026-11-02: strace rejected it outright ("invalid system call 'mkfifo'") and exited
-# before ever running the traced command at all, silently wasting that entire diagnostic attempt.
-timeout 500 strace -f -e trace=open,openat,mknod,mknodat,connect,bind -s 500 -o "$OUT/hailomz-parse-strace.log" \
-  chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; hailomz parse $MODEL" || true
+# faulthandler.dump_traceback_later() is the right one instead: it runs inside the Python process itself (a
+# watchdog thread, no ptrace, no external tool, and unlike PYTHONFAULTHANDLER's crash-time hook it doesn't need
+# the process to be dying) and prints every thread's Python-level stack to stderr after a delay even if nothing
+# has gone wrong yet. A tiny wrapper script replaces the `hailomz` console-script entry point (which is itself
+# just `from hailo_model_zoo.main import main; sys.exit(main())`) so this doesn't depend on hailomz accepting
+# any flag of its own for it.
+cat > "$ROOTFS/tmp/hailomz_wrapper.py" <<'WRAPPER'
+import faulthandler
+import sys
+
+dump_after_seconds = int(sys.argv[1])
+faulthandler.dump_traceback_later(dump_after_seconds, exit=False)
+sys.argv = ["hailomz"] + sys.argv[2:]
+from hailo_model_zoo.main import main
+
+sys.exit(main())
+WRAPPER
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
-run_pipeline_step parse 600 "hailomz parse $MODEL"
-run_pipeline_step optimize 3600 "hailomz optimize $MODEL --calib-path '$CALIB_REL'"
-run_pipeline_step compile 3600 "hailomz compile $MODEL"
+run_pipeline_step parse 600 "python3 /tmp/hailomz_wrapper.py 300 parse $MODEL"
+run_pipeline_step optimize 3600 "python3 /tmp/hailomz_wrapper.py 1800 optimize $MODEL --calib-path '$CALIB_REL'"
+run_pipeline_step compile 3600 "python3 /tmp/hailomz_wrapper.py 1800 compile $MODEL"
 
 # hailomz's own output path convention is not pinned by Hailo's docs (verified: GETTING_STARTED.rst does not
 # state where the .hef lands); search the whole workspace inside the rootfs rather than guess a single exact

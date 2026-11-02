@@ -167,12 +167,23 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
   });
 
   it('actually invokes the hailomz parse/optimize/compile pipeline, not just a diagnostic', () => {
+    // Runs through hailomz_wrapper.py (adds a faulthandler watchdog -- see the next test), not the `hailomz`
+    // console script directly, but still reaches hailo_model_zoo's real parse/optimize/compile subcommands.
     expect(content).toContain('run_pipeline_step parse');
-    expect(content).toContain('hailomz parse $MODEL');
+    expect(content).toContain('hailomz_wrapper.py 300 parse $MODEL');
     expect(content).toContain('run_pipeline_step optimize');
-    expect(content).toContain('hailomz optimize $MODEL --calib-path');
+    expect(content).toContain("hailomz_wrapper.py 1800 optimize $MODEL --calib-path");
     expect(content).toContain('run_pipeline_step compile');
-    expect(content).toContain('hailomz compile $MODEL');
+    expect(content).toContain('hailomz_wrapper.py 1800 compile $MODEL');
+  });
+
+  it('wraps hailomz with a faulthandler watchdog that dumps all thread stacks without ptrace', () => {
+    // strace (ptrace-based syscall tracing) turned out to be far too slow to ever reach a hang this deep into a
+    // busy, import-heavy startup; py-spy needs CAP_SYS_PTRACE, confirmed NOT present on at least one host. A
+    // watchdog running inside the Python process itself needs neither.
+    expect(content).toContain('faulthandler.dump_traceback_later');
+    expect(content).toContain('hailomz_wrapper.py');
+    expect(content).toContain('from hailo_model_zoo.main import main');
   });
 
   it('diagnoses a hung pipeline step instead of waiting silently for hours', () => {
