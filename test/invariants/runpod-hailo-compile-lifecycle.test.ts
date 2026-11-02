@@ -171,4 +171,12 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).toMatch(/^\s*hailomz optimize \$MODEL --calib-path/m);
     expect(content).toMatch(/^\s*hailomz compile \$MODEL/m);
   });
+
+  it('stubs /proc/self/exe so TensorFlow\'s readlink-based executable-path check does not abort', () => {
+    // Confirmed live 2026-11-02 via strace: TensorFlow's tsl/platform/env.cc calls
+    // readlink("/proc/self/exe"), gets ENOENT (no live procfs in this hand-built rootfs), and hits a hard CHECK
+    // failure that aborts the whole process -- crashing `import hailo_sdk_client` before any pipeline code runs.
+    expect(content).toContain('mkdir -p "$ROOTFS/proc/self"');
+    expect(content).toMatch(/ln -sfn "\$VENV_PYTHON_REL" "\$ROOTFS\/proc\/self\/exe"/);
+  });
 });

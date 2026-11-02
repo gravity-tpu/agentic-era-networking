@@ -229,6 +229,18 @@ done
 # so it has to be created at its final chroot-relative location from the start.
 set -a; source "$ENVFILE"; set +a
 WORKSPACE_DIR="${WORKSPACE:-/local/workspace}"
+
+# TensorFlow's tsl/platform/env.cc calls readlink("/proc/self/exe") to find its own executable path. Confirmed
+# live 2026-11-02 via strace: that call fails with ENOENT (our /proc has no live /proc/self -- it can't, without
+# a real procfs mount) and TF hits a hard `CHECK failed: -1 != path_length` that aborts the whole process,
+# crashing `import hailo_sdk_client` (which imports TensorFlow) before any of our own code even runs. Every
+# process in this pipeline is python3 from the bundled venv, so a static symlink pointing there is accurate for
+# "self" here, not a generic fake -- there is no other binary that would ever actually be /proc/self/exe in this
+# chroot.
+VENV_PYTHON_REL="${HAILO_VENV_PATH:-$WORKSPACE_DIR/hailo_virtualenv}/bin/python3"
+mkdir -p "$ROOTFS/proc/self"
+[ -e "$ROOTFS$VENV_PYTHON_REL" ] && ln -sfn "$VENV_PYTHON_REL" "$ROOTFS/proc/self/exe"
+
 CALIB_REL="$WORKSPACE_DIR/calib"
 mkdir -p "$ROOTFS$CALIB_REL"
 python3 - "$ROOTFS$CALIB_REL" "$CALIB_IMAGE_COUNT" "$CALIB_IMAGE_SIZE" <<'PY'
