@@ -1,0 +1,5 @@
+{"atMs": 1793647490465, "event": "fault_injected", "route": "fault", "what": "table-miss replaced by a forward to P3 for 240 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793647610194, "event": "fault_injected", "route": "fault", "what": "table-miss removed (strict delete of the priority-0 entry) for 240 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793647728927, "event": "fault_injected", "route": "fault", "what": "table-miss replaced by an entry whose only instruction is CLEAR_ACTIONS (it still drops, but is not a recognised DROP) for 240 s", "notes": ["the DROP returns at the time limit, or when the switch session restarts"]}
+{"atMs": 1793647907976, "event": "repair", "route": "repair", "what": "isolation repair: table-miss unrecognised", "notes": ["re-sent the approved table-miss DROP only; the readback that follows says whether it worked"]}
+{"atMs": 1793647968930, "event": "fault_reverted", "route": "fault", "what": "table-miss DROP re-sent at the time limit", "notes": ["the readback that follows says whether the switch took it"]}
