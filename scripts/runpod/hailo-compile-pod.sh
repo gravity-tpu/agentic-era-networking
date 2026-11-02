@@ -363,7 +363,10 @@ run_pipeline_step() {
 # seen in every prior run, not gradually, so there is no need to wait anywhere near the full 600s step timeout
 # to catch it in the act.
 apt-get install -y -qq strace || echo 'strace install failed on the outer OS (non-fatal; continuing without a trace)' >&2
-timeout 120 strace -f -e trace=open,openat,mkfifo,mknodat,connect,bind -s 500 -o "$OUT/hailomz-parse-strace.log" \
+# mkfifo(3) is a glibc wrapper around mknod()/mknodat() (with S_IFIFO in the mode bits), not a syscall of its
+# own -- confirmed live 2026-11-02: strace rejected it outright ("invalid system call 'mkfifo'") and exited
+# before ever running the traced command at all, silently wasting that entire diagnostic attempt.
+timeout 120 strace -f -e trace=open,openat,mknod,mknodat,connect,bind -s 500 -o "$OUT/hailomz-parse-strace.log" \
   chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; hailomz parse $MODEL" || true
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
