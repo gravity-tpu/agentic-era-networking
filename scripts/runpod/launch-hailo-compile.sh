@@ -142,7 +142,7 @@ fi
 "${SSH[@]}" 'ln -sf /workspace/suite.tar.gz /workspace/in/suite.tar.gz'
 
 git show HEAD:scripts/runpod/hailo-compile-pod.sh | "${SSH[@]}" 'cat > /workspace/in/hailo-compile-pod.sh && chmod +x /workspace/in/hailo-compile-pod.sh'
-"${SSH[@]}" "MODEL='$MODEL' MODEL_ZOO_REF='$MODEL_ZOO_REF' SUITE_IMAGE_TAG='$SUITE_IMAGE_TAG' nohup /workspace/in/hailo-compile-pod.sh > /workspace/out-boot.log 2>&1 &"
+"${SSH[@]}" "MODEL='$MODEL' MODEL_ZOO_REF='$MODEL_ZOO_REF' SUITE_IMAGE_TAG='$SUITE_IMAGE_TAG' PROBE_ONLY='${PROBE_ONLY:-}' nohup /workspace/in/hailo-compile-pod.sh > /workspace/out-boot.log 2>&1 &"
 
 mkdir -p "$OUT"
 # Bounded poll loop (Invariant 5), same pattern as launch-eval-lora.sh / launch-train-lora.sh: incremental pull

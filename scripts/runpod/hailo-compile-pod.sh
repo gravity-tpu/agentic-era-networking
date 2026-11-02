@@ -36,6 +36,34 @@ mkdir -p /workspace/out /workspace/work   # before the traps below: both write i
 # next attempt to be reported (and the pod terminated) ~60s in, mid-apt-get, nowhere near its actual failure point.
 rm -f /workspace/out/DONE /workspace/out/FAILED
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
+
+# One-off capability probe (2026-11-02): live runs hit CAP_NET_ADMIN and CAP_SYS_ADMIN walls (networking, then
+# mounts, then unshare() during layer apply) that make real Docker-in-Docker impossible on this pod regardless
+# of dockerd flags -- Runpod's REST API has no privileged/capability field to request otherwise (checked the
+# OpenAPI spec directly). Before committing to a Docker-free redesign (extract the suite image's layers by hand,
+# chroot into the result), confirm chroot() itself is actually permitted here -- a much lower bar than the
+# namespace/mount capabilities already ruled out -- rather than assuming and finding out at the end of a much
+# bigger rewrite. PROBE_ONLY is not a permanent flag; remove this block once the redesign decision is made.
+if [ "${PROBE_ONLY:-}" = "1" ]; then
+  {
+    echo "=== capability probe $(date -u +%FT%TZ) ==="
+    id
+    python3 - <<'PY' || true
+import os
+try:
+    os.makedirs('/tmp/chroot-probe', exist_ok=True)
+    os.chroot('/tmp/chroot-probe')
+    print('chroot(): OK')
+except Exception as e:
+    print('chroot(): FAILED', repr(e))
+PY
+    echo "--- /proc/self/status Cap lines ---"
+    grep -i '^Cap' /proc/self/status
+  } > /workspace/out/probe.log 2>&1
+  cat /workspace/out/probe.log
+  touch /workspace/out/DONE
+  exit 0
+fi
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
 MODEL="${MODEL:-mobilenet_v1}"
