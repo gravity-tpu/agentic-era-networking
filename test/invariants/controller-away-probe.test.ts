@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
@@ -482,3 +483,13 @@ describe('orchestrator judging helpers (offline)', () => {
     expect(text).not.toMatch(/time\.monotonic\(\)/);
   });
 });
+
+describe('the orchestrator does not match its own ssh shell when it looks for a probe', () => {
+  it('uses a bracketed pattern for pgrep and pkill, so an idle Jetson reads as no probe running', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../scripts/controller-away-run.py'), 'utf-8');
+    expect(src).not.toMatch(/pgrep -f controller-away-probe-cli/);
+    expect(src).not.toMatch(/pkill -f controller-away-probe-cli/);
+    expect(src).toContain('[c]ontroller-away-probe-cli');
+  });
+});
+
