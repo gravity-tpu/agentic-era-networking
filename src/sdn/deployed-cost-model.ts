@@ -109,3 +109,75 @@ export function classifyDeployedShape(rules: readonly IsolationRule[]): Deployed
   }
   return { modelled: true, quarantineRuleIds };
 }
+
+/**
+ * The allow-rule form that was measured (2026-11-01, docs/benchmarks/results/layout-capacity/run-2026-11-01-allow-sweep/README.md): the live policy, then 1 to 8
+ * allow rules, then quarantine DROPs. Each allow rule matches `in_port 3` and a source MAC, outputs to P1 and sits at priority 120 (between p3-tap-return, 100, and the
+ * rule the measured frames match, 150). This is a FLOOR over measurements, not a per-rule cost: the runs could not resolve a per-count step above their run-to-run
+ * spread (the same table measured 6% apart in two runs), so the claim is only that, in every measurement of this form with 8 quarantine DROPs, capacity was at least
+ * ALLOW_FLOOR_PPS. A test re-reads the stored runs and fails if the constant is not the lowest of them.
+ *
+ * What it does not say: counts above 8, another priority, output, match form or command, an allow rule installed after a quarantine, a quarantine depth other than 8,
+ * another payload, or traffic that matches an allow rule (the rules measured matched none, and the cost of a frame that takes an allow rule was not measured).
+ * The gate can check that a rule has this form; it cannot check that the rule matches no traffic.
+ */
+export const ALLOW_FORM_PRIORITY = 120;
+export const ALLOW_FORM_MAX_RULES = 8n;
+export const ALLOW_FLOOR_DEPTH = DEPLOYED_MAX_QUARANTINES;
+export const ALLOW_FLOOR_PPS = 7_765n;
+
+/** The same fail-closed margin as the quarantine model: the floor is discounted by the tolerance, rounded down, before it is compared with a target. */
+export function meetsAllowFloorTarget(targetPps: bigint): boolean {
+  if (targetPps < 0n) throw new DeployedCostDomainError(`negative target ${targetPps}`);
+  return (ALLOW_FLOOR_PPS * (1_000_000n - DEPLOYED_TOLERANCE_PPM)) / 1_000_000n >= targetPps;
+}
+
+export type DeployedAllowShapeResult =
+  | { readonly modelled: true; readonly allowRuleIds: readonly string[]; readonly quarantineRuleIds: readonly string[] }
+  | { readonly modelled: false; readonly reason: string };
+
+const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
+
+/** Exactly the measured allow rule: an add at the form's priority, one output (P1), matching only in_port 3 and a source MAC. */
+function allowFormProblem(r: IsolationRule): string | null {
+  const m = r.flowMod.match ?? {};
+  const keys = Object.keys(m).filter((k) => (m as Record<string, unknown>)[k] !== undefined).sort();
+  const out = r.flowMod.outputPorts ?? [];
+  if (r.flowMod.command !== FlowModCommand.OFPFC_ADD) return `${r.id}: only adds were measured`;
+  if (r.flowMod.priority !== ALLOW_FORM_PRIORITY) return `${r.id}: only priority ${ALLOW_FORM_PRIORITY} was measured, not ${r.flowMod.priority}`;
+  if (out.length !== 1 || out[0] !== 1) return `${r.id}: only a single output to P1 was measured`;
+  if (keys.length !== 2 || keys[0] !== 'inPort' || keys[1] !== 'srcMac' || m.inPort !== 3 || typeof m.srcMac !== 'string' || !MAC_RE.test(m.srcMac.toLowerCase())) {
+    return `${r.id}: only a match on in_port 3 and a source MAC was measured`;
+  }
+  return null;
+}
+
+/**
+ * The table the allow-rule runs measured: the live policy in order, then 1 to ALLOW_FORM_MAX_RULES allow rules of the measured form (distinct ids and distinct source
+ * MACs, so none is shadowed by another), then quarantine DROPs of the shape classifyDeployedShape accepts. An allow rule after a DROP is a different install order
+ * and is not modelled.
+ */
+export function classifyDeployedAllowShape(rules: readonly IsolationRule[]): DeployedAllowShapeResult {
+  const no = (reason: string): DeployedAllowShapeResult => ({ modelled: false, reason });
+  const policy = buildPort1IsolationPolicy(undefined, undefined, undefined, MEASURED_UPLINK_ARP_PEERS);
+  if (rules.length <= policy.length) return no(`no allow rule after the ${policy.length}-rule live isolation policy`);
+  for (const [i, p] of policy.entries()) {
+    const r = rules[i];
+    if (r === undefined || canon(r) !== canon(p)) return no(`rule ${i + 1} is not the measured live policy's ${p.id}, in order`);
+  }
+  const rest = rules.slice(policy.length);
+  const allowRules: IsolationRule[] = [];
+  for (const r of rest) {
+    if (allowFormProblem(r) !== null) break;
+    allowRules.push(r);
+  }
+  if (allowRules.length === 0) return no(allowFormProblem(rest[0]!) ?? 'no allow rule of the measured form');
+  if (BigInt(allowRules.length) > ALLOW_FORM_MAX_RULES) return no(`${allowRules.length} allow rules; only 1 to ${ALLOW_FORM_MAX_RULES} were measured`);
+  const ids = new Set(allowRules.map((r) => r.id));
+  const macs = new Set(allowRules.map((r) => String(r.flowMod.match?.srcMac).toLowerCase()));
+  if (ids.size !== allowRules.length) return no('two allow rules share an id');
+  if (macs.size !== allowRules.length) return no('two allow rules match the same source MAC; the second would never win and was not measured');
+  const tail = classifyDeployedShape([...policy, ...rest.slice(allowRules.length)]);
+  if (!tail.modelled) return no(`after the allow rules: ${tail.reason}`);
+  return { modelled: true, allowRuleIds: allowRules.map((r) => r.id), quarantineRuleIds: tail.quarantineRuleIds };
+}

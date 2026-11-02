@@ -33,9 +33,14 @@ import {
 } from './zodiac-cost-model.js';
 import {
   DEPLOYED_TOLERANCE_PPM,
+  ALLOW_FLOOR_DEPTH,
+  ALLOW_FLOOR_PPS,
+  classifyDeployedAllowShape,
   classifyDeployedShape,
+  DEPLOYED_PAYLOAD_BYTES,
   deployedCapacityPps,
   explainDeployedDomain,
+  meetsAllowFloorTarget,
   meetsDeployedCapacityTarget,
 } from './deployed-cost-model.js';
 import type { IsolationRule } from './port1-isolation.js';
@@ -251,7 +256,7 @@ export type CapacityVerdict =
        * layout. For a policy with none, the layout is undetermined and this is the lowest-capacity modelled layout:
        * a bound, not a statement about what is installed.
        */
-      readonly decidingLayout: CostLayout | 'deployed';
+      readonly decidingLayout: CostLayout | 'deployed' | 'deployed_allow';
       /** Quarantine depth the model was evaluated at: DROP rules present plus the reserve. */
       readonly quarantineDepth: number;
       readonly modelledPps: bigint;
@@ -275,7 +280,9 @@ export function checkCapacityBudget(rules: readonly IsolationRule[], spec: Capac
     // Not the two-rule shape of the 2026-10-04 benchmark. The deployed table (policy plus quarantine DROPs) has its own measured model.
     const deployed = classifyDeployedShape(rules);
     if (deployed.modelled) return checkDeployedCapacity(deployed.quarantineRuleIds, reserve, spec);
-    return { property: 'A8', status: 'unverifiable', reason: `${shape.reason}; and not the deployed table either (${deployed.reason})` };
+    const withAllow = classifyDeployedAllowShape(rules);
+    if (withAllow.modelled) return checkDeployedAllowCapacity(withAllow.allowRuleIds, withAllow.quarantineRuleIds, reserve, spec);
+    return { property: 'A8', status: 'unverifiable', reason: `${shape.reason}; and not the deployed table either (${deployed.reason}); nor the deployed table with allow rules (${withAllow.reason})` };
   }
 
   const depth = shape.shape.quarantineRuleIds.length + reserve;
@@ -345,6 +352,41 @@ function checkDeployedCapacity(quarantineRuleIds: readonly string[], reserve: nu
             detail:
               `modelled capacity ${modelled} pps (${spec.payloadBytes} B, deployed table, ${depth} quarantine rules including ${reserve} reserved) ` +
               `does not meet the ${spec.targetPps} pps target after the ${DEPLOYED_TOLERANCE_PPM} ppm model tolerance`,
+          },
+        ],
+  };
+}
+
+/**
+ * A8 for the deployed table with allow rules: a floor over measurements (deployed-cost-model.ts), valid only at the depth that was measured (8 quarantine rules,
+ * present plus reserved) and at the measured payload. Any other depth or payload is unverifiable, never a pass.
+ */
+function checkDeployedAllowCapacity(allowRuleIds: readonly string[], quarantineRuleIds: readonly string[], reserve: number, spec: CapacityBudgetSpec): CapacityVerdict {
+  const depth = quarantineRuleIds.length + reserve;
+  if (spec.payloadBytes !== DEPLOYED_PAYLOAD_BYTES) {
+    return { property: 'A8', status: 'unverifiable', reason: `payload ${spec.payloadBytes} B is outside the measured domain (the allow-rule floor was measured at ${DEPLOYED_PAYLOAD_BYTES} B only)` };
+  }
+  if (BigInt(depth) !== ALLOW_FLOOR_DEPTH) {
+    return { property: 'A8', status: 'unverifiable', reason: `${depth} quarantine rules (present plus reserved) is not the measured depth of ${ALLOW_FLOOR_DEPTH} for a table with allow rules` };
+  }
+  const ok = meetsAllowFloorTarget(spec.targetPps);
+  return {
+    property: 'A8',
+    status: ok ? 'pass' : 'fail',
+    decidingLayout: 'deployed_allow',
+    quarantineDepth: depth,
+    modelledPps: ALLOW_FLOOR_PPS,
+    targetPps: spec.targetPps,
+    tolerancePpm: DEPLOYED_TOLERANCE_PPM,
+    violations: ok
+      ? []
+      : [
+          {
+            property: 'A8',
+            ruleIds: allowRuleIds,
+            detail:
+              `the lowest capacity measured for this table with allow rules was ${ALLOW_FLOOR_PPS} pps (${spec.payloadBytes} B, ${allowRuleIds.length} allow rules, ${depth} quarantine rules ` +
+              `including ${reserve} reserved), which does not meet the ${spec.targetPps} pps target after the ${DEPLOYED_TOLERANCE_PPM} ppm tolerance`,
           },
         ],
   };
