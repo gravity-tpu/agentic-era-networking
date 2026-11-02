@@ -32,7 +32,11 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 CPU_FLAVOR="cpu5c"; MINUTES=""; NETWORK_VOLUME_ID=""; SUITE_TAR=""; MODEL="mobilenet_v1"
-VCPU_COUNT="16"; YES=""; DISK_GB=100
+VCPU_COUNT="16"; YES=""; DISK_GB=200   # ephemeral container disk, not the network volume: the by-hand layer
+                                        # extraction (hailo-compile-pod.sh) needs room for the image's raw
+                                        # layer tars plus the extracted rootfs at the same time; 200GB is a
+                                        # generous margin against an unknown uncompressed size for a 9GB-
+                                        # compressed image bundling a full CUDA/Node/Python toolchain.
 OUT="/tmp/zodiac-hailo-compile-$(date -u +%Y%m%dT%H%M%SZ)"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 IMAGE="${IMAGE:-ubuntu:22.04}"   # just the pod's own base OS now (no Docker installed into it anymore -- see
