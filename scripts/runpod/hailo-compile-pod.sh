@@ -182,10 +182,17 @@ for i, layer_path in enumerate(layers, 1):
 # once, or needed again later than its first use), then dropped all at once rather than one at a time.
 shutil.rmtree(raw_layers_dir, ignore_errors=True)
 
+# bash treats a handful of names as builtin/readonly (UID and EUID in particular -- confirmed live 2026-11-02:
+# the image's own Env list includes UID=10642, metadata about the user the Suite container originally ran as,
+# and `export UID=...` in a sourced script fails with "readonly variable" under `set -e`). Not needed here
+# anyway: everything in the chroot runs as root regardless of what this Env list says.
+BASH_READONLY_NAMES = {'UID', 'EUID', 'PPID', 'BASHPID', 'GROUPS', 'FUNCNAME', 'DIRSTACK', 'SHELLOPTS'}
 cfg = config.get('config', {}) or {}
 with open(env_out, 'w') as f:
     for line in cfg.get('Env') or []:
         key, _, val = line.partition('=')
+        if key in BASH_READONLY_NAMES:
+            continue
         f.write(f'export {key}={shlex.quote(val)}\n')
     f.write(f"export HAILO_CHROOT_WORKDIR={shlex.quote(cfg.get('WorkingDir') or '/')}\n")
 
