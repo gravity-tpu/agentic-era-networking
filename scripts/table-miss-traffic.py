@@ -5,7 +5,7 @@ Sends FRAMES raw Ethernet frames with the IEEE 802 local experimental ethertype 
 reaches the table-miss) from agentic-node-01's uplink NIC into the Zodiac's port 2, and counts what arrives at each observer:
   O3   the Jetson NIC on switch #2's mirror of the Zodiac P2 link (control: the frames really were on the link),
   O2   the Jetson NIC on the Zodiac P3 tap (a frame forwarded out of port 3),
-  O4   agentic-node-01 eth0 and rpi-hailo eth0, both on the workload side (a frame forwarded out of port 1).
+  O4   rpi-hailo eth0, on the workload side (a frame forwarded out of port 1; agentic-node-01 has no tcpdump, see OBSERVERS).
 Needs ssh to jetson, agentic-node-01 and rpi-hailo (passwordless sudo on the last two), and the wire-campaign VLAN arrangement on switch #2: node-01's uplink NIC
 (switch port 2) in the same VLAN as the Zodiac's P2 link (port 4), and port 3 (the mirror of that link) in its own VLAN. With the normal arrangement node-01 eth1 is on the household LAN and the
 frames never reach the Zodiac; the O3 control then reads 0 and the run is not valid.
@@ -26,7 +26,10 @@ UPLINK_IF = 'eth1'
 O2_IF, O3_IF = 'enx9c69d39dd0a6', 'enx9c69d39ddcc0'
 FRAMES, SPACING_S, CAPTURE_S = 20, 0.1, 22
 WAIT_FOR_FAULT_S = 240
-OBSERVERS = {'O3_p2_mirror': (JETSON, O3_IF, False), 'O2_p3_tap': (JETSON, O2_IF, False), 'O4_node01_eth0': (NODE01, 'eth0', True), 'O4_rpi_hailo_eth0': (LISTENER, 'eth0', True)}
+# The workload side is observed on rpi-hailo only. agentic-node-01 has no tcpdump (found 2026-11-02: its capture could never start, and the earlier script read that as 0 frames),
+# and it has no internet while its uplink NIC is isolated for these tests, so it cannot be installed there. rpi-hailo sits behind the same workload switch, which floods multicast and
+# unknown-unicast frames to all of its ports, so a frame forwarded out of P1 reaches it. One observer instead of two; the load script still samples both NICs' rx_packets.
+OBSERVERS = {'O3_p2_mirror': (JETSON, O3_IF, False), 'O2_p3_tap': (JETSON, O2_IF, False), 'O4_rpi_hailo_eth0': (LISTENER, 'eth0', True)}
 
 def ssh(host, cmd, timeout=90):
     """A structured result (lib.Remote): a failed ssh, a refused sudo or a timeout is ok=False with the reason, never an empty string."""
@@ -82,8 +85,8 @@ def run_classes(label, names, state):
     per_obs = {k: (lib.counts_by_class(str(v['text']), names) if v['valid'] else None) for k, v in d['results'].items()}
     def count(obs, c): return None if per_obs[obs] is None else per_obs[obs][c]['count']
     def o4(c):
-        a, b = count('O4_node01_eth0', c), count('O4_rpi_hailo_eth0', c)
-        return 0 if a is None or b is None else a + b  # an invalid O4 is flagged through `invalid`; the number is not used
+        a = count('O4_rpi_hailo_eth0', c)
+        return 0 if a is None else a  # an invalid O4 is flagged through `invalid`; the number is not used
     rows = {c: {'O3': count('O3_p2_mirror', c) or 0, 'O2': count('O2_p3_tap', c) or 0, 'O4': o4(c)} for c in names}
     lengths = lambda obs: {c: (per_obs[obs][c]['lengths'] if per_obs[obs] is not None else None) for c in names}
     return {'label': label, 'state': state, 'classes': names, 'frames_per_class': lib.FRAMES_PER_CLASS, 'sender': d['sent'], 'counts': rows,
