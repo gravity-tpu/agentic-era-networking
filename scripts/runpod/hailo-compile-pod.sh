@@ -340,6 +340,22 @@ run_pipeline_step() {
   wait "$pid"
 }
 
+# The /proc/self/exe fix above resolved readlink("/proc/self/exe") failing (TF's GetExecutablePath, env.cc:400).
+# Live run 2026-11-02 then hit a sibling CHECK five lines later in the same file (env.cc:405: "-1 != fd"),
+# strongly suggesting a second, distinct call -- probably open("/proc/self/exe", O_RDONLY) rather than
+# readlink() -- that the symlink alone doesn't satisfy. Testing this directly and cheaply before guessing at a
+# fix for a call we haven't actually confirmed is the one failing.
+chroot "$ROOTFS" /bin/bash -c "python3 -c '
+import os
+print(\"readlink(/proc/self/exe):\", os.readlink(\"/proc/self/exe\"))
+try:
+    fd = os.open(\"/proc/self/exe\", os.O_RDONLY)
+    print(\"open(/proc/self/exe) fd:\", fd)
+    os.close(fd)
+except Exception as e:
+    print(\"open(/proc/self/exe) FAILED:\", repr(e))
+'" || true
+
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
 run_pipeline_step parse 600 "hailomz parse $MODEL"
