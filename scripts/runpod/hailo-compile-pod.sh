@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 # scripts/runpod/hailo-compile-pod.sh
-# Runs ON the Runpod CPU Pod. Loads the Hailo AI Software Suite Docker image (staged once on the attached
-# network volume by scripts/runpod/launch-hailo-compile.sh, not re-uploaded per run), clones the Hailo Model
-# Zoo at a Hailo-8-compatible version, and compiles one model to a .hef via `hailomz parse/optimize/compile`.
+# Runs ON the Runpod CPU Pod. Extracts the Hailo AI Software Suite Docker image (staged once on the attached
+# network volume by scripts/runpod/launch-hailo-compile.sh, not re-uploaded per run) by hand into a plain
+# directory and chroots into it, then compiles one model to a .hef via `hailomz parse/optimize/compile`.
+#
+# Why not just `docker run` the Suite image (the obvious approach, and what this script originally did): live
+# runs on 2026-11-02 proved this pod's container has neither CAP_NET_ADMIN nor CAP_SYS_ADMIN -- confirmed via
+# /proc/self/status's Cap lines, and independently via dockerd itself failing at three different layers in turn
+# (bridge/iptables setup, then mount()-based overlay2 layer application, then unshare() during `docker load`
+# even with vfs). Runpod's REST API has no privileged/capability field (checked the OpenAPI spec directly) --
+# there is no flag that would have fixed this. Real Docker-in-Docker is not possible on this pod via the API we
+# have. CAP_SYS_CHROOT, by contrast, IS present (also confirmed live) -- a much lower privilege bar -- so this
+# extracts the image's layers with plain tar (handling AUFS-style whiteout files by hand) and chroots into the
+# result instead of running an actual Docker daemon.
+#
+# Bonus discovery while inspecting the image's config for this rewrite: it already bundles a fully built
+# virtualenv (HAILO_VENV_PATH) AND its own paired copy of the Hailo Model Zoo (MZ_DIR) -- this pipeline no
+# longer needs to `pip install` or `git clone` anything at all inside the chroot, which also sidesteps needing
+# outbound network access to work from inside it (untested whether it would have; moot now).
 #
 # Scope (deliberately narrow -- Option C of the agent-feedback plan, "validate the pipeline with a known-good
 # model before betting it on our own untested detector architecture"): compiles a Hailo Model Zoo reference
@@ -36,98 +51,152 @@ mkdir -p /workspace/out /workspace/work   # before the traps below: both write i
 # next attempt to be reported (and the pod terminated) ~60s in, mid-apt-get, nowhere near its actual failure point.
 rm -f /workspace/out/DONE /workspace/out/FAILED
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
-
-# One-off capability probe (2026-11-02): live runs hit CAP_NET_ADMIN and CAP_SYS_ADMIN walls (networking, then
-# mounts, then unshare() during layer apply) that make real Docker-in-Docker impossible on this pod regardless
-# of dockerd flags -- Runpod's REST API has no privileged/capability field to request otherwise (checked the
-# OpenAPI spec directly). Before committing to a Docker-free redesign (extract the suite image's layers by hand,
-# chroot into the result), confirm chroot() itself is actually permitted here -- a much lower bar than the
-# namespace/mount capabilities already ruled out -- rather than assuming and finding out at the end of a much
-# bigger rewrite. PROBE_ONLY is not a permanent flag; remove this block once the redesign decision is made.
-if [ "${PROBE_ONLY:-}" = "1" ]; then
-  {
-    echo "=== capability probe $(date -u +%FT%TZ) ==="
-    id
-    python3 - <<'PY' || true
-import os
-try:
-    os.makedirs('/tmp/chroot-probe', exist_ok=True)
-    os.chroot('/tmp/chroot-probe')
-    print('chroot(): OK')
-except Exception as e:
-    print('chroot(): FAILED', repr(e))
-PY
-    echo "--- /proc/self/status Cap lines ---"
-    grep -i '^Cap' /proc/self/status
-  } > /workspace/out/probe.log 2>&1
-  cat /workspace/out/probe.log
-  touch /workspace/out/DONE
-  exit 0
-fi
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
 MODEL="${MODEL:-mobilenet_v1}"
-MODEL_ZOO_REF="${MODEL_ZOO_REF:-v2.14}"   # Hailo-8/8L-compatible branch (paired with DFC 3.x); the zoo's master
-                                          # branch now targets Hailo-10/15 only -- confirmed 2026-11-01.
-SUITE_IMAGE_TAG="${SUITE_IMAGE_TAG:-hailo8_ai_sw_suite_2026-07:latest}"   # must match the tag baked into the
-                                                                          # specific suite.tar.gz staged on the volume
 CALIB_IMAGE_COUNT="${CALIB_IMAGE_COUNT:-64}"
 CALIB_IMAGE_SIZE="${CALIB_IMAGE_SIZE:-224}"   # mobilenet_v1's standard input resolution; override per model
 
-IN=/workspace/in; OUT=/workspace/out; W=/workspace/work   # already created above, before the traps
+IN=/workspace/in; OUT=/workspace/out   # already created above, before the traps
+# Heavy extraction work happens on the pod's own ephemeral container disk, NOT under /workspace: /workspace is
+# the attached network volume (currently 50GB, already holding the 9GB suite.tar.gz) and the image's uncompressed
+# footprint plus a temporary full copy of its raw layer tars (see the extraction script below -- manifest.json
+# arrives at the END of the tar stream, after every layer, so layer order isn't known until the whole 9GB has
+# already streamed past once) can run well past that. Mirrors this script's own prior reasoning about Docker's
+# image storage living on ephemeral disk, not the volume.
+BUILD=/root/hailo-build
+RAWLAYERS="$BUILD/raw-layers"
+ROOTFS="$BUILD/rootfs"
+ENVFILE="$BUILD/suite-env.sh"
+mkdir -p "$RAWLAYERS" "$ROOTFS"
 exec > >(tee -a "$OUT/pod.log") 2>&1
-echo "start $(date -u +%FT%TZ) model=$MODEL model_zoo_ref=$MODEL_ZOO_REF calib_images=$CALIB_IMAGE_COUNT"
+echo "start $(date -u +%FT%TZ) model=$MODEL calib_images=$CALIB_IMAGE_COUNT"
 
-# 0. OS packages + Docker-in-Docker (documented as CPU-Pod-only on Runpod; this pod is always a CPU Pod --
-# see src/infra/runpod-budget.ts's 'compile' JobKind comment). No GPU is required by the Dataflow Compiler
-# itself (confirmed from Hailo's own system-requirements check bundled in the Suite's docker-run script).
+# 0. OS packages. No GPU is required by the Dataflow Compiler itself (confirmed from Hailo's own
+# system-requirements check bundled in the Suite's docker-run script); no Docker needed at all anymore (see
+# header). python3/pip are for the synthetic calibration image generator and the layer-extraction script below.
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq && apt-get install -y -qq docker.io python3 python3-pip
-# Both attempts' output already lands in pod.log via the exec/tee redirect above; no reason to discard the
-# first attempt's stderr if it fails and the fallback is needed -- it's the first thing an operator would want
-# to see when debugging why the fallback path was taken.
+apt-get update -qq && apt-get install -y -qq python3 python3-pip
 pip install -q --break-system-packages pillow numpy || pip install -q pillow numpy
-# This pod's container has no CAP_NET_ADMIN at all (confirmed live 2026-11-02, in two steps): --iptables=false
-# alone still left ip6tables chain setup failing the same way, and then bridge creation itself failed via
-# netlink ("Failed to create bridge docker0 via netlink: operation not permitted") -- a capability restriction
-# of the nested-container environment, not a uid issue (we are root). --bridge=none skips creating Docker's
-# default network entirely, which needs that capability; the only `docker run` below uses --network host so it
-# never needs Docker's own bridge/NAT for outbound connectivity in the first place.
-# Also no CAP_SYS_ADMIN for mounts: confirmed live 2026-11-02, `docker load`/`docker run` failed extracting the
-# suite image's layers via the default overlay2 snapshotter ("failed to unmount ... operation not permitted").
-# --storage-driver=vfs copies layers instead of bind-mounting them, trading layer-sharing/speed for working at
-# all without mount capabilities -- acceptable for this one-off compile job (DISK_GB headroom accounts for it).
-nohup dockerd --iptables=false --bridge=none --storage-driver=vfs > "$W/dockerd.log" 2>&1 &
-for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
-docker info >/dev/null 2>&1 || {
-  echo "dockerd did not become ready" >&2
-  # dockerd.log lives under $W (/workspace/work), not $OUT (/workspace/out); only $OUT gets pulled back by the
-  # launcher's scp, so without this the real failure reason is lost -- exactly what happened on the first live
-  # run (2026-11-02): "dockerd did not become ready" with no further detail to diagnose from.
-  echo "--- dockerd.log ---" >&2
-  cat "$W/dockerd.log" >&2 2>/dev/null
-  exit 1
-}
-docker --version > "$OUT/versions.txt"
+python3 --version > "$OUT/versions.txt"
 
-# 1. Load the Hailo AI Software Suite image. The 9GB tar.gz is staged on the attached network volume (NOT
-# re-uploaded by the launcher if a sha256-verified copy is already there) -- but Docker's own image storage is
-# NOT part of that volume (it lives on this pod's ephemeral container disk), so `docker load` always runs fresh
-# per pod. This is a local decompress + layer-registration, not a network transfer.
+# 1. Extract the Suite image's layers by hand into $ROOTFS (see header for why: no CAP_SYS_ADMIN, so no real
+# Docker daemon is possible here). This is the classic `docker save` tar format: a flat set of
+# "<layer-id>/layer.tar" entries (order within the stream is unrelated to application order) plus a
+# manifest.json (confirmed live 2026-11-02 to be the SECOND-TO-LAST entry in the stream, after every layer) that
+# gives the real per-image layer order and the config blob. AUFS-style whiteout markers (.wh.<name> for a
+# deleted file, .wh..wh..opq for "clear this directory before applying the rest of this layer") are handled by
+# hand to match what a real union filesystem would have done.
 [ -f "$IN/suite.tar.gz" ] || { echo "suite.tar.gz not found in $IN" >&2; exit 1; }
-docker load -i "$IN/suite.tar.gz" | tee "$OUT/docker-load.log"
-docker image inspect "$SUITE_IMAGE_TAG" >/dev/null || {
-  echo "loaded image does not match expected tag $SUITE_IMAGE_TAG; check SUITE_IMAGE_TAG against the actual tar.gz" >&2
-  docker images >&2
-  exit 1
-}
+python3 - "$IN/suite.tar.gz" "$RAWLAYERS" "$ROOTFS" "$ENVFILE" <<'PY'
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
 
-# 2. Hailo Model Zoo, pinned to a Hailo-8-compatible branch (public repo, no auth).
-git clone -q -b "$MODEL_ZOO_REF" https://github.com/hailo-ai/hailo_model_zoo "$W/hailo_model_zoo"
-(cd "$W/hailo_model_zoo" && git rev-parse HEAD > "$OUT/model-zoo-commit.txt")
+suite_tar, raw_layers_dir, rootfs, env_out = sys.argv[1:5]
+os.makedirs(raw_layers_dir, exist_ok=True)
+os.makedirs(rootfs, exist_ok=True)
 
-# 3. Synthetic calibration set (see module header: pipeline validation only, not accuracy-tuned).
-python3 - "$W/calib" "$CALIB_IMAGE_COUNT" "$CALIB_IMAGE_SIZE" <<'PY'
+# Single streaming pass (the file is ~9GB compressed; gzip is not seekable, so re-opening per-layer would mean
+# re-scanning from the start every time -- O(n^2) I/O over a 9GB stream). manifest.json and every small
+# "<id>/json" / "<id>/VERSION" config entry are buffered in memory; each "<id>/layer.tar" is streamed straight
+# to its own file under raw_layers_dir, since we don't yet know which order to apply them in.
+small_files = {}
+layer_count = 0
+with tarfile.open(suite_tar, 'r|*') as t:
+    for member in t:
+        if member.name.endswith('/layer.tar'):
+            layer_id = member.name.split('/', 1)[0]
+            dest = os.path.join(raw_layers_dir, layer_id + '.tar')
+            src = t.extractfile(member)
+            with open(dest, 'wb') as out:
+                shutil.copyfileobj(src, out, length=4 * 1024 * 1024)
+            layer_count += 1
+            print(f'staged layer {layer_count}: {layer_id}', flush=True)
+        elif member.isfile() and member.size < 1_000_000:
+            small_files[member.name] = t.extractfile(member).read()
+
+manifest = json.loads(small_files['manifest.json'])
+entry = manifest[0]
+config = json.loads(small_files[entry['Config']])
+layers = entry['Layers']  # ordered list of "<id>/layer.tar"
+print(f'manifest: {len(layers)} layers in application order', flush=True)
+
+def apply_whiteouts(layer_tar_path, rootfs):
+    with tarfile.open(layer_tar_path, 'r') as lt:
+        for member in lt.getmembers():
+            name = member.name.lstrip('./')
+            if not name:
+                continue
+            parts = name.split('/')
+            base = parts[-1]
+            dirname = '/'.join(parts[:-1])
+            if base == '.wh..wh..opq':
+                target_dir = os.path.join(rootfs, dirname)
+                if os.path.isdir(target_dir):
+                    for e in os.listdir(target_dir):
+                        full = os.path.join(target_dir, e)
+                        if os.path.islink(full) or os.path.isfile(full):
+                            os.remove(full)
+                        else:
+                            shutil.rmtree(full, ignore_errors=True)
+            elif base.startswith('.wh.'):
+                real = base[len('.wh.'):]
+                target = os.path.join(rootfs, dirname, real)
+                if os.path.islink(target) or os.path.isfile(target):
+                    os.remove(target)
+                elif os.path.isdir(target):
+                    shutil.rmtree(target, ignore_errors=True)
+
+for i, layer_path in enumerate(layers, 1):
+    layer_id = layer_path.split('/', 1)[0]
+    raw_path = os.path.join(raw_layers_dir, layer_id + '.tar')
+    print(f'applying layer {i}/{len(layers)}: {layer_id}', flush=True)
+    apply_whiteouts(raw_path, rootfs)
+    # Native tar for the actual extraction: faster and more faithful (preserves modes/owners/symlinks/devices)
+    # than re-implementing extraction in Python. --exclude matches the whiteout marker files themselves so they
+    # never land in the final rootfs (their effect was already applied above).
+    subprocess.run(
+        ['tar', '--same-owner', '-xf', raw_path, '-C', rootfs, '--exclude=.wh.*'],
+        check=True,
+    )
+    os.remove(raw_path)  # reclaim disk as we go; never need more than ~one extra layer's worth of headroom
+
+cfg = config.get('config', {}) or {}
+with open(env_out, 'w') as f:
+    for line in cfg.get('Env') or []:
+        key, _, val = line.partition('=')
+        f.write(f'export {key}={shlex.quote(val)}\n')
+    f.write(f"export HAILO_CHROOT_WORKDIR={shlex.quote(cfg.get('WorkingDir') or '/')}\n")
+
+print('rootfs extraction complete:', rootfs, flush=True)
+PY
+
+# Minimal /dev nodes: a fresh rootfs directory has no device files at all, and without CAP_SYS_ADMIN this script
+# can't bind-mount the pod's real /dev into it. CAP_MKNOD *is* present (confirmed live 2026-11-02 via
+# /proc/self/status), so create the handful of character devices most tools actually touch directly.
+mkdir -p "$ROOTFS/dev"
+[ -e "$ROOTFS/dev/null" ]    || mknod -m 666 "$ROOTFS/dev/null" c 1 3
+[ -e "$ROOTFS/dev/zero" ]    || mknod -m 666 "$ROOTFS/dev/zero" c 1 5
+[ -e "$ROOTFS/dev/random" ]  || mknod -m 666 "$ROOTFS/dev/random" c 1 8
+[ -e "$ROOTFS/dev/urandom" ] || mknod -m 666 "$ROOTFS/dev/urandom" c 1 9
+# /etc/resolv.conf is a plain file, not a live mount -- copy the pod's own in case anything inside the chroot
+# does a DNS lookup (nothing should need to: the Suite's venv and Model Zoo are already baked into the image).
+mkdir -p "$ROOTFS/etc"
+cp -f /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
+
+# 2. Synthetic calibration set (see module header: pipeline validation only, not accuracy-tuned), written
+# directly into the rootfs at a path matching WORKSPACE/calib -- there is no bind-mount to populate it through,
+# so it has to be created at its final chroot-relative location from the start.
+set -a; source "$ENVFILE"; set +a
+WORKSPACE_DIR="${WORKSPACE:-/local/workspace}"
+CALIB_REL="$WORKSPACE_DIR/calib"
+mkdir -p "$ROOTFS$CALIB_REL"
+python3 - "$ROOTFS$CALIB_REL" "$CALIB_IMAGE_COUNT" "$CALIB_IMAGE_SIZE" <<'PY'
 import sys
 from pathlib import Path
 import numpy as np
@@ -142,28 +211,26 @@ for i in range(count):
 print(f"wrote {count} synthetic {size}x{size} calibration images to {out_dir}")
 PY
 
-# 4. Parse, optimize (quantize), compile -- inside the Suite container, which bundles the Dataflow Compiler's
-# Python environment. hailo_model_zoo is pip-installed into the container at run time (not baked into the
-# image), matching the zoo's own documented workflow (`pip install -e .` after cloning).
-docker run --rm --network host \
-  -v "$W/hailo_model_zoo:/local/model_zoo" \
-  -v "$W/calib:/local/calib" \
-  -v "$OUT:/local/out" \
-  "$SUITE_IMAGE_TAG" \
-  bash -c "
-    set -e
-    cd /local/model_zoo
-    pip install -q -e .
-    hailomz parse $MODEL
-    hailomz optimize $MODEL --calib-path /local/calib
-    hailomz compile $MODEL
-    # hailomz's own output path convention is not pinned by Hailo's docs (verified: GETTING_STARTED.rst does
-    # not state where the .hef lands); copy whatever .hef files exist in the working tree rather than guess a
-    # single exact path, and fail if none appear.
-    found=0
-    while IFS= read -r -d '' f; do cp \"\$f\" /local/out/; found=1; done < <(find . -maxdepth 3 -name '*.hef' -print0)
-    [ \"\$found\" = 1 ] || { echo 'no .hef produced' >&2; exit 1; }
-  "
+# 3. Parse, optimize (quantize), compile -- inside the extracted rootfs via chroot. The image already bundles a
+# fully built virtualenv (on $PATH, from $ENVFILE) and its own paired copy of the Hailo Model Zoo ($MZ_DIR) --
+# no `pip install` or `git clone` needed. Environment variables exported above (via `source "$ENVFILE"`) are
+# inherited across chroot() same as any other process attribute, so they don't need to be re-passed.
+MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
+[ -d "$ROOTFS$MZ_REL" ] || { echo "bundled Hailo Model Zoo not found at $MZ_REL inside the extracted image" >&2; exit 1; }
+chroot "$ROOTFS" /bin/bash -c "
+  set -e
+  cd '$MZ_REL'
+  hailomz parse $MODEL
+  hailomz optimize $MODEL --calib-path '$CALIB_REL'
+  hailomz compile $MODEL
+"
+
+# hailomz's own output path convention is not pinned by Hailo's docs (verified: GETTING_STARTED.rst does not
+# state where the .hef lands); search the whole workspace inside the rootfs rather than guess a single exact
+# path, and fail if none appear.
+found=0
+while IFS= read -r -d '' f; do cp "$f" "$OUT/"; found=1; done < <(find "$ROOTFS$WORKSPACE_DIR" -name '*.hef' -print0)
+[ "$found" = 1 ] || { echo "no .hef produced under $WORKSPACE_DIR" >&2; exit 1; }
 
 ls -la "$OUT"/*.hef
 for f in "$OUT"/*.hef; do sha256sum "$f" >> "$OUT/hef.sha256"; done

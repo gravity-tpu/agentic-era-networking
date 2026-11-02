@@ -8,38 +8,42 @@
 # every future run against the same volume), runs scripts/runpod/hailo-compile-pod.sh, downloads the .hef, and
 # ALWAYS terminates the pod on exit (trap). Without --yes it only prints the plan (no pod is created).
 #
-# Why a CPU Pod, not GPU: Docker-in-Docker, which the compile pod needs to load and run the Suite image, is
-# documented as Runpod-CPU-Pod-only -- GPU Pods cannot do Docker-in-Docker on Runpod at all today. Hailo's own
-# Dataflow Compiler system-requirements check treats a GPU as optional, not required, so this is not a
-# capability tradeoff (see src/infra/runpod-budget.ts's 'compile' JobKind comment for the full reasoning).
+# Why a CPU Pod, not GPU: Hailo's own Dataflow Compiler system-requirements check treats a GPU as optional, not
+# required (see src/infra/runpod-budget.ts's 'compile' JobKind comment). Originally chosen for Docker-in-Docker
+# (documented as Runpod-CPU-Pod-only), which the compile pod no longer actually uses -- see
+# hailo-compile-pod.sh's header: this pod's container turned out to have neither CAP_NET_ADMIN nor
+# CAP_SYS_ADMIN, ruling out a real Docker daemon regardless of pod type, so the pod script now extracts the
+# Suite image's layers by hand and chroots into them (CAP_SYS_CHROOT is present). Staying on CPU Pods anyway:
+# cheaper than GPU, and there is still no GPU requirement either way.
 #
 # Prerequisites (one-time, manual, NOT performed by this script):
 #   1. A Hailo Developer Zone account and the downloaded Hailo AI Software Suite Docker bundle (a .zip
 #      containing a .tar.gz of the image) for Hailo-8/8L specifically -- not the Hailo-10H/15H/15L-tagged
 #      default download; check the Developer Zone's release history for a Hailo-8-tagged release.
 #   2. A Runpod network volume: `npm run runpod -- volume-create --name hailo-compile --size-gb 50
-#      --datacenter <id> --yes` (50GB covers the ~9GB image plus the model zoo checkout and output headroom;
-#      size and datacenter are a one-time, deliberate choice -- see scripts/runpod.ts's volume-create docs).
+#      --datacenter <id> --yes` (50GB covers the ~9GB image plus output headroom -- the much larger uncompressed
+#      extraction and chroot work happen on the pod's own ephemeral container disk, not this volume; size and
+#      datacenter are a one-time, deliberate choice -- see scripts/runpod.ts's volume-create docs).
 #
 # Usage: scripts/runpod/launch-hailo-compile.sh --minutes 90 --network-volume-id <id> \
 #          --suite-tar ~/Downloads/hailo8_ai_sw_suite_2026-07.tar.gz [--model mobilenet_v1] \
-#          [--cpu-flavor "cpu5c,cpu3c"] [--vcpu-count 16] [--model-zoo-ref v2.14] [--out DIR] [--yes]
+#          [--cpu-flavor "cpu5c,cpu3c"] [--vcpu-count 16] [--out DIR] [--yes]
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-CPU_FLAVOR="cpu5c"; MINUTES=""; NETWORK_VOLUME_ID=""; SUITE_TAR=""; MODEL="mobilenet_v1"; MODEL_ZOO_REF="v2.14"
-VCPU_COUNT="16"; YES=""; DISK_GB=100; SUITE_IMAGE_TAG=""
+CPU_FLAVOR="cpu5c"; MINUTES=""; NETWORK_VOLUME_ID=""; SUITE_TAR=""; MODEL="mobilenet_v1"
+VCPU_COUNT="16"; YES=""; DISK_GB=100
 OUT="/tmp/zodiac-hailo-compile-$(date -u +%Y%m%dT%H%M%SZ)"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
-IMAGE="${IMAGE:-ubuntu:22.04}"   # the Hailo Suite's own docker-run script documents Ubuntu 20.04/22.04 as
-                                 # the supported host OS; Docker itself is installed inside the pod (step 0 of
-                                 # hailo-compile-pod.sh), not baked into this base image.
+IMAGE="${IMAGE:-ubuntu:22.04}"   # just the pod's own base OS now (no Docker installed into it anymore -- see
+                                 # hailo-compile-pod.sh's header); the Hailo Suite's own docker-run script
+                                 # documents Ubuntu 20.04/22.04 as a supported host OS for its tooling too.
 POLL_SECONDS="${POLL_SECONDS:-60}"   # overridable, matching SSH_READY_SECONDS/CREATE_ROUNDS/CREATE_WAIT below
 
 while [ $# -gt 0 ]; do case "$1" in
   --cpu-flavor) CPU_FLAVOR="$2"; shift 2;; --vcpu-count) VCPU_COUNT="$2"; shift 2;; --minutes) MINUTES="$2"; shift 2;;
   --network-volume-id) NETWORK_VOLUME_ID="$2"; shift 2;; --suite-tar) SUITE_TAR="$2"; shift 2;;
-  --suite-image-tag) SUITE_IMAGE_TAG="$2"; shift 2;; --model) MODEL="$2"; shift 2;; --model-zoo-ref) MODEL_ZOO_REF="$2"; shift 2;;
+  --model) MODEL="$2"; shift 2;;
   --disk-gb) DISK_GB="$2"; shift 2;; --out) OUT="$2"; shift 2;; --yes) YES=--yes; shift;;
   *) echo "unknown arg $1" >&2; exit 2;; esac; done
 [ -n "$MINUTES" ] || { echo "--minutes is required" >&2; exit 2; }
@@ -47,20 +51,13 @@ while [ $# -gt 0 ]; do case "$1" in
 [ -n "$NETWORK_VOLUME_ID" ] || { echo "--network-volume-id is required (see the module header for how to create one)" >&2; exit 2; }
 [ -n "$SUITE_TAR" ] || { echo "--suite-tar is required: path to the downloaded Hailo AI Software Suite .tar.gz" >&2; exit 2; }
 [ -f "$SUITE_TAR" ] || { echo "--suite-tar not found: $SUITE_TAR" >&2; exit 2; }
-# Derived from the tar's filename by convention (hailo8_ai_sw_suite_<date>.tar.gz -> hailo8_ai_sw_suite_<date>:latest),
-# matching the tag Hailo's own docker_run.sh hardcodes for the same file; override with --suite-image-tag if a
-# future release names things differently.
-[ -n "$SUITE_IMAGE_TAG" ] || SUITE_IMAGE_TAG="$(basename "$SUITE_TAR" .tar.gz):latest"
-# --model, --model-zoo-ref and --suite-image-tag are later interpolated, single-quoted, into a double-quoted
-# remote SSH command string (`MODEL='$MODEL' ... nohup ...`). A value containing a single quote would break out
-# of that quoting on the remote root shell. There is no actual privilege boundary crossed here (the operator
-# already has unrestricted root SSH access to the very pod this targets, which they created and will terminate
-# themselves), but validating the charset is cheap and removes the question entirely rather than relying on
-# that reasoning holding up forever.
-for pair in "model:$MODEL" "model-zoo-ref:$MODEL_ZOO_REF" "suite-image-tag:$SUITE_IMAGE_TAG"; do
-  name="${pair%%:*}"; value="${pair#*:}"
-  [[ "$value" =~ ^[A-Za-z0-9._/:-]+$ ]] || { echo "--$name contains characters outside [A-Za-z0-9._/:-]: $value" >&2; exit 2; }
-done
+# --model is later interpolated, single-quoted, into a double-quoted remote SSH command string
+# (`MODEL='$MODEL' ... nohup ...`). A value containing a single quote would break out of that quoting on the
+# remote root shell. There is no actual privilege boundary crossed here (the operator already has unrestricted
+# root SSH access to the very pod this targets, which they created and will terminate themselves), but
+# validating the charset is cheap and removes the question entirely rather than relying on that reasoning
+# holding up forever.
+[[ "$MODEL" =~ ^[A-Za-z0-9._/:-]+$ ]] || { echo "--model contains characters outside [A-Za-z0-9._/:-]: $MODEL" >&2; exit 2; }
 
 echo "computing sha256 of $SUITE_TAR (this is a local hash of a multi-GB file; the operation itself does not touch the network)..."
 SUITE_TAR_SHA256="$(shasum -a 256 "$SUITE_TAR" | awk '{print $1}')"
@@ -142,7 +139,7 @@ fi
 "${SSH[@]}" 'ln -sf /workspace/suite.tar.gz /workspace/in/suite.tar.gz'
 
 git show HEAD:scripts/runpod/hailo-compile-pod.sh | "${SSH[@]}" 'cat > /workspace/in/hailo-compile-pod.sh && chmod +x /workspace/in/hailo-compile-pod.sh'
-"${SSH[@]}" "MODEL='$MODEL' MODEL_ZOO_REF='$MODEL_ZOO_REF' SUITE_IMAGE_TAG='$SUITE_IMAGE_TAG' PROBE_ONLY='${PROBE_ONLY:-}' nohup /workspace/in/hailo-compile-pod.sh > /workspace/out-boot.log 2>&1 &"
+"${SSH[@]}" "MODEL='$MODEL' nohup /workspace/in/hailo-compile-pod.sh > /workspace/out-boot.log 2>&1 &"
 
 mkdir -p "$OUT"
 # Bounded poll loop (Invariant 5), same pattern as launch-eval-lora.sh / launch-train-lora.sh: incremental pull

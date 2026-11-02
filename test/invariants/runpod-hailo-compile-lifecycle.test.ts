@@ -97,21 +97,21 @@ describe('launch-hailo-compile.sh: reuses the Tier 1 reliability patterns, not r
     expect(content).toContain('sha256 mismatch');
   });
 
-  it('validates --model/--model-zoo-ref/--suite-image-tag before interpolating them into a remote SSH command', () => {
-    // These three values are later single-quoted inside a double-quoted SSH command string executed as root on
-    // the pod; a value containing a single quote would break that quoting. Validated here rather than relying
-    // on the (true, but not permanent) observation that the operator already has unrestricted root access to
-    // that same pod via the SSH connection itself.
+  it('validates --model before interpolating it into a remote SSH command', () => {
+    // --model is later single-quoted inside a double-quoted SSH command string executed as root on the pod; a
+    // value containing a single quote would break that quoting. Validated here rather than relying on the
+    // (true, but not permanent) observation that the operator already has unrestricted root access to that
+    // same pod via the SSH connection itself.
     const res = runLaunchScript(['--minutes', '30', '--network-volume-id', 'vol123', '--suite-tar', __filename, '--model', "x'; echo pwned; echo '"]);
     expect(res.status).not.toBe(0);
     expect(res.stderr).toContain('--model contains characters outside');
   });
 
-  it('accepts realistic model/ref/tag values (mobilenet_v1, v2.14, a colon-bearing image tag)', () => {
+  it('accepts a realistic --model value (mobilenet_v1)', () => {
     const tmpTar = path.join(REPO_ROOT, '.tmp-hailo-suite-test2.tar.gz');
     writeFileSync(tmpTar, 'fake suite content');
     try {
-      const res = runLaunchScript(['--minutes', '30', '--network-volume-id', 'vol123', '--suite-tar', tmpTar, '--model', 'mobilenet_v1', '--model-zoo-ref', 'v2.14', '--suite-image-tag', 'hailo8_ai_sw_suite_2026-07:latest']);
+      const res = runLaunchScript(['--minutes', '30', '--network-volume-id', 'vol123', '--suite-tar', tmpTar, '--model', 'mobilenet_v1']);
       expect(res.status).toBe(0);
       expect(res.stderr).not.toContain('contains characters outside');
     } finally {
@@ -130,8 +130,18 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).toContain('/workspace/out/DONE');
   });
 
-  it('verifies the loaded Docker image matches the expected tag rather than assuming it', () => {
-    expect(content).toContain('docker image inspect "$SUITE_IMAGE_TAG"');
+  it('extracts the suite image by hand and chroots into it rather than running a Docker daemon', () => {
+    // This pod's container has neither CAP_NET_ADMIN nor CAP_SYS_ADMIN (confirmed live 2026-11-02), ruling out
+    // a real dockerd regardless of flags -- see the module header for the full story. Checking for an actual
+    // invocation, not just the word (it's discussed in prose comments explaining why there isn't one).
+    expect(content).not.toMatch(/^\s*(nohup\s+)?dockerd\b/m);
+    expect(content).not.toMatch(/^\s*docker (run|load)\b/m);
+    expect(content).toContain('chroot "$ROOTFS"');
+  });
+
+  it('handles AUFS-style whiteout files when applying extracted layers', () => {
+    expect(content).toContain('.wh..wh..opq');
+    expect(content).toContain(".wh.'):");
   });
 
   it('discloses that the synthetic calibration set is for pipeline validation only, not accuracy', () => {
@@ -139,8 +149,11 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).toContain('CALIB_IMAGE_COUNT');
   });
 
-  it('pins the Hailo Model Zoo to a Hailo-8-compatible branch, not master (which targets Hailo-10/15)', () => {
-    expect(content).toMatch(/MODEL_ZOO_REF:-v2\.\d+/);
-    expect(content.toLowerCase()).toContain('hailo-10/15');
+  it('relies on the Hailo Model Zoo bundled in the Suite image rather than cloning a separate copy', () => {
+    // The bundled copy is already version-paired with this exact Suite build (MZ_DIR in the image's own config);
+    // a separately `git clone`d copy pinned to some branch could drift out of sync with it. Checking for an
+    // actual invocation, not just the word (it's discussed in prose comments explaining why there isn't one).
+    expect(content).not.toMatch(/^\s*git clone\b/m);
+    expect(content).toContain('MZ_DIR');
   });
 });
