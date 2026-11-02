@@ -396,6 +396,20 @@ WRAPPER
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
+
+# The CUDA_VISIBLE_DEVICES fix above resolved the hang; live run 2026-11-02 then got all the way into real
+# parsing (downloaded mobilenet_v1.zip successfully, "Initializing the runner...") before failing with a clean
+# but unhelpfully generic exception: "Encountered error during parsing: [Errno 2] No such file or directory" --
+# hailo_model_zoo's own parse_model() catches the real OSError and re-raises a plain Exception with `from None`,
+# discarding both the traceback and (since whatever constructed the original OSError apparently never set a
+# .filename) the specific missing path. Unlike the earlier hang, this failure is fast (a couple of minutes,
+# including the zip download) -- strace's overhead is no longer the problem it was, so it can cheaply pin down
+# exactly which path doesn't exist.
+apt-get install -y -qq strace || echo 'strace install failed on the outer OS (non-fatal; continuing without a trace)' >&2
+strace -f -e trace=openat,open -s 500 -o "$OUT/hailomz-parse-enoent-strace.log" \
+  chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; python3 /tmp/hailomz_wrapper.py 300 parse $MODEL" || true
+grep -B2 'ENOENT' "$OUT/hailomz-parse-enoent-strace.log" 2>/dev/null | tail -40
+
 run_pipeline_step parse 600 "python3 /tmp/hailomz_wrapper.py 300 parse $MODEL"
 run_pipeline_step optimize 3600 "python3 /tmp/hailomz_wrapper.py 1800 optimize $MODEL --calib-path '$CALIB_REL'"
 run_pipeline_step compile 3600 "python3 /tmp/hailomz_wrapper.py 1800 compile $MODEL"
