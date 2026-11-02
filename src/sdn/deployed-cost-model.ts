@@ -166,11 +166,10 @@ export function classifyDeployedAllowShape(rules: readonly IsolationRule[]): Dep
     if (r === undefined || canon(r) !== canon(p)) return no(`rule ${i + 1} is not the measured live policy's ${p.id}, in order`);
   }
   const rest = rules.slice(policy.length);
-  const allowRules: IsolationRule[] = [];
-  for (const r of rest) {
-    if (allowFormProblem(r) !== null) break;
-    allowRules.push(r);
-  }
+  // The allow rules are the leading run of rules of the measured form. Whatever follows the run must be quarantine DROPs and nothing else (checked through
+  // classifyDeployedShape below), so a rule of another form in the middle of the run is refused there, never skipped over and never counted.
+  const firstOther = rest.findIndex((r) => allowFormProblem(r) !== null);
+  const allowRules = firstOther === -1 ? rest : rest.slice(0, firstOther);
   if (allowRules.length === 0) return no(allowFormProblem(rest[0]!) ?? 'no allow rule of the measured form');
   if (BigInt(allowRules.length) > ALLOW_FORM_MAX_RULES) return no(`${allowRules.length} allow rules; only 1 to ${ALLOW_FORM_MAX_RULES} were measured`);
   const ids = new Set(allowRules.map((r) => r.id));

@@ -35,6 +35,7 @@ import {
   DEPLOYED_TOLERANCE_PPM,
   ALLOW_FLOOR_DEPTH,
   ALLOW_FLOOR_PPS,
+  ALLOW_FORM_MAX_RULES,
   classifyDeployedAllowShape,
   classifyDeployedShape,
   DEPLOYED_PAYLOAD_BYTES,
@@ -363,6 +364,9 @@ function checkDeployedCapacity(quarantineRuleIds: readonly string[], reserve: nu
  */
 function checkDeployedAllowCapacity(allowRuleIds: readonly string[], quarantineRuleIds: readonly string[], reserve: number, spec: CapacityBudgetSpec): CapacityVerdict {
   const depth = quarantineRuleIds.length + reserve;
+  if (allowRuleIds.length < 1 || BigInt(allowRuleIds.length) > ALLOW_FORM_MAX_RULES) {
+    return { property: 'A8', status: 'unverifiable', reason: `${allowRuleIds.length} allow rules is outside the measured 1 to ${ALLOW_FORM_MAX_RULES}` }; // the classifier already refuses this; kept so the check does not rely on its caller
+  }
   if (spec.payloadBytes !== DEPLOYED_PAYLOAD_BYTES) {
     return { property: 'A8', status: 'unverifiable', reason: `payload ${spec.payloadBytes} B is outside the measured domain (the allow-rule floor was measured at ${DEPLOYED_PAYLOAD_BYTES} B only)` };
   }
