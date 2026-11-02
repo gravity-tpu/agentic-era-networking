@@ -373,14 +373,19 @@ run_pipeline_step() {
 # hailo_sdk_server's Python source -- so whatever opens a FIFO here does it from native code or creates one at
 # runtime, invisible to a static source grep. Tracing the real `hailomz parse` invocation itself (not just the
 # isolated import, which is a different process and apparently doesn't reach this far) for mkfifo/open/connect
-# calls, bounded to 2 minutes: the hang itself happens shortly after the same TF plugin-registration messages
-# seen in every prior run, not gradually, so there is no need to wait anywhere near the full 600s step timeout
-# to catch it in the act.
+# calls.
+#
+# A 120s bound (an earlier version of this line) was not long enough: that trace only reached as far as routine
+# `requests`/urllib3/charset_normalizer imports (plus one harmless bind() to ::1 -- urllib3's own, unrelated,
+# IPv6-availability probe) before being cut off, nowhere near the actual FIFO wait. 500s leaves the real
+# run_pipeline_step attempt below only a 100s bound of its own if this one doesn't finish in time, but it already
+# doesn't (every attempt so far has hung the full 600s), so this trades a little of that step's own timeout
+# budget for visibility into what happens in the final ~400s that the earlier, shorter trace never reached.
 apt-get install -y -qq strace || echo 'strace install failed on the outer OS (non-fatal; continuing without a trace)' >&2
 # mkfifo(3) is a glibc wrapper around mknod()/mknodat() (with S_IFIFO in the mode bits), not a syscall of its
 # own -- confirmed live 2026-11-02: strace rejected it outright ("invalid system call 'mkfifo'") and exited
 # before ever running the traced command at all, silently wasting that entire diagnostic attempt.
-timeout 120 strace -f -e trace=open,openat,mknod,mknodat,connect,bind -s 500 -o "$OUT/hailomz-parse-strace.log" \
+timeout 500 strace -f -e trace=open,openat,mknod,mknodat,connect,bind -s 500 -o "$OUT/hailomz-parse-strace.log" \
   chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; hailomz parse $MODEL" || true
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
