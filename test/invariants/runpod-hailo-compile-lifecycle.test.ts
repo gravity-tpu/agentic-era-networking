@@ -186,6 +186,13 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).toContain('from hailo_model_zoo.main import main');
   });
 
+  it('disables CUDA device enumeration (the faulthandler dump pinned the hang inside TFE_NewContext)', () => {
+    // The watchdog dump showed every attempt blocking inside TensorFlow's own eager-context init, immediately
+    // after repeated "Unable to register cuDNN/cuBLAS factory: ... already registered" warnings -- TF's CUDA/XLA
+    // plugin-registration machinery runs its full GPU-backend discovery dance even with no GPU driver at all.
+    expect(content).toContain('export CUDA_VISIBLE_DEVICES=-1');
+  });
+
   it('diagnoses a hung pipeline step instead of waiting silently for hours', () => {
     // Confirmed live 2026-11-02: with every known abort fixed, the pipeline got past every import and then hung
     // with zero further output for 4+ hours until the launcher's own poll budget ran out and killed the pod --

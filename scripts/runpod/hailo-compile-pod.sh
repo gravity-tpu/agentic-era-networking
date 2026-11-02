@@ -295,19 +295,23 @@ MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
 # native aborts that still route back through the interpreter's signal handling.
 export PYTHONFAULTHANDLER=1
 # A live hang diagnosis (2026-11-02) showed /proc/<pid>/status's Cpus_allowed_list spanning 14-16 scattered,
-# non-contiguous CPU indices up to core 249-253 (e.g. "9,22,28,30,34,68,100,121,137,150,156,158,162,196,228,249")
-# -- this CPU pod's cpuset is pinned to specific cores on a much larger shared physical host, not a clean
-# contiguous range. TensorFlow spawns a thread per visible CPU by default for its inter/intra-op thread pools;
-# a bounded strace of `hailomz parse` then showed every single one of those ~35 threads simultaneously idling in
-# the same futex/restart_syscall wait state when the diagnostic window closed -- consistent with thread-pool
-# initialization against this scattered topology being unusually slow or stuck, not a classic single-thread
-# deadlock. Capping TensorFlow's thread pools and OpenMP explicitly (standard, documented TF/OMP env vars) avoids
-# whatever it does internally with an oddly-reported cpuset, rather than digging further into TF's own NUMA/
-# thread-placement logic for a CPU-only compile job that was never going to benefit from dozens of threads
-# anyway.
+# non-contiguous CPU indices up to core 249-253 -- this CPU pod's cpuset is pinned to specific cores on a much
+# larger shared physical host, not a clean contiguous range. Capping TensorFlow's thread pools and OpenMP
+# explicitly (standard, documented env vars) rules out thread-pool sizing against that topology as the cause --
+# it wasn't: a later run with these set hung identically. Left in place as cheap, harmless insurance (a CPU-only
+# compile job for one small model was never going to benefit from dozens of threads anyway), but see the
+# faulthandler-watchdog-derived fix below for what the hang actually was.
 export TF_NUM_INTEROP_THREADS=4
 export TF_NUM_INTRAOP_THREADS=4
 export OMP_NUM_THREADS=4
+# A faulthandler watchdog dump (below) pinned the hang precisely: every attempt blocks inside TensorFlow's own
+# TFE_NewContext() (eager context initialization), called from hailo_model_optimization's module-level
+# `tf.constant(0.0) + 1.0`, immediately after repeated "Unable to register cuDNN/cuBLAS factory: ... already
+# registered" warnings -- TF's CUDA/XLA plugin-registration machinery still runs its full GPU-backend discovery
+# dance even on a machine with no GPU driver at all (every libcuda.so.1 open already fails with ENOENT). Setting
+# the standard CUDA_VISIBLE_DEVICES=-1 tells TensorFlow to skip GPU enumeration entirely rather than attempt it
+# and get stuck partway through on a backend that was never going to be found anyway.
+export CUDA_VISIBLE_DEVICES=-1
 # Checkpointed imports, strace, and a getrandom()/dev-urandom probe (all since removed -- their diagnosis is
 # preserved in git history and in the /proc/self/exe and FIFO-bridge fixes above) found and fixed two real
 # aborts in turn. With both fixed, live run 2026-11-02 got past every import and all the way into the actual
