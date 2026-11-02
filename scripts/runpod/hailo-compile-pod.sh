@@ -347,10 +347,17 @@ run_pipeline_step() {
 # exe") like line 400's call was assumed to be (that assumption, based on proximity alone and not verified, was
 # wrong). Reaching for strace again (it already found the real cause once, for the line-400 check) instead of
 # guessing a second time from source-line proximity.
-chroot "$ROOTFS" /bin/bash -c "apt-get update -qq && apt-get install -y -qq strace" \
-  || echo 'strace install failed inside chroot (non-fatal; continuing without a trace)' >&2
-chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; strace -f -s 2000 -o /tmp/hailo-sdk-client-strace2.log python3 -c 'import hailo_sdk_client'" || true
-cp "$ROOTFS/tmp/hailo-sdk-client-strace2.log" "$OUT/hailo-sdk-client-strace2.log" 2>/dev/null || echo "no second strace log produced" >&2
+#
+# `apt-get install strace` *inside* the chroot (an earlier version of this line) failed on a later run: the
+# Suite's own extracted rootfs has no gpgv/gpgv2/gpgv1 binary, so apt there can't verify any repo signature at
+# all ("gpgv, gpgv2 or gpgv1 required for verification") -- a pre-existing gap in the image itself, unrelated to
+# anything this script controls. No need to fix that: chroot doesn't create a new PID namespace, so a chrooted
+# process's PID is a normal PID in the outer, unchrooted shell too -- strace can be installed on the OUTER pod
+# OS (apt there has been working fine all along, e.g. for python3/pip) and trace straight through the chroot()
+# call from outside, with no dependency on the inner rootfs's own (broken) package management at all.
+apt-get install -y -qq strace || echo 'strace install failed on the outer OS (non-fatal; continuing without a trace)' >&2
+strace -f -s 2000 -o "$OUT/hailo-sdk-client-strace2.log" \
+  chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; python3 -c 'import hailo_sdk_client'" || true
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
