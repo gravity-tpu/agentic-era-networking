@@ -55,7 +55,15 @@ apt-get update -qq && apt-get install -y -qq docker.io python3 python3-pip
 pip install -q --break-system-packages pillow numpy || pip install -q pillow numpy
 nohup dockerd > "$W/dockerd.log" 2>&1 &
 for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
-docker info >/dev/null 2>&1 || { echo "dockerd did not become ready" >&2; exit 1; }
+docker info >/dev/null 2>&1 || {
+  echo "dockerd did not become ready" >&2
+  # dockerd.log lives under $W (/workspace/work), not $OUT (/workspace/out); only $OUT gets pulled back by the
+  # launcher's scp, so without this the real failure reason is lost -- exactly what happened on the first live
+  # run (2026-11-02): "dockerd did not become ready" with no further detail to diagnose from.
+  echo "--- dockerd.log ---" >&2
+  cat "$W/dockerd.log" >&2 2>/dev/null
+  exit 1
+}
 docker --version > "$OUT/versions.txt"
 
 # 1. Load the Hailo AI Software Suite image. The 9GB tar.gz is staged on the attached network volume (NOT

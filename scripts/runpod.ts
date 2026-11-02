@@ -283,8 +283,15 @@ function shellQuote(s: string): string {
 
 function wrapCommand(cmd: string | undefined, timeoutSeconds: bigint, withSsh: boolean): string[] {
   const inner = cmd === undefined ? `sleep ${timeoutSeconds.toString()}` : cmd;
-  // The image's /start.sh brings up sshd (from PUBLIC_KEY) and then blocks; run it beside the bounded command.
-  const ssh = withSsh ? '(/start.sh &) ; ' : '';
+  // Runpod's own images (e.g. runpod/pytorch, used by score/sweep/train) ship a /start.sh that brings up sshd
+  // from $PUBLIC_KEY. A plain base image (e.g. ubuntu:22.04, used by --kind compile) has neither /start.sh nor
+  // an SSH server at all -- confirmed live 2026-11-01: 4 CPU pods created successfully but none ever accepted
+  // SSH, because `(/start.sh &)` silently no-ops (file not found) and nothing else starts sshd. Fall back to
+  // installing and starting it by hand so --ssh-pubkey works on any Debian/Ubuntu-based image, not just
+  // Runpod's own templates.
+  const ssh = withSsh
+    ? `(if [ -x /start.sh ]; then /start.sh & else (apt-get update -qq && apt-get install -y -qq openssh-server && mkdir -p /run/sshd ~/.ssh && echo "$PUBLIC_KEY" >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys && /usr/sbin/sshd -D &) ; fi) ; `
+    : '';
   const script = `${ssh}timeout -k ${KILL_GRACE_SECONDS} ${timeoutSeconds.toString()} bash -c ${shellQuote(inner)}; exit $?`;
   return ['bash', '-c', script];
 }
