@@ -144,6 +144,10 @@ describe('Neon DB Historical Downsampling Engine', () => {
       latencyP50Us: 320n,
       latencyP99Us: 480n,
       usbThroughputKbps: 45n,
+      coral1Ips: 0n,
+      coral2Ips: 0n,
+      coral1LatencyP50Us: 0n,
+      coral2LatencyP50Us: 0n,
     }));
 
     const downsampled = downsampleCoralPoints(rawCoral, 100);

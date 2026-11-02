@@ -22,7 +22,7 @@ import { checkCapacityBudget } from '../../src/sdn/capacity-budget.js';
 import { buildPort1IsolationPolicy, type IsolationRule } from '../../src/sdn/port1-isolation.js';
 import { FlowModCommand } from '../../src/sdn/openflow-types.js';
 
-const policy = (): IsolationRule[] => buildPort1IsolationPolicy(undefined, undefined, undefined, MEASURED_UPLINK_ARP_PEERS);
+const policy = (): IsolationRule[] => [...buildPort1IsolationPolicy(undefined, undefined, undefined, MEASURED_UPLINK_ARP_PEERS)];
 const mac = (n: number): string => `02:00:00:00:00:${n.toString(16).padStart(2, '0')}`;
 const allow = (n: number, over: Partial<{ priority: number; outputPorts: number[]; match: Record<string, unknown>; command: FlowModCommand }> = {}): IsolationRule => ({
   id: `allow-${n}`,

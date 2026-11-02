@@ -25,13 +25,13 @@
  *   node --experimental-strip-types scripts/eval-lora-llama-server.ts --mode both [--host http://127.0.0.1:11436]
  */
 
-import { QUARANTINE_PRECEDENCE_INTENT, PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, TAP_RETURN_ISOLATION_INTENT, type NetworkIntent } from '../src/sdn/intents.ts';
+import { QUARANTINE_PRECEDENCE_INTENT, PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../src/sdn/intents.ts';
+import type { IntentSpec } from '../src/sdn/intent-spec.ts';
 import { proposerPrompts, type PromptVersion } from '../src/sdn/proposer-prompt.js';
-import { parseProposal, triageProposal, type TriageVerdict } from '../src/sdn/proposal-triage.js';
+import { parseProposal, triageProposal, type Triage } from '../src/sdn/proposal-triage.js';
 import {
   REVIEWER_TECHNICAL_SYSTEM_PROMPT,
   validateReviewFormat,
-  type ReviewValidationResult,
 } from '../src/sdn/reviewer-lora-dataset.ts';
 
 export const DEFAULT_HOST = 'http://127.0.0.1:11436';
@@ -78,7 +78,7 @@ export interface ProposerTurnResult {
   readonly turn: number;
   readonly wallNs: bigint;
   readonly content: string;
-  readonly triage: TriageVerdict | { category: string; categories: readonly string[]; details: readonly string[] };
+  readonly triage: Triage | { category: string; categories: readonly string[]; details: readonly string[] };
 }
 
 export interface ProposerTestResult {
@@ -178,14 +178,14 @@ export async function runReviewerEvaluation(
     wallNs,
     response: content,
     valid,
-    error,
+    ...(error === undefined ? {} : { error }),
   };
 }
 
 export async function runProposerEvaluation(
   host: string,
   model = 'qwen3.8-27b-proposer-lora',
-  intent: NetworkIntent = QUARANTINE_PRECEDENCE_INTENT,
+  intent: IntentSpec = QUARANTINE_PRECEDENCE_INTENT,
   promptVersion: PromptVersion = 'v3',
   maxTurns = 2,
 ): Promise<ProposerTestResult> {

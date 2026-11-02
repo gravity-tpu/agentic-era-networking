@@ -221,7 +221,7 @@ def main():
                 sat = [s for s in steps if s.get('saturated')]
                 cap = sat[0]['medianBusyDeliveredPps'] if sat else None
                 log(f'  k={k}: capacity {cap if cap is not None else "not reached"} pps')
-                results.append({'round': rnd, 'k': k, 'quarantines': a.allow_quarantines if allow_js is not None else k, 'idlePps': round(idle, 2), 'capacityPps': cap, 'steps': steps})
+                results.append({'round': rnd, 'k': k, 'quarantines': a.allow_quarantines if allow_js is not None else k, 'idlePps': round(idle), 'capacityPps': cap, 'steps': steps})
                 json.dump(results, open(os.path.join(a.out, 'results.json'), 'w'))
                 set_quarantines(0)
                 time.sleep(8)

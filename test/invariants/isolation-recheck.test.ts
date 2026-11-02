@@ -34,7 +34,7 @@ const policy = buildPort1IsolationPolicy();
 const flowMods = policy.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
 const tableMissMod = buildOfpFlowMod({ command: FlowModCommand.OFPFC_ADD, priority: 0 }, 99);
 
-const entriesOf = (bufs: readonly Buffer[]): FlowStatsEntry[] => parseFlowStatsReply(replyOf(bufs)).entries;
+const entriesOf = (bufs: readonly Buffer[]): FlowStatsEntry[] => [...parseFlowStatsReply(replyOf(bufs)).entries];
 const faithful = (): FlowStatsEntry[] => entriesOf([entryFrom(tableMissMod), ...flowMods.map((fm) => entryFrom(fm))]);
 const leaky = (): FlowStatsEntry[] => {
   const bufs = [entryFrom(tableMissMod), ...flowMods.map((fm) => entryFrom(fm))];

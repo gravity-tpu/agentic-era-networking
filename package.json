@@ -13,7 +13,7 @@
     "build": "prisma generate && tsc && node --experimental-strip-types scripts/build-assets.ts",
     "build:server": "prisma generate && tsc",
     "build:assets": "node --experimental-strip-types scripts/build-assets.ts",
-    "check-types": "tsc --noEmit && tsc --project tsconfig.api.json --noEmit",
+    "check-types": "tsc --noEmit && tsc --project tsconfig.api.json --noEmit && tsc --project tsconfig.test.json",
     "check:provenance": "node --experimental-strip-types scripts/check-provenance.ts",
     "lint:md": "markdownlint -c .markdownlint.json \"**/*.md\" --ignore node_modules",
     "lint:md:fix": "markdownlint -c .markdownlint.json --fix \"**/*.md\" --ignore node_modules",

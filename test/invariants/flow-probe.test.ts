@@ -27,7 +27,7 @@ import {
 import { MAX_READBACK_RAW_BYTES, readFlowStats, readFlowStatsRaw } from '../../src/sdn/flow-readback.js';
 import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
-import { applyActions, entryFrom, otherAction, outputAction, replyOf } from '../helpers/flow-stats-fixtures.js';
+import { applyActions, asFlowStatsSource, entryFrom, otherAction, outputAction, replyOf } from '../helpers/flow-stats-fixtures.js';
 
 const policy = buildPort1IsolationPolicy();
 const flowMods = policy.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
@@ -203,28 +203,28 @@ describe('raw-capturing readback', () => {
   it('returns the entries and the raw reply bytes, and readFlowStats still returns the entries alone', async () => {
     const first = replyOf(faithful().slice(0, 2), true);
     const second = replyOf(faithful().slice(2));
-    const raw = await readFlowStatsRaw(new FakeSession([first, second]), 1000);
+    const raw = await readFlowStatsRaw(asFlowStatsSource(new FakeSession([first, second])), 1000);
     expect(raw.replies.map((b) => b.toString('hex'))).toEqual([first.toString('hex'), second.toString('hex')]);
     expect(raw.entries).toHaveLength(faithful().length);
-    const entries = await readFlowStats(new FakeSession([first, second]), 1000);
+    const entries = await readFlowStats(asFlowStatsSource(new FakeSession([first, second])), 1000);
     expect(entries).toHaveLength(faithful().length);
   });
 
   it('ignores replies for another xid', async () => {
     const s = new FakeSession([replyOf(faithful())]);
-    const p = readFlowStatsRaw(s, 1000);
+    const p = readFlowStatsRaw(asFlowStatsSource(s), 1000);
     s.emit('multipartReply', 999, replyOf([entryFrom(tableMissMod)]));
     expect((await p).entries).toHaveLength(faithful().length);
   });
 
   it('aborts when the raw bytes exceed the cap, even if no entries accumulate', async () => {
     const many = Array.from({ length: 4 }, () => replyOf([], true));
-    await expect(readFlowStatsRaw(new FakeSession(many), 1000, 512, 40)).rejects.toThrow(/raw bytes/);
+    await expect(readFlowStatsRaw(asFlowStatsSource(new FakeSession(many)), 1000, 512, 40)).rejects.toThrow(/raw bytes/);
     expect(MAX_READBACK_RAW_BYTES).toBeGreaterThan(0);
   });
 
   it('times out when the switch never answers', async () => {
-    await expect(readFlowStatsRaw(new FakeSession([]), 30)).rejects.toThrow(/timed out/);
+    await expect(readFlowStatsRaw(asFlowStatsSource(new FakeSession([])), 30)).rejects.toThrow(/timed out/);
   });
 });
 

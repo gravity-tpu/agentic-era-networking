@@ -285,6 +285,10 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
           latencyP50Us: 380n,
           latencyP99Us: 490n,
           usbThroughputKbps: 1200n,
+          coral1Ips: 0n,
+          coral2Ips: 0n,
+          coral1LatencyP50Us: 0n,
+          coral2LatencyP50Us: 0n,
         },
       ],
     };
@@ -293,10 +297,10 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
     const deserialized = deserializeTelemetryState(serialized);
     expect(deserialized).not.toBeNull();
     expect(deserialized?.timeSeries).toHaveLength(1);
-    expect(deserialized?.timeSeries[0].rxBytes).toBe(1048576n);
-    expect(deserialized?.timeSeries[0].ports?.[1]?.rxRateBps).toBe(51200n);
-    expect(deserialized?.jetsonTimeSeries[0].ramUsedBytes).toBe(2147483648n);
-    expect(deserialized?.coralTimeSeries[0].inferencesPerSecond).toBe(125n);
+    expect(deserialized?.timeSeries[0]?.rxBytes).toBe(1048576n);
+    expect(deserialized?.timeSeries[0]?.ports?.[1]?.rxRateBps).toBe(51200n);
+    expect(deserialized?.jetsonTimeSeries[0]?.ramUsedBytes).toBe(2147483648n);
+    expect(deserialized?.coralTimeSeries[0]?.inferencesPerSecond).toBe(125n);
 
     // Test atomic file write & load
     const tmpTestFile = path.join(os.tmpdir(), `test-zodiac-state-${Date.now()}.json`);
@@ -307,7 +311,7 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
 
       const loaded = loadTelemetryState(tmpTestFile);
       expect(loaded).not.toBeNull();
-      expect(loaded?.jetsonTimeSeries[0].sdnPortRateBps).toBe(125000n);
+      expect(loaded?.jetsonTimeSeries[0]?.sdnPortRateBps).toBe(125000n);
     } finally {
       if (fs.existsSync(tmpTestFile)) {
         fs.unlinkSync(tmpTestFile);
@@ -329,13 +333,13 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
       timestampMs: baseTime + i * 24_000,
       cpuUtilizationPct: 10,
       gpuUtilizationPct: 50,
-      gpuMemoryUsedBytes: '2000000000',
-      ramUsedBytes: '60000000000',
+      gpuMemoryUsedBytes: 2_000_000_000n,
+      ramUsedBytes: 60_000_000_000n,
       tokensPerSecond: 72,
       promptTokensPerSecond: 2000,
-      totalPromptTokens: String(i * 1000),
-      totalCompletionTokens: String(i * 200),
-      totalTokens: String(i * 1200),
+      totalPromptTokens: BigInt(i * 1000),
+      totalCompletionTokens: BigInt(i * 200),
+      totalTokens: BigInt(i * 1200),
     }));
 
     const maxRelayPoints = 150;
@@ -378,7 +382,7 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
       cpuUtilizationPct: 12,
     }));
     const incomingLive = Array.from({ length: 10 }, (_, i) => ({
-      timestampMs: existing[existing.length - 1].timestampMs + (i + 1) * 2000,
+      timestampMs: (existing[existing.length - 1]?.timestampMs ?? 0) + (i + 1) * 2000,
       cpuUtilizationPct: 20,
     }));
     const incoming = [...incomingHistorical, ...incomingLive];
@@ -394,11 +398,11 @@ describe('Zodiac FX Hardware Telemetry Invariants', () => {
     expect(merged[0]?.timestampMs).toBe(time0158);
 
     // Invariant: The latest live point must be preserved
-    expect(merged[merged.length - 1]?.timestampMs).toBe(incomingLive[incomingLive.length - 1].timestampMs);
+    expect(merged[merged.length - 1]?.timestampMs).toBe(incomingLive[incomingLive.length - 1]?.timestampMs);
 
     // Invariant: Strict monotonicity
     for (let i = 1; i < merged.length; i++) {
-      expect(merged[i].timestampMs).toBeGreaterThan(merged[i - 1].timestampMs);
+      expect(merged[i]?.timestampMs).toBeGreaterThan(merged[i - 1]?.timestampMs ?? 0);
     }
   });
 });

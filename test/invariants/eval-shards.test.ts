@@ -66,13 +66,13 @@ describe('mergeShards', () => {
     }
   });
   it('refuses a shard that did not run all of its seeds', () => {
-    const short = shard(2, 2, 6);
-    short.trialsJsonl = short.trialsJsonl.split('\n').slice(0, 1).join('\n') + '\n';
+    const full = shard(2, 2, 6);
+    const short = { ...full, trialsJsonl: full.trialsJsonl.split('\n').slice(0, 1).join('\n') + '\n' };
     expect(() => mergeShards([shard(1, 2, 6), short])).toThrow(/ERR_SHARD_SEEDS/);
   });
   it('refuses a trial whose seed belongs to another shard (duplicate across shards)', () => {
-    const bad = shard(2, 2, 6);
-    bad.trialsJsonl = JSON.stringify({ seed: 1, ok: true, category: 'ADMISSIBLE' }) + '\n' + bad.trialsJsonl.split('\n').slice(1).join('\n');
+    const other = shard(2, 2, 6);
+    const bad = { ...other, trialsJsonl: JSON.stringify({ seed: 1, ok: true, category: 'ADMISSIBLE' }) + '\n' + other.trialsJsonl.split('\n').slice(1).join('\n') };
     expect(() => mergeShards([shard(1, 2, 6), bad])).toThrow(/ERR_SHARD_SEEDS/);
   });
   it('refuses an unsharded summary', () => {

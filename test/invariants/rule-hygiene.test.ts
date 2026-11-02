@@ -195,8 +195,9 @@ describe('exactness guards', () => {
   });
 
   it('treats a known field explicitly set to null as unmodelled rather than comparing against it', () => {
-    const nulled = Object.assign({ inPort: 1 }, { etherType: null });
-    const v = checkRuleHygiene([rule('nulled', 100, [2], nulled)]);
+    // Deliberately not a valid match: a known field explicitly set to null, as a caller or a parsed payload could produce.
+    const nulled: unknown = Object.assign({ inPort: 1 }, { etherType: null });
+    const v = checkRuleHygiene([rule('nulled', 100, [2], nulled as FlowModMatchOptions)]);
     expect(v.violations[0]).toMatchObject({ property: 'unmodelled', ruleIds: ['nulled'] });
     expect(v.violations[0]?.detail).toContain('etherType=null');
   });

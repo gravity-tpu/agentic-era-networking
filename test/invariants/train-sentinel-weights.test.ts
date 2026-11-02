@@ -115,7 +115,7 @@ print(json.dumps({
     "target_oracle": target,
 }))
 `;
-    const out = runPython(DRIVER, [SCRIPT_PATH]);
+    const out = runPython<{ value: number; expected: number; hinge_all_nonnegative: boolean; value_saturated: number; l_benign: number; target_standalone: number; target_oracle: number }>(DRIVER, [SCRIPT_PATH]);
 
     it('matches an independently computed oracle for L_benign + lambda * mean(hinge)', () => {
       expect(out.value).toBeCloseTo(out.expected, 6);
@@ -187,7 +187,7 @@ except SystemExit as exc:
     print(json.dumps({"ok": False, "error": str(exc)}))
 `;
     function runLoader(jsonText: string) {
-      return runPython(DRIVER, [SCRIPT_PATH, jsonText]);
+      return runPython<{ ok: boolean; error?: string; weights: number[]; tau: number }>(DRIVER, [SCRIPT_PATH, jsonText]);
     }
 
     it('accepts a well-formed weights+tau payload', () => {

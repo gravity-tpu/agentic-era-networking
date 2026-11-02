@@ -52,7 +52,7 @@ print(json.dumps(out))
 
   it('resolves a morning reading (AM fits, PM would not) to the AM epoch', () => {
     // Wednesday's own DoS Slowloris rows read literally as "10:43", correctly AM.
-    const [[epoch, reason]] = parse([['5/7/2017 10:43', ...WED_WINDOW]]);
+    const [epoch, reason] = parse([['5/7/2017 10:43', ...WED_WINDOW]])[0] ?? [null, 'no row'];
     expect(reason).toBe('ok');
     expect(epoch).toBeCloseTo(1499262180.0, 1); // 2017-07-05 13:43:00 UTC = 10:43 ADT (UTC-3)
   });
@@ -60,19 +60,19 @@ print(json.dumps(out))
   it('resolves an afternoon reading (no AM/PM marker; AM would fall before the window) to the PM epoch', () => {
     // Heartbleed's own CSV rows read literally as "3:12" in the same file as the slowloris row above - only
     // distinguishable from a slowloris-like morning time by checking which reading lands in the capture window.
-    const [[epoch, reason]] = parse([['5/7/2017 3:12', ...WED_WINDOW]]);
+    const [epoch, reason] = parse([['5/7/2017 3:12', ...WED_WINDOW]])[0] ?? [null, 'no row'];
     expect(reason).toBe('ok');
     expect(epoch).toBeCloseTo(1499278320.0, 1); // 2017-07-05 18:12:00 UTC = 15:12 ADT (UTC-3)
   });
 
   it('reports neither_fits when both readings fall outside the measured capture window', () => {
-    const [[epoch, reason]] = parse([['5/7/2017 6:00', ...WED_WINDOW]]); // 06:00 and 18:00 ADT both miss the window
+    const [epoch, reason] = parse([['5/7/2017 6:00', ...WED_WINDOW]])[0] ?? [null, 'no row']; // 06:00 and 18:00 ADT both miss the window
     expect(reason).toBe('neither_fits');
     expect(epoch).toBeNull();
   });
 
   it('reports parse_error for a timestamp that does not match the expected D/M/YYYY H:MM shape', () => {
-    const [[epoch, reason]] = parse([['2017-07-05 10:43:00', ...WED_WINDOW]]);
+    const [epoch, reason] = parse([['2017-07-05 10:43:00', ...WED_WINDOW]])[0] ?? [null, 'no row'];
     expect(reason).toBe('parse_error');
     expect(epoch).toBeNull();
   });

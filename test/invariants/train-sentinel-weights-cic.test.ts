@@ -45,7 +45,7 @@ print(json.dumps({
     'known_attacker_ip': mod.KNOWN_ATTACKER_IP,
 }))
 `;
-    const out = runPython(DRIVER, [SCRIPT_PATH]);
+    const out = runPython<{ train_labels: string[]; holdout_wed_labels: string[]; holdout_fri_labels: string[]; known_attacker_ip: string }>(DRIVER, [SCRIPT_PATH]);
 
     it('trains the margin term on exactly DoS Hulk and DoS GoldenEye (the two highest-volume flood classes)', () => {
       expect(out.train_labels).toEqual(['DoS Hulk', 'DoS GoldenEye']);

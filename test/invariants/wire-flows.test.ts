@@ -17,7 +17,7 @@ import {
   type WireRuleSet,
 } from '../../src/sdn/wire-flows.js';
 
-const rs = (id: string, rules: ReadonlyArray<{ id: string; priority: number; outputPorts: number[]; match: FlowModMatchOptions }>): WireRuleSet => ({ id, rules });
+const rs = (id: string, rules: ReadonlyArray<{ id: string; priority: number; outputPorts: readonly number[]; match: FlowModMatchOptions }>): WireRuleSet => ({ id, rules });
 const flow = (id: string, over: Partial<WireFlow['packet']> & { inPort: number }): WireFlow => ({
   id,
   mode: FlowMode.Real,
