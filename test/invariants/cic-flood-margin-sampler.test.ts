@@ -14,16 +14,18 @@ import { resolve } from 'node:path';
 
 const ROOT = resolve(__dirname, '../..');
 const SAMPLER_SCRIPT = resolve(ROOT, 'scripts/cic-flood-margin-sampler.py');
-const hasNumpy = spawnSync('python3', ['-c', 'import numpy']).status === 0;
+/** A hung child process must fail the test, not block the runner. */
+const PYTHON_TIMEOUT_MS = 60_000;
+const hasNumpy = spawnSync('python3', ['-c', 'import numpy'], { timeout: PYTHON_TIMEOUT_MS }).status === 0;
 
 function runPython(driver: string, args: string[] = []): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync('python3', ['-c', driver, ...args], { encoding: 'utf-8' });
+  const r = spawnSync('python3', ['-c', driver, ...args], { encoding: 'utf-8', timeout: PYTHON_TIMEOUT_MS });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-function lastJson(stdout: string): unknown {
+function lastJson<T = Record<string, unknown>>(stdout: string): T {
   const line = stdout.trim().split('\n').pop() ?? 'null';
-  return JSON.parse(line);
+  return JSON.parse(line) as T;
 }
 
 describe.skipIf(!hasNumpy)('cic-flood-margin-sampler: Bucket', () => {
@@ -46,7 +48,7 @@ print(json.dumps(out))
   it('stops accepting windows once the cap is reached, silently (no error) and without growing past it', () => {
     const r = runPython(DRIVER, [SAMPLER_SCRIPT]);
     expect(r.status, r.stderr).toBe(0);
-    const out = lastJson(r.stdout) as any;
+    const out = lastJson(r.stdout);
     expect(out.full_before).toBe(false);
     expect(out.full_after_one).toBe(false);
     expect(out.full_after_two).toBe(true);
@@ -65,7 +67,7 @@ print(json.dumps({'src_ips': b.src_ips}))
 `;
     const r = runPython(DRIVER2, [SAMPLER_SCRIPT]);
     expect(r.status, r.stderr).toBe(0);
-    expect((lastJson(r.stdout) as any).src_ips).toEqual(['']);
+    expect(lastJson<{ src_ips: string[] }>(r.stdout).src_ips).toEqual(['']);
   });
 });
 
@@ -110,7 +112,7 @@ print(json.dumps({
   it('fills the attack bucket to its cap, excludes benign windows that start after the cutoff epoch, and stops early once every bucket is settled', () => {
     const r = runPython(DRIVER, [SAMPLER_SCRIPT]);
     expect(r.status, r.stderr).toBe(0);
-    const out = lastJson(r.stdout) as any;
+    const out = lastJson<Record<string, unknown> & { windows_by_label: Record<string, number> }>(r.stdout);
     expect(out.hulk_collected).toBe(50); // capped well below the 200 available attack windows
     expect(out.hulk_feature_len).toBe(256); // one row per window: 64 packets x 4 features, flattened
     expect(out.hulk_src_ips_all_attacker).toBe(true);
@@ -141,7 +143,7 @@ stats = s.bucket_frames(iter(frames), idx, {}, benign_bucket=b, benign_cutoff_ep
 print(json.dumps({'collected': len(b.features), 'stopped_early': stats['stopped_early'],
                    'packets_processed': stats['packets_processed']}))
 `;
-    const r = spawnSync('python3', ['-c', DRIVER2, SAMPLER_SCRIPT], { encoding: 'utf-8' });
+    const r = spawnSync('python3', ['-c', DRIVER2, SAMPLER_SCRIPT], { encoding: 'utf-8', timeout: PYTHON_TIMEOUT_MS });
     expect(r.status, r.stderr).toBe(0);
     const out = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
     expect(out.collected).toBe(20);
@@ -160,7 +162,7 @@ try:
 except ValueError:
     print('value_error')
 `;
-    const r = spawnSync('python3', ['-c', DRIVER3, SAMPLER_SCRIPT], { encoding: 'utf-8' });
+    const r = spawnSync('python3', ['-c', DRIVER3, SAMPLER_SCRIPT], { encoding: 'utf-8', timeout: PYTHON_TIMEOUT_MS });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout.trim()).toBe('value_error');
   });

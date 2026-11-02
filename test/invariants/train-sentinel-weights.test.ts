@@ -28,9 +28,9 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
 const SCRIPT_PATH = path.resolve(REPO_ROOT, 'scripts/train-sentinel-weights.py');
 const DATA_DIR = path.resolve(REPO_ROOT, 'docs/benchmarks/results/labelled-runs');
 
-function runPython(driver: string, args: string[] = []): any {
+function runPython<T = Record<string, unknown>>(driver: string, args: string[] = []): T {
   const r = execFileSync('python3', ['-c', driver, ...args], { encoding: 'utf8', timeout: 60000 });
-  return JSON.parse(r.trim().split('\n').pop() ?? '{}');
+  return JSON.parse(r.trim().split('\n').pop() ?? '{}') as T;
 }
 
 describe('scripts/train-sentinel-weights.py --objective margin invariants', () => {
