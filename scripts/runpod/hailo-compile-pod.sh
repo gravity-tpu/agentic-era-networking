@@ -59,12 +59,13 @@ apt-get update -qq && apt-get install -y -qq docker.io python3 python3-pip
 # first attempt's stderr if it fails and the fallback is needed -- it's the first thing an operator would want
 # to see when debugging why the fallback path was taken.
 pip install -q --break-system-packages pillow numpy || pip install -q pillow numpy
-# --iptables=false: this pod's container lacks permission to manage netfilter tables (confirmed live
-# 2026-11-02: "failed to register 'bridge' driver: ... iptables --wait -t nat -N DOCKER: ... Permission denied
-# (you must be root)" despite running as root -- a capability restriction of the nested-container environment,
-# not a uid issue). Without this flag dockerd refuses to start at all. The only `docker run` below uses
-# --network host (see there) so it never needs Docker's own bridge/NAT for outbound connectivity.
-nohup dockerd --iptables=false > "$W/dockerd.log" 2>&1 &
+# This pod's container has no CAP_NET_ADMIN at all (confirmed live 2026-11-02, in two steps): --iptables=false
+# alone still left ip6tables chain setup failing the same way, and then bridge creation itself failed via
+# netlink ("Failed to create bridge docker0 via netlink: operation not permitted") -- a capability restriction
+# of the nested-container environment, not a uid issue (we are root). --bridge=none skips creating Docker's
+# default network entirely, which needs that capability; the only `docker run` below uses --network host so it
+# never needs Docker's own bridge/NAT for outbound connectivity in the first place.
+nohup dockerd --iptables=false --bridge=none > "$W/dockerd.log" 2>&1 &
 for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
 docker info >/dev/null 2>&1 || {
   echo "dockerd did not become ready" >&2
