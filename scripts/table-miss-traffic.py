@@ -63,6 +63,7 @@ def send_frames(hexes):
 
 def observe_pass(label, names, hexes, capture_s, prefix):
     """Starts and verifies the captures, sends, waits, reads. Returns (error dict or None, details). No frame is sent unless every observer is listening."""
+    t0_ms = time.monotonic_ns() // 1_000_000  # the captures end capture_s seconds after this (they start a little later, which the margin below covers)
     started = lib.start_captures(lib.ssh_runner, OBSERVERS, lib.capture_filter(names), int(capture_s), prefix, time.sleep)
     not_listening = {k: v['reason'] for k, v in started.items() if not v['listening']}
     if not_listening:
@@ -72,7 +73,9 @@ def observe_pass(label, names, hexes, capture_s, prefix):
     after = status()
     if not ok:
         return {'label': label, 'error': sent, 'status_before': before}, None
-    time.sleep(8)  # the captures end at their own time limit; the summary is only printed then
+    # The captures end at their own time limit and print their summary only then. A fixed wait after sending raced the end of the capture (2026-11-02, session 2: rpi-hailo's summary
+    # appeared a moment after the read), so wait until the known end plus a margin.
+    time.sleep(lib.seconds_until_capture_end(t0_ms, time.monotonic_ns() // 1_000_000, int(capture_s)))
     results, invalid = lib.read_all(lib.ssh_runner, OBSERVERS, {k: v['base'] for k, v in started.items()})
     return None, {'sent': sent, 'results': results, 'invalid': invalid, 'before': before, 'after': after}
 
