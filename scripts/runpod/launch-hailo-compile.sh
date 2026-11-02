@@ -28,7 +28,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 CPU_FLAVOR="cpu5c"; MINUTES=""; NETWORK_VOLUME_ID=""; SUITE_TAR=""; MODEL="mobilenet_v1"; MODEL_ZOO_REF="v2.14"
-VCPU_COUNT="16"; YES=""; DISK_GB=60; SUITE_IMAGE_TAG=""
+VCPU_COUNT="16"; YES=""; DISK_GB=100; SUITE_IMAGE_TAG=""
 OUT="/tmp/zodiac-hailo-compile-$(date -u +%Y%m%dT%H%M%SZ)"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 IMAGE="${IMAGE:-ubuntu:22.04}"   # the Hailo Suite's own docker-run script documents Ubuntu 20.04/22.04 as

@@ -65,7 +65,11 @@ pip install -q --break-system-packages pillow numpy || pip install -q pillow num
 # of the nested-container environment, not a uid issue (we are root). --bridge=none skips creating Docker's
 # default network entirely, which needs that capability; the only `docker run` below uses --network host so it
 # never needs Docker's own bridge/NAT for outbound connectivity in the first place.
-nohup dockerd --iptables=false --bridge=none > "$W/dockerd.log" 2>&1 &
+# Also no CAP_SYS_ADMIN for mounts: confirmed live 2026-11-02, `docker load`/`docker run` failed extracting the
+# suite image's layers via the default overlay2 snapshotter ("failed to unmount ... operation not permitted").
+# --storage-driver=vfs copies layers instead of bind-mounting them, trading layer-sharing/speed for working at
+# all without mount capabilities -- acceptable for this one-off compile job (DISK_GB headroom accounts for it).
+nohup dockerd --iptables=false --bridge=none --storage-driver=vfs > "$W/dockerd.log" 2>&1 &
 for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
 docker info >/dev/null 2>&1 || {
   echo "dockerd did not become ready" >&2
