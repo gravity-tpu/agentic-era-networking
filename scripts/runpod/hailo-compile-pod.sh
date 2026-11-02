@@ -356,23 +356,49 @@ diagnose_hang() {
 # label, diagnosis timeout (seconds), command. Timeouts are generous and asymmetric: parse is just ONNX
 # import/graph construction (should be fast); optimize (INT8 calibration) and compile (graph allocation) are
 # the parts expected to actually be CPU-heavy and slow, not hung.
-run_pipeline_step() {
-  local label="$1" timeout_s="$2" cmd="$3"
-  echo "--- starting $label ---"
+#
+# Live runs 2026-11-02 showed this hang (wchan "wait_for_partner", inside TensorFlow's eager context init) is
+# genuinely non-deterministic PER INVOCATION of the exact same code, not a fixed bug in one call site: it has
+# hit parse's own tf.constant(0.0)+1.0, optimize's tf.convert_to_tensor on the calibration file list, and (when
+# forced to run first, deliberately, to test whether ordering mattered) even a bare tf.constant(0) in this
+# wrapper script itself -- while the identical code has also succeeded cleanly across several other runs. That
+# rules out a single deterministic root cause fixable by reordering or by any one environment change found so
+# far; it does not rule out retrying. A hang is retried up to 2 times before giving up -- bounded this low
+# because optimize/compile's own per-attempt timeout is already generous (3600s), so a worst case of every step
+# hanging on every attempt needs to stay within the launcher's own --minutes budget. A real exception (like the
+# earlier /dev/shm-caused ENOENT) is not retried: that was a deterministic bug with an actual fix, not something
+# a second attempt of the exact same code would ever resolve on its own.
+run_pipeline_step_once() {
+  local label="$1" timeout_s="$2" cmd="$3" attempt="$4"
+  echo "--- starting $label (attempt $attempt) ---"
   chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; $cmd" &
   local pid=$! waited=0
   while kill -0 "$pid" 2>/dev/null; do
     if [ "$waited" -ge "$timeout_s" ]; then
-      diagnose_hang "$pid" "$label" "$waited"
+      diagnose_hang "$pid" "$label-attempt$attempt" "$waited"
       kill -9 "$pid" 2>/dev/null
       wait "$pid" 2>/dev/null
-      echo "$label killed after ${waited}s with no completion" >&2
-      return 1
+      echo "$label attempt $attempt killed after ${waited}s with no completion" >&2
+      return 2  # hang: distinct from a real exception's exit code, so the retry loop can tell them apart
     fi
     sleep 15
     waited=$((waited + 15))
   done
   wait "$pid"
+}
+
+run_pipeline_step() {
+  local label="$1" timeout_s="$2" cmd="$3"
+  local attempt=1 max_attempts=2 rc
+  while :; do
+    run_pipeline_step_once "$label" "$timeout_s" "$cmd" "$attempt"
+    rc=$?
+    if [ "$rc" -ne 2 ] || [ "$attempt" -ge "$max_attempts" ]; then
+      return "$rc"
+    fi
+    echo "$label hung on attempt $attempt/$max_attempts; retrying (this specific TF eager-context-init hang has been observed to succeed on a later attempt with no code change at all)" >&2
+    attempt=$((attempt + 1))
+  done
 }
 
 # strace (run from the OUTER pod OS -- chroot doesn't create a new PID namespace, so a chrooted process's PID
@@ -397,22 +423,6 @@ import sys
 
 dump_after_seconds = int(sys.argv[1])
 faulthandler.dump_traceback_later(dump_after_seconds, exit=False)
-
-# parse's own first eager-tensor conversion (tf.constant(0.0)+1.0, inside hailo_model_optimization's own
-# module-level code) used to hang the same way optimize's did (_dataset_from_folder's tf.convert_to_tensor on
-# the calibration file list) before CUDA_VISIBLE_DEVICES=-1 was set -- and after that fix, parse now succeeds
-# reliably but optimize still hangs there sometimes, in a completely separate process. Both call sites are
-# TensorFlow's one-time eager context initialization (ctx.ensure_initialized() -> TFE_NewContext()), just
-# triggered from different places; prior live runs already showed this exact code path crash non-deterministically
-# with different symptoms (env.cc:400 vs env.cc:405) depending on timing, suggesting a race during that
-# initialization rather than a single deterministic cause. Forcing it here, in a single-threaded context before
-# hailo_model_zoo's own code (and whatever threads it spins up) gets a chance to race it, is a cheap test of
-# that theory -- if eager context init always happens exactly once per process and the race is about *who*
-# triggers it and *when*, doing it ourselves, first, removes the race entirely regardless of what caused it.
-import tensorflow as tf
-
-tf.constant(0)
-
 sys.argv = ["hailomz"] + sys.argv[2:]
 from hailo_model_zoo.main import main
 

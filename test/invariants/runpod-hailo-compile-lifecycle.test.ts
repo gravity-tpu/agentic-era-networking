@@ -210,6 +210,16 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).toMatch(/kill -9 "\$pid"/);
   });
 
+  it('retries a hung step (but not a real exception) a bounded number of times', () => {
+    // Confirmed live 2026-11-02: the exact same code (TensorFlow's eager context init) hung on some invocations
+    // and succeeded cleanly on others -- including a deliberately-reordered attempt that didn't fix it -- ruling
+    // out a single deterministic cause fixable by any one environment change, but not ruling out that a retry
+    // of the identical, unmodified command might simply succeed.
+    expect(content).toContain('run_pipeline_step_once');
+    expect(content).toMatch(/max_attempts=2/);
+    expect(content).toMatch(/return 2 {2}#/); // the hang path returns a distinct code from a real exception
+  });
+
   it('stubs /proc/self/exe so TensorFlow\'s readlink-based executable-path check does not abort', () => {
     // Confirmed live 2026-11-02 via strace: TensorFlow's tsl/platform/env.cc calls
     // readlink("/proc/self/exe"), gets ENOENT (no live procfs in this hand-built rootfs), and hits a hard CHECK
