@@ -34,14 +34,16 @@ cd "$(git rev-parse --show-toplevel)"
 CPU_FLAVOR="cpu5c"; MINUTES=""; NETWORK_VOLUME_ID=""; SUITE_TAR=""; MODEL="mobilenet_v1"
 VCPU_COUNT="16"; YES=""; DISK_GB=60    # ephemeral container disk, not the network volume. Measured locally
                                         # 2026-11-02: this image's layer.tar contents sum to ~17GB uncompressed
-                                        # total, and hailo-compile-pod.sh deletes each raw layer tar immediately
-                                        # after extracting it, so peak usage never approaches that doubled --
-                                        # 60GB is a generous (~3.5x) margin, not the 100-160GB first guessed
-                                        # before actually measuring it. That earlier guess likely cost real
-                                        # Secure Cloud host matches: every CPU flavor failed on capacity across
-                                        # 10 full retry rounds right after the bump to 160GB (confirmed this pod
-                                        # type's hard ceiling is 160, separately), where capacity had been
-                                        # findable at 60GB before.
+                                        # total; hailo-compile-pod.sh keeps all raw layer tars on disk until
+                                        # every layer has been applied (one turned out to be a `docker save`
+                                        # symlink alias to another layer's tar, needing its target's raw file to
+                                        # still be present regardless of which was staged first), so peak usage
+                                        # is roughly double that, ~34GB. 60GB is a comfortable margin over that,
+                                        # not the 100-160GB first guessed before actually measuring anything.
+                                        # That earlier guess likely cost real Secure Cloud host matches: every
+                                        # CPU flavor failed on capacity across 10 full retry rounds right after
+                                        # the bump to 160GB (confirmed this pod type's hard ceiling is 160,
+                                        # separately), where capacity had been findable at 60GB before.
 OUT="/tmp/zodiac-hailo-compile-$(date -u +%Y%m%dT%H%M%SZ)"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 IMAGE="${IMAGE:-ubuntu:22.04}"   # just the pod's own base OS now (no Docker installed into it anymore -- see

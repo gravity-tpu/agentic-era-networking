@@ -104,13 +104,26 @@ os.makedirs(rootfs, exist_ok=True)
 # Single streaming pass (the file is ~9GB compressed; gzip is not seekable, so re-opening per-layer would mean
 # re-scanning from the start every time -- O(n^2) I/O over a 9GB stream). manifest.json and every small
 # "<id>/json" / "<id>/VERSION" config entry are buffered in memory; each "<id>/layer.tar" is streamed straight
-# to its own file under raw_layers_dir, since we don't yet know which order to apply them in.
+# to its own file under raw_layers_dir, since we don't yet know which order to apply them in. One wrinkle
+# confirmed live 2026-11-02: `docker save` represents at least one layer as a SYMLINK to another layer's
+# layer.tar (presumably a deduplicated empty/identical layer) rather than its own regular-file entry --
+# extractfile() cannot read a symlink's "content" at all in streaming mode ("cannot extract (sym)link as file
+# object"), and the real target can appear either earlier or later in the stream than the symlink itself. Such
+# layers are recorded in `aliases` (id -> target id) instead of staged directly; raw files are kept until the
+# whole extraction finishes (not deleted layer-by-layer) so an alias can always resolve to its target's file
+# regardless of which one was encountered first.
 small_files = {}
+aliases = {}  # layer_id -> target layer_id, for layer.tar entries that are symlinks to another layer's tar
 layer_count = 0
 with tarfile.open(suite_tar, 'r|*') as t:
     for member in t:
         if member.name.endswith('/layer.tar'):
             layer_id = member.name.split('/', 1)[0]
+            if member.issym() or member.islnk():
+                target_id = member.linkname.strip('/').split('/')[-2]
+                aliases[layer_id] = target_id
+                print(f'layer {layer_id} is a link to {target_id}, not staging separately', flush=True)
+                continue
             dest = os.path.join(raw_layers_dir, layer_id + '.tar')
             src = t.extractfile(member)
             with open(dest, 'wb') as out:
@@ -154,8 +167,9 @@ def apply_whiteouts(layer_tar_path, rootfs):
 
 for i, layer_path in enumerate(layers, 1):
     layer_id = layer_path.split('/', 1)[0]
-    raw_path = os.path.join(raw_layers_dir, layer_id + '.tar')
-    print(f'applying layer {i}/{len(layers)}: {layer_id}', flush=True)
+    real_id = aliases.get(layer_id, layer_id)
+    raw_path = os.path.join(raw_layers_dir, real_id + '.tar')
+    print(f'applying layer {i}/{len(layers)}: {layer_id}' + (f' (-> {real_id})' if real_id != layer_id else ''), flush=True)
     apply_whiteouts(raw_path, rootfs)
     # Native tar for the actual extraction: faster and more faithful (preserves modes/owners/symlinks/devices)
     # than re-implementing extraction in Python. --exclude matches the whiteout marker files themselves so they
@@ -164,7 +178,9 @@ for i, layer_path in enumerate(layers, 1):
         ['tar', '--same-owner', '-xf', raw_path, '-C', rootfs, '--exclude=.wh.*'],
         check=True,
     )
-    os.remove(raw_path)  # reclaim disk as we go; never need more than ~one extra layer's worth of headroom
+# Raw layers are kept until every layer has been applied (an aliased layer's target may be needed more than
+# once, or needed again later than its first use), then dropped all at once rather than one at a time.
+shutil.rmtree(raw_layers_dir, ignore_errors=True)
 
 cfg = config.get('config', {}) or {}
 with open(env_out, 'w') as f:
