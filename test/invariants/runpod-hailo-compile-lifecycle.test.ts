@@ -144,6 +144,13 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).toContain(".wh.'):");
   });
 
+  it('creates a writable /dev/shm for POSIX semaphores (multiprocessing needs it)', () => {
+    // Live strace 2026-11-02 caught the exact cause behind hailo_model_zoo's generic "Encountered error during
+    // parsing: [Errno 2] No such file or directory": openat("/dev/shm/sem.<random>", O_CREAT|O_EXCL) failing
+    // because /dev/shm didn't exist in this hand-built /dev at all.
+    expect(content).toContain('mkdir -p "$ROOTFS/dev/shm"');
+  });
+
   it('discloses that the synthetic calibration set is for pipeline validation only, not accuracy', () => {
     expect(content.toLowerCase()).toContain('not accuracy-tuned');
     expect(content).toContain('CALIB_IMAGE_COUNT');

@@ -207,6 +207,15 @@ PY
 # load-bearing; if something downstream genuinely needs a working /dev/null and it's missing, that will surface
 # as its own concrete, diagnosable failure rather than this script refusing to even try.
 mkdir -p "$ROOTFS/dev"
+# /dev/shm: live strace (2026-11-02) caught the exact ENOENT behind hailo_model_zoo's generic "Encountered error
+# during parsing: [Errno 2] No such file or directory" -- openat("/dev/shm/sem.<random>", O_CREAT|O_EXCL) fails
+# because /dev/shm doesn't exist in this hand-built /dev at all (confirmed: the earlier, separate "joblib will
+# operate in serial mode" warning is the exact same underlying cause, just caught gracefully there). /dev/shm is
+# normally a tmpfs mount, which needs CAP_SYS_ADMIN this script doesn't have, but a plain writable directory on
+# the pod's own ephemeral disk satisfies glibc's sem_open()/shm_open() just fine for this single-process job --
+# it only needs the path to exist and be writable, not genuine shared-memory semantics across real containers.
+mkdir -p "$ROOTFS/dev/shm"
+chmod 1777 "$ROOTFS/dev/shm"
 [ -e "$ROOTFS/dev/null" ] || mknod -m 666 "$ROOTFS/dev/null" c 1 3 2>/dev/null || echo "mknod /dev/null failed (no CAP_MKNOD on this host?); continuing" >&2
 [ -e "$ROOTFS/dev/zero" ] || mknod -m 666 "$ROOTFS/dev/zero" c 1 5 2>/dev/null || echo "mknod /dev/zero failed (no CAP_MKNOD on this host?); continuing" >&2
 # /dev/random and /dev/urandom specifically: confirmed live 2026-11-02 that even when mknod is refused here
