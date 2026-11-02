@@ -5,7 +5,7 @@
  * refuse a bridge that is not idle, never count an unsendable flow as agreement.
  */
 import { describe, it, expect } from 'vitest';
-import { runSession, UDP_TAG_BASE, MAX_UDP_TAGS, type Rig, type SessionSet, type RigFlowResult } from '../../src/sdn/wire-session.js';
+import { runSession, UDP_TAG_BASE, MAX_UDP_TAGS, type Rig, type SessionSet, type RigFlowResult, type FlowResult } from '../../src/sdn/wire-session.js';
 import { predictOutcome, type WireFlow, type WireRule } from '../../src/sdn/wire-flows.js';
 import { PORT1_ISOLATION_INTENT } from '../../src/sdn/intents.js';
 
@@ -13,6 +13,16 @@ const refRules: WireRule[] = [
   { id: 'intra', priority: 200, outputPorts: [2, 3], match: { inPort: 1, etherType: 0x0800, srcIp: '10.0.2.0', srcIpPrefixLen: 24, dstIp: '10.0.2.0', dstIpPrefixLen: 24 } },
   { id: 'catch', priority: 100, outputPorts: [3], match: { inPort: 1 } },
 ];
+/** A flow result that was sent (and so carries M1 and M2); fails the test loudly if it was not. */
+function sentFlow(f: FlowResult | undefined): Extract<FlowResult, { sent: true }> {
+  if (f === undefined || !f.sent) throw new Error('expected a flow that was sent');
+  return f;
+}
+/** A flow result that was not sent (and so carries a reason). */
+function unsentFlow(f: FlowResult | undefined): Extract<FlowResult, { sent: false }> {
+  if (f === undefined || f.sent) throw new Error('expected a flow that was not sent');
+  return f;
+}
 const set = (id: string, rules: WireRule[], kind = 'reference'): SessionSet => ({ id, kind, intent: PORT1_ISOLATION_INTENT, rules, body: { label: id, ttlSeconds: 60, rules } });
 const flowA: WireFlow = { id: 'p1-ip-a', mode: 0, observable: [2, 3], packet: { inPort: 1, etherType: 0x0800, srcMac: '02:00:00:00:00:01', dstMac: '02:00:00:00:00:fe', srcIp: '10.0.2.50', dstIp: '10.0.2.52' } };
 const flowB: WireFlow = { id: 'p1-ip-b', mode: 0, observable: [2, 3], packet: { inPort: 1, etherType: 0x0800, srcMac: '02:00:00:00:00:01', dstMac: '02:00:00:00:00:fe', srcIp: '10.0.2.50', dstIp: '8.8.8.8' } };
@@ -48,14 +58,14 @@ describe('runSession', () => {
     expect(out.stoppedBecause).toBeNull();
     const r = out.results[0]!;
     expect(r.installed && r.restored).toBe(true);
-    expect(r.flows.map((f) => f.m1.agrees)).toEqual([true, true]);
+    expect(r.flows.map((f) => sentFlow(f).m1.agrees)).toEqual([true, true]);
   });
 
   it('can fail: a disagreement is recorded as data and the session continues', async () => {
     const log: Log = { calls: [] };
     const rig = fakeRig(log, { override: (id, f) => (id === 'ref' && f.id === 'p1-ip-a' ? [2, 3, 1] : undefined) });
     const out = await runSession(rig, [set('ref', refRules), set('ref2', refRules)], flows, {});
-    expect(out.results[0]!.flows[0]!.m1).toMatchObject({ agrees: false });
+    expect(sentFlow(out.results[0]!.flows[0]).m1).toMatchObject({ agrees: false });
     expect(out.results).toHaveLength(2);
     expect(out.stoppedBecause).toBeNull();
   });
@@ -63,7 +73,7 @@ describe('runSession', () => {
   it('reports M2 against the intent separately from M1', async () => {
     const leakyRules: WireRule[] = [{ id: 'all', priority: 1, outputPorts: [1, 2, 3], match: {} }];
     const out = await runSession(fakeRig({ calls: [] }), [set('leaky', leakyRules, 'model-admissible')], flows, {});
-    const f = out.results[0]!.flows[1]!; // 10.0.2.50 -> 8.8.8.8: the intent allows only the tap
+    const f = sentFlow(out.results[0]!.flows[1]); // 10.0.2.50 -> 8.8.8.8: the intent allows only the tap
     expect(f.m1.agrees).toBe(true);
     expect(f.m2.compliant).toBe(false);
     expect(f.m2.leaks).toContain(2);
@@ -106,7 +116,7 @@ describe('runSession', () => {
 
   it('never counts an unsendable flow as agreement', async () => {
     const out = await runSession(fakeRig({ calls: [] }, { unsendable: 'p1-ip-a' }), [set('a', refRules)], flows, {});
-    const f = out.results[0]!.flows[0]!;
+    const f = unsentFlow(out.results[0]!.flows[0]);
     expect(f.sent).toBe(false);
     expect(f.reason).toBe('no sender');
     expect(f).not.toHaveProperty('m1');

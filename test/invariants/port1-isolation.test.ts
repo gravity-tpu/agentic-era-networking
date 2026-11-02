@@ -23,6 +23,7 @@ import type { IsolationRule } from '../../src/sdn/port1-isolation.js';
 import { parseFlowStatsReply } from '../../src/sdn/dataplane-benchmark.js';
 import { readFlowStats, MAX_READBACK_FLOW_ENTRIES } from '../../src/sdn/flow-readback.js';
 import type { OpenFlowServer } from '../../src/sdn/openflow-server.js';
+import { asFlowStatsSource } from '../helpers/flow-stats-fixtures.js';
 
 /** Collects OXM TLV type headers (uint32) from an encoded FlowMod. */
 function oxmHeaders(buf: Buffer): number[] {
@@ -199,7 +200,7 @@ describe('Port 1 isolation switch readback', () => {
     }
 
     const mockServer = new MockOpenFlowServer();
-    const readPromise = readFlowStats(mockServer, 1000, 2);
+    const readPromise = readFlowStats(asFlowStatsSource(mockServer), 1000, 2);
     // Reply contains 7 entries (table-miss + 6 isolation rules), which exceeds maxEntries = 2
     const replyBuf = flowStatsReplyFrom([tableMiss, ...policyBufs]);
     mockServer.emit('multipartReply', 42, replyBuf);

@@ -120,9 +120,9 @@ describe('AI Reviewer Utils: readErrorBody Invariants', () => {
 
 describe('AI Reviewer Utils: Asynchronous Telemetry Task Registry', () => {
   it('handles non-promises or null gracefully without throwing', () => {
-    expect(() => trackTelemetryTask(null)).not.toThrow();
-    expect(() => trackTelemetryTask(undefined)).not.toThrow();
-    expect(() => trackTelemetryTask('not a promise')).not.toThrow();
+    expect(() => trackTelemetryTask(null as unknown as Promise<unknown>)).not.toThrow();
+    expect(() => trackTelemetryTask(undefined as unknown as Promise<unknown>)).not.toThrow();
+    expect(() => trackTelemetryTask('not a promise' as unknown as Promise<unknown>)).not.toThrow();
   });
 
   it('drains tracked background telemetry tasks upon flushPendingTelemetry', async () => {
@@ -200,8 +200,8 @@ describe('AI Reviewer Utils: buildModelFallbacks Invariants', () => {
       expect(fallbacks.length).toBeGreaterThan(0);
       // Cost control: the cheap 'fast' tier is tried before the expensive 'pro' tier (see
       // buildModelFallbacks' tiers comment) -- gemini-3.8-flash, not gemini-pro-latest, leads.
-      expect(fallbacks[0].provider).toBe('google');
-      expect(fallbacks[0].model).toBe('gemini-3.8-flash');
+      expect(fallbacks[0]?.provider).toBe('google');
+      expect(fallbacks[0]?.model).toBe('gemini-3.8-flash');
     } finally {
       if (orig !== undefined) {
         process.env.SKIP_OLLAMA = orig;
@@ -217,7 +217,7 @@ describe('AI Reviewer Utils: buildModelFallbacks Invariants', () => {
       process.env.PREFER_GEMINI = 'true';
       const fallbacks = buildModelFallbacks();
       expect(fallbacks.length).toBeGreaterThan(0);
-      expect(fallbacks[0].provider).toBe('google');
+      expect(fallbacks[0]?.provider).toBe('google');
     } finally {
       if (orig !== undefined) {
         process.env.PREFER_GEMINI = orig;

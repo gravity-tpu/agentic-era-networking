@@ -6,6 +6,11 @@
  * written by hand. None of it is a capture from the physical switch.
  */
 
+import type { FlowStatsSource } from '../../src/sdn/flow-readback.js';
+
+/** A test fake standing in for the controller's session: it has the four members the readback uses and nothing else, so it is not assignable to the real server type. */
+export const asFlowStatsSource = (fake: unknown): FlowStatsSource => fake as FlowStatsSource;
+
 /** One OUTPUT action (16 bytes). */
 export function outputAction(port: number): Buffer {
   const b = Buffer.alloc(16);

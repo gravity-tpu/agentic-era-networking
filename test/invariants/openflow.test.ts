@@ -28,6 +28,9 @@ import {
 import { OpenFlowServer } from '../../src/sdn/openflow-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
 
+/** A socket 'data' chunk is a Buffer unless an encoding was set; the tests set none, and this keeps the type honest either way. */
+const toBuffer = (chunk: string | Buffer): Buffer => (typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+
 describe('OpenFlow 1.3 Wire Protocol Serialization', () => {
   it('encodes and decodes standard 8-byte OpenFlow headers deterministically', () => {
     const xid = 0x12345678;
@@ -306,11 +309,7 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      const buf = typeof chunk === 'string'
-        ? Buffer.from(chunk, 'utf-8')
-        : Buffer.isBuffer(chunk)
-          ? chunk
-          : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      const buf = toBuffer(chunk);
       switchRx = Buffer.concat([switchRx, buf]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
@@ -357,11 +356,7 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      const buf = typeof chunk === 'string'
-        ? Buffer.from(chunk, 'utf-8')
-        : Buffer.isBuffer(chunk)
-          ? chunk
-          : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      const buf = toBuffer(chunk);
       switchRx = Buffer.concat([switchRx, buf]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
@@ -456,7 +451,7 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      switchRx = Buffer.concat([switchRx, chunk]);
+      switchRx = Buffer.concat([switchRx, toBuffer(chunk)]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
         if (switchRx.length < header.length) break;
@@ -514,7 +509,7 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      switchRx = Buffer.concat([switchRx, chunk]);
+      switchRx = Buffer.concat([switchRx, toBuffer(chunk)]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
         if (switchRx.length < header.length) break;
@@ -606,7 +601,7 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      switchRx = Buffer.concat([switchRx, chunk]);
+      switchRx = Buffer.concat([switchRx, toBuffer(chunk)]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
         if (switchRx.length < header.length) break;
@@ -703,7 +698,7 @@ describe('OpenFlowServer Live Handshake & State Invariants', () => {
     });
 
     switchSocket.on('data', (chunk) => {
-      switchRx = Buffer.concat([switchRx, chunk]);
+      switchRx = Buffer.concat([switchRx, toBuffer(chunk)]);
       while (switchRx.length >= 8) {
         const header = decodeOfpHeader(switchRx);
         if (switchRx.length < header.length) break;

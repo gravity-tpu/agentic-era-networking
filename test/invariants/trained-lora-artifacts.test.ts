@@ -147,7 +147,10 @@ describe('Trained Qwen3.8-27B LoRA Artifacts & Provenance (2026-10-29)', () => {
 
         // Verify lora_B weights are non-zero (proving gradient updates occurred during SFT+DPO)
         const buf = readFileSync(stPath);
-        const firstB = st.header[loraBKeys[0]];
+        const firstKey = loraBKeys[0];
+        if (firstKey === undefined) throw new Error('no lora_B tensor in the header');
+        const firstB = st.header[firstKey];
+        if (firstB === undefined) throw new Error('lora_B tensor missing from the header');
         const start = st.bodyOffset + firstB.data_offsets[0];
         let nonZeroCount = 0;
         for (let i = 0; i < 1024; i += 2) {

@@ -20,7 +20,7 @@ import { applyActions, entryFrom, outputAction, replyOf } from '../helpers/flow-
 const policy = buildPort1IsolationPolicy();
 const flowMods = policy.map((r, i) => buildOfpFlowMod(r.flowMod, i + 1));
 const tableMissMod = buildOfpFlowMod({ command: FlowModCommand.OFPFC_ADD, priority: 0 }, 99);
-const entriesOf = (bufs: readonly Buffer[]): FlowStatsEntry[] => parseFlowStatsReply(replyOf(bufs)).entries;
+const entriesOf = (bufs: readonly Buffer[]): FlowStatsEntry[] => [...parseFlowStatsReply(replyOf(bufs)).entries];
 const readingOf = (entries: FlowStatsEntry[]): IsolationStatus => statusFromReadback(pendingReadbackStatus(), verifyIsolationReadback(policy, entries), 1, 1n);
 const clean = (): IsolationStatus => readingOf(entriesOf([entryFrom(tableMissMod), ...flowMods.map((fm) => entryFrom(fm))]));
 const forwards = (): IsolationStatus => readingOf(entriesOf([entryFrom(tableMissMod, applyActions(outputAction(2))), ...flowMods.map((fm) => entryFrom(fm))]));

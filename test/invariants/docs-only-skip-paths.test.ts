@@ -52,7 +52,7 @@ function prePushDocsOnlyGlobs(): string[] {
   const hook = readFileSync(path.resolve(REPO_ROOT, '.agents/hooks/pre-push'), 'utf-8');
   const match = hook.match(/is_docs_only_push\(\)[\s\S]*?case "\$f" in\s*\n\s*(\S+)\)\s*;;/);
   if (!match) throw new Error('Could not find the is_docs_only_push case-pattern arm in .agents/hooks/pre-push -- the function may have been restructured; update this test\'s regex.');
-  return match[1].split('|');
+  return (match[1] ?? '').split('|');
 }
 
 /** Normalizes a GitHub Actions paths-ignore glob to the equivalent bash extglob-free case pattern
