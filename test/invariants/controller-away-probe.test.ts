@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   OFP_VERSION_1_3,
@@ -465,5 +466,19 @@ describe('closeAndExit (CLI stop path)', () => {
     await closeAndExit({ close: () => Promise.reject(new Error('close blew up')) }, 6, (c) => exits.push(c), (m) => errors.push(m));
     expect(exits).toEqual([6]);
     expect(errors.join(' ')).toMatch(/close blew up/);
+  });
+});
+
+describe('orchestrator judging helpers (offline)', () => {
+  it('passes its own selftest: integer permille ratios, the zero/partial/resumed thresholds, and a line far inside the dropped part of the buffer still seen', () => {
+    const script = fileURLToPath(new URL('../../scripts/controller-away-run.py', import.meta.url));
+    const out = execFileSync('python3', ['-I', script, '--selftest'], { encoding: 'utf-8', timeout: 20_000 });
+    expect(out).toContain('selftest ok');
+  });
+
+  it('has no float division on packet counters and no float seconds for waits', () => {
+    const text = readFileSync(fileURLToPath(new URL('../../scripts/controller-away-run.py', import.meta.url)), 'utf-8');
+    expect(text).not.toMatch(/total \/ r\['sent'\]/);
+    expect(text).not.toMatch(/time\.monotonic\(\)/);
   });
 });

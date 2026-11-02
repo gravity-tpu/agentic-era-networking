@@ -28,14 +28,14 @@ On 2026-11-02 (run of 2026-11-01 ET, [`../controller-outage-2026-11-01/README.md
 
 ## What is predicted
 
-All observations use the earlier frame class: 2,000 pps of 572 B UDP from `agentic-node-01` (10.0.2.50, `eth0`) towards 10.0.0.119 for 12 s, counted on the Jetson tap NIC (`enx9c69d39dd0a6`, the P3 link), idle-corrected, ratio = delivered over sent. Four states:
+All observations use the earlier frame class: 2,000 pps of 572 B UDP from `agentic-node-01` (10.0.2.50, `eth0`) towards 10.0.0.119 for 12 s, counted on the Jetson tap NIC (`enx9c69d39dd0a6`, the P3 link), idle-corrected, ratio = delivered times 1000 over sent, as an integer (permille; the script uses no floats for it). Four states:
 
-- **A. baseline**, bridge up. Known: about 0.987.
+- **A. baseline**, bridge up. Known: about 987 permille (delivered times 1000, divided by sent, integer).
 - **B. no controller before the probe**: the bridge is gone, the probe has not started. Known from the earlier run: 0.
 - **C. probe connected**: the switch has a session with the probe; the probe has installed nothing.
-- **D. after the bridge is back**, after its 10 s settle and a `verified` isolation status. Known: about 0.987.
+- **D. after the bridge is back**, after its 10 s settle and a `verified` isolation status. Known: about 987 permille (delivered times 1000, divided by sent, integer).
 
-"Zero" means a ratio under 0.02 (the earlier zeros were exactly 0; a trickle from ARP or noise stays under this). "Resumed" means a ratio of at least 0.90, the baseline floor the script itself enforces. In between is reported as partial and not forced into a hypothesis.
+"Zero" means a ratio under 20 permille (the earlier zeros were exactly 0; a trickle from ARP or noise stays under this). "Resumed" means a ratio of at least 900 permille, the baseline floor the script itself enforces. In between is reported as partial and not forced into a hypothesis.
 
 Table counters. Before the outage the script reads the switch's counters through the bridge's existing read-only route (`GET /api/zodiac/flows/probe`), call it N0 for `p1-default-tap-only`. The probe reads them at connect (read 1) and 20 s later (read 2).
 
@@ -64,7 +64,7 @@ Prior, stated so it can be wrong: I expect H1 or H2 and put H3 lowest, but I hav
 | `readback_failed` (exit 5) | any | A session was established but the flow-stats request got no usable answer. The readback path works when the bridge uses it, so something differs about a session with no table (the switch may not answer, or answers with an error reply, which the log records). C is still valid as an observation of a session held by a controller that sends nothing. |
 | `bind_failed` (exit 7) | n/a | The bridge (or something) still holds 6633. Nothing was sent. The run is void; check why the stop did not release the port. |
 | any | a second handshake, entries appearing or vanishing between read 1 and read 2, counters that go down, or a packet-in count above 0 | **The probe's own session changed the switch** (or the switch was changing independently). The summary flags `tableChangedDuringSession`, `handshakes` above 1 and `packetIns`. Whatever the first read says is then a state after the probe connected, and the combined reading above is weaker. Packet-ins mean the switch is asking a controller what to do with frames; the probe does not answer, so those frames are not delivered by this path. |
-| any | D not about 0.987, or isolation status not `verified` after | **Recovery was disturbed.** The run is an incident first and a measurement second: stop, read the bridge log, and do not repeat until understood. |
+| any | D not about 987 permille, or isolation status not `verified` after | **Recovery was disturbed.** The run is an incident first and a measurement second: stop, read the bridge log, and do not repeat until understood. |
 
 One more way the result is limited: only one frame class is observed. H2 and H3 differ in what other classes do, and this run does not send any. A second run would send, for example, intra-segment IPv4 matched by the priority-200 rule to P2 and P3, and an ARP frame.
 
@@ -91,7 +91,7 @@ Expected, if the switch reconnects in a few seconds: the probe is finished about
 The script aborts or skips as follows. None needs the owner except the last.
 
 - Preflight fails (no ssh, no passwordless sudo on either host, a probe process already running, the probe CLI missing on the Jetson, isolation not `verified`, quarantines active, not exactly one listener on 6633): nothing is touched.
-- Baseline ratio under 0.90: the neighbor entry or tap capture is not holding. Stops before READY; nothing is disturbed.
+- Baseline ratio under 900 permille: the neighbor entry or tap capture is not holding. Stops before READY; nothing is disturbed.
 - No outage within 300 s of READY: gives up, nothing disturbed.
 - Bridge already back when B ends, or B ended later than D+25: the probe is not started; B and D are still recorded.
 - The probe never prints a first readback line within 48 s: C is skipped, the probe's lines are recorded.

@@ -6,6 +6,7 @@ It does NOT write to the switch: the probe it starts (src/sdn/controller-away-pr
 Run on the Mac with the same setup as scripts/outage-forwarding.py (it creates and removes the sender neighbor entry and the promiscuous tap NIC itself).
 
 Usage: python3 scripts/controller-away-run.py OUT_PREFIX      then paste the owner command when READY is printed.
+       python3 scripts/controller-away-run.py --selftest   runs the offline checks of the judging helpers.
        python3 scripts/controller-away-run.py --plan          prints the timeline, the limits and the owner command, touching nothing.
 Observations, all the same frame class (2,000 pps UDP, 572 B, workload side to the tap NIC, matched by p1-default-tap-only):
   baseline_bridge_up -> [owner stops the bridge] -> no_controller_before_probe -> [probe starts, switch reconnects, probe reads the table]
@@ -15,6 +16,36 @@ Observations, all the same frame class (2,000 pps UDP, 572 B, workload side to t
 import collections, importlib.util, hashlib, json, os, re, shlex, subprocess, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+def now_ms():
+    """Monotonic integer milliseconds: every interval in this script is measured with this, never with float seconds."""
+    return time.monotonic_ns() // 1_000_000
+
+def permille(delivered, sent):
+    """Integer delivery ratio in thousandths; 0 when nothing was sent. A negative delivered (idle-correction overshoot) counts as 0."""
+    if sent <= 0: return 0
+    return max(0, delivered) * 1000 // sent
+
+def judge(pm):
+    """'zero', 'resumed' or 'partial' from a permille ratio, by the pre-registered thresholds."""
+    if pm < ZERO_BELOW_PERMILLE: return 'zero'
+    if pm >= RESUMED_AT_PERMILLE: return 'resumed'
+    return 'partial'
+
+def selftest():
+    assert permille(23689, 24000) == 987 and permille(0, 24000) == 0 and permille(5, 0) == 0 and permille(-3, 24000) == 0 and permille(24000, 24000) == 1000
+    assert judge(0) == 'zero' and judge(19) == 'zero' and judge(20) == 'partial' and judge(899) == 'partial' and judge(900) == 'resumed' and judge(1000) == 'resumed'
+    assert judge(permille(23690, 24000)) == 'resumed' and judge(permille(0, 24000)) == 'zero'
+    seen = {}; pats = {'first_readback': re.compile(r'readback 1[: ]')}
+    for i in range(PROBE_HEAD_LINES + PROBE_TAIL_LINES + 50):      # a target line far inside the part the bounded buffer drops is still seen
+        note_arrival(seen, pats, i, 'noise' if i != PROBE_HEAD_LINES + 10 else 'readback 1: 12 entries, equals_policy')
+    assert seen['first_readback'] == (PROBE_HEAD_LINES + 10, 'readback 1: 12 entries, equals_policy')
+    print('selftest ok')
+
+def note_arrival(seen, patterns, t, line):
+    """Match one line AS IT ARRIVES; record the first time each awaited pattern is seen. Waiting depends on this, never on the bounded output buffer."""
+    for name, rx in patterns.items():
+        if name not in seen and rx.search(line): seen[name] = (t, line)
 spec = importlib.util.spec_from_file_location('lc', os.path.join(HERE, 'layout-capacity-run.py'))
 lc = importlib.util.module_from_spec(spec); spec.loader.exec_module(lc)
 
@@ -32,7 +63,10 @@ OWNER_MARGIN_S = 8
 OUTAGE_SLEEP_S = PROBE_START_DEADLINE_S + PROBE_REMOTE_KILL_S + DETECTION_SLACK_S + OWNER_MARGIN_S   # the owner's sleep: the probe is dead before the bridge starts
 ISOLATION_WATCH_ALERT_S = 150      # 3 polls of 60 s: stay under this for the whole blackout
 BRIDGE_RESTART_ALLOWANCE_S = 6     # about how long the bridge takes to answer again after systemctl start (a few seconds; not measured here)
-BASELINE_MIN_RATIO = 0.90          # below this the preconditions (neighbor entry, promiscuous NIC) are not holding: abort before the outage
+# Delivery ratios are integer permille (delivered * 1000 // sent), never floats (Invariant 2). The earlier run: baseline 987, outage 0, after 987.
+BASELINE_FLOOR_PERMILLE = 900      # below this the preconditions (neighbor entry, promiscuous NIC) are not holding: abort before the outage
+ZERO_BELOW_PERMILLE = 20           # "zero": under this (the earlier zeros were exactly 0)
+RESUMED_AT_PERMILLE = 900          # "resumed": at least this, the baseline floor
 WAIT_FOR_OUTAGE_S = 300            # how long to wait for the owner to stop the bridge
 WAIT_FOR_BRIDGE_BACK_S = 240       # after this the script reports and exits (the owner's command should have restarted it long before)
 PROBE_FIRST_READ_WAIT_S = (PROBE_RECONNECT_WAIT_MS + PROBE_READBACK_TIMEOUT_MS) // 1000 + 5
@@ -87,19 +121,24 @@ def sh(host, cmd, timeout=30):
 class Probe:
     """The read-only probe, run on the Jetson over ssh. Its output lines are collected with a monotonic timestamp."""
     def __init__(self, arp_peers, host):
+        self.patterns = {'first_readback': re.compile(r'readback 1[: ]')}; self.seen = {}; self.result = None
         env = f'ZODIAC_UPLINK_ARP_PEERS={shlex.quote(arp_peers)} ' if arp_peers else ''
         hostarg = f' --host {shlex.quote(host)}' if host else ''
         remote = (f'cd ~/agentic-era-networking && {env}timeout -s KILL {PROBE_REMOTE_KILL_S} node {PROBE_CLI} --overall-ms {PROBE_OVERALL_MS} '
                   f'--reconnect-wait-ms {PROBE_RECONNECT_WAIT_MS} --readback-timeout-ms {PROBE_READBACK_TIMEOUT_MS} --readbacks {PROBE_READBACKS} --interval-ms {PROBE_INTERVAL_MS}{hostarg}')
         self.remote = remote; self.head = []; self.tail = collections.deque(maxlen=PROBE_TAIL_LINES); self.dropped = 0; self.lines_seen = 0; self.lock = threading.Lock(); self.proc = None; self.started = None
     def start(self):
-        self.started = time.monotonic()
+        self.started_ms = now_ms()
         self.proc = subprocess.Popen(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', lc.JETSON, self.remote], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         threading.Thread(target=self._read, daemon=True).start()
     def _read(self):
         for line in self.proc.stdout:
             with self.lock:
-                entry = (time.monotonic(), line.rstrip('\n')); self.lines_seen += 1
+                t = now_ms(); text = line.rstrip('\n'); entry = (t, text); self.lines_seen += 1
+                note_arrival(self.seen, self.patterns, t, text)
+                if text.startswith('RESULT ') and self.result is None:
+                    try: self.result = json.loads(text[len('RESULT '):])
+                    except ValueError: self.result = None
                 if len(self.head) < PROBE_HEAD_LINES: self.head.append(entry)
                 else:
                     if len(self.tail) == self.tail.maxlen: self.dropped += 1
@@ -107,16 +146,15 @@ class Probe:
             log('probe| ' + line.rstrip('\n'))
     def snapshot(self):
         with self.lock: return list(self.head) + list(self.tail)
-    def wait_line(self, pattern, timeout_s):
-        """The first collected line matching `pattern`, or None; also returns early (None) if the probe has exited."""
-        rx = re.compile(pattern); end = time.monotonic() + timeout_s
-        while time.monotonic() < end:
-            for t, l in self.snapshot():
-                if rx.search(l): return t, l
-            if self.proc.poll() is not None: time.sleep(0.3)  # let the reader drain, then look once more
-            for t, l in self.snapshot():
-                if rx.search(l): return t, l
-            if self.proc.poll() is not None: return None
+    def wait_seen(self, name, timeout_s):
+        """(arrival ms, line) of the first line that matched pattern `name`, or None on timeout or if the probe exited without it. Independent of the bounded buffer."""
+        end = now_ms() + timeout_s * 1000
+        while now_ms() < end:
+            with self.lock:
+                if name in self.seen: return self.seen[name]
+            if self.proc.poll() is not None:
+                time.sleep(0.3)  # let the reader drain, then look once more
+                with self.lock: return self.seen.get(name)
             time.sleep(0.2)
         return None
     def finish(self, timeout_s):
@@ -126,11 +164,7 @@ class Probe:
         except subprocess.TimeoutExpired:
             killed = True; log('probe still running at its bound; killing it'); self.kill()
         time.sleep(0.5)
-        result = None
-        for t, l in self.snapshot():
-            if l.startswith('RESULT '):
-                try: result = json.loads(l[len('RESULT '):])
-                except ValueError: result = None
+        with self.lock: result = self.result
         if self.dropped: log(f'probe output: {self.dropped} middle line(s) were not kept in memory ({self.lines_seen} seen; the log has all of them)')
         return self.proc.returncode, result, killed
     def kill(self):
@@ -200,18 +234,22 @@ def table_counters():
         if attempt == 1: time.sleep(PROBE_ROUTE_RETRY_S)
     return {'error': err}
 def observe(label, idle):
-    t_epoch = time.time(); t0 = time.monotonic()
+    t_epoch = int(time.time()); t0 = now_ms()
     r = lc.step(2000)
     total, med, bins = lc.delivered_stats(r['series'], idle)
     try: up = bridge_up()
     except Exception as e: up = f'unknown ({e})'
-    RES[label] = {'sent': r['sent'], 'delivered': round(total), 'ratio': round(total / r['sent'], 4) if r['sent'] else 0, 'medianBusyPps': round(med),
-                  'startedEpoch': round(t_epoch, 1), 'durationS': round(time.monotonic() - t0, 1), 'startedEt': lc.now_et(), 'bridgeUpAtEnd': up}
-    log(f'{label}: sent {r["sent"]}, delivered {round(total)}, ratio {RES[label]["ratio"]:.3f}, bridge up at end: {up}')
+    delivered = round(total)   # the sampler's idle-corrected total (from the layout-capacity harness) rounded once to an integer packet count
+    pm = permille(delivered, r['sent'])
+    RES[label] = {'sent': r['sent'], 'delivered': delivered, 'ratioPermille': pm, 'judgement': judge(pm), 'medianBusyPps': round(med),
+                  'startedEpochS': t_epoch, 'durationMs': now_ms() - t0, 'startedEt': lc.now_et(), 'bridgeUpAtEnd': up}
+    log(f'{label}: sent {r["sent"]}, delivered {delivered}, ratio {pm} permille ({judge(pm)}; zero is under {ZERO_BELOW_PERMILLE}, resumed is at least {RESUMED_AT_PERMILLE}), bridge up at end: {up}')
     return RES[label]
 
 def main():
     global OUT
+    if sys.argv[1:] == ['--selftest']:
+        selftest(); return 0
     if sys.argv[1:] == ['--plan']:
         print(plan_text()); return 0
     if len(sys.argv) != 2: raise SystemExit(__doc__)
@@ -220,7 +258,7 @@ def main():
             'senderSha256': hashlib.sha256(lc.SENDER_SRC.encode()).hexdigest(),
             'probeCliSha256': lc.run(lc.JETSON, f'sha256sum {PROBE_CLI}').split()[0], 'jetsonRepo': lc.run(lc.JETSON, 'cd ~/agentic-era-networking && git rev-parse HEAD && git rev-parse --abbrev-ref HEAD').split(),
             'limits': {'probeOverallMs': PROBE_OVERALL_MS, 'reconnectWaitMs': PROBE_RECONNECT_WAIT_MS, 'readbackTimeoutMs': PROBE_READBACK_TIMEOUT_MS, 'readbacks': PROBE_READBACKS, 'intervalMs': PROBE_INTERVAL_MS,
-                       'remoteKillS': PROBE_REMOTE_KILL_S, 'startDeadlineS': PROBE_START_DEADLINE_S, 'ownerSleepS': OUTAGE_SLEEP_S, 'baselineMinRatio': BASELINE_MIN_RATIO}}
+                       'remoteKillS': PROBE_REMOTE_KILL_S, 'startDeadlineS': PROBE_START_DEADLINE_S, 'ownerSleepS': OUTAGE_SLEEP_S, 'baselineFloorPermille': BASELINE_FLOOR_PERMILLE, 'zeroBelowPermille': ZERO_BELOW_PERMILLE, 'resumedAtPermille': RESUMED_AT_PERMILLE}}
     log(plan_text())
     preflight()
     peers = bridge_env_value('ZODIAC_UPLINK_ARP_PEERS'); host = bridge_env_value('SDN_CONTROLLER_IP')
@@ -232,43 +270,43 @@ def main():
         pid = setup()
         idle = lc.sample_idle(); log(f'idle rate {idle:.1f} pps')
         base = observe('baseline_bridge_up', idle)
-        if base['ratio'] < BASELINE_MIN_RATIO: raise SystemExit(f'baseline ratio {base["ratio"]} is under {BASELINE_MIN_RATIO}: the preconditions are not holding; nothing was disturbed')
+        if base['ratioPermille'] < BASELINE_FLOOR_PERMILLE: raise SystemExit(f'baseline ratio {base["ratioPermille"]} permille is under {BASELINE_FLOOR_PERMILLE}: the preconditions are not holding; nothing was disturbed')
         RES['tableBeforeOutage'] = table_counters(); log(f'table counters before the outage: {json.dumps(RES["tableBeforeOutage"])[:400]}')
         open(OUT + '.ready', 'w').write('ready')
         log('READY. Owner: paste this on the Jetson now (it stops the bridge, waits, starts it again):')
         log('    ' + OWNER_COMMAND)
-        t0 = time.monotonic()
+        t0 = now_ms()
         while bridge_up():
-            if time.monotonic() - t0 > WAIT_FOR_OUTAGE_S: log('gave up waiting for the outage; nothing was disturbed'); return 1
+            if now_ms() - t0 > WAIT_FOR_OUTAGE_S * 1000: log('gave up waiting for the outage; nothing was disturbed'); return 1
             time.sleep(1)
-        D = time.monotonic(); RES['bridgeDownSeenAfterReadyS'] = round(D - t0, 1)
+        D = now_ms(); RES['bridgeDownSeenAfterReadyMs'] = D - t0
         log('bridge unreachable (D). The switch has no controller. Measuring before the probe connects.')
         observe('no_controller_before_probe', idle)
-        late = time.monotonic() - D > PROBE_START_DEADLINE_S
+        late = now_ms() - D > PROBE_START_DEADLINE_S * 1000
         back = bridge_up()
         if back or late:
             RES['probeSkipped'] = 'bridge already back' if back else f'later than {PROBE_START_DEADLINE_S} s after the bridge went down'
             log(f'probe NOT started: {RES["probeSkipped"]}')
         else:
-            probe = Probe(peers, host); probe.start(); RES['probeStartedAfterDS'] = round(time.monotonic() - D, 1)
-            log(f'probe started {RES["probeStartedAfterDS"]} s after D; waiting for the switch to connect and the first readback')
-            got = probe.wait_line(r'readback 1[: ]', PROBE_FIRST_READ_WAIT_S)
+            probe = Probe(peers, host); probe.start(); RES['probeStartedAfterDMs'] = now_ms() - D
+            log(f'probe started {RES["probeStartedAfterDMs"]} ms after D; waiting for the switch to connect and the first readback')
+            got = probe.wait_seen('first_readback', PROBE_FIRST_READ_WAIT_S)
             if got is None:
                 RES['probeConnectedObservation'] = 'skipped: no readback 1 line (the switch did not connect or the read failed); see the probe lines'
                 log(RES['probeConnectedObservation'])
             else:
-                RES['probeFirstReadAfterDS'] = round(got[0] - D, 1)
+                RES['probeFirstReadAfterDMs'] = got[0] - D
                 observe('probe_connected', idle)
-            code, result, killed = probe.finish(max(1, PROBE_OVERALL_MS / 1000 + PROBE_BACKSTOP_S - (time.monotonic() - probe.started)))
+            code, result, killed = probe.finish(max(1, PROBE_OVERALL_MS // 1000 + PROBE_BACKSTOP_S - (now_ms() - probe.started_ms) // 1000))
             RES['probe'] = {'exitCode': code, 'killedAtBound': killed, 'result': result, 'linesSeen': probe.lines_seen, 'linesDroppedFromMemory': probe.dropped}
             log(f'probe finished: exit {code}, outcome {result.get("outcome") if result else "no RESULT line"}')
-        t1 = time.monotonic()
+        t1 = now_ms()
         while not bridge_up():
-            if time.monotonic() - t1 > WAIT_FOR_BRIDGE_BACK_S:
+            if now_ms() - t1 > WAIT_FOR_BRIDGE_BACK_S * 1000:
                 log('THE BRIDGE IS STILL DOWN after the wait: the owner must check systemctl status zodiac-bridge'); RES['bridgeBack'] = False; rc = 2; return rc
             time.sleep(2)
-        RES['bridgeBack'] = True; RES['bridgeBackAfterDS'] = round(time.monotonic() - D, 1)
-        log(f'bridge answering again {RES["bridgeBackAfterDS"]} s after D')
+        RES['bridgeBack'] = True; RES['bridgeBackAfterDMs'] = now_ms() - D
+        log(f'bridge answering again {RES["bridgeBackAfterDMs"]} ms after D')
         time.sleep(SETTLE_AFTER_BRIDGE_BACK_S)
         ok, flows = lc.isolation_ok(); RES['isolationAfter'] = ok; log(f'isolation after: {ok}')
         observe('after_bridge_back', idle)
