@@ -1,0 +1,10 @@
+[2026-11-01 23:09:28 ET] isolation verified before: True
+[2026-11-01 23:09:32 ET] idle rate 0.0 pps
+[2026-11-01 23:09:49 ET] baseline_bridge_up: sent 24000, delivered 23689, ratio 0.987, bridge up at end: True
+[2026-11-01 23:09:49 ET] READY: waiting for the bridge to go away
+[2026-11-01 23:10:20 ET] bridge unreachable; measuring forwarding without a controller
+[2026-11-01 23:10:36 ET] during_outage_1: sent 24000, delivered 0, ratio 0.000, bridge up at end: False
+[2026-11-01 23:10:53 ET] during_outage_2: sent 24000, delivered 0, ratio 0.000, bridge up at end: False
+[2026-11-01 23:11:31 ET] isolation after: True
+[2026-11-01 23:11:48 ET] after_bridge_back: sent 24000, delivered 23690, ratio 0.987, bridge up at end: True
+[2026-11-01 23:11:48 ET] finished
