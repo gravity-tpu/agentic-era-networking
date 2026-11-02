@@ -176,7 +176,10 @@ export function classifyDeployedAllowShape(rules: readonly IsolationRule[]): Dep
   const macs = new Set(allowRules.map((r) => String(r.flowMod.match?.srcMac).toLowerCase()));
   if (ids.size !== allowRules.length) return no('two allow rules share an id');
   if (macs.size !== allowRules.length) return no('two allow rules match the same source MAC; the second would never win and was not measured');
-  const tail = classifyDeployedShape([...policy, ...rest.slice(allowRules.length)]);
+  const afterAllow = rest.slice(allowRules.length);
+  const stray = afterAllow.find((r) => allowFormProblem(r) === null);
+  if (stray !== undefined) return no(`${stray.id}: an allow rule after a rule of another form or after a quarantine DROP is a layout that was not measured`);
+  const tail = classifyDeployedShape([...policy, ...afterAllow]);
   if (!tail.modelled) return no(`after the allow rules: ${tail.reason}`);
   return { modelled: true, allowRuleIds: allowRules.map((r) => r.id), quarantineRuleIds: tail.quarantineRuleIds };
 }
