@@ -169,7 +169,7 @@ class Probe:
         return self.proc.returncode, result, killed
     def kill(self):
         if self.proc is not None and self.proc.poll() is None: self.proc.terminate()
-        try: sh(lc.JETSON, 'pkill -f controller-away-probe-cli || true', 15)
+        try: sh(lc.JETSON, 'pkill -f "[c]ontroller-away-probe-cli" || true', 15)  # the bracket stops the pattern matching the ssh shell that runs it
         except Exception as e: log(f'remote pkill failed: {e}')
 
 # ---- preconditions ----
@@ -181,7 +181,7 @@ def preflight():
     rc, _, _ = sh(lc.NODE01, 'sudo -n true')
     if rc != 0: raise SystemExit(f'sudo -n does not work on {lc.NODE01}: run by hand: sudo ip neigh replace {NEIGH_IP} lladdr {NEIGH_MAC} dev {NEIGH_DEV} nud permanent')
     # The Jetson has no passwordless sudo and needs none here: the tap capture runs as the same user, as every earlier session did (the promiscuity check below proves it works).
-    rc, out, _ = sh(lc.JETSON, 'pgrep -f controller-away-probe-cli || true')
+    rc, out, _ = sh(lc.JETSON, 'pgrep -f "[c]ontroller-away-probe-cli" || true')  # the bracket stops the pattern matching the ssh shell that runs it (it did, on 2026-11-02)
     if out: raise SystemExit(f'a probe process is already running on the Jetson ({out}); not starting')
     rc, out, _ = sh(lc.JETSON, f'test -f {PROBE_CLI} && echo yes || echo no')
     if out != 'yes': raise SystemExit(f'{PROBE_CLI} is missing on the Jetson: build and deploy this branch first (npx tsc, then the dist copy)')
