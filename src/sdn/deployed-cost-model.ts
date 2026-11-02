@@ -173,7 +173,8 @@ export function classifyDeployedAllowShape(rules: readonly IsolationRule[]): Dep
   if (allowRules.length === 0) return no(allowFormProblem(rest[0]!) ?? 'no allow rule of the measured form');
   if (BigInt(allowRules.length) > ALLOW_FORM_MAX_RULES) return no(`${allowRules.length} allow rules; only 1 to ${ALLOW_FORM_MAX_RULES} were measured`);
   const ids = new Set(allowRules.map((r) => r.id));
-  const macs = new Set(allowRules.map((r) => String(r.flowMod.match?.srcMac).toLowerCase()));
+  const srcMacOf = (r: IsolationRule): string => { const v = r.flowMod.match?.srcMac; return typeof v === 'string' ? v.toLowerCase() : ''; }; // the form check above guarantees a MAC string
+  const macs = new Set(allowRules.map(srcMacOf));
   if (ids.size !== allowRules.length) return no('two allow rules share an id');
   if (macs.size !== allowRules.length) return no('two allow rules match the same source MAC; the second would never win and was not measured');
   const afterAllow = rest.slice(allowRules.length);

@@ -126,7 +126,7 @@ describe('a declared throughput target (A8)', () => {
     vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '6000');
     bridge = new ZodiacBridgeServer(controller); // the server under test reads the module's `bridge`; the target is read at construction
     // The bridge models an allow rule only once it has been sent, so the later rules are checked against the earlier ones only with a session. (`metrics` is a getter.)
-    vi.spyOn(controller.openFlow, 'metrics', 'get').mockReturnValue({ state: 'ESTABLISHED' } as never);
+    vi.spyOn(controller.openFlow, 'metrics', 'get').mockReturnValue({ ...controller.openFlow.metrics, state: 'ESTABLISHED' });
     const form = (n: number, extra: Record<string, unknown> = {}) => ({ inPort: 3, outPort: 1, priority: 120, srcMac: `02:00:00:00:00:${n.toString(16).padStart(2, '0')}`, ...extra });
     for (let n = 1; n <= 8; n++) {
       const r = await call('POST', '/api/sdn/allow', form(n));
