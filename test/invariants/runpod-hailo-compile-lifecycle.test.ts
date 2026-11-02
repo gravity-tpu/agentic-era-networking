@@ -156,4 +156,19 @@ describe('hailo-compile-pod.sh: fail-closed trap and the disclosed calibration-d
     expect(content).not.toMatch(/^\s*git clone\b/m);
     expect(content).toContain('MZ_DIR');
   });
+
+  it('finds the freshly-compiled .hef by modification time, not by name alone', () => {
+    // The Suite image ships its own pre-existing example .hef files elsewhere under $WORKSPACE_DIR. Confirmed
+    // live 2026-11-02: a since-fixed version of this script searched `find ... -name '*.hef'` with no time
+    // filter and reported DONE with 7 bundled .hef files on a run that never even got past `import
+    // hailo_sdk_client` -- none of them had just been compiled.
+    expect(content).toMatch(/touch "\$COMPILE_START_MARKER"/);
+    expect(content).toMatch(/find "\$ROOTFS\$WORKSPACE_DIR" -name '\*\.hef' -newer "\$COMPILE_START_MARKER"/);
+  });
+
+  it('actually invokes the hailomz parse/optimize/compile pipeline, not just a diagnostic', () => {
+    expect(content).toMatch(/^\s*hailomz parse \$MODEL/m);
+    expect(content).toMatch(/^\s*hailomz optimize \$MODEL --calib-path/m);
+    expect(content).toMatch(/^\s*hailomz compile \$MODEL/m);
+  });
 });
