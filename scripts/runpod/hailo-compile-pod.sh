@@ -397,6 +397,22 @@ import sys
 
 dump_after_seconds = int(sys.argv[1])
 faulthandler.dump_traceback_later(dump_after_seconds, exit=False)
+
+# parse's own first eager-tensor conversion (tf.constant(0.0)+1.0, inside hailo_model_optimization's own
+# module-level code) used to hang the same way optimize's did (_dataset_from_folder's tf.convert_to_tensor on
+# the calibration file list) before CUDA_VISIBLE_DEVICES=-1 was set -- and after that fix, parse now succeeds
+# reliably but optimize still hangs there sometimes, in a completely separate process. Both call sites are
+# TensorFlow's one-time eager context initialization (ctx.ensure_initialized() -> TFE_NewContext()), just
+# triggered from different places; prior live runs already showed this exact code path crash non-deterministically
+# with different symptoms (env.cc:400 vs env.cc:405) depending on timing, suggesting a race during that
+# initialization rather than a single deterministic cause. Forcing it here, in a single-threaded context before
+# hailo_model_zoo's own code (and whatever threads it spins up) gets a chance to race it, is a cheap test of
+# that theory -- if eager context init always happens exactly once per process and the race is about *who*
+# triggers it and *when*, doing it ourselves, first, removes the race entirely regardless of what caused it.
+import tensorflow as tf
+
+tf.constant(0)
+
 sys.argv = ["hailomz"] + sys.argv[2:]
 from hailo_model_zoo.main import main
 
