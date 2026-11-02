@@ -252,6 +252,10 @@ PY
 # inherited across chroot() same as any other process attribute, so they don't need to be re-passed.
 MZ_REL="${MZ_DIR:-$WORKSPACE_DIR/hailo_model_zoo}"
 [ -d "$ROOTFS$MZ_REL" ] || { echo "bundled Hailo Model Zoo not found at $MZ_REL inside the extracted image" >&2; exit 1; }
+# PYTHONFAULTHANDLER: `hailomz parse` aborted with no Python traceback at all on the first live attempt (just
+# "Aborted (core dumped)") -- this at least gives faulthandler a chance to print a Python-level stack before the
+# process dies, for the subset of native aborts that still route back through the interpreter's signal handling.
+export PYTHONFAULTHANDLER=1
 chroot "$ROOTFS" /bin/bash -c "
   set -e
   cd '$MZ_REL'
