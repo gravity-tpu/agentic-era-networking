@@ -25,11 +25,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const SCRIPT_PATH = path.resolve(REPO_ROOT, 'scripts/train-sentinel-weights-cic.py');
-const hasScipy = spawnSync('python3', ['-c', 'import numpy, scipy']).status === 0;
+const hasScipy = spawnSync('python3', ['-c', 'import numpy, scipy'], { timeout: 60_000 }).status === 0;
 
-function runPython(driver: string, args: string[] = []): any {
+function runPython<T = Record<string, unknown>>(driver: string, args: string[] = []): T {
   const r = execFileSync('python3', ['-c', driver, ...args], { encoding: 'utf8', timeout: 60000 });
-  return JSON.parse(r.trim().split('\n').pop() ?? '{}');
+  return JSON.parse(r.trim().split('\n').pop() ?? '{}') as T;
 }
 
 describe.skipIf(!hasScipy)('scripts/train-sentinel-weights-cic.py', () => {

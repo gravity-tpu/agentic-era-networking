@@ -46,3 +46,8 @@ Per the pre-registration (predictions 1 and 2 failed), the model is refitted for
 - Harness: `scripts/layout-capacity-run.py` with the allow mode and the rule form as committed with these results (SHA-256 of the file in each `provenance.json`). Bridge commit `6dd6f8e` (the Jetson's checkout reported 3 modified files in `git status`; not investigated here), bridge dist `64ee69a1…`.
 - The throughput target was removed for the window (`#ZODIAC_CAPACITY_TARGET_PPS` in `/etc/zodiac/zodiac-bridge.env`) and restored afterwards; a leftover systemd drop-in that set 7,900 pps was found and removed the same day. Effective value during the earlier days was not read from the process (permission denied).
 - One switch, firmware 0.86; one traffic path; one pass per count; inert rules; counts 0, 4 and 8 only; a Python paced sender; the receiver-side offset of about 1.3% seen in earlier runs is not re-measured here.
+
+## Corrections (2026-11-01, review cleanup)
+
+- The bridge host's "3 modified files" in `git status` were 3 untracked entries (`dist-new/`, `dist-prev-a10/`, `public/zodiac-app.6fa3d8b12b.js`); no tracked file differed from `6dd6f8e`.
+- The target's effective value on earlier days was not read from the process. For the measurement windows themselves it was checked by a refused allow probe before each window's first install: with the target off the probe's refusal carried no A8 violation (only a note), and no allow install of the valid runs was refused (the one refusal, in failed attempt 2, was A11, not A8); a declared target would have refused them all.
