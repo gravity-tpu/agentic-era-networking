@@ -11,13 +11,13 @@ The bridge re-reads the switch's flow table every minute (`src/sdn/isolation-rec
 | Table-miss absent, forwarding or unrecognised, or the policy rejected by the verifier | 2 consecutive polls (about 2 minutes) | urgent |
 | Any other mismatch, `readback_failed`, `not_installed`, or an unknown state | 5 polls (outlasts the stale `mismatch` that follows an experiment session) | high |
 | Bridge unreachable, or the status says `verified` but its last check is older than 5 minutes (the re-check stopped, so `verified` is not evidence) | 3 polls | high |
-| The bridge repaired itself (its `port1Isolation.repair.totalRepairs` went up; see `docs/design/isolation-repair.md`) | immediately, one message per repair | high |
-| The bridge's repair budget is spent and the table-miss is still wrong | 2 polls (critical) | urgent |
+| The bridge re-sent the default DROP (its `port1Isolation.repair.totalRepairs` went up; see `docs/design/isolation-repair.md`). The message says this is not yet a fix: the next readback decides, and you hear "recovered" or "budget spent" | immediately, one message per repair | high |
+| The bridge's repair budget is spent and the table-miss is still wrong: its own class (`exhausted`), above critical, so it alerts by itself even when a critical alert already went out. It stays in force, and blocks the recovery message, until the bridge's governor clears the flag after 3 clean readings | 2 polls | urgent |
 | Recovery | 2 consecutive clean polls | default |
 | Reminder while a problem lasts | every 30 minutes, at most 8 | as the alert |
 | Heartbeat | every 24 hours; **no heartbeat means the watcher is not running** | low |
 
-One alert per episode; a worse class (bad to critical) alerts again. A message stays pending until ntfy confirms delivery, so a failed push is retried and never lost or duplicated. Every number is a named, bounded setting (`ISOLATION_WATCH_*`); a value out of bounds is an error, never clamped.
+One alert per episode; a worse class (bad to critical to exhausted) alerts again. A message stays pending until ntfy confirms delivery, so a failed push is retried and never lost or duplicated. Every number is a named, bounded setting (`ISOLATION_WATCH_*`); a value out of bounds is an error, never clamped.
 
 ## Setting it up
 
@@ -67,3 +67,7 @@ More supervised tests with the other modes (owner present, workload idle; the li
 - **Repeats** of the forward tests above: with repair off (`ZODIAC_ISOLATION_REPAIR=0`) and with it on.
 
 Remove every `ZODIAC_FAULT_TABLE_MISS*` line and every test override (and keep `ZODIAC_ISOLATION_REPAIR=1`) when the tests are done.
+
+### What the sticky-fault run found (2026-11-02) and what changed
+
+The first run of the repair that does not take showed two gaps in the watcher, both fixed afterwards. The "bridge repaired itself" message went out whenever the bridge re-sent the DROP, including when it had not taken, and an exhausted budget was classified as an ordinary critical, so no push followed the CRITICAL one sent minutes earlier. Now the repair message says the bridge re-sent the DROP and that the next readback decides, and `exhausted` is its own class above critical. These changes are covered by unit tests; the sticky run has not been repeated with them (see `docs/benchmarks/results/isolation-watch-fault-2026-11-02/`).

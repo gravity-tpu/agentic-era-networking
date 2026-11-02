@@ -191,6 +191,12 @@ describe('auto-repair events (the bridge re-sends the default DROP by itself; a 
     expect(m[0]?.priority).toBe('high');
     expect(m[0]?.body).toMatch(/default DROP/);
     expect(m[0]?.body).toMatch(/forwards/);
+    // It says what happened, not that the problem is solved: the next readback decides, and the person is told which way it went.
+    expect(m[0]?.title).not.toMatch(/repaired itself/i);
+    expect(m[0]?.title).toMatch(/re-sent/);
+    expect(m[0]?.body).toMatch(/readback/);
+    expect(m[0]?.body).toMatch(/recovered/);
+    expect(m[0]?.body).toMatch(/budget/i);
     expect(r.poll(withRepair(1))).toEqual([]);
     expect(kinds(r.poll(withRepair(2)))).toEqual(['repair']);
   });
@@ -200,14 +206,37 @@ describe('auto-repair events (the bridge re-sends the default DROP by itself; a 
     expect(r.poll(withRepair(0))).toEqual([]); // the bridge restarted: counters are new
     expect(kinds(r.poll(withRepair(1)))).toEqual(['repair']);
   });
-  it('an exhausted repair budget is critical: urgent after 2 polls, saying a person is needed', () => {
+  it('an exhausted repair budget is its own class, above critical: urgent after 2 polls, saying a person is needed', () => {
     const r = rig();
     r.poll(withRepair(3, { exhausted: true }));
     const m = r.poll(withRepair(3, { exhausted: true }));
     expect(kinds(m)).toEqual(['alert']);
     expect(m[0]?.priority).toBe('urgent');
+    expect(m[0]?.title).toMatch(/BUDGET SPENT/);
     expect(m[0]?.body).toMatch(/person/);
-    expect(classify(withRepair(3, { exhausted: true }), DEFAULT_WATCH_CONFIG)).toBe('critical');
+    expect(classify(withRepair(3, { exhausted: true }), DEFAULT_WATCH_CONFIG)).toBe('exhausted');
+  });
+  it('alerts again when the budget runs out during a critical episode that was already announced (the sticky-fault run of 2026-11-02 sent nothing at that point), and only once', () => {
+    const r = rig();
+    const crit: Observation = { ...forwards, repair: { enabled: true, totalRepairs: 1, exhausted: false, lastTrigger: 'forwards' } };
+    const spent: Observation = { ...forwards, repair: { enabled: true, totalRepairs: 1, exhausted: true, lastTrigger: 'forwards' } };
+    const first = [crit, crit].flatMap((o) => r.poll(o));
+    expect(first.map((m) => m.title)).toEqual(['Zodiac isolation: CRITICAL']);
+    expect(r.poll(spent)).toEqual([]); // one poll of the new class is not enough
+    const second = r.poll(spent);
+    expect(kinds(second)).toEqual(['alert']);
+    expect(second[0]?.title).toMatch(/BUDGET SPENT/);
+    expect([spent, spent, spent].flatMap((o) => r.poll(o))).toEqual([]); // not repeated
+  });
+  it('does not announce recovery while the exhausted flag is still set, even when the table reads verified and dropping', () => {
+    const r = rig();
+    const spent: Observation = { ...forwards, repair: { enabled: true, totalRepairs: 1, exhausted: true, lastTrigger: 'forwards' } };
+    [spent, spent].forEach((o) => r.poll(o));
+    const stillFlagged: Observation = withRepair(1, { exhausted: true }); // verified and drops, but the governor has not yet seen 3 clean readings
+    expect([stillFlagged, stillFlagged, stillFlagged].flatMap((o) => r.poll(o))).toEqual([]);
+    expect(classify(stillFlagged, DEFAULT_WATCH_CONFIG)).toBe('exhausted');
+    const cleared: Observation = withRepair(1);
+    expect(kinds([cleared, cleared].flatMap((o) => r.poll(o)))).toEqual(['recovered']);
   });
   it('an older bridge without repair information produces no repair messages and no error', () => {
     const r = rig();

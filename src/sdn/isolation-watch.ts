@@ -17,7 +17,8 @@
  * Pure: no I/O, no clock of its own (the caller passes monotonic nanoseconds).
  */
 
-export type Problem = 'bad' | 'critical' | 'stale' | 'unreachable';
+/** `exhausted` is the bridge's repair budget spent with the table-miss still wrong: above `critical`, so it alerts on its own even when a critical alert already went out. */
+export type Problem = 'bad' | 'critical' | 'exhausted' | 'stale' | 'unreachable';
 export type Classification = 'ok' | Problem;
 
 /** What the bridge reports about its own auto-repair (src/sdn/isolation-repair.ts): the isolation watcher tells a person when it acts or runs out of budget. */
@@ -84,8 +85,8 @@ const OK_TABLE_MISS: ReadonlySet<string> = new Set(['drops', 'unobservable']);
 
 export function classify(o: Observation, cfg: WatchConfig): Classification {
   if (o.kind === 'unreachable') return 'unreachable';
+  if (o.repair?.exhausted === true) return 'exhausted'; // the bridge spent its repair budget and the table-miss is still wrong (and stays flagged until 3 clean readings): a person is needed
   if (o.state === 'verifier_rejected') return 'critical';
-  if (o.repair?.exhausted === true) return 'critical'; // the bridge spent its repair budget and the table-miss is still wrong: a person is needed
   if (o.tableMiss !== null && CRITICAL_TABLE_MISS.has(o.tableMiss)) return 'critical';
   if (o.state !== 'verified') return 'bad'; // mismatch, readback_failed, not_installed and anything unknown: never ok
   if (o.tableMiss !== null && !OK_TABLE_MISS.has(o.tableMiss)) return 'bad';
@@ -124,7 +125,7 @@ export type MessageKind = 'started' | 'alert' | 'reminder' | 'recovered' | 'hear
 export type Priority = 'low' | 'default' | 'high' | 'urgent';
 export interface WatchMessage { readonly id: number; readonly kind: MessageKind; readonly title: string; readonly body: string; readonly priority: Priority; readonly tags: readonly string[] }
 
-const SEVERITY: Readonly<Record<Problem, number>> = { bad: 1, stale: 1, unreachable: 1, critical: 2 };
+const SEVERITY: Readonly<Record<Problem, number>> = { bad: 1, stale: 1, unreachable: 1, critical: 2, exhausted: 3 };
 const NS_PER_MS = 1_000_000n;
 const WHERE = 'Look at: the dashboard panel "SDN Boundary Containment", GET /api/zodiac/flows, or journalctl -u zodiac-bridge on the Jetson.';
 
@@ -137,6 +138,7 @@ function describe(o: Observation | null): string {
 
 function alertFor(c: Problem, last: Observation | null): { title: string; body: string; priority: Priority; tags: string[] } {
   switch (c) {
+    case 'exhausted': return { title: 'Zodiac isolation: repair BUDGET SPENT', body: `The bridge re-sent the default DROP and the table-miss is still wrong, so it has stopped repairing: a person is needed. ${describe(last)}. ${WHERE}`, priority: 'urgent', tags: ['rotating_light', 'sos'] };
     case 'critical': return { title: 'Zodiac isolation: CRITICAL', body: `The table-miss DROP or the policy is wrong: ${describe(last)}. The default drop is not confirmed. ${WHERE}`, priority: 'urgent', tags: ['rotating_light'] };
     case 'bad': return { title: 'Zodiac isolation: mismatch', body: `The switch's table differs from the policy: ${describe(last)}. ${WHERE}`, priority: 'high', tags: ['warning'] };
     case 'stale': return { title: 'Zodiac isolation re-check stopped', body: `The bridge reports verified but its isolation re-check is not running (${describe(last)}), so verified is not evidence. ${WHERE}`, priority: 'high', tags: ['warning'] };
@@ -167,7 +169,7 @@ export class IsolationWatcher {
   }
 
   private threshold(c: Problem): number {
-    return c === 'critical' ? this.cfg.criticalPollsToAlert : c === 'bad' ? this.cfg.badPollsToAlert : this.cfg.unreachablePollsToAlert;
+    return c === 'critical' || c === 'exhausted' ? this.cfg.criticalPollsToAlert : c === 'bad' ? this.cfg.badPollsToAlert : this.cfg.unreachablePollsToAlert;
   }
 
   observe(o: Observation, nowNs: bigint): void {
@@ -196,7 +198,7 @@ export class IsolationWatcher {
     if (o.kind !== 'status' || o.repair === undefined || o.repair === null) return;
     const total = o.repair.totalRepairs;
     if (this.lastRepairTotal !== null && total > this.lastRepairTotal) {
-      this.push('repair', 'Zodiac isolation: the bridge repaired itself', `The bridge re-sent the default DROP by itself (the table-miss read "${o.repair.lastTrigger ?? 'wrong'}"); ${total} repair(s) so far. Something changed or removed the default drop: the repair is automatic, the cause is not. ${WHERE}`, 'high', ['wrench']);
+      this.push('repair', 'Zodiac isolation: the bridge re-sent the default DROP', `The bridge re-sent the default DROP by itself (the table-miss read "${o.repair.lastTrigger ?? 'wrong'}"); ${total} repair(s) so far. This is not yet a fix: the next readback decides. You will get "recovered" if it took, and a "budget spent" alert if the bridge's repair budget runs out with the table-miss still wrong. Something changed or removed the default drop: the repair is automatic, the cause is not. ${WHERE}`, 'high', ['wrench']);
     }
     this.lastRepairTotal = total;
   }
@@ -211,7 +213,8 @@ export class IsolationWatcher {
       return;
     }
     if (ep.reminders < this.cfg.maxReminders && nowNs - ep.lastNotifiedNs >= BigInt(this.cfg.realertMs) * NS_PER_MS) {
-      const a = alertFor(ep.problemClass === 'critical' || c === 'critical' ? 'critical' : c, this.lastObservation);
+      const worst: Problem = SEVERITY[c] >= SEVERITY[ep.problemClass] ? c : ep.problemClass; // a reminder keeps the episode's worst class, not a milder one it has since relaxed into
+      const a = alertFor(worst, this.lastObservation);
       this.push('reminder', `STILL: ${a.title}`, `${a.body} (reminder ${ep.reminders + 1} of at most ${this.cfg.maxReminders})`, a.priority, a.tags);
       ep.reminders++;
       ep.lastNotifiedNs = nowNs;
