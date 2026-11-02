@@ -28,3 +28,12 @@ One alert per episode; a worse class (bad to critical) alerts again. A message s
 ## What it does not do
 
 It reports what the bridge's readback says; it cannot see traffic. If the bridge is down or wedged it says so only after three polls, and if the Jetson itself is down the heartbeat stops, which is something a person has to notice. It sends no secrets: only state names, counts and ages, and the logs show the ntfy host, never the topic.
+
+## Validation so far (2026-11-01)
+
+Installed on the Jetson (`zodiac-isolation-watch`, enabled) and exercised on the real bridge with the owner present:
+
+- **Delivery:** `--test` sent two messages and the service's own "started" message; all three arrived on the owner's phone.
+- **Unreachable bridge:** with the thresholds shortened for the test only (`ISOLATION_WATCH_POLL_MS=10000`, `ISOLATION_WATCH_UNREACHABLE_POLLS=1`, both inside the documented bounds), the bridge was stopped for about 25 s. The first failed poll sent "Zodiac bridge unreachable" within 0.3 s; after the bridge returned, "Zodiac isolation recovered" followed after two clean polls (19 s). The overrides were removed and the service restarted at the defaults. Journal lines: `journalctl -u zodiac-isolation-watch` for 2026-11-01 22:50 to 22:53 EST.
+
+**Not validated:** detection of an absent, forwarding or unrecognised table-miss on firmware 0.86 (that classification has only run against unit-test fakes and the verified readback; no route can break the DROP on purpose, and the experiment endpoint always reinstalls it), the auto-repair path (off by default), and what the switch does with its flow table while the controller is away (after the outage the bridge re-sent the whole table before the readback, so `verified` does not show the table survived). A supervised test of the table-miss path needs a guarded way to replace the DROP for a bounded time and is not built.
