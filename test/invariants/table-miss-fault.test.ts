@@ -20,11 +20,12 @@ import {
 } from '../../src/sdn/table-miss-fault.js';
 import { ZodiacBridgeServer } from '../../src/sdn/zodiac-bridge-server.js';
 import { ZodiacController } from '../../src/sdn/zodiac-controller.js';
-import { buildOfpFlowMod, FlowModCommand } from '../../src/sdn/openflow-types.js';
+import { buildOfpFlowMod, buildOfpTableMissClearActions, FlowModCommand, InstructionType, OpenFlowType } from '../../src/sdn/openflow-types.js';
 import { RepairGovernor, parseRepairConfig } from '../../src/sdn/isolation-repair.js';
 import { parseFlowStatsReply, type FlowStatsEntry } from '../../src/sdn/dataplane-benchmark.js';
-import { buildPort1IsolationPolicy } from '../../src/sdn/port1-isolation.js';
+import { buildPort1IsolationPolicy, verifyIsolationReadback } from '../../src/sdn/port1-isolation.js';
 import { readFlowStats } from '../../src/sdn/flow-readback.js';
+import { pendingReadbackStatus, statusFromReadback } from '../../src/sdn/isolation-status.js';
 import { entryFrom, replyOf } from '../helpers/flow-stats-fixtures.js';
 
 vi.mock('../../src/sdn/flow-readback.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../src/sdn/flow-readback.js')>()), readFlowStats: vi.fn() }));
@@ -56,10 +57,11 @@ describe('parseTableMissFault', () => {
     expect(parseTableMissFault(ON)).toMatchObject({ enabled: true, mode: 'forward-to-tap', durationMs: TABLE_MISS_FAULT_DEFAULT_SECONDS * 1000, reassertMs: 0, warnings: [] });
   });
 
-  it('knows exactly three modes, each needing the same acknowledgement: forward once, forward and keep re-asserting, and remove the entry', () => {
-    expect([...TABLE_MISS_FAULT_MODES]).toEqual(['forward-to-tap', 'forward-to-tap-sticky', 'delete-table-miss']);
+  it('knows exactly four modes, each needing the same acknowledgement: forward once, forward and keep re-asserting, remove the entry, and an entry carrying an instruction the parser does not recognise', () => {
+    expect([...TABLE_MISS_FAULT_MODES]).toEqual(['forward-to-tap', 'forward-to-tap-sticky', 'delete-table-miss', 'unrecognised-table-miss']);
     expect(parseTableMissFault({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'forward-to-tap-sticky' })).toMatchObject({ enabled: true, mode: 'forward-to-tap-sticky', reassertMs: TABLE_MISS_FAULT_REASSERT_MS });
     expect(parseTableMissFault({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'delete-table-miss' })).toMatchObject({ enabled: true, mode: 'delete-table-miss', reassertMs: 0 });
+    expect(parseTableMissFault({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'unrecognised-table-miss' })).toMatchObject({ enabled: true, mode: 'unrecognised-table-miss', reassertMs: 0 });
     for (const mode of TABLE_MISS_FAULT_MODES) {
       const c = parseTableMissFault({ ZODIAC_FAULT_TABLE_MISS: mode });
       expect(c.enabled, mode).toBe(false);
@@ -256,6 +258,57 @@ describe('a repair that does not take, against the governor with a sticky fault'
     expect(decisions).toContain('exhausted');
     expect(decisions.filter((a) => a === 'exhausted')).toHaveLength(1); // announced once, then silent until it clears
     expect(decisions.indexOf('exhausted')).toBeGreaterThan(decisions.indexOf('repair'));
+  });
+});
+
+describe('the unrecognised mode', () => {
+  it('builds a priority-0 wildcard whose only instruction is CLEAR_ACTIONS, which executes as a drop (no output) but is not a drop the parser recognises', () => {
+    const fm = buildOfpTableMissClearActions(7);
+    expect(fm.readUInt8(0)).toBe(4); // OpenFlow 1.3
+    expect(fm.readUInt8(1)).toBe(OpenFlowType.OFPT_FLOW_MOD);
+    expect(fm.readUInt16BE(2)).toBe(fm.length);
+    expect(fm.readUInt32BE(4)).toBe(7);
+    expect(fm.readUInt8(25)).toBe(FlowModCommand.OFPFC_ADD);
+    expect(fm.readUInt16BE(30)).toBe(0); // priority 0
+    expect(fm.readUInt16BE(50)).toBe(4); // an empty match
+    expect(fm.readUInt16BE(56)).toBe(InstructionType.OFPIT_CLEAR_ACTIONS);
+    expect(fm.readUInt16BE(58)).toBe(8);
+    expect(fm.length).toBe(64); // nothing after the one instruction: no apply-actions, so no output
+  });
+
+  it('is read back as an unrecognised table-miss, not as a drop', () => {
+    const entries = [...parseFlowStatsReply(replyOf([entryFrom(buildOfpTableMissClearActions(99)), ...flowMods.map((fm) => entryFrom(fm))])).entries];
+    const v = verifyIsolationReadback(policy, entries);
+    expect(v.actions.tableMiss).toBe('unrecognised');
+    expect(v.actions.status).toBe('mismatch');
+    expect(v.actions.mismatches.join(' ')).toContain('could not be recognised as a drop');
+    // And the isolation status built from it is not `verified`, so the recheck, the watcher and the repair governor all see it.
+    expect(statusFromReadback(pendingReadbackStatus(), v, 1, 1n).state).not.toBe('verified');
+  });
+
+  it('is sent as raw bytes after the verified readback, once, with the DROP put back at the time limit; nothing else touches the table', async () => {
+    makeBridge({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'unrecognised-table-miss', ZODIAC_FAULT_TABLE_MISS_SECONDS: '60' });
+    const raw: Buffer[] = [];
+    vi.spyOn(controller.openFlow, 'sendRaw').mockImplementation((p: Buffer) => { raw.push(Buffer.from(p)); });
+    controller.openFlow.emit('ready', {});
+    await settle();
+    const clear = raw.filter((p) => p.length === 64 && p.readUInt8(1) === OpenFlowType.OFPT_FLOW_MOD && p.readUInt16BE(56) === InstructionType.OFPIT_CLEAR_ACTIONS);
+    expect(clear).toHaveLength(1);
+    expect(order.filter((x) => x === 'flow-mod:p0:[3]' || x === 'delete-strict:p0')).toEqual([]);
+    expect(audit().map((r) => r['event'])).toEqual(['fault_injected']);
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(order.filter((x) => x.startsWith('table-miss'))).toEqual(['table-miss:DROP', 'table-miss:DROP']);
+    expect(audit().map((r) => r['event'])).toEqual(['fault_injected', 'fault_reverted']);
+  });
+
+  it('does nothing when the readback did not verify the baseline', async () => {
+    makeBridge({ ...ON, ZODIAC_FAULT_TABLE_MISS: 'unrecognised-table-miss' });
+    const raw: Buffer[] = [];
+    vi.spyOn(controller.openFlow, 'sendRaw').mockImplementation((p: Buffer) => { raw.push(Buffer.from(p)); });
+    vi.mocked(readFlowStats).mockRejectedValue(new Error('readback timed out'));
+    controller.openFlow.emit('ready', {});
+    await settle();
+    expect(raw.filter((p) => p.length === 64)).toEqual([]);
   });
 });
 

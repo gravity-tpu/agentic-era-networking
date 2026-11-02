@@ -77,7 +77,7 @@ import { admitInstall, parseCapacityTarget, type CapacityTargetConfig, type Gate
 import { CALLER_MAX_EVENTS_PER_MINUTE, GateAuditLog, resolveCallerAuditFile, resolveGateAuditFile, safeHeaderText, type GateAuditRoute } from './gate-audit.js';
 import { MAX_FORWARDING_PRIORITY, QUARANTINE_PRIORITY, defaultIsQuarantine } from './quarantine-precedence.js';
 import { PORT1_ISOLATION_INTENT, port1IsolationUplinkArpIntent } from './intents.js';
-import { FlowModCommand } from './openflow-types.js';
+import { FlowModCommand, buildOfpTableMissClearActions } from './openflow-types.js';
 import os from 'node:os';
 import { readFlowStats, readFlowStatsRaw } from './flow-readback.js';
 import {
@@ -721,13 +721,16 @@ export class ZodiacBridgeServer {
     // A strict delete matches on the entry's match and priority; the action fields are ignored by the switch and the out_port filter defaults to OFPP_ANY.
     const remove: IsolationRule = { id: 'fault-table-miss-delete', flowMod: { command: FlowModCommand.OFPFC_DELETE_STRICT, priority: 0, outputPorts: [], match: {} } };
     const drop: IsolationRule = { id: 'table-miss', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} } };
-    const fault = cfg.mode === 'delete-table-miss' ? remove : forward;
+    const unrecognised: IsolationRule = { id: 'fault-table-miss-clear-actions', flowMod: { command: FlowModCommand.OFPFC_ADD, priority: 0, outputPorts: [], match: {} } }; // for the audit record: the bytes sent below carry a CLEAR_ACTIONS instruction
+    const fault = cfg.mode === 'delete-table-miss' ? remove : cfg.mode === 'unrecognised-table-miss' ? unrecognised : forward;
     let what: string;
     if (cfg.mode === 'delete-table-miss') what = 'removed (strict delete of the priority-0 entry)';
+    else if (cfg.mode === 'unrecognised-table-miss') what = 'replaced by an entry whose only instruction is CLEAR_ACTIONS (it still drops, but is not a recognised DROP)';
     else if (cfg.mode === 'forward-to-tap-sticky') what = `replaced by a forward to P${FAULT_FORWARD_PORT}, re-asserted every ${cfg.reassertMs / 1000} s`;
     else what = `replaced by a forward to P${FAULT_FORWARD_PORT}`;
     try {
-      this.controller.openFlow.sendFlowModOptions(fault.flowMod);
+      if (cfg.mode === 'unrecognised-table-miss') this.controller.openFlow.sendRaw(buildOfpTableMissClearActions(this.controller.openFlow.reserveXid()));
+      else this.controller.openFlow.sendFlowModOptions(fault.flowMod);
     } catch (err: unknown) {
       console.error(`[!] [Fault] could NOT send the test fault: ${err instanceof Error ? err.message : String(err)}; the table-miss is unchanged.`);
       return;

@@ -678,3 +678,36 @@ export function parseOfpPacketIn(packet: Buffer): DecodedPacketIn {
     rawPayload,
   };
 }
+
+/**
+ * A priority-0 wildcard flow-mod whose only instruction is OFPIT_CLEAR_ACTIONS: it executes as a drop (the action set is cleared and nothing is output), but it is
+ * not the bare entry the controller installs as the table-miss DROP, so the readback classifies it as an unrecognised table-miss. Used only by the test fault
+ * (src/sdn/table-miss-fault.ts) to exercise that class on the real switch without opening any forwarding path.
+ */
+export function buildOfpTableMissClearActions(xid: number): Buffer {
+  const buf = Buffer.alloc(64);
+  buf.writeUInt8(OFP_VERSION_1_3, 0);
+  buf.writeUInt8(OpenFlowType.OFPT_FLOW_MOD, 1);
+  buf.writeUInt16BE(64, 2);
+  buf.writeUInt32BE(xid, 4);
+  buf.writeBigUInt64BE(0n, 8); // cookie
+  buf.writeBigUInt64BE(0n, 16); // cookie_mask
+  buf.writeUInt8(0, 24); // table_id
+  buf.writeUInt8(FlowModCommand.OFPFC_ADD, 25);
+  buf.writeUInt16BE(0, 26); // idle_timeout
+  buf.writeUInt16BE(0, 28); // hard_timeout
+  buf.writeUInt16BE(0, 30); // priority 0
+  buf.writeUInt32BE(OFP_NO_BUFFER, 32);
+  buf.writeUInt32BE(OFPP_ANY, 36);
+  buf.writeUInt32BE(OFPG_ANY, 40);
+  buf.writeUInt16BE(0, 44); // flags
+  buf.writeUInt16BE(0, 46); // pad
+  buf.writeUInt16BE(1, 48); // match type OXM
+  buf.writeUInt16BE(4, 50); // an empty match: header only
+  buf.writeUInt32BE(0, 52); // pad to 8
+  buf.writeUInt16BE(InstructionType.OFPIT_CLEAR_ACTIONS, 56);
+  buf.writeUInt16BE(8, 58); // instruction length
+  buf.writeUInt32BE(0, 60); // pad
+  return buf;
+}
+

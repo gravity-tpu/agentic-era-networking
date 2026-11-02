@@ -49,7 +49,7 @@ No route can change the table-miss, and the experiment endpoint always reinstall
 
 | Variable | Value |
 | :--- | :--- |
-| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (forward once), `forward-to-tap-sticky` (re-send the forward every 2 s, so a repair does not take) or `delete-table-miss` (a strict delete: the entry is absent) |
+| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (forward once), `forward-to-tap-sticky` (re-send the forward every 2 s, so a repair does not take), `delete-table-miss` (a strict delete: the entry is absent) or `unrecognised-table-miss` (an entry whose only instruction is CLEAR_ACTIONS: it still drops, but the readback cannot recognise it as the DROP) |
 | `ZODIAC_FAULT_TABLE_MISS_ACK` | `I-ACCEPT-A-BOUNDED-FORWARDING-TABLE-MISS` (exactly) |
 | `ZODIAC_FAULT_TABLE_MISS_SECONDS` | optional, whole seconds from 60 to 900, default 240 |
 
@@ -73,3 +73,7 @@ Remove every `ZODIAC_FAULT_TABLE_MISS*` line and every test override (and keep `
 ### What the sticky-fault run found (2026-11-02) and what changed
 
 The first run of the repair that does not take showed two gaps in the watcher, both fixed afterwards. The "bridge repaired itself" message went out whenever the bridge re-sent the DROP, including when it had not taken, and an exhausted budget was classified as an ordinary critical, so no push followed the CRITICAL one sent minutes earlier. Now the repair message says the bridge re-sent the DROP and that the next readback decides, and `exhausted` is its own class above critical. These changes are covered by unit tests; the sticky run has not been repeated with them (see `docs/benchmarks/results/isolation-watch-fault-2026-11-02/`).
+
+### What a frame that matches no rule does in each state
+
+`scripts/table-miss-traffic.py` sends raw frames with the experimental ethertype 0x88b5 (neither IPv4 nor ARP, so no policy rule matches) from the uplink side into port 2 while a fault is active, and counts them at the mirror of the P2 link (control), the tap and the workload side. It needs the wire-campaign VLAN arrangement on the second switch (the sender's port and the Zodiac P2 port together, the mirror port alone), which is not the normal arrangement; results are in `docs/benchmarks/results/table-miss-traffic-2026-11-02/` once run.
