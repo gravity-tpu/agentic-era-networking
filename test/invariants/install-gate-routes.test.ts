@@ -122,6 +122,42 @@ describe('a declared throughput target (A8)', () => {
     vi.unstubAllEnvs();
   });
 
+  it('under the 6,000 pps target, admits inert-form allow rules one at a time up to eight and refuses the ninth and any other form (measured floor, not a per-rule cost)', async () => {
+    vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '6000');
+    bridge = new ZodiacBridgeServer(controller); // the server under test reads the module's `bridge`; the target is read at construction
+    // The bridge models an allow rule only once it has been sent, so the later rules are checked against the earlier ones only with a session. (`metrics` is a getter.)
+    vi.spyOn(controller.openFlow, 'metrics', 'get').mockReturnValue({ ...controller.openFlow.metrics, state: 'ESTABLISHED' });
+    const form = (n: number, extra: Record<string, unknown> = {}) => ({ inPort: 3, outPort: 1, priority: 120, srcMac: `02:00:00:00:00:${n.toString(16).padStart(2, '0')}`, ...extra });
+    for (let n = 1; n <= 8; n++) {
+      const r = await call('POST', '/api/sdn/allow', form(n));
+      expect(r.status, `rule ${n}`).toBe(200);
+      expect(r.json.ok, `rule ${n}`).toBe(true);
+    }
+    const ninth = await call('POST', '/api/sdn/allow', form(9));
+    expect(ninth.status).toBe(422);
+    expect(ninth.json.violations?.map((v) => v.property)).toEqual(['A8']);
+    vi.unstubAllEnvs();
+  });
+
+  it('under the target, refuses an allow rule above the measured rule (priority 300) for A8, though A2 to A7 and A11 admit it', async () => {
+    vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '6000');
+    bridge = new ZodiacBridgeServer(controller);
+    const r = await call('POST', '/api/sdn/allow', { inPort: 3, outPort: 1, priority: 300, srcMac: '02:00:00:00:00:01' });
+    expect(r.status).toBe(422);
+    expect(r.json.violations?.map((v) => v.property)).toEqual(['A8']);
+    expect(sendSpy).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it('a target above the floor refuses even the measured form, and says why', async () => {
+    vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', '7700');
+    bridge = new ZodiacBridgeServer(controller);
+    const r = await call('POST', '/api/sdn/allow', { inPort: 3, outPort: 1, priority: 120, srcMac: '02:00:00:00:00:01' });
+    expect(r.status).toBe(422);
+    expect(JSON.stringify(r.json.violations)).toContain('7765');
+    vi.unstubAllEnvs();
+  });
+
   it('a malformed target is reported and enforces nothing', () => {
     vi.stubEnv('ZODIAC_CAPACITY_TARGET_PPS', 'fast');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
