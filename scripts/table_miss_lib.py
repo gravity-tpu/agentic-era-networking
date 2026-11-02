@@ -327,6 +327,13 @@ def read_capture(runner: Runner, host: str, base: str) -> Dict[str, object]:
     return {'valid': True, 'reason': '', 'text': text, 'packets': packets}
 
 
+def seconds_until_capture_end(started_ms: int, now_ms: int, capture_s: int, margin_s: int = 3) -> int:
+    """Whole seconds still to wait before the captures, which end `capture_s` seconds after they were started, have printed their exit summary (the summary appears only then; a read before it
+    makes the observer invalid). Never negative. All integers: the caller passes monotonic milliseconds."""
+    remaining_ms = started_ms + (capture_s + margin_s) * 1000 - now_ms
+    return max(0, -(-remaining_ms // 1000))
+
+
 def observer_group(name: str) -> str:
     """O3_p2_mirror -> O3, O4_node01_eth0 -> O4: the two workload-side captures are one observer, invalid if either is."""
     return name.split('_', 1)[0]

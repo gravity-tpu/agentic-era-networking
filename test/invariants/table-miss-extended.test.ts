@@ -443,3 +443,22 @@ describe('the workload-side observer of the class pass', () => {
   });
 });
 
+describe('reading the captures only after they have ended', () => {
+  const wait = (started: number, now: number, cap: number): number => Number(execFileSync('python3', ['-c', `import sys; sys.path.insert(0, ${JSON.stringify(path.dirname(LIB))}); import table_miss_lib as t; print(t.seconds_until_capture_end(${started}, ${now}, ${cap}))`], { encoding: 'utf8' }).trim());
+
+  it('waits for the capture limit plus the margin, rounded up to a whole second, and never a negative time', () => {
+    expect(wait(0, 0, 30)).toBe(33);
+    expect(wait(0, 31_000, 30)).toBe(2); // the pass that raced: read 1 s after the capture limit, before the summary was printed
+    expect(wait(0, 31_001, 30)).toBe(2);
+    expect(wait(1_000, 30_500, 30)).toBe(4);
+    expect(wait(0, 33_000, 30)).toBe(0);
+    expect(wait(0, 90_000, 30)).toBe(0);
+  });
+
+  it('is what the class pass waits on: no fixed sleep after sending', () => {
+    const src = readFileSync(TRAFFIC, 'utf-8');
+    expect(src).toContain('lib.seconds_until_capture_end(');
+    expect(src).not.toMatch(/time\.sleep\(8\)/);
+  });
+});
+
