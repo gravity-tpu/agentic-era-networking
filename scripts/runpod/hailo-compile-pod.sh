@@ -200,13 +200,17 @@ print('rootfs extraction complete:', rootfs, flush=True)
 PY
 
 # Minimal /dev nodes: a fresh rootfs directory has no device files at all, and without CAP_SYS_ADMIN this script
-# can't bind-mount the pod's real /dev into it. CAP_MKNOD *is* present (confirmed live 2026-11-02 via
-# /proc/self/status), so create the handful of character devices most tools actually touch directly.
+# can't bind-mount the pod's real /dev into it. CAP_MKNOD was present on the pod this was first confirmed live
+# against (2026-11-02, US-IL-1, via /proc/self/status), but NOT on a different pod/host in a different
+# datacenter the same day (US-CA-2): `mknod: Operation not permitted`, under `set -e`, aborting the whole run.
+# Runpod's capability set isn't uniform across hosts -- best-effort each one rather than treating it as
+# load-bearing; if something downstream genuinely needs a working /dev/null and it's missing, that will surface
+# as its own concrete, diagnosable failure rather than this script refusing to even try.
 mkdir -p "$ROOTFS/dev"
-[ -e "$ROOTFS/dev/null" ]    || mknod -m 666 "$ROOTFS/dev/null" c 1 3
-[ -e "$ROOTFS/dev/zero" ]    || mknod -m 666 "$ROOTFS/dev/zero" c 1 5
-[ -e "$ROOTFS/dev/random" ]  || mknod -m 666 "$ROOTFS/dev/random" c 1 8
-[ -e "$ROOTFS/dev/urandom" ] || mknod -m 666 "$ROOTFS/dev/urandom" c 1 9
+[ -e "$ROOTFS/dev/null" ]    || mknod -m 666 "$ROOTFS/dev/null" c 1 3    2>/dev/null || echo "mknod /dev/null failed (no CAP_MKNOD on this host?); continuing" >&2
+[ -e "$ROOTFS/dev/zero" ]    || mknod -m 666 "$ROOTFS/dev/zero" c 1 5    2>/dev/null || echo "mknod /dev/zero failed (no CAP_MKNOD on this host?); continuing" >&2
+[ -e "$ROOTFS/dev/random" ]  || mknod -m 666 "$ROOTFS/dev/random" c 1 8  2>/dev/null || echo "mknod /dev/random failed (no CAP_MKNOD on this host?); continuing" >&2
+[ -e "$ROOTFS/dev/urandom" ] || mknod -m 666 "$ROOTFS/dev/urandom" c 1 9 2>/dev/null || echo "mknod /dev/urandom failed (no CAP_MKNOD on this host?); continuing" >&2
 # /etc/resolv.conf is a plain file, not a live mount -- copy the pod's own in case anything inside the chroot
 # does a DNS lookup (nothing should need to: the Suite's venv and Model Zoo are already baked into the image).
 mkdir -p "$ROOTFS/etc"
