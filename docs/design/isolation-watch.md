@@ -51,7 +51,7 @@ No route can change the table-miss, and the experiment endpoint always reinstall
 
 | Variable | Value |
 | :--- | :--- |
-| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (forward once), `forward-to-tap-sticky` (re-send the forward every 2 s, so a repair does not take), `delete-table-miss` (a strict delete: the entry is absent) or `unrecognised-table-miss` (an entry whose only instruction is CLEAR_ACTIONS: it still drops, but the readback cannot recognise it as the DROP) |
+| `ZODIAC_FAULT_TABLE_MISS` | `forward-to-tap` (forward once), `forward-to-tap-sticky` (re-send the forward every 2 s, so a repair does not take), `delete-table-miss` (a strict delete: the entry is absent), `unrecognised-table-miss` (an entry whose only instruction is CLEAR_ACTIONS: it still drops, but the readback cannot recognise it as the DROP) or one of three further entries that cannot forward and that the readback also reads as unrecognised: `unrecognised-write-empty` (an empty WRITE_ACTIONS), `unrecognised-apply-pop-vlan` (an APPLY_ACTIONS holding only POP_VLAN) and `unrecognised-write-metadata` (a zero WRITE_METADATA) |
 | `ZODIAC_FAULT_TABLE_MISS_ACK` | `I-ACCEPT-A-BOUNDED-FORWARDING-TABLE-MISS` (exactly) |
 | `ZODIAC_FAULT_TABLE_MISS_SECONDS` | optional, whole seconds from 60 to 900, default 240 |
 
@@ -63,6 +63,8 @@ Two supervised tests use it, both with the owner present and the workload idle:
 
 1. **Detection and push (repair off, the default).** Fault for 240 s. Expected: the status goes `mismatch`, the watcher sends an urgent alert after 2 polls (about 2 minutes at the default 60 s), the DROP returns at 240 s, the watcher sends the recovery message after 2 clean polls.
 2. **Repair.** Set `ZODIAC_ISOLATION_REPAIR=1` too and a fault of 600 s or more, so the governor acts first. Expected: after 3 readings the bridge re-sends the DROP itself (`repair` audit line, one "the bridge repaired itself" push), and the status returns to `verified` well before the fault's own time limit.
+
+The three further unrecognised variants, the other unmatched frame classes and the table-miss under load are prepared but not yet run: the session plan, predictions and abort conditions are fixed in [`docs/benchmarks/results/table-miss-extended/PREREGISTRATION.md`](../benchmarks/results/table-miss-extended/PREREGISTRATION.md). They stay under "Not validated" above until that run is written up.
 
 More supervised tests with the other modes (owner present, workload idle; the live bridge now runs with repair on, so a test that must not be repaired sets `ZODIAC_ISOLATION_REPAIR=0` after the repair line):
 
