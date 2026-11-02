@@ -258,6 +258,14 @@ WORKSPACE_DIR="${WORKSPACE:-/local/workspace}"
 VENV_PYTHON_REL="${HAILO_VENV_PATH:-$WORKSPACE_DIR/hailo_virtualenv}/bin/python3"
 mkdir -p "$ROOTFS/proc/self"
 [ -e "$ROOTFS$VENV_PYTHON_REL" ] && ln -sfn "$VENV_PYTHON_REL" "$ROOTFS/proc/self/exe"
+# The readlink("/proc/self/exe") fix above wasn't the whole story: strace on a live run 2026-11-02 showed it
+# succeeding, immediately followed by openat(AT_FDCWD, "/proc/self/cmdline", O_RDONLY) = -1 ENOENT -- a second,
+# unrelated call (/proc/self/cmdline is a real file, not a symlink, containing the process's own NUL-separated
+# argv) that TF's env.cc also needs and that doesn't exist in this hand-built /proc either. Unlike /proc/self/exe
+# there's no one true answer for "the" cmdline across every process in this pipeline (parse/optimize/compile are
+# different invocations) -- a plausible placeholder is enough here, since TF only needs the read to succeed, not
+# any particular content.
+printf 'python3\0' > "$ROOTFS/proc/self/cmdline"
 
 CALIB_REL="$WORKSPACE_DIR/calib"
 mkdir -p "$ROOTFS$CALIB_REL"
@@ -340,24 +348,23 @@ run_pipeline_step() {
   wait "$pid"
 }
 
-# The /proc/self/exe fix above resolved readlink("/proc/self/exe") failing (TF's GetExecutablePath, env.cc:400).
-# Live run 2026-11-02 then hit a sibling CHECK five lines later in the same file (env.cc:405: "-1 != fd"). A
-# direct probe of readlink()+open() on "/proc/self/exe" in isolation succeeded cleanly (fd=3), yet the same crash
-# still happened moments later in the real import -- proving the line-405 call is NOT simply open("/proc/self/
-# exe") like line 400's call was assumed to be (that assumption, based on proximity alone and not verified, was
-# wrong). Reaching for strace again (it already found the real cause once, for the line-400 check) instead of
-# guessing a second time from source-line proximity.
-#
-# `apt-get install strace` *inside* the chroot (an earlier version of this line) failed on a later run: the
-# Suite's own extracted rootfs has no gpgv/gpgv2/gpgv1 binary, so apt there can't verify any repo signature at
-# all ("gpgv, gpgv2 or gpgv1 required for verification") -- a pre-existing gap in the image itself, unrelated to
-# anything this script controls. No need to fix that: chroot doesn't create a new PID namespace, so a chrooted
-# process's PID is a normal PID in the outer, unchrooted shell too -- strace can be installed on the OUTER pod
-# OS (apt there has been working fine all along, e.g. for python3/pip) and trace straight through the chroot()
-# call from outside, with no dependency on the inner rootfs's own (broken) package management at all.
+# strace (run from the OUTER pod OS -- chroot doesn't create a new PID namespace, so a chrooted process's PID
+# and its real /proc entry are both visible from outside, and the Suite's own extracted rootfs has no working
+# apt [no gpgv/gpgv2/gpgv1], so installing strace has to happen out here regardless) already found two real
+# causes this way: the /proc/self/exe and /proc/self/cmdline fixes above. The hang diagnosis from a full live run
+# (2026-11-02, after both of those fixes) showed `hailomz parse` blocked with wchan "wait_for_partner" -- the
+# kernel's FIFO-open wait state, used only for named pipes, never anonymous pipes from pipe()/pipe2(). No FIFO
+# under our own control was involved (mknod succeeded for /dev/random and /dev/urandom on that host, so our FIFO
+# fallback for those wasn't even in play), and no mkfifo call appears anywhere in hailo_sdk_client/hailo_platform/
+# hailo_sdk_server's Python source -- so whatever opens a FIFO here does it from native code or creates one at
+# runtime, invisible to a static source grep. Tracing the real `hailomz parse` invocation itself (not just the
+# isolated import, which is a different process and apparently doesn't reach this far) for mkfifo/open/connect
+# calls, bounded to 2 minutes: the hang itself happens shortly after the same TF plugin-registration messages
+# seen in every prior run, not gradually, so there is no need to wait anywhere near the full 600s step timeout
+# to catch it in the act.
 apt-get install -y -qq strace || echo 'strace install failed on the outer OS (non-fatal; continuing without a trace)' >&2
-strace -f -s 2000 -o "$OUT/hailo-sdk-client-strace2.log" \
-  chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; python3 -c 'import hailo_sdk_client'" || true
+timeout 120 strace -f -e trace=open,openat,mkfifo,mknodat,connect,bind -s 500 -o "$OUT/hailomz-parse-strace.log" \
+  chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; hailomz parse $MODEL" || true
 
 COMPILE_START_MARKER="$BUILD/compile-start-marker"
 touch "$COMPILE_START_MARKER"
