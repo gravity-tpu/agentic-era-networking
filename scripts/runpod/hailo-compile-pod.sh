@@ -29,6 +29,12 @@
 set -Eeuo pipefail
 mkdir -p /workspace/out /workspace/work   # before the traps below: both write into /workspace/out on failure,
                                            # and must not themselves fail because that directory doesn't exist yet
+# /workspace is the attached network volume, which outlives any single pod -- without this, a stale DONE/FAILED
+# left by a previous run on the same volume is still there when this run starts, and the launcher's poll loop
+# (which only checks for the file's presence, not its age) reports FAILED/DONE within its first poll before this
+# run has done anything. Confirmed live 2026-11-02: a leftover FAILED from a prior failed attempt caused the
+# next attempt to be reported (and the pod terminated) ~60s in, mid-apt-get, nowhere near its actual failure point.
+rm -f /workspace/out/DONE /workspace/out/FAILED
 trap 'echo "step failed at line $LINENO" >> /workspace/out/pod.log; touch /workspace/out/FAILED' ERR
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ ! -e /workspace/out/DONE ] && [ ! -e /workspace/out/FAILED ]; then echo "exit $rc" >> /workspace/out/pod.log; touch /workspace/out/FAILED; fi' EXIT
 
