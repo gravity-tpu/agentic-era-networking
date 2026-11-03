@@ -451,8 +451,14 @@ apt-get install -y -qq strace || echo 'strace install failed on the outer OS (no
 timeout 400 strace -f -e trace=open,openat,mknod,mknodat,connect,bind -s 500 -o "$OUT/hailomz-optimize-strace.log" \
   chroot "$ROOTFS" /bin/bash -c "cd '$MZ_REL'; python3 /tmp/hailomz_wrapper.py 300 optimize $MODEL --calib-path '$CALIB_REL'" || true
 
-run_pipeline_step optimize 3600 "python3 /tmp/hailomz_wrapper.py 1800 optimize $MODEL --calib-path '$CALIB_REL'"
-run_pipeline_step compile 3600 "python3 /tmp/hailomz_wrapper.py 1800 compile $MODEL"
+# Live run 2026-11-03: optimize's attempt 1 hung (confirmed via wchan) and was correctly killed and retried;
+# attempt 2 got past the hang entirely and was doing real work (translation, HAR saved, calibration data prep,
+# "Starting Model Optimization") when the run ended -- the log simply stops there, consistent with attempt 2
+# also hitting the 3600s bound while genuinely still computing, not hanging (INT8 calibration quantization is
+# real CPU-bound work, not something this timeout was ever sized for). Bumped to 7200s so legitimate completion
+# isn't mistaken for a second hang and discarded.
+run_pipeline_step optimize 7200 "python3 /tmp/hailomz_wrapper.py 1800 optimize $MODEL --calib-path '$CALIB_REL'"
+run_pipeline_step compile 7200 "python3 /tmp/hailomz_wrapper.py 1800 compile $MODEL"
 
 # hailomz's own output path convention is not pinned by Hailo's docs (verified: GETTING_STARTED.rst does not
 # state where the .hef lands); search the whole workspace inside the rootfs rather than guess a single exact
