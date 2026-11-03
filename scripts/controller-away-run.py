@@ -60,7 +60,7 @@ def selftest():
     assert 'systemd-run' in OWNER_COMMAND and OWNER_COMMAND.index('systemd-run') < OWNER_COMMAND.index('systemctl stop zodiac-bridge') and '&& systemctl stop zodiac-bridge' in OWNER_COMMAND and 'sleep' not in OWNER_COMMAND
     assert OWNER_ABORT_COMMAND.index("systemctl stop 'away-restart-*.timer'") < OWNER_ABORT_COMMAND.index('systemctl start zodiac-bridge')
     # preflight against a faked ssh: it refuses on a leftover timer and on package activity, and passes on a quiet Jetson.
-    real_sh, real_iso, real_sleep = globals()['sh'], lc.isolation_ok, time.sleep
+    real_sh, real_iso, real_qc, real_sleep = globals()['sh'], lc.isolation_ok, lc.quarantine_count, time.sleep
     def quiet(overrides):
         def fake(host, cmd, timeout=30):
             for needle, answer in overrides.items():
@@ -71,10 +71,10 @@ def selftest():
             return 0, '', ''
         return fake
     def preflight_says(overrides):
-        globals()['sh'] = quiet(overrides); lc.isolation_ok = lambda: (True, {}); globals()['time'].sleep = lambda s: None
+        globals()['sh'] = quiet(overrides); lc.isolation_ok = lambda: (True, {}); lc.quarantine_count = lambda: 0; globals()['time'].sleep = lambda s: None
         try: preflight(); return 'ok'
         except SystemExit as e: return str(e)
-        finally: globals()['sh'], lc.isolation_ok, globals()['time'].sleep = real_sh, real_iso, real_sleep
+        finally: globals()['sh'], lc.isolation_ok, lc.quarantine_count, globals()['time'].sleep = real_sh, real_iso, real_qc, real_sleep
     assert preflight_says({}) == 'ok'
     assert 'leftover away-restart timer' in preflight_says({"list-timers --all --no-legend 'away-restart-*'": (0, '1', '')})
     assert 'package activity is running' in preflight_says({'pgrep -af "[u]pdate-notifier': (0, '4242 /usr/bin/aptd --foo', '')})
