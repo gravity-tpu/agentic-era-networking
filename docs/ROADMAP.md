@@ -47,6 +47,7 @@ A manually-maintained rollup of section 2's detailed tables and section 4's sequ
 5. **Review: drop the word "independent".** The reviewer named in the review packet is the owner, who also made the policy decisions, so the review is by the author. Call it the owner's review in everything published, and say that no one outside the project has reviewed the policy or the property list. An outside reviewer remains welcome and is not an exit condition.
 6. **Freeze feature work on the watcher, repair and test fault.** They produced real findings and protect unattended lab runs, but the roadmap says this is not a production appliance. Maintain, do not extend.
 7. **State plainly what is not claimed:** detector precision and recall are unmeasured, and the quarantine envelope depends on detection. The 6,000 pps A8 target is a declared number no workload requires, not a derived need.
+8. **Runpod is idle by default.** Under this scope nothing on the path to an exit needs a pod: scenarios 4 and 5 run on the bench, and the evaluation results exist. A pod run needs a named question, a per-run cap (5 USD, as in the evaluation plan) and the owner as the decision-maker. The one use worth considering is repeating the local Qwen arms to put a spread on the headline result, which today is one run per cell; it is optional, because the verifier-feedback result does not depend on it.
 
 **Not changed by this proposal:** Track D, the invariants, the non-goals, and every measured result.
 
