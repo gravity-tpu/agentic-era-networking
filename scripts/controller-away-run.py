@@ -5,7 +5,8 @@ The script does NOT stop or start the bridge (that needs sudo; the owner does it
 It does NOT write to the switch: the probe it starts (src/sdn/controller-away-probe-cli.ts) is read-only by construction and by test.
 Run on the Mac with the same setup as scripts/outage-forwarding.py (it creates and removes the sender neighbor entry and the promiscuous tap NIC itself).
 
-Usage: python3 scripts/controller-away-run.py OUT_PREFIX      then paste the owner command when READY is printed.
+Usage: python3 scripts/controller-away-run.py OUT_PREFIX [--skip-state-b]      then paste the owner command when READY is printed.
+--skip-state-b leaves out the traffic step before the probe starts (state B, already measured as 0 permille in three runs), so the probe starts within seconds of the outage and a slow ssh cannot push it past its start deadline.
        python3 scripts/controller-away-run.py --selftest   runs the offline checks of the judging helpers.
        python3 scripts/controller-away-run.py --plan          prints the timeline, the limits and the owner command, touching nothing.
 Observations, all the same frame class (2,000 pps UDP, 572 B, workload side to the tap NIC, matched by p1-default-tap-only):
@@ -32,10 +33,18 @@ def judge(pm):
     if pm >= RESUMED_AT_PERMILLE: return 'resumed'
     return 'partial'
 
+def parse_args(argv):
+    """(out_prefix, skip_state_b) or None when the arguments are not exactly an output prefix with the one optional flag."""
+    flags = [a for a in argv if a.startswith('--')]; rest = [a for a in argv if not a.startswith('--')]
+    if len(rest) != 1 or any(f != '--skip-state-b' for f in flags) or len(flags) > 1: return None
+    return rest[0], bool(flags)
+
 def selftest():
     assert permille(23689, 24000) == 987 and permille(0, 24000) == 0 and permille(5, 0) == 0 and permille(-3, 24000) == 0 and permille(24000, 24000) == 1000
     assert judge(0) == 'zero' and judge(19) == 'zero' and judge(20) == 'partial' and judge(899) == 'partial' and judge(900) == 'resumed' and judge(1000) == 'resumed'
     assert judge(permille(23690, 24000)) == 'resumed' and judge(permille(0, 24000)) == 'zero'
+    assert parse_args(['/tmp/x']) == ('/tmp/x', False) and parse_args(['/tmp/x', '--skip-state-b']) == ('/tmp/x', True) and parse_args(['--skip-state-b', '/tmp/x']) == ('/tmp/x', True)
+    assert parse_args([]) is None and parse_args(['/tmp/x', '/tmp/y']) is None and parse_args(['/tmp/x', '--other']) is None and parse_args(['/tmp/x', '--skip-state-b', '--skip-state-b']) is None
     calls = []
     def flaky(n):
         def f():
@@ -333,8 +342,9 @@ def main():
         selftest(); return 0
     if sys.argv[1:] == ['--plan']:
         print(plan_text()); return 0
-    if len(sys.argv) != 2: raise SystemExit(__doc__)
-    OUT = sys.argv[1]
+    parsed = parse_args(sys.argv[1:])
+    if parsed is None: raise SystemExit(__doc__)
+    OUT, SKIP_B = parsed
     prov = {'startedEt': lc.now_et(), 'harnessSha256': hashlib.sha256(open(__file__, 'rb').read()).hexdigest(), 'lcSha256': hashlib.sha256(open(lc.__file__, 'rb').read()).hexdigest(),
             'senderSha256': hashlib.sha256(lc.SENDER_SRC.encode()).hexdigest(),
             'probeCliSha256': lc.run(lc.JETSON, f'sha256sum {PROBE_CLI}').split()[0], 'jetsonRepo': lc.run(lc.JETSON, 'cd ~/agentic-era-networking && git rev-parse HEAD && git rev-parse --abbrev-ref HEAD').split(),
@@ -363,7 +373,8 @@ def main():
             time.sleep(1)
         D = now_ms(); RES['bridgeDownSeenAfterReadyMs'] = D - t0
         log('bridge unreachable (D). The switch has no controller. Measuring before the probe connects.')
-        observe('no_controller_before_probe', idle)
+        if SKIP_B: RES['no_controller_before_probe'] = {'skipped': 'state B was measured as 0 permille in three earlier runs; skipped so the probe starts within seconds of the outage'}; log('state B skipped (--skip-state-b)')
+        else: observe('no_controller_before_probe', idle)
         late = now_ms() - D > PROBE_START_DEADLINE_S * 1000
         back = bridge_up()
         if back or late:
