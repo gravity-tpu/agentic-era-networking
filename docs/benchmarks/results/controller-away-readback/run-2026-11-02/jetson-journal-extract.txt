@@ -1,0 +1,31 @@
+2026-11-02T18:57:19-0500 systemd: Stopping Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking...
+2026-11-02T18:57:19-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T18:57:19-0500 systemd: Stopped Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking.
+2026-11-02T18:57:38-0500 zodiac-isolation-watch: 2026-11-02T23:57:38.813Z poll: unreachable (fetch failed) -> unreachable
+2026-11-02T18:58:38-0500 zodiac-isolation-watch: 2026-11-02T23:58:38.866Z poll: unreachable (fetch failed) -> unreachable
+2026-11-02T18:59:38-0500 zodiac-isolation-watch: 2026-11-02T23:59:38.918Z poll: unreachable (fetch failed) -> unreachable
+2026-11-02T18:59:39-0500 zodiac-isolation-watch: 2026-11-02T23:59:39.211Z sent alert: Zodiac bridge unreachable
+2026-11-02T19:00:08-0500 systemd: Started Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking.
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T19:00:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
+2026-11-02T19:01:39-0500 zodiac-isolation-watch: 2026-11-03T00:01:39.591Z sent recovered: Zodiac isolation recovered
+--- other units
+2026-11-02T18:57:32-0500 update-notifier.desktop: ERROR:root:free space check failed
+2026-11-02T18:57:32-0500 update-notifier.desktop: Traceback (most recent call last):
+2026-11-02T18:57:32-0500 update-notifier.desktop:   File "/usr/lib/python3/dist-packages/UpdateManager/UpdatesAvailable.py", line 905, in on_button_install_clicked
+2026-11-02T18:57:32-0500 update-notifier.desktop:     self.cache.checkFreeSpace()
+2026-11-02T18:57:32-0500 update-notifier.desktop:   File "/usr/lib/python3/dist-packages/DistUpgrade/DistUpgradeCache.py", line 1198, in checkFreeSpace
+2026-11-02T18:57:32-0500 update-notifier.desktop:     for (dir, size) in [(archivedir, self.required_download),
+2026-11-02T18:57:32-0500 update-notifier.desktop:   File "/usr/lib/python3/dist-packages/UpdateManager/Core/MyCache.py", line 136, in required_download
+2026-11-02T18:57:32-0500 update-notifier.desktop:     pm.get_archives(fetcher, self._list, self._records)
+2026-11-02T18:57:32-0500 update-notifier.desktop: apt_pkg.Error: E:Can't find a source to download version '1.0.9-2ubuntu0.1' of 'libbrotli1:arm64', E:Can't find a source to download version '5.15.0-2
+2026-11-02T18:57:35-0500 AptDaemon: INFO: Initializing daemon
+2026-11-02T18:57:36-0500 AptDaemon: INFO: CommitPackages() was called: dbus.Array([dbus.String('')], signature=dbus.Signature('s')), dbus.Array([dbus.String('')], signature=dbus.Signature('s')), dbus.
+2026-11-02T18:57:42-0500 systemd: Stopping Tailscale node agent...
+2026-11-02T18:57:42-0500 tailscaled: tailscaled got signal terminated; shutting down
+2026-11-02T18:57:42-0500 sudo: pam_unix(sudo:session): session closed for user root
