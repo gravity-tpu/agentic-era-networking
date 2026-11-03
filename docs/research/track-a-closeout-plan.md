@@ -52,7 +52,7 @@ Agreement per flow and per arm with Wilson intervals; the separate measure of ob
 
 ### Phase 5: review and exit
 
-Independent review of the policy and property list by a network engineer before publishing (ROADMAP sequence step 7; the owner arranges it); the exit checklist (A1 to A11 enforced in CI, rejection detail, published evaluation with failure cases, wire results as above); ROADMAP and README status lines updated.
+Owner's review of the policy and property list before publishing (ROADMAP sequence step 7; the reviewer is the author, so it is not independent and published results say so); the exit checklist (A1 to A11 enforced in CI, rejection detail, published evaluation with failure cases, wire results as above); ROADMAP and README status lines updated.
 
 ### Phase 6: Track C scenarios (in scope by the owner's decision)
 
@@ -65,7 +65,7 @@ Scenarios 2 (MAC and IP spoofing inside the workload segment), 4 (flood to sessi
 3. Availability: the owner is generally present; each session's bundle is still approved by hash before it is installed.
 4. A8: the operator determines the target (6,000 pps at 572 B, derivation in Phase 4), with the consequence noted there.
 5. A10 uplink to workload: deploy. It is already deployed (empty peer list); the remaining work is in Phase 4.
-6. Independent review: the owner.
+6. Review: the owner (the author; not independent).
 7. Track C scenarios 2, 4 and 5 are part of this close-out (Phase 6; scenario 6 with them).
 
 8. Injecting frames into port 3 from the O2 capture NIC (to test how rule sets treat frames from the tap): **not approved for now** (owner, 2026-10-31); port 3 ingress stays untested and is reported as such.

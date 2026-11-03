@@ -1,6 +1,6 @@
 # Isolation repair: the bridge re-sends the default DROP by itself, within an envelope
 
-The owner chose this (option 2 of the A3 options in `docs/research/independent-review-packet.md`) on 2026-10-31: when the switch's table-miss DROP is found missing or wrong, a damped, bounded auto-repair restores it, and a person is told. **On the live bridge it has been enabled since 2026-11-02 (the owner's decision, recorded in `.agents/audit-log.md`); the code default is still off.** **It is off unless `ZODIAC_ISOLATION_REPAIR=1`.**
+The owner chose this (option 2 of the A3 options in `docs/research/owner-review-packet.md`) on 2026-10-31: when the switch's table-miss DROP is found missing or wrong, a damped, bounded auto-repair restores it, and a person is told. **On the live bridge it has been enabled since 2026-11-02 (the owner's decision, recorded in `.agents/audit-log.md`); the code default is still off.** **It is off unless `ZODIAC_ISOLATION_REPAIR=1`.**
 
 ## What it does
 

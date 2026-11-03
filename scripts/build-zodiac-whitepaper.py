@@ -252,7 +252,7 @@ capacity = 1,000,000 / t_packet  packets per second</pre>
 <tr><td>Checks A3 to A10; action-level readback; cost-model input to the verifier</td><td>Planned</td></tr>
 <tr><td>E1 conformance</td><td>First manual run done: five checks, all matched (section 5); automated probe planned</td></tr>
 <tr><td>E2 adversarial suite, E3 agent evaluation</td><td>Planned; no results</td></tr>
-<tr><td>Independent review of policy and property list</td><td>Planned before publication of results</td></tr>
+<tr><td>Owner's review of policy and property list (by the author, not independent)</td><td>Planned before publication of results</td></tr>
 </table>
 <p>The roadmap [2] gives sequencing and exit criteria. Deferred or dropped from the earlier plan: the Sentinel bot-mitigation module, DNS reverse proxy, multi-agent routing stability, and the agent intent firewall.</p>
 

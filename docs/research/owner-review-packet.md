@@ -1,6 +1,6 @@
-# Independent review packet: what the network-engineer review covers (2026-10-31)
+# Owner review packet: what the owner's review of the policy covers (2026-10-31)
 
-The Track A sequence (`docs/ROADMAP.md`, section 4, step 7) calls for an **independent review of the policy and the property list by a network engineer, before results are published**. This packet says what that review is, where to look, and what questions would be most useful to answer. The reviewer is the owner. Nothing here has been signed off.
+The Track A sequence (`docs/ROADMAP.md`, section 4, step 7) calls for a **review of the policy and the property list by a network engineer, before results are published**. The reviewer is the owner, who also made the policy decisions, so this is the author's review and is not independent; published results say so and say that no outside review has happened. This packet says what the review is, where to look, and what questions would be most useful to answer; it would serve an outside reviewer equally. Nothing here has been signed off.
 
 ## What you are reviewing
 

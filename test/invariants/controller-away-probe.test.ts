@@ -9,7 +9,8 @@
 
 import { describe, it, expect } from 'vitest';
 import net from 'node:net';
-import { readFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -473,8 +474,17 @@ describe('closeAndExit (CLI stop path)', () => {
 describe('orchestrator judging helpers (offline)', () => {
   it('passes its own selftest: integer permille ratios, the zero/partial/resumed thresholds, and a line far inside the dropped part of the buffer still seen', () => {
     const script = fileURLToPath(new URL('../../scripts/controller-away-run.py', import.meta.url));
-    const out = execFileSync('python3', ['-I', script, '--selftest'], { encoding: 'utf-8', timeout: 20_000 });
-    expect(out).toContain('selftest ok');
+    // The selftest is offline. A stub `ssh` that fails at once is first on PATH, so a call it forgets to fake fails fast instead of waiting for a
+    // real host (2026-11-02: it hung when Tailscale SSH asked for its periodic re-approval, which is what made the pre-push gate fail).
+    const bin = mkdtempSync(path.join(tmpdir(), 'no-ssh-'));
+    try {
+      writeFileSync(path.join(bin, 'ssh'), '#!/bin/sh\necho "ssh disabled in the offline selftest" >&2\nexit 255\n');
+      chmodSync(path.join(bin, 'ssh'), 0o755);
+      const out = execFileSync('python3', ['-I', script, '--selftest'], { encoding: 'utf-8', timeout: 20_000, env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` } });
+      expect(out).toContain('selftest ok');
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
   });
 
   it('has no float division on packet counters and no float seconds for waits', () => {
