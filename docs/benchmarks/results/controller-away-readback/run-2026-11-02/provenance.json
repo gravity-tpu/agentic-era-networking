@@ -1,0 +1,26 @@
+{
+ "startedEt": "2026-11-02 18:56:19 ET",
+ "harnessSha256": "1df0100b217a5327faa043abfaff619be6475c58a7abbc2892c3700c46cbdc1e",
+ "lcSha256": "34725152e5eccd309279a1123565a6d90e0ea312ae933a8660c2a43da7be67d5",
+ "senderSha256": "4eccef8e7cf9d777e7bbea7f4e3a6201abc585b72b1d8f52df5a6d6504fc2a68",
+ "probeCliSha256": "e5dfb64f9c6ea9301cb4dd0f5f42fb17694773f057f37ff3b0bbfe8577f9df26",
+ "jetsonRepo": [
+  "ebe555fcd821b95a223536886f4da3c33efe7f13",
+  "main"
+ ],
+ "limits": {
+  "probeOverallMs": 65000,
+  "reconnectWaitMs": 35000,
+  "readbackTimeoutMs": 8000,
+  "readbacks": 2,
+  "intervalMs": 20000,
+  "remoteKillS": 72,
+  "startDeadlineS": 25,
+  "ownerSleepS": 110,
+  "baselineFloorPermille": 900,
+  "zeroBelowPermille": 20,
+  "resumedAtPermille": 900
+ },
+ "uplinkArpPeers": "none",
+ "probeBindHost": "0.0.0.0 (the bridge default)"
+}

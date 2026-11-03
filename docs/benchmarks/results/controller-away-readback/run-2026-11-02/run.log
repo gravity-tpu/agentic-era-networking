@@ -1,0 +1,34 @@
+[2026-11-02 18:56:20 ET] Timeline (seconds from the owner pressing enter; D = the script sees the bridge down, at most 5 s after):
+  T+0            owner stops the bridge (the switch loses its controller; workload frames start to be dropped)
+  D              no_controller_before_probe: 12 s of 2,000 pps (sampler lead-in 1.5 s, so about 16 s with the ssh calls)
+  D+~18          probe starts on the Jetson (must start by D+25 or it is not started); it binds 6633 and waits up to 35 s for the switch
+  P+r            the switch connects (r unmeasured), the probe reads the table (read 1)
+  P+r            probe_connected: 12 s of the same traffic while the probe holds the session
+  P+r+20         read 2; the probe exits and the switch has no controller again
+  T+110          the owner's command restarts the bridge (the probe is dead by D+97 at the latest, the CLI's own limits)
+  +6 s          bridge answering again; 10 s settle; isolation status read; after_bridge_back: 12 s of the same traffic
+Probe limits: overall 65 s, reconnect wait 35 s, readback timeout 8 s, 2 readbacks 20 s apart; remote last-resort kill at 72 s.
+Worst-case blackout: 110 s sleep + about 6 s restart = about 116 s, under the isolation watcher's alert of 150 s (3 polls of 60 s); the sleep is fixed, so the blackout is about that long whether or not the probe finishes early.
+Owner command (one line, on the Jetson): sudo sh -c 'systemctl stop zodiac-bridge; sleep 110; systemctl start zodiac-bridge'
+[2026-11-02 18:56:20 ET] preflight
+[2026-11-02 18:56:22 ET] uplink ARP peers the probe compares against: 'none'; the probe binds 0.0.0.0 like the bridge
+[2026-11-02 18:56:25 ET] setup: neighbor entry 10.0.0.119 on agentic-node-01 eth0; tap capture pid 998127; promiscuity 1
+[2026-11-02 18:56:29 ET] idle rate 0.0 pps
+[2026-11-02 18:56:46 ET] baseline_bridge_up: sent 24000, delivered 23693, ratio 987 permille (resumed; zero is under 20, resumed is at least 900), bridge up at end: True
+[2026-11-02 18:56:46 ET] table counters before the outage: {"capturedAtIso": "2026-11-02T23:56:46.444Z", "entryCount": 7, "entries": [{"priority": 0, "inPort": null, "ethType": null, "srcIp": null, "dstIp": null, "packetCount": "428", "byteCount": "45367"}, {"priority": 200, "inPort": 1, "ethType": 2048, "srcIp": "10.0.2.0", "dstIp": "10.0.2.0", "packetCount": "0", "byteCount": "0"}, {"priority": 200, "inPort": 1, "ethType": 2054, "srcIp": null, "dstIp": 
+[2026-11-02 18:56:46 ET] READY. Owner: paste this on the Jetson now (it stops the bridge, waits, starts it again):
+[2026-11-02 18:56:46 ET]     sudo sh -c 'systemctl stop zodiac-bridge; sleep 110; systemctl start zodiac-bridge'
+[2026-11-02 18:57:20 ET] bridge unreachable (D). The switch has no controller. Measuring before the probe connects.
+[2026-11-02 18:57:36 ET] no_controller_before_probe: sent 24000, delivered 0, ratio 0 permille (zero; zero is under 20, resumed is at least 900), bridge up at end: False
+[2026-11-02 18:57:36 ET] probe started 16766 ms after D; waiting for the switch to connect and the first readback
+[2026-11-02 18:57:37 ET] probe| 2026-11-02T23:57:37.279Z controller-away probe (READ-ONLY): overall limit 65000 ms, 2 readback(s) every 20000 ms, policy 6 rules
+[2026-11-02 18:57:37 ET] probe| 2026-11-02T23:57:37.299Z listening on 0.0.0.0:6633; waiting up to 35000 ms for the switch (read-only: nothing will be written to it)
+[2026-11-02 18:57:40 ET] probe| 2026-11-02T23:57:38.821Z notice: switch TCP connection from 10.0.1.99:49311
+[2026-11-02 18:57:40 ET] probe| 2026-11-02T23:57:38.825Z notice: handshake complete, datapath 70b3d58740c9
+[2026-11-02 18:57:40 ET] probe| 2026-11-02T23:57:38.826Z switch session ready after 1541 ms
+[2026-11-02 18:57:40 ET] probe| 2026-11-02T23:57:38.829Z readback 1: 0 entries, empty
+[2026-11-02 18:57:42 ET] probe| Connection to 100.118.64.16 closed by remote host.
+[2026-11-02 18:58:02 ET] teardown
+[2026-11-02 18:58:02 ET] tap capture stopped (rc 0)
+[2026-11-02 18:58:03 ET] neighbor entry removed (rc 0)
+[2026-11-02 18:58:03 ET] tap NIC now: promiscuity 0

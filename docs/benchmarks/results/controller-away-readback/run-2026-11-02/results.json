@@ -1,0 +1,96 @@
+{
+ "baseline_bridge_up": {
+  "sent": 24000,
+  "delivered": 23693,
+  "ratioPermille": 987,
+  "judgement": "resumed",
+  "medianBusyPps": 1973,
+  "startedEpochS": 1793663789,
+  "durationMs": 16568,
+  "startedEt": "2026-11-02 18:56:46 ET",
+  "bridgeUpAtEnd": true
+ },
+ "tableBeforeOutage": {
+  "capturedAtIso": "2026-11-02T23:56:46.444Z",
+  "entryCount": 7,
+  "entries": [
+   {
+    "priority": 0,
+    "inPort": null,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "428",
+    "byteCount": "45367"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2048,
+    "srcIp": "10.0.2.0",
+    "dstIp": "10.0.2.0",
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2054,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2054,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 150,
+    "inPort": 1,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "23745",
+    "byteCount": "14567568"
+   },
+   {
+    "priority": 200,
+    "inPort": 2,
+    "ethType": 2048,
+    "srcIp": null,
+    "dstIp": "10.0.2.0",
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 100,
+    "inPort": 3,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   }
+  ]
+ },
+ "bridgeDownSeenAfterReadyMs": 33788,
+ "no_controller_before_probe": {
+  "sent": 24000,
+  "delivered": 0,
+  "ratioPermille": 0,
+  "judgement": "zero",
+  "medianBusyPps": 0,
+  "startedEpochS": 1793663840,
+  "durationMs": 16549,
+  "startedEt": "2026-11-02 18:57:36 ET",
+  "bridgeUpAtEnd": false
+ },
+ "probeStartedAfterDMs": 16766,
+ "probeFirstReadAfterDMs": 20031
+}
