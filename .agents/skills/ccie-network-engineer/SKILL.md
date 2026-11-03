@@ -22,7 +22,7 @@ metadata:
 
 # Network Engineering Review & Context Custodian
 
-**Role:** review network-facing code and policy against [network-engineering-principles.md](../../rules/network-engineering-principles.md), and keep the repository's network state ledger current. The name of this skill is historical; it claims no certification and its findings are hypotheses to be checked. Independent review by a qualified network engineer is a planned step in [docs/ROADMAP.md](../../../docs/ROADMAP.md) and is not replaced by this skill.
+**Role:** review network-facing code and policy against [network-engineering-principles.md](../../rules/network-engineering-principles.md), and keep the repository's network state ledger current. The name of this skill is historical; it claims no certification and its findings are hypotheses to be checked. The owner's review of the policy and property list is a planned step in [docs/ROADMAP.md](../../../docs/ROADMAP.md); it is the author's review, not an independent one, and this skill does not replace it.
 
 ---
 
