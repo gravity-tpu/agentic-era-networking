@@ -492,4 +492,3 @@ describe('the orchestrator does not match its own ssh shell when it looks for a 
     expect(src).toContain('[c]ontroller-away-probe-cli');
   });
 });
-

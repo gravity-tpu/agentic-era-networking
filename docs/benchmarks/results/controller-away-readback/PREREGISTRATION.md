@@ -125,7 +125,7 @@ The script aborts or skips as follows. None needs the owner except the last.
 3. Owner, on the Jetson, when READY is printed (the line is repeated in the log): paste exactly this one line. It stops the bridge, waits, and starts it again, so the bridge returns whatever else happens.
 
    ```text
-   sudo sh -c 'systemctl stop zodiac-bridge; sleep 110; systemctl start zodiac-bridge'
+   sudo sh -c 'systemd-run --unit=away-restart-$(date +%s) --on-active=110s systemctl start zodiac-bridge && systemctl stop zodiac-bridge'
    ```
 
 4. Nobody touches the switch, the bridge or the Jetson for the next 2 minutes. The script prints each observation and the probe's lines as they happen and ends with `finished`.
@@ -186,3 +186,7 @@ All named in `PROBE_LIMITS` (probe) and at the top of `scripts/controller-away-r
 | probe start after the bridge is seen down | 25 s | fixed in the script |
 | traffic | 2,000 pps, 12 s per state, four states | as the earlier run; about 96,000 frames in all |
 | owner's sleep | 110 s | derived: start deadline + remote kill + detection slack + margin |
+
+## Amendment, 2026-11-02, after the first run and before the re-run
+
+The first run was cut short (see the README beside this file): a package update restarted Tailscale, the ssh sessions and the owner's `sudo sh -c 'stop; sleep; start'` died, and the bridge stayed down 169 s. Nothing in the hypotheses or the predictions changes; the re-run adds state C, the second readback and state D. What changes in the procedure: (1) the bridge's return is armed first as a detached systemd timer (`systemd-run --unit=away-restart-<time> --on-active=110s systemctl start zodiac-bridge`) and only then is the bridge stopped, with `&&` so that a failed arming leaves the bridge running; to end the outage early the owner cancels the timers and starts the bridge (`sudo systemctl stop 'away-restart-*.timer'; sudo systemctl start zodiac-bridge`); (2) the orchestrator stops the desktop update notifier (a user process) and refuses to start while apt or dpkg is running; (3) a dropped ssh is retried before the bridge is read as down, and a failed traffic step is retried once and then recorded as not measured instead of ending the run. The first run's observations stay as they are: readback 1 read 0 entries, and state B was 0 permille.
