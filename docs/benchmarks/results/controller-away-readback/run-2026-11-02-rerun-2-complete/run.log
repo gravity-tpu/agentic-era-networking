@@ -1,0 +1,62 @@
+[2026-11-02 19:53:05 ET] Timeline (seconds from the owner pressing enter; D = the script sees the bridge down, at most 5 s after):
+  T+0            owner stops the bridge (the switch loses its controller; workload frames start to be dropped)
+  D              no_controller_before_probe: 12 s of 2,000 pps (sampler lead-in 1.5 s, so about 16 s with the ssh calls)
+  D+~18          probe starts on the Jetson (must start by D+25 or it is not started); it binds 6633 and waits up to 35 s for the switch
+  P+r            the switch connects (r unmeasured), the probe reads the table (read 1)
+  P+r            probe_connected: 12 s of the same traffic while the probe holds the session
+  P+r+20         read 2; the probe exits and the switch has no controller again
+  T+110          the detached timer armed by the owner's command starts the bridge (the probe is dead by D+97 at the latest, the CLI's own limits)
+  +6 s          bridge answering again; 10 s settle; isolation status read; after_bridge_back: 12 s of the same traffic
+Probe limits: overall 65 s, reconnect wait 35 s, readback timeout 8 s, 2 readbacks 20 s apart; remote last-resort kill at 72 s.
+Worst-case blackout: 110 s sleep + about 6 s restart = about 116 s, under the isolation watcher's alert of 150 s (3 polls of 60 s); the sleep is fixed, so the blackout is about that long whether or not the probe finishes early.
+Owner command (one line, on the Jetson): sudo sh -c 'systemd-run --unit=away-restart-$(date +%s) --on-active=110s systemctl start zodiac-bridge && systemctl stop zodiac-bridge'
+To end the outage early: sudo systemctl stop 'away-restart-*.timer'; sudo systemctl start zodiac-bridge
+[2026-11-02 19:53:05 ET] preflight
+[2026-11-02 19:53:09 ET] uplink ARP peers the probe compares against: 'none'; the probe binds 0.0.0.0 like the bridge
+[2026-11-02 19:53:11 ET] setup: neighbor entry 10.0.0.119 on agentic-node-01 eth0; tap capture pid 1005555; promiscuity 1
+[2026-11-02 19:53:16 ET] idle rate 0.0 pps
+[2026-11-02 19:53:32 ET] baseline_bridge_up: sent 24000, delivered 23691, ratio 987 permille (resumed; zero is under 20, resumed is at least 900), bridge up at end: True
+[2026-11-02 19:53:32 ET] table counters before the outage: {"capturedAtIso": "2026-11-03T00:53:32.961Z", "entryCount": 7, "entries": [{"priority": 0, "inPort": null, "ethType": null, "srcIp": null, "dstIp": null, "packetCount": "22", "byteCount": "3432"}, {"priority": 200, "inPort": 1, "ethType": 2048, "srcIp": "10.0.2.0", "dstIp": "10.0.2.0", "packetCount": "0", "byteCount": "0"}, {"priority": 200, "inPort": 1, "ethType": 2054, "srcIp": null, "dstIp": nu
+[2026-11-02 19:53:32 ET] READY. Owner: paste this on the Jetson now (it stops the bridge, waits, starts it again):
+[2026-11-02 19:53:32 ET]     sudo sh -c 'systemd-run --unit=away-restart-$(date +%s) --on-active=110s systemctl start zodiac-bridge && systemctl stop zodiac-bridge'
+[2026-11-02 19:57:15 ET] bridge unreachable (D). The switch has no controller. Measuring before the probe connects.
+[2026-11-02 19:57:15 ET] state B skipped (--skip-state-b)
+[2026-11-02 19:57:15 ET] probe started 242 ms after D; waiting for the switch to connect and the first readback
+[2026-11-02 19:57:16 ET] probe| 2026-11-03T00:57:16.070Z controller-away probe (READ-ONLY): overall limit 65000 ms, 2 readback(s) every 20000 ms, policy 6 rules
+[2026-11-02 19:57:16 ET] probe| 2026-11-03T00:57:16.089Z listening on 0.0.0.0:6633; waiting up to 35000 ms for the switch (read-only: nothing will be written to it)
+[2026-11-02 19:57:16 ET] probe| 2026-11-03T00:57:16.394Z notice: switch TCP connection from 10.0.1.99:49433
+[2026-11-02 19:57:16 ET] probe| 2026-11-03T00:57:16.398Z notice: handshake complete, datapath 70b3d58740c9
+[2026-11-02 19:57:16 ET] probe| 2026-11-03T00:57:16.398Z switch session ready after 323 ms
+[2026-11-02 19:57:16 ET] probe| 2026-11-03T00:57:16.403Z readback 1: 0 entries, empty
+[2026-11-02 19:57:33 ET] probe_connected: sent 24000, delivered 0, ratio 0 permille (zero; zero is under 20, resumed is at least 900), bridge up at end: False
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.403Z readback 2: 0 entries, empty
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.408Z readback 1 at 324 ms (4 ms): 0 entries, empty
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.408Z   policy comparison: 0/6 rules confirmed, 0 extra entries, actions unobservable, table-miss absent
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-ipv4-intra-segment: not present on switch (priority 200, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-arp-allow-10.0.2.50: not present on switch (priority 200, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-arp-allow-10.0.2.52: not present on switch (priority 200, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-default-tap-only: not present on switch (priority 150, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p2-ipv4-to-segment: not present on switch (priority 200, in_port 2)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p3-tap-return: not present on switch (priority 100, in_port 3)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: table-miss: no priority-0 wildcard entry on switch
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z readback 2 at 20325 ms (3 ms): 0 entries, empty
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   policy comparison: 0/6 rules confirmed, 0 extra entries, actions unobservable, table-miss absent
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-ipv4-intra-segment: not present on switch (priority 200, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-arp-allow-10.0.2.50: not present on switch (priority 200, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-arp-allow-10.0.2.52: not present on switch (priority 200, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p1-default-tap-only: not present on switch (priority 150, in_port 1)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.409Z   mismatch: p2-ipv4-to-segment: not present on switch (priority 200, in_port 2)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.410Z   mismatch: p3-tap-return: not present on switch (priority 100, in_port 3)
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.410Z   mismatch: table-miss: no priority-0 wildcard entry on switch
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.410Z server errors seen: 0
+[2026-11-02 19:57:36 ET] probe| 2026-11-03T00:57:36.410Z OUTCOME empty (exit 3): The switch held NO flow entries after the controller was away.
+[2026-11-02 19:57:36 ET] probe| RESULT {"outcome":"empty","exitCode":3,"message":"The switch held NO flow entries after the controller was away.","connectedAtMs":323,"handshakes":1,"packetIns":"0","serverErrorCount":"0","recentServerErrors":[],"reads":[{"index":1,"startedAtMs":324,"durationMs":4,"ok":true,"entries":[],"assessment":{"entryCount":0,"extraEntries":0,"policyRuleCount":6,"confirmed":0,"mismatches":["p1-ipv4-intra-segment: not present on switch (priority 200, in_port 1)","p1-arp-allow-10.0.2.50: not present on switch (priority 200, in_port 1)","p1-arp-allow-10.0.2.52: not present on switch (priority 200, in_port 1)","p1-default-tap-only: not present on switch (priority 150, in_port 1)","p2-ipv4-to-segment: not present on switch (priority 200, in_port 2)","p3-tap-return: not present on switch (priority 100, in_port 3)","table-miss: no priority-0 wildcard entry on switch"],"actionStatus":"unobservable","tableMiss":"absent","klass":"empty","note":"the switch reported no flow entries"}},{"index":2,"startedAtMs":20325,"durationMs":3,"ok":true,"entries":[],"assessment":{"entryCount":0,"extraEntries":0,"policyRuleCount":6,"confirmed":0,"mismatches":["p1-ipv4-intra-segment: not present on switch (priority 200, in_port 1)","p1-arp-allow-10.0.2.50: not present on switch (priority 200, in_port 1)","p1-arp-allow-10.0.2.52: not present on switch (priority 200, in_port 1)","p1-default-tap-only: not present on switch (priority 150, in_port 1)","p2-ipv4-to-segment: not present on switch (priority 200, in_port 2)","p3-tap-return: not present on switch (priority 100, in_port 3)","table-miss: no priority-0 wildcard entry on switch"],"actionStatus":"unobservable","tableMiss":"absent","klass":"empty","note":"the switch reported no flow entries"}}],"tableChangedDuringSession":false,"counterDeltas":[],"notes":[],"elapsedMs":20333,"sentToSwitch":"hello, features request, echo, flow-stats request only (enforced; see file comment)"}
+[2026-11-02 19:57:36 ET] probe finished: exit 3, outcome empty
+[2026-11-02 19:59:09 ET] bridge answering again 113568 ms after D
+[2026-11-02 19:59:19 ET] isolation after: True
+[2026-11-02 19:59:35 ET] after_bridge_back: sent 24000, delivered 23693, ratio 987 permille (resumed; zero is under 20, resumed is at least 900), bridge up at end: True
+[2026-11-02 19:59:35 ET] finished
+[2026-11-02 19:59:36 ET] teardown
+[2026-11-02 19:59:36 ET] tap capture stopped (rc 0)
+[2026-11-02 19:59:36 ET] neighbor entry removed (rc 0)
+[2026-11-02 19:59:37 ET] tap NIC now: promiscuity 0

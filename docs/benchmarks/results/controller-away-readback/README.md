@@ -1,5 +1,26 @@
 # What the switch keeps when its controller goes away: the read-only probe (2026-11-02)
 
+**Settled by the third run of the day (`run-2026-11-02-rerun-2-complete/`): the switch's flow table is empty when a controller reconnects, it stays empty with a controller session open, and the switch drops everything meanwhile.** The first run (below) was cut short; the hardened re-runs completed it. Summary of the complete run, with the pre-registration's predictions for H1 (read 1 empty, state C zero) all met:
+
+| Step | Result |
+| ---- | ------ |
+| Bridge seen down (D) at 19:57:15; probe started | 242 ms after D |
+| The switch connected and completed the handshake | 323 ms after the probe began listening (979 ms after D to the first readback line), one handshake |
+| **Readback 1** | **0 entries, empty** (against 7 before the outage) |
+| **State C**, the probe holding the session, 24,000 frames at 2,000 pps | **0 delivered (0 permille)** |
+| **Readback 2**, 20 s later | **0 entries, still empty** |
+| Packet-ins to the probe, server errors, second handshakes | 0, 0, 0 |
+| The bridge back (the detached systemd timer) | answering 113.6 s after D; isolation `verified`; traffic after recovery 987 permille (23,693 of 24,000) |
+| The isolation watcher | two unreachable polls (the blackout was shorter than its 3-poll alert), no alert |
+
+What this adds to the first run: the pre-registered surprising case, frames delivered through an empty table while a session is open (a firmware default the readback would hide), is **excluded**: with the session open and the table empty nothing was delivered, and the table did not fill or change over 20 s. No frame was punted to the controller (packet-ins 0). So an outage of the controller is a blackout and a loss of the whole configuration, and only the bridge's re-send at session start restores forwarding. Still true: the probe cannot tell "cleared when the old session ended" from "cleared when any new session starts" (either way the table is empty at reconnect), and these are one run each of the three, one frame class, firmware 0.86.
+
+The first re-run (`run-2026-11-02-rerun-1-probe-skipped/`) confirmed the detached timer (the bridge came back by itself 112 s after D) and state B (0 permille) but did not start the probe: a 20 s network blip made the ssh calls time out as the outage began, state B ran 32 s, and the 25 s probe-start rule stopped it; the third run skipped state B (`--skip-state-b`, amendment in the pre-registration).
+
+---
+
+The first run of the day, kept as it was:
+
 One supervised run of the session in [`PREREGISTRATION.md`](PREREGISTRATION.md) (written before it), firmware 0.86, owner present. **It stopped early: states C and D and the second readback were not measured** (cause below). It did settle the question the pre-registration asked first. Files: `run-2026-11-02/run.log` and `stdout.txt` (the orchestrator's log), `results.json` (what it recorded before it stopped), `provenance.json` (hashes, limits, the Jetson commit `ebe555f`, the probe's CLI hash) and `jetson-journal-extract.txt` (the bridge, the watcher and the Jetson events around the interruption).
 
 ## What was measured
