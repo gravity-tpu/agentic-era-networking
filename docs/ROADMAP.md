@@ -23,6 +23,35 @@ A manually-maintained rollup of section 2's detailed tables and section 4's sequ
 
 ---
 
+## Re-scope (DRAFT 2026-11-02, not adopted)
+
+**Status: a proposal for the owner to edit, accept or reject.** Until adopted, the exit criteria in section 2 keep the text they had; each proposed replacement sits beside the old one and is marked *Proposed*. Nothing here changes a measured result or a status line above.
+
+**Why.** A review of the tracks against the three core claims (section 1) found the goal sound but the exit criteria written as counts of items, not as statements of what has to be true. Two consequences: some criteria cannot be met literally, and recent effort went to work that supports no claim.
+
+| Claim (section 1) | Evidence today | Left |
+| :--- | :--- | :--- |
+| 1. Hardware limits are verifier inputs | Cost model (done), A8 model and floor, session loss at overload, the flow table wiped on controller loss | Nothing new needed |
+| 2. Deterministic checks guard model-proposed policy | Pre-registered evaluation (zero-shot `86/200` local, `161/200` Haiku; `79/80` against `80/80` within 5 verifier turns) and 128 rule sets on the wire | Publish with failure cases and limits |
+| 3. Wire observation is ground truth | Two conformance runs (58 and 128 rule sets, all agreeing); the 2026-11-02 observer flaw, which only wire evidence exposed | Larger packet set has diminishing returns |
+
+**Proposed changes**
+
+1. **Track A: say what each property is, not "all A1 to A11 enforced".** Three cannot be met literally: A3 cannot be proven at the moment of a packet (a poll proves the last readback); A9 was resolved by decision, not implementation; A8 and A10 describe one deployed policy on one firmware, so they are measurements with a stated domain rather than general properties. Label every property *enforced before install*, *checked at readback only* or *decided not needed*, with its stated limit, and publish that table with the evaluation.
+2. **Track A: stop adapter (LoRA) training unless the owner names a limit.** Three adapters gave mixed or negative results (the longer-trained one scored `145/300` against `248/300` for the control), and verifier feedback already brings the local model to `79/80`. The "dataset v2, full epoch" design stays on file but is not started without a named decision-maker and a stopping condition (`AGENTS.md`, working in this repo).
+3. **Track B: close it** with the cost model, two conformance runs and their stated limits. A larger packet set is optional, not an exit condition.
+4. **Track C: replace "scenarios 1 to 4" with the scenarios that bear on a claim.**
+   - **Scenario 4 (flood to session loss), reframed:** what an attacker can do to availability. Overload drops the OpenFlow session (whitepaper) and the switch then clears its table (2026-11-02), so a flood is a blackout that also loses the configuration. Script it, with the bridge's re-send as the recovery under test.
+   - **Scenario 5 (evasion), narrowed** to non-IPv4 EtherTypes, IPv6 and fragments: the questions the review packet already asks. Rule-table exhaustion is A7's job.
+   - **Scenario 2 (spoofing inside the workload segment), reclassified:** the segment's traffic mostly stays on switch #2 and never reaches the Zodiac (conformance T3). Keep only as the source-address forgery question for the quarantine envelope (Invariant 4); do not count it toward the exit.
+5. **Review: the reviewer named in the packet is the owner.** Before results are published, either commission a network engineer who did not write the policy or drop the word "independent". Every A property currently has only the author's review.
+6. **Freeze feature work on the watcher, repair and test fault.** They produced real findings and protect unattended lab runs, but the roadmap says this is not a production appliance. Maintain, do not extend.
+7. **State plainly what is not claimed:** detector precision and recall are unmeasured, and the quarantine envelope depends on detection. The 6,000 pps A8 target is a declared number no workload requires, not a derived need.
+
+**Not changed by this proposal:** Track D, the invariants, the non-goals, and every measured result.
+
+---
+
 ## 1. Why the scope changed
 
 Measurements on the actual hardware ([whitepaper](benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md)) set the limits the original plan had not accounted for:
@@ -83,6 +112,8 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 
 **Exit criteria:** A1 to A11 enforced in CI; every rejection returns the violated property and the offending rules; the agent-proposal evaluation is published with its method and failure cases.
 
+*Proposed (see Re-scope):* every property is labelled *enforced before install*, *checked at readback only* or *decided not needed*, with its limit, in one published table; every rejection returns the violated property and the offending rules (already tested); the agent-proposal evaluation is published with its method, failure cases and limits; the policy and property list have had a review by someone who did not write them.
+
 **Rejection detail (2026-10-31):** `test/invariants/rejection-detail.test.ts` checks every refusal of the install gate over the 196 mutants of the four original references (tripwire: the count and the properties they trigger are pinned) and four deliberately broken tables: each violation names its property, gives a reason and names the offending rules; the one case with no rule to blame (an intent clause whose packets fall to the table-miss, A11 `missing`) must name the clause instead; table-wide properties (A7, A8, a check that could not run) may name none. Mutation-checked: dropping the rule names from hygiene refusals fails it. It covers the install gate, not the evaluation triage's own categories.
 
 **Where each property is checked, enforced and tested** (2026-10-31): [docs/research/track-a-ci-matrix.md](research/track-a-ci-matrix.md), kept honest by `test/invariants/track-a-matrix.test.ts`.
@@ -130,6 +161,8 @@ Limits: ICMP and ARP only; small samples (five pings per run); one switch, firmw
 
 **Exit criteria:** the cost model is a tested dependency of the verifier; the conformance probe runs in one command and reports agreement over a stated packet set; open items are either resolved or recorded as unresolved with evidence.
 
+*Proposed (see Re-scope):* these three are met as of 2026-11-02 (cost model tested; `scripts/conformance-run.ts` run twice, 58 and 128 rule sets, all agreeing; open items recorded). Mark the track closed, with the packet-set limit stated; a larger set is optional.
+
 ### Track C: Adversarial testing on hardware
 
 Use the adversary node (the Pi 3B+ in the target topology) as the red team against the live policy and report what happens. Workload `wlan0` interfaces are off during runs, otherwise the lab-LAN Wi-Fi path bypasses the isolation policy being tested. **That understates it:** any interface that reaches the lab LAN without transiting the Zodiac is the same risk, Wi-Fi or wired, and turning one off does not remove the risk if another exists or a script forgets to bind to the workload interface explicitly. See [`docs/design/track-c-adversary-network.md`](design/track-c-adversary-network.md) (found 2026-10-22) and `scripts/adversary-bind.py`, which every scenario script must use before it is trusted to prove anything about the switch.
@@ -147,6 +180,8 @@ Scenarios, each repeatable by script and reported with detection and containment
 Report per scenario: contained or not, time to detect, time to quarantine, false positives, and whether the verifier or the detector would have prevented it. The detectors under test are the Jetson GPU autoencoder and, once it exists, a Hailo-8 classifier on the Pi 5 sensor (section 3). Their precision and recall are unmeasured today and become a result of this track; the attack runs also produce the labelled captures needed to train a classifier.
 
 **Exit criteria:** scenarios 1 to 4 scripted and reproducible (2 of 4 done: 1 and 3); results table published; any scenario that defeats the policy produces a new verifier property in track A.
+
+*Proposed (see Re-scope):* scenarios 1 and 3 (done), 4 (reframed as flood to session loss, then recovery) and 5 (narrowed to non-IPv4, IPv6 and fragments) scripted and reproducible; scenario 2 reclassified and not counted; results table published; any scenario that defeats the policy produces a new verifier property in track A (as scenario 1 did with A10).
 
 ### Track D: Provenance and telemetry (maintain)
 
@@ -230,7 +265,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 4. **B conformance probe**: the first manual run was done on 2026-10-12 (T1 to T4, all matched, see track B); the one-command probe (`scripts/conformance-run.ts`) ran on 2026-10-20 (58 rule sets, five flows); next is a larger packet set and repeats.
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
 6. **C scenarios 2 to 6**, then the end-to-end scenario in section 3.
-7. **Independent review of the policy and the property list by a network engineer**, before publishing results. This can happen earlier; it should not happen later. The reviewer (the owner) has a reading list and questions in [docs/research/independent-review-packet.md](research/independent-review-packet.md) (2026-10-31); not yet done.
+7. **Review of the policy and the property list by a network engineer** (proposed: one who did not write them; see Re-scope), before publishing results. This can happen earlier; it should not happen later. The reviewer (the owner) has a reading list and questions in [docs/research/independent-review-packet.md](research/independent-review-packet.md) (2026-10-31); not yet done.
 
 ## 5. Deferred or dropped
 
