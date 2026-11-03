@@ -44,7 +44,7 @@ A manually-maintained rollup of section 2's detailed tables and section 4's sequ
    - **Scenario 4 (flood to session loss), reframed:** what an attacker can do to availability. Overload drops the OpenFlow session (whitepaper) and the switch then clears its table (2026-11-02), so a flood is a blackout that also loses the configuration. Script it, with the bridge's re-send as the recovery under test.
    - **Scenario 5 (evasion), narrowed** to non-IPv4 EtherTypes, IPv6 and fragments: the questions the review packet already asks. Rule-table exhaustion is A7's job.
    - **Scenario 2 (spoofing inside the workload segment), reclassified:** the segment's traffic mostly stays on switch #2 and never reaches the Zodiac (conformance T3). Keep only as the source-address forgery question for the quarantine envelope (Invariant 4); do not count it toward the exit.
-5. **Review: the reviewer named in the packet is the owner.** Before results are published, either commission a network engineer who did not write the policy or drop the word "independent". Every A property currently has only the author's review.
+5. **Review: drop the word "independent".** The reviewer named in the review packet is the owner, who also made the policy decisions, so the review is by the author. Call it the owner's review in everything published, and say that no one outside the project has reviewed the policy or the property list. An outside reviewer remains welcome and is not an exit condition.
 6. **Freeze feature work on the watcher, repair and test fault.** They produced real findings and protect unattended lab runs, but the roadmap says this is not a production appliance. Maintain, do not extend.
 7. **State plainly what is not claimed:** detector precision and recall are unmeasured, and the quarantine envelope depends on detection. The 6,000 pps A8 target is a declared number no workload requires, not a derived need.
 
@@ -112,7 +112,7 @@ Check an agent-proposed or human-proposed rule set against a model of the real s
 
 **Exit criteria:** A1 to A11 enforced in CI; every rejection returns the violated property and the offending rules; the agent-proposal evaluation is published with its method and failure cases.
 
-*Proposed (see Re-scope):* every property is labelled *enforced before install*, *checked at readback only* or *decided not needed*, with its limit, in one published table; every rejection returns the violated property and the offending rules (already tested); the agent-proposal evaluation is published with its method, failure cases and limits; the policy and property list have had a review by someone who did not write them.
+*Proposed (see Re-scope):* every property is labelled *enforced before install*, *checked at readback only* or *decided not needed*, with its limit, in one published table; every rejection returns the violated property and the offending rules (already tested); the agent-proposal evaluation is published with its method, failure cases and limits; the policy and property list have been reviewed by the owner (the author), and published results say so and say that no outside review has happened.
 
 **Rejection detail (2026-10-31):** `test/invariants/rejection-detail.test.ts` checks every refusal of the install gate over the 196 mutants of the four original references (tripwire: the count and the properties they trigger are pinned) and four deliberately broken tables: each violation names its property, gives a reason and names the offending rules; the one case with no rule to blame (an intent clause whose packets fall to the table-miss, A11 `missing`) must name the clause instead; table-wide properties (A7, A8, a check that could not run) may name none. Mutation-checked: dropping the rule names from hygiene refusals fails it. It covers the install gate, not the evaluation triage's own categories.
 
@@ -265,7 +265,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 4. **B conformance probe**: the first manual run was done on 2026-10-12 (T1 to T4, all matched, see track B); the one-command probe (`scripts/conformance-run.ts`) ran on 2026-10-20 (58 rule sets, five flows); next is a larger packet set and repeats.
 5. **A agent-proposal evaluation**, once the verifier has enough properties for the result to mean something.
 6. **C scenarios 2 to 6**, then the end-to-end scenario in section 3.
-7. **Review of the policy and the property list by a network engineer** (proposed: one who did not write them; see Re-scope), before publishing results. This can happen earlier; it should not happen later. The reviewer (the owner) has a reading list and questions in [docs/research/independent-review-packet.md](research/independent-review-packet.md) (2026-10-31); not yet done.
+7. **Owner's review of the policy and the property list** (proposed: called that, not "independent", because the reviewer is the author; see Re-scope), before publishing results. This can happen earlier; it should not happen later. The reviewer (the owner) has a reading list and questions in [docs/research/independent-review-packet.md](research/independent-review-packet.md) (2026-10-31); not yet done.
 
 ## 5. Deferred or dropped
 
