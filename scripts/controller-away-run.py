@@ -36,6 +36,55 @@ def selftest():
     assert permille(23689, 24000) == 987 and permille(0, 24000) == 0 and permille(5, 0) == 0 and permille(-3, 24000) == 0 and permille(24000, 24000) == 1000
     assert judge(0) == 'zero' and judge(19) == 'zero' and judge(20) == 'partial' and judge(899) == 'partial' and judge(900) == 'resumed' and judge(1000) == 'resumed'
     assert judge(permille(23690, 24000)) == 'resumed' and judge(permille(0, 24000)) == 'zero'
+    calls = []
+    def flaky(n):
+        def f():
+            calls.append(1)
+            if len(calls) <= n: raise RuntimeError('ssh failed (255): Connection closed')
+            return 'ok'
+        return f
+    assert with_ssh_retry(flaky(2), 'selftest', sleep=lambda s: None) == 'ok' and len(calls) == 3   # two dropped connections, then it answers
+    calls.clear()
+    try: with_ssh_retry(flaky(99), 'selftest', sleep=lambda s: None); raise AssertionError('should have raised')
+    except RuntimeError as e: assert 'failed 3 times' in str(e) and len(calls) == SSH_RETRIES
+    # The owner command arms the bridge's return as a detached timer first, and stops the bridge only if arming worked (&&).
+    assert 'systemd-run' in OWNER_COMMAND and OWNER_COMMAND.index('systemd-run') < OWNER_COMMAND.index('systemctl stop zodiac-bridge') and '&& systemctl stop zodiac-bridge' in OWNER_COMMAND and 'sleep' not in OWNER_COMMAND
+    assert OWNER_ABORT_COMMAND.index("systemctl stop 'away-restart-*.timer'") < OWNER_ABORT_COMMAND.index('systemctl start zodiac-bridge')
+    # preflight against a faked ssh: it refuses on a leftover timer and on package activity, and passes on a quiet Jetson.
+    real_sh, real_iso, real_sleep = globals()['sh'], lc.isolation_ok, time.sleep
+    def quiet(overrides):
+        def fake(host, cmd, timeout=30):
+            for needle, answer in overrides.items():
+                if needle in cmd: return answer
+            if 'pgrep -f "[c]ontroller-away-probe-cli"' in cmd: return 0, '', ''
+            if 'test -f' in cmd: return 0, 'yes', ''
+            if 'sport = :6633' in cmd: return 0, '1', ''   # exactly one listener, the bridge
+            return 0, '', ''
+        return fake
+    def preflight_says(overrides):
+        globals()['sh'] = quiet(overrides); lc.isolation_ok = lambda: (True, {}); globals()['time'].sleep = lambda s: None
+        try: preflight(); return 'ok'
+        except SystemExit as e: return str(e)
+        finally: globals()['sh'], lc.isolation_ok, globals()['time'].sleep = real_sh, real_iso, real_sleep
+    assert preflight_says({}) == 'ok'
+    assert 'leftover away-restart timer' in preflight_says({"list-timers --all --no-legend 'away-restart-*'": (0, '1', '')})
+    assert 'package activity is running' in preflight_says({'pgrep -af "[u]pdate-notifier': (0, '4242 /usr/bin/aptd --foo', '')})
+    # observe(): a failed traffic step is retried once, then recorded as not measured; the run is not ended.
+    real_step, real_stats = lc.step, lc.delivered_stats
+    tries = []
+    def step_fails(n):
+        def f(pps):
+            tries.append(1)
+            if len(tries) <= n: raise KeyError('series')
+            return {'sent': 24000, 'elapsedNs': 12_000_000_000, 'series': [(0, 0), (12_000_000_000, 23690)]}
+        return f
+    globals()['time'].sleep = lambda s: None; lc.delivered_stats = lambda series, idle: (23690, 1973, [])
+    try:
+        lc.step = step_fails(1); r = observe('selftest_once', 0.0); assert r['sent'] == 24000 and 'error' not in r and len(tries) == 2
+        tries.clear(); lc.step = step_fails(9); r = observe('selftest_twice', 0.0); assert 'error' in r and r['attempts'] == 2 and len(tries) == 2
+    finally:
+        lc.step, lc.delivered_stats, globals()['time'].sleep = real_step, real_stats, real_sleep
+        RES.pop('selftest_once', None); RES.pop('selftest_twice', None)
     seen = {}; pats = {'first_readback': re.compile(r'readback 1[: ]')}
     for i in range(PROBE_HEAD_LINES + PROBE_TAIL_LINES + 50):      # a target line far inside the part the bounded buffer drops is still seen
         note_arrival(seen, pats, i, 'noise' if i != PROBE_HEAD_LINES + 10 else 'readback 1: 12 entries, equals_policy')
@@ -78,7 +127,10 @@ NEIGH_IP, NEIGH_MAC, NEIGH_DEV = '10.0.0.119', '02:00:00:00:00:77', 'eth0'   # t
 PROBE_CLI = '~/agentic-era-networking/dist/sdn/controller-away-probe-cli.js'
 BRIDGE_ENV_FILE = '/etc/zodiac/zodiac-bridge.env'
 
-OWNER_COMMAND = f"sudo sh -c 'systemctl stop zodiac-bridge; sleep {OUTAGE_SLEEP_S}; systemctl start zodiac-bridge'"
+# The bridge's return is armed FIRST as a detached systemd timer, then the bridge is stopped, so nothing that happens to this ssh session or to the owner's sudo session can leave the bridge down.
+# (2026-11-02: the first run used `stop; sleep; start` in one shell, a package update restarted Tailscale mid-run, the shell died before `start`, and the bridge stayed down 169 s.)
+OWNER_COMMAND = f"sudo sh -c 'systemd-run --unit=away-restart-$(date +%s) --on-active={OUTAGE_SLEEP_S}s systemctl start zodiac-bridge && systemctl stop zodiac-bridge'"
+OWNER_ABORT_COMMAND = "sudo systemctl stop 'away-restart-*.timer'; sudo systemctl start zodiac-bridge"   # ends the outage early: cancel the pending timers, then start the bridge now
 WORST_BLACKOUT_S = OUTAGE_SLEEP_S + BRIDGE_RESTART_ALLOWANCE_S
 
 def plan_text():
@@ -90,13 +142,14 @@ def plan_text():
         '  P+r            the switch connects (r unmeasured), the probe reads the table (read 1)',
         '  P+r            probe_connected: 12 s of the same traffic while the probe holds the session',
         '  P+r+%d         read 2; the probe exits and the switch has no controller again' % (PROBE_INTERVAL_MS // 1000),
-        '  T+%d          the owner\'s command restarts the bridge (the probe is dead by D+%d at the latest, the CLI\'s own limits)' % (OUTAGE_SLEEP_S, PROBE_START_DEADLINE_S + PROBE_REMOTE_KILL_S),
+        '  T+%d          the detached timer armed by the owner\'s command starts the bridge (the probe is dead by D+%d at the latest, the CLI\'s own limits)' % (OUTAGE_SLEEP_S, PROBE_START_DEADLINE_S + PROBE_REMOTE_KILL_S),
         '  +%d s          bridge answering again; %d s settle; isolation status read; after_bridge_back: 12 s of the same traffic' % (BRIDGE_RESTART_ALLOWANCE_S, SETTLE_AFTER_BRIDGE_BACK_S),
         'Probe limits: overall %d s, reconnect wait %d s, readback timeout %d s, %d readbacks %d s apart; remote last-resort kill at %d s.' % (
             PROBE_OVERALL_MS // 1000, PROBE_RECONNECT_WAIT_MS // 1000, PROBE_READBACK_TIMEOUT_MS // 1000, PROBE_READBACKS, PROBE_INTERVAL_MS // 1000, PROBE_REMOTE_KILL_S),
         'Worst-case blackout: %d s sleep + about %d s restart = about %d s, under the isolation watcher\'s alert of %d s (3 polls of 60 s); the sleep is fixed, so the blackout is about that long whether or not the probe finishes early.' % (
             OUTAGE_SLEEP_S, BRIDGE_RESTART_ALLOWANCE_S, WORST_BLACKOUT_S, ISOLATION_WATCH_ALERT_S),
         'Owner command (one line, on the Jetson): ' + OWNER_COMMAND,
+        'To end the outage early: ' + OWNER_ABORT_COMMAND,
     ])
 
 assert WORST_BLACKOUT_S < ISOLATION_WATCH_ALERT_S, 'the blackout must stay under the isolation watcher alert threshold'
@@ -109,8 +162,21 @@ def log(s):
     line = f'[{lc.now_et()}] {s}'; print(line, flush=True)
     if OUT: open(OUT + '.log', 'a').write(line + '\n')
 
+SSH_RETRIES = 3
+SSH_RETRY_PAUSE_S = 3
+
+def with_ssh_retry(fn, what, sleep=time.sleep):
+    """Runs fn, retrying when an ssh call fails (a dropped connection is not the bridge being down). Raises after SSH_RETRIES failures, never returns a guess."""
+    last = None
+    for attempt in range(1, SSH_RETRIES + 1):
+        try: return fn()
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            last = e; log(f'ssh failure in {what} (attempt {attempt} of {SSH_RETRIES}): {str(e)[:160]}')
+            if attempt < SSH_RETRIES: sleep(SSH_RETRY_PAUSE_S)
+    raise RuntimeError(f'{what} failed {SSH_RETRIES} times: {str(last)[:200]}')
+
 def bridge_up():
-    code = lc.run(lc.JETSON, "curl -s -m 3 -o /dev/null -w '%{http_code}' localhost:3003/api/zodiac/flows || true").strip()
+    code = with_ssh_retry(lambda: lc.run(lc.JETSON, "curl -s -m 3 -o /dev/null -w '%{http_code}' localhost:3003/api/zodiac/flows || true"), 'the bridge status check').strip()
     return code == '200'
 
 def sh(host, cmd, timeout=30):
@@ -185,6 +251,13 @@ def preflight():
     if out: raise SystemExit(f'a probe process is already running on the Jetson ({out}); not starting')
     rc, out, _ = sh(lc.JETSON, f'test -f {PROBE_CLI} && echo yes || echo no')
     if out != 'yes': raise SystemExit(f'{PROBE_CLI} is missing on the Jetson: build and deploy this branch first (npx tsc, then the dist copy)')
+    rc, out, _ = sh(lc.JETSON, "systemctl list-timers --all --no-legend 'away-restart-*' | wc -l")
+    if out.strip() not in ('', '0'): raise SystemExit(f'a leftover away-restart timer exists on the Jetson ({out.strip()}); cancel it with: sudo systemctl stop \'away-restart-*.timer\'')
+    # A best-effort guard, not a guarantee: it recognises the apt and update processes seen on this Jetson (Ubuntu with the desktop update notifier), and the owner is told to keep updates off for the session.
+    # Package activity restarted Tailscale mid-run on 2026-11-02 (the desktop update notifier started an apt transaction). Stop the notifier (a user process, no sudo, back at the next login) and refuse to start while apt or dpkg is working.
+    sh(lc.JETSON, 'pkill -f "[u]pdate-notifier" || true'); time.sleep(1)
+    rc, out, _ = sh(lc.JETSON, 'pgrep -af "[u]pdate-notifier|[a]pt-get|[a]ptd|[d]pkg|[u]nattended-upgr" || true')
+    if out: raise SystemExit(f'package activity is running on the Jetson, which can restart Tailscale and kill the session; wait for it to finish: {out.splitlines()[0][:120]}')
     ok, flows = lc.isolation_ok()
     if not ok: raise SystemExit('refusing to start: the isolation policy is not verified')
     if lc.quarantine_count() != 0: raise SystemExit('refusing to start: quarantines are active (the probe compares the table with the bare policy)')
@@ -232,9 +305,18 @@ def table_counters():
         except Exception as e: err = str(e)
         if attempt == 1: time.sleep(PROBE_ROUTE_RETRY_S)
     return {'error': err}
+OBSERVE_RETRY_PAUSE_S = 6
+
 def observe(label, idle):
     t_epoch = int(time.time()); t0 = now_ms()
-    r = lc.step(2000)
+    r = None; err = None
+    for attempt in (1, 2):   # one retry: a dropped ssh must cost one state at worst, not the whole run
+        try: r = lc.step(2000); break
+        except Exception as e:
+            err = f'{type(e).__name__}: {str(e)[:160]}'; log(f'{label}: the traffic step failed (attempt {attempt} of 2): {err}')
+            if attempt == 1: time.sleep(OBSERVE_RETRY_PAUSE_S)
+    if r is None:
+        RES[label] = {'error': err, 'attempts': 2, 'startedEt': lc.now_et()}; log(f'{label}: NOT MEASURED ({err}); the run goes on'); return RES[label]
     total, med, bins = lc.delivered_stats(r['series'], idle)
     try: up = bridge_up()
     except Exception as e: up = f'unknown ({e})'
@@ -269,6 +351,7 @@ def main():
         pid = setup()
         idle = lc.sample_idle(); log(f'idle rate {idle:.1f} pps')
         base = observe('baseline_bridge_up', idle)
+        if 'error' in base: raise SystemExit(f'the baseline could not be measured ({base["error"]}); nothing was disturbed')
         if base['ratioPermille'] < BASELINE_FLOOR_PERMILLE: raise SystemExit(f'baseline ratio {base["ratioPermille"]} permille is under {BASELINE_FLOOR_PERMILLE}: the preconditions are not holding; nothing was disturbed')
         RES['tableBeforeOutage'] = table_counters(); log(f'table counters before the outage: {json.dumps(RES["tableBeforeOutage"])[:400]}')
         open(OUT + '.ready', 'w').write('ready')
