@@ -391,8 +391,12 @@ run_pipeline_step() {
   local label="$1" timeout_s="$2" cmd="$3"
   local attempt=1 max_attempts=2 rc
   while :; do
-    run_pipeline_step_once "$label" "$timeout_s" "$cmd" "$attempt"
-    rc=$?
+    # `|| rc=$?`, not a bare call then `rc=$?`: under `set -e`, a plain function-call statement that returns
+    # nonzero triggers errexit immediately (confirmed live 2026-11-03 -- the retry logic below never even ran;
+    # the whole script exited right at run_pipeline_step_once's own `return 2` line instead). The `||` makes the
+    # overall statement's own exit status 0, so set -e lets it through, while still capturing the real code.
+    rc=0
+    run_pipeline_step_once "$label" "$timeout_s" "$cmd" "$attempt" || rc=$?
     if [ "$rc" -ne 2 ] || [ "$attempt" -ge "$max_attempts" ]; then
       return "$rc"
     fi
