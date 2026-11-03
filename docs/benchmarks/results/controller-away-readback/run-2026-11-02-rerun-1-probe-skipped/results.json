@@ -1,0 +1,109 @@
+{
+ "baseline_bridge_up": {
+  "sent": 24000,
+  "delivered": 23689,
+  "ratioPermille": 987,
+  "judgement": "resumed",
+  "medianBusyPps": 1974,
+  "startedEpochS": 1793666211,
+  "durationMs": 16562,
+  "startedEt": "2026-11-02 19:37:07 ET",
+  "bridgeUpAtEnd": true
+ },
+ "tableBeforeOutage": {
+  "capturedAtIso": "2026-11-03T00:37:07.920Z",
+  "entryCount": 7,
+  "entries": [
+   {
+    "priority": 0,
+    "inPort": null,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "169",
+    "byteCount": "35484"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2048,
+    "srcIp": "10.0.2.0",
+    "dstIp": "10.0.2.0",
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2054,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2054,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 150,
+    "inPort": 1,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "23762",
+    "byteCount": "14574844"
+   },
+   {
+    "priority": 200,
+    "inPort": 2,
+    "ethType": 2048,
+    "srcIp": null,
+    "dstIp": "10.0.2.0",
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 100,
+    "inPort": 3,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   }
+  ]
+ },
+ "bridgeDownSeenAfterReadyMs": 78738,
+ "no_controller_before_probe": {
+  "sent": 24000,
+  "delivered": 0,
+  "ratioPermille": 0,
+  "judgement": "zero",
+  "medianBusyPps": 0,
+  "startedEpochS": 1793666830,
+  "durationMs": 32680,
+  "startedEt": "2026-11-02 19:47:42 ET",
+  "bridgeUpAtEnd": false
+ },
+ "probeSkipped": "later than 25 s after the bridge went down",
+ "bridgeBack": true,
+ "bridgeBackAfterDMs": 112025,
+ "isolationAfter": true,
+ "after_bridge_back": {
+  "sent": 24000,
+  "delivered": 23700,
+  "ratioPermille": 987,
+  "judgement": "resumed",
+  "medianBusyPps": 1975,
+  "startedEpochS": 1793666952,
+  "durationMs": 16536,
+  "startedEt": "2026-11-02 19:49:28 ET",
+  "bridgeUpAtEnd": true
+ }
+}

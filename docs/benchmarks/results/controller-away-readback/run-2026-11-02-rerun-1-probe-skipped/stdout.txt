@@ -1,0 +1,34 @@
+[2026-11-02 19:36:40 ET] Timeline (seconds from the owner pressing enter; D = the script sees the bridge down, at most 5 s after):
+  T+0            owner stops the bridge (the switch loses its controller; workload frames start to be dropped)
+  D              no_controller_before_probe: 12 s of 2,000 pps (sampler lead-in 1.5 s, so about 16 s with the ssh calls)
+  D+~18          probe starts on the Jetson (must start by D+25 or it is not started); it binds 6633 and waits up to 35 s for the switch
+  P+r            the switch connects (r unmeasured), the probe reads the table (read 1)
+  P+r            probe_connected: 12 s of the same traffic while the probe holds the session
+  P+r+20         read 2; the probe exits and the switch has no controller again
+  T+110          the detached timer armed by the owner's command starts the bridge (the probe is dead by D+97 at the latest, the CLI's own limits)
+  +6 s          bridge answering again; 10 s settle; isolation status read; after_bridge_back: 12 s of the same traffic
+Probe limits: overall 65 s, reconnect wait 35 s, readback timeout 8 s, 2 readbacks 20 s apart; remote last-resort kill at 72 s.
+Worst-case blackout: 110 s sleep + about 6 s restart = about 116 s, under the isolation watcher's alert of 150 s (3 polls of 60 s); the sleep is fixed, so the blackout is about that long whether or not the probe finishes early.
+Owner command (one line, on the Jetson): sudo sh -c 'systemd-run --unit=away-restart-$(date +%s) --on-active=110s systemctl start zodiac-bridge && systemctl stop zodiac-bridge'
+To end the outage early: sudo systemctl stop 'away-restart-*.timer'; sudo systemctl start zodiac-bridge
+[2026-11-02 19:36:40 ET] preflight
+[2026-11-02 19:36:44 ET] uplink ARP peers the probe compares against: 'none'; the probe binds 0.0.0.0 like the bridge
+[2026-11-02 19:36:46 ET] setup: neighbor entry 10.0.0.119 on agentic-node-01 eth0; tap capture pid 1002159; promiscuity 1
+[2026-11-02 19:36:51 ET] idle rate 0.0 pps
+[2026-11-02 19:37:07 ET] baseline_bridge_up: sent 24000, delivered 23689, ratio 987 permille (resumed; zero is under 20, resumed is at least 900), bridge up at end: True
+[2026-11-02 19:37:07 ET] table counters before the outage: {"capturedAtIso": "2026-11-03T00:37:07.920Z", "entryCount": 7, "entries": [{"priority": 0, "inPort": null, "ethType": null, "srcIp": null, "dstIp": null, "packetCount": "169", "byteCount": "35484"}, {"priority": 200, "inPort": 1, "ethType": 2048, "srcIp": "10.0.2.0", "dstIp": "10.0.2.0", "packetCount": "0", "byteCount": "0"}, {"priority": 200, "inPort": 1, "ethType": 2054, "srcIp": null, "dstIp": 
+[2026-11-02 19:37:07 ET] READY. Owner: paste this on the Jetson now (it stops the bridge, waits, starts it again):
+[2026-11-02 19:37:07 ET]     sudo sh -c 'systemd-run --unit=away-restart-$(date +%s) --on-active=110s systemctl start zodiac-bridge && systemctl stop zodiac-bridge'
+[2026-11-02 19:46:59 ET] ssh failure in the bridge status check (attempt 1 of 3): ssh jetson failed (255): ssh: connect to host 100.118.64.16 port 22: Operation timed out
+[2026-11-02 19:47:10 ET] bridge unreachable (D). The switch has no controller. Measuring before the probe connects.
+[2026-11-02 19:47:19 ET] no_controller_before_probe: the traffic step failed (attempt 1 of 2): RuntimeError: ssh agentic-node-01 failed (255): ssh: connect to host agentic-node-01 port 22: Operation timed out
+[2026-11-02 19:47:42 ET] no_controller_before_probe: sent 24000, delivered 0, ratio 0 permille (zero; zero is under 20, resumed is at least 900), bridge up at end: False
+[2026-11-02 19:47:43 ET] probe NOT started: later than 25 s after the bridge went down
+[2026-11-02 19:49:02 ET] bridge answering again 112025 ms after D
+[2026-11-02 19:49:12 ET] isolation after: True
+[2026-11-02 19:49:28 ET] after_bridge_back: sent 24000, delivered 23700, ratio 987 permille (resumed; zero is under 20, resumed is at least 900), bridge up at end: True
+[2026-11-02 19:49:28 ET] finished
+[2026-11-02 19:49:28 ET] teardown
+[2026-11-02 19:49:29 ET] tap capture stopped (rc 0)
+[2026-11-02 19:49:29 ET] neighbor entry removed (rc 0)
+[2026-11-02 19:49:29 ET] tap NIC now: promiscuity 0

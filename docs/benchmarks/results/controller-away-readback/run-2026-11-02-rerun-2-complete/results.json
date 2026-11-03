@@ -1,0 +1,188 @@
+{
+ "baseline_bridge_up": {
+  "sent": 24000,
+  "delivered": 23691,
+  "ratioPermille": 987,
+  "judgement": "resumed",
+  "medianBusyPps": 1951,
+  "startedEpochS": 1793667196,
+  "durationMs": 16606,
+  "startedEt": "2026-11-02 19:53:32 ET",
+  "bridgeUpAtEnd": true
+ },
+ "tableBeforeOutage": {
+  "capturedAtIso": "2026-11-03T00:53:32.961Z",
+  "entryCount": 7,
+  "entries": [
+   {
+    "priority": 0,
+    "inPort": null,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "22",
+    "byteCount": "3432"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2048,
+    "srcIp": "10.0.2.0",
+    "dstIp": "10.0.2.0",
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2054,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 200,
+    "inPort": 1,
+    "ethType": 2054,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 150,
+    "inPort": 1,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "47397",
+    "byteCount": "29099346"
+   },
+   {
+    "priority": 200,
+    "inPort": 2,
+    "ethType": 2048,
+    "srcIp": null,
+    "dstIp": "10.0.2.0",
+    "packetCount": "0",
+    "byteCount": "0"
+   },
+   {
+    "priority": 100,
+    "inPort": 3,
+    "ethType": null,
+    "srcIp": null,
+    "dstIp": null,
+    "packetCount": "0",
+    "byteCount": "0"
+   }
+  ]
+ },
+ "bridgeDownSeenAfterReadyMs": 222529,
+ "no_controller_before_probe": {
+  "skipped": "state B was measured as 0 permille in three earlier runs; skipped so the probe starts within seconds of the outage"
+ },
+ "probeStartedAfterDMs": 242,
+ "probeFirstReadAfterDMs": 979,
+ "probe_connected": {
+  "sent": 24000,
+  "delivered": 0,
+  "ratioPermille": 0,
+  "judgement": "zero",
+  "medianBusyPps": 0,
+  "startedEpochS": 1793667436,
+  "durationMs": 16521,
+  "startedEt": "2026-11-02 19:57:33 ET",
+  "bridgeUpAtEnd": false
+ },
+ "probe": {
+  "exitCode": 3,
+  "killedAtBound": false,
+  "result": {
+   "outcome": "empty",
+   "exitCode": 3,
+   "message": "The switch held NO flow entries after the controller was away.",
+   "connectedAtMs": 323,
+   "handshakes": 1,
+   "packetIns": "0",
+   "serverErrorCount": "0",
+   "recentServerErrors": [],
+   "reads": [
+    {
+     "index": 1,
+     "startedAtMs": 324,
+     "durationMs": 4,
+     "ok": true,
+     "entries": [],
+     "assessment": {
+      "entryCount": 0,
+      "extraEntries": 0,
+      "policyRuleCount": 6,
+      "confirmed": 0,
+      "mismatches": [
+       "p1-ipv4-intra-segment: not present on switch (priority 200, in_port 1)",
+       "p1-arp-allow-10.0.2.50: not present on switch (priority 200, in_port 1)",
+       "p1-arp-allow-10.0.2.52: not present on switch (priority 200, in_port 1)",
+       "p1-default-tap-only: not present on switch (priority 150, in_port 1)",
+       "p2-ipv4-to-segment: not present on switch (priority 200, in_port 2)",
+       "p3-tap-return: not present on switch (priority 100, in_port 3)",
+       "table-miss: no priority-0 wildcard entry on switch"
+      ],
+      "actionStatus": "unobservable",
+      "tableMiss": "absent",
+      "klass": "empty",
+      "note": "the switch reported no flow entries"
+     }
+    },
+    {
+     "index": 2,
+     "startedAtMs": 20325,
+     "durationMs": 3,
+     "ok": true,
+     "entries": [],
+     "assessment": {
+      "entryCount": 0,
+      "extraEntries": 0,
+      "policyRuleCount": 6,
+      "confirmed": 0,
+      "mismatches": [
+       "p1-ipv4-intra-segment: not present on switch (priority 200, in_port 1)",
+       "p1-arp-allow-10.0.2.50: not present on switch (priority 200, in_port 1)",
+       "p1-arp-allow-10.0.2.52: not present on switch (priority 200, in_port 1)",
+       "p1-default-tap-only: not present on switch (priority 150, in_port 1)",
+       "p2-ipv4-to-segment: not present on switch (priority 200, in_port 2)",
+       "p3-tap-return: not present on switch (priority 100, in_port 3)",
+       "table-miss: no priority-0 wildcard entry on switch"
+      ],
+      "actionStatus": "unobservable",
+      "tableMiss": "absent",
+      "klass": "empty",
+      "note": "the switch reported no flow entries"
+     }
+    }
+   ],
+   "tableChangedDuringSession": false,
+   "counterDeltas": [],
+   "notes": [],
+   "elapsedMs": 20333,
+   "sentToSwitch": "hello, features request, echo, flow-stats request only (enforced; see file comment)"
+  },
+  "linesSeen": 28,
+  "linesDroppedFromMemory": 0
+ },
+ "bridgeBack": true,
+ "bridgeBackAfterDMs": 113568,
+ "isolationAfter": true,
+ "after_bridge_back": {
+  "sent": 24000,
+  "delivered": 23693,
+  "ratioPermille": 987,
+  "judgement": "resumed",
+  "medianBusyPps": 1974,
+  "startedEpochS": 1793667559,
+  "durationMs": 16545,
+  "startedEt": "2026-11-02 19:59:35 ET",
+  "bridgeUpAtEnd": true
+ }
+}

@@ -1,0 +1,13 @@
+2026-11-02T19:57:14-0500 systemd: Stopping Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking...
+2026-11-02T19:57:14-0500 zodiac-bridge: [!] Stopping ZodiacBridgeServer...
+2026-11-02T19:57:14-0500 systemd: Stopped Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking.
+2026-11-02T19:57:41-0500 zodiac-isolation-watch: 2026-11-03T00:57:41.992Z poll: unreachable (fetch failed) -> unreachable
+2026-11-02T19:58:42-0500 zodiac-isolation-watch: 2026-11-03T00:58:42.046Z poll: unreachable (fetch failed) -> unreachable
+2026-11-02T19:59:07-0500 systemd: Started Zodiac FX SDN Control-Plane Bridge — Agentic Era Networking.
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Table-Miss flow rule installed (DROP fail-closed).
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-ipv4-intra-segment sent (xid 102, priority 200) → [P2, P3].
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.50 sent (xid 103, priority 200) → [P2, P3].
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-arp-allow-10.0.2.52 sent (xid 104, priority 200) → [P2, P3].
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p1-default-tap-only sent (xid 105, priority 150) → [P3].
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p2-ipv4-to-segment sent (xid 106, priority 200) → [P1].
+2026-11-02T19:59:08-0500 zodiac-bridge: [+] [Bridge Server] Isolation rule p3-tap-return sent (xid 107, priority 100) → [P1].
