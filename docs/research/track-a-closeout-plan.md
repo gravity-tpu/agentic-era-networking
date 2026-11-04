@@ -73,3 +73,29 @@ Scenarios 2 (MAC and IP spoofing inside the workload segment), 4 (flood to sessi
 ## 5. What this plan will not deliver
 
 Exhaustive correctness on the wire; a result on traffic other than the flows chosen; more than one switch and one firmware; a measured duration or cost for the wire sessions (none exists yet: model and pod costs are zero for them, the cost is the owner's time and the testbed's). The adapter question (plan section 15) is separate and not needed for the wire results: the existing 4,250 admissible sets are enough.
+
+## 6. Remaining work under the re-scope (2026-11-03)
+
+Written after the ROADMAP re-scope (section "Re-scope" of `docs/ROADMAP.md`, adopted for discussion in PR #209; the owner agreed with all of it on 2026-11-02 except that the policy review is called the owner's, not independent). It supersedes Phase 6 and decision 7 where they differ: scenario 2 is reclassified and not counted, scenario 4 is reframed, scenario 5 is narrowed, scenario 6 is unchanged and not an exit condition. Order is by what a result could change, then risk, then dependencies. Every item states the three things below before any work starts; "stop" says what ends the item and who decides.
+
+| # | Item | Supports | A result that would change the scope | Stop, and decided by | State |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | One label per property in `docs/research/track-a-ci-matrix.md`, tested | Claims 2 and 3 (nothing described as enforced without saying where) | A label with no evidence behind it becomes a work item | Done when every row is labelled and the test passes; the operator | Done 2026-11-03 |
+| 2 | Owner's review of the policy and property list (`docs/research/owner-review-packet.md`) | All three | A policy or property flaw found by reading is cheaper than one found on the wire, and may reshape 3 and 4 | The owner signs or lists issues; the owner | Not started |
+| 3 | Scenario 5, narrowed (below) | Claim 3 | Any frame that leaves P2 which the policy says should not: a new verifier property (Track C exit rule) | One pass of the listed classes at a fixed count, pre-registered; a leak stops the run; the owner | Not started |
+| 4 | Scenario 4, flood to session loss and recovery (below) | Claim 1 | The bridge does not restore forwarding by itself after the loss, or something crosses P2 during it | One ladder and one recovery, owner present; if the bridge does not restore by itself the owner restores by hand and the run ends; the owner | Not started |
+| 5 | Publish the agent-proposal evaluation with failure cases and limits | Claim 2 | Items 2 to 4 may add limits or findings it must cite | Done when the write-up cites the results and states what is not claimed; the owner | Waits for 2 to 4 |
+| 6 | Close Track B with a status note | Claim 1 | None | A note in the ROADMAP; the operator | Not started |
+
+**What the labels exposed (item 1).** Limits recorded in the matrix that are work items or are not:
+
+- A1 and A11 do not model L4 ports or VLAN tags: this is what scenario 5 tests on the wire.
+- A10: a peer list under real use (the 2026-10-26 capture was an idle day), a capture showing the NETGEAR management broadcast is dropped, and the non-peer-host test (Phase 4 above). Unchanged; not on this list because none of them blocks an exit condition, and they remain recorded limits.
+- A6: how the firmware breaks a tie is unmeasured. By inference, not by measurement, this affects nothing the gate admits, because the gate refuses equal-priority overlaps with different outputs; kept as a recorded limit, not a work item.
+- A3: presence only at the last readback is inherent to polling and stays a label limit.
+
+**Scenario 5, narrowed: what is already covered and what is not.** The 2026-11-02 frame-class sessions (`docs/benchmarks/results/table-miss-extended-2026-11-02/README.md`) sent eight classes arriving on P2 (experimental EtherType, IPv6, 802.1Q-tagged, STP BPDU, runt, 1514-byte, IPv4 to outside the segment, ARP) in seven table-miss states: none reached the workload side, and none reached the tap unless the table-miss forwarded there. Not covered: the same classes arriving on **P1** (workload-originated, where the policy sends everything unmatched to the tap only), IPv4 with options, IPv4 fragments, and a VLAN-tagged IPv4 frame whose inner addresses the policy allows (whether the firmware matches through the tag is the one place a surprise is plausible). Frames into P3 stay not approved (decision 8). Prediction, to be registered before the run: contained, nothing out of P2. The value of the item is closing a stated "not covered", with a small chance of finding a property; it is not expected to find a defeat. LLDP and other link-local classes cannot be observed on this arrangement (switch #2 consumes them).
+
+**Scenario 4, what it measures.** The load at which the OpenFlow session drops, as a multiple of the model's capacity (the whitepaper puts it at about 1.3 to 2.3); how long forwarding is down; whether the bridge restores it with no person acting; whether any frame crosses P2 or reaches the tap during the loss; what the watcher reports and when. Already known and not re-measured: the switch clears its whole table when the controller goes away, and drops everything until the bridge re-sends (`docs/benchmarks/results/controller-away-readback/README.md`). Needs the owner present, the Jetson's Tailscale SSH approval current, and auto-repair state recorded before the run.
+
+**Not on the list.** Scenario 2 (kept only as the source-address forgery question for the quarantine envelope), scenario 6 (unchanged, not an exit condition), adapter training, and any Runpod run without a named question and cap (ROADMAP proposal 8).
