@@ -29,18 +29,28 @@ STOP_FILE = '/tmp/sl-load-stop'
 
 
 def restart_bridge():
-    r = wfs.remote(JETSON, 'sudo -n systemctl restart zodiac-bridge', 30)
+    # The jetson's NOPASSWD sudoers rule is scoped to the exact argument "zodiac-bridge.service" (confirmed live
+    # 2026-11-04 via `sudo -n systemctl status zodiac-bridge` without the suffix: "a password is required"); sudo
+    # does literal argument matching, so systemd's own tolerance of the unit name with or without ".service"
+    # does not help here. The call must use the exact string the sudoers rule grants.
+    r = wfs.remote(JETSON, 'sudo -n systemctl restart zodiac-bridge.service', 30)
     return r.ok, (r.reason if not r.ok else 'restarted')
 
 
 def start_send(frame_hex, pps, step_s):
     """Launches the raw-socket pacer (table_miss_lib.LOAD_SENDER_SRC, unchanged) on node-02 as a background subprocess; returns the Popen handle. The remote `timeout` and the
-    stop-file both bound the sender independently of whether this process is still watching it."""
-    removed = wfs.remote(NODE02, f'sudo -n rm -f {STOP_FILE}', 8)
+    stop-file both bound the sender independently of whether this process is still watching it.
+
+    No sudo on node-02: confirmed live 2026-11-04 that this host's user can already open an AF_PACKET raw socket
+    and create/remove files under /tmp without it -- table-miss-load.py's `sudo -n` pattern (copied here
+    uncritically) is specific to node-01, a different host where raw-socket creation does need root; the
+    already-working scenario 5 sender on this same host (workload-frames.py) uses no sudo at all for exactly
+    this reason. Adding a NOPASSWD sudoers grant here would have been solving a problem that does not exist."""
+    removed = wfs.remote(NODE02, f'rm -f {STOP_FILE}', 8)
     if not removed.ok:
         raise RuntimeError(f'the stop file could not be cleared, so an abort could not stop the sender: {removed.reason}')
     ssh_cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', NODE02,
-               f'sudo -n timeout {step_s + 5} python3 - {SENDER_IFACE} {pps} {step_s} {STOP_FILE} {frame_hex}']
+               f'timeout {step_s + 5} python3 - {SENDER_IFACE} {pps} {step_s} {STOP_FILE} {frame_hex}']
     p = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     assert p.stdin is not None
     p.stdin.write(tm.LOAD_SENDER_SRC)
