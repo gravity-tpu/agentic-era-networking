@@ -13,7 +13,7 @@ Usage: python3 scripts/session-loss.py LABEL --dry-run | --owner-go-for-real-loa
   --pps: accepted only so the registered value can be stated explicitly on the command line; anything other than the registered 25,000 is refused before any ssh.
 Prints one JSON line. Needs ssh to jetson and agentic-node-02; node-02's wlan0 down.
 """
-import importlib.util, json, os, subprocess, sys, time
+import importlib.util, json, os, shlex, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import table_miss_lib as tm
@@ -37,6 +37,17 @@ def restart_bridge():
     return r.ok, (r.reason if not r.ok else 'restarted')
 
 
+def check_raw_socket_capability():
+    """No sudo on node-02 (see start_send) rests entirely on this host's user already being able to open an
+    AF_PACKET raw socket unprivileged -- a capability assumption, not a code-level guarantee (AI review,
+    2026-11-04): if it were ever revoked (a kernel/capability change, a container runtime, a different node),
+    the sender would fail to bind and the run would read as a confusing, silent no_loss_observed rather than a
+    loud, diagnosable refusal. Checked fresh before every send, not just asserted in a comment."""
+    r = wfs.remote(NODE02, 'python3 -c "import socket; socket.socket(socket.AF_PACKET, socket.SOCK_RAW)"', 8)
+    if not r.ok:
+        raise RuntimeError(f'node-02 cannot open an AF_PACKET raw socket without privilege any more (the sender would fail silently): {r.reason}')
+
+
 def start_send(frame_hex, pps, step_s):
     """Launches the raw-socket pacer (table_miss_lib.LOAD_SENDER_SRC, unchanged) on node-02 as a background subprocess; returns the Popen handle. The remote `timeout` and the
     stop-file both bound the sender independently of whether this process is still watching it.
@@ -46,11 +57,13 @@ def start_send(frame_hex, pps, step_s):
     uncritically) is specific to node-01, a different host where raw-socket creation does need root; the
     already-working scenario 5 sender on this same host (workload-frames.py) uses no sudo at all for exactly
     this reason. Adding a NOPASSWD sudoers grant here would have been solving a problem that does not exist."""
-    removed = wfs.remote(NODE02, f'rm -f {STOP_FILE}', 8)
+    assert isinstance(pps, int) and isinstance(step_s, int), f'Invariant 2: pps and step_s must be int, not injected into a remote shell command as anything else (got {pps!r}, {step_s!r})'
+    check_raw_socket_capability()
+    removed = wfs.remote(NODE02, f'rm -f {shlex.quote(STOP_FILE)}', 8)
     if not removed.ok:
         raise RuntimeError(f'the stop file could not be cleared, so an abort could not stop the sender: {removed.reason}')
     ssh_cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', NODE02,
-               f'timeout {step_s + 5} python3 - {SENDER_IFACE} {pps} {step_s} {STOP_FILE} {frame_hex}']
+               f'timeout {step_s + 5} python3 - {shlex.quote(SENDER_IFACE)} {pps} {step_s} {shlex.quote(STOP_FILE)} {shlex.quote(frame_hex)}']
     p = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     assert p.stdin is not None
     p.stdin.write(tm.LOAD_SENDER_SRC)
