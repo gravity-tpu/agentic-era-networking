@@ -1,6 +1,6 @@
-# Does a quarantine DROP match a tagged frame? Pre-registration (DRAFT)
+# Does a quarantine DROP match a tagged frame? Pre-registration
 
-**Status: draft of 2026-11-04, not registered.** It becomes the registration when the owner approves the points in "Approvals needed" and it is on `main` before any quarantine is installed for it. After that it is edited only to add dated lines saying what changed and why. Nothing here has been built or run.
+**Status: approved by the owner on 2026-11-04, all five points as drafted, and on `main` since PR #213 (2026-11-04 02:32 UTC), before any quarantine was installed for it. The install itself still needs the owner's explicit go at the moment it happens (approval 1).** After this it is edited only to add dated lines saying what changed and why. The tooling is built and tested offline (`scripts/tag-quarantine.py`, `scripts/tag_quarantine_lib.py`, `test/invariants/tag-quarantine.test.ts`); nothing has been run on the hardware. Build-time amendments are at the end.
 
 ## What it closes
 
@@ -60,3 +60,12 @@ Five classes, a judge and a run choreography (install, verify on the switch, sen
 3. **10.0.2.101 is unused.** It is in the range the capacity harness has used; confirm nothing on your side uses it.
 4. **Detector enforcement stays as it is**, with a pass during which a second quarantine appears voided (the same stance as scenario 5).
 5. **Prerequisites at run time**: `wlan0` on node-02 down (it is) and a current Tailscale SSH approval for the Jetson.
+
+## Amendments (2026-11-04, written while building the tooling, before any run)
+
+1. **`partial` cannot occur.** Rule 3 listed `partial` as "otherwise". For Q1 and Q2 the cases are exhaustive without it: O3 above 0 is `evaded`; with O3 at 0, O2 above 0 is `reached_tap_only` and O2 at 0 is `dropped`. The judge has three outcomes and a test pins that.
+2. **Frames at O3 in a void run are shown.** If a control fails the run is void and Q1 and Q2 are `void`, but any frames at O3 for them are recorded (`o3_frames`), not hidden.
+3. **The install must show on the switch, with a bounded wait.** The status is read up to 3 times, 2 s apart, for exactly one quarantine rule to appear (the flow readback can lag the install by a moment); if it never does, nothing is sent and the quarantine is released.
+4. **A status check during the send.** After the frames are sent, before the release, the status must read exactly our one quarantine with `verified/drops`; anything else (a second quarantine, a changed table-miss) voids the run and the verdicts are `void`.
+5. **The owner's go is a command-line flag.** The script refuses to install anything unless it is given `--dry-run` or `--owner-go-for-install`, and the second is passed only after the owner has said go for this install in so many words. A dry run does the preflight, the status gate, the mode read and the capture plumbing with nothing installed and nothing sent.
+6. **Capture window.** The captures start before the install, so the window is 4 s, 15 s for the install and its checks, the send time and 8 s of margin (about 37 s); the quarantine is released as soon as the send ends, not at the end of the window, so it is held for roughly the install, the checks and the 10 s send.
