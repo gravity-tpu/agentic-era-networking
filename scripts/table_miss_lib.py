@@ -306,10 +306,18 @@ def start_captures(runner: Runner, observers: Dict[str, Tuple[str, str, bool]], 
 SUMMARY = re.compile(r'(\d+) packets captured')
 DROPPED = re.compile(r'(\d+) packets dropped by kernel')
 
+# Named, not buried (Invariant 5): the largest single registered send so far is session-loss's 25,000 pps for
+# STEP_SECONDS=10 s, up to 250,000 frames filtered to one source MAC; at tcpdump -e's observed ~141 B/line that is
+# about 35 MB of text. 64 MiB leaves a wide margin over that without being large enough to risk a slow remote read.
+# This cap does not weaken the validity check below: a capture still larger than this still fails the packets-vs-
+# lines comparison and reports observer_invalid rather than silently under-reporting (2026-11-03: this is exactly
+# how the previous 2,000,000-byte cap was caught, not a case it missed).
+CAPTURE_TEXT_READ_CAP_BYTES = 64 * 1024 * 1024
+
 
 def read_capture(runner: Runner, host: str, base: str) -> Dict[str, object]:
     """Reads one finished capture. Valid only if tcpdump's exit summary is present, reports no kernel drops, and its packet count equals the number of frame lines in the text."""
-    r = run_remote(runner, host, f"head -c 4000 {base}.err; echo '#TXT#'; head -c 2000000 {base}.txt")
+    r = run_remote(runner, host, f"head -c 4000 {base}.err; echo '#TXT#'; head -c {CAPTURE_TEXT_READ_CAP_BYTES} {base}.txt")
     if not r.ok:
         return {'valid': False, 'reason': f'the capture could not be read: {r.reason}', 'text': '', 'packets': None}
     err, sep, text = r.out.partition('#TXT#\n')
