@@ -82,7 +82,7 @@ const connected = (sessions: number, state = 'verified', tableMiss: string | nul
 const disconnected: Poll = { ok: true, openflow: 'Disconnected', isolation_state: 'mismatch', table_miss: null, sessions: 0 };
 const unreadable: Poll = { ok: false, error: 'timeout' };
 
-const judge = (polls: Poll[], o3: number, o2: number, invalid: Record<string, string> = {}, fallbackFired = false): any =>
+const judge = (polls: Poll[], o3: number | null, o2: number | null, invalid: Record<string, string> = {}, fallbackFired = false): any =>
   py('judge', { polls, o3_frames: o3, o2_frames: o2, invalid, fallback_fired: fallbackFired });
 
 describe('the judge', () => {
@@ -126,6 +126,17 @@ describe('the judge', () => {
     expect(j.verdict).toBe('observer_invalid');
   });
 
+  it('accepts null for a frame count (an invalid observer has no count, not a confirmed zero) and does not crash or read it as a leak', () => {
+    const j = judge([connected(1), disconnected, connected(2)], null, null, { O3: 'capture never ran' });
+    expect(j).toMatchObject({ verdict: 'observer_invalid', o3_frames: null, o2_frames: null });
+  });
+
+  it('can fail: a null frame count with an EMPTY invalid map must not crash the leak check (a caller contract judge() has to hold on its own, not just via the observer_invalid short-circuit)', () => {
+    const j = judge([connected(1), disconnected, connected(2)], null, null, {});
+    expect(j.verdict).toBe('recovered');
+    expect(j.o3_frames).toBeNull();
+  });
+
   it('an unreadable poll counts as neither connected nor disconnected: it never by itself flips loss_detected or recovery', () => {
     const j = judge([connected(1), unreadable, unreadable, connected(1)], 0, 0);
     expect(j).toMatchObject({ verdict: 'no_loss_observed', loss_detected: false });
@@ -138,7 +149,7 @@ describe('the judge', () => {
 });
 
 describe('the choreography, against a scripted ssh and bridge', () => {
-  it('passes its own selftest: the plan is validated before any ssh; the fallback restart runs at most once and only after the reconnect wait elapses; a leak is found when the captures are read at the end of the window, exactly as in every other experiment in this series (no component here does an interim capture read); a dry run sends no load and never calls the restart command', () => {
+  it('passes its own selftest: the plan is validated before any ssh; the fallback restart runs at most once and only after the reconnect wait elapses; a leak is found when the captures are read at the end of the window, exactly as in every other experiment in this series (no component here does an interim capture read); an invalid observer is reported as a null frame count, not a confirmed zero; a dry run sends no load and never calls the restart command', () => {
     const out = withNoSsh((env) => execFileSync('python3', ['-I', LIB, 'selftest'], { encoding: 'utf-8', timeout: 60_000, env }));
     expect(out).toContain('selftest ok');
   });

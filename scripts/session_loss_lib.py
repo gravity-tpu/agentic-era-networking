@@ -25,6 +25,10 @@ import workload_frames_lib as wf
 
 TARGET_PPS = 25_000                # 2x deployedCapacityPps(572n, 0n) = 2 x 12,500; exact, not a ceiling with a lower starting point
 MIN_STEP_SECONDS, MAX_STEP_SECONDS = tm.MIN_STEP_SECONDS, tm.MAX_STEP_SECONDS   # reused unchanged: 5 to 10 s
+# Invariant 2 (integer accounting): these bounds must be whole seconds, never float. validate_plan() rejects a float step at the call boundary; this assertion makes the same
+# requirement fail loudly and immediately on the reused constants themselves, rather than as a buried crash deep inside run_experiment's `assert plan['ok']` if table_miss_lib
+# ever changed MIN_STEP_SECONDS/MAX_STEP_SECONDS to a float.
+assert isinstance(MIN_STEP_SECONDS, int) and isinstance(MAX_STEP_SECONDS, int), 'Invariant 2: the reused step bounds must be integers'
 STEP_SECONDS = MAX_STEP_SECONDS    # the registered duration: the top of the reused range
 RECONNECT_WAIT_S = 30              # longer than any session-recovery time measured anywhere in this project, including a full device reboot (2026-10-18: back within 30 s)
 FALLBACK_WAIT_S = 30               # the same bound again, after the one allowed local restart
@@ -52,10 +56,13 @@ def validate_plan(pps: int, step_seconds: float) -> Dict[str, Any]:
     return {'ok': True}
 
 
-def judge(polls: List[Dict[str, Any]], o3_frames: int, o2_frames: int, invalid: Optional[Dict[str, str]] = None, fallback_fired: bool = False) -> Dict[str, Any]:
+def judge(polls: List[Dict[str, Any]], o3_frames: Optional[int], o2_frames: Optional[int], invalid: Optional[Dict[str, str]] = None, fallback_fired: bool = False) -> Dict[str, Any]:
     """The verdict rules of the pre-registration, in order. `polls` is the sequence read over the whole window, oldest first, each shaped like table_miss_lib.parse_poll's return.
     An unreadable poll (`ok: False`) counts as neither connected nor disconnected: it never by itself flips loss_detected or a recovery finding, because the only thing it proves is
-    that this one read failed, not what the switch was doing."""
+    that this one read failed, not what the switch was doing. A frame count is `None`, never a fabricated `0`, when its observer's capture was not proven valid: an invalid
+    observer tells you nothing about what crossed, and reporting it as a confirmed zero would misrepresent "unknown" as "measured" (the provenance invariant this project holds
+    telemetry to generally). `judge` is called directly in tests with any combination of these, so the leak check below must not assume o3_frames/o2_frames are int just because
+    invalid happens to be non-empty in the caller that built them that way; it must hold as its own contract."""
     invalid = invalid or {}
     readable = [p for p in polls if p.get('ok')]
     baseline_sessions = readable[0]['sessions'] if readable else None
@@ -77,7 +84,7 @@ def judge(polls: List[Dict[str, Any]], o3_frames: int, o2_frames: int, invalid: 
         verdict = 'not_recovered'
     if invalid:
         verdict = 'observer_invalid'
-    elif o3_frames > 0:
+    elif o3_frames is not None and o3_frames > 0:
         verdict = 'leak'   # this frame shape is never matched by an allow rule in any state the policy defines; any count at O3 overrides every other finding
     return {'verdict': verdict, 'loss_detected': loss_detected, 'baseline_sessions': baseline_sessions, 'o3_frames': o3_frames, 'o2_frames': o2_frames, 'fallback_fired': fallback_fired, 'invalid': invalid}
 
@@ -146,7 +153,7 @@ def run_experiment(d: Deps, label: str, prefix: str = '/tmp/sl') -> Dict[str, An
             loss_since = now
         current = judge(polls, 0, 0)   # frame counts are not known until the captures are read; used here only to see whether recovery already holds
         send_done = not d.send_running(handle)
-        if loss_since is not None and not current['loss_detected'] is False and current['verdict'] in ('recovered', 'recovered_with_fallback'):
+        if loss_since is not None and current['loss_detected'] and current['verdict'] in ('recovered', 'recovered_with_fallback'):
             break
         if loss_since is not None and not fallback_fired and (now - loss_since) >= RECONNECT_WAIT_S * 1000:
             ok, detail = d.restart_bridge()
@@ -164,8 +171,9 @@ def run_experiment(d: Deps, label: str, prefix: str = '/tmp/sl') -> Dict[str, An
         out['fallback_detail'] = fallback_detail
     d.sleep(tm.seconds_until_capture_end(t0, d.now_ms(), window_s))
     results, invalid = tm.read_all(d.runner, d.observers, {k: v['base'] for k, v in started.items()})
-    o3 = tm.parse_capture(str(results[OBSERVER_O3]['text'])).get(SENDER_SRC_MAC, {'count': 0})['count'] if results[OBSERVER_O3]['valid'] else 0
-    o2 = tm.parse_capture(str(results[OBSERVER_O2]['text'])).get(SENDER_SRC_MAC, {'count': 0})['count'] if results[OBSERVER_O2]['valid'] else 0
+    # None, never a fabricated 0, when the capture was not proven valid: a count that was never measured is not the same finding as a count that was measured and came back zero.
+    o3 = tm.parse_capture(str(results[OBSERVER_O3]['text'])).get(SENDER_SRC_MAC, {'count': 0})['count'] if results[OBSERVER_O3]['valid'] else None
+    o2 = tm.parse_capture(str(results[OBSERVER_O2]['text'])).get(SENDER_SRC_MAC, {'count': 0})['count'] if results[OBSERVER_O2]['valid'] else None
     j = judge(polls, o3, o2, invalid, fallback_fired)
     out.update({'polls': polls, 'capture_summaries': {k: v['packets'] for k, v in results.items()}, **j})
     return out
@@ -177,7 +185,7 @@ def selftest() -> None:
     obs = {OBSERVER_O3: ('jetson', 'o3if', False), OBSERVER_O2: ('jetson', 'o2if', False)}
     healthy = {'state': 'verified', 'tableMiss': 'drops', 'quarantines': 0}
 
-    def fake_captures_runner(o3_total: int, o2_total: int):
+    def fake_captures_runner(o3_total: int, o2_total: int, invalid_o3_read: bool = False):
         class R(tm.ScriptedRunner):
             def __call__(self, host, cmd, timeout, stdin=None):
                 del timeout, stdin
@@ -189,6 +197,8 @@ def selftest() -> None:
                 if 'head -c 150' in cmd:
                     return 0, 'empty', ''
                 if 'head -c 4000' in cmd:
+                    if invalid_o3_read and OBSERVER_O3 in cmd:
+                        return 0, 'listening on x\n(no summary: the capture never finished)\n#TXT#\n', ''   # no "N packets captured" line: tm.read_capture marks this invalid
                     n = o3_total if OBSERVER_O3 in cmd else o2_total
                     lines = '\n'.join(f'12:00:00.{i:06d} {SENDER_SRC_MAC} > ff:ff:ff:ff:ff:ff, ethertype IPv4 (0x0800), length 572: x' for i in range(n))
                     text = lines + ('\n' if n else '')
@@ -196,7 +206,7 @@ def selftest() -> None:
                 return 255, '', 'no scripted response'
         return R([])
 
-    def deps(poll_sequence: List[Dict[str, Any]], o3_total: int = 0, o2_total: int = 0, restart_ok: bool = True, send_steps: int = 3):
+    def deps(poll_sequence: List[Dict[str, Any]], o3_total: int = 0, o2_total: int = 0, restart_ok: bool = True, send_steps: int = 3, invalid_o3_read: bool = False):
         state = {'polls_taken': 0, 'send_polls': 0, 'restarts': []}
 
         def status():
@@ -223,7 +233,7 @@ def selftest() -> None:
         def sleep(seconds):
             clock['ms'] += int(seconds * 1000) if seconds else 1000
 
-        return Deps(fake_captures_runner(o3_total, o2_total), obs, status, start_send, send_running, restart_bridge, poll, sleep, lambda: clock['ms']), state
+        return Deps(fake_captures_runner(o3_total, o2_total, invalid_o3_read), obs, status, start_send, send_running, restart_bridge, poll, sleep, lambda: clock['ms']), state
 
     def connected(sessions, state='verified', table_miss='drops'):
         return {'ok': True, 'openflow': 'Connected', 'isolation_state': state, 'table_miss': table_miss, 'sessions': sessions}
@@ -256,6 +266,11 @@ def selftest() -> None:
     d, state = deps([connected(1), disconnected, connected(2)] + [connected(2)] * 50, o3_total=2)
     out = run_experiment(d, 't5')
     assert out['verdict'] == 'leak' and out['o3_frames'] == 2, out
+
+    # 5b. an invalid O3 capture: the frame count is reported as null, never a fabricated 0, and the run is observer_invalid, not a silent "recovered" or "contained".
+    d, state = deps([connected(1), disconnected, connected(2)] + [connected(2)] * 50, invalid_o3_read=True)
+    out = run_experiment(d, 't5b')
+    assert out['verdict'] == 'observer_invalid' and out['o3_frames'] is None and out['invalid'], out
 
     # 6. a dry run sends no load and never calls the restart command.
     d, state = deps([connected(1)])
