@@ -45,7 +45,7 @@ describe('track-a CI matrix', () => {
   });
 
   it('A9 is the only property labelled decided not needed, and A3 and A8 say what their label does not cover', () => {
-    const labels = Object.fromEntries(rows.map((r) => [/^\| (A\d+) /.exec(r)?.[1], labelOf(r)]));
+    const labels: Record<string, string> = Object.fromEntries(rows.map((r): [string, string] => [/^\| (A\d+) /.exec(r)?.[1] ?? '', labelOf(r)]));
     expect(Object.entries(labels).filter(([, l]) => l.startsWith('decided not needed')).map(([k]) => k)).toEqual(['A9']);
     expect(labels['A3']).toMatch(/readback/);
     expect(labels['A8']).toMatch(/target is declared/);
