@@ -322,10 +322,15 @@ DROPPED = re.compile(r'(\d+) packets dropped by kernel')
 # command (run_remote reports it as `r.ok == False`), not silently return the full file.
 CAPTURE_TEXT_READ_CAP_BYTES = 64 * 1024 * 1024
 
+# stderr holds only tcpdump's own startup line, the "listening on" line and the exit summary ("N packets captured" /
+# "N packets dropped"); none of those grow with capture volume the way the frame text does, so this cap is sized for
+# that fixed-shape content, not for scaling with traffic. 4 KiB is generous for it.
+CAPTURE_ERR_READ_CAP_BYTES = 4000
+
 
 def read_capture(runner: Runner, host: str, base: str) -> Dict[str, object]:
     """Reads one finished capture. Valid only if tcpdump's exit summary is present, reports no kernel drops, and its packet count equals the number of frame lines in the text."""
-    r = run_remote(runner, host, f"head -c 4000 {base}.err; echo '#TXT#'; head -c {int(CAPTURE_TEXT_READ_CAP_BYTES)} {base}.txt")
+    r = run_remote(runner, host, f"head -c {int(CAPTURE_ERR_READ_CAP_BYTES)} {base}.err; echo '#TXT#'; head -c {int(CAPTURE_TEXT_READ_CAP_BYTES)} {base}.txt")
     if not r.ok:
         return {'valid': False, 'reason': f'the capture could not be read: {r.reason}', 'text': '', 'packets': None}
     err, sep, text = r.out.partition('#TXT#\n')

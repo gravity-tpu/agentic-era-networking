@@ -112,6 +112,9 @@ def main():
     # break silently (reverting to 30s/30s with no error) if session_loss_lib.py ever stopped reading these as
     # plain globals (for example, by capturing them as function-default-argument values instead).
     sl.RECONNECT_WAIT_S, sl.FALLBACK_WAIT_S = reconnect, fallback
+    # Makes a future session_loss_lib.py refactor that stops reading these as plain module globals (e.g. capturing
+    # them as function-default-argument values instead) fail loudly here, not revert silently to 30s/30s.
+    assert sl.RECONNECT_WAIT_S == reconnect and sl.FALLBACK_WAIT_S == fallback, 'module-global override did not take effect'
     print(f'# diagnostic override: RECONNECT_WAIT_S={sl.RECONNECT_WAIT_S}s FALLBACK_WAIT_S={sl.FALLBACK_WAIT_S}s '
           f'(registered values are 30s/30s; TARGET_PPS={sl.TARGET_PPS}, STEP_SECONDS={sl.STEP_SECONDS} unchanged)', file=sys.stderr)
 
