@@ -324,7 +324,7 @@ CAPTURE_TEXT_READ_CAP_BYTES = 64 * 1024 * 1024
 
 # stderr holds only tcpdump's own startup line, the "listening on" line and the exit summary ("N packets captured" /
 # "N packets dropped"); none of those grow with capture volume the way the frame text does, so this cap is sized for
-# that fixed-shape content, not for scaling with traffic. 4 KiB is generous for it.
+# that fixed-shape content, not for scaling with traffic. 4,000 bytes is generous for it.
 CAPTURE_ERR_READ_CAP_BYTES = 4000
 
 
