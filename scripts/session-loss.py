@@ -69,10 +69,19 @@ def start_send(frame_hex, pps, step_s):
     removed = wfs.remote(NODE02, f'rm -f {shlex.quote(STOP_FILE)}', 8)
     if not removed.ok:
         raise RuntimeError(f'the stop file could not be cleared, so an abort could not stop the sender: {removed.reason}')
+    # pps/step_s are already validated as int above, so interpolating them can never embed a shell metacharacter
+    # (int.__str__() only ever produces digits and a leading '-') -- quoted anyway so every interpolated value in
+    # this command is quoted the same way, consistent with the rationale just given for frame_hex, rather than
+    # leaving an unquoted survivor beside it for a future editor to puzzle over or copy uncritically.
     ssh_cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', NODE02,
-               f'timeout {step_s + 5} python3 - {shlex.quote(SENDER_IFACE)} {pps} {step_s} {shlex.quote(STOP_FILE)} {shlex.quote(frame_hex)}']
+               f'timeout {shlex.quote(str(step_s + 5))} python3 - {shlex.quote(SENDER_IFACE)} {shlex.quote(str(pps))} {shlex.quote(str(step_s))} {shlex.quote(STOP_FILE)} {shlex.quote(frame_hex)}']
     p = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    assert p.stdin is not None
+    # Not `assert p.stdin is not None` (same reason as the pps/step_s guard above: stripped under `python3 -O`,
+    # which would turn a clean refusal into an obscure `AttributeError: 'NoneType' object has no attribute
+    # 'write'` instead). Popen is called with stdin=PIPE immediately above, so this never actually fires; it
+    # exists so a future edit that removes that argument fails loudly here, not three lines later.
+    if p.stdin is None:
+        raise RuntimeError('Popen was not given stdin=PIPE; cannot write the sender source to it')
     p.stdin.write(tm.LOAD_SENDER_SRC)
     p.stdin.close()
     return p
