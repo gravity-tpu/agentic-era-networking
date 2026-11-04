@@ -13,7 +13,7 @@ Usage: python3 scripts/session-loss.py LABEL --dry-run | --owner-go-for-real-loa
   --pps: accepted only so the registered value can be stated explicitly on the command line; anything other than the registered 25,000 is refused before any ssh.
 Prints one JSON line. Needs ssh to jetson and agentic-node-02; node-02's wlan0 down.
 """
-import importlib.util, json, os, shlex, subprocess, sys, time
+import importlib.util, json, os, re, shlex, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import table_miss_lib as tm
@@ -57,7 +57,14 @@ def start_send(frame_hex, pps, step_s):
     uncritically) is specific to node-01, a different host where raw-socket creation does need root; the
     already-working scenario 5 sender on this same host (workload-frames.py) uses no sudo at all for exactly
     this reason. Adding a NOPASSWD sudoers grant here would have been solving a problem that does not exist."""
-    assert isinstance(pps, int) and isinstance(step_s, int), f'Invariant 2: pps and step_s must be int, not injected into a remote shell command as anything else (got {pps!r}, {step_s!r})'
+    # `assert`, not used here on purpose (AI review, 2026-11-04): it is stripped entirely under `python3 -O`,
+    # which would silently remove this exact guard against pps/step_s being anything other than the validated
+    # int constants before they are interpolated into a remote shell command. An unconditional check holds
+    # regardless of how this script is invoked.
+    if not (isinstance(pps, int) and isinstance(step_s, int) and step_s > 0):
+        raise TypeError(f'Invariant 2: pps and step_s must be a positive int, not injected into a remote shell command as anything else (got {pps!r}, {step_s!r})')
+    if not re.fullmatch(r'[0-9a-fA-F]+', frame_hex):
+        raise ValueError(f'frame_hex must be hex digits only (it is embedded in a remote shell command, and bytes.fromhex() on the far end would otherwise raise a confusing remote error instead of this clean local refusal): {frame_hex!r}')
     check_raw_socket_capability()
     removed = wfs.remote(NODE02, f'rm -f {shlex.quote(STOP_FILE)}', 8)
     if not removed.ok:
