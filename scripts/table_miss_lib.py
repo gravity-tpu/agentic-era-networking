@@ -311,7 +311,15 @@ DROPPED = re.compile(r'(\d+) packets dropped by kernel')
 # about 35 MB of text. 64 MiB leaves a wide margin over that without being large enough to risk a slow remote read.
 # This cap does not weaken the validity check below: a capture still larger than this still fails the packets-vs-
 # lines comparison and reports observer_invalid rather than silently under-reporting (2026-11-03: this is exactly
-# how the previous 2,000,000-byte cap was caught, not a case it missed).
+# how the previous 2,000,000-byte cap was caught, not a case it missed) -- any single step producing more than
+# about 455,000 frame lines (64 MiB / the observed ~141 B/line) will void itself the same way, by design, so a
+# future increase to STEP_SECONDS or TARGET_PPS large enough to cross that is a loud observer_invalid, not a
+# silent wrong count.
+#
+# A fixed Python int literal, never built from remote or user-supplied data, so there is no shell-injection
+# surface in the f-string below despite the interpolation. `head -c` is GNU coreutils (both the jetson and
+# agentic-node-02 run Debian-derived userlands); a non-GNU `head` without `-c` would error loudly on the whole
+# command (run_remote reports it as `r.ok == False`), not silently return the full file.
 CAPTURE_TEXT_READ_CAP_BYTES = 64 * 1024 * 1024
 
 
