@@ -42,10 +42,16 @@ def check_raw_socket_capability():
     AF_PACKET raw socket unprivileged -- a capability assumption, not a code-level guarantee (AI review,
     2026-11-04): if it were ever revoked (a kernel/capability change, a container runtime, a different node),
     the sender would fail to bind and the run would read as a confusing, silent no_loss_observed rather than a
-    loud, diagnosable refusal. Checked fresh before every send, not just asserted in a comment."""
-    r = wfs.remote(NODE02, 'python3 -c "import socket; socket.socket(socket.AF_PACKET, socket.SOCK_RAW)"', 8)
+    loud, diagnosable refusal. Checked fresh before every send, not just asserted in a comment.
+
+    Binds to SENDER_IFACE itself, not just socket()'s AF_PACKET/SOCK_RAW arguments (AI review, 2026-11-04): a bare
+    socket() with no bind can succeed under weaker privilege than an actual bind to a specific interface would
+    need, so a check that stops at socket() proves less than LOAD_SENDER_SRC's own `s.bind((iface, 0))` actually
+    requires -- still not a byte-for-byte guarantee of the real send (TOCTOU between this check and the sender's
+    own socket), but it now exercises the same privileged operation, not a weaker stand-in for it."""
+    r = wfs.remote(NODE02, f'python3 -c "import socket; s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW); s.bind(({SENDER_IFACE!r}, 0))"', 8)
     if not r.ok:
-        raise RuntimeError(f'node-02 cannot open an AF_PACKET raw socket without privilege any more (the sender would fail silently): {r.reason}')
+        raise RuntimeError(f'node-02 cannot bind an AF_PACKET raw socket to {SENDER_IFACE} without privilege any more (the sender would fail silently): {r.reason}')
 
 
 def start_send(frame_hex, pps, step_s):
@@ -60,9 +66,12 @@ def start_send(frame_hex, pps, step_s):
     # `assert`, not used here on purpose (AI review, 2026-11-04): it is stripped entirely under `python3 -O`,
     # which would silently remove this exact guard against pps/step_s being anything other than the validated
     # int constants before they are interpolated into a remote shell command. An unconditional check holds
-    # regardless of how this script is invoked.
-    if not (isinstance(pps, int) and isinstance(step_s, int) and step_s > 0):
-        raise TypeError(f'Invariant 2: pps and step_s must be a positive int, not injected into a remote shell command as anything else (got {pps!r}, {step_s!r})')
+    # regardless of how this script is invoked. The upper bound on step_s (AI review, 2026-11-04) is this
+    # function's own defense, not a repeat of validate_plan's: that check happens upstream of every real call
+    # site, but this one holds regardless of what a future caller does, so an absurd value (say, an unchecked
+    # integer overflow case) can't turn into an absurd `timeout N` on the remote end.
+    if not (isinstance(pps, int) and isinstance(step_s, int) and 0 < step_s <= sl.MAX_STEP_SECONDS):
+        raise TypeError(f'Invariant 2: pps must be a positive int and step_s a positive int up to {sl.MAX_STEP_SECONDS}, not injected into a remote shell command as anything else (got {pps!r}, {step_s!r})')
     if not re.fullmatch(r'[0-9a-fA-F]+', frame_hex):
         raise ValueError(f'frame_hex must be hex digits only (it is embedded in a remote shell command, and bytes.fromhex() on the far end would otherwise raise a confusing remote error instead of this clean local refusal): {frame_hex!r}')
     check_raw_socket_capability()
