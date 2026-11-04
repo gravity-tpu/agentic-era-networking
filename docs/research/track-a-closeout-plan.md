@@ -101,3 +101,5 @@ Written after the ROADMAP re-scope (section "Re-scope" of `docs/ROADMAP.md`, ado
 **Not on the list.** Scenario 2 (kept only as the source-address forgery question for the quarantine envelope), scenario 6 (unchanged, not an exit condition), adapter training, and any Runpod run without a named question and cap (ROADMAP proposal 8).
 
 **Follow-up raised by scenario 5 (2026-11-03).** The switch matches an IPv4 allow rule through an 802.1Q tag, so a quarantine DROP probably matches a tagged frame the same way; that is untested and needs a quarantine installed (owner present, inside the quarantine envelope). It would decide whether a tag can evade quarantine, and is the one result of the run that could become a new verifier property.
+
+**Closed 2026-11-04:** the quarantine DROP matched tagged frames from the quarantined source for VID 100 and VID 200 (0 of 40 left P2, controls held), so a tag does not evade a quarantine and no new property follows; double tags, VID 0 and a quarantine by MAC were not tested ([results](../benchmarks/results/scenario5-tag-quarantine/README.md)).
