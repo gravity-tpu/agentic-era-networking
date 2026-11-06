@@ -36,7 +36,7 @@ Questions: Does each intent say what a network engineer means by it? Are the cla
 
 ## Safety of how it was done
 
-The experiment endpoint needs a LAN operator and a token, bounds the rules, re-checks A5, A6 and A7, installs the table-miss DROP, reads back, has a bridge time limit and a switch-side hard timeout, and the runner restores the isolation policy after every set and stops on any unverified restore (`src/sdn/experiment-install.ts`, `src/sdn/wire-session.ts`; backstop tests in `docs/benchmarks/results/conformance/safety-backstops/`). The unattended sessions ran under the owner's written grant; the token was pasted into a chat during the work and should be rotated.
+The experiment endpoint needs a LAN operator and a token, bounds the rules, re-checks A5, A6 and A7, installs the table-miss DROP, reads back, has a bridge time limit and a switch-side hard timeout, and the runner restores the isolation policy after every set and stops on any unverified restore (`src/sdn/experiment-install.ts`, `src/sdn/wire-session.ts`; backstop tests in `docs/benchmarks/results/conformance/safety-backstops/`). The unattended sessions ran under the owner's written grant; the token was pasted into a chat during the work. **Rotated 2026-11-05** on the jetson (`/etc/zodiac/zodiac-bridge.env`, `ZODIAC_EXPERIMENT_TOKEN`, 64 hex characters from `secrets.token_hex(32)`; the old value is backed up at `zodiac-bridge.env.bak-before-rotation-20261105T232849`, not in this repository); `ZODIAC_EXPERIMENT_ENDPOINTS` remains `0`, so neither value was ever live during the rotation, and no bridge restart was needed.
 
 ## What would count as a finding
 

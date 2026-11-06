@@ -57,6 +57,7 @@
 - [x] Wire-protocol RFC 1035 UDP DNS socket server with fail-closed resolution.
 - [x] SDN Flow Table with CIDR matching and default-drop enforcement.
 - [x] Zodiac FX Physical Hardware Interface & OpenFlow 1.3 Controller Daemon.
+- [x] Rotate `ZODIAC_EXPERIMENT_TOKEN` after it was pasted into a chat during the 2026-10-31 work (`docs/research/owner-review-packet.md`, "Safety of how it was done"). Rotated 2026-11-05 on the jetson; `ZODIAC_EXPERIMENT_ENDPOINTS` was and remains `0` throughout, so neither the old nor the new value was ever live.
 - [ ] Connect live Neon PostgreSQL connection string and run initial migration.
 - [ ] Independent network-engineer review of the isolation policy and the verifier property list (roadmap, before publishing results).
 - [ ] Test the suspected ARP spoofing surface across P1 to P2 (roadmap C1); resolve the A4 (quarantine precedence) versus A9 (forwarding-first layout) tension.
