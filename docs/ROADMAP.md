@@ -212,7 +212,7 @@ Keep what already differentiates the project: telemetry with provenance, integer
 
 Reassessed 2026-10-09. The current rack has four problems for the experiments above:
 
-1. **Workload nodes are dual-homed to the lab LAN.** Both Pis keep `wlan0` on `10.0.0.0/24` as an out-of-band path, which bypasses the P1 to P2 isolation policy.
+1. **Workload nodes are dual-homed to the lab LAN.** Both Pis keep a management path to `10.0.0.0/24` outside the Zodiac: originally Wi-Fi, now wired through uplink switch #2 (VLAN 1, with the ISP extender; the Zodiac P2 link sits on its own VLAN with no path to those ports). Traffic that uses it bypasses the P1 to P2 isolation policy, so scenario scripts must bind to the workload interface (`scripts/adversary-bind.py`).
 2. **No independent observer of Zodiac P2 egress.** The P3 tap shows what the flow rules choose to copy, so it derives from the policy under test. The benchmark receiver was the Mac over Wi-Fi, which is a confound.
 3. **The Pi 5 is adversary and observer.** Its capture NIC shares a host with the traffic generator, so attacker CPU load can drop captured packets.
 4. **The Jetson was overloaded.** Controller, verifier, GPU detector and previous local LLM inference shared 7.6 GB of memory and one GPU (96% load during inference); local Qwen inference was subsequently removed from the Jetson to eliminate memory contention and measurement distortion.
@@ -225,7 +225,7 @@ Target topology (**NEW** marks changes from today):
                              ┌────────────┴────────────┐
                              │  Uplink switch #2       │  GS105Ev2, built 2026-10-09: P5 = ISP mesh, P4 = Zodiac P2
                              └──┬───────────────────┬──┘
-                          to Zodiac P2         mirror of P4  (not yet configured)
+                          to Zodiac P2         mirror of P4 (O3)
                                 │                   │
                                 │                   └────► Jetson third USB NIC   [O3 egress ground truth]  live 2026-10-12
                                 │
@@ -237,8 +237,8 @@ Target topology (**NEW** marks changes from today):
                    ┌────────────┴────────────┐
                    │   NETGEAR GS105Ev2      │
                    │  P5 uplink              │
-                   │  P3 ── Pi 3B+  (adversary)              wlan0 OFF during runs
-                   │  P1 ── agentic-node-02 (legit client)   provisioned 2026-10-09, wlan0 OFF during runs
+                   │  P3 ── Pi 3B+  (adversary)
+                   │  P1 ── agentic-node-02 (legit client)   provisioned 2026-10-09
                    │  P2 ◄─ mirror of P5 ── Pi 5 capture NIC   [O1 pre-DUT]
                    └─────────────────────────┘
                                                   rpi-hailo (Pi 5 + Hailo-8) = SENSOR
@@ -266,7 +266,7 @@ Observation points: **O1** is the NETGEAR hardware mirror of the workload uplink
 
 **Open items for the topology:**
 
-- Out-of-band management of the workload nodes without a lab-LAN path (for example a second Jetson NIC on a management VLAN, or scheduled `wlan0` windows).
+- Out-of-band management of the workload nodes without a lab-LAN path. Today's wired management via uplink switch #2 still reaches the lab LAN; an option is a second Jetson NIC on a dedicated management VLAN.
 - Done 2026-10-12: with the Corals removed, both capture NICs link at 5000M on the SuperSpeed hub. An earlier plug negotiated 480M on a USB 2.0 hub port, so use a USB 3 port and check `lsusb -t`.
 - Done 2026-10-12: switch #2 management address `192.168.0.240`, mirror P4 to P3, 802.3x flow control on P4 and P5, and the O3 NIC fail-closed on egress and persistent across reboots.
 - Found and mitigated 2026-10-12: the mirror destination ports on **both** switches **accepted ingress** (a frame sent from the capture NIC came back through the mirror), contradicting the documented claim; on switch #1 that port holds the untrusted Pi 5's capture NIC. Each switch now isolates its mirror port in its own VLAN (switch #2: VLAN 1 = P4, P5; VLAN 2 = P1, P2, P3. Switch #1: VLAN 1 = P1, P3, P4, P5; VLAN 2 = P2). Re-tests for untagged, 802.1Q VID 1 and VID 2 tagged, and double-tagged (outer 0x8100 and 0x88a8) frames were negative on both, the mirrors still work, and the workload network is healthy. Remaining: confirm the PVIDs in both UIs, include the ingress tests in the automated conformance probe and re-run them after any switch configuration change, and build the one-command automated probe.
