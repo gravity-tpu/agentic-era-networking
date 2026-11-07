@@ -12,7 +12,7 @@
 [ISP Gateway / Mesh Node]
           │ Ethernet
           ▼
-[NETGEAR GS105Ev2 #2 Port 5]   (uplink switch; installed 2026-10-09; its P4 mirrors to P3 = O3 capture NIC; P1-P2 free)
+[NETGEAR GS105Ev2 #2 Port 5]   (uplink switch; installed 2026-10-09; its P4 mirrors to P3 = O3 capture NIC; P1, P2 = wired management to agentic-node-01, -02)
 [NETGEAR GS105Ev2 #2 Port 4]
           │ 100BASE-TX Ethernet
           ▼
@@ -33,7 +33,7 @@
 ```
 
 > [!NOTE]
-> Detailed private IP allocations, hardware MAC addresses, and physical port assignments are documented in the local persistent context manager ([.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md)).
+> Private IP allocations and hardware MAC addresses are kept in a local, gitignored file (`.agents/devices.local.md`) and are not in this repository; use your own addressing (the `<...-subnet>` placeholders above). The topology, VLAN matrix, port assignments and the isolation policy are in [`.agents/network-context.md`](../../.agents/network-context.md), and the switch VLAN configuration is part of what the experiments depend on, not an optional detail.
 
 **Port assignment:**
 
@@ -52,13 +52,13 @@
 On the Jetson (JetPack 6.x, Ubuntu 22.04 ARM64):
 
 ```bash
-# Install Node.js 20 LTS via NodeSource
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Install Node.js 22 via NodeSource (matches .nvmrc and package.json "engines")
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Verify
-node --version   # v20.x.x
-npm --version    # 10.x.x
+node --version   # v22.x.x
+npm --version
 
 # Add your user to the dialout group for /dev/ttyACM0 access
 sudo usermod -aG dialout $USER
@@ -254,6 +254,24 @@ stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phas
    - **TPU #1 (`usb:0`)**: Zodiac Port 3 mirror tap stream feeds the Coral for on-silicon inference (<100 µs); the output tensor is not yet consumed, so this is a throughput/latency path until a trained classifier lands (ROADMAP Milestone 2C).
    - **TPU #2 (`usb:1`)**: RFC 1035 transparent DNS Sentinel evaluates FQDN semantic intent and DGA likelihood (<300 µs).
    - The Jetson Ampere TensorRT engine (67 TOPS) handles deep 1D-CNN autoencoder scoring concurrently.
+
+---
+
+## 8. What is in this directory, and what is not
+
+| File | Status | Purpose |
+| --- | --- | --- |
+| `zodiac-bridge.service`, `zodiac-bridge.env.template` | Current | The controller and bridge (sections 2 to 5). |
+| `zodiac-isolation-watch.service`, `isolation-watch.env.example` | Current | Pushes isolation problems to ntfy; see [`docs/design/isolation-watch.md`](../../docs/design/isolation-watch.md). |
+| `zodiac-trt.service` | Current | TensorRT wire-tap inference daemon (needs a TensorRT engine you build yourself: `scripts/build-trt-engine.py`). |
+| `gpu-sdn-sentinel.service` | Current | GPU anomaly sentinel (`scripts/gpu-sdn-anomaly-sentinel.py`). |
+| `backup/` | Current | Encrypted restic backup and restore drill; see [`backup/README.md`](backup/README.md). |
+| `zodiac-coral.service`, `99-coral-usb-power.rules` | Historical | For the Coral Edge TPUs, removed 2026-10-11. Do not install unless you have Corals. |
+
+Not provided here, and needed to reproduce the O3 observation point and the software reference bridge:
+
+- **O3 capture NIC.** A USB 3 NIC on switch #2 P3 (the mirror of the Zodiac P2 link) must be receive-only: brought up with no address, and egress dropped. This Tegra kernel (`5.15.148-tegra`) has no `CONFIG_NET_CLS_MATCHALL`, so the project drops egress with a root `blackhole` qdisc instead of a matchall filter, and applies it from a boot unit that finds the NIC by MAC because the udev rule did not fire at boot. The helper and that unit are not published; caveat 10 in [`.agents/network-context.md`](../../.agents/network-context.md) describes them. The qdisc does not stop a raw `AF_PACKET` socket, so the switch's own VLAN isolation of the mirror port is what actually blocks injection.
+- **Open vSwitch `br-sim` (optional, software reference evaluation).** JetPack 6.1's kernel has no `openvswitch.ko`, so the project runs OVS in userspace (`datapath_type: netdev`) with `install openvswitch /bin/true` in `/etc/modprobe.d/openvswitch.conf`, bound to `tcp:127.0.0.1:6634` and pinned to OpenFlow 1.3. Caveat 9 in `network-context.md` has the details.
 
 ---
 
