@@ -192,6 +192,18 @@ cp .env.example .env.local
 
 Hardware benchmarks (`npm run bench:dataplane`) require the physical bench. They wipe the flow table and saturate Port 2; see the [benchmark runbook](docs/design/zodiac-fx-dataplane-benchmark.md).
 
+### Replicating the physical testbed
+
+The software, service units and results are in this repository; the physical setup is not turnkey. In order:
+
+1. **Hardware:** the devices in [section 6](#6-hardware). The Zodiac FX runs firmware 0.86; both NETGEAR switches must be GS105Ev2 (802.1Q and port mirroring).
+2. **Switch configuration:** VLANs, port mirrors (O1, O3) and port assignments are in [`.agents/network-context.md`](.agents/network-context.md). Isolate each mirror destination port in its own VLAN, and re-run the ingress tests after any change; the mirror ports accepted ingress frames by default on both units (caveat 10).
+3. **Jetson:** follow [`deploy/jetson/README.md`](deploy/jetson/README.md) (Node.js 22, `zodiac-bridge`, optionally `zodiac-isolation-watch`, `zodiac-trt` and the GPU sentinel, and the backup timer).
+4. **Raspberry Pis:** [`deploy/rpi5/`](deploy/rpi5/) (Hailo service, capture NIC), [`deploy/rpi3/`](deploy/rpi3/) and [`deploy/workload/`](deploy/workload/).
+5. **Operator machine:** [`deploy/mac/`](deploy/mac/).
+
+Not in the repository: the O3 capture NIC helper and its boot unit (kept local; the procedure and the Tegra kernel workaround are described in caveat 10 of `.agents/network-context.md`), private addressing, secrets, and the TensorRT and Hailo model binaries (build them with `scripts/build-trt-engine.py` and the Hailo tooling). Nothing here has been replicated on a second rack.
+
 ## 10. Operations
 
 - **Telemetry history (Jetson).** The bridge server writes 30-day JSONL history to `/var/lib/zodiac/history/` (falling back to `~/zodiac-history` or `/tmp/zodiac-history`), at about 2 points per minute. Ranges such as `?range=6h` are served from local disk with no internet dependency. After a restart (`sudo systemctl restart zodiac-bridge`) history resumes accumulating.
