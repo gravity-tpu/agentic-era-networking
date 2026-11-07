@@ -30,7 +30,12 @@ set -euo pipefail
 
 PORT_SW1="8888"
 PORT_SW2="8889"
-LOCAL_PORT="${LOCAL_PORT:-$PORT_SW1}"
+# LOCAL_PORT is deliberately left unset here (not defaulted to PORT_SW1): cmd_connect's own
+# "${LOCAL_PORT:-$default_port}" picks the right per-target default (8888 for switch 1, 8889 for
+# switch 2) only when this is unset. Defaulting it here unconditionally used to make every `connect`
+# call open on 8888 regardless of target, because cmd_connect's own default never got a chance to
+# apply once this was already set. cmd_status and cmd_stop already guard every use with
+# "${LOCAL_PORT:-...}" or an explicit emptiness check, so they are unaffected by leaving it unset.
 PI_USER="${PI_USER:-agent}"
 KNOWN_PI_HOSTS=("10.0.0.179" "10.0.0.45")
 PI_HOST="${PI_HOST:-10.0.0.179}"
