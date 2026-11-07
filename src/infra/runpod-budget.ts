@@ -113,8 +113,14 @@ export function isExpired(deadlineEpochSeconds: bigint, nowEpochSeconds: bigint)
  * "Spot pods are no longer offered", seen 2026-10-30), so Community ON-DEMAND is the default for scoring and
  * sweeps and spot is an explicit opt-in (`spot: true`, CLI `--spot`). A preempted spot pod loses its container
  * disk, so spot runs are bounded (Invariant 5) and must be restartable; training is never placed on spot.
+ *
+ * 'compile' (added 2026-11-01, Hailo Dataflow Compiler pipeline): always a CPU Pod, never GPU -- Docker-in-
+ * Docker, which the compile pod needs to load and run the Hailo AI Software Suite image, is documented as
+ * supported on Runpod CPU Pods only, not GPU Pods. Runpod's CPU catalog pricing (GET /v2/catalog/cpus/{id})
+ * exposes only a `securePerVcpu` rate, no community-cloud rate, so CPU Pods are placed on Secure Cloud, not
+ * interruptible.
  */
-export type JobKind = 'score' | 'sweep' | 'train';
+export type JobKind = 'score' | 'sweep' | 'train' | 'compile';
 export type Cloud = 'secure' | 'community';
 export interface Placement {
   readonly cloud: Cloud;
@@ -129,6 +135,11 @@ export function placementFor(kind: JobKind, opts: { readonly onDemand?: boolean;
     case 'train':
       if (opts.onDemand === true || opts.spot === true) {
         throw new Error('ERR_PLACEMENT: training is already Secure on-demand; --on-demand and --spot only apply to score and sweep');
+      }
+      return { cloud: 'secure', interruptible: false };
+    case 'compile':
+      if (opts.onDemand === true || opts.spot === true) {
+        throw new Error('ERR_PLACEMENT: compile is already Secure on-demand (CPU Pods have no community-cloud rate or spot option)');
       }
       return { cloud: 'secure', interruptible: false };
     case 'score':

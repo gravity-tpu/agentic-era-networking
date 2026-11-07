@@ -8,29 +8,18 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { placementFor } from '../../src/infra/runpod-budget.ts';
+import { runCliScript, type CliResult } from '../helpers/run-cli-script.ts';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
-function runScript(args: string[]): { status: number; stdout: string; stderr: string } {
-  try {
-    const stdout = execFileSync('bash', [path.join(REPO_ROOT, 'scripts/runpod/launch-train-lora.sh'), ...args], {
-      encoding: 'utf8',
-      cwd: REPO_ROOT,
-      timeout: 30_000,
-    });
-    return { status: 0, stdout, stderr: '' };
-  } catch (err: unknown) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
-    return {
-      status: e.status ?? 1,
-      stdout: e.stdout ?? '',
-      stderr: e.stderr ?? '',
-    };
-  }
+function runScript(args: string[]): CliResult {
+  return runCliScript('bash', [path.join(REPO_ROOT, 'scripts/runpod/launch-train-lora.sh'), ...args], {
+    cwd: REPO_ROOT,
+    timeout: 30_000,
+  });
 }
 
 describe('Runpod LoRA Training Lifecycle Invariants', () => {
