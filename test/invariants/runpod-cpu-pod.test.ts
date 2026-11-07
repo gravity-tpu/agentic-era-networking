@@ -102,10 +102,10 @@ describe('scripts/runpod.ts: --vcpu-count is bounded (Invariant 5)', () => {
     expect(res.status).not.toBe(0);
     expect(res.stderr).toContain('RUNPOD_MAX_VCPU_COUNT must be a positive integer');
   });
-});
 
-// The --image-required-for-compile guard (cmdCreate) only runs after buildPlan's network calls and the --yes
-// gate, both of which need real or mocked API responses this test suite has no infrastructure for yet. Rather
-// than keep a source-text-only assertion standing in for a behavioral test (flagged twice by the pre-push
-// review as providing false confidence), it's removed here; the guard itself is short and directly readable
-// in scripts/runpod.ts. Revisit with a real fetch-mocking harness if this script grows enough to warrant one.
+  it('create --kind compile rejects missing --image before any network call or --yes gate', () => {
+    const res = runScript(['create', '--kind', 'compile', '--cpu-flavor', 'cpu5c', '--minutes', '30', '--label', 'test-compile']);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain('--image is required for --kind compile');
+  });
+});

@@ -356,6 +356,15 @@ async function networkVolume(id: string): Promise<NetworkVolumeInfo> {
 }
 
 async function cmdCreate(flags: Flags): Promise<void> {
+  const label = need(flags, 'label');
+  const diskGb = parsePositiveInt(flags.values.get('disk-gb') ?? String(DEFAULT_DISK_GB), 'disk-gb', BigInt(MAX_DISK_GB));
+  // DEFAULT_IMAGE bundles CUDA/pytorch, which a CPU Pod has no use for and may not even be compatible with;
+  // there is no sensible CPU-Pod default in this codebase, so --image is required for --kind compile.
+  // Checked before buildPlan / dry-run so `create` without --yes fails closed on missing --image or --label.
+  const isCpuCompile = flags.values.get('kind') === 'compile' || flags.values.has('cpu-flavor');
+  const imageName = flags.values.get('image') ?? (isCpuCompile ? undefined : DEFAULT_IMAGE);
+  if (imageName === undefined) throw new Error('ERR_USAGE: --image is required for --kind compile (no CPU-Pod default image)');
+
   const { compute, kind, placement, cloud, minutes, ratePerHourMicros, plan } = await buildPlan(flags);
   if (!plan.ok) throw new Error(`${plan.code}: ${plan.detail}`);
   const computeLabel = formatComputeLabel(compute);
@@ -380,7 +389,6 @@ async function cmdCreate(flags: Flags): Promise<void> {
     console.log('dry run: pass --yes to launch');
     return;
   }
-  const diskGb = parsePositiveInt(flags.values.get('disk-gb') ?? String(DEFAULT_DISK_GB), 'disk-gb', BigInt(MAX_DISK_GB));
   const deadline = BigInt(Math.floor(Date.now() / 1000)) + plan.timeoutSeconds + BigInt(KILL_GRACE_SECONDS) + 60n;
   const pubKeyPath = flags.values.get('ssh-pubkey');
   const env: Record<string, string> = {};
@@ -391,12 +399,8 @@ async function cmdCreate(flags: Flags): Promise<void> {
     }
     env['PUBLIC_KEY'] = key;
   }
-  // DEFAULT_IMAGE bundles CUDA/pytorch, which a CPU Pod has no use for and may not even be compatible with;
-  // there is no sensible CPU-Pod default in this codebase, so --image is required for --kind compile.
-  const imageName = flags.values.get('image') ?? (compute.computeType === 'CPU' ? undefined : DEFAULT_IMAGE);
-  if (imageName === undefined) throw new Error('ERR_USAGE: --image is required for --kind compile (no CPU-Pod default image)');
   const body = {
-    name: encodePodName(need(flags, 'label'), deadline),
+    name: encodePodName(label, deadline),
     imageName,
     ...(compute.computeType === 'GPU'
       ? { gpuTypeIds: [compute.gpu], gpuCount: 1 }
