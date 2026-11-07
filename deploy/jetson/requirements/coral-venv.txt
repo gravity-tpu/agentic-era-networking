@@ -1,5 +1,5 @@
 # Python 3.9.25 (as deployed 2026-11-07)
 numpy==1.26.4
-pillow==11.3.0
+pillow==13.0.0
 pycoral==2.0.0
 tflite-runtime==2.5.0.post1
