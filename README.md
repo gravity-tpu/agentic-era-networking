@@ -121,7 +121,7 @@ On 2026-11-02, with the same switch (supervised, one run per case; the index wit
 | Device under test | Northbound Networks Zodiac FX: SAM4E8E MCU, KSZ8795 switch IC, 4 x 100BASE-TX, 128-rule table, OpenFlow 1.3 |
 | Controller, benchmark host, detector | NVIDIA Jetson Orin Nano Super (three NICs: OpenFlow control, O2 tap, O3 uplink capture) |
 | Hostile workload and traffic generator | Raspberry Pi 5 with Hailo-8 (`rpi-hailo`) |
-| Untrusted client workloads | Two Raspberry Pi 3B+ (`agentic-node-01`, `agentic-node-02`) |
+| Untrusted client workloads | Two Raspberry Pi 3B+ (`agentic-node-01`, `agentic-node-02`), each also cabled to the uplink switch for wired management |
 | Workload aggregation | NETGEAR GS105Ev2 (802.1Q, port mirror) |
 | Uplink switch | Second NETGEAR GS105Ev2 between the ISP mesh and Zodiac P2 (installed 2026-10-09; its P4 mirrors to P3, feeding the Jetson's O3 capture NIC) |
 | Operator and local model host | Apple Silicon workstation |
@@ -131,7 +131,7 @@ On 2026-11-02, with the same switch (supervised, one run per case; the index wit
               │ P5
         ┌─────┴──────┐
         │ NETGEAR #2 │  uplink switch (P4 → Zodiac P2; P3 = O3 mirror)
-        │ GS105Ev2   │
+        │ GS105Ev2   │── P1, P2: wired mgmt to agentic-node-01, -02
         └─────┬──────┘
               │ P4 ↔ Zodiac P2
         ┌─────┴──────┐  P3 mirror tap ───────► Jetson (tap NIC → detector)
@@ -144,7 +144,7 @@ On 2026-11-02, with the same switch (supervised, one run per case; the index wit
         └────────────┘
 ```
 
-A reassessed target topology (independent uplink observer, Pi 5 as passive sensor, workload `wlan0` off during runs) is in the [roadmap](docs/ROADMAP.md#3-target-topology-and-hardware-roles); the diagram above is today's rack.
+A reassessed target topology (independent uplink observer, Pi 5 as passive sensor) is in the [roadmap](docs/ROADMAP.md#3-target-topology-and-hardware-roles); the diagram above is today's rack. On the uplink switch, VLANs keep the Zodiac P2 link (P4) isolated from the nodes' management ports, so the wired management path is not a bypass of the P1→P2 isolation policy.
 
 Addresses, VLAN matrix, port assignments and the NETGEAR management path are kept in [`.agents/network-context.md`](.agents/network-context.md). Wiring detail and the management-plane hierarchy are in [`docs/design/physical-sdn-edge-tpu.md`](docs/design/physical-sdn-edge-tpu.md).
 
