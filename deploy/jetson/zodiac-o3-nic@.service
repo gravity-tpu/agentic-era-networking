@@ -1,0 +1,17 @@
+[Unit]
+Description=Zodiac O3 capture NIC %I (receive-only, promiscuous, address-less, egress dropped)
+After=sys-subsystem-net-devices-%i.device
+BindsTo=sys-subsystem-net-devices-%i.device
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/zodiac-o3-nic.sh nic-apply %i
+ExecStart=/usr/local/sbin/zodiac-o3-nic.sh nic-verify %i
+# ProtectKernelTunables is left off on purpose: apply writes net.ipv6.conf.<if>.disable_ipv6.
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK

@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="9c:69:d3:9d:dc:c0", TAG+="systemd", ENV{SYSTEMD_WANTS}="zodiac-o3-nic@%k.service"

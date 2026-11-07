@@ -1,0 +1,17 @@
+# Python 3.10 system interpreter, user site (~/.local), used by oled.service (as deployed 2026-11-07)
+Adafruit-Blinka==9.2.0
+adafruit-circuitpython-busdevice==5.2.17
+adafruit-circuitpython-connectionmanager==3.1.8
+adafruit-circuitpython-framebuf==1.6.12
+adafruit-circuitpython-requests==4.1.17
+adafruit-circuitpython-ssd1306==2.12.24
+adafruit-circuitpython-typing==1.12.3
+Adafruit-PlatformDetect==3.89.1
+Adafruit-PureIO==1.1.11
+binho-host-adapter==0.1.6
+netifaces==0.11.0
+pyftdi==0.57.2
+pyusb==1.3.1
+sysv_ipc==1.2.0
+toml==0.10.2
+typing_extensions==4.16.0
