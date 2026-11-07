@@ -1,6 +1,6 @@
-# Owner review packet: what the owner's review of the policy covers (2026-10-31)
+# Owner review packet: what the owner's review of the policy covers (2026-10-31; signed off 2026-11-07)
 
-The Track A sequence (`docs/ROADMAP.md`, section 4, step 7) calls for a **review of the policy and the property list by a network engineer, before results are published**. The reviewer is the owner, who also made the policy decisions, so this is the author's review and is not independent; published results say so and say that no outside review has happened. This packet says what the review is, where to look, and what questions would be most useful to answer; it would serve an outside reviewer equally. Nothing here has been signed off.
+The Track A sequence (`docs/ROADMAP.md`, section 4, step 7) calls for a **review of the policy and the property list by a network engineer, before results are published**. The reviewer is the owner, who also made the policy decisions, so this is the author's review and is not independent; published results say so and say that no outside review has happened. This packet says what the review is, where to look, and what questions were answered; it would serve an outside reviewer equally. **Signed off by the owner on 2026-11-07 (see Section 4 below).**
 
 ## What you are reviewing
 
@@ -12,7 +12,7 @@ You are not asked to review the language-model results or the training work.
 
 ## 1. The policy
 
-Deployed rules (six, plus the table-miss DROP), as the live readback reports them: `p1-ipv4-intra-segment`, `p1-arp-allow-10.0.2.50`, `p1-arp-allow-10.0.2.52`, `p1-default-tap-only`, `p2-ipv4-to-segment`, `p3-tap-return`. Read: `src/sdn/port1-isolation.ts` (the builder), the live status `GET /api/zodiac` (`port1Isolation`), and the ledger `.agents/network-context.md` (its policy block predates the A10 ARP change: ARP from P1 is now allowed by sender address and there is no P2 ARP rule, because `ZODIAC_UPLINK_ARP_PEERS=none`).
+Deployed rules (six, plus the table-miss DROP), as the live readback reports them: `p1-ipv4-intra-segment`, `p1-arp-allow-10.0.2.50`, `p1-arp-allow-10.0.2.52`, `p1-default-tap-only`, `p2-ipv4-to-segment`, `p3-tap-return`. Read: `src/sdn/port1-isolation.ts` (the builder), the live status `GET /api/zodiac` (`port1Isolation`), and the ledger `.agents/network-context.md` (updated in PR #221 to reflect the A10 ARP change: ARP from P1 is allowed by exact sender address and there is no general P2 ARP rule when `ZODIAC_UPLINK_ARP_PEERS=none`).
 
 Questions: Is forwarding intra-segment IPv4 to both P2 and P3 right? Is "everything else from P1 goes only to the tap" the right default, and what happens to IPv6 and other EtherTypes (they fall to that rule from P1 and to the table-miss from P2)? Is ARP allowed by sender address alone enough (no MAC binding)? Is an empty uplink ARP peer list acceptable for real use (chosen from an idle 24-hour capture; `docs/benchmarks/results/a10-uplink-arp-capture-2026-10-26/README.md`)?
 
@@ -41,3 +41,20 @@ The experiment endpoint needs a LAN operator and a token, bounds the rules, re-c
 ## What would count as a finding
 
 Anything in 1 to 3 that a reviewer would not accept as stated: record it as an issue against the section, with the file and line, and say whether it blocks publishing the results.
+
+## 4. Owner's review record (2026-11-07)
+
+**Reviewer:** repository owner and policy author (not an independent reviewer; no outside review has happened).  
+**Disposition:** Confirmed and signed off on 2026-11-07 with zero blocking findings; all stated limits remain disclosed in `docs/ROADMAP.md`, `README.md`, and `docs/research/track-a-ci-matrix.md`.
+
+1. **Section 1 (The deployed isolation policy):** Confirmed.
+   - Forwarding intra-segment IPv4 (`10.0.2.0/24 → 10.0.2.0/24`) from `P1` to `[P2, P3]` while sending all other `P1` frames (including IPv6 and non-IPv4 EtherTypes) to `[P3]` (tap only) and dropping unmatched `P2` ingress at the `prio 0` table-miss `DROP` is the intended isolation boundary.
+   - `A10` ARP confinement on `P1 → P2` by exact sender IPv4 address (`arp_spa` in `DEFAULT_WORKLOAD_HOSTS`, without Ethernet MAC binding, which the switch's OpenFlow 1.3 match set does not expose) and `ZODIAC_UPLINK_ARP_PEERS=none` on `P2 → P1` (derived from the 24-hour idle capture, requiring any uplink-side `10.0.2.x` experiment host to be explicitly listed while running) are accepted with those limits stated.
+2. **Section 2 (The properties `A1`–`A11`):** Confirmed.
+   - The `A1`–`A11` property list and labels (*enforced before install*, *checked at readback only*, *decided not needed*) in `docs/research/track-a-ci-matrix.md` are accepted for this single-table OpenFlow 1.3 switch, with unmodelled fields (VLAN tags, IPv6, L4 ports outside `A11` clauses, and unmeasured firmware tie-breaking on non-identical equal-priority overlaps in `A6`) explicitly documented as limits.
+   - **`A4` over `A9`:** Confirmed that quarantine `DROP`s sit at `prio 65535` above all forwarding rules, accepting the measured deployed-table cost (`80.0 µs + 5.42 µs × k`).
+   - **`A3` post-install auto-repair:** Confirmed the live configuration (`ZODIAC_ISOLATION_REPAIR=1`, re-sending only the approved `prio 0` default `DROP` after 3 consecutive bad readings ~3 min, 600 s cooldown, max 3 repairs/hour before stopping and paging via `ntfy`, validated on hardware 2026-11-02).
+   - **`A8` capacity target (`6,000 pps` at `572 B`):** Confirmed as a ceiling guard (`74%` of full `k=8` quarantine capacity `8,106 pps`, below the `1.3x–2.3x` session-loss cliff), and confirmed that refusing allow-route installs outside the measured 6-rule deployed shape and 8-rule allow floor (`7,765 pps`) is the intended fail-closed behavior.
+3. **Section 3 (The experiment and its claims):** Confirmed.
+   - The eight intents (`INTENT-1..8`) and the on-wire conformance report (`611/611` flow checks across 128 rule sets agreeing with the model and intent, 20 sets repeated identically across 3 sessions, with finding `F1`—switch IC dropping self-addressed `src === dst` IPv4 frames—recorded as hardware land-attack filtering) fairly represent the evidence and its boundaries.
+   - The temporary isolated uplink VLAN arrangement on `zodiac_netgear_2` (moving `agentic-node-01` `eth1` onto VLAN 2 with Zodiac `P2` for the uplink-ingress reference flows, then restoring the 3-VLAN split) is accepted.
