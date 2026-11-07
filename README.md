@@ -202,7 +202,7 @@ The software, service units and results are in this repository; the physical set
 4. **Raspberry Pis:** [`deploy/rpi5/`](deploy/rpi5/) (Hailo service, capture NIC), [`deploy/rpi3/`](deploy/rpi3/) and [`deploy/workload/`](deploy/workload/).
 5. **Operator machine:** [`deploy/mac/`](deploy/mac/).
 
-Not in the repository: the O3 capture NIC helper and its boot unit (kept local; the procedure and the Tegra kernel workaround are described in caveat 10 of `.agents/network-context.md`), private addressing, secrets, and the TensorRT and Hailo model binaries (build them with `scripts/build-trt-engine.py` and the Hailo tooling). Nothing here has been replicated on a second rack.
+Not in the repository: private addressing, secrets, the TensorRT and Hailo model binaries (build them with `scripts/build-trt-engine.py` and the Hailo tooling), and the Open vSwitch `br-sim` definition. [`deploy/jetson/README.md`](deploy/jetson/README.md) section 8 lists what was exported from the Jetson and what was not. Nothing here has been replicated on a second rack.
 
 ## 10. Operations
 

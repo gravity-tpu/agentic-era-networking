@@ -257,21 +257,44 @@ stubbed in [`zodiac-bridge.env.template`](zodiac-bridge.env.template). When Phas
 
 ---
 
-## 8. What is in this directory, and what is not
+## 8. What is in this directory
 
-| File | Status | Purpose |
+Contents reflect what was running on the Jetson on 2026-11-07, exported from the live host. Paths on the right are install locations.
+
+| File | Status | Install to / purpose |
 | --- | --- | --- |
-| `zodiac-bridge.service`, `zodiac-bridge.env.template` | Current | The controller and bridge (sections 2 to 5). |
+| `zodiac-bridge.service`, `zodiac-bridge.env.template` | Current | `/etc/systemd/system/`, `/etc/zodiac/zodiac-bridge.env` (sections 2 to 5). |
+| `zodiac-bridge.service.d/workstation-wifi.conf.example` | Optional | Drop-in that points the bridge at an operator workstation agent. Copy without `.example`, edit the address. |
 | `zodiac-isolation-watch.service`, `isolation-watch.env.example` | Current | Pushes isolation problems to ntfy; see [`docs/design/isolation-watch.md`](../../docs/design/isolation-watch.md). |
-| `zodiac-trt.service` | Current | TensorRT wire-tap inference daemon (needs a TensorRT engine you build yourself: `scripts/build-trt-engine.py`). |
-| `gpu-sdn-sentinel.service` | Current | GPU anomaly sentinel (`scripts/gpu-sdn-anomaly-sentinel.py`). |
-| `backup/` | Current | Encrypted restic backup and restore drill; see [`backup/README.md`](backup/README.md). |
+| `zodiac-trt.service` | Current | TensorRT wire-tap inference daemon (needs a TensorRT engine you build: `scripts/build-trt-engine.py`). Runs from `trt-venv`. |
+| `gpu-sdn-sentinel.service` | Installed, disabled | GPU anomaly sentinel (`scripts/gpu-sdn-anomaly-sentinel.py`). Runs from `coral-venv`. |
+| `zodiac-o3-nic.sh`, `zodiac-o3-nic-boot.service`, `zodiac-o3-nic@.service`, `99-zodiac-o3-nic.rules` | Current | O3 capture NIC: `/usr/local/sbin/`, `/etc/systemd/system/`, `/etc/udev/rules.d/`. Edit the MAC in the udev rule and in the helper for your NIC. Runbook: [`o3-nic-runbook.md`](o3-nic-runbook.md). |
+| `oled.service`, `oled_sysinfo.py` | Optional | SSD1306 status display (I2C bus 7, 0x3c). Script goes in `/home/zodiac/`. |
+| `sysctl.d/99-tailscale.conf`, `sysctl.d/99-jetson-ai-memory.conf` | Current | `/etc/sysctl.d/` (IP forwarding for the Tailscale subnet router; memory tuning). |
+| `modprobe.d/openvswitch.conf` | Optional | `/etc/modprobe.d/`; see the Open vSwitch note below. |
+| `requirements/` | Reference | `pip freeze` of `trt-venv` (Python 3.10), `coral-venv` (Python 3.9) and the user site used by `oled.service`. |
+| `backup/` | Current (timer disabled) | Encrypted restic backup and restore drill; see [`backup/README.md`](backup/README.md). |
 | `zodiac-coral.service`, `99-coral-usb-power.rules` | Historical | For the Coral Edge TPUs, removed 2026-10-11. Do not install unless you have Corals. |
 
-Not provided here, and needed to reproduce the O3 observation point and the software reference bridge:
+### Host network configuration (NetworkManager)
 
-- **O3 capture NIC.** A USB 3 NIC on switch #2 P3 (the mirror of the Zodiac P2 link) must be receive-only: brought up with no address, and egress dropped. This Tegra kernel (`5.15.148-tegra`) has no `CONFIG_NET_CLS_MATCHALL`, so the project drops egress with a root `blackhole` qdisc instead of a matchall filter, and applies it from a boot unit that finds the NIC by MAC because the udev rule did not fire at boot. The helper and that unit are not published; caveat 10 in [`.agents/network-context.md`](../../.agents/network-context.md) describes them. The qdisc does not stop a raw `AF_PACKET` socket, so the switch's own VLAN isolation of the mirror port is what actually blocks injection.
-- **Open vSwitch `br-sim` (optional, software reference evaluation).** JetPack 6.1's kernel has no `openvswitch.ko`, so the project runs OVS in userspace (`datapath_type: netdev`) with `install openvswitch /bin/true` in `/etc/modprobe.d/openvswitch.conf`, bound to `tcp:127.0.0.1:6634` and pinned to OpenFlow 1.3. Caveat 9 in `network-context.md` has the details.
+| Interface | Profile | Settings |
+| --- | --- | --- |
+| `enP8p1s0` (onboard) | `Zodiac-OpenFlow` | IPv4 manual `10.0.1.8/24`, never-default. Controller channel to Zodiac P4 (`:6633`). |
+| `wlP1p1s0` (Wi-Fi) | `Internet` | DHCP; management and cloud relay. |
+| `enx...` (O2 tap, Zodiac P3) | per-NIC profile | Must carry no address in service: it is a promiscuous tap. The live interface had none on 2026-11-07, although a stored NetworkManager profile for it lists a manual `10.0.1.200/24` (never-default); treat the stored profile as stale and verify with `ip -br addr`. |
+| O3 NIC (switch #2 P3) | none | Managed by `zodiac-o3-nic*`, not NetworkManager. |
+
+Tailscale 1.104.4 is installed; the Jetson offers an exit node and, per `network-context.md`, advertises the lab and control subnets as a subnet router. The exact `tailscale up` flags were not captured; the live preferences could not be read without root.
+
+### Things this export did not capture
+
+- **Open vSwitch `br-sim`** (optional, software reference evaluation). JetPack 6.1's kernel has no `openvswitch.ko`, so the project runs OVS in userspace (`datapath_type: netdev`) with the `modprobe.d` file above, bound to `tcp:127.0.0.1:6634` and pinned to OpenFlow 1.3 (caveat 9 in [`.agents/network-context.md`](../../.agents/network-context.md)). The bridge definition lives in the OVS database, which needed root to read; no creation script is published.
+- **Secrets and private addressing:** `/etc/zodiac/*.env` and similar are deliberately excluded.
+- **Model binaries:** TensorRT engines, Coral models and Hailo HEFs.
+- **Ollama:** installed on the host but stopped and unpopulated; the project runs no local LLM on the Jetson.
+- **JetPack power mode:** `nvpmodel` reported 15W; no setting is captured here.
+- Scratch and one-off files in the home directory (logs, screenshots, `stage-a10-uplink.sh`, a CUDA test) were left out.
 
 ---
 
