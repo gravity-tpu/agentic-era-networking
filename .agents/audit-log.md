@@ -59,8 +59,8 @@
 - [x] Zodiac FX Physical Hardware Interface & OpenFlow 1.3 Controller Daemon.
 - [x] Rotate `ZODIAC_EXPERIMENT_TOKEN` after it was pasted into a chat during the 2026-10-31 work (`docs/research/owner-review-packet.md`, "Safety of how it was done"). Rotated 2026-11-05 on the jetson; `ZODIAC_EXPERIMENT_ENDPOINTS` was and remains `0` throughout, so neither the old nor the new value was ever live.
 - [ ] Connect live Neon PostgreSQL connection string and run initial migration.
-- [ ] Independent network-engineer review of the isolation policy and the verifier property list (roadmap, before publishing results).
-- [ ] Test the suspected ARP spoofing surface across P1 to P2 (roadmap C1); resolve the A4 (quarantine precedence) versus A9 (forwarding-first layout) tension.
+- [x] Test the suspected ARP spoofing surface across P1 to P2 (roadmap C1: done 2026-10-22, re-run against the A10 fix 2026-10-25, see `docs/benchmarks/results/track-c-scenario1-arp-spoof/README.md`); resolve the A4 (quarantine precedence) versus A9 (forwarding-first layout) tension (resolved 2026-10-20, hardware-confirmed the same day, see `docs/ROADMAP.md`'s decision record; the corrected deployed-table cost formula is wired into `src/sdn/deployed-cost-model.ts`).
+- [ ] The owner's review of the isolation policy and the verifier property list (not "independent": the reviewer is the author; see `docs/ROADMAP.md`'s Re-scope, item 5, and `docs/research/owner-review-packet.md`), before publishing the agent-proposal evaluation.
 
 ---
 
