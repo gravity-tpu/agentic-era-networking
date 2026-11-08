@@ -8,18 +8,34 @@ All admissibility figures come from the abstract evaluation (RQ1 to RQ3): a rule
 
 ## Summary
 
-| Model | Hosting | Zero-shot admissible (Protocol A) | With verifier feedback (Protocol B) | Cost to run |
+| Model | Hosting and hardware | Zero-shot admissible (Protocol A) | With verifier feedback (Protocol B) | Cost to run |
 | :--- | :--- | :--- | :--- | :--- |
-| `gemma4:26b` (Q4_K_M) | Local: Mac, Ollama | 35% (70/200), reasoning on | 94% (75/80) | No API cost; hours of wall time |
-| `qwen3.8:27b` (Q4_K_M) | Local: Mac, Ollama | 57% (113/200) under prompt v1; 43% (86/200) under v2 | 100% (80/80) v1; 99% (79/80) v2 | No API cost; 5 h 49 min (v1) to 7 h 55 min (v2) for Protocol A |
-| `qwen2.5:3b` (Q4_K_M) | Local: Jetson Orin Nano | 0 of the answered trials (INTENT-1 only) | not run | No API cost; removed 2026-10-16 |
-| `Qwen3.8-27B` plus LoRA adapters (`L3`, `L4`) | Rented GPU (Runpod A100 80 GB), open weights | `L3` 88% (176/200) vs 87% for the unadapted control; `L4` 48% (145/300) vs 83% (248/300) | `L3`: 100% (80/80) | About 20 USD per campaign (see below) |
-| `claude-haiku-5-5` (effort low) | Cloud API | 96.0% (2,303/2,400, fresh trials); 98% on the harder intents | 100% (400/400) | About 0.0008 USD per admissible set |
-| Other cloud models (Gemini, Claude Sonnet and Opus) | Cloud API | Pilot only (12 trials each); see below | not run | 10x to 64x Haiku's cost per admissible set |
+| `gemma4:26b` (Q4_K_M) | Local: MacBook Pro, Apple M5 Pro, 64 GB unified memory, Ollama | 35% (70/200), reasoning on | 94% (75/80) | No API cost; hours of wall time on this MacBook (see below) |
+| `qwen3.8:27b` (Q4_K_M) | Local: same MacBook Pro, Ollama | 57% (113/200) under prompt v1; 43% (86/200) under v2 | 100% (80/80) v1; 99% (79/80) v2 | No API cost; 5 h 49 min (v1) to 7 h 55 min (v2) for Protocol A |
+| `qwen2.5:3b` (Q4_K_M) | Local: Jetson Orin Nano Super, 8 GB memory shared by CPU and GPU, Ollama | 0 of the answered trials (INTENT-1 only) | not run | No API cost; removed 2026-10-16 |
+| `Qwen3.8-27B` plus LoRA adapters (`L3`, `L4`) | Rented GPU: Runpod A100 SXM 80 GB, open weights | `L3` 88% (176/200) vs 87% for the unadapted control; `L4` 48% (145/300) vs 83% (248/300) | `L3`: 100% (80/80) | About 20 USD per campaign (see below) |
+| `claude-haiku-5-5` (effort low) | Cloud API (provider hardware not disclosed) | 96.0% (2,303/2,400, fresh trials); 98% on the harder intents | 100% (400/400) | About 0.0008 USD per admissible set |
+| Other cloud models (Gemini, Claude Sonnet and Opus) | Cloud API (provider hardware not disclosed) | Pilot only (12 trials each); see below | not run | 10x to 64x Haiku's cost per admissible set |
 
 Hosting here has three kinds. **Local** means the model ran on hardware in this lab (the Mac workstation or the Jetson). **Rented GPU** means open weights that ran on a short-lived cloud GPU pod, so the model is the same kind as the local ones but the compute is paid by the hour. **Cloud API** means a hosted proprietary model billed per token.
 
 ## Local models
+
+### Hardware the local models ran on
+
+| Machine | Specification | Used for |
+| :--- | :--- | :--- |
+| Mac workstation | MacBook Pro (Mac17,9), Apple M5 Pro: 18-core CPU (6 super + 12 performance cores), 20-core GPU (Metal 4), **64 GB unified memory** | `gemma4:26b` and `qwen3.8:27b` through Ollama; the operator machine for the whole project |
+| Jetson Orin Nano Super | Ampere GPU, 8 GB memory shared between CPU and GPU (7.6 GB visible to the OS), reported at the 15 W power mode on 2026-11-07 | `qwen2.5:3b` through Ollama: the load test and the `INTENT-1` run |
+
+How to read the wall-time figures with this in mind:
+
+- **They are for a laptop, not a server.** All Mac hours in this page (Gemma reasoning-on at about 2.1 hours per 50 zero-shot trials, Qwen at 5 h 49 min to 7 h 55 min per Protocol A campaign) are one MacBook Pro running one request at a time. The rented A100 pods managed about one trial per minute per pod on the same Qwen family, but that comparison is not like for like (different serving stack, quantization path and concurrency), and no run here isolates the effect of the hardware.
+- **Unified memory is shared with everything else.** The 64 GB is the one pool for the model, the context window, the OS and whatever else the operator had running; the benchmarks did not control for that load. The 26B and 27B models at Q4_K_M fit comfortably (Gemma's weights are 18 GB on disk), so memory capacity was not the visible constraint on the Mac; the Jetson's 8 GB was.
+- **The Jetson's limit was memory, not compute.** CPU and GPU share 8 GB, and the controller, verifier, detector and Ollama competed for it; Ollama could not load the 1.9 GB `qwen2.5:3b` once page cache held about 2 GB the GPU allocator could not reclaim (`cudaMalloc failed`), and the GPU was at 96.5% load during the load test. That is why the model was removed.
+- **Serving was one request at a time on both machines.** Ollama handled requests serially, so concurrency raised latency without raising throughput; the Mac's 63 tokens/s and the Jetson's 15.3 tokens/s in the load test are single-stream rates.
+
+Provenance of these specifications: the run records (`summary.json`) store only the Mac's Tailscale address, not its hardware. The specifications above were read from the machine on 2026-11-07 (`system_profiler`), and the project's archived roadmap independently describes the workstation as an M5 MacBook with a 20-core Metal GPU. The owner confirmed on 2026-11-07 that the machine has not changed since the start of the project, so the specifications apply to every run. The OS version and the Ollama version at the time of each run were not recorded (the client is now 0.34.4).
 
 ### `gemma4:26b` (Mac, Ollama, Q4_K_M)
 
@@ -131,6 +147,7 @@ In every case the verifier decides admissibility and a person approves the insta
 - **Settings differ across arms.** Quantization (Q4_K_M, not the planned 8-bit), reasoning mode, sampling (Claude takes no seed, and Fable takes no temperature or top-p) and prompt version differ between arms, so cross-arm comparisons are approximate.
 - **Prompt and intent text changed over time.** Plan v1 and v2 numbers are not comparable; plan v1 predates the A10 intent text.
 - **Selection was not blind.** Haiku was picked as the cheapest model that cleared thresholds set after part of the pilot had been seen; only the fresh post-selection trials support its accuracy claim.
+- **Hardware is one laptop, and not recorded in the run files.** Local wall times depend on that MacBook Pro and its load at the time, and the specifications above were read after the fact (the owner confirms the machine is unchanged).
 - **Local cost is not priced.** Mac electricity was not measured, and hours of Mac time are not like for like with API dollars.
 - **Single switch, one run per case**, one Mac, one Jetson; no outside replication.
 - Counts and costs are copied from the linked result files; the figures there are authoritative.
