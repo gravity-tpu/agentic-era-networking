@@ -39,6 +39,8 @@ Each benchmark trial prompts the model with a natural-language intent specificat
 
 ## 4. Evaluated Model Cohort
 
+> **Superseded.** The cohort below is the pre-registered plan. The models actually run, with results, cost and settings, are in [`models.md`](models.md); deviation D3 records the change to the frontier arm.
+
 To decouple the data plane from inference load, model inference executes off the measurement host (the Jetson Orin Nano CPU runs only the controller and verifier):
 
 1. **Workstation Local Model:**  
