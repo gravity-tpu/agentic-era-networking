@@ -222,6 +222,7 @@ npm run review:head     # all working-tree changes
 ## 12. Documents
 
 - [Roadmap](docs/ROADMAP.md): goals, tracks, exit criteria, what is deferred.
+- [Models used](docs/research/models.md): every model that proposed rule sets, local, rented-GPU and cloud API, with measured results, cost and suited uses.
 - [Zodiac whitepaper (PDF)](docs/design/zodiac-whitepaper.pdf): the testbed, measured hardware model, verifier design and evaluation plan. Rebuild with `python3 scripts/build-zodiac-whitepaper.py` (needs matplotlib and Chrome).
 - [Benchmark whitepaper](docs/benchmarks/zodiac-infrastructure-bandwidth-whitepaper-2026-10-04.md): packet-rate limits of an OpenFlow edge switch under rule-table load.
 - [Benchmark archive](docs/benchmarks/README.md): runs, artifacts and analysis scripts.
