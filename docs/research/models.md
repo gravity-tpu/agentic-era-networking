@@ -35,7 +35,7 @@ How to read the wall-time figures with this in mind:
 - **The Jetson's limit was memory, not compute.** CPU and GPU share 8 GB, and the controller, verifier, detector and Ollama competed for it; Ollama could not load the 1.9 GB `qwen2.5:3b` once page cache held about 2 GB the GPU allocator could not reclaim (`cudaMalloc failed`), and the GPU was at 96.5% load during the load test. That is why the model was removed.
 - **Serving was one request at a time on both machines.** Ollama handled requests serially, so concurrency raised latency without raising throughput; the Mac's 63 tokens/s and the Jetson's 15.3 tokens/s in the load test are single-stream rates.
 
-Provenance of these specifications: the run records (`summary.json`) store only the Mac's Tailscale address, not its hardware. The specifications above were read from the machine on 2026-11-07 (`system_profiler`), and the project's archived roadmap independently describes the workstation as an M5 MacBook with a 20-core Metal GPU. The 64 GB figure, the OS version and the Ollama version at the time of each run were not recorded (the client is now 0.34.4). If the machine was changed between the runs in October and this reading, the specifications would differ.
+Provenance of these specifications: the run records (`summary.json`) store only the Mac's Tailscale address, not its hardware. The specifications above were read from the machine on 2026-11-07 (`system_profiler`), and the project's archived roadmap independently describes the workstation as an M5 MacBook with a 20-core Metal GPU. The owner confirmed on 2026-11-07 that the machine has not changed since the start of the project, so the specifications apply to every run. The OS version and the Ollama version at the time of each run were not recorded (the client is now 0.34.4).
 
 ### `gemma4:26b` (Mac, Ollama, Q4_K_M)
 
@@ -147,7 +147,7 @@ In every case the verifier decides admissibility and a person approves the insta
 - **Settings differ across arms.** Quantization (Q4_K_M, not the planned 8-bit), reasoning mode, sampling (Claude takes no seed, and Fable takes no temperature or top-p) and prompt version differ between arms, so cross-arm comparisons are approximate.
 - **Prompt and intent text changed over time.** Plan v1 and v2 numbers are not comparable; plan v1 predates the A10 intent text.
 - **Selection was not blind.** Haiku was picked as the cheapest model that cleared thresholds set after part of the pilot had been seen; only the fresh post-selection trials support its accuracy claim.
-- **Hardware is one laptop, and not recorded in the run files.** Local wall times depend on that MacBook Pro and its load at the time, and the specifications above were read after the fact.
+- **Hardware is one laptop, and not recorded in the run files.** Local wall times depend on that MacBook Pro and its load at the time, and the specifications above were read after the fact (the owner confirms the machine is unchanged).
 - **Local cost is not priced.** Mac electricity was not measured, and hours of Mac time are not like for like with API dollars.
 - **Single switch, one run per case**, one Mac, one Jetson; no outside replication.
 - Counts and costs are copied from the linked result files; the figures there are authoritative.
