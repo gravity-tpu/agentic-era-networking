@@ -30,6 +30,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from zodiac_whitepaper_figures import (  # noqa: E402
     svg_cover_artwork,
+    svg_closed_loop_architecture,
     svg_figure_1_physical_topology,
     svg_figure_2_verifier_pipeline,
     svg_figure_3_capacity_ladder,
@@ -76,6 +77,7 @@ def generate_html(toc_pages: dict[str, int] | None = None) -> str:
     fig4_svg = svg_figure_4_deployed_cost_and_a8()
     fig5_svg = svg_figure_5_agent_eval_chart()
     fig6_svg = svg_figure_6_conformance_funnel()
+    closed_loop_arch_svg = svg_closed_loop_architecture()
     cover_svg = svg_cover_artwork()
 
     return f"""<!DOCTYPE html>
@@ -208,7 +210,7 @@ body {{
     position: absolute;
     top: 228pt;
     left: 54pt;
-    width: 220pt;
+    width: 255pt;
     font-family: 'GoogleSans', sans-serif;
     font-weight: 500;
     font-size: 10.5pt;
@@ -427,6 +429,21 @@ code {{
 .exec-main {{
     flex: 1;
 }}
+.exec-main p {{
+    margin-bottom: 5pt;
+    font-size: 9.4pt;
+    line-height: 1.48;
+}}
+.exec-main ul {{
+    margin-top: 2pt;
+    margin-bottom: 5pt;
+    padding-left: 14pt;
+}}
+.exec-main li {{
+    margin-bottom: 3pt;
+    font-size: 8.8pt;
+    line-height: 1.42;
+}}
 .exec-sidebar {{
     width: 176pt;
     flex-shrink: 0;
@@ -573,13 +590,7 @@ tr:nth-child(even) td {{
 <!-- ==================== PAGE 1: COVER ==================== -->
 <div class="cover-page">
     <div class="cover-title">Zodiac: A Real-Hardware Testbed and Deterministic Verifier for Agent-Proposed SDN Policy</div>
-    <div class="cover-subtitle">Measuring OpenFlow 1.3 Silicon Boundaries, Proving Flow-Table Admissibility (A1–A11), and Evaluating Verifier-in-the-Loop Policy Synthesis Against a Live Hardware Adversary</div>
-    <div class="cover-badges">
-        <span class="cover-badge">Track A: 196/196 Mutants Caught</span>
-        <span class="cover-badge">Track B: 611/611 Wire Conformance</span>
-        <span class="cover-badge">Track C: 7/7 Red-Team Scenarios</span>
-        <span class="cover-badge">Protocol B: 98.8%–100% Admissible</span>
-    </div>
+    <div class="cover-subtitle">Closed-Loop Verification of Language Model Flow Policies Against Physical OpenFlow Silicon, Deterministic Safety Invariants, and Live Network Adversaries</div>
     {cover_svg}
     <div class="cover-authors">
         Gravity TPU Infrastructure &amp; Agentic Networking Group<br>
@@ -742,7 +753,7 @@ tr:nth-child(even) td {{
     </div>
 
     <!-- ==================== SECTION 1 ==================== -->
-    <h1 id="sec1">1. Introduction &amp; Research Thesis</h1>
+    <h1 id="sec1" class="page-start">1. Introduction &amp; Research Thesis</h1>
     <p>
         Network configuration synthesis has long separated into two camps: formal control-plane verifiers that analyze static forwarding graphs (Header Space Analysis [2], VeriFlow [3], NetKAT [4], Batfish [5]) and machine-learning systems that translate operator intent into configuration stanzas. In the agentic era, where LLM agents are increasingly asked to propose low-level policy updates in response to operational tickets or anomaly alerts, a dangerous gap emerges between <em>syntactic validity</em> and <em>physical data-plane admissibility</em>.
     </p>
@@ -759,7 +770,26 @@ tr:nth-child(even) td {{
 
     <h2 id="sec1_2">1.2 Summary of Contributions Across Tracks A, B, and C</h2>
     <p>
-        Rather than claiming autonomous self-healing, Zodiac enforces a strict architectural separation: <strong>an agent proposes; deterministic code decides admissibility (<code>A1</code>–<code>A11</code>); a human approves policy installation; and independent hardware mirror taps verify what actually crossed the wire.</strong> Table 1 summarizes the physical hardware bill of materials used across all experiments.
+        Rather than claiming autonomous self-healing, Zodiac enforces a strict architectural separation: <strong>an agent proposes; deterministic code decides admissibility (<code>A1</code>–<code>A11</code>); a human approves policy installation; and independent hardware mirror taps verify what actually crossed the wire.</strong> To investigate where neural policy generators succeed and fail in real networking environments, our evaluation is organized across three experimental tracks:
+    </p>
+    <ul>
+        <li><strong>Track A — Deterministic Verifier &amp; Adversarial Invariants:</strong> Evaluates formal admissibility checks (<code>A1</code>–<code>A11</code>) against a 196-mutant corpus spanning priority precedence conflicts (<code>A4</code>), silent firmware action-stripping (<code>A3</code>), hardware table budgets (<code>A7</code>), and linear traversal latency budgets (<code>A8</code>). Caught 100% (196/196) of invalid mutations with zero false dismissals.</li>
+        <li><strong>Track B — Physical Wire Conformance &amp; Hardware Reality Gaps:</strong> Validates flow tables on actual physical silicon across 128 rule sets (611 differential flow checks) observed at three hardware vantage points (<code>O1</code>, <code>O2</code>, <code>O3</code>). Discovered physical quirks—such as Firmware 0.86 priority-0 silent blackholing and switch-path drops of self-addressed frames (Finding F1)—that controller-only simulation cannot detect.</li>
+        <li><strong>Track C — Live Red-Team Adversary &amp; Containment Envelopes:</strong> Exercises 7 live attack scenarios (<code>S1</code>–<code>S7</code>) launched by an adversary node (<code>10.0.2.50</code>) on a shared untrusted segment, demonstrating that pre-approved quarantine envelopes bound attacker steering, prevent table exhaustion, and preserve legitimate client traffic.</li>
+    </ul>
+    <p>
+        Across these tracks, we compare two operational paradigms: <strong>Protocol A</strong> (unassisted zero-shot generation directly to the verifier) and <strong>Protocol B</strong> (a multi-turn closed-loop repair interaction where rejected properties and conflicting rule IDs are returned to the model within &le; 5 turns). Figure 1 illustrates this complete closed-loop architecture.
+    </p>
+
+    <div class="figure-container">
+        {closed_loop_arch_svg}
+        <div class="figure-caption">
+            <strong>Figure 1: Zodiac Closed-Loop Testbed Architecture &amp; Multi-Track Verification Pipeline.</strong> Natural language operator intent is synthesized into OpenFlow 1.3 flow rules by local edge models, rented cloud GPUs, or commercial frontier APIs. Before reaching hardware, rules must satisfy the 11 formal properties of the deterministic verifier (Track A). Under Protocol B, diagnostic failure feedback repairs invalid proposals within 2 median turns (raising admissibility from 43% to 98.8%–100%). Policy actuation requires human sign-off, while detector-driven containment is constrained by a pre-approved Quarantine Envelope (Track C). All data-plane behavior is verified against physical silicon across three independent mirror taps (Track B: 611/611 wire checks).
+        </div>
+    </div>
+
+    <p>
+        Table 1 summarizes the physical hardware bill of materials used across all experiments.
     </p>
 
     <table>
@@ -819,7 +849,7 @@ tr:nth-child(even) td {{
 
     <h2 id="sec2_1">2.1 Three-Tier Switch Stack &amp; Compute/Sensor Nodes</h2>
     <p>
-        Figure 1 illustrates the complete port-by-port physical wiring, 802.1Q VLAN boundaries, and passive observation taps extracted from our hardware ledger (<code>.agents/network-context.md</code>). Reading the physical switch stack from top to bottom:
+        Figure 2 illustrates the complete port-by-port physical wiring, 802.1Q VLAN boundaries, and passive observation taps extracted from our hardware ledger (<code>.agents/network-context.md</code>). Reading the physical switch stack from top to bottom:
     </p>
     <ol>
         <li><strong>Top of Stack — NETGEAR GS105Ev2 #2 (<code>192.168.0.240</code>, Uplink &amp; <code>O3</code> Mirror):</strong> Partitioned into three strict 802.1Q VLANs so out-of-band management traffic (VLAN 1), DUT uplink traffic (VLAN 2 on Port 4), and passive egress capture (<code>O3</code> on Port 3, VLAN 3) never cross-contaminate.</li>
@@ -830,7 +860,7 @@ tr:nth-child(even) td {{
     <div class="figure-box">
         {fig1_svg}
         <div class="figure-caption">
-            <strong>Figure 1: Physical Testbed Topology Breakdown (100% Vector Diagram).</strong> Complete port-level mapping of the 3-switch stack (NETGEAR GS105Ev2 #2 on top, NETGEAR GS105Ev2 #1 in middle, Zodiac FX DUT at bottom), the 3 wired NICs on the NVIDIA Jetson Orin Nano Super, the 3 Raspberry Pi nodes, and the three passive observation points (<code>O1</code>, <code>O2</code>, <code>O3</code>).
+            <strong>Figure 2: Physical Testbed Topology Breakdown (100% Vector Diagram).</strong> Complete port-level mapping of the 3-switch stack (NETGEAR GS105Ev2 #2 on top, NETGEAR GS105Ev2 #1 in middle, Zodiac FX DUT at bottom), the 3 wired NICs on the NVIDIA Jetson Orin Nano Super, the 3 Raspberry Pi nodes, and the three passive observation points (<code>O1</code>, <code>O2</code>, <code>O3</code>).
         </div>
     </div>
 
@@ -914,13 +944,13 @@ tr:nth-child(even) td {{
     <!-- ==================== SECTION 3 ==================== -->
     <h1 id="sec3">3. Track A: Deterministic Flow-Table Verifier &amp; Cost Model</h1>
     <p>
-        Every flow-table update proposed by a human operator or an LLM agent passes through the five-stage pipeline shown in Figure 2. At the center of this pipeline is <code>verifyFlowTable()</code> and <code>admitInstall()</code> (<code>src/sdn/flow-verifier.ts</code>, <code>src/sdn/install-gate.ts</code>), a pure, deterministic TypeScript verifier that evaluates <strong>11 formal properties (<code>A1</code>–<code>A11</code>)</strong> in under 5 milliseconds.
+        Every flow-table update proposed by a human operator or an LLM agent passes through the five-stage pipeline shown in Figure 3. At the center of this pipeline is <code>verifyFlowTable()</code> and <code>admitInstall()</code> (<code>src/sdn/flow-verifier.ts</code>, <code>src/sdn/install-gate.ts</code>), a pure, deterministic TypeScript verifier that evaluates <strong>11 formal properties (<code>A1</code>–<code>A11</code>)</strong> in under 5 milliseconds.
     </p>
 
     <div class="figure-box">
         {fig2_svg}
         <div class="figure-caption">
-            <strong>Figure 2: End-to-End Verifier-in-the-Loop &amp; On-Wire Conformance Pipeline.</strong> Candidate JSON rule sets are checked deterministically against <code>A1</code>–<code>A11</code> (with up to 5 structured rejection feedback turns in Protocol B), gated on human approval, verified against Firmware 0.86 readback on the Zodiac FX, and cross-checked against wire taps <code>O1</code>, <code>O2</code>, and <code>O3</code>.
+            <strong>Figure 3: End-to-End Verifier-in-the-Loop &amp; On-Wire Conformance Pipeline.</strong> Candidate JSON rule sets are checked deterministically against <code>A1</code>–<code>A11</code> (with up to 5 structured rejection feedback turns in Protocol B), gated on human approval, verified against Firmware 0.86 readback on the Zodiac FX, and cross-checked against wire taps <code>O1</code>, <code>O2</code>, and <code>O3</code>.
         </div>
     </div>
 
@@ -1024,13 +1054,13 @@ tr:nth-child(even) td {{
 
     <h2 id="sec3_4">3.4 Deployed-Table Cost Equation (A8) &amp; Allow-Rule Floor Calibration</h2>
     <p>
-        How much forwarding capacity does each additional flow rule cost on the 120 MHz ARM Cortex-M4? We answered this in two stages: first across synthetic rule-depth ladders from <code>N = 0</code> to <code>N = 126</code> rules (Figure 3), and second on the exact 6-rule production policy with <code>k = 0..8</code> active priority-65535 quarantine DROP rules (Figure 4).
+        How much forwarding capacity does each additional flow rule cost on the 120 MHz ARM Cortex-M4? We answered this in two stages: first across synthetic rule-depth ladders from <code>N = 0</code> to <code>N = 126</code> rules (Figure 4), and second on the exact 6-rule production policy with <code>k = 0..8</code> active priority-65535 quarantine DROP rules (Figure 5).
     </p>
 
     <div class="figure-box">
         {fig3_svg}
         <div class="figure-caption">
-            <strong>Figure 3: 600-Byte UDP Capacity vs. Rule Depth (Base vs. Forwarding-First Ordering).</strong> Measured on-wire saturation throughput across <code>N = 16, 32, 64, 126</code> rules (solid bars) and linear-fit empty-table intercepts at <code>N = 0</code> (hatched bars). Placing the active forwarding rule above unused rules reduces per-rule cost from <code>4.24 us/rule</code> to <code>1.30 us/rule</code>—yielding <strong>2.63x higher capacity</strong> at 126 rules (4,497 pps vs. 1,711 pps).
+            <strong>Figure 4: 600-Byte UDP Capacity vs. Rule Depth (Base vs. Forwarding-First Ordering).</strong> Measured on-wire saturation throughput across <code>N = 16, 32, 64, 126</code> rules (solid bars) and linear-fit empty-table intercepts at <code>N = 0</code> (hatched bars). Placing the active forwarding rule above unused rules reduces per-rule cost from <code>4.24 us/rule</code> to <code>1.30 us/rule</code>—yielding <strong>2.63x higher capacity</strong> at 126 rules (4,497 pps vs. 1,711 pps).
         </div>
     </div>
 
@@ -1045,7 +1075,7 @@ tr:nth-child(even) td {{
     <div class="figure-box">
         {fig4_svg}
         <div class="figure-caption">
-            <strong>Figure 4: Deployed 6-Rule Policy Capacity Ladder (<code>k = 0..8</code>) and A8 Admissibility Boundaries.</strong> Red circles show measured hardware saturation; the blue curve shows the fitted model <code>80.0 us + 5.42 us * k</code> (within ±1.3% at every point). The orange dashed line marks the <code>7,765 pps</code> allow-rule floor measured across 1..8 allow rules at <code>k = 8</code>; the green dashed line marks the live <code>6,000 pps</code> A8 admission gate.
+            <strong>Figure 5: Deployed 6-Rule Policy Capacity Ladder (<code>k = 0..8</code>) and A8 Admissibility Boundaries.</strong> Red circles show measured hardware saturation; the blue curve shows the fitted model <code>80.0 us + 5.42 us * k</code> (within ±1.3% at every point). The orange dashed line marks the <code>7,765 pps</code> allow-rule floor measured across 1..8 allow rules at <code>k = 8</code>; the green dashed line marks the live <code>6,000 pps</code> A8 admission gate.
         </div>
     </div>
 
@@ -1087,7 +1117,7 @@ tr:nth-child(even) td {{
     <div class="figure-box">
         {fig5_svg}
         <div class="figure-caption">
-            <strong>Figure 5: Agent Policy Synthesis Admissibility Across Protocols, Models, and LoRA Adapters.</strong> Deterministic verifier feedback (Protocol B, green bars) lifts admissibility to <strong>94%–100%</strong> across local and cloud models. In contrast, scaling LoRA fine-tuning from 15 steps to 80 SFT + 90 DPO steps (red bar) collapses multi-intent accuracy to <strong>48.3%</strong> through template memorization and syntax degeneration.
+            <strong>Figure 6: Agent Policy Synthesis Admissibility Across Protocols, Models, and LoRA Adapters.</strong> Deterministic verifier feedback (Protocol B, green bars) lifts admissibility to <strong>94%–100%</strong> across local and cloud models. In contrast, scaling LoRA fine-tuning from 15 steps to 80 SFT + 90 DPO steps (red bar) collapses multi-intent accuracy to <strong>48.3%</strong> through template memorization and syntax degeneration.
         </div>
     </div>
 
@@ -1322,7 +1352,7 @@ tr:nth-child(even) td {{
     <div class="figure-box">
         {fig6_svg}
         <div class="figure-caption">
-            <strong>Figure 6: Physical Wire Conformance (RQ4) &amp; Smoke Gate Validation Funnel.</strong> Across 128 distinct rule sets and 611 flow checks, <strong>611 of 611 (100.0%)</strong> wire observations across O1, O2, and O3 agreed with the model's match predictions (M1) and satisfied intent clauses (M2). The 4-stage smoke gate (right) resolved capture harness defects (<code>tcpdump -p</code>) and discovered switch-path drops of self-addressed IPv4 frames before unlocking the full 143-run campaign.
+            <strong>Figure 7: Physical Wire Conformance (RQ4) &amp; Smoke Gate Validation Funnel.</strong> Across 128 distinct rule sets and 611 flow checks, <strong>611 of 611 (100.0%)</strong> wire observations across O1, O2, and O3 agreed with the model's match predictions (M1) and satisfied intent clauses (M2). The 4-stage smoke gate (right) resolved capture harness defects (<code>tcpdump -p</code>) and discovered switch-path drops of self-addressed IPv4 frames before unlocking the full 143-run campaign.
         </div>
     </div>
 
@@ -1524,7 +1554,7 @@ tr:nth-child(even) td {{
         </div>
     </div>
 
-    <h2>A.1 Mapping Physical Bench Cabling to Figure 1</h2>
+    <h2>A.1 Mapping Physical Bench Cabling to Figure 2</h2>
     <ul>
         <li><strong>Bottom Chassis (Northbound Networks Zodiac FX, Firmware 0.86):</strong> Sits at the base of the three-switch stack. Its micro-USB CDC ACM serial port connects to the Jetson Orin Nano Super for out-of-band register telemetry and firmware verification, while RJ45 Ports 1–3 carry OpenFlow VLAN 100 data-plane traffic and Port 4 carries Native VLAN 200 OpenFlow 1.3 TCP control (<code>10.0.1.99:6633</code>).</li>
         <li><strong>Middle Switch (NETGEAR GS105Ev2 #1, <code>192.168.0.239</code>):</strong> Yellow-booted patch cords connect the untrusted <code>10.0.2.0/24</code> Raspberry Pi hosts (Ports 1, 3, 4) to Port 5 (uplink to Zodiac FX Port 1), while Port 2 outputs the hardware port mirror (<code>O1</code>) in isolated 802.1Q VLAN 2 to the Raspberry Pi 5's secondary USB-GbE capture interface (<code>eth1</code>).</li>

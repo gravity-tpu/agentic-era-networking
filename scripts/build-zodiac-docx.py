@@ -356,12 +356,14 @@ def crop_pdf_figure(pdf_doc: fitz.Document, page_idx: int, rect: fitz.Rect, dpi:
 
 def build_docx() -> None:
     pdf_doc = fitz.open(str(PDF_PATH))
-    fig1_png = crop_pdf_figure(pdf_doc, 6, fitz.Rect(50, 48, 562, 392), dpi=400)
-    fig2_png = crop_pdf_figure(pdf_doc, 8, fitz.Rect(50, 120, 562, 265), dpi=400)
-    fig3_png = crop_pdf_figure(pdf_doc, 11, fitz.Rect(50, 48, 562, 232), dpi=400)
-    fig4_png = crop_pdf_figure(pdf_doc, 11, fitz.Rect(50, 326, 562, 495), dpi=400)
-    fig5_png = crop_pdf_figure(pdf_doc, 12, fitz.Rect(50, 260, 562, 430), dpi=400)
-    cover_png = crop_pdf_figure(pdf_doc, 0, fitz.Rect(240, 320, 595, 760), dpi=350)
+    fig1_png = crop_pdf_figure(pdf_doc, 5, fitz.Rect(54, 122, 558, 260), dpi=400)
+    fig2_png = crop_pdf_figure(pdf_doc, 7, fitz.Rect(68, 82, 544, 525), dpi=400)
+    fig3_png = crop_pdf_figure(pdf_doc, 9, fitz.Rect(54, 180, 558, 321), dpi=400)
+    fig4_png = crop_pdf_figure(pdf_doc, 12, fitz.Rect(81, 75, 542, 306), dpi=400)
+    fig5_png = crop_pdf_figure(pdf_doc, 12, fitz.Rect(54, 354, 558, 727), dpi=400)
+    fig6_png = crop_pdf_figure(pdf_doc, 14, fitz.Rect(54, 232, 558, 391), dpi=400)
+    fig7_png = crop_pdf_figure(pdf_doc, 18, fitz.Rect(54, 469, 558, 653), dpi=400)
+    cover_png = crop_pdf_figure(pdf_doc, 0, fitz.Rect(320, 255, 528, 475), dpi=350)
 
     photo_stack_bytes = (FIG_DIR / "bench-jetson-switch-stack.jpg").read_bytes()
     photo_wiring_bytes = (FIG_DIR / "bench-port-wiring-workloads.jpg").read_bytes()
@@ -376,18 +378,14 @@ def build_docx() -> None:
         sz=48,
     )
     b.add_p(
-        "Measuring OpenFlow 1.3 Silicon Boundaries, Proving Flow-Table Admissibility (A1–A11), and Evaluating Verifier-in-the-Loop Policy Synthesis Against a Live Hardware Adversary",
+        "Closed-Loop Verification of Language Model Flow Policies Against Physical OpenFlow Silicon, Deterministic Safety Invariants, and Live Network Adversaries",
         space_after=160,
         color="5F6368",
         sz=24,
     )
-    b.add_p(
-        "<code>Track A: 196/196 Mutants Caught</code>   <code>Track B: 611/611 Wire Conformance</code>   <code>Track C: 7/7 Red-Team Scenarios</code>   <code>Protocol B: 98.8%–100% Admissible</code>",
-        space_after=160,
-    )
     b.add_figure(
         cover_png,
-        "<strong>Zodiac Three-Vantage-Point Verification Architecture (O1, O2, O3)</strong> — 120 MHz ARM Cortex-M4 OpenFlow 1.3 Silicon with 128-Rule Flow Table.",
+        "<strong>Zodiac Multi-Tier Neuro-Symbolic Verification Architecture</strong> — 3D isometric model connecting physical switch silicon, deterministic safety gates, and closed-loop agent policy synthesis.",
         max_width_pt=260.0,
     )
     b.add_p(
@@ -479,8 +477,25 @@ def build_docx() -> None:
     )
     b.add_h2("1.2 Summary of Contributions Across Tracks A, B, and C")
     b.add_p(
-        "Rather than claiming autonomous self-healing, Zodiac enforces a strict architectural separation: <strong>an agent proposes; deterministic code decides admissibility (<code>A1</code>–<code>A11</code>); a human approves policy installation; and independent hardware mirror taps verify what actually crossed the wire.</strong> Table 1 summarizes the physical hardware bill of materials."
+        "Rather than claiming autonomous self-healing, Zodiac enforces a strict architectural separation: <strong>an agent proposes; deterministic code decides admissibility (<code>A1</code>–<code>A11</code>); a human approves policy installation; and independent hardware mirror taps verify what actually crossed the wire.</strong> To investigate where neural policy generators succeed and fail in real networking environments, our evaluation is organized across three experimental tracks:"
     )
+    b.add_bullet(
+        "<strong>Track A — Deterministic Verifier &amp; Adversarial Invariants:</strong> Evaluates formal admissibility checks (<code>A1</code>–<code>A11</code>) against a 196-mutant corpus spanning priority precedence conflicts (<code>A4</code>), silent firmware action-stripping (<code>A3</code>), hardware table budgets (<code>A7</code>), and linear traversal latency budgets (<code>A8</code>). Caught 100% (196/196) of invalid mutations with zero false dismissals."
+    )
+    b.add_bullet(
+        "<strong>Track B — Physical Wire Conformance &amp; Hardware Reality Gaps:</strong> Validates flow tables on actual physical silicon across 128 rule sets (611 differential flow checks) observed at three hardware vantage points (<code>O1</code>, <code>O2</code>, <code>O3</code>). Discovered physical quirks—such as Firmware 0.86 priority-0 silent blackholing and switch-path drops of self-addressed frames (Finding F1)—that controller-only simulation cannot detect."
+    )
+    b.add_bullet(
+        "<strong>Track C — Live Red-Team Adversary &amp; Containment Envelopes:</strong> Exercises 7 live attack scenarios (<code>S1</code>–<code>S7</code>) launched by an adversary node (<code>10.0.2.50</code>) on a shared untrusted segment, demonstrating that pre-approved quarantine envelopes bound attacker steering, prevent table exhaustion, and preserve legitimate client traffic."
+    )
+    b.add_p(
+        "Across these tracks, we compare two operational paradigms: <strong>Protocol A</strong> (unassisted zero-shot generation directly to the verifier) and <strong>Protocol B</strong> (a multi-turn closed-loop repair interaction where rejected properties and conflicting rule IDs are returned to the model within &le; 5 turns)."
+    )
+    b.add_figure(
+        fig1_png,
+        "<strong>Figure 1: Zodiac Closed-Loop Testbed Architecture &amp; Multi-Track Verification Pipeline.</strong> Natural language operator intent is synthesized into OpenFlow 1.3 flow rules by local edge models, rented cloud GPUs, or commercial frontier APIs. Before reaching hardware, rules must satisfy the 11 formal properties of the deterministic verifier (Track A). Under Protocol B, diagnostic failure feedback repairs invalid proposals within 2 median turns (raising admissibility from 43% to 98.8%–100%). Policy actuation requires human sign-off, while detector-driven containment is constrained by a pre-approved Quarantine Envelope (Track C). All data-plane behavior is verified against physical silicon across three independent mirror taps (Track B: 611/611 wire checks).",
+    )
+    b.add_p("Table 1 summarizes the physical hardware bill of materials used across all experiments.")
     b.add_table(
         ["Component", "Hardware Specification", "Network Role", "Verification / Measurement Function"],
         [
@@ -510,8 +525,8 @@ def build_docx() -> None:
         "<strong>Bottom of Stack — Northbound Networks Zodiac FX (DUT, Firmware 0.86):</strong> Enclosed in its black 3D-printed chassis at the base of the stack, exposing Ports 1–3 to OpenFlow data-plane control (VLAN 100) and Port 4 to dedicated OpenFlow TCP control (<code>10.0.1.99/24</code>, Native VLAN 200)."
     )
     b.add_figure(
-        fig1_png,
-        "<strong>Figure 1: Physical Testbed Topology Breakdown (400 DPI Render).</strong> Complete port-level mapping of the 3-switch stack (NETGEAR GS105Ev2 #2 on top, NETGEAR GS105Ev2 #1 in middle, Zodiac FX DUT at bottom), the 3 wired NICs on the NVIDIA Jetson Orin Nano Super, the 3 Raspberry Pi nodes, and the three passive observation points (<code>O1</code>, <code>O2</code>, <code>O3</code>).",
+        fig2_png,
+        "<strong>Figure 2: Physical Testbed Topology Breakdown (400 DPI Render).</strong> Complete port-level mapping of the 3-switch stack (NETGEAR GS105Ev2 #2 on top, NETGEAR GS105Ev2 #1 in middle, Zodiac FX DUT at bottom), the 3 wired NICs on the NVIDIA Jetson Orin Nano Super, the 3 Raspberry Pi nodes, and the three passive observation points (<code>O1</code>, <code>O2</code>, <code>O3</code>).",
     )
     b.add_h2("2.2 Port-by-Port Wiring, 802.1Q VLAN Isolation & Observation Points (O1, O2, O3)")
     b.add_p(
@@ -541,11 +556,11 @@ def build_docx() -> None:
     # ---- SECTION 3 ----
     b.add_h1("3. Track A: Deterministic Flow-Table Verifier & Cost Model")
     b.add_p(
-        "Every flow-table update proposed by a human operator or an LLM agent passes through the five-stage pipeline shown in Figure 2. At the center of this pipeline is <code>verifyFlowTable()</code> and <code>admitInstall()</code> (<code>src/sdn/flow-verifier.ts</code>, <code>src/sdn/install-gate.ts</code>), a pure, deterministic TypeScript verifier that evaluates <strong>11 formal properties (<code>A1</code>–<code>A11</code>)</strong> in under 5 milliseconds."
+        "Every flow-table update proposed by a human operator or an LLM agent passes through the five-stage pipeline shown in Figure 3. At the center of this pipeline is <code>verifyFlowTable()</code> and <code>admitInstall()</code> (<code>src/sdn/flow-verifier.ts</code>, <code>src/sdn/install-gate.ts</code>), a pure, deterministic TypeScript verifier that evaluates <strong>11 formal properties (<code>A1</code>–<code>A11</code>)</strong> in under 5 milliseconds."
     )
     b.add_figure(
-        fig2_png,
-        "<strong>Figure 2: End-to-End Verifier-in-the-Loop &amp; On-Wire Conformance Pipeline (400 DPI Render).</strong> Candidate JSON rule sets are checked deterministically against <code>A1</code>–<code>A11</code> (with up to 5 structured rejection feedback turns in Protocol B), gated on human approval, verified against Firmware 0.86 readback on the Zodiac FX, and cross-checked against wire taps <code>O1</code>, <code>O2</code>, and <code>O3</code>.",
+        fig3_png,
+        "<strong>Figure 3: End-to-End Verifier-in-the-Loop &amp; On-Wire Conformance Pipeline (400 DPI Render).</strong> Candidate JSON rule sets are checked deterministically against <code>A1</code>–<code>A11</code> (with up to 5 structured rejection feedback turns in Protocol B), gated on human approval, verified against Firmware 0.86 readback on the Zodiac FX, and cross-checked against wire taps <code>O1</code>, <code>O2</code>, and <code>O3</code>.",
     )
     b.add_h2("3.1 The Eleven Verifier Properties (A1–A11) & Mutation-Corpus Coverage")
     b.add_table(
@@ -578,16 +593,16 @@ def build_docx() -> None:
     )
     b.add_h2("3.4 Deployed-Table Cost Equation (A8) & Allow-Rule Floor Calibration")
     b.add_figure(
-        fig3_png,
-        "<strong>Figure 3: 600-Byte UDP Capacity vs. Rule Depth (Base vs. Forwarding-First Ordering, 400 DPI Render).</strong> Placing the active forwarding rule above unused rules reduces per-rule cost from <code>4.24 us/rule</code> to <code>1.30 us/rule</code>—yielding <strong>2.63x higher capacity</strong> at 126 rules (4,497 pps vs. 1,711 pps).",
+        fig4_png,
+        "<strong>Figure 4: 600-Byte UDP Capacity vs. Rule Depth (Base vs. Forwarding-First Ordering, 400 DPI Render).</strong> Placing the active forwarding rule above unused rules reduces per-rule cost from <code>4.24 us/rule</code> to <code>1.30 us/rule</code>—yielding <strong>2.63x higher capacity</strong> at 126 rules (4,497 pps vs. 1,711 pps).",
     )
     b.add_callout(
         "Deployed 6-Rule Hardware Traversal Equation (src/sdn/deployed-cost-model.ts)",
         "<code>t_pkt(k) = 80.0 us + 5.42 us * k  ==&gt;  Capacity(k) = 1,000,000 / (80.0 + 5.42 * k) pps</code>   (for <code>k in 0..8</code> at 572 B payload). Across <code>1, 2, 4, 8</code> priority-120 allow rules at <code>k = 8</code>, hardware capacity held <strong>&gt;= 7,765 pps</strong>, well above the live <strong>6,000 pps</strong> <code>A8</code> ceiling.",
     )
     b.add_figure(
-        fig4_png,
-        "<strong>Figure 4: Deployed 6-Rule Policy Capacity Ladder (k = 0..8) and A8 Admissibility Boundaries (400 DPI Render).</strong> Red circles show measured hardware saturation; the blue curve shows the fitted model <code>80.0 us + 5.42 us * k</code> (±1.3%).",
+        fig5_png,
+        "<strong>Figure 5: Deployed 6-Rule Policy Capacity Ladder (k = 0..8) and A8 Admissibility Boundaries (400 DPI Render).</strong> Red circles show measured hardware saturation; the blue curve shows the fitted model <code>80.0 us + 5.42 us * k</code> (±1.3%).",
     )
 
     # ---- SECTION 4 ----
@@ -597,8 +612,8 @@ def build_docx() -> None:
         "We evaluated eight operator intents spanning Standard Intents (<code>INTENT-1..4</code>) and Hard Multi-Constraint Intents (<code>INTENT-5..8</code>) across <strong>1,420 evaluated trials</strong> comparing Zero-Shot (Protocol A), Verifier Feedback (Protocol B, <code>&lt;= 5</code> turns), and LoRA SFT+DPO weight adaptation."
     )
     b.add_figure(
-        fig5_png,
-        "<strong>Figure 5: Agent Policy Synthesis Admissibility Across Protocols, Models, and LoRA Adapters (400 DPI Render).</strong> Adding up to 5 deterministic verifier feedback turns (Protocol B) lifts admissibility to <strong>98.8%–100.0%</strong> across all models, whereas scaling LoRA fine-tuning to 80 SFT + 90 DPO steps causes severe overfitting (<strong>48.3%</strong>).",
+        fig6_png,
+        "<strong>Figure 6: Agent Policy Synthesis Admissibility Across Protocols, Models, and LoRA Adapters (400 DPI Render).</strong> Adding up to 5 deterministic verifier feedback turns (Protocol B) lifts admissibility to <strong>98.8%–100.0%</strong> across all models, whereas scaling LoRA fine-tuning to 80 SFT + 90 DPO steps causes severe overfitting (<strong>48.3%</strong>).",
     )
     b.add_table(
         ["Model & Prompt / Adapter Configuration", "Intent Suite", "Protocol", "Admissible Rate", "Median Turns", "Primary Finding / Failure Mode"],
@@ -644,6 +659,10 @@ def build_docx() -> None:
         border_hex="FBBC04",
     )
     b.add_h2("5.3 Physical Reality Gaps Discovered Across Hardware Conformance & Red-Team Tracks")
+    b.add_figure(
+        fig7_png,
+        "<strong>Figure 7: Physical Wire Conformance (RQ4) &amp; Smoke Gate Validation Funnel (400 DPI Render).</strong> Across 128 distinct rule sets and 611 flow checks, <strong>611 of 611 (100.0%)</strong> wire observations across O1, O2, and O3 agreed with the model's match predictions (M1) and satisfied intent clauses (M2). The 4-stage smoke gate (right) resolved capture harness defects (<code>tcpdump -p</code>) and discovered switch-path drops of self-addressed IPv4 frames before unlocking the full 143-run campaign.",
+    )
     b.add_p(
         "The central practical insight from deploying on real hardware is that several behaviors looked correct in controller software or simulated environments until physical vantage points contradicted them:"
     )

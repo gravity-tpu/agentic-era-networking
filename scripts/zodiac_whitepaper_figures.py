@@ -698,69 +698,236 @@ def svg_figure_6_conformance_funnel() -> str:
 
 def svg_cover_artwork() -> str:
     """
-    Cover Artwork: Replaces abstract prism with a crisp, self-explanatory
-    Zodiac Closed-Loop Verification & Hardware Conformance Architecture Card.
-    Fits neatly on the right half of the cover page without overlapping footer or titles.
+    Cover Artwork: Clean, minimalist 3D isometric cube/prism vector graphic
+    matching Google Research / DeepMind whitepaper styling.
+    Scalable pure SVG, zero Type 3 bitmap fonts, subtle isometric grid, facet shading,
+    and Google-hued vertex nodes.
     """
     return """
-<svg viewBox="0 0 380 435" width="280pt" height="320pt" xmlns="http://www.w3.org/2000/svg" style="position:absolute;right:48pt;top:222pt;z-index:5;">
-  <!-- Card Background -->
-  <rect x="0" y="0" width="380" height="435" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.5" />
-  
-  <!-- Header Bar -->
-  <rect x="0" y="0" width="380" height="38" rx="8" fill="#1a73e8" />
-  <rect x="0" y="30" width="380" height="8" fill="#1a73e8" />
-  <text x="16" y="24" font-family="GoogleSans, sans-serif" font-weight="700" font-size="11.5" fill="#ffffff">ZODIAC CLOSED-LOOP ARCHITECTURE</text>
-  <text x="364" y="24" text-anchor="end" font-family="RobotoMono, monospace" font-size="8.5" fill="#d2e3fc">v3.0 VERIFIED</text>
+<svg viewBox="0 0 380 380" width="280pt" height="280pt" xmlns="http://www.w3.org/2000/svg" style="position:absolute;right:48pt;top:205pt;z-index:5;">
+  <defs>
+    <!-- Top Face Gradient (Policy Synthesis Plane) -->
+    <linearGradient id="topFaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="40%" stop-color="#e8f0fe" />
+      <stop offset="100%" stop-color="#c3dcfe" />
+    </linearGradient>
+    <linearGradient id="leftFaceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4285f4" />
+      <stop offset="100%" stop-color="#1a73e8" />
+    </linearGradient>
+    <linearGradient id="rightFaceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a73e8" />
+      <stop offset="100%" stop-color="#155724" />
+    </linearGradient>
 
-  <!-- Step 1: LLM Policy Proposers -->
-  <g transform="translate(16, 50)">
-    <rect x="0" y="0" width="348" height="66" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
-    <rect x="0" y="0" width="6" height="66" rx="3" fill="#1a73e8" />
-    <text x="14" y="18" font-family="GoogleSans, sans-serif" font-weight="700" font-size="10" fill="#202124">1. LLM Policy Proposers (Local · Rented A100 · Cloud API)</text>
-    <text x="14" y="34" font-family="GoogleSansText, sans-serif" font-size="8.5" fill="#5f6368">Natural language operator intent &rarr; OpenFlow 1.3 JSON flow table.</text>
-    <text x="14" y="52" font-family="RobotoMono, monospace" font-weight="700" font-size="8" fill="#d93025">Zero-Shot (Protocol A): 35%–57% Local, 96.0% Haiku (2,303/2,400)</text>
+    <!-- Mid Layer (Verifier Plane) -->
+    <linearGradient id="midTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8f0fe" />
+      <stop offset="100%" stop-color="#aecbfa" />
+    </linearGradient>
+    <linearGradient id="midLeftGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a73e8" />
+      <stop offset="100%" stop-color="#185abc" />
+    </linearGradient>
+    <linearGradient id="midRightGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#185abc" />
+      <stop offset="100%" stop-color="#174ea6" />
+    </linearGradient>
+
+    <!-- Base Layer (Physical Silicon Plane) -->
+    <linearGradient id="baseTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8ab4f8" />
+      <stop offset="100%" stop-color="#4285f4" />
+    </linearGradient>
+    <linearGradient id="baseLeftGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#185abc" />
+      <stop offset="100%" stop-color="#174ea6" />
+    </linearGradient>
+    <linearGradient id="baseRightGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#174ea6" />
+      <stop offset="100%" stop-color="#0d47a1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Ground Shadow -->
+  <ellipse cx="190" cy="316" rx="135" ry="40" fill="#000000" fill-opacity="0.04" />
+  <ellipse cx="190" cy="314" rx="90" ry="26" fill="#1a73e8" fill-opacity="0.08" />
+
+  <!-- Isometric Ground Plane Grid -->
+  <g stroke="#dadce0" stroke-width="0.8" stroke-dasharray="2 3">
+    <line x1="190" y1="314" x2="310" y2="245" />
+    <line x1="190" y1="314" x2="70" y2="245" />
+    <line x1="130" y1="279" x2="250" y2="210" />
+    <line x1="250" y1="279" x2="130" y2="210" />
+    <line x1="190" y1="314" x2="190" y2="350" stroke-dasharray="none" stroke="#bdc1c6" />
   </g>
 
-  <!-- Connecting Arrow 1 -> 2 -->
-  <line x1="190" y1="116" x2="190" y2="134" stroke="#1a73e8" stroke-width="2" />
-  <polygon points="190,137 186,130 194,130" fill="#1a73e8" />
+  <!-- Vertical Axis Core (Dashed Center Ray) -->
+  <line x1="190" y1="75" x2="190" y2="314" stroke="#1a73e8" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.6" />
 
-  <!-- Step 2: Deterministic Verifier -->
-  <g transform="translate(16, 138)">
-    <rect x="0" y="0" width="348" height="76" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4" />
-    <text x="14" y="18" font-family="GoogleSans, sans-serif" font-weight="700" font-size="10" fill="#1967d2">2. Deterministic Verifier (Properties A1–A11 &amp; Cost Model)</text>
-    <text x="14" y="34" font-family="GoogleSansText, sans-serif" font-size="8.5" fill="#3c4043">Precedence conflicts (A4), shadowing (A9), ARP confinement (A10),</text>
-    <text x="14" y="47" font-family="GoogleSansText, sans-serif" font-size="8.5" fill="#3c4043">table budget k&le;8, and traversal cost: t_pkt = 80.0&micro;s + 5.42&micro;s &middot; k (A8).</text>
-    <text x="14" y="65" font-family="RobotoMono, monospace" font-weight="700" font-size="8.2" fill="#137333">Protocol B Feedback (&le;5 turns): 94%–100% Admissible (400/400 Haiku)</text>
+  <!-- ==================== TIER 1: PHYSICAL SILICON LAYER (BOTTOM) ==================== -->
+  <g id="layer-silicon">
+    <!-- Left Face -->
+    <polygon points="112,245 190,290 190,314 112,269" fill="url(#baseLeftGrad)" stroke="#ffffff" stroke-width="1" />
+    <!-- Right Face -->
+    <polygon points="190,290 268,245 268,269 190,314" fill="url(#baseRightGrad)" stroke="#ffffff" stroke-width="1" />
+    <!-- Top Face -->
+    <polygon points="190,200 268,245 190,290 112,245" fill="url(#baseTopGrad)" stroke="#ffffff" stroke-width="1.2" />
   </g>
 
-  <!-- Connecting Arrow 2 -> 3 -->
-  <line x1="190" y1="214" x2="190" y2="232" stroke="#1a73e8" stroke-width="2" />
-  <polygon points="190,235 186,228 194,228" fill="#1a73e8" />
-
-  <!-- Step 3: Governance & Quarantine Envelope -->
-  <g transform="translate(16, 236)">
-    <rect x="0" y="0" width="348" height="66" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
-    <rect x="0" y="0" width="6" height="66" rx="3" fill="#fbbc04" />
-    <text x="14" y="18" font-family="GoogleSans, sans-serif" font-weight="700" font-size="10" fill="#202124">3. Governance: Human Approval Gate &amp; Containment Envelope</text>
-    <text x="14" y="34" font-family="GoogleSansText, sans-serif" font-size="8.5" fill="#5f6368">Agent policies NEVER self-install; human sign-off required.</text>
-    <text x="14" y="52" font-family="RobotoMono, monospace" font-size="8" fill="#b06000">Quarantine Envelope: k&le;8 DROPs, TTL&le;300s, protected hosts immune</text>
+  <!-- ==================== TIER 2: DETERMINISTIC VERIFIER LAYER (MIDDLE) ==================== -->
+  <g id="layer-verifier">
+    <!-- Left Face -->
+    <polygon points="112,192 190,237 190,261 112,216" fill="url(#midLeftGrad)" stroke="#ffffff" stroke-width="1" />
+    <!-- Right Face -->
+    <polygon points="190,237 268,192 268,216 190,261" fill="url(#midRightGrad)" stroke="#ffffff" stroke-width="1" />
+    <!-- Top Face with Etched Matrix Lines -->
+    <polygon points="190,147 268,192 190,237 112,192" fill="url(#midTopGrad)" stroke="#ffffff" stroke-width="1.2" />
+    <line x1="151" y1="170" x2="229" y2="215" stroke="#ffffff" stroke-width="0.8" opacity="0.7" />
+    <line x1="229" y1="170" x2="151" y2="215" stroke="#ffffff" stroke-width="0.8" opacity="0.7" />
   </g>
 
-  <!-- Connecting Arrow 3 -> 4 -->
-  <line x1="190" y1="302" x2="190" y2="320" stroke="#1a73e8" stroke-width="2" />
-  <polygon points="190,323 186,316 194,316" fill="#1a73e8" />
-
-  <!-- Step 4: Physical Silicon & Conformance -->
-  <g transform="translate(16, 324)">
-    <rect x="0" y="0" width="348" height="98" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
-    <rect x="0" y="0" width="6" height="98" rx="3" fill="#137333" />
-    <text x="14" y="18" font-family="GoogleSans, sans-serif" font-weight="700" font-size="10" fill="#202124">4. Physical Silicon (Zodiac FX 120 MHz) &amp; Wire Taps (O1, O2, O3)</text>
-    <text x="14" y="34" font-family="GoogleSansText, sans-serif" font-size="8.5" fill="#3c4043">Execution on Atmel SAM4E8E (FW 0.86) + dual GS105Ev2 mirror taps.</text>
-    <text x="14" y="52" font-family="RobotoMono, monospace" font-weight="700" font-size="8" fill="#137333">&bull; Track B: 611/611 wire flow checks conform (128 rule sets, F1)</text>
-    <text x="14" y="68" font-family="RobotoMono, monospace" font-weight="700" font-size="8" fill="#137333">&bull; Track C: 7/7 live adversary scenarios contained (0 leaked frames)</text>
-    <text x="14" y="84" font-family="GoogleSansText, sans-serif" font-size="8" fill="#5f6368">Fate-sharing: switch wipes table on controller loss; recovers in 4–6 s.</text>
+  <!-- ==================== TIER 3: POLICY SYNTHESIS & CLOSED-LOOP (TOP) ==================== -->
+  <g id="layer-policy">
+    <!-- Left Face -->
+    <polygon points="112,139 190,184 190,208 112,163" fill="url(#leftFaceGrad)" stroke="#ffffff" stroke-width="1" />
+    <!-- Right Face -->
+    <polygon points="190,184 268,139 268,163 190,208" fill="url(#rightFaceGrad)" stroke="#ffffff" stroke-width="1" />
+    <!-- Top Face with Gradient -->
+    <polygon points="190,94 268,139 190,184 112,139" fill="url(#topFaceGrad)" stroke="#ffffff" stroke-width="1.4" />
   </g>
+
+  <!-- Floating Isometric Satellite Node 1 (Control / Uplink) -->
+  <g transform="translate(295, 102)">
+    <line x1="-27" y1="37" x2="0" y2="12" stroke="#4285f4" stroke-width="0.9" stroke-dasharray="2 2" />
+    <polygon points="12,0 24,7 12,14 0,7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8" />
+    <polygon points="0,7 12,14 12,24 0,17" fill="#1a73e8" stroke="#ffffff" stroke-width="0.6" />
+    <polygon points="12,14 24,7 24,17 12,24" fill="#174ea6" stroke="#ffffff" stroke-width="0.6" />
+  </g>
+
+  <!-- Floating Isometric Satellite Node 2 (Observer / Mirror Tap) -->
+  <g transform="translate(62, 230)">
+    <line x1="50" y1="15" x2="20" y2="12" stroke="#34a853" stroke-width="0.9" stroke-dasharray="2 2" />
+    <polygon points="10,0 20,6 10,12 0,6" fill="#ceead6" stroke="#1e8e3e" stroke-width="0.8" />
+    <polygon points="0,6 10,12 10,20 0,14" fill="#1e8e3e" stroke="#ffffff" stroke-width="0.6" />
+    <polygon points="10,12 20,6 20,14 10,20" fill="#137333" stroke="#ffffff" stroke-width="0.6" />
+  </g>
+
+  <!-- Glowing Google-Colored Vertex Nodes on Top Face -->
+  <!-- Top: Google Blue -->
+  <circle cx="190" cy="94" r="5" fill="#4285f4" fill-opacity="0.3" />
+  <circle cx="190" cy="94" r="2.8" fill="#1a73e8" stroke="#ffffff" stroke-width="1" />
+
+  <!-- Right: Google Green -->
+  <circle cx="268" cy="139" r="5" fill="#34a853" fill-opacity="0.3" />
+  <circle cx="268" cy="139" r="2.8" fill="#1e8e3e" stroke="#ffffff" stroke-width="1" />
+
+  <!-- Bottom: Google Amber -->
+  <circle cx="190" cy="184" r="5" fill="#fbbc04" fill-opacity="0.3" />
+  <circle cx="190" cy="184" r="2.8" fill="#f9ab00" stroke="#ffffff" stroke-width="1" />
+
+  <!-- Left: Google Red -->
+  <circle cx="112" cy="139" r="5" fill="#ea4335" fill-opacity="0.3" />
+  <circle cx="112" cy="139" r="2.8" fill="#d93025" stroke="#ffffff" stroke-width="1" />
 </svg>
 """
+
+
+def svg_closed_loop_architecture() -> str:
+    """
+    Zodiac Closed-Loop Verification Architecture:
+    Horizontal 4-stage pipeline visualizing LLM Policy Synthesis -> Deterministic Verifier
+    -> Governance Gate & Envelope -> Physical Silicon & Mirror Taps, with the Protocol B
+    multi-turn repair loop clearly highlighted.
+    Designed for Section 1.2 (Summary of Contributions across Tracks A, B, and C).
+    """
+    return """
+<svg viewBox="0 0 880 240" width="100%" xmlns="http://www.w3.org/2000/svg" style="background:#ffffff;border:1px solid #dadce0;border-radius:4pt;display:block;">
+  <!-- Header Bar -->
+  <rect x="0" y="0" width="880" height="30" fill="#f8f9fa" />
+  <line x1="0" y1="30" x2="880" y2="30" stroke="#dadce0" stroke-width="1" />
+  <text x="16" y="20" font-family="GoogleSans, sans-serif" font-weight="700" font-size="11" fill="#202124">ZODIAC CLOSED-LOOP TESTBED ARCHITECTURE &amp; MULTI-TRACK VERIFICATION PIPELINE</text>
+  <text x="864" y="20" text-anchor="end" font-family="RobotoMono, monospace" font-size="9" fill="#1a73e8">Tracks A, B, C · Protocols A &amp; B</text>
+
+  <!-- Step 1: LLM Policy Proposers -->
+  <g transform="translate(16, 44)">
+    <rect x="0" y="0" width="194" height="136" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
+    <rect x="0" y="0" width="194" height="24" rx="5" fill="#e8f0fe" />
+    <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9.5" fill="#1967d2">1. LLM Policy Proposers</text>
+    <text x="10" y="38" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#3c4043">Natural language operator intent</text>
+    <text x="10" y="50" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#3c4043">&rarr; OpenFlow 1.3 JSON flow table.</text>
+    <text x="10" y="68" font-family="GoogleSansText, sans-serif" font-size="8" fill="#5f6368">&bull; Local edge: Qwen3.8-27B (vLLM)</text>
+    <text x="10" y="80" font-family="GoogleSansText, sans-serif" font-size="8" fill="#5f6368">&bull; Rented: NVIDIA A100 SXM4 80G</text>
+    <text x="10" y="92" font-family="GoogleSansText, sans-serif" font-size="8" fill="#5f6368">&bull; Cloud API: Claude Haiku / Sonnet</text>
+    <rect x="8" y="104" width="178" height="24" rx="3" fill="#fce8e6" stroke="#ea4335" stroke-width="0.8" />
+    <text x="12" y="120" font-family="RobotoMono, monospace" font-size="7.6" fill="#c5221f">Protocol A (Zero-Shot): 43%–80%</text>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <g stroke="#1a73e8" stroke-width="2">
+    <line x1="212" y1="112" x2="232" y2="112" />
+    <polygon points="236,112 228,107 228,117" fill="#1a73e8" stroke="none" />
+  </g>
+
+  <!-- Step 2: Deterministic Verifier -->
+  <g transform="translate(238, 44)">
+    <rect x="0" y="0" width="206" height="136" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4" />
+    <rect x="0" y="0" width="206" height="24" rx="5" fill="#1a73e8" />
+    <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9.5" fill="#ffffff">2. Deterministic Verifier (Track A)</text>
+    <text x="10" y="38" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#202124">Properties A1–A11 (Formal Gates)</text>
+    <text x="10" y="52" font-family="RobotoMono, monospace" font-size="7.8" fill="#3c4043">&bull; A4: Precedence &amp; Overlaps</text>
+    <text x="10" y="64" font-family="RobotoMono, monospace" font-size="7.8" fill="#3c4043">&bull; A3: Priority-0 Action Drop Guard</text>
+    <text x="10" y="76" font-family="RobotoMono, monospace" font-size="7.8" fill="#3c4043">&bull; A8: Traversal Cost (80.0 + 5.42k &mu;s)</text>
+    <text x="10" y="88" font-family="RobotoMono, monospace" font-size="7.8" fill="#3c4043">&bull; A10: ARP Peer Confinement</text>
+    <rect x="8" y="104" width="190" height="24" rx="3" fill="#e6f4ea" stroke="#137333" stroke-width="0.8" />
+    <text x="12" y="120" font-family="RobotoMono, monospace" font-weight="700" font-size="7.8" fill="#137333">Track A: 196/196 Mutants Caught</text>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <g stroke="#1a73e8" stroke-width="2">
+    <line x1="446" y1="112" x2="466" y2="112" />
+    <polygon points="470,112 462,107 462,117" fill="#1a73e8" stroke="none" />
+  </g>
+
+  <!-- Step 3: Governance & Quarantine Envelope -->
+  <g transform="translate(472, 44)">
+    <rect x="0" y="0" width="190" height="136" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
+    <rect x="0" y="0" width="190" height="24" rx="5" fill="#fef7e0" />
+    <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9.5" fill="#b06000">3. Governance (Track C)</text>
+    <text x="10" y="38" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#3c4043">Human Approval Gate:</text>
+    <text x="10" y="50" font-family="GoogleSansText, sans-serif" font-size="8" fill="#5f6368">Agent rules NEVER self-install.</text>
+    <text x="10" y="66" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#3c4043">Quarantine Envelope (Detector):</text>
+    <text x="10" y="78" font-family="RobotoMono, monospace" font-size="7.6" fill="#b06000">&bull; Table budget: k &le; 8 DROPs</text>
+    <text x="10" y="90" font-family="RobotoMono, monospace" font-size="7.6" fill="#b06000">&bull; Bounded TTL: &le; 300 s</text>
+    <rect x="8" y="104" width="174" height="24" rx="3" fill="#ffffff" stroke="#fbbc04" stroke-width="0.8" />
+    <text x="12" y="120" font-family="RobotoMono, monospace" font-weight="700" font-size="7.6" fill="#b06000">Anti-Steering: Protected Immune</text>
+  </g>
+
+  <!-- Arrow 3 -> 4 -->
+  <g stroke="#1a73e8" stroke-width="2">
+    <line x1="664" y1="112" x2="684" y2="112" />
+    <polygon points="688,112 680,107 680,117" fill="#1a73e8" stroke="none" />
+  </g>
+
+  <!-- Step 4: Physical Silicon & Conformance -->
+  <g transform="translate(690, 44)">
+    <rect x="0" y="0" width="174" height="136" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
+    <rect x="0" y="0" width="174" height="24" rx="5" fill="#e6f4ea" />
+    <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9.5" fill="#137333">4. Physical Silicon (Track B)</text>
+    <text x="10" y="38" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#202124">Zodiac FX 120 MHz (FW 0.86)</text>
+    <text x="10" y="50" font-family="GoogleSansText, sans-serif" font-size="8" fill="#5f6368">Atmel SAM4E8E Cortex-M4</text>
+    <text x="10" y="66" font-family="GoogleSansText, sans-serif" font-size="8.2" fill="#202124">Dual Mirror Switches &amp; Taps:</text>
+    <text x="10" y="78" font-family="RobotoMono, monospace" font-size="7.6" fill="#137333">&bull; O1 Pre-DUT · O2 · O3 Uplink</text>
+    <rect x="8" y="104" width="158" height="24" rx="3" fill="#e6f4ea" stroke="#137333" stroke-width="0.8" />
+    <text x="12" y="120" font-family="RobotoMono, monospace" font-weight="700" font-size="7.6" fill="#137333">611/611 Wire Checks Agree</text>
+  </g>
+
+  <!-- ==================== PROTOCOL B FEEDBACK LOOP ==================== -->
+  <path d="M 341 180 L 341 210 L 113 210 L 113 186" fill="none" stroke="#137333" stroke-width="2" stroke-dasharray="4 3" />
+  <polygon points="113,180 109,188 117,188" fill="#137333" />
+  <rect x="135" y="198" width="186" height="22" rx="3" fill="#e6f4ea" stroke="#137333" stroke-width="1" />
+  <text x="142" y="213" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#137333">Protocol B Feedback: 98.8%–100% (&le;5 turns)</text>
+</svg>
+"""
+
