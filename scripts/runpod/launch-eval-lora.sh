@@ -89,9 +89,13 @@ SSH=(ssh -p "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=3
 
 BUNDLE="/tmp/zodiac-eval-repo.$$.bundle"   # per-launcher path: parallel launchers must not share one file
 git bundle create "$BUNDLE" HEAD
-scp -P "$PORT" "$BUNDLE" "root@$IP:/workspace/in/repo.bundle"
+scp -P "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15 "$BUNDLE" "root@$IP:/workspace/in/repo.bundle"
 rm -f "$BUNDLE"
-scp -P "$PORT" -r "$ADAPTER_SRC" "root@$IP:/workspace/in/proposer-adapter"
+if [[ " $ARMS " =~ [[:space:]]L[34][[:space:]] ]]; then
+  scp -P "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15 -r "$ADAPTER_SRC" "root@$IP:/workspace/in/proposer-adapter"
+else
+  "${SSH[@]}" 'mkdir -p /workspace/in/proposer-adapter'
+fi
 git show HEAD:scripts/runpod/eval-lora-pod.sh | "${SSH[@]}" 'cat > /workspace/in/eval-lora-pod.sh && chmod +x /workspace/in/eval-lora-pod.sh'
 "${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' WAIT_FOR_GO='$WAIT_FOR_GO' PROTOCOL='$PROTOCOL' SEED_START='$SEED_START' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
 
