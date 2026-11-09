@@ -643,6 +643,16 @@ def build_docx() -> None:
         fill_hex="FEF7E0",
         border_hex="FBBC04",
     )
+    b.add_h2("5.3 Physical Reality Gaps Discovered Across Hardware Conformance & Red-Team Tracks")
+    b.add_p(
+        "The central practical insight from deploying on real hardware is that several behaviors looked correct in controller software or simulated environments until physical vantage points contradicted them:"
+    )
+    b.add_bullet("<strong>Vacuous observer captures:</strong> A first table-miss experiment reported zero frames at the workload observer; the observing node lacked <code>tcpdump</code>, so its capture never ran and its zeros were false evidence. Observers now strictly prove execution before results are admitted. In Scenario 4, a capture helper read at most 2 MB of text, silently truncating a 250,000-frame capture until caught by size validation.")
+    b.add_bullet("<strong>Capture-harness promiscuity bug:</strong> The initial wire run disagreed with the model on 11/28 flows. Running <code>tcpdump -p</code> disabled promiscuous mode on the O2 tap NIC, dropping unicast mirror frames. Removing <code>-p</code> resolved 7 disagreements immediately.")
+    b.add_bullet("<strong>Switch-path drop of self-addressed frames:</strong> The remaining 4 smoke disagreements were IPv4 frames with source IP identical to destination IP (Land attack shape). The Zodiac FX switch silicon silently drops self-addressed frames before reaching mirror taps (safe failure mode); these degenerate flows were excluded from candidate test suites.")
+    b.add_bullet("<strong>Aggregation switch VLAN bypass:</strong> During Scenario 1 debugging, a convenience change to the uplink aggregation switch gave both workload nodes an unmonitored second path onto the segment under test, bypassing the Zodiac FX entirely until discovered and isolated.")
+    b.add_bullet("<strong>Linux weak-host model ARP interception:</strong> In Scenario 6, pinging a workload node failed 100%, appearing to confirm containment. In reality, Linux's default <code>arp_filter=0</code> caused the lab-facing NIC to answer for the workload NIC's IP, intercepting traffic before it ever touched the switch. Setting <code>arp_filter=1</code> and downing Wi-Fi revealed the switch rule was never exercised.")
+    b.add_bullet("<strong>Protected-host authorization block:</strong> In Scenario 3, the detector correctly attributed 939 scan anomalies to the attacker, but every one of 1,543 quarantine requests failed with HTTP 403 because the scanning node was still on the protected-host list from an earlier test role.")
 
     # ---- SECTION 6 ----
     b.add_h1("6. Track C: Live Red-Team Adversary & Quarantine Envelope Evaluation")

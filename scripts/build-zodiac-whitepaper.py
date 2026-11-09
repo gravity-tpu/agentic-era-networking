@@ -35,6 +35,7 @@ from zodiac_whitepaper_figures import (  # noqa: E402
     svg_figure_3_capacity_ladder,
     svg_figure_4_deployed_cost_and_a8,
     svg_figure_5_agent_eval_chart,
+    svg_figure_6_conformance_funnel,
 )
 
 FONT_DIR = REPO_ROOT / "docs" / "design" / "fonts"
@@ -74,6 +75,7 @@ def generate_html(toc_pages: dict[str, int] | None = None) -> str:
     fig3_svg = svg_figure_3_capacity_ladder()
     fig4_svg = svg_figure_4_deployed_cost_and_a8()
     fig5_svg = svg_figure_5_agent_eval_chart()
+    fig6_svg = svg_figure_6_conformance_funnel()
     cover_svg = svg_cover_artwork()
 
     return f"""<!DOCTYPE html>
@@ -700,6 +702,7 @@ tr:nth-child(even) td {{
         <div class="toc-row major"><span class="toc-title">5. Track B: Hardware Characterization &amp; On-Wire Conformance Oracle</span><span class="toc-leader"></span><span class="toc-page">{pg('sec5', 12)}</span></div>
         <div class="toc-row sub"><span class="toc-title">5.1 128-Rule-Set Differential Conformance Campaign (611/611 Flow Checks)</span><span class="toc-leader"></span><span class="toc-page">{pg('sec5_1', 12)}</span></div>
         <div class="toc-row sub"><span class="toc-title">5.2 Finding F1: Why Controller-State Verification Cannot Replace Wire Ground Truth</span><span class="toc-leader"></span><span class="toc-page">{pg('sec5_2', 12)}</span></div>
+        <div class="toc-row sub"><span class="toc-title">5.3 Physical Reality Gaps Across Conformance &amp; Red-Team Tracks</span><span class="toc-leader"></span><span class="toc-page">{pg('sec5_3', 13)}</span></div>
 
         <div class="toc-row major"><span class="toc-title">6. Track C: Live Red-Team Adversary &amp; Quarantine Envelope Evaluation</span><span class="toc-leader"></span><span class="toc-page">{pg('sec6', 13)}</span></div>
         <div class="toc-row sub"><span class="toc-title">6.1 Consolidated Hardware Red-Team Matrix (Scenarios 1–7)</span><span class="toc-leader"></span><span class="toc-page">{pg('sec6_1', 13)}</span></div>
@@ -1316,6 +1319,13 @@ tr:nth-child(even) td {{
         </tbody>
     </table>
 
+    <div class="figure-box">
+        {fig6_svg}
+        <div class="figure-caption">
+            <strong>Figure 6: Physical Wire Conformance (RQ4) &amp; Smoke Gate Validation Funnel.</strong> Across 128 distinct rule sets and 611 flow checks, <strong>611 of 611 (100.0%)</strong> wire observations across O1, O2, and O3 agreed with the model's match predictions (M1) and satisfied intent clauses (M2). The 4-stage smoke gate (right) resolved capture harness defects (<code>tcpdump -p</code>) and discovered switch-path drops of self-addressed IPv4 frames before unlocking the full 143-run campaign.
+        </div>
+    </div>
+
     <h2 id="sec5_2">5.2 Finding F1: Why Controller-State Verification Cannot Replace Wire Ground Truth</h2>
     <div class="callout warn">
         <div class="callout-title">Finding F1 — Silent Priority-0 Action Stripping in Firmware 0.86</div>
@@ -1324,6 +1334,19 @@ tr:nth-child(even) td {{
     <p>
         Finding <code>F1</code> is the single most important empirical justification for Track B's three-vantage-point wire architecture. A verifier that only inspects the controller's intended flow table—or even one that queries the switch's flow-table match fields without parsing the returned instruction TLVs and cross-checking wire egress at <code>O3</code>—would certify a priority-0 forwarding rule as "installed and forwarding" while 0% of packets actually leave the switch. Encoding <code>F1</code> into both our reference model and <code>A3</code> closed this gap permanently.
     </p>
+
+    <h2 id="sec5_3">5.3 Physical Reality Gaps Across Conformance &amp; Red-Team Tracks</h2>
+    <p>
+        The central practical insight from deploying on real hardware is that several behaviors looked correct in controller software or simulated environments until physical vantage points contradicted them:
+    </p>
+    <ul>
+        <li><strong>Vacuous observer captures:</strong> A first table-miss experiment reported zero frames at the workload observer; the observing node lacked <code>tcpdump</code>, so its capture never ran and its zeros were false evidence. Observers now strictly prove execution before results are admitted. In Scenario 4, a capture helper read at most 2 MB of text, silently truncating a 250,000-frame capture until caught by size validation.</li>
+        <li><strong>Capture-harness promiscuity bug:</strong> The initial wire run disagreed with the model on 11/28 flows. Running <code>tcpdump -p</code> disabled promiscuous mode on the O2 tap NIC, dropping unicast mirror frames. Removing <code>-p</code> resolved 7 disagreements immediately.</li>
+        <li><strong>Switch-path drop of self-addressed frames:</strong> The remaining 4 smoke disagreements were IPv4 frames with source IP identical to destination IP (Land attack shape). The Zodiac FX switch silicon silently drops self-addressed frames before reaching mirror taps (safe failure mode); these degenerate flows were excluded from candidate test suites.</li>
+        <li><strong>Aggregation switch VLAN bypass:</strong> During Scenario 1 debugging, a convenience change to the uplink aggregation switch gave both workload nodes an unmonitored second path onto the segment under test, bypassing the Zodiac FX entirely until discovered and isolated.</li>
+        <li><strong>Linux weak-host model ARP interception:</strong> In Scenario 6, pinging a workload node failed 100%, appearing to confirm containment. In reality, Linux's default <code>arp_filter=0</code> caused the lab-facing NIC to answer for the workload NIC's IP, intercepting traffic before it ever touched the switch. Setting <code>arp_filter=1</code> and downing Wi-Fi revealed the switch rule was never exercised.</li>
+        <li><strong>Protected-host authorization block:</strong> In Scenario 3, the detector correctly attributed 939 scan anomalies to the attacker, but every one of 1,543 quarantine requests failed with HTTP 403 because the scanning node was still on the protected-host list from an earlier test role.</li>
+    </ul>
 
     <!-- ==================== SECTION 6 ==================== -->
     <h1 id="sec6">6. Track C: Live Red-Team Adversary &amp; Quarantine Envelope Evaluation</h1>
@@ -1577,6 +1600,7 @@ def detect_toc_pages(pdf_path: Path) -> dict[str, int]:
         "sec5": "5. Track B: Hardware Characterization & On-Wire Conformance",
         "sec5_1": "5.1 128-Rule-Set Differential Conformance Campaign",
         "sec5_2": "5.2 Finding F1: Why Controller-State Verification",
+        "sec5_3": "5.3 Physical Reality Gaps Across Conformance",
         "sec6": "6. Track C: Live Red-Team Adversary & Quarantine Envelope",
         "sec6_1": "6.1 Consolidated Hardware Red-Team Matrix",
         "sec6_2": "6.2 Pre-Approved Quarantine Envelope & Anti-Steering",

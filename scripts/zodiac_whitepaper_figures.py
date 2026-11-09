@@ -559,6 +559,143 @@ def svg_figure_5_agent_eval_chart() -> str:
 """
 
 
+def svg_figure_6_conformance_funnel() -> str:
+    """
+    Figure 6: On-Wire Conformance Run Breakdown (RQ4) & Pre-Campaign Smoke Gate Validation Funnel.
+    Visualizes the 128-rule-set matrix (611/611 flow checks) and the 4-stage smoke gate that caught
+    the tcpdump -p non-promiscuous bug and discovered Finding F1 (switch-path drop of self-addressed IPv4 frames).
+    """
+    return """
+<svg viewBox="0 0 880 320" width="100%" xmlns="http://www.w3.org/2000/svg" style="background:#ffffff;border:1px solid #dadce0;border-radius:4pt;display:block;">
+  <!-- Header -->
+  <rect x="0" y="0" width="880" height="30" fill="#f8f9fa" />
+  <line x1="0" y1="30" x2="880" y2="30" stroke="#dadce0" stroke-width="1" />
+  <text x="16" y="20" font-family="GoogleSans, sans-serif" font-weight="700" font-size="11" fill="#202124">PHYSICAL WIRE CONFORMANCE (RQ4) — 128-RULE-SET EXECUTION MATRIX &amp; SMOKE GATE VALIDATION FUNNEL</text>
+  <text x="864" y="20" text-anchor="end" font-family="RobotoMono, monospace" font-size="9" fill="#137333">611 / 611 (100.0%) Agreed</text>
+
+  <!-- LEFT PANEL: 128-Rule-Set Execution Matrix -->
+  <g transform="translate(18, 44)">
+    <rect x="0" y="0" width="456" height="260" rx="5" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.2" />
+    <rect x="0" y="0" width="456" height="26" rx="5" fill="#e8f0fe" />
+    <text x="14" y="17" font-family="GoogleSans, sans-serif" font-weight="700" font-size="10" fill="#1967d2">PART A: 128-RULE-SET WIRE CONFORMANCE EXECUTION MATRIX</text>
+    <text x="442" y="17" text-anchor="end" font-family="RobotoMono, monospace" font-size="8.5" fill="#137333">143 Set-Runs · 611 Checks</text>
+
+    <!-- Table Header -->
+    <rect x="10" y="34" width="436" height="20" fill="#ffffff" stroke="#dadce0" stroke-width="0.8" />
+    <text x="16" y="48" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#3c4043">Rule-Set Category</text>
+    <text x="180" y="48" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#3c4043">Sets</text>
+    <text x="218" y="48" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#3c4043">Runs</text>
+    <text x="256" y="48" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#3c4043">Flows</text>
+    <text x="312" y="48" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#3c4043">Model Match (M1)</text>
+    <text x="408" y="48" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.5" fill="#3c4043">Intent (M2)</text>
+
+    <!-- Row 1: Model-Admissible -->
+    <rect x="10" y="56" width="436" height="32" fill="#ffffff" stroke="#e8eaed" stroke-width="0.8" />
+    <text x="16" y="71" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.8" fill="#202124">Model-Admissible</text>
+    <text x="16" y="83" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#5f6368">5 arms across 8 intents</text>
+    <text x="180" y="76" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">56</text>
+    <text x="218" y="76" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">56</text>
+    <text x="256" y="76" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">224</text>
+    <text x="312" y="76" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">224 / 224 (100%)</text>
+    <text x="408" y="76" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">100.0%</text>
+
+    <!-- Row 2: Surviving Mutants -->
+    <rect x="10" y="90" width="436" height="32" fill="#ffffff" stroke="#e8eaed" stroke-width="0.8" />
+    <text x="16" y="105" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.8" fill="#202124">Surviving Mutants</text>
+    <text x="16" y="117" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#5f6368">Distinct from reference</text>
+    <text x="180" y="110" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">36</text>
+    <text x="218" y="110" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">36</text>
+    <text x="256" y="110" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">149</text>
+    <text x="312" y="110" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">149 / 149 (100%)</text>
+    <text x="408" y="110" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">100.0%</text>
+
+    <!-- Row 3: Reference Baselines -->
+    <rect x="10" y="124" width="436" height="32" fill="#ffffff" stroke="#e8eaed" stroke-width="0.8" />
+    <text x="16" y="139" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.8" fill="#202124">Reference Baselines</text>
+    <text x="16" y="151" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#5f6368">8 canonical references</text>
+    <text x="180" y="144" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">8</text>
+    <text x="218" y="144" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">23</text>
+    <text x="256" y="144" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">126</text>
+    <text x="312" y="144" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">126 / 126 (100%)</text>
+    <text x="408" y="144" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">100.0%</text>
+
+    <!-- Row 4: Equivalence Controls -->
+    <rect x="10" y="158" width="436" height="32" fill="#ffffff" stroke="#e8eaed" stroke-width="0.8" />
+    <text x="16" y="173" font-family="GoogleSans, sans-serif" font-weight="700" font-size="8.8" fill="#202124">Equivalence Controls</text>
+    <text x="16" y="185" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#5f6368">Model + Mutant controls</text>
+    <text x="180" y="178" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">28</text>
+    <text x="218" y="178" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">28</text>
+    <text x="256" y="178" font-family="RobotoMono, monospace" font-size="8.5" fill="#202124">112</text>
+    <text x="312" y="178" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">112 / 112 (100%)</text>
+    <text x="408" y="178" font-family="RobotoMono, monospace" font-weight="700" font-size="8.5" fill="#137333">100.0%</text>
+
+    <!-- Total Row -->
+    <rect x="10" y="192" width="436" height="26" fill="#e6f4ea" stroke="#ceead6" stroke-width="1" />
+    <text x="16" y="209" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9" fill="#137333">TOTAL CAMPAIGN</text>
+    <text x="180" y="209" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#137333">128</text>
+    <text x="218" y="209" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#137333">143</text>
+    <text x="256" y="209" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#137333">611</text>
+    <text x="312" y="209" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#137333">611 / 611 (99.4%–100%)</text>
+    <text x="408" y="209" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#137333">100.0%</text>
+
+    <text x="14" y="235" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#5f6368">9 wire sessions: coverage-refs, smoke-refs, and 7 intent campaigns (51–120 flows each).</text>
+    <text x="14" y="248" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#5f6368">Each set ran via guarded endpoint with isolation policy restored &amp; read back after each.</text>
+  </g>
+
+  <!-- RIGHT PANEL: Pre-Campaign Smoke Gate Validation Funnel -->
+  <g transform="translate(488, 44)">
+    <rect x="0" y="0" width="374" height="260" rx="5" fill="#ffffff" stroke="#dadce0" stroke-width="1.2" />
+    <rect x="0" y="0" width="374" height="26" rx="5" fill="#fef7e0" />
+    <text x="14" y="17" font-family="GoogleSans, sans-serif" font-weight="700" font-size="10" fill="#b06000">PART B: SMOKE GATE VALIDATION FUNNEL &amp; DISCOVERIES</text>
+
+    <!-- Stage 1 -->
+    <g transform="translate(14, 34)">
+      <rect x="0" y="0" width="346" height="44" rx="4" fill="#fce8e6" stroke="#ea4335" stroke-width="1.2" />
+      <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9" fill="#c5221f">1. first-smoke (28 flows) &rarr; 11 / 28 Disagreements</text>
+      <text x="10" y="28" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#3c4043">Root Cause 1: tcpdump -p on O2 tap NIC disabled promiscuous mode.</text>
+      <text x="10" y="39" font-family="RobotoMono, monospace" font-weight="700" font-size="7.5" fill="#c5221f">Fix: Removed -p flag; verified promiscuous tap capture (-7 errors resolved).</text>
+    </g>
+
+    <!-- Arrow 1 -> 2 -->
+    <line x1="187" y1="78" x2="187" y2="88" stroke="#5f6368" stroke-width="1.5" />
+    <polygon points="187,90 184,84 190,84" fill="#5f6368" />
+
+    <!-- Stage 2 -->
+    <g transform="translate(14, 90)">
+      <rect x="0" y="0" width="346" height="44" rx="4" fill="#fef7e0" stroke="#fbbc04" stroke-width="1.2" />
+      <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9" fill="#b06000">2. smoke-fixed-capture (28 fl) &rarr; 4 / 28 Disagreements</text>
+      <text x="10" y="28" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#3c4043">Root Cause 2: All 4 remaining disagreements were identical flow type:</text>
+      <text x="10" y="39" font-family="RobotoMono, monospace" font-weight="700" font-size="7.5" fill="#b06000">IPv4 frame with src === dst (self-addressed / Land attack shape).</text>
+    </g>
+
+    <!-- Arrow 2 -> 3 -->
+    <line x1="187" y1="134" x2="187" y2="144" stroke="#5f6368" stroke-width="1.5" />
+    <polygon points="187,146 184,140 190,140" fill="#5f6368" />
+
+    <!-- Stage 3: Diagnostic -->
+    <g transform="translate(14, 146)">
+      <rect x="0" y="0" width="346" height="44" rx="4" fill="#f8f9fa" stroke="#1a73e8" stroke-width="1.2" />
+      <text x="10" y="15" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9" fill="#1967d2">3. diagnostic-self-addressed &rarr; Finding F1 Discovered</text>
+      <text x="10" y="27" font-family="GoogleSansText, sans-serif" font-size="7.8" fill="#3c4043">3 self-addressed frames: dropped by switch path (safe failure mode).</text>
+      <text x="10" y="38" font-family="RobotoMono, monospace" font-size="7.5" fill="#1967d2">2 normal frames: forwarded. Excluded degenerate self-addressed flows.</text>
+    </g>
+
+    <!-- Arrow 3 -> 4 -->
+    <line x1="187" y1="190" x2="187" y2="200" stroke="#5f6368" stroke-width="1.5" />
+    <polygon points="187,202 184,196 190,196" fill="#5f6368" />
+
+    <!-- Stage 4: Gate Passed -->
+    <g transform="translate(14, 202)">
+      <rect x="0" y="0" width="346" height="48" rx="4" fill="#e6f4ea" stroke="#137333" stroke-width="1.4" />
+      <text x="10" y="16" font-family="GoogleSans, sans-serif" font-weight="700" font-size="9.5" fill="#137333">4. smoke-final (28 flows) &rarr; 0 / 28 Disagreements (PASSED)</text>
+      <text x="10" y="30" font-family="GoogleSansText, sans-serif" font-size="8" fill="#202124">Smoke gate fully satisfied; authorized unattended 143-run campaign.</text>
+      <text x="10" y="42" font-family="RobotoMono, monospace" font-weight="700" font-size="8" fill="#137333">&rarr; Unlocked 611/611 (100.0%) physical conformance milestone.</text>
+    </g>
+  </g>
+</svg>
+"""
+
+
 def svg_cover_artwork() -> str:
     """
     Cover Artwork: Replaces abstract prism with a crisp, self-explanatory

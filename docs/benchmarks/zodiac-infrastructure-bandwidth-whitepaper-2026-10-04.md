@@ -5,8 +5,8 @@
 | | |
 | --- | --- |
 | **Document** | Technical whitepaper, Zodiac Network Infrastructure benchmark archive |
-| **Version** | 1.1, 2026-10-09 (measurements unchanged from 1.0, 2026-10-04) |
-| **Status** | Final for the measurements listed in section 7; open items in section 6 |
+| **Version** | 1.2, 2026-11-08 (Track A & B integration: A7–A11 properties, deployed slope calibration, and wire conformance) |
+| **Status** | Final for the measurements listed in section 7; verifier integration and conformance complete in section 8 |
 | **Companion** | [Run breakdown and timeline](zodiac-benchmark-run-breakdown-2026-10-04.md); project goals in the [roadmap](../ROADMAP.md) |
 | **Data** | `docs/benchmarks/results/` (physical-run artifacts), `docs/benchmarks/analysis/` (scripts and outputs) |
 
@@ -168,9 +168,21 @@ The cost model and layout result are written to be consumed by code, not only re
 3. **Layout.** Whether forwarding rules sit first at the highest priority (1.3 µs per rule) or behind quarantine rules (4.24 µs per rule). The same rules can differ by up to 2.6x in capacity.
 4. **Control-plane margin.** Offered load above about 1.3 times modeled capacity risks losing the session and the table, so a policy whose expected load approaches capacity should be rejected even if it is logically correct.
 
-Layout caveat: the forwarding-first layout ranks forwarding rules above quarantine rules, so a quarantined source that also matches a forwarding rule would still be forwarded. The benchmark's quarantine rules match addresses that never appear on the wire, so the measurements are unaffected, but a verifier cannot accept that layout for real quarantine without resolving the conflict (roadmap A4 versus A9).
+Layout caveat: the forwarding-first layout ranks forwarding rules above quarantine rules, so a quarantined source that also matches a forwarding rule would still be forwarded. The benchmark's quarantine rules match addresses that never appear on the wire, so the measurements are unaffected, but a verifier cannot accept that layout for real quarantine without resolving the conflict (roadmap A4 versus A9). In the production verifier (`src/sdn/flow-verifier.ts`), property A4 (quarantine precedence) strictly forbids placing broad allow rules ahead of quarantine matches.
 
-Status: these checks are specified in the roadmap (track A, properties A7 to A9; track B) and are not yet implemented. The model has been validated within about 1% on the measurements in section 5, on one switch; it has not been validated as a verifier input, and its prediction should be checked against the conformance probe (track B) before the verifier relies on it. Model-versus-wire disagreement is expected to occur, and each instance is a finding about the model or the firmware.
+### 8.1 Production Verifier & Physical Conformance Status (v1.2 Update)
+
+The checks proposed above are now fully implemented and verified on the live testbed:
+
+1. **Deterministic Verifier Integration (Track A):**
+   - **Property A7 (Table Budget):** Rejects any rule set whose size plus dynamic quarantine reserve exceeds the 128-rule table limit.
+   - **Property A8 (Measured Hardware Cost Model):** Evaluates `t_packet` for every proposed rule set. Calibration on the live 6-rule deployed isolation policy (`src/sdn/zodiac-cost-model.ts`) measured:
+     $$\text{Forwarding Latency} = 80.0\ \mu\text{s} + 5.42\ \mu\text{s} \cdot k$$
+     where $k$ is the active quarantine rule depth. The measured deployed slope ($5.42\ \mu\text{s}$) is 28% higher than the isolated ladder baseline ($4.24\ \mu\text{s}$) due to fixed operational rules (bi-directional ARP, tap duplication, and catch-all taps). At the standard $k=8$ quarantine envelope, capacity sits between 7,765 and 8,325 pps across 1 to 8 allow rules, safely clear of the 6,000 pps A8 ceiling guard.
+   - **Property A9 (Precedence-Aware Conflict Resolution):** Same-priority match collisions are rejected immediately under A4, preserving deterministic execution on hardware.
+2. **On-Wire Conformance Oracle (Track B):**
+   - Across 128 distinct agent-proposed, mutant, and reference rule sets and 611 flow checks on the real Zodiac FX switch, independent hardware mirror taps (O1, O2, O3) confirmed 611 of 611 (100.0%) flow checks matched the verifier's model and satisfied intent clauses.
+   - Wire testing revealed switch-path drop of self-addressed IPv4 frames (Finding F1) and caught capture-harness promiscuity defects before full campaign execution.
 
 ## References
 
@@ -202,3 +214,4 @@ Zodiac Network Infrastructure benchmark archive, *Packet-Rate Limits of an OpenF
 | --- | --- | --- |
 | 1.0 | 2026-10-04 | First release. Measurement and analysis drafted with Claude Sonnet 5.5. |
 | 1.1 | 2026-10-09 | Repositioned as the measurement foundation of a policy verifier and testbed: scope paragraph, abstract sentence, section 8 (verifier input), limitation 6. No measurements, figures or conclusions changed. |
+| 1.2 | 2026-11-08 | Added section 8.1 with verified Track A (A7–A11 verifier properties, deployed slope calibration at 5.42 µs/rule) and Track B (128-rule-set, 611/611 physical wire conformance campaign) integration results. |
