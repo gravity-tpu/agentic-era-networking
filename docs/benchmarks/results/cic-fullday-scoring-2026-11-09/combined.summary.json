@@ -1,0 +1,145 @@
+{
+  "adaptive": {
+    "false_positive_rate": {
+      "interval95": [
+        0.010421750164588841,
+        0.010484519127326229
+      ],
+      "k": 421705,
+      "n": 40342624,
+      "value": 0.01045308802917728
+    },
+    "precision": 0.0934759850297406,
+    "precision_interval95": [
+      0.09264280979072573,
+      0.09431587448495249
+    ],
+    "recall": 0.010070948726725811,
+    "recall_interval95": [
+      0.00997720256125481,
+      0.010165566690144559
+    ]
+  },
+  "attack": {
+    "adaptive_true_positives": 43484,
+    "static_true_positives": 1476622,
+    "windows": 4317766
+  },
+  "benign": {
+    "adaptive_false_positives": 421705,
+    "static_false_positives": 5101738,
+    "windows": 40342624
+  },
+  "days": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday"
+  ],
+  "labels": {
+    "BENIGN": {
+      "adaptive_alerts": 421705,
+      "static_alerts": 5101738,
+      "windows": 40342624
+    },
+    "Bot": {
+      "adaptive_alerts": 39,
+      "static_alerts": 427,
+      "windows": 4996
+    },
+    "DDoS": {
+      "adaptive_alerts": 22711,
+      "static_alerts": 642555,
+      "windows": 1273650
+    },
+    "DoS GoldenEye": {
+      "adaptive_alerts": 492,
+      "static_alerts": 10007,
+      "windows": 106533
+    },
+    "DoS Hulk": {
+      "adaptive_alerts": 10271,
+      "static_alerts": 709471,
+      "windows": 2289360
+    },
+    "DoS Slowhttptest": {
+      "adaptive_alerts": 219,
+      "static_alerts": 5712,
+      "windows": 31223
+    },
+    "DoS slowloris": {
+      "adaptive_alerts": 1222,
+      "static_alerts": 14232,
+      "windows": 22690
+    },
+    "FTP-Patator": {
+      "adaptive_alerts": 2024,
+      "static_alerts": 25692,
+      "windows": 54585
+    },
+    "Heartbleed": {
+      "adaptive_alerts": 31,
+      "static_alerts": 342,
+      "windows": 46117
+    },
+    "Infiltration": {
+      "adaptive_alerts": 934,
+      "static_alerts": 2509,
+      "windows": 45481
+    },
+    "PortScan": {
+      "adaptive_alerts": 4741,
+      "static_alerts": 60699,
+      "windows": 323661
+    },
+    "SSH-Patator": {
+      "adaptive_alerts": 645,
+      "static_alerts": 4366,
+      "windows": 117162
+    },
+    "Web Attack \u0096 Brute Force": {
+      "adaptive_alerts": 69,
+      "static_alerts": 322,
+      "windows": 1726
+    },
+    "Web Attack \u0096 XSS": {
+      "adaptive_alerts": 86,
+      "static_alerts": 288,
+      "windows": 582
+    }
+  },
+  "limits": "windows overlap and are strongly dependent, so the intervals (which assume independence) are optimistic; precision depends on the benign-to-attack mix of the days scored; unlabelled windows are excluded from every rate",
+  "schema": "cic-score-windows/v1",
+  "settings": {
+    "adaptive": {
+      "alpha": 0.05,
+      "sigma": 2.5,
+      "tau": 0.15
+    },
+    "static_tau": 0.15
+  },
+  "static": {
+    "false_positive_rate": {
+      "interval95": [
+        0.126357714334394,
+        0.1265628411054404
+      ],
+      "k": 5101738,
+      "n": 40342624,
+      "value": 0.1264602421498413
+    },
+    "precision": 0.22446658437665315,
+    "precision_interval95": [
+      0.2241479049231897,
+      0.2247855856393673
+    ],
+    "recall": 0.3419875000173701,
+    "recall_interval95": [
+      0.3415401864578957,
+      0.34243509475015493
+    ]
+  },
+  "unlabelled_windows": 11709997,
+  "windows_total": 56370387
+}

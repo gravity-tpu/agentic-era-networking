@@ -1,0 +1,20 @@
+[1/3] measuring capture window (full streaming pass, container-read only): /workspace/work/data/pcaps/Wednesday-workingHours.pcap
+      first=1499254962.084372 last=1499285419.780725 span=8.46h packets=13788878 in 132.0s (104438 pps)
+[2/3] loading flow labels
+      /workspace/work/labels/TrafficLabelling /Wednesday-workingHours.pcap_ISCX.csv: {'rows': 692703, 'parsed_ok': 692703, 'ambiguous_both': 0, 'neither_fits': 0, 'parse_error': 0, 'missing_columns': 0}
+      692703 flows loaded into index (of 692703 rows)
+[3/3] streaming frames through the sentinel feature/kernel math
+
+=== coverage and throughput ===
+packets processed: 13788878 in 1909.6s -> 7221 pps (extraction + feature math + label lookup)
+frame categories: ip_tcp=12943316 ip_udp=761853 ip_other=386 non_ip=83323
+label join: 13704848/13705555 IPv4 packets (100.0%) matched a labelled flow within slack; 707 did not (no flow in the CSV covered that 5-tuple + time, or it fell outside the slack window)
+13788815 windows emitted; majority-label distribution: {'BENIGN': 11292892, 'DoS slowloris': 22690, 'DoS Slowhttptest': 31223, 'DoS Hulk': 2289360, 'DoS GoldenEye': 106533, 'Heartbleed': 46117}
+estimated full-file pass at this run's extraction rate: 31.8 min for all 13788878 packets (13.4 GB)
+
+=== attack-window spot check (first up to 5 non-benign-majority windows) ===
+  label=DoS slowloris majority_src_ip=172.16.0.1 matched=64/64 window_end_epoch=1499258926.226179 loss=0.1498
+  label=DoS slowloris majority_src_ip=172.16.0.1 matched=64/64 window_end_epoch=1499258926.226333 loss=0.1519
+  label=DoS slowloris majority_src_ip=172.16.0.1 matched=64/64 window_end_epoch=1499258926.226356 loss=0.1511
+  label=DoS slowloris majority_src_ip=172.16.0.1 matched=64/64 window_end_epoch=1499258926.226427 loss=0.1513
+  label=DoS slowloris majority_src_ip=172.16.0.1 matched=64/64 window_end_epoch=1499258926.226444 loss=0.1525

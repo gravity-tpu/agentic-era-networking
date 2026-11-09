@@ -1,0 +1,87 @@
+{
+  "adaptive": {
+    "false_positive_rate": {
+      "interval95": [
+        0.010700283550676315,
+        0.01082017054281266
+      ],
+      "k": 122451,
+      "n": 11380139,
+      "value": 0.01076006189379585
+    },
+    "precision": 0.021331521739130433,
+    "precision_interval95": [
+      0.02054548465651804,
+      0.022146951346821552
+    ],
+    "recall": 0.015540300558379476,
+    "recall_interval95": [
+      0.014966063936573779,
+      0.016136209276391953
+    ]
+  },
+  "attack": {
+    "adaptive_true_positives": 2669,
+    "static_true_positives": 30058,
+    "windows": 171747
+  },
+  "benign": {
+    "adaptive_false_positives": 122451,
+    "static_false_positives": 1429367,
+    "windows": 11380139
+  },
+  "day": "Tuesday",
+  "days": [
+    "Tuesday"
+  ],
+  "labels": {
+    "BENIGN": {
+      "adaptive_alerts": 122451,
+      "static_alerts": 1429367,
+      "windows": 11380139
+    },
+    "FTP-Patator": {
+      "adaptive_alerts": 2024,
+      "static_alerts": 25692,
+      "windows": 54585
+    },
+    "SSH-Patator": {
+      "adaptive_alerts": 645,
+      "static_alerts": 4366,
+      "windows": 117162
+    }
+  },
+  "limits": "windows overlap and are strongly dependent, so the intervals (which assume independence) are optimistic; precision depends on the benign-to-attack mix of the days scored; unlabelled windows are excluded from every rate",
+  "schema": "cic-score-windows/v1",
+  "settings": {
+    "adaptive": {
+      "alpha": 0.05,
+      "sigma": 2.5,
+      "tau": 0.15
+    },
+    "static_tau": 0.15
+  },
+  "static": {
+    "false_positive_rate": {
+      "interval95": [
+        0.12540947307412215,
+        0.12579456552106244
+      ],
+      "k": 1429367,
+      "n": 11380139,
+      "value": 0.12560189291185284
+    },
+    "precision": 0.020595782585607344,
+    "precision_interval95": [
+      0.02036661331711502,
+      0.02082747568971141
+    ],
+    "recall": 0.17501324622846395,
+    "recall_interval95": [
+      0.17322342816459874,
+      0.1768176024349276
+    ]
+  },
+  "unlabelled_windows": 5,
+  "windows_total": 11551891
+}

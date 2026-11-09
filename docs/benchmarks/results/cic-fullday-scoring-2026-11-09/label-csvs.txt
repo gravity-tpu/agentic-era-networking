@@ -1,0 +1,8 @@
+/workspace/work/labels/TrafficLabelling /Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Friday-WorkingHours-Morning.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Monday-WorkingHours.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Tuesday-WorkingHours.pcap_ISCX.csv
+/workspace/work/labels/TrafficLabelling /Wednesday-workingHours.pcap_ISCX.csv

@@ -1,0 +1,102 @@
+{
+  "adaptive": {
+    "false_positive_rate": {
+      "interval95": [
+        0.008216268074244188,
+        0.008321902844858073
+      ],
+      "k": 93380,
+      "n": 11292892,
+      "value": 0.008268918183225341
+    },
+    "precision": 0.1158452871277754,
+    "precision_interval95": [
+      0.1139290696830198,
+      0.11778944975205793
+    ],
+    "recall": 0.004901994172095854,
+    "recall_interval95": [
+      0.0048161046655147725,
+      0.004989407736567967
+    ]
+  },
+  "attack": {
+    "adaptive_true_positives": 12235,
+    "static_true_positives": 739764,
+    "windows": 2495923
+  },
+  "benign": {
+    "adaptive_false_positives": 93380,
+    "static_false_positives": 1132526,
+    "windows": 11292892
+  },
+  "day": "Wednesday",
+  "days": [
+    "Wednesday"
+  ],
+  "labels": {
+    "BENIGN": {
+      "adaptive_alerts": 93380,
+      "static_alerts": 1132526,
+      "windows": 11292892
+    },
+    "DoS GoldenEye": {
+      "adaptive_alerts": 492,
+      "static_alerts": 10007,
+      "windows": 106533
+    },
+    "DoS Hulk": {
+      "adaptive_alerts": 10271,
+      "static_alerts": 709471,
+      "windows": 2289360
+    },
+    "DoS Slowhttptest": {
+      "adaptive_alerts": 219,
+      "static_alerts": 5712,
+      "windows": 31223
+    },
+    "DoS slowloris": {
+      "adaptive_alerts": 1222,
+      "static_alerts": 14232,
+      "windows": 22690
+    },
+    "Heartbleed": {
+      "adaptive_alerts": 31,
+      "static_alerts": 342,
+      "windows": 46117
+    }
+  },
+  "limits": "windows overlap and are strongly dependent, so the intervals (which assume independence) are optimistic; precision depends on the benign-to-attack mix of the days scored; unlabelled windows are excluded from every rate",
+  "schema": "cic-score-windows/v1",
+  "settings": {
+    "adaptive": {
+      "alpha": 0.05,
+      "sigma": 2.5,
+      "tau": 0.15
+    },
+    "static_tau": 0.15
+  },
+  "static": {
+    "false_positive_rate": {
+      "interval95": [
+        0.10011156155640197,
+        0.10046195593378349
+      ],
+      "k": 1132526,
+      "n": 11292892,
+      "value": 0.10028662277120864
+    },
+    "precision": 0.39511186835372725,
+    "precision_interval95": [
+      0.3944118117338782,
+      0.3958123553955939
+    ],
+    "recall": 0.29638895110145624,
+    "recall_interval95": [
+      0.29582271540423266,
+      0.29695581357362566
+    ]
+  },
+  "unlabelled_windows": 0,
+  "windows_total": 13788815
+}
