@@ -5,6 +5,7 @@ Every diagram and chart is emitted as an inline <svg> element using embedded
 GoogleSans / GoogleSansText / RobotoMono vector fonts — zero PNG rasterization,
 ensuring infinite-zoom crispness in Chromium's PDF output.
 """
+import math
 
 
 def svg_figure_1_physical_topology() -> str:
@@ -698,140 +699,297 @@ def svg_figure_6_conformance_funnel() -> str:
 
 def svg_cover_artwork() -> str:
     """
-    Cover Artwork: Clean, minimalist 3D isometric cube/prism vector graphic
-    matching Google Research / DeepMind whitepaper styling.
-    Scalable pure SVG, zero Type 3 bitmap fonts, subtle isometric grid, facet shading,
-    and Google-hued vertex nodes.
+    Cover Artwork: 3D isometric representation of the Zodiac physical testbed stack
+    (Uplink Switch GS105Ev2 #2, Workload Switch GS105Ev2 #1, Zodiac FX OpenFlow 1.3 DUT)
+    and adjacent SDN Controller (NVIDIA Jetson Orin Nano Super).
+    Features RJ45 port cutouts, active link LEDs, dedicated OpenFlow 1.3 control cable,
+    VLAN 1 ingress, filtered egress, and mirror tap conduits.
+    Pure scalable SVG, zero Type 3 bitmap fonts.
     """
-    return """
-<svg viewBox="0 0 380 380" width="280pt" height="280pt" xmlns="http://www.w3.org/2000/svg" style="position:absolute;right:48pt;top:205pt;z-index:5;">
-  <defs>
-    <!-- Top Face Gradient (Policy Synthesis Plane) -->
-    <linearGradient id="topFaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="40%" stop-color="#e8f0fe" />
-      <stop offset="100%" stop-color="#c3dcfe" />
+    cos30 = math.cos(math.radians(30))  # ~0.8660
+    sin30 = math.sin(math.radians(30))  # 0.5
+
+    def pt(cx, cy, x, y, z):
+        px = cx + (x - y) * cos30
+        py = cy - (x + y) * sin30 - z
+        return round(px, 1), round(py, 1)
+
+    def poly_pts(pts):
+        return " ".join(f"{p[0]},{p[1]}" for p in pts)
+
+    sw_w = 120  # front face length
+    sw_d = 72   # side face depth
+    sw_h = 22   # chassis height
+    gap = 9     # gap between stacked switches (rubber feet)
+
+    st_cx = 145
+    st_cy = 280
+
+    ctrl_cx = 288
+    ctrl_cy = 245
+    ctrl_w = 68
+    ctrl_d = 62
+    ctrl_h = 24
+
+    svg = []
+    svg.append('<svg viewBox="0 0 380 340" width="280pt" height="250pt" xmlns="http://www.w3.org/2000/svg" style="position:absolute;right:48pt;top:205pt;z-index:5;">')
+    
+    # Gradients & Filters
+    svg.append("""  <defs>
+    <!-- Metallic Netgear Slate-Blue Shading -->
+    <linearGradient id="ngTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b4252" />
+      <stop offset="50%" stop-color="#2e3440" />
+      <stop offset="100%" stop-color="#252a34" />
     </linearGradient>
-    <linearGradient id="leftFaceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#4285f4" />
-      <stop offset="100%" stop-color="#1a73e8" />
+    <linearGradient id="ngFront" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e222a" />
+      <stop offset="100%" stop-color="#282c37" />
     </linearGradient>
-    <linearGradient id="rightFaceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1a73e8" />
-      <stop offset="100%" stop-color="#155724" />
-    </linearGradient>
-
-    <!-- Mid Layer (Verifier Plane) -->
-    <linearGradient id="midTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#e8f0fe" />
-      <stop offset="100%" stop-color="#aecbfa" />
-    </linearGradient>
-    <linearGradient id="midLeftGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1a73e8" />
-      <stop offset="100%" stop-color="#185abc" />
-    </linearGradient>
-    <linearGradient id="midRightGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#185abc" />
-      <stop offset="100%" stop-color="#174ea6" />
+    <linearGradient id="ngSide" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#16181f" />
+      <stop offset="100%" stop-color="#0f1015" />
     </linearGradient>
 
-    <!-- Base Layer (Physical Silicon Plane) -->
-    <linearGradient id="baseTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#8ab4f8" />
-      <stop offset="100%" stop-color="#4285f4" />
+    <!-- Zodiac FX Matte Charcoal Shading -->
+    <linearGradient id="zfxTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d3748" />
+      <stop offset="50%" stop-color="#1a202c" />
+      <stop offset="100%" stop-color="#171923" />
     </linearGradient>
-    <linearGradient id="baseLeftGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#185abc" />
-      <stop offset="100%" stop-color="#174ea6" />
+    <linearGradient id="zfxFront" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#12141a" />
+      <stop offset="100%" stop-color="#1a202c" />
     </linearGradient>
-    <linearGradient id="baseRightGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#174ea6" />
-      <stop offset="100%" stop-color="#0d47a1" />
+    <linearGradient id="zfxSide" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d0e12" />
+      <stop offset="100%" stop-color="#050608" />
     </linearGradient>
-  </defs>
 
-  <!-- Ambient Ground Shadow -->
-  <ellipse cx="190" cy="316" rx="135" ry="40" fill="#000000" fill-opacity="0.04" />
-  <ellipse cx="190" cy="314" rx="90" ry="26" fill="#1a73e8" fill-opacity="0.08" />
+    <!-- Jetson Orin Industrial Shading -->
+    <linearGradient id="jetTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a5568" />
+      <stop offset="100%" stop-color="#2d3748" />
+    </linearGradient>
+    <linearGradient id="jetFront" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1a202c" />
+      <stop offset="100%" stop-color="#2d3748" />
+    </linearGradient>
+    <linearGradient id="jetSide" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#111318" />
+      <stop offset="100%" stop-color="#0a0b0e" />
+    </linearGradient>
+  </defs>""")
 
-  <!-- Isometric Ground Plane Grid -->
-  <g stroke="#dadce0" stroke-width="0.8" stroke-dasharray="2 3">
-    <line x1="190" y1="314" x2="310" y2="245" />
-    <line x1="190" y1="314" x2="70" y2="245" />
-    <line x1="130" y1="279" x2="250" y2="210" />
-    <line x1="250" y1="279" x2="130" y2="210" />
-    <line x1="190" y1="314" x2="190" y2="350" stroke-dasharray="none" stroke="#bdc1c6" />
-  </g>
+    # Ambient Bench Shadow
+    svg.append(f'  <ellipse cx="205" cy="298" rx="160" ry="32" fill="#000000" fill-opacity="0.05" />')
+    svg.append(f'  <ellipse cx="145" cy="280" rx="95" ry="22" fill="#000000" fill-opacity="0.08" />')
+    svg.append(f'  <ellipse cx="288" cy="245" rx="52" ry="16" fill="#000000" fill-opacity="0.07" />')
 
-  <!-- Vertical Axis Core (Dashed Center Ray) -->
-  <line x1="190" y1="75" x2="190" y2="314" stroke="#1a73e8" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.6" />
+    # Bench Isometric Grid Lines
+    svg.append('  <!-- Bench Grid -->')
+    svg.append('  <g stroke="#dadce0" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.6">')
+    for y_off in range(-20, 100, 30):
+        p1 = pt(st_cx, st_cy, -40, y_off, 0)
+        p2 = pt(st_cx, st_cy, 220, y_off, 0)
+        svg.append(f'    <line x1="{p1[0]}" y1="{p1[1]}" x2="{p2[0]}" y2="{p2[1]}" />')
+    for x_off in range(-20, 220, 40):
+        p1 = pt(st_cx, st_cy, x_off, -20, 0)
+        p2 = pt(st_cx, st_cy, x_off, 100, 0)
+        svg.append(f'    <line x1="{p1[0]}" y1="{p1[1]}" x2="{p2[0]}" y2="{p2[1]}" />')
+    svg.append('  </g>')
 
-  <!-- ==================== TIER 1: PHYSICAL SILICON LAYER (BOTTOM) ==================== -->
-  <g id="layer-silicon">
-    <!-- Left Face -->
-    <polygon points="112,245 190,290 190,314 112,269" fill="url(#baseLeftGrad)" stroke="#ffffff" stroke-width="1" />
-    <!-- Right Face -->
-    <polygon points="190,290 268,245 268,269 190,314" fill="url(#baseRightGrad)" stroke="#ffffff" stroke-width="1" />
-    <!-- Top Face -->
-    <polygon points="190,200 268,245 190,290 112,245" fill="url(#baseTopGrad)" stroke="#ffffff" stroke-width="1.2" />
-  </g>
+    def draw_chassis(cx, cy, w, d, h, z_base, top_grad, front_grad, side_grad, border_col="#4b5563"):
+        res = []
+        b_c = pt(cx, cy, 0, 0, z_base)
+        b_r = pt(cx, cy, w, 0, z_base)
+        b_b = pt(cx, cy, w, d, z_base)
+        b_l = pt(cx, cy, 0, d, z_base)
+        t_c = pt(cx, cy, 0, 0, z_base + h)
+        t_r = pt(cx, cy, w, 0, z_base + h)
+        t_b = pt(cx, cy, w, d, z_base + h)
+        t_l = pt(cx, cy, 0, d, z_base + h)
 
-  <!-- ==================== TIER 2: DETERMINISTIC VERIFIER LAYER (MIDDLE) ==================== -->
-  <g id="layer-verifier">
-    <!-- Left Face -->
-    <polygon points="112,192 190,237 190,261 112,216" fill="url(#midLeftGrad)" stroke="#ffffff" stroke-width="1" />
-    <!-- Right Face -->
-    <polygon points="190,237 268,192 268,216 190,261" fill="url(#midRightGrad)" stroke="#ffffff" stroke-width="1" />
-    <!-- Top Face with Etched Matrix Lines -->
-    <polygon points="190,147 268,192 190,237 112,192" fill="url(#midTopGrad)" stroke="#ffffff" stroke-width="1.2" />
-    <line x1="151" y1="170" x2="229" y2="215" stroke="#ffffff" stroke-width="0.8" opacity="0.7" />
-    <line x1="229" y1="170" x2="151" y2="215" stroke="#ffffff" stroke-width="0.8" opacity="0.7" />
-  </g>
+        side_pts = poly_pts([b_c, b_l, t_l, t_c])
+        res.append(f'    <polygon points="{side_pts}" fill="url({side_grad})" stroke="{border_col}" stroke-width="0.6" />')
 
-  <!-- ==================== TIER 3: POLICY SYNTHESIS & CLOSED-LOOP (TOP) ==================== -->
-  <g id="layer-policy">
-    <!-- Left Face -->
-    <polygon points="112,139 190,184 190,208 112,163" fill="url(#leftFaceGrad)" stroke="#ffffff" stroke-width="1" />
-    <!-- Right Face -->
-    <polygon points="190,184 268,139 268,163 190,208" fill="url(#rightFaceGrad)" stroke="#ffffff" stroke-width="1" />
-    <!-- Top Face with Gradient -->
-    <polygon points="190,94 268,139 190,184 112,139" fill="url(#topFaceGrad)" stroke="#ffffff" stroke-width="1.4" />
-  </g>
+        front_pts = poly_pts([b_c, b_r, t_r, t_c])
+        res.append(f'    <polygon points="{front_pts}" fill="url({front_grad})" stroke="{border_col}" stroke-width="0.6" />')
 
-  <!-- Floating Isometric Satellite Node 1 (Control / Uplink) -->
-  <g transform="translate(295, 102)">
-    <line x1="-27" y1="37" x2="0" y2="12" stroke="#4285f4" stroke-width="0.9" stroke-dasharray="2 2" />
-    <polygon points="12,0 24,7 12,14 0,7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8" />
-    <polygon points="0,7 12,14 12,24 0,17" fill="#1a73e8" stroke="#ffffff" stroke-width="0.6" />
-    <polygon points="12,14 24,7 24,17 12,24" fill="#174ea6" stroke="#ffffff" stroke-width="0.6" />
-  </g>
+        top_pts = poly_pts([t_c, t_r, t_b, t_l])
+        res.append(f'    <polygon points="{top_pts}" fill="url({top_grad})" stroke="{border_col}" stroke-width="0.8" />')
 
-  <!-- Floating Isometric Satellite Node 2 (Observer / Mirror Tap) -->
-  <g transform="translate(62, 230)">
-    <line x1="50" y1="15" x2="20" y2="12" stroke="#34a853" stroke-width="0.9" stroke-dasharray="2 2" />
-    <polygon points="10,0 20,6 10,12 0,6" fill="#ceead6" stroke="#1e8e3e" stroke-width="0.8" />
-    <polygon points="0,6 10,12 10,20 0,14" fill="#1e8e3e" stroke="#ffffff" stroke-width="0.6" />
-    <polygon points="10,12 20,6 20,14 10,20" fill="#137333" stroke="#ffffff" stroke-width="0.6" />
-  </g>
+        return "\n".join(res)
 
-  <!-- Glowing Google-Colored Vertex Nodes on Top Face -->
-  <!-- Top: Google Blue -->
-  <circle cx="190" cy="94" r="5" fill="#4285f4" fill-opacity="0.3" />
-  <circle cx="190" cy="94" r="2.8" fill="#1a73e8" stroke="#ffffff" stroke-width="1" />
+    def draw_feet(cx, cy, w, d, z_base, foot_h):
+        res = []
+        coords = [(12, 10), (w - 18, 10), (12, d - 15), (w - 18, d - 15)]
+        for fx, fy in coords:
+            p_top = pt(cx, cy, fx, fy, z_base + foot_h)
+            res.append(f'    <rect x="{p_top[0]-3}" y="{p_top[1]}" width="6" height="{foot_h}" rx="1" fill="#111827" />')
+        return "\n".join(res)
 
-  <!-- Right: Google Green -->
-  <circle cx="268" cy="139" r="5" fill="#34a853" fill-opacity="0.3" />
-  <circle cx="268" cy="139" r="2.8" fill="#1e8e3e" stroke="#ffffff" stroke-width="1" />
+    # 1. CONTROLLER: Jetson Orin Nano Super
+    svg.append('  <!-- ==================== SDN CONTROLLER (JETSON ORIN NANO SUPER) ==================== -->')
+    svg.append('  <g id="sdn-controller">')
+    svg.append(draw_chassis(ctrl_cx, ctrl_cy, ctrl_w, ctrl_d, ctrl_h, 0, "#jetTop", "#jetFront", "#jetSide", "#374151"))
 
-  <!-- Bottom: Google Amber -->
-  <circle cx="190" cy="184" r="5" fill="#fbbc04" fill-opacity="0.3" />
-  <circle cx="190" cy="184" r="2.8" fill="#f9ab00" stroke="#ffffff" stroke-width="1" />
+    for fin_i in range(5):
+        fin_y = 10 + fin_i * 10
+        p_l = pt(ctrl_cx, ctrl_cy, 8, fin_y, ctrl_h)
+        p_r = pt(ctrl_cx, ctrl_cy, ctrl_w - 8, fin_y, ctrl_h)
+        p_lt = pt(ctrl_cx, ctrl_cy, 8, fin_y, ctrl_h + 5)
+        p_rt = pt(ctrl_cx, ctrl_cy, ctrl_w - 8, fin_y, ctrl_h + 5)
+        fin_poly = poly_pts([p_l, p_r, p_rt, p_lt])
+        svg.append(f'    <polygon points="{fin_poly}" fill="#1f2937" stroke="#4b5563" stroke-width="0.5" />')
 
-  <!-- Left: Google Red -->
-  <circle cx="112" cy="139" r="5" fill="#ea4335" fill-opacity="0.3" />
-  <circle cx="112" cy="139" r="2.8" fill="#d93025" stroke="#ffffff" stroke-width="1" />
-</svg>
-"""
+    led_p = pt(ctrl_cx, ctrl_cy, 12, 0, ctrl_h - 6)
+    svg.append(f'    <circle cx="{led_p[0]}" cy="{led_p[1]}" r="1.8" fill="#34a853" />')
+    svg.append(f'    <circle cx="{led_p[0]}" cy="{led_p[1]}" r="3.6" fill="#34a853" fill-opacity="0.3" />')
+
+    c_top_p = pt(ctrl_cx, ctrl_cy, 25, 30, ctrl_h + 6)
+    svg.append(f'    <rect x="{c_top_p[0]-48}" y="{c_top_p[1]-20}" width="96" height="18" rx="3" fill="#ffffff" stroke="#202124" stroke-width="0.8" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))" />')
+    svg.append(f'    <text x="{c_top_p[0]}" y="{c_top_p[1]-11}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.8" fill="#1a73e8" text-anchor="middle">SDN CONTROLLER</text>')
+    svg.append(f'    <text x="{c_top_p[0]}" y="{c_top_p[1]-3}" font-family="RobotoMono, monospace" font-size="5.4" fill="#5f6368" text-anchor="middle">Jetson Orin Nano · Verifier</text>')
+
+    cp_port = pt(ctrl_cx, ctrl_cy, 22, 0, 6)
+    svg.append(f'    <rect x="{cp_port[0]-4}" y="{cp_port[1]-4}" width="8" height="7" rx="1" fill="#111827" stroke="#fbbc04" stroke-width="0.8" />')
+    tap2_port = pt(ctrl_cx, ctrl_cy, 38, 0, 6)
+    svg.append(f'    <rect x="{tap2_port[0]-3}" y="{tap2_port[1]-4}" width="7" height="6" rx="1" fill="#111827" stroke="#4285f4" stroke-width="0.6" />')
+    tap3_port = pt(ctrl_cx, ctrl_cy, 50, 0, 6)
+    svg.append(f'    <rect x="{tap3_port[0]-3}" y="{tap3_port[1]-4}" width="7" height="6" rx="1" fill="#111827" stroke="#4285f4" stroke-width="0.6" />')
+    svg.append('  </g>')
+
+    # 2. PHYSICAL SWITCH STACK (3 TIERS)
+    # TIER 1: Zodiac FX (DUT) at Base (z=0)
+    svg.append('  <!-- ==================== TIER 1: ZODIAC FX OPENFLOW 1.3 DUT ==================== -->')
+    svg.append('  <g id="switch-zodiac-fx">')
+    svg.append(draw_chassis(st_cx, st_cy, sw_w, sw_d, sw_h, 0, "#zfxTop", "#zfxFront", "#zfxSide", "#374151"))
+
+    z_bez = pt(st_cx, st_cy, 6, 0, sw_h - 6)
+    svg.append(f'    <text x="{z_bez[0]}" y="{z_bez[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6" fill="#fbbc04">ZODIAC FX</text>')
+
+    z_ports = []
+    for i, p_num in enumerate([1, 2, 3, 4]):
+        px_pos = 18 + i * 25
+        p_pt = pt(st_cx, st_cy, px_pos, 0, 5)
+        led_pt = pt(st_cx, st_cy, px_pos, 0, 15)
+        z_ports.append(p_pt)
+        svg.append(f'    <rect x="{p_pt[0]-4}" y="{p_pt[1]-4}" width="8.5" height="7.5" rx="1" fill="#000000" stroke="#9ca3af" stroke-width="0.7" />')
+        led_color = "#34a853" if p_num in [1, 2] else ("#4285f4" if p_num == 3 else "#fbbc04")
+        svg.append(f'    <circle cx="{led_pt[0]}" cy="{led_pt[1]}" r="1.3" fill="{led_color}" />')
+        p_lbl = pt(st_cx, st_cy, px_pos - 1, 0, 1)
+        svg.append(f'    <text x="{p_lbl[0]}" y="{p_lbl[1]+6}" font-family="RobotoMono, monospace" font-size="4.8" fill="#9ca3af" text-anchor="middle">P{p_num}</text>')
+
+    z_tag_p = pt(st_cx, st_cy, -8, 40, 6)
+    svg.append(f'    <rect x="{z_tag_p[0]-115}" y="{z_tag_p[1]-9}" width="115" height="18" rx="3" fill="#ffffff" stroke="#fbbc04" stroke-width="0.8" />')
+    svg.append(f'    <text x="{z_tag_p[0]-6}" y="{z_tag_p[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.5" fill="#202124" text-anchor="end">TIER 1: ZODIAC FX DUT</text>')
+    svg.append(f'    <text x="{z_tag_p[0]-6}" y="{z_tag_p[1]+7}" font-family="RobotoMono, monospace" font-size="5.2" fill="#b06000" text-anchor="end">OpenFlow 1.3 · 128-rule Table</text>')
+    svg.append(f'    <line x1="{z_tag_p[0]}" y1="{z_tag_p[1]}" x2="{z_tag_p[0]+12}" y2="{z_tag_p[1]}" stroke="#fbbc04" stroke-width="0.8" />')
+    svg.append('  </g>')
+
+    svg.append(draw_feet(st_cx, st_cy, sw_w, sw_d, sw_h, gap))
+
+    # TIER 2: NETGEAR GS105Ev2 #1 (Workload Switch) - Middle (z=31)
+    z2 = sw_h + gap
+    svg.append('  <!-- ==================== TIER 2: NETGEAR GS105Ev2 #1 (WORKLOAD) ==================== -->')
+    svg.append('  <g id="switch-netgear-workload">')
+    svg.append(draw_chassis(st_cx, st_cy, sw_w, sw_d, sw_h, z2, "#ngTop", "#ngFront", "#ngSide", "#4b5563"))
+
+    w_bez = pt(st_cx, st_cy, 6, 0, z2 + sw_h - 6)
+    svg.append(f'    <text x="{w_bez[0]}" y="{w_bez[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6" fill="#8ab4f8">NETGEAR</text>')
+
+    w_ports = []
+    for i in range(5):
+        p_num = i + 1
+        px_pos = 14 + i * 21
+        p_pt = pt(st_cx, st_cy, px_pos, 0, z2 + 5)
+        led_pt = pt(st_cx, st_cy, px_pos, 0, z2 + 15)
+        w_ports.append(p_pt)
+        svg.append(f'    <rect x="{p_pt[0]-4}" y="{p_pt[1]-4}" width="7.5" height="7" rx="0.8" fill="#0b0f19" stroke="#cbd5e1" stroke-width="0.6" />')
+        led_color = "#34a853" if p_num in [1, 3, 4, 5] else "#fbbc04"
+        svg.append(f'    <circle cx="{led_pt[0]}" cy="{led_pt[1]}" r="1.3" fill="{led_color}" />')
+
+    w_tag_p = pt(st_cx, st_cy, -8, 40, z2 + 6)
+    svg.append(f'    <rect x="{w_tag_p[0]-115}" y="{w_tag_p[1]-9}" width="115" height="18" rx="3" fill="#ffffff" stroke="#1a73e8" stroke-width="0.8" />')
+    svg.append(f'    <text x="{w_tag_p[0]-6}" y="{w_tag_p[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.5" fill="#202124" text-anchor="end">TIER 2: WORKLOAD SWITCH</text>')
+    svg.append(f'    <text x="{w_tag_p[0]-6}" y="{w_tag_p[1]+7}" font-family="RobotoMono, monospace" font-size="5.2" fill="#1967d2" text-anchor="end">GS105Ev2 #1 · Untrusted VLAN 1</text>')
+    svg.append(f'    <line x1="{w_tag_p[0]}" y1="{w_tag_p[1]}" x2="{w_tag_p[0]+12}" y2="{w_tag_p[1]}" stroke="#1a73e8" stroke-width="0.8" />')
+    svg.append('  </g>')
+
+    z3 = z2 + sw_h + gap
+    svg.append(draw_feet(st_cx, st_cy, sw_w, sw_d, z2 + sw_h, gap))
+
+    # TIER 3: NETGEAR GS105Ev2 #2 (Uplink Switch) - Top (z=62)
+    svg.append('  <!-- ==================== TIER 3: NETGEAR GS105Ev2 #2 (UPLINK) ==================== -->')
+    svg.append('  <g id="switch-netgear-uplink">')
+    svg.append(draw_chassis(st_cx, st_cy, sw_w, sw_d, sw_h, z3, "#ngTop", "#ngFront", "#ngSide", "#4b5563"))
+
+    u_bez = pt(st_cx, st_cy, 6, 0, z3 + sw_h - 6)
+    svg.append(f'    <text x="{u_bez[0]}" y="{u_bez[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6" fill="#81c995">NETGEAR</text>')
+
+    u_ports = []
+    for i in range(5):
+        p_num = i + 1
+        px_pos = 14 + i * 21
+        p_pt = pt(st_cx, st_cy, px_pos, 0, z3 + 5)
+        led_pt = pt(st_cx, st_cy, px_pos, 0, z3 + 15)
+        u_ports.append(p_pt)
+        svg.append(f'    <rect x="{p_pt[0]-4}" y="{p_pt[1]-4}" width="7.5" height="7" rx="0.8" fill="#0b0f19" stroke="#cbd5e1" stroke-width="0.6" />')
+        led_color = "#34a853" if p_num in [1, 4] else "#fbbc04"
+        svg.append(f'    <circle cx="{led_pt[0]}" cy="{led_pt[1]}" r="1.3" fill="{led_color}" />')
+
+    u_tag_p = pt(st_cx, st_cy, -8, 40, z3 + 6)
+    svg.append(f'    <rect x="{u_tag_p[0]-115}" y="{u_tag_p[1]-9}" width="115" height="18" rx="3" fill="#ffffff" stroke="#137333" stroke-width="0.8" />')
+    svg.append(f'    <text x="{u_tag_p[0]-6}" y="{u_tag_p[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.5" fill="#202124" text-anchor="end">TIER 3: UPLINK SWITCH</text>')
+    svg.append(f'    <text x="{u_tag_p[0]-6}" y="{u_tag_p[1]+7}" font-family="RobotoMono, monospace" font-size="5.2" fill="#137333" text-anchor="end">GS105Ev2 #2 · Protected Transit</text>')
+    svg.append(f'    <line x1="{u_tag_p[0]}" y1="{u_tag_p[1]}" x2="{u_tag_p[0]+12}" y2="{u_tag_p[1]}" stroke="#137333" stroke-width="0.8" />')
+    svg.append('  </g>')
+
+    # 3. INTERCONNECTING PATCH CABLES
+    svg.append('  <!-- ==================== PHYSICAL PATCH CABLES & SDN FLOWS ==================== -->')
+    c1_start = (cp_port[0], cp_port[1])
+    c1_end = (z_ports[3][0], z_ports[3][1])
+    c1_ctrl1 = (c1_start[0] - 25, c1_start[1] + 26)
+    c1_ctrl2 = (c1_end[0] + 30, c1_end[1] + 24)
+    svg.append(f'    <path d="M {c1_start[0]} {c1_start[1]+7} C {c1_ctrl1[0]} {c1_ctrl1[1]+7}, {c1_ctrl2[0]} {c1_ctrl2[1]+7}, {c1_end[0]} {c1_end[1]+7}" fill="none" stroke="#000000" stroke-width="3" stroke-opacity="0.10" />')
+    svg.append(f'    <path d="M {c1_start[0]} {c1_start[1]} C {c1_ctrl1[0]} {c1_ctrl1[1]}, {c1_ctrl2[0]} {c1_ctrl2[1]}, {c1_end[0]} {c1_end[1]}" fill="none" stroke="#f9ab00" stroke-width="2.6" stroke-linecap="round" />')
+    svg.append(f'    <path d="M {c1_start[0]} {c1_start[1]} C {c1_ctrl1[0]} {c1_ctrl1[1]}, {c1_ctrl2[0]} {c1_ctrl2[1]}, {c1_end[0]} {c1_end[1]}" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="3 5" opacity="0.8" />')
+
+    c2_start = (w_ports[4][0], w_ports[4][1])
+    c2_end = (z_ports[0][0], z_ports[0][1])
+    c2_ctrl1 = (c2_start[0] + 20, c2_start[1] + 14)
+    c2_ctrl2 = (c2_end[0] - 18, c2_end[1] - 8)
+    svg.append(f'    <path d="M {c2_start[0]} {c2_start[1]} C {c2_ctrl1[0]} {c2_ctrl1[1]}, {c2_ctrl2[0]} {c2_ctrl2[1]}, {c2_end[0]} {c2_end[1]}" fill="none" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" />')
+
+    c3_start = (z_ports[1][0], z_ports[1][1])
+    c3_end = (u_ports[3][0], u_ports[3][1])
+    c3_ctrl1 = (c3_start[0] + 16, c3_start[1] - 14)
+    c3_ctrl2 = (c3_end[0] + 22, c3_end[1] + 16)
+    svg.append(f'    <path d="M {c3_start[0]} {c3_start[1]} C {c3_ctrl1[0]} {c3_ctrl1[1]}, {c3_ctrl2[0]} {c3_ctrl2[1]}, {c3_end[0]} {c3_end[1]}" fill="none" stroke="#137333" stroke-width="2.4" stroke-linecap="round" />')
+
+    c4_start = (z_ports[2][0], z_ports[2][1])
+    c4_end = (tap2_port[0], tap2_port[1])
+    c4_ctrl1 = (c4_start[0] + 18, c4_start[1] + 15)
+    c4_ctrl2 = (c4_end[0] - 14, c4_end[1] + 16)
+    svg.append(f'    <path d="M {c4_start[0]} {c4_start[1]} C {c4_ctrl1[0]} {c4_ctrl1[1]}, {c4_ctrl2[0]} {c4_ctrl2[1]}, {c4_end[0]} {c4_end[1]}" fill="none" stroke="#4285f4" stroke-width="1.5" stroke-dasharray="2 2" stroke-linecap="round" />')
+
+    mid_c1 = (c1_start[0] - 38, c1_start[1] + 30)
+    svg.append(f'    <rect x="{mid_c1[0]-46}" y="{mid_c1[1]-8}" width="92" height="15" rx="3" fill="#ffffff" stroke="#fbbc04" stroke-width="0.8" />')
+    svg.append(f'    <text x="{mid_c1[0]}" y="{mid_c1[1]+3}" font-family="RobotoMono, monospace" font-size="6.2" font-weight="700" fill="#b06000" text-anchor="middle">OF 1.3 Control (:6633)</text>')
+
+    svg.append(f'    <rect x="{c2_start[0]+12}" y="{c2_start[1]+2}" width="78" height="13" rx="2" fill="#ffffff" stroke="#1a73e8" stroke-width="0.8" />')
+    svg.append(f'    <text x="{c2_start[0]+51}" y="{c2_start[1]+11}" font-family="RobotoMono, monospace" font-size="5.8" fill="#1967d2" text-anchor="middle">Data Ingress (VLAN 1)</text>')
+
+    svg.append(f'    <rect x="{c3_end[0]+12}" y="{c3_end[1]+2}" width="72" height="13" rx="2" fill="#ffffff" stroke="#137333" stroke-width="0.8" />')
+    svg.append(f'    <text x="{c3_end[0]+48}" y="{c3_end[1]+11}" font-family="RobotoMono, monospace" font-size="5.8" fill="#137333" text-anchor="middle">Filtered Egress</text>')
+
+    svg.append('    <rect x="70" y="318" width="240" height="18" rx="9" fill="#f8f9fa" stroke="#dadce0" stroke-width="1" />')
+    svg.append('    <text x="190" y="330" font-family="GoogleSans, sans-serif" font-weight="600" font-size="7.5" fill="#3c4043" text-anchor="middle">PHYSICAL 3-TIER TESTBED STACK &amp; SDN CONTROL PLANE</text>')
+
+    svg.append('</svg>')
+    return "\n".join(svg)
+
 
 
 def svg_closed_loop_architecture() -> str:

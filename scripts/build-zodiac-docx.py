@@ -363,7 +363,7 @@ def build_docx() -> None:
     fig5_png = crop_pdf_figure(pdf_doc, 12, fitz.Rect(54, 354, 558, 727), dpi=400)
     fig6_png = crop_pdf_figure(pdf_doc, 14, fitz.Rect(54, 232, 558, 391), dpi=400)
     fig7_png = crop_pdf_figure(pdf_doc, 18, fitz.Rect(54, 469, 558, 653), dpi=400)
-    cover_png = crop_pdf_figure(pdf_doc, 0, fitz.Rect(320, 255, 528, 475), dpi=350)
+    cover_png = crop_pdf_figure(pdf_doc, 0, fitz.Rect(280, 200, 568, 460), dpi=350)
 
     photo_stack_bytes = (FIG_DIR / "bench-jetson-switch-stack.jpg").read_bytes()
     photo_wiring_bytes = (FIG_DIR / "bench-port-wiring-workloads.jpg").read_bytes()
