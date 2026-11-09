@@ -106,4 +106,4 @@ Anything about traffic on this rack: CIC-IDS2017 is a 2017 lab capture with its 
 
 ### 8.7 Dry run record
 
-To be filled in from the launcher's dry run before the pod starts.
+`scripts/runpod/launch-cic-score.sh --minutes 240 --gpu "NVIDIA GeForce RTX 3090"`, without `--yes`, on 2026-11-09, nothing created: `plan: score on NVIDIA GeForce RTX 3090 (community on-demand) 240 min @ $0.2200/hr -> worst case $0.8800 (cap $5.0000)`. A 180-minute plan on the same card was 0.66 USD, and on an A40 (0.35 USD per hour) 1.05 USD. The pod time limit is 240 minutes. The 240 minutes is an estimate, not a measurement: the adapter processed about 11,700 packets per second on the Mac, about 13.8 million packets in the largest day, plus a window-scan pass and the download of about 52 GB; pod CPUs may be slower.
