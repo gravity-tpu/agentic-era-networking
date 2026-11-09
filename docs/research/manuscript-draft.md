@@ -18,12 +18,12 @@ Two bodies of work address parts of this. Verifiers such as Header Space Analysi
 
 The gap matters most on cheap hardware. A rule set that passes an abstract verifier can still exceed the table, push a microcontroller into software lookup latency it cannot sustain, or drop the controller session and with it the configuration. On such a device a mistake in an agent's proposal becomes a physical failure rather than a logged warning.
 
-We make four contributions, each bounded by the limits in Section 8:
+We make four contributions, each bounded by the limits in Section 7:
 
 1. **A verifier that takes measured hardware cost as an input.** Table budget and capacity are checked properties, alongside isolation, shadowing, conflicts, quarantine precedence and exact intent compliance (Section 3).
 2. **A hardware characterization of the device, including a pre-registered prediction that failed.** The deployed-table cost per quarantine rule came out 28% above the fitted model's value (Section 4).
 3. **An evaluation of model-proposed policy against that verifier, with on-wire conformance.** We pre-registered the protocol, report per-intent results for five arms, and checked 128 rule sets on the real switch against independent captures (Section 5).
-4. **A record of where model, host and environment disagreed with the wire.** Several results looked correct until a physical observation contradicted them (Section 6). We argue this is the practical value of putting the loop on hardware.
+4. **A record of where model, host and environment disagreed with the wire.** Several results looked correct until a physical observation contradicted them (Section 5.3.2). We argue this is the practical value of putting the loop on hardware.
 
 The system is deliberately not autonomous. Agents propose, deterministic code decides admissibility, and a person approves each install. One narrow exception, detector-driven quarantine inside a pre-approved envelope, is described in Section 3.4.
 
@@ -141,7 +141,7 @@ PART B: PHYSICAL SWITCH STACK WIRING, 802.1Q VLAN ISOLATION, AND PASSIVE CAPTURE
 
 **Figure 1. Zodiac Testbed Architecture.** Part A shows the closed-loop verification pipeline with verifier feedback (Protocol B) and human governance. Part B shows the physical 3-switch vertical stack, port wiring, 802.1Q VLAN isolation, and the three passive capture points (O1 pre-DUT, O2 policy-derived tap, O3 independent post-DUT egress).
 
-The device under test is a Northbound Networks Zodiac FX: SAM4E8E microcontroller (120 MHz), KSZ8795 port fabric, four 100BASE-TX ports, 128-rule table, OpenFlow 1.3, firmware 0.86. Port 1 faces an untrusted workload segment (`10.0.2.0/24`) through an aggregation switch, port 2 faces the uplink, port 3 is a mirror tap, and port 4 carries OpenFlow to a Jetson Orin Nano controller. Three capture points give ground truth: O1 mirrors the workload link before the device, O2 is the policy-derived copy on port 3 (a product of the rules under test, so not ground truth), and O3 mirrors the port 2 link and records what actually left. Traffic comes from Raspberry Pi hosts on the workload segment. Mirror destination ports on both aggregation switches were found to accept ingress and are isolated in their own VLANs (Section 6).
+The device under test is a Northbound Networks Zodiac FX: SAM4E8E microcontroller (120 MHz), KSZ8795 port fabric, four 100BASE-TX ports, 128-rule table, OpenFlow 1.3, firmware 0.86. Port 1 faces an untrusted workload segment (`10.0.2.0/24`) through an aggregation switch, port 2 faces the uplink, port 3 is a mirror tap, and port 4 carries OpenFlow to a Jetson Orin Nano controller. Three capture points give ground truth: O1 mirrors the workload link before the device, O2 is the policy-derived copy on port 3 (a product of the rules under test, so not ground truth), and O3 mirrors the port 2 link and records what actually left. Traffic comes from Raspberry Pi hosts on the workload segment. Mirror destination ports on both aggregation switches were found to accept ingress and are isolated in their own VLANs (Section 5.3.2).
 
 ### 3.2 Policy and properties
 
@@ -262,7 +262,7 @@ We pre-registered the protocol before any result [evaluation-plan]. **RQ1** asks
 
 ### 5.2 Model-proposed policy against the verifier (RQ1 to RQ3)
 
-Arms: a local 26B model (`gemma4:26b`) and a local 27B model (`qwen3.8:27b`), both at Q4_K_M with reasoning on; a hosted model (`claude-haiku-5-5`, lowest effort); and the 27B model with a 15-step and an 80/90-step LoRA adapter trained on verifier-generated data. Settings differ across arms (Section 8).
+Arms: a local 26B model (`gemma4:26b`) and a local 27B model (`qwen3.8:27b`), both at Q4_K_M with reasoning on; a hosted model (`claude-haiku-5-5`, lowest effort); and the 27B model with a 15-step and an 80/90-step LoRA adapter trained on verifier-generated data. Settings differ across arms (Section 7).
 
 **Table 3. Zero-shot admissibility (Protocol A), abstract evaluation, one run per cell.**
 
@@ -294,6 +294,8 @@ Rows with different prompt versions or intent texts are not comparable. The pre-
 **Cost.** Hosted Haiku cost about 0.0008 USD per admissible set and about 35 minutes of wall time for the valid v2 runs, against about 13 hours for the local 27B model on a laptop. Local arms cost hours of laptop time and no API fee. These are descriptive; hardware, serving stack and concurrency differ.
 
 ### 5.3 Accepted policy on the wire (RQ4)
+
+#### 5.3.1 Conformance campaign (128 rule sets, 611 flow checks)
 
 A bundle of 132 rule sets over the eight intents was fixed before any wire data by seed and the SHA-256 of its index: per intent, the reference, the surviving mutants that a chosen flow can tell from the reference, up to eight model-proposed sets drawn round-robin over the models, and four equivalence controls. 128 ran (one intent had no separating flows). Each set went through a guarded experiment endpoint, with the isolation policy restored and read back after each, and a runner that stops on any unverified restore. The owner approved the bundle by hash and the sessions ran unattended under written permission.
 
@@ -364,26 +366,9 @@ PART C: PRE-CAMPAIGN SMOKE GATE VALIDATION FUNNEL & FINDING F1
 
 **What this shows and does not.** Agreement on a finite flow set is evidence against a disagreement on those flows, not a proof for the rule set. The flows were chosen, not all traffic. The uplink side was exercised only for the references with forged frames from an isolated segment, and frames from the tap not at all. The equivalence controls (four per intent) are by construction indistinguishable from the reference by the chosen flows, so agreement there tests only the model's equivalence claim. Earlier, a first conformance run (58 rule sets, 290 flow checks, five flows) was also all-agreeing, but 29 of 38 surviving mutants were indistinguishable from their reference by those flows, and we regard its agreement as weak.
 
-### 5.4 A live adversary (Track C)
+#### 5.3.2 Physical reality gaps: Where model, host and environment disagreed with the wire
 
-Scenarios ran from an untrusted workload node bound to its workload interface by a preflight that refuses to send if another interface could reach the lab network, since a bypass path would defeat the experiment.
-
-**Table 4. Adversarial results.**
-
-| Scenario | Result |
-| :--- | :--- |
-| 1. ARP spoofing across ports 1 and 2 | The first run defeated the policy: 3 of 3 spoofed frames crossed to the uplink. This became property A10. After deploying exact-address ARP rules, 0 of 7 crossed. |
-| 3. Fast and low-rate port scan | A fast scan (0.8 s) was detected by the GPU sentinel at 0.85 s on run 1, missed on one re-test try, and detected on the next. A rate rule missed both scans. For the low-rate scan the live process reported no hits while an offline replay of the same documented math flagged 37 of 141 windows; unresolved. |
-| 4. Flood to session loss | At 25,000 pps (2× deployed capacity, 572 B, 10 s) 2 of 5 valid trials dropped the OpenFlow session; both recovered unaided within the polling resolution (at most 4 s and 6 s). 0 leaks in any of 13 valid trials. The fallback restart path never fired on hardware. |
-| 5. Evasion and tag handling | 18 workload-side frame classes (non-IPv4, IPv6, fragments, options, runts, near-MTU) produced 0 breaches. The switch matches IPv4 allow rules through an 802.1Q tag, which the model does not track. A quarantine DROP also matches single-tagged frames: 0 of 40 left port 2 (VID 100 and 200). |
-| 6. Uplink-side address aliasing | The 2026-10-09 observation did not reproduce. A host-level ARP misconfiguration on a workload node (see Section 6) had been intercepting the traffic before the switch. The switch's own rule was never exercised. |
-| 7. Mirror-port injection | A frame sent from the capture NIC reached the traffic side on both aggregation switches. Mitigated by VLAN isolation and re-tested for untagged, single-tagged and double-tagged frames; kept as a regression test. |
-
-Scenario 2 (spoofing inside the workload segment) was reclassified out of scope because that traffic stays on the aggregation switch and never reaches the device.
-
-## 6. Where the Model, the Host and the Environment Disagreed With the Wire
-
-We consider these the most transferable results.
+We consider these the most transferable results of putting the policy loop on physical hardware. Several results looked correct until a physical observation contradicted them:
 
 **A check that proved nothing.** A first table-miss experiment reported zero frames at the workload observer. The observing node had no `tcpdump`, so its capture never ran and its zeros were evidence of nothing. Observers must now prove they ran. The same class of error returned in Scenario 4: a capture helper read at most 2 MB of text, silently truncating a 250,000-frame capture; the validity check caught the mismatch and failed the run closed.
 
@@ -397,7 +382,24 @@ We consider these the most transferable results.
 
 **Model against switch.** The IPv4-through-802.1Q matching and the self-addressed-frame drop are the two cases where the wire disagreed with the verifier's model on the traffic classes we sent. Both are on the safe side for isolation in the cases tested, but the first shows the model's blind spot (VLAN) is real.
 
-## 7. Discussion
+### 5.4 A live adversary (Track C)
+
+Scenarios ran from an untrusted workload node bound to its workload interface by a preflight that refuses to send if another interface could reach the lab network, since a bypass path would defeat the experiment.
+
+**Table 4. Adversarial results.**
+
+| Scenario | Result |
+| :--- | :--- |
+| 1. ARP spoofing across ports 1 and 2 | The first run defeated the policy: 3 of 3 spoofed frames crossed to the uplink. This became property A10. After deploying exact-address ARP rules, 0 of 7 crossed. |
+| 3. Fast and low-rate port scan | A fast scan (0.8 s) was detected by the GPU sentinel at 0.85 s on run 1, missed on one re-test try, and detected on the next. A rate rule missed both scans. For the low-rate scan the live process reported no hits while an offline replay of the same documented math flagged 37 of 141 windows; unresolved. |
+| 4. Flood to session loss | At 25,000 pps (2× deployed capacity, 572 B, 10 s) 2 of 5 valid trials dropped the OpenFlow session; both recovered unaided within the polling resolution (at most 4 s and 6 s). 0 leaks in any of 13 valid trials. The fallback restart path never fired on hardware. |
+| 5. Evasion and tag handling | 18 workload-side frame classes (non-IPv4, IPv6, fragments, options, runts, near-MTU) produced 0 breaches. The switch matches IPv4 allow rules through an 802.1Q tag, which the model does not track. A quarantine DROP also matches single-tagged frames: 0 of 40 left port 2 (VID 100 and 200). |
+| 6. Uplink-side address aliasing | The 2026-10-09 observation did not reproduce. A host-level ARP misconfiguration on a workload node (see Section 5.3.2) had been intercepting the traffic before the switch. The switch's own rule was never exercised. |
+| 7. Mirror-port injection | A frame sent from the capture NIC reached the traffic side on both aggregation switches. Mitigated by VLAN isolation and re-tested for untagged, single-tagged and double-tagged frames; kept as a regression test. |
+
+Scenario 2 (spoofing inside the workload segment) was reclassified out of scope because that traffic stays on the aggregation switch and never reaches the device.
+
+## 6. Discussion
 
 **What the evidence supports.** On one cheap switch, measured hardware cost and exact verification over a small packet-class space are workable as a pre-install gate. Deterministic diagnostics let local and hosted models repair their own proposals within two turns on the intents we tried. The verifier's model matched the switch on every flow checked, with two disagreement classes found by looking.
 
@@ -405,9 +407,9 @@ We consider these the most transferable results.
 
 **Why the cheap device is useful here.** Merchant silicon masks inefficiencies behind over-provisioning. On a 120 MHz microcontroller, 100 extra rules add about 424 µs of lookup latency, reordering changes capacity by up to 2.6×, and modest overload drops the controller session. An agent's mistake becomes visible quickly. The same property limits generality, because a policy admitted here would not be stress-tested on a device with ample headroom.
 
-**Practical lesson.** A passing result that depends on an observer, a host configuration or a switch VLAN table must be checked at the observation, not only at the policy. Four of the findings in Section 6 would have passed unchallenged in a simulator.
+**Practical lesson.** A passing result that depends on an observer, a host configuration or a switch VLAN table must be checked at the observation, not only at the policy. Four of the findings in Section 5.3.2 would have passed unchallenged in a simulator.
 
-## 8. Limitations and Threats to Validity
+## 7. Limitations and Threats to Validity
 
 - **One switch, one firmware (0.86), one workload segment, four ports.** No replication on other units or firmware.
 - **One run per cell** in the model evaluation, a few-trial run-to-run spread, and a measured same-seed non-reproducibility.
@@ -420,7 +422,7 @@ We consider these the most transferable results.
 - **Detectors are out of scope:** their precision and recall are unmeasured, and the quarantine envelope depends on detection.
 - **Supervised experiments** were run by the owner or under written permission, and each is a single supervised run.
 
-## 9. Conclusion
+## 8. Conclusion
 
 We built a verifier whose inputs include a measured hardware cost model, evaluated model-proposed policy against it, checked accepted policy on a real switch against independent captures, and attacked it live. The results are measurements on one switch. What generalizes, we argue, is the method: put the policy loop on hardware, pre-register the claims, and treat disagreements between model, host and wire as findings. The failed cost prediction, the masked scenario, the vacuous observer and the blocked containment path are the kind of result a simulator cannot produce.
 
@@ -461,7 +463,7 @@ Citations below are taken from `docs/research/prior-art.md` and have not been re
 
 These are open items in the draft, not text for submission.
 
-1. **Venue and form.** The draft is written as a workshop or short-paper length study with a testbed-and-measurement framing. Pick a venue and trim or expand accordingly. The core diagrams—Figure 1 (Architecture and testbed wiring), Figure 2 (Base vs. forwarding-first capacity curves), Figure 3 (Deployed policy capacity and A8 boundary), and Figure 4 (RQ4 on-wire conformance run breakdown and smoke gate validation funnel)—are now integrated directly into Sections 3, 4, and 5.
+1. **Venue and form.** Target: 6-page workshop paper (e.g., ACM HotNets) framing a testbed-and-measurement study with tight, evidence-grounded prose. Physical reality gaps (formerly Section 6) are now folded directly into Section 5.3 (Wire conformance RQ4) to reinforce the physical testbed narrative. The core diagrams—Figure 1 (Architecture and testbed wiring), Figure 2 (Base vs. forwarding-first capacity curves), Figure 3 (Deployed policy capacity and A8 boundary), and Figure 4 (RQ4 on-wire conformance run breakdown and smoke gate validation funnel)—are integrated directly into Sections 3, 4, and 5.
 2. **Numbers to re-verify against source before submission.** The draft was assembled from result READMEs and not regenerated. In particular: the claim "43% to 98%" in the abstract (it spans the v2 local arm to the harder-intent hosted arm, which differ in prompt and intent set; consider a tighter statement); the mutation counts (the baselines README predates the A10 intent change, and the rejection-detail test pins 196 mutants over four references, which differs from the 178 in the baselines tables); and the 2,303 of 2,400 hosted-arm figure in `models.md`, which is omitted here because its prompt version is not stated there.
 3. **Claims the data does not support, left out on purpose:** that LoRA fine-tuning cannot help; that prompt v3 improved the model; any detector precision or recall; any generalization to other firmware.
 4. **Missing outside review.** The strongest single change would be one network engineer reading the policy, the property list and the intents, and a second author who did not write them.
