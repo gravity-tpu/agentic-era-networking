@@ -432,3 +432,63 @@ Exhaustive correctness on the wire; behaviour on traffic outside the chosen flow
 **A3, 2026-10-31, after the first hardware smoke runs (their evidence is in `docs/benchmarks/results/conformance/validation-2026-10-31/`; they are validation of the harness, not section 16 results).** The first run of the 8 references (28 flows) disagreed with the model on 11 flows and the smoke gate stopped the unattended campaign, as designed. The cause was in two parts. (1) **Two harness defects, fixed with tests:** the Jetson captures passed `tcpdump -p`, and the non-promiscuous O2 NIC dropped every unicast IPv4 tap copy; and evidence for all sets was written to one directory. (2) **Finding F1 about the switch path:** IPv4 frames whose source and destination address are identical are not forwarded (nothing on O2 or O3; confirmed by a diagnostic on one reference with three hosts, while ordinary frames between the same hosts agreed with the model); the safe direction; where the drop happens is not established. Because a degenerate packet is not a useful gate flow, `candidateFlows` now excludes IPv4 frames with identical source and destination, and `flows.json` and `coverage-flows.json` are regenerated (flows SHA-256 starts 0d122ba0c7d11d24, coverage f12aa353c91d99cc). **`index.json` and every rule set are unchanged** (`4bb9a7bd...`). After the fixes the smoke run on the 8 references gives 28 flows with 0 disagreements and 0 intent non-compliance. F1 is carried into the results as a model-versus-hardware discrepancy.
 
 **A4, 2026-10-31, before any section 16 result: the repeats of 16.5 are drawn.** `repeats.json` in the bundle directory lists the 20 separable sets (surviving mutants and model-admissible sets) drawn by the same seed after every other draw (round-robin over the sources, so `index.json` and every other selection are unchanged: `4bb9a7bd...`); the runner takes them with `--ids-file` and refuses if a listed set is not in the bundle. Each repeat session runs these 20 sets with the same flows; the three sessions are run one after another with the policy restored and read back between sets, not at different times of day.
+
+## 17. Plan v9 addendum (DRAFT, not registered): run-to-run spread of the local base-model arm
+
+**Status: a draft by the operator (a Claude Code session), written 2026-11-09 for the owner's decision. Nothing in this section is registered or authorised: no pod starts until the owner approves it and a commit registers the final text before any data. Sections 1 to 16 are unchanged. No harness code changes are needed for the design recommended in 17.2. A dry run of the launcher was done on 2026-11-09 and created nothing (17.7).**
+
+### 17.1 Question
+
+The roadmap (re-scope, item 8) names one Runpod use worth considering: repeating the local Qwen arms to put a spread on the headline result, which today is one run per cell. Concretely: the base arm `B3` (`qwen3.8:27b`, Ollama library, digest `aaee06c39dcf`) scored 47, 50, 27 and 50 of 50 on `INTENT-1` to `INTENT-4` (174 of 200) under prompt v3, Protocol A, in one run per cell (`lora-v3-2026-10-30`). **When the identical registered cell is run again, how far do the admissible counts move?** The answer decides how many trials of difference between arms can be read as an effect. Existing evidence is thin: the results note for `INTENT-5` to `INTENT-8` says run-to-run variation at N = 50 is "a few trials per cell", citing section 12, where it was measured at N = 20; there is no repeat of a full cell. This run measures it directly. Abstract evaluation only (RQ1 to RQ3); admissible means the verifier accepts the rule set, not that it is correct on the wire.
+
+### 17.2 Design
+
+| Item | Value |
+| :--- | :--- |
+| Arm | `B3` only. No adapter, no `L3`, `L4` or `C3`; nothing is trained |
+| Cell repeated | the registered cell: `INTENT-1` to `INTENT-4`, prompt v3, Protocol A, `think: true`, `num_predict` 32768, temperature 0.2, top-p 0.95, seeds 1 to 50 |
+| Repeats | **2 new runs** (three in total with the original), one pod each, identical settings |
+| Serving | Ollama 0.34.4 (the version of the registered runs), A100 SXM4 80 GB, Community Cloud on-demand, the four intents running concurrently as four streams against one server (the original Stage 2 pods ran three streams; the `INTENT-5` to `INTENT-8` pods ran four) |
+| Code | `scripts/runpod/launch-eval-lora.sh --arms B3` at one pinned commit (the commit is the evidence; the launcher refuses a dirty tree) |
+
+Seeds are the same as the original run. So the spread measures **run-to-run variation of the same cell**: it combines the serving stack (concurrent batching makes seeded outputs not guaranteed identical, as the Stage 2 notes in `lora-v3-2026-10-30` say) and any model non-determinism. It does **not** measure sampling variance across different seed sets. An alternative that does (fresh seeds 51 to 100 and 101 to 150) needs a seed-offset option in `scripts/agent-eval.ts`, which does not exist; it is listed in 17.8 and not recommended for the first experiment, because it changes one more thing than the question needs.
+
+Known inequalities with the original, stated now: the original `INTENT-3` cell ran as a single stream at another commit (`4b2a73c`) while `INTENT-1`, `2` and `4` ran concurrently at `02ec648`, so concurrency and commit differ for that cell. The repeats run all four intents concurrently at one commit, so a difference on `INTENT-3` may reflect scheduling, not variation alone.
+
+### 17.3 Metrics, fixed in advance
+
+Per cell and per run: admissible count of 50, the 95% Wilson interval, the failure categories, distinct outputs and transport failures. Across the three runs, per cell: the minimum, maximum and range of the admissible count, and over all 200 trials per run the same. For each seed, whether its verdict (admissible or not) is the same in all three runs, and the number of seeds whose verdict changed. Wall time per run.
+
+### 17.4 Analysis rules
+
+Descriptive only: ranges and counts, no significance test (three runs cannot support one). No prediction is made about the size. The original run counts as run 1 and is not rerun. A run is relaunched only for an infrastructure failure (the pod, the SSH link or a launcher fault), with both attempts kept and listed; a run with transport failures is reported with them and not silently replaced. Results are not merged with any other section's data. If a cell is at the ceiling (`INTENT-2` and `INTENT-4` were 50 of 50), its range is reported as bounded by the ceiling and does not bear on the spread of the harder cells.
+
+### 17.5 Cost, stopping condition and decision-maker
+
+- **Decision-maker:** the owner approves each launch (Invariant 4; the launcher is a dry run without `--yes`). The per-run cap needs a decision: the default of 5 USD refuses the 240-minute plan, so the owner sets 7 USD for these runs (the code ceiling is 25 USD).
+- **Duration:** 240 minutes per pod. Throughput on these pods was about one trial per minute, and the original pods outran their 200-minute limits, so 200 trials plus setup does not fit in 200 minutes.
+- **Price (dry run 2026-11-09):** A100 SXM4 80 GB on Community on-demand, 1.39 USD per hour, worst case 5.56 USD per pod, 11.12 USD for two. The Runpod balance read 17.17 USD, which covers the worst case but leaves about 6 USD. Earlier comparable pods cost about 4 to 5 USD each.
+- **Stop:** exactly two runs. One relaunch is allowed per run for an infrastructure failure, bounded by the same cap; if a relaunch also fails, stop and report. No third repeat, no extra arms and no other protocol without a new decision. The in-pod `timeout` ends billing even if the launcher dies, and `sweep` terminates any `zodiac-*` pod past its deadline.
+- **Not on Secure Cloud and not on the PCIe card.** Placement follows the owner policy for score runs (Community on-demand). The A100 PCIe card is cheaper (1.19 USD per hour) but is different hardware from the original runs, so it is not used.
+
+### 17.6 What this will not show
+
+Two extra runs on one pod type, one seed set; a run-to-run range from three samples is itself imprecise. The spread says how much to trust a one-run difference between arms on this stack; it says nothing about the local Mac runs (a different serving stack and quantization path), about prompt v2, or about Protocol B. It does not change any registered result, and the verifier-feedback result does not depend on it.
+
+### 17.7 Dry run record (2026-11-09)
+
+`scripts/runpod/launch-eval-lora.sh --minutes 240 --arms B3 --n 50 --gpu "NVIDIA A100-SXM4-80GB" --intents "port1-isolation/v1 dns-confinement/v1 quarantine-precedence/v1 tap-return-isolation/v1"`, without `--yes`, nothing created:
+
+| Cap | Result |
+| :--- | :--- |
+| 5 USD (default) | `ERR_OVER_CAP: estimate $5.5600 exceeds cap $5.0000` |
+| 7 USD (`RUNPOD_RUN_CAP_USD=7`) | `plan: score on NVIDIA A100-SXM4-80GB (community on-demand) 240 min @ $1.3900/hr -> worst case $5.5600 (cap $7.0000)`; `dry run: pass --yes to launch` |
+
+At 200 minutes the plan fits the default cap (worst case 4.63 USD) but is too short for the trial count. Preconditions found: a clean git tree at the pinned commit, `RUNPOD_API_KEY` in `.env.local`, an SSH public key, and, because the launcher checks for it even when only `B3` runs, the proposer adapter files present at the path the launcher expects (they are not in git; this is a launcher quirk, not a need of the run).
+
+### 17.8 Alternatives and decisions for the owner
+
+1. **Approve as drafted** (two same-seed repeats, 7 USD cap per run, about 11 USD worst case).
+2. **Fresh seeds instead** (51 to 100, 101 to 150): measures sampling variance across seed sets, which is closer to how the headline rate would be generalised, but needs a small, tested change to `scripts/agent-eval.ts` first.
+3. **One repeat only** (about 5.6 USD worst case): gives a first read of the spread, with two runs per cell.
+4. **Do not run:** the roadmap marks this optional; the verifier-feedback result stands without it.
