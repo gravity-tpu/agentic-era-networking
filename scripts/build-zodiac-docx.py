@@ -363,7 +363,7 @@ def build_docx() -> None:
     fig5_png = crop_pdf_figure(pdf_doc, 12, fitz.Rect(54, 354, 558, 727), dpi=400)
     fig6_png = crop_pdf_figure(pdf_doc, 14, fitz.Rect(54, 232, 558, 391), dpi=400)
     fig7_png = crop_pdf_figure(pdf_doc, 18, fitz.Rect(54, 469, 558, 653), dpi=400)
-    cover_png = crop_pdf_figure(pdf_doc, 0, fitz.Rect(280, 200, 568, 460), dpi=350)
+    cover_png = crop_pdf_figure(pdf_doc, 0, fitz.Rect(54, 180, 558, 448), dpi=350)
 
     photo_stack_bytes = (FIG_DIR / "bench-jetson-switch-stack.jpg").read_bytes()
     photo_wiring_bytes = (FIG_DIR / "bench-port-wiring-workloads.jpg").read_bytes()
@@ -385,8 +385,19 @@ def build_docx() -> None:
     )
     b.add_figure(
         cover_png,
-        "<strong>Zodiac Multi-Tier Neuro-Symbolic Verification Architecture</strong> — 3D isometric model connecting physical switch silicon, deterministic safety gates, and closed-loop agent policy synthesis.",
-        max_width_pt=260.0,
+        "<strong>Figure 0: Zodiac Physical Testbed Stack &amp; SDN Control Plane</strong> — 3D isometric model of the 3-switch testbed stack (GS105Ev2 Uplink, GS105Ev2 Workload, Zodiac FX OpenFlow 1.3 DUT) and NVIDIA Jetson Orin Nano Super controller, featuring active RJ45 ports, dedicated OpenFlow 1.3 control cable, VLAN 1 ingress, filtered egress, and triple mirror taps [O1, O2, O3].",
+        max_width_pt=460.0,
+    )
+    b.add_table(
+        ["Track A: Physical Data Plane", "Track B: Deterministic Verifier", "Track C: On-Wire &amp; Red Team"],
+        [
+            [
+                "• <strong>DUT:</strong> Zodiac FX (SAM4E 120MHz, FW 0.86)<br>• <strong>Table 0:</strong> 128-rule capacity budget<br>• <strong>Cost Model:</strong> 4.24 µs/rule; 58 µs base latency<br>• <strong>Sustained Rate:</strong> 8,106 pps (38.9M) at k<=8",
+                "• <strong>Safety Gates:</strong> 11 pre-install checks (A1–A11)<br>• <strong>Protocol A:</strong> 43.5%–79.8% zero-shot rate<br>• <strong>Protocol B:</strong> <strong>100.0% admissible</strong> (<=3 turns)<br>• <strong>Robustness:</strong> 0 unhandled exceptions; fail-closed",
+                "• <strong>Mirror Taps:</strong> [O1] Pre-DUT, [O2] Pol, [O3] Egress<br>• <strong>Wire Conformance:</strong> <strong>611 / 611 (100.0%)</strong><br>• <strong>Live Adversary:</strong> 25k pps flood, ARP spoof, scans<br>• <strong>Envelope:</strong> 18.4ms quarantine; 100% anti-steer",
+            ]
+        ],
+        [33, 33, 34],
     )
     b.add_p(
         "<strong>Gravity TPU Infrastructure &amp; Agentic Networking Group</strong> — Hardware Verification, Systems Telemetry &amp; Adversarial Evaluation",
@@ -395,7 +406,7 @@ def build_docx() -> None:
         sz=20,
     )
     b.add_p(
-        "Repository: <code>gravity-tpu/agentic-era-networking</code> (Commit <code>79b36be</code>) · November 2026 (v3.0 Close-Out) · DUT: Northbound Networks Zodiac FX (FW 0.86) · Controller: NVIDIA Jetson Orin Nano Super",
+        "November 2026 (v3.0 Close-Out) · DUT: Northbound Networks Zodiac FX (FW 0.86) · Controller: NVIDIA Jetson Orin Nano Super",
         space_after=120,
         color="5F6368",
         sz=18,

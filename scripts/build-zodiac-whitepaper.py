@@ -195,25 +195,25 @@ body {{
 /* Cover Page Styling (matching neurips_evaluation.pdf) */
 .cover-title {{
     position: absolute;
-    top: 72pt;
+    top: 56pt;
     left: 54pt;
-    width: 500pt;
+    width: 504pt;
     font-family: 'GoogleSans', sans-serif;
     font-weight: 700;
-    font-size: 28pt;
+    font-size: 26pt;
     line-height: 1.15;
     color: #202124;
-    letter-spacing: -0.5pt;
+    letter-spacing: -0.4pt;
     z-index: 10;
 }}
 .cover-subtitle {{
     position: absolute;
-    top: 228pt;
+    top: 134pt;
     left: 54pt;
-    width: 255pt;
+    width: 504pt;
     font-family: 'GoogleSans', sans-serif;
     font-weight: 500;
-    font-size: 10.5pt;
+    font-size: 10.2pt;
     line-height: 1.45;
     color: #5f6368;
     z-index: 10;
@@ -239,11 +239,11 @@ body {{
 }}
 .cover-authors {{
     position: absolute;
-    bottom: 96pt;
+    bottom: 80pt;
     left: 54pt;
     font-family: 'GoogleSans', sans-serif;
     font-weight: 700;
-    font-size: 10pt;
+    font-size: 9.5pt;
     line-height: 1.45;
     color: #202124;
     z-index: 10;
@@ -592,12 +592,49 @@ tr:nth-child(even) td {{
     <div class="cover-title">Zodiac: A Real-Hardware Testbed and Deterministic Verifier for Agent-Proposed SDN Policy</div>
     <div class="cover-subtitle">Closed-Loop Verification of Language Model Flow Policies Against Physical OpenFlow Silicon, Deterministic Safety Invariants, and Live Network Adversaries</div>
     {cover_svg}
+    <div class="cover-profile-card" style="position:absolute;top:458pt;left:54pt;width:504pt;background:#f8f9fa;border:1pt solid #dadce0;border-radius:4pt;padding:8pt 12pt;box-sizing:border-box;z-index:10;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:0.75pt solid #dadce0;padding-bottom:4pt;margin-bottom:6pt;">
+            <span style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:8pt;color:#202124;letter-spacing:0.3pt;">EXECUTIVE TESTBED &amp; MULTI-TRACK EMPIRICAL PROFILE</span>
+            <span style="font-family:'RobotoMono',monospace;font-size:7pt;color:#1a73e8;">Tracks A, B, C &bull; Protocols A &amp; B &bull; Measured Ground Truth</span>
+        </div>
+        <div style="display:flex;gap:12pt;">
+            <!-- Column 1: Track A -->
+            <div style="flex:1;border-right:0.75pt solid #e8eaed;padding-right:8pt;">
+                <div style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:7.5pt;color:#1967d2;margin-bottom:3pt;">Track A: Physical Data Plane</div>
+                <div style="font-family:'GoogleSansText',sans-serif;font-size:7pt;line-height:1.45;color:#3c4043;">
+                    &bull; <strong>DUT:</strong> Zodiac FX (SAM4E 120MHz, FW 0.86)<br>
+                    &bull; <strong>Table 0:</strong> 128-rule hardware budget<br>
+                    &bull; <strong>Cost Model:</strong> 4.24 &mu;s/rule; 58 &mu;s base latency<br>
+                    &bull; <strong>Sustained Rate:</strong> 8,106 pps (38.9M) at k&le;8
+                </div>
+            </div>
+            <!-- Column 2: Track B -->
+            <div style="flex:1;border-right:0.75pt solid #e8eaed;padding-right:8pt;">
+                <div style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:7.5pt;color:#137333;margin-bottom:3pt;">Track B: Deterministic Verifier</div>
+                <div style="font-family:'GoogleSansText',sans-serif;font-size:7pt;line-height:1.45;color:#3c4043;">
+                    &bull; <strong>Safety Gates:</strong> 11 pre-install checks (A1&ndash;A11)<br>
+                    &bull; <strong>Protocol A:</strong> 43.5%&ndash;79.8% zero-shot rate<br>
+                    &bull; <strong>Protocol B:</strong> <strong>100.0% admissible</strong> (&le;3 turns)<br>
+                    &bull; <strong>Robustness:</strong> 0 unhandled exceptions; fail-closed
+                </div>
+            </div>
+            <!-- Column 3: Track C -->
+            <div style="flex:1;">
+                <div style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:7.5pt;color:#b06000;margin-bottom:3pt;">Track C: On-Wire &amp; Red Team</div>
+                <div style="font-family:'GoogleSansText',sans-serif;font-size:7pt;line-height:1.45;color:#3c4043;">
+                    &bull; <strong>Mirror Taps:</strong> [O1] Pre-DUT, [O2] Pol, [O3] Egress<br>
+                    &bull; <strong>Wire Conformance:</strong> <strong>611 / 611 (100.0%)</strong><br>
+                    &bull; <strong>Live Adversary:</strong> 25k pps flood, ARP spoof, scans<br>
+                    &bull; <strong>Envelope:</strong> 18.4ms quarantine; 100% anti-steer
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="cover-authors">
         Gravity TPU Infrastructure &amp; Agentic Networking Group<br>
         <span style="font-weight:400;font-size:9.2pt;color:#5f6368;">Hardware Verification, Systems Telemetry &amp; Adversarial Evaluation</span>
     </div>
     <div class="cover-meta" style="position:absolute;bottom:42pt;left:54pt;width:370pt;border-top:0.75pt solid #dadce0;padding-top:6pt;">
-        Repository: <code>gravity-tpu/agentic-era-networking</code> (Commit <code>1e12cee</code>)<br>
         DUT: Northbound Networks Zodiac FX (120 MHz, FW 0.86) · Controller: NVIDIA Jetson Orin Nano Super
     </div>
     <div class="cover-date" style="position:absolute;bottom:42pt;right:54pt;text-align:right;">
