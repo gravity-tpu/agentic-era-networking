@@ -1,0 +1,15 @@
+[1/3] measuring capture window (full streaming pass, container-read only): /workspace/work/data/pcaps/Monday-WorkingHours.pcap
+      first=1499082958.598308 last=1499112094.472889 span=8.09h packets=11709971 in 109.0s (107441 pps)
+[2/3] loading flow labels
+      /workspace/work/labels/TrafficLabelling /Monday-WorkingHours.pcap_ISCX.csv: {'rows': 529918, 'parsed_ok': 0, 'ambiguous_both': 0, 'neither_fits': 0, 'parse_error': 529918, 'missing_columns': 0}
+      0 flows loaded into index (of 529918 rows)
+[3/3] streaming frames through the sentinel feature/kernel math
+
+=== coverage and throughput ===
+packets processed: 11709971 in 1559.2s -> 7510 pps (extraction + feature math + label lookup)
+frame categories: ip_tcp=10718469 ip_udp=907299 ip_other=724 non_ip=83479
+label join: 0/11626492 IPv4 packets (0.0%) matched a labelled flow within slack; 11626492 did not (no flow in the CSV covered that 5-tuple + time, or it fell outside the slack window)
+11709908 windows emitted; majority-label distribution: {None: 11709908}
+estimated full-file pass at this run's extraction rate: 26.0 min for all 11709971 packets (10.8 GB)
+
+=== attack-window spot check (first up to 5 non-benign-majority windows) ===

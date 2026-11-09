@@ -1,0 +1,92 @@
+{
+  "adaptive": {
+    "false_positive_rate": {
+      "interval95": [
+        0.01347172440232913,
+        0.013620521019268753
+      ],
+      "k": 125627,
+      "n": 9274157,
+      "value": 0.01354592120879558
+    },
+    "precision": 0.008594021275924114,
+    "precision_interval95": [
+      0.008100473291709095,
+      0.009117363887153035
+    ],
+    "recall": 0.022787670802904433,
+    "recall_interval95": [
+      0.021487593553671906,
+      0.024164464933681143
+    ]
+  },
+  "attack": {
+    "adaptive_true_positives": 1089,
+    "static_true_positives": 3119,
+    "windows": 47789
+  },
+  "benign": {
+    "adaptive_false_positives": 125627,
+    "static_false_positives": 1525343,
+    "windows": 9274157
+  },
+  "day": "Thursday",
+  "days": [
+    "Thursday"
+  ],
+  "labels": {
+    "BENIGN": {
+      "adaptive_alerts": 125627,
+      "static_alerts": 1525343,
+      "windows": 9274157
+    },
+    "Infiltration": {
+      "adaptive_alerts": 934,
+      "static_alerts": 2509,
+      "windows": 45481
+    },
+    "Web Attack \u0096 Brute Force": {
+      "adaptive_alerts": 69,
+      "static_alerts": 322,
+      "windows": 1726
+    },
+    "Web Attack \u0096 XSS": {
+      "adaptive_alerts": 86,
+      "static_alerts": 288,
+      "windows": 582
+    }
+  },
+  "limits": "windows overlap and are strongly dependent, so the intervals (which assume independence) are optimistic; precision depends on the benign-to-attack mix of the days scored; unlabelled windows are excluded from every rate",
+  "schema": "cic-score-windows/v1",
+  "settings": {
+    "adaptive": {
+      "alpha": 0.05,
+      "sigma": 2.5,
+      "tau": 0.15
+    },
+    "static_tau": 0.15
+  },
+  "static": {
+    "false_positive_rate": {
+      "interval95": [
+        0.16423396766109352,
+        0.16471114054922384
+      ],
+      "k": 1525343,
+      "n": 9274157,
+      "value": 0.1644724151208568
+    },
+    "precision": 0.0020406133747518746,
+    "precision_interval95": [
+      0.00197031133807137,
+      0.0021134185236742035
+    ],
+    "recall": 0.06526606541254264,
+    "recall_interval95": [
+      0.06308630165001511,
+      0.06751571720964608
+    ]
+  },
+  "unlabelled_windows": 16,
+  "windows_total": 9321962
+}

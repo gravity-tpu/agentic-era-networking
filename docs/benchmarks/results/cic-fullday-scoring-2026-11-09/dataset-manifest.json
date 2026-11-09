@@ -1,0 +1,30 @@
+{
+  "csvs/GeneratedLabelledFlows.zip": {
+    "sha256": "7bdbef286f8893f31c6db12105fa097fa5c2dcc6733179037a08129d150ea27a",
+    "size": 283876488
+  },
+  "csvs/MachineLearningCSV.zip": {
+    "sha256": "c3f26274b36c837ccf28ffd2dbf4582941c30b3ee70a635c6e5b2f87c4727928",
+    "size": 235102953
+  },
+  "pcaps/Friday-WorkingHours.pcap": {
+    "sha256": "beff0dcce1eebc9b2454582f4dc8ed0ba0112b2c619a710bf03af93147254cd0",
+    "size": 8839309056
+  },
+  "pcaps/Monday-WorkingHours.pcap": {
+    "sha256": "f6eac599358f216b074338813a1cf7be3cc4e91d116e13efc0dc71f2cca11972",
+    "size": 10822507416
+  },
+  "pcaps/Thursday-WorkingHours.pcap": {
+    "sha256": "38f8b1bb276849bf1721f7c4de22bebfa7f59a74e52286d4c0a37edbb118fe01",
+    "size": 8302500180
+  },
+  "pcaps/Tuesday-WorkingHours.pcap": {
+    "sha256": "080c2250154c5a174c03660ed0f75a3858d41a27511ba716e780d7bcb1ec4c57",
+    "size": 11048283608
+  },
+  "pcaps/Wednesday-workingHours.pcap": {
+    "sha256": "cd2674db7559a53f24bc03be3239b315700174ccaef72d10f5edc4c1a08f6186",
+    "size": 13420789612
+  }
+}

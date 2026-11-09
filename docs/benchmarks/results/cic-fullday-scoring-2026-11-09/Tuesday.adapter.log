@@ -1,0 +1,20 @@
+[1/3] measuring capture window (full streaming pass, container-read only): /workspace/work/data/pcaps/Tuesday-WorkingHours.pcap
+      first=1499169212.364079 last=1499198431.076755 span=8.12h packets=11551954 in 110.0s (104982 pps)
+[2/3] loading flow labels
+      /workspace/work/labels/TrafficLabelling /Tuesday-WorkingHours.pcap_ISCX.csv: {'rows': 445909, 'parsed_ok': 445909, 'ambiguous_both': 0, 'neither_fits': 0, 'parse_error': 0, 'missing_columns': 0}
+      445909 flows loaded into index (of 445909 rows)
+[3/3] streaming frames through the sentinel feature/kernel math
+
+=== coverage and throughput ===
+packets processed: 11551954 in 1630.0s -> 7087 pps (extraction + feature math + label lookup)
+frame categories: ip_tcp=10710230 ip_udp=759022 ip_other=484 non_ip=82218
+label join: 11468769/11469736 IPv4 packets (100.0%) matched a labelled flow within slack; 967 did not (no flow in the CSV covered that 5-tuple + time, or it fell outside the slack window)
+11551891 windows emitted; majority-label distribution: {'BENIGN': 11380139, None: 5, 'FTP-Patator': 54585, 'SSH-Patator': 117162}
+estimated full-file pass at this run's extraction rate: 27.2 min for all 11551954 packets (11.0 GB)
+
+=== attack-window spot check (first up to 5 non-benign-majority windows) ===
+  label=FTP-Patator majority_src_ip=13.107.4.50 matched=64/64 window_end_epoch=1499170760.167587 loss=0.1415
+  label=FTP-Patator majority_src_ip=13.107.4.50 matched=64/64 window_end_epoch=1499170760.167587 loss=0.1417
+  label=FTP-Patator majority_src_ip=192.168.10.50 matched=64/64 window_end_epoch=1499170760.1688 loss=0.1400
+  label=FTP-Patator majority_src_ip=192.168.10.50 matched=64/64 window_end_epoch=1499170760.169323 loss=0.1385
+  label=FTP-Patator majority_src_ip=172.16.0.1 matched=64/64 window_end_epoch=1499170760.169571 loss=0.1370

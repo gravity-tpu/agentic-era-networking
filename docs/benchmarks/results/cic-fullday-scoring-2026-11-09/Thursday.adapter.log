@@ -1,0 +1,21 @@
+[1/3] measuring capture window (full streaming pass, container-read only): /workspace/work/data/pcaps/Thursday-WorkingHours.pcap
+      first=1499342338.492265 last=1499371484.364012 span=8.10h packets=9322025 in 85.5s (108998 pps)
+[2/3] loading flow labels
+      /workspace/work/labels/TrafficLabelling /Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv: {'rows': 288602, 'parsed_ok': 288602, 'ambiguous_both': 0, 'neither_fits': 0, 'parse_error': 0, 'missing_columns': 0}
+      /workspace/work/labels/TrafficLabelling /Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv: {'rows': 458968, 'parsed_ok': 170366, 'ambiguous_both': 0, 'neither_fits': 0, 'parse_error': 288602, 'missing_columns': 0}
+      458968 flows loaded into index (of 747570 rows)
+[3/3] streaming frames through the sentinel feature/kernel math
+
+=== coverage and throughput ===
+packets processed: 9322025 in 1244.4s -> 7491 pps (extraction + feature math + label lookup)
+frame categories: ip_tcp=8538148 ip_udp=701016 ip_other=1559 non_ip=81302
+label join: 9238784/9240723 IPv4 packets (100.0%) matched a labelled flow within slack; 1939 did not (no flow in the CSV covered that 5-tuple + time, or it fell outside the slack window)
+9321962 windows emitted; majority-label distribution: {'BENIGN': 9274157, 'Web Attack \x96 Brute Force': 1726, 'Web Attack \x96 XSS': 582, 'Infiltration': 45481, None: 16}
+estimated full-file pass at this run's extraction rate: 20.7 min for all 9322025 packets (8.3 GB)
+
+=== attack-window spot check (first up to 5 non-benign-majority windows) ===
+  label=Web Attack  Brute Force majority_src_ip=172.16.0.1 matched=63/64 window_end_epoch=1499343681.585797 loss=0.1321
+  label=Web Attack  Brute Force majority_src_ip=172.16.0.1 matched=63/64 window_end_epoch=1499343681.638935 loss=0.1289
+  label=Web Attack  Brute Force majority_src_ip=172.16.0.1 matched=63/64 window_end_epoch=1499343681.639526 loss=0.1237
+  label=Web Attack  Brute Force majority_src_ip=172.16.0.1 matched=63/64 window_end_epoch=1499343681.754936 loss=0.1230
+  label=Web Attack  Brute Force majority_src_ip=172.16.0.1 matched=63/64 window_end_epoch=1499343681.754989 loss=0.1239

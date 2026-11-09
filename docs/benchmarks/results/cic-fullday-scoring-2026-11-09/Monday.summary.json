@@ -1,0 +1,53 @@
+{
+  "adaptive": {
+    "false_positive_rate": {
+      "interval95": null,
+      "k": 0,
+      "n": 0,
+      "value": null
+    },
+    "precision": null,
+    "precision_interval95": null,
+    "recall": null,
+    "recall_interval95": null
+  },
+  "attack": {
+    "adaptive_true_positives": 0,
+    "static_true_positives": 0,
+    "windows": 0
+  },
+  "benign": {
+    "adaptive_false_positives": 0,
+    "static_false_positives": 0,
+    "windows": 0
+  },
+  "day": "Monday",
+  "days": [
+    "Monday"
+  ],
+  "labels": {},
+  "limits": "windows overlap and are strongly dependent, so the intervals (which assume independence) are optimistic; precision depends on the benign-to-attack mix of the days scored; unlabelled windows are excluded from every rate",
+  "schema": "cic-score-windows/v1",
+  "settings": {
+    "adaptive": {
+      "alpha": 0.05,
+      "sigma": 2.5,
+      "tau": 0.15
+    },
+    "static_tau": 0.15
+  },
+  "static": {
+    "false_positive_rate": {
+      "interval95": null,
+      "k": 0,
+      "n": 0,
+      "value": null
+    },
+    "precision": null,
+    "precision_interval95": null,
+    "recall": null,
+    "recall_interval95": null
+  },
+  "unlabelled_windows": 11709908,
+  "windows_total": 11709908
+}

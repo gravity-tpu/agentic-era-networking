@@ -1,0 +1,66 @@
+start 2026-11-09T19:51:28Z days=Monday Tuesday Wednesday Thursday Friday parallel=4
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 24286 files and directories currently installed.)
+Preparing to unpack .../ca-certificates_20260816ubuntu0.22.04.2_all.deb ...
+Unpacking ca-certificates (20260816ubuntu0.22.04.2) over (20240203~22.04.1) ...
+Preparing to unpack .../curl_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking curl (7.81.0-1ubuntu1.30) over (7.81.0-1ubuntu1.20) ...
+Preparing to unpack .../libcurl4_7.81.0-1ubuntu1.30_amd64.deb ...
+Unpacking libcurl4:amd64 (7.81.0-1ubuntu1.30) over (7.81.0-1ubuntu1.20) ...
+Preparing to unpack .../git_1%3a2.34.1-1ubuntu1.18_amd64.deb ...
+Unpacking git (1:2.34.1-1ubuntu1.18) over (1:2.34.1-1ubuntu1.12) ...
+Selecting previously unselected package unzip.
+Preparing to unpack .../unzip_6.0-26ubuntu3.2_amd64.deb ...
+Unpacking unzip (6.0-26ubuntu3.2) ...
+Setting up unzip (6.0-26ubuntu3.2) ...
+Setting up ca-certificates (20260816ubuntu0.22.04.2) ...
+Setting up git (1:2.34.1-1ubuntu1.18) ...
+Setting up libcurl4:amd64 (7.81.0-1ubuntu1.30) ...
+Setting up curl (7.81.0-1ubuntu1.30) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.9) ...
+Processing triggers for mailcap (3.70+nmu1ubuntu1) ...
+Processing triggers for ca-certificates (20260816ubuntu0.22.04.2) ...
+Updating certificates in /etc/ssl/certs...
+rehash: warning: skipping ca-certificates.crt,it does not contain exactly one certificate or CRL
+17 added, 43 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 25.0.1 -> 26.3
+[notice] To update, run: python3 -m pip install --upgrade pip
+Note: switching to 'ee20d1901754b13a9dca66f4d92be43b61d4311e'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+7 files in the manifest
+day Monday -> pcaps/Monday-WorkingHours.pcap
+day Tuesday -> pcaps/Tuesday-WorkingHours.pcap
+day Wednesday -> pcaps/Wednesday-workingHours.pcap
+day Thursday -> pcaps/Thursday-WorkingHours.pcap
+day Friday -> pcaps/Friday-WorkingHours.pcap
+verified csvs/GeneratedLabelledFlows.zip 283876488 bytes 7bdbef286f8893f3
+verified pcaps/Monday-WorkingHours.pcap 10822507416 bytes f6eac599358f216b
+verified pcaps/Tuesday-WorkingHours.pcap 11048283608 bytes 080c2250154c5a17
+verified pcaps/Wednesday-workingHours.pcap 13420789612 bytes cd2674db7559a53f
+verified pcaps/Thursday-WorkingHours.pcap 8302500180 bytes 38f8b1bb276849bf
+verified pcaps/Friday-WorkingHours.pcap 8839309056 bytes beff0dcce1eebc9b
+scored Thursday 2026-11-09T20:17:55Z
+scored Monday 2026-11-09T20:23:35Z
+scored Tuesday 2026-11-09T20:24:51Z
+scored Wednesday 2026-11-09T20:29:59Z
+scored Friday 2026-11-09T20:42:23Z
+done 2026-11-09T20:42:23Z
