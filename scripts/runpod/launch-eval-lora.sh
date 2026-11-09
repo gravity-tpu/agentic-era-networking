@@ -7,21 +7,23 @@
 # Placement: --kind score (default) runs on Community Cloud spot; add --on-demand to leave spot (still Community).
 #   A preempted spot pod loses its results, so the poll loop reports UNREACHABLE and downloads what it can.
 # Usage: scripts/runpod/launch-eval-lora.sh --minutes 150 [--gpu "NVIDIA A100-SXM4-80GB"] [--intents "a/v1 b/v1"] \
-#          [--n 50] [--arms "B3 L3 C3"] [--out DIR] [--yes]
+#          [--n 50] [--arms "B3 L3 C3"] [--seed-start 1] [--out DIR] [--yes]
+#   --seed-start S runs seeds S..S+N-1 (default 1..N) so a repeat run uses fresh seeds (plan section 17); result directories get an -sS suffix.
 # Needs: a clean git tree (the commit is the evidence), .env.local with RUNPOD_API_KEY, ~/.ssh/id_ed25519.pub.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-GPU="NVIDIA A100-SXM4-80GB"; MINUTES=""; INTENTS="quarantine-precedence/v1"; N=50; ARMS="B3 L3 C3"; YES=""; STOP_AFTER=""; KIND="score"; ONDEMAND=""; WAIT_FOR_GO=""; PROTOCOL="A"
+GPU="NVIDIA A100-SXM4-80GB"; MINUTES=""; INTENTS="quarantine-precedence/v1"; N=50; ARMS="B3 L3 C3"; YES=""; STOP_AFTER=""; KIND="score"; ONDEMAND=""; WAIT_FOR_GO=""; PROTOCOL="A"; SEED_START=1
 OUT="/tmp/zodiac-lora-eval-$(date -u +%Y%m%dT%H%M%SZ)"
 ADAPTER_SRC="${ADAPTER_SRC:-$(git rev-parse --git-common-dir)/../docs/benchmarks/results/lora-adapters-2026-10-29/proposer-lora-out}"
 PUBKEY="${PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 POLL_SECONDS=120
 while [ $# -gt 0 ]; do case "$1" in
   --gpu) GPU="$2"; shift 2;; --minutes) MINUTES="$2"; shift 2;; --intents) INTENTS="$2"; shift 2;;
-  --n) N="$2"; shift 2;; --arms) ARMS="$2"; shift 2;; --stop-after) STOP_AFTER="$2"; shift 2;; --kind) KIND="$2"; shift 2;; --wait-for-go) WAIT_FOR_GO=1; shift;; --protocol) PROTOCOL="$2"; shift 2;; --on-demand) ONDEMAND=--on-demand; shift;; --out) OUT="$2"; shift 2;; --yes) YES=--yes; shift;;
+  --n) N="$2"; shift 2;; --arms) ARMS="$2"; shift 2;; --stop-after) STOP_AFTER="$2"; shift 2;; --kind) KIND="$2"; shift 2;; --wait-for-go) WAIT_FOR_GO=1; shift;; --protocol) PROTOCOL="$2"; shift 2;; --seed-start) SEED_START="$2"; shift 2;; --on-demand) ONDEMAND=--on-demand; shift;; --out) OUT="$2"; shift 2;; --yes) YES=--yes; shift;;
   *) echo "unknown arg $1" >&2; exit 2;; esac; done
 [ -n "$MINUTES" ] || { echo "--minutes is required" >&2; exit 2; }
+[[ "$SEED_START" =~ ^[1-9][0-9]{0,5}$ ]] || { echo "--seed-start must be a positive integer (1 to 999999)" >&2; exit 2; }
 [[ "$MINUTES" =~ ^[0-9]+$ ]] && [ "$MINUTES" -gt 0 ] || { echo "--minutes must be a positive integer" >&2; exit 2; }
 [ -z "$(git status --porcelain)" ] || { echo "refusing: working tree is dirty" >&2; exit 1; }
 [ -f "$ADAPTER_SRC/dpo-adapter/adapter_model.safetensors" ] || { echo "adapter not found at $ADAPTER_SRC" >&2; exit 1; }
@@ -91,7 +93,7 @@ scp -P "$PORT" "$BUNDLE" "root@$IP:/workspace/in/repo.bundle"
 rm -f "$BUNDLE"
 scp -P "$PORT" -r "$ADAPTER_SRC" "root@$IP:/workspace/in/proposer-adapter"
 git show HEAD:scripts/runpod/eval-lora-pod.sh | "${SSH[@]}" 'cat > /workspace/in/eval-lora-pod.sh && chmod +x /workspace/in/eval-lora-pod.sh'
-"${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' WAIT_FOR_GO='$WAIT_FOR_GO' PROTOCOL='$PROTOCOL' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
+"${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' WAIT_FOR_GO='$WAIT_FOR_GO' PROTOCOL='$PROTOCOL' SEED_START='$SEED_START' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
 
 mkdir -p "$OUT"
 # Best-effort incremental pull: scripts/agent-eval.ts appends each finished trial to trials.partial.jsonl as it

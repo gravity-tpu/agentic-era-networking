@@ -20,13 +20,16 @@ INTENTS="${INTENTS:-quarantine-precedence/v1}"
 N="${N:-50}"
 ARMS="${ARMS:-B3 L3 C3}"
 PARALLEL="${PARALLEL:-4}"
+SEED_START="${SEED_START:-1}"   # first seed of the run (plan section 17: a repeat run with fresh seeds uses 51, 101, ...)
+case "$SEED_START" in *[!0-9]*|""|0*) echo "SEED_START must be a positive integer" >&2; exit 2;; esac
+SEED_SUFFIX=""; [ "$SEED_START" = 1 ] || SEED_SUFFIX="-s$SEED_START"   # seed 1 keeps the names of every earlier run
 OLLAMA_VERSION="${OLLAMA_VERSION:-0.34.4}"
 BASE_HF="Qwen/Qwen3.8-27B"
 BASE_OLLAMA="qwen3.8:27b"
 IN=/workspace/in; OUT=/workspace/out; W=/workspace/work
 mkdir -p "$OUT" "$W"
 exec > >(tee -a "$OUT/pod.log") 2>&1
-echo "start $(date -u +%FT%TZ) intents=$INTENTS n=$N arms=$ARMS"
+echo "start $(date -u +%FT%TZ) intents=$INTENTS n=$N seed_start=$SEED_START arms=$ARMS"
 nvidia-smi -L > "$OUT/gpu.txt" 2>&1 || true
 
 # 0. OS packages the installers and the llama.cpp build need (the pod image lacks zstd, found on the first launch).
@@ -130,12 +133,12 @@ run_arm() { # arm model
   fi
   mkdir -p "$OUT/shards"
   for intent in $INTENTS; do
-    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N"
+    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N$SEED_SUFFIX"
     for i in $(seq 1 "$shards"); do
       # agent-eval records the git commit and refuses a dirty tree, so it must run with the repo as cwd.
       (cd "$W/repo" && exec node --experimental-strip-types --no-warnings scripts/agent-eval.ts \
         --host http://127.0.0.1:11434 --model "$model" --intent "$intent" --n "$N" --shard "$i/$shards" \
-        --prompt-version v3 --protocol "$PROTOCOL" --think true --num-predict 32768 \
+        --prompt-version v3 --protocol "$PROTOCOL" --think true --num-predict 32768 --seed-start "$SEED_START" \
         --out "$OUT/shards/$base-shard$i") &
       pids+=($!)
     done
@@ -143,7 +146,7 @@ run_arm() { # arm model
   for p in "${pids[@]}"; do wait "$p" || rc=1; done
   [ "$rc" = 0 ] || { echo "a shard failed for arm $arm; not merging"; return 1; }
   for intent in $INTENTS; do
-    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N" dirs=()
+    local base="protocol-a-${intent//\//_}-$arm-pv3-n$N$SEED_SUFFIX" dirs=()
     for i in $(seq 1 "$shards"); do dirs+=("$OUT/shards/$base-shard$i"); done   # explicit list, no glob over stale dirs
     (cd "$W/repo" && node --experimental-strip-types --no-warnings scripts/merge-eval-shards.ts --out "$OUT/$base" "${dirs[@]}") \
       || { echo "merge failed for $intent ($arm)"; return 1; }

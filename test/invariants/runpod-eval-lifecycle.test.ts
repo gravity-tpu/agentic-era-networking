@@ -30,6 +30,22 @@ describe('Runpod LoRA Eval Lifecycle Invariants', () => {
     expect(res.stderr).toContain('--minutes is required');
   });
 
+  it('validates --seed-start before any git, adapter or pod action', () => {
+    for (const bad of ['0', '-1', 'x', '1.5', '']) {
+      const res = runScript(['--minutes', '10', '--seed-start', bad]);
+      expect(res.status).not.toBe(0);
+      expect(res.stderr).toContain('--seed-start must be a positive integer');
+    }
+  });
+
+  it('passes --seed-start to the pod, and the pod script offsets seeds and result names with it', () => {
+    const launcher = readFileSync(path.join(REPO_ROOT, 'scripts/runpod/launch-eval-lora.sh'), 'utf8');
+    expect(launcher).toContain("SEED_START='$SEED_START'");
+    const pod = readFileSync(path.join(REPO_ROOT, 'scripts/runpod/eval-lora-pod.sh'), 'utf8');
+    expect(pod).toContain('--seed-start "$SEED_START"');
+    expect(pod).toMatch(/SEED_SUFFIX/);
+  });
+
   it('pulls results incrementally during the poll loop, not only once at the end', () => {
     const content = readFileSync(path.join(REPO_ROOT, 'scripts/runpod/launch-eval-lora.sh'), 'utf8');
     expect(content).toMatch(/pull_results\(\)\s*\{/);

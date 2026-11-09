@@ -11,13 +11,13 @@ export type EvalProvider = 'ollama' | 'gemini' | 'anthropic' | 'llama';
 export interface SamplingRecord {
   readonly temperature: number | null;
   readonly topP: number | null;
-  /** `1..N` when seeds were sent, `provider-default` when none were. */
+  /** `start..start+N-1` (`1..N` by default) when seeds were sent, `provider-default` when none were. */
   readonly seeds: string;
   /** True when the numbers above were actually sent to the model. */
   readonly sent: boolean;
 }
 
-export function samplingRecord(provider: EvalProvider, temperature: number, topP: number, trials: number): SamplingRecord {
+export function samplingRecord(provider: EvalProvider, temperature: number, topP: number, trials: number, seedStart = 1): SamplingRecord {
   if (provider === 'anthropic') return { temperature: null, topP: null, seeds: 'provider-default', sent: false };
-  return { temperature, topP, seeds: `1..${trials}`, sent: true };
+  return { temperature, topP, seeds: `${seedStart}..${seedStart + trials - 1}`, sent: true };
 }
