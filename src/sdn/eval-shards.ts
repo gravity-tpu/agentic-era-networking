@@ -3,11 +3,17 @@
  * Pure: no I/O. A trial is identical whichever shard runs it (same seed, prompt and sampling); only the schedule changes.
  *
  * Invariant 3/4: mergeShards refuses (throws) unless the shards share one provenance, form exactly the set 1..k, and
- * between them hold every seed 1..N once. A merge that cannot reject a gap or a duplicate would not be verification.
+ * between them hold every seed of the run's range once. A merge that cannot reject a gap or a duplicate would not be verification.
+ *
+ * Seed start (plan section 17): a run covers seeds seedStart..seedStart+N-1; the default is 1, which is every earlier run. A repeat
+ * run with fresh seeds uses a different start so its trials are independent samples, not a repeat of the same seeds.
  */
 
 /** Upper bound on shards: more concurrent streams than this risks exhausting GPU memory for the KV caches. */
 export const MAX_SHARDS = 16;
+
+/** Upper bound on the first seed: a named limit, far above any planned range, so a typo cannot produce absurd seeds. */
+export const MAX_SEED_START = 1_000_000;
 
 export interface ShardSpec {
   readonly index: number; // 1-based
@@ -27,7 +33,7 @@ export interface MergedShards {
 /** Summary fields that must be identical across shards: they identify the model, prompt, intent, settings and code. */
 const PROVENANCE_KEYS = [
   'schema', 'protocol', 'intent', 'model', 'modelDigest', 'host', 'trials', 'temperature', 'topP', 'seeds',
-  'numPredict', 'think', 'promptSha256', 'promptVersion', 'intentSha256', 'gitCommit',
+  'numPredict', 'think', 'promptSha256', 'promptVersion', 'intentSha256', 'gitCommit', 'seedStart',
 ] as const;
 
 export function parseShardSpec(raw: string, trials: number): ShardSpec {
@@ -41,10 +47,24 @@ export function parseShardSpec(raw: string, trials: number): ShardSpec {
   return { index, count };
 }
 
+/** First seed of a run: 1 when absent. A positive integer up to MAX_SEED_START, written as plain digits. */
+export function parseSeedStart(raw: string | undefined): number {
+  if (raw === undefined) return 1;
+  if (!/^[1-9]\d*$/.test(raw)) throw new Error(`--seed-start must be a positive integer written as digits, got ${JSON.stringify(raw)}`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value > MAX_SEED_START) throw new Error(`--seed-start must be 1 to ${MAX_SEED_START}`);
+  return value;
+}
+
+/** Every seed of an unsharded run: seedStart..seedStart+trials-1. */
+export function trialSeeds(trials: number, seedStart = 1): number[] {
+  return Array.from({ length: trials }, (_, i) => seedStart + i);
+}
+
 /** Seeds this shard runs: strided so shards take equal shares even if later seeds think longer. */
-export function shardSeeds(trials: number, shard: ShardSpec): number[] {
+export function shardSeeds(trials: number, shard: ShardSpec, seedStart = 1): number[] {
   const seeds: number[] = [];
-  for (let seed = shard.index; seed <= trials; seed += shard.count) seeds.push(seed);
+  for (let seed = seedStart + shard.index - 1; seed <= seedStart + trials - 1; seed += shard.count) seeds.push(seed);
   return seeds;
 }
 
@@ -75,11 +95,16 @@ export function mergeShards(inputs: readonly ShardInput[]): MergedShards {
     }
   }
   const trials = first['trials'] as number;
+  const rawStart = first['seedStart'];
+  const seedStart = rawStart === undefined ? 1 : rawStart;
+  if (typeof seedStart !== 'number' || !Number.isSafeInteger(seedStart) || seedStart < 1 || seedStart > MAX_SEED_START) {
+    throw new Error('ERR_SHARD_MISMATCH: seedStart is not a positive integer within the bound');
+  }
 
   const records: Array<{ seed: number; line: string }> = [];
   inputs.forEach((input, idx) => {
     const spec = shards[idx]!;
-    const want = shardSeeds(trials, { index: spec.index, count: spec.count });
+    const want = shardSeeds(trials, { index: spec.index, count: spec.count }, seedStart);
     const lines = input.trialsJsonl.split('\n').filter((l) => l.trim() !== '');
     const got = lines.map((l) => (JSON.parse(l) as { seed: number }).seed);
     if (JSON.stringify(got) !== JSON.stringify(want) || JSON.stringify(spec.seedsRun) !== JSON.stringify(want)) {
@@ -88,8 +113,8 @@ export function mergeShards(inputs: readonly ShardInput[]): MergedShards {
     lines.forEach((line, i) => records.push({ seed: got[i]!, line }));
   });
   records.sort((a, b) => a.seed - b.seed);
-  if (records.length !== trials || records.some((r, i) => r.seed !== i + 1)) {
-    throw new Error(`ERR_SHARD_SEEDS: merged trials are not exactly seeds 1..${trials}`);
+  if (records.length !== trials || records.some((r, i) => r.seed !== seedStart + i)) {
+    throw new Error(`ERR_SHARD_SEEDS: merged trials are not exactly seeds ${seedStart}..${seedStart + trials - 1}`);
   }
 
   const counts: Record<string, number> = {};

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mergeShards, shardSeeds, parseShardSpec, type ShardInput } from '../../src/sdn/eval-shards.js';
+import { mergeShards, shardSeeds, parseShardSpec, parseSeedStart, trialSeeds, MAX_SEED_START, type ShardInput } from '../../src/sdn/eval-shards.js';
 
 const BASE = {
   schema: 'agent-eval/v2', protocol: 'A (zero-shot)', intent: 'quarantine-precedence/v1', model: 'zodiac-L3',
@@ -107,5 +107,89 @@ describe('scripts/agent-eval.ts --shard validation (before any network or git ch
   it('accepts a valid shard spec (fails later, not on --shard)', () => {
     const r = run([...common, '--model', 'm', '--n', '10', '--shard', '2/4']);
     expect(r.stderr).not.toContain('--shard');
+  });
+});
+
+describe('seed start (fresh seed ranges for repeat runs, plan section 17)', () => {
+  it('defaults to seeds 1..N and offsets the whole range when a start is given', () => {
+    expect(trialSeeds(4)).toEqual([1, 2, 3, 4]);
+    expect(trialSeeds(4, 51)).toEqual([51, 52, 53, 54]);
+    expect(shardSeeds(6, { index: 1, count: 4 }, 51)).toEqual([51, 55]);
+    expect(shardSeeds(6, { index: 4, count: 4 }, 51)).toEqual([54]);
+    const all = [1, 2, 3, 4].flatMap((i) => shardSeeds(50, { index: i, count: 4 }, 101)).sort((a, b) => a - b);
+    expect(all).toEqual(Array.from({ length: 50 }, (_, i) => 101 + i));
+  });
+  it('leaves the unoffset behaviour unchanged', () => {
+    expect(shardSeeds(6, { index: 2, count: 4 })).toEqual([2, 6]);
+    expect(shardSeeds(6, { index: 2, count: 4 }, 1)).toEqual([2, 6]);
+  });
+  it('parses --seed-start and rejects anything that is not a positive integer within the bound', () => {
+    expect(parseSeedStart(undefined)).toBe(1);
+    expect(parseSeedStart('51')).toBe(51);
+    expect(parseSeedStart(String(MAX_SEED_START))).toBe(MAX_SEED_START);
+    for (const bad of ['0', '-1', '1.5', 'abc', '', ' 5', '1e3', String(MAX_SEED_START + 1)]) {
+      expect(() => parseSeedStart(bad)).toThrow(/--seed-start/);
+    }
+  });
+  function offsetShard(index: number, count: number, n: number, start: number, over: Record<string, unknown> = {}): ShardInput {
+    const seeds = shardSeeds(n, { index, count }, start);
+    const lines = seeds.map((s) => JSON.stringify({ seed: s, ok: true, category: 'ADMISSIBLE', wallNs: '1' }));
+    return {
+      summary: { ...BASE, trials: n, seeds: `${start}..${start + n - 1}`, seedStart: start, trialsRun: seeds.length, startedAt: `2026-11-09T05:0${index}:00Z`,
+        counts: { ADMISSIBLE: seeds.length, ERR_INTENT_LEAK: 0, TRANSPORT_FAILURE: 0 }, shard: { index, count, seedsRun: seeds }, ...over },
+      trialsJsonl: lines.join('\n') + '\n',
+    };
+  }
+  it('merges shards of an offset run into exactly seeds start..start+N-1', () => {
+    const merged = mergeShards([1, 2, 3].map((i) => offsetShard(i, 3, 7, 51)));
+    const seeds = merged.trialsJsonl.trim().split('\n').map((l) => (JSON.parse(l) as { seed: number }).seed);
+    expect(seeds).toEqual([51, 52, 53, 54, 55, 56, 57]);
+    expect(merged.summary['seedStart']).toBe(51);
+    expect(merged.summary['trialsRun']).toBe(7);
+  });
+  it('refuses shards that disagree on the seed start', () => {
+    const a = offsetShard(1, 2, 6, 51);
+    const b = offsetShard(2, 2, 6, 101);
+    expect(() => mergeShards([a, b])).toThrow(/ERR_SHARD_MISMATCH/);
+  });
+  it('refuses a shard whose seeds are not the offset range it claims', () => {
+    const good = offsetShard(1, 2, 6, 51);
+    const bad = offsetShard(2, 2, 6, 51, {});
+    const wrong = { ...bad, trialsJsonl: shardSeeds(6, { index: 2, count: 2 }).map((s) => JSON.stringify({ seed: s, ok: true, category: 'ADMISSIBLE' })).join('\n') + '\n' };
+    expect(() => mergeShards([good, wrong])).toThrow(/ERR_SHARD_SEEDS/);
+  });
+  it('still merges an old summary with no seedStart as seeds 1..N', () => {
+    const merged = mergeShards([shard(1, 2, 4), shard(2, 2, 4)]);
+    expect(merged.trialsJsonl.trim().split('\n').map((l) => (JSON.parse(l) as { seed: number }).seed)).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe('scripts/agent-eval.ts --seed-start validation (before any network or git check)', () => {
+  function run(args: string[]): { status: number; stderr: string } {
+    try {
+      execFileSync('node', ['--experimental-strip-types', '--no-warnings', 'scripts/agent-eval.ts', ...args], { encoding: 'utf8', timeout: 15_000, stdio: 'pipe' });
+      return { status: 0, stderr: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { status: err.status ?? 1, stderr: err.stderr ?? '' };
+    }
+  }
+  const common = ['--host', 'http://127.0.0.1:1', '--intent', 'dns-confinement/v1', '--model', 'm', '--n', '10', '--out', '/tmp/agent-eval-seed-start-test'];
+  it('rejects a non-positive or non-integer start', () => {
+    for (const bad of ['0', '-3', 'x', '2.5']) {
+      const r = run([...common, '--seed-start', bad]);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('--seed-start');
+    }
+  });
+  it('rejects --seed-start together with --batch', () => {
+    const r = run(['--provider', 'anthropic', '--batch', '--intent', 'dns-confinement/v1', '--model', 'm', '--n', '10', '--seed-start', '51', '--out', '/tmp/agent-eval-seed-start-test',
+      '--price-in-cents', '1', '--price-out-cents', '1', '--max-cents', '1', '--price-note', 'x']);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain('--seed-start cannot be combined with --batch');
+  });
+  it('accepts a valid start (fails later, not on --seed-start)', () => {
+    const r = run([...common, '--seed-start', '51']);
+    expect(r.stderr).not.toContain('--seed-start');
   });
 });

@@ -432,3 +432,62 @@ Exhaustive correctness on the wire; behaviour on traffic outside the chosen flow
 **A3, 2026-10-31, after the first hardware smoke runs (their evidence is in `docs/benchmarks/results/conformance/validation-2026-10-31/`; they are validation of the harness, not section 16 results).** The first run of the 8 references (28 flows) disagreed with the model on 11 flows and the smoke gate stopped the unattended campaign, as designed. The cause was in two parts. (1) **Two harness defects, fixed with tests:** the Jetson captures passed `tcpdump -p`, and the non-promiscuous O2 NIC dropped every unicast IPv4 tap copy; and evidence for all sets was written to one directory. (2) **Finding F1 about the switch path:** IPv4 frames whose source and destination address are identical are not forwarded (nothing on O2 or O3; confirmed by a diagnostic on one reference with three hosts, while ordinary frames between the same hosts agreed with the model); the safe direction; where the drop happens is not established. Because a degenerate packet is not a useful gate flow, `candidateFlows` now excludes IPv4 frames with identical source and destination, and `flows.json` and `coverage-flows.json` are regenerated (flows SHA-256 starts 0d122ba0c7d11d24, coverage f12aa353c91d99cc). **`index.json` and every rule set are unchanged** (`4bb9a7bd...`). After the fixes the smoke run on the 8 references gives 28 flows with 0 disagreements and 0 intent non-compliance. F1 is carried into the results as a model-versus-hardware discrepancy.
 
 **A4, 2026-10-31, before any section 16 result: the repeats of 16.5 are drawn.** `repeats.json` in the bundle directory lists the 20 separable sets (surviving mutants and model-admissible sets) drawn by the same seed after every other draw (round-robin over the sources, so `index.json` and every other selection are unchanged: `4bb9a7bd...`); the runner takes them with `--ids-file` and refuses if a listed set is not in the bundle. Each repeat session runs these 20 sets with the same flows; the three sessions are run one after another with the policy restored and read back between sets, not at different times of day.
+
+## 17. Plan v9 addendum (registered 2026-11-09): run-to-run spread of the local base-model arm, fresh seeds
+
+**Status: approved by the owner on 2026-11-09 (design option 2, fresh seeds; a per-run cap of 7 USD; both repeat pods cleared to launch), and registered by the commit that adds this text, before any repeat data exists. Sections 1 to 16 are unchanged. The harness change this needs, `--seed-start` in `scripts/agent-eval.ts`, the launcher and the pod script, is in the same commit and tested (`test/invariants/eval-shards.test.ts`, `eval-sampling.test.ts`, `runpod-eval-lifecycle.test.ts`). A dry run of the launcher on 2026-11-09 created nothing (17.7).**
+
+### 17.1 Question
+
+The roadmap (re-scope, item 8) names one Runpod use worth considering: repeating the local Qwen arm to put a spread on the headline result, which today is one run per cell. Concretely: the base arm `B3` (`qwen3.8:27b`, Ollama library, digest `aaee06c39dcf`) scored 47, 50, 27 and 50 of 50 on `INTENT-1` to `INTENT-4` (174 of 200) under prompt v3, Protocol A, in one run per cell (`lora-v3-2026-10-30`, seeds 1 to 50). **When the same cell is run on new, independent seeds, how far do the admissible counts move?** The answer decides how many trials of difference between arms can be read as an effect. Existing evidence is thin: the results note for `INTENT-5` to `INTENT-8` says run-to-run variation at N = 50 is "a few trials per cell", citing section 12, where it was measured at N = 20; there is no repeat of a full cell. Abstract evaluation only (RQ1 to RQ3); admissible means the verifier accepts the rule set, not that it is correct on the wire.
+
+### 17.2 Design
+
+| Item | Value |
+| :--- | :--- |
+| Arm | `B3` only. No adapter, no `L3`, `L4` or `C3`; nothing is trained |
+| Cell repeated | the registered cell: `INTENT-1` to `INTENT-4`, prompt v3, Protocol A, `think: true`, `num_predict` 32768, temperature 0.2, top-p 0.95, N = 50 per intent |
+| Seeds | **fresh, non-overlapping blocks:** the original run used seeds 1 to 50; repeat 1 uses **51 to 100** (`--seed-start 51`) and repeat 2 uses **101 to 150** (`--seed-start 101`) |
+| Repeats | 2 new runs (three seed blocks with the original), one pod each |
+| Serving | Ollama 0.34.4 (the version of the registered runs), A100 SXM4 80 GB, Community Cloud on-demand, the four intents running concurrently as four streams against one server (the original Stage 2 pods ran three streams; the `INTENT-5` to `INTENT-8` pods ran four) |
+| Code | `scripts/runpod/launch-eval-lora.sh --arms B3 --seed-start S` at one pinned commit, the commit that registers this section; the launcher refuses a dirty tree |
+
+Different seeds make each repeat an independent sample of the model's behaviour on the cell, so the spread across the three blocks measures **sampling variance across seed sets**, together with any serving-stack variation (concurrent batching makes seeded outputs not guaranteed identical, as the Stage 2 notes in `lora-v3-2026-10-30` say; the two cannot be separated here). It does not test whether the same seeds reproduce on this stack; that would be a separate, same-seed repeat.
+
+Known inequalities with the original, stated now: the original `INTENT-3` cell ran as a single stream at another commit (`4b2a73c`) while `INTENT-1`, `2` and `4` ran concurrently at `02ec648`, so concurrency and commit differ for that cell. The repeats run all four intents concurrently at one commit, so a difference on `INTENT-3` may reflect scheduling, not seed variance alone. A result directory for a repeat carries an `-s51` or `-s101` suffix; `summary.json` records `seedStart` and `seeds` (`51..100`).
+
+### 17.3 Metrics, fixed in advance
+
+Per cell and per run: admissible count of 50, the 95% Wilson interval, the failure categories, distinct outputs and transport failures. Across the three seed blocks, per cell: the minimum, maximum and range of the admissible count, and the same over all 200 trials per run. Additionally the 150 trials per cell pooled, with its 95% Wilson interval, reported next to the original single-block interval; and, per cell, whether the original block's count lies inside the range of the two new blocks. Wall time per run.
+
+### 17.4 Analysis rules
+
+Descriptive only: ranges, counts and one pooled interval, no significance test (three blocks cannot support one). No prediction is made about the size. The original run counts as block 1 and is not rerun. A run is relaunched only for an infrastructure failure (the pod, the SSH link or a launcher fault), with both attempts kept and listed; a run with transport failures is reported with them and not silently replaced. Results are not merged with any other section's data. If a cell is at the ceiling (`INTENT-2` and `INTENT-4` were 50 of 50), its range is reported as bounded by the ceiling and does not bear on the spread of the harder cells. The pooled interval treats trials as independent; distinct-output counts are reported so repeated answers can be seen.
+
+### 17.5 Cost, stopping condition and decision-maker
+
+- **Decision-maker:** the owner. The owner approved the two launches and the cap on 2026-11-09; each launch is a separate command that is a dry run without `--yes` (Invariant 4).
+- **Per-run cap:** 7 USD (`RUNPOD_RUN_CAP_USD=7`; the default of 5 USD refuses the 240-minute plan, and the code ceiling is 25 USD).
+- **Duration:** 240 minutes per pod. Throughput on these pods was about one trial per minute, and the original pods outran their 200-minute limits, so 200 trials plus setup does not fit in 200 minutes.
+- **Price (dry run 2026-11-09):** A100 SXM4 80 GB on Community on-demand, 1.39 USD per hour, worst case 5.56 USD per pod, 11.12 USD for two. The Runpod balance read 17.17 USD. Earlier comparable pods cost about 4 to 5 USD each.
+- **Stop:** exactly two runs. One relaunch is allowed per run for an infrastructure failure, bounded by the same cap; if a relaunch also fails, stop and report. No third repeat, no extra arms and no other protocol without a new decision. The in-pod `timeout` ends billing even if the launcher dies, and `sweep` terminates any `zodiac-*` pod past its deadline.
+- **Placement:** Community on-demand, per the owner policy for score runs; not the cheaper A100 PCIe card (1.19 USD per hour), which is different hardware from the original runs.
+
+### 17.6 What this will not show
+
+Two extra seed blocks on one pod type; a range from three blocks is itself imprecise. The spread says how much to trust a one-run difference between arms on this stack; it says nothing about the local Mac runs (a different serving stack and quantization path), about prompt v2, or about Protocol B. It does not change any registered result, and the verifier-feedback result does not depend on it.
+
+### 17.7 Dry run record (2026-11-09)
+
+`scripts/runpod/launch-eval-lora.sh --minutes 240 --arms B3 --n 50 --gpu "NVIDIA A100-SXM4-80GB" --intents "port1-isolation/v1 dns-confinement/v1 quarantine-precedence/v1 tap-return-isolation/v1"`, without `--yes`, nothing created:
+
+| Cap | Result |
+| :--- | :--- |
+| 5 USD (default) | `ERR_OVER_CAP: estimate $5.5600 exceeds cap $5.0000` |
+| 7 USD (`RUNPOD_RUN_CAP_USD=7`) | `plan: score on NVIDIA A100-SXM4-80GB (community on-demand) 240 min @ $1.3900/hr -> worst case $5.5600 (cap $7.0000)`; `dry run: pass --yes to launch` |
+
+At 200 minutes the plan fits the default cap (worst case 4.63 USD) but is too short for the trial count. Preconditions found: a clean git tree at the pinned commit, `RUNPOD_API_KEY` in `.env.local`, an SSH public key, and, because the launcher checks for it even when only `B3` runs, the proposer adapter files present at the path the launcher expects (they are not in git; this is a launcher quirk, not a need of the run).
+
+### 17.8 Result (recorded 2026-11-09, after the runs)
+
+Sections 17.1 to 17.7 are unchanged. The runs are reported in `docs/benchmarks/results/qwen-spread-2026-11-09/README.md`. Admissible counts of 50 for `INTENT-1` to `INTENT-4`: seeds 1 to 50 (original) 47, 50, 27, 50 (174 of 200); seeds 51 to 100 44, 50, 26, 50 (170); seeds 101 to 150 48, 49, 31, 49 (177). The total ranged over 7 trials (3.5 points); the mid-rate cells moved most (`INTENT-3` 26 to 31, `INTENT-1` 44 to 48), and in every cell the original count lies inside the range of the two new blocks. Two transport failures (seeds 148 and 149, `fetch failed` at about 301 s) are counted as not admissible and were not replaced; no block was relaunched. Pooled, 521 of 600 (86.8%). No departure from the registered design; the two pods cost about 7.7 USD. As registered, the result is descriptive: differences of up to about 5 trials per cell on these four intents are within the seed-to-seed movement of one arm; `INTENT-5` to `INTENT-8` and the Mac runs were not re-measured.

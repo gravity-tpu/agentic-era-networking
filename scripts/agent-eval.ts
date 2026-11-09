@@ -1,7 +1,7 @@
 /**
  * scripts/agent-eval.ts
  * Protocol A (zero-shot) of the pre-registered agent-proposal evaluation (docs/research/evaluation-plan.md).
- * For one intent and one model: N independent trials with seeds 1..N, temperature 0.2, top-p 0.95. Each trial records
+ * For one intent and one model: N independent trials with seeds 1..N (or --seed-start S: seeds S..S+N-1, for a repeat run with fresh seeds), temperature 0.2, top-p 0.95. Each trial records
  * the prompt hash, the raw model output, token counts and the deterministic verdict from src/sdn/proposal-triage.ts.
  * Nothing here touches the switch: this is the abstract evaluation (RQ1 to RQ3). On-wire conformance (RQ4) is separate.
  *
@@ -67,7 +67,7 @@ import { parseProposal, triageProposal, CATEGORY_PRECEDENCE } from '../dist/sdn/
 import { samplingRecord } from '../dist/sdn/eval-sampling.js';
 import { proposerPrompts, type PromptVersion } from '../dist/sdn/proposer-prompt.js';
 import { intentSha256 } from '../dist/sdn/intent-hash.js';
-import { parseShardSpec, shardSeeds, type ShardSpec } from '../dist/sdn/eval-shards.js';
+import { parseShardSpec, parseSeedStart, shardSeeds, trialSeeds, type ShardSpec } from '../dist/sdn/eval-shards.js';
 import { PORT1_ISOLATION_INTENT, DNS_CONFINEMENT_INTENT, QUARANTINE_PRECEDENCE_INTENT, TAP_RETURN_ISOLATION_INTENT } from '../dist/sdn/intents.js';
 import { HARD_INTENTS } from '../dist/sdn/intents-hard.js';
 
@@ -104,7 +104,7 @@ const ANTHROPIC_EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 
 interface Spend { priceInCents: number; priceOutCents: number; maxCents: number; note: string }
 interface Args {
   intent: string; model: string; host: string; n: number; out: string; think: boolean; numPredict: number; protocol: 'A' | 'B';
-  provider: 'ollama' | 'gemini' | 'anthropic' | 'llama'; thinking: string; spend: Spend | null; promptVersion: PromptVersion; batch: boolean; shard: ShardSpec | null;
+  provider: 'ollama' | 'gemini' | 'anthropic' | 'llama'; thinking: string; spend: Spend | null; promptVersion: PromptVersion; batch: boolean; shard: ShardSpec | null; seedStart: number;
   allowMultiRound: boolean;
 }
 
@@ -151,7 +151,9 @@ function parseArgs(argv: readonly string[]): Args {
   const shardArg = get('--shard');
   if (shardArg !== undefined && batch) throw new Error('--shard cannot be combined with --batch (a batch is one submission)');
   const shard = shardArg === undefined ? null : parseShardSpec(shardArg, n);
-  return { promptVersion, protocol, intent, model: need('--model'), host, n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend, batch, shard, allowMultiRound };
+  const seedStart = parseSeedStart(get('--seed-start'));
+  if (seedStart !== 1 && batch) throw new Error('--seed-start cannot be combined with --batch (a batch numbers its requests from seed 1)');
+  return { seedStart, promptVersion, protocol, intent, model: need('--model'), host, n, out: need('--out'), think: thinkArg === 'true', numPredict, provider, thinking, spend, batch, shard, allowMultiRound };
 }
 
 function git(...a: string[]): string { return execFileSync('git', a, { encoding: 'utf-8' }).trim(); }
@@ -631,7 +633,7 @@ async function main(): Promise<void> {
       process.stderr.write(`[batch] completed: ${results.length} results scored\n`);
     }
   } else {
-    const seedsToRun = args.shard === null ? Array.from({ length: args.n }, (_, i) => i + 1) : shardSeeds(args.n, args.shard);
+    const seedsToRun = args.shard === null ? trialSeeds(args.n, args.seedStart) : shardSeeds(args.n, args.shard, args.seedStart);
     for (const seed of seedsToRun) {
       if (overCap()) { capHit = true; break; }
       const t0 = process.hrtime.bigint();
@@ -705,7 +707,7 @@ async function main(): Promise<void> {
   }
   const summary = {
     schema: 'agent-eval/v2', protocol: args.protocol === 'A' ? 'A (zero-shot)' : `B (verifier feedback, up to ${MAX_TURNS} turns)`, intent: args.intent, model: args.model, modelDigest: model.digest, host: args.host,
-    trials: args.n, trialsRun: lines.length, ...(({ temperature, topP, seeds }) => ({ temperature, topP, seeds }))(samplingRecord(args.provider, TEMPERATURE, TOP_P, args.n)), numPredict: args.numPredict, think: args.think,
+    trials: args.n, trialsRun: lines.length, ...(({ temperature, topP, seeds }) => ({ temperature, topP, seeds }))(samplingRecord(args.provider, TEMPERATURE, TOP_P, args.n, args.seedStart)), numPredict: args.numPredict, think: args.think,
     promptSha256: promptHash, promptVersion: args.promptVersion, intentSha256: intentSha256(spec), gitCommit: git('rev-parse', 'HEAD'), startedAt: started,
     counts: Object.fromEntries([...CATEGORY_PRECEDENCE, 'ADMISSIBLE', 'TRANSPORT_FAILURE'].map((c) => [c, counts.get(c) ?? 0])),
     ...((args.provider === 'gemini' || args.provider === 'anthropic' || args.provider === 'llama') ? {
@@ -717,7 +719,8 @@ async function main(): Promise<void> {
         maxCents: args.spend.maxCents,
       } : {}),
     } : {}),
-    ...(args.shard === null ? {} : { shard: { index: args.shard.index, count: args.shard.count, seedsRun: shardSeeds(args.n, args.shard) } }),
+    ...(args.shard === null ? {} : { shard: { index: args.shard.index, count: args.shard.count, seedsRun: shardSeeds(args.n, args.shard, args.seedStart) } }),
+    ...(args.seedStart === 1 ? {} : { seedStart: args.seedStart }),
     note: 'abstract evaluation only (RQ1-RQ3); says nothing about switch behaviour',
   };
   await fs.writeFile(path.join(args.out, 'trials.jsonl'), lines.join('\n') + '\n');

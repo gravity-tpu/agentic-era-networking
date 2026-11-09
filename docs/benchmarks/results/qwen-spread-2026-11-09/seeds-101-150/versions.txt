@@ -1,0 +1,3 @@
+NAME           ID              SIZE     MODIFIED               
+qwen3.8:27b    aaee06c39dcf    17 GB    Less than a second ago    
+ollama version is 0.34.4
