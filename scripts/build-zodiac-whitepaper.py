@@ -111,6 +111,18 @@ def generate_html(toc_pages: dict[str, int] | None = None) -> str:
     font-style: normal;
 }}
 @font-face {{
+    font-family: 'GoogleSans';
+    src: url('{gs_bold}') format('truetype');
+    font-weight: 800;
+    font-style: normal;
+}}
+@font-face {{
+    font-family: 'GoogleSans';
+    src: url('{gs_bold}') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+}}
+@font-face {{
     font-family: 'GoogleSansText';
     src: url('{gst_reg}') format('truetype');
     font-weight: 400;
@@ -138,6 +150,12 @@ def generate_html(toc_pages: dict[str, int] | None = None) -> str:
     font-family: 'RobotoMono';
     src: local('Menlo-Regular'), local('Menlo');
     font-weight: 400;
+    font-style: normal;
+}}
+@font-face {{
+    font-family: 'RobotoMono';
+    src: local('Menlo-Bold'), local('Menlo');
+    font-weight: 600;
     font-style: normal;
 }}
 @font-face {{
@@ -208,7 +226,7 @@ body {{
 }}
 .cover-subtitle {{
     position: absolute;
-    top: 134pt;
+    top: 158pt;
     left: 54pt;
     width: 504pt;
     font-family: 'GoogleSans', sans-serif;
@@ -592,44 +610,6 @@ tr:nth-child(even) td {{
     <div class="cover-title">Zodiac: A Real-Hardware Testbed and Deterministic Verifier for Agent-Proposed SDN Policy</div>
     <div class="cover-subtitle">Closed-Loop Verification of Language Model Flow Policies Against Physical OpenFlow Silicon, Deterministic Safety Invariants, and Live Network Adversaries</div>
     {cover_svg}
-    <div class="cover-profile-card" style="position:absolute;top:458pt;left:54pt;width:504pt;background:#f8f9fa;border:1pt solid #dadce0;border-radius:4pt;padding:8pt 12pt;box-sizing:border-box;z-index:10;">
-        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:0.75pt solid #dadce0;padding-bottom:4pt;margin-bottom:6pt;">
-            <span style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:8pt;color:#202124;letter-spacing:0.3pt;">EXECUTIVE TESTBED &amp; MULTI-TRACK EMPIRICAL PROFILE</span>
-            <span style="font-family:'RobotoMono',monospace;font-size:7pt;color:#1a73e8;">Tracks A, B, C &bull; Protocols A &amp; B &bull; Measured Ground Truth</span>
-        </div>
-        <div style="display:flex;gap:12pt;">
-            <!-- Column 1: Track A -->
-            <div style="flex:1;border-right:0.75pt solid #e8eaed;padding-right:8pt;">
-                <div style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:7.5pt;color:#1967d2;margin-bottom:3pt;">Track A: Physical Data Plane</div>
-                <div style="font-family:'GoogleSansText',sans-serif;font-size:7pt;line-height:1.45;color:#3c4043;">
-                    &bull; <strong>DUT:</strong> Zodiac FX (SAM4E 120MHz, FW 0.86)<br>
-                    &bull; <strong>Table 0:</strong> 128-rule hardware budget<br>
-                    &bull; <strong>Cost Model:</strong> 4.24 &mu;s/rule; 58 &mu;s base latency<br>
-                    &bull; <strong>Sustained Rate:</strong> 8,106 pps (38.9M) at k&le;8
-                </div>
-            </div>
-            <!-- Column 2: Track B -->
-            <div style="flex:1;border-right:0.75pt solid #e8eaed;padding-right:8pt;">
-                <div style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:7.5pt;color:#137333;margin-bottom:3pt;">Track B: Deterministic Verifier</div>
-                <div style="font-family:'GoogleSansText',sans-serif;font-size:7pt;line-height:1.45;color:#3c4043;">
-                    &bull; <strong>Safety Gates:</strong> 11 pre-install checks (A1&ndash;A11)<br>
-                    &bull; <strong>Protocol A:</strong> 43.5%&ndash;79.8% zero-shot rate<br>
-                    &bull; <strong>Protocol B:</strong> <strong>100.0% admissible</strong> (&le;3 turns)<br>
-                    &bull; <strong>Robustness:</strong> 0 unhandled exceptions; fail-closed
-                </div>
-            </div>
-            <!-- Column 3: Track C -->
-            <div style="flex:1;">
-                <div style="font-family:'GoogleSans',sans-serif;font-weight:700;font-size:7.5pt;color:#b06000;margin-bottom:3pt;">Track C: On-Wire &amp; Red Team</div>
-                <div style="font-family:'GoogleSansText',sans-serif;font-size:7pt;line-height:1.45;color:#3c4043;">
-                    &bull; <strong>Mirror Taps:</strong> [O1] Pre-DUT, [O2] Pol, [O3] Egress<br>
-                    &bull; <strong>Wire Conformance:</strong> <strong>611 / 611 (100.0%)</strong><br>
-                    &bull; <strong>Live Adversary:</strong> 25k pps flood, ARP spoof, scans<br>
-                    &bull; <strong>Envelope:</strong> 18.4ms quarantine; 100% anti-steer
-                </div>
-            </div>
-        </div>
-    </div>
     <div class="cover-authors">
         Gravity TPU Infrastructure &amp; Agentic Networking Group<br>
         <span style="font-weight:400;font-size:9.2pt;color:#5f6368;">Hardware Verification, Systems Telemetry &amp; Adversarial Evaluation</span>
@@ -779,9 +759,9 @@ tr:nth-child(even) td {{
             </p>
             <ul>
                 <li><strong>Deterministic verification (<code>A1</code>–<code>A11</code>) + <= 5 feedback turns solves policy admissibility without model weight tuning:</strong> Zero-shot LLM proposals (Protocol A) passed all 11 deterministic checks only <strong>43.0%</strong> of the time on Qwen3.8-27B (Prompt v2) and <strong>80.5%</strong> on Claude Haiku 5.5. Providing the exact rejected property and conflicting rule IDs in a bounded feedback loop (Protocol B, <code>&lt;= 5</code> turns, median 2 turns) raised admissibility to <strong>98.8% (79/80)</strong> on local Qwen3.8-27B and <strong>100.0% (80/80)</strong> on Claude Haiku 5.5 and Prompt v3.</li>
-                <li><strong>Longer LoRA fine-tuning degraded generalization on multi-constraint intents:</strong> While a light 15-step SFT+DPO LoRA adapter nudged zero-shot accuracy on seen intents (<code>INTENT-1..4</code>) from 87.0% to 88.0%, it regressed unseen harder intents (<code>INTENT-5..8</code>) from <strong>87.0% to 70.5%</strong>. Scaling to an 80-step SFT + 90-step DPO adapter collapsed 6-intent zero-shot admissibility from <strong>82.7% (248/300)</strong> to <strong>48.3% (145/300)</strong> due to cross-intent rule memorization.</li>
+                <li><strong>Longer LoRA fine-tuning degraded generalization on multi-constraint intents:</strong> A light 15-step SFT+DPO LoRA adapter scored 88.0% (176/200) on seen intents (<code>INTENT-1..4</code>)—inside the base model's natural fresh-seed spread of <strong>85.0%–88.5% (521/600 across seeds 1..150)</strong>—while regressing unseen intents (<code>INTENT-5..8</code>) from <strong>87.0% to 70.5%</strong>. Scaling to 80 SFT + 90 DPO steps collapsed 6-intent zero-shot admissibility from <strong>82.7% (248/300)</strong> to <strong>48.3% (145/300)</strong> due to cross-intent rule memorization.</li>
                 <li><strong>Controller-state verification must be paired with hardware-quirk modeling and wire ground truth:</strong> In Track B, <strong>128 distinct rule sets (611 flow checks)</strong> achieved <strong>100% (611/611)</strong> agreement between the software reference model and real frames captured at <code>O1</code>/<code>O2</code>/<code>O3</code>—but only after encoding Firmware 0.86's silent priority-0 instruction drop (<strong>Finding F1</strong>) and deployed-table per-packet traversal cost (<code>t_pkt = 80.0 us + 5.42 us * k</code>) into the verifier.</li>
-                <li><strong>Pre-approved quarantine envelopes bound adversarial failure modes:</strong> Across <strong>7 live hardware red-team scenarios</strong> launched from an untrusted Raspberry Pi 3B+ node, deterministic rules and bounded quarantine envelopes contained reconnaissance, lateral movement, spoofed Steering DoS, control-plane saturation (recovering within 4–6 s), and flow-table exhaustion while preserving legitimate workload traffic.</li>
+                <li><strong>Pre-approved quarantine envelopes bound adversarial and detector failure modes:</strong> Across <strong>7 live hardware red-team scenarios</strong>—and calibrated against whole-day <strong>CIC-IDS2017</strong> captures (static sentinel alerting on <strong>12.65% benign / 34.2% attack windows</strong>, Tue–Fri)—bounded quarantine envelopes (<code>k &lt;= 8</code>, 300 s TTL) contained reconnaissance, lateral movement, spoofed Steering DoS, control-plane saturation (4–6 s recovery), and table exhaustion while preserving legitimate traffic.</li>
             </ul>
         </div>
         <div class="exec-sidebar">
@@ -1138,9 +1118,9 @@ tr:nth-child(even) td {{
                 <li><code>qwen2.5:3b</code> (NVIDIA Jetson Orin Nano Super): <strong>0 admissible sets in 44 answered trials</strong> on <code>INTENT-1</code> (25 <code>ERR_SHADOWED</code>, 18 <code>ERR_SYNTAX</code> such as CIDR masks in IPv4 match fields, 6 transport timeouts). In-flight inference ran at <strong>15.3 tok/s</strong> (p50 latency 39.1 s), driving GPU load to <strong>96.5% mean (99% max)</strong>, board power to 12.5 W mean (13.1 W peak), thermals to 56°C, and consuming 4.6–5.1 GB of the board's 7.6 GB RAM. Removed from active rotation on 2026-10-16.</li>
             </ul>
         </li>
-        <li><strong>Rented-GPU Tier (Runpod A100 80 GB at $1.79/hr, Qwen3.8-27B + LoRA Adapters):</strong>
+        <li><strong>Rented-GPU Tier (Runpod A100 80 GB at $1.39–$1.79/hr, Qwen3.8-27B + LoRA Adapters):</strong>
             We evaluated four fine-tuning and pipeline arms: <code>B3</code> (Ollama base), <code>C3</code> (pipeline conversion control), <code>L3</code> (15-step SFT+DPO adapter, rank 16, alpha 32, trained in 14.2 min on 1,466 SFT examples and 1,434 verifier-grounded DPO pairs, ~$19.60 campaign cost), and <code>L4</code> (80 SFT + 90 DPO steps, ~0.5 epoch, $3.90 training cost, ~$20 campaign cost).
-            On seen intents (<code>INTENT-1..4</code>), <code>B3</code> and <code>C3</code> scored 87.0% (174/200) zero-shot, while <code>L3</code> reached 88.0% (176/200); both reached 100% (80/80) within &le;2 turns in Protocol B.
+            On seen intents (<code>INTENT-1..4</code>), across three independent fresh-seed blocks (seeds <code>1..50</code>, <code>51..100</code>, and <code>101..150</code>; Plan &sect;17), <code>B3</code> scored <strong>87.0% (174/200)</strong>, <strong>85.0% (170/200)</strong>, and <strong>88.5% (177/200, 2 transport timeouts)</strong>—yielding a pooled fresh-seed rate of <strong>521/600 (86.8%, range 85.0%–88.5%)</strong> alongside <strong>90.5% (181/200)</strong> on a same-seed (<code>1..50</code>) repeat. <code>C3</code> scored 87.0% (174/200) zero-shot and <code>L3</code> reached 88.0% (176/200)—lying strictly inside <code>B3</code>'s natural seed-to-seed variance—while both <code>C3</code> and <code>L3</code> reached 100% (80/80) within &le;2 turns in Protocol B.
             However, on unseen hard intents (<code>INTENT-5..8</code>), <code>C3</code> held 87.0% (174/200) zero-shot, whereas <code>L3</code> regressed to <strong>70.5% (141/200)</strong> (-16.5 pp). On the full 6-intent suite (<code>INTENT-1,3,5,6,7,8</code>), the longer-trained <code>L4</code> adapter collapsed to <strong>48.3% (145/300)</strong> zero-shot (119 <code>ERR_SYNTAX</code> failures from truncated/repetitive JSON) compared to <strong>82.7% (248/300)</strong> for the <code>C3</code> control.
         </li>
         <li><strong>Cloud Frontier API Models (Claude Haiku 5.5 Production Arm &amp; 12-Model Pilot):</strong>
@@ -1195,12 +1175,12 @@ tr:nth-child(even) td {{
                 <td>25 <code>ERR_SHADOWED</code>, 18 <code>ERR_SYNTAX</code> (CIDR masks in IPv4), 6 transport timeouts. Board saturated (12.5 W, 5.1 GB RAM).</td>
             </tr>
             <tr>
-                <td><strong>Qwen3.8 Rented A100 (C3 Ctrl)</strong><br><span style="font-size:7.5pt;color:#5f6368;">Runpod A100 80 GB ($1.79/h)</span></td>
+                <td><strong>Qwen3.8 Rented A100 (B3 / C3)</strong><br><span style="font-size:7.5pt;color:#5f6368;">Runpod A100 80 GB ($1.39–$1.79/h)</span></td>
                 <td><code>INTENT-1..4</code><br><code>INTENT-5..8</code></td>
                 <td>Proto A (0-shot)<br>Proto B (&le;2t)</td>
-                <td><strong>174/200 (87.0%)</strong><br><strong>80/80 (100.0%)</strong></td>
-                <td>~$19.60 campaign<br>p50 &le; 2.5 s</td>
-                <td>Base weights generalized cleanly across both seen and hard unseen intents when given explicit prompt invariants.</td>
+                <td><strong>521/600 (86.8% B3)</strong><br><strong>80/80 (100.0% C3)</strong></td>
+                <td>~$4–$5 / 200-run<br>p50 &le; 2.5 s</td>
+                <td>Fresh-seed blocks (<code>1..150</code>) scored 174, 170, 177/200 (85.0%–88.5%); <code>C3</code> held 174/200 on both seen and unseen intents.</td>
             </tr>
             <tr>
                 <td><strong>Qwen3.8 + 15s LoRA (L3)</strong><br><span style="font-size:7.5pt;color:#5f6368;">1,466 SFT + 1,434 DPO pairs</span></td>
@@ -1497,6 +1477,7 @@ tr:nth-child(even) td {{
         <li><strong>Scope &amp; Action Restriction:</strong> Automatic containment may only insert or remove <code>DROP</code> rules on <code>in_port = 1</code> at <code>priority = 65535</code> matching a single <code>eth_type = 0x0800, ipv4_src = /32</code> host on <code>10.0.2.0/24</code>. It can never add forwarding outputs, modify uplink rules, or touch Port 2 or Port 4.</li>
         <li><strong>Protected-Host Immunity (Scenario 3 defense):</strong> The envelope maintains a hard-coded immutable exclusion list (<code>10.0.2.52</code> legitimate client, <code>10.0.2.51</code> sensor node, <code>10.0.1.0/24</code> control plane). Because L2 source addresses are trivially forgeable on an untrusted segment, the envelope guarantees that a spoofed flood can never trick the sentinel into quarantining protected infrastructure.</li>
         <li><strong>Table &amp; Throughput Cap (Scenario 5 defense):</strong> Active quarantines are capped at <code>k &lt;= 8</code> (6.25% of the 128-rule table), guaranteeing via our <code>A8</code> cost model that worst-case legitimate forwarding capacity never falls below <strong>8,106 pps</strong> (or <strong>7,765 pps</strong> with up to 8 allow rules).</li>
+        <li><strong>Whole-Day CIC-IDS2017 Benchmark Calibration (Plan &sect;8.8):</strong> To evaluate how the deployed sentinel rule behaves on external whole-day traffic outside our testbed (`docs/benchmarks/results/cic-fullday-scoring-2026-11-09/`), we scored it across the CIC-IDS2017 capture days. Across Tuesday, Wednesday, Thursday, and Friday (&ge;99.99% flow-label join), the static sentinel rule alerted on <strong>12.65% of benign windows</strong> and <strong>34.2% of attack windows</strong> (while the continuous adaptive threshold alerted on <strong>1.05% of benign</strong> and <strong>1.01% of attack windows</strong>; Monday's 529,918 label rows failed the pre-registered Section 8.3 timestamp-format join gate—<code>DD/MM/YYYY HH:MM:SS</code> vs. <code>D/M/YYYY H:MM</code>—and were excluded). These modest external window rates reinforce why Zodiac treats the detector strictly as a noisy signal whose blast radius must be bounded by the Quarantine Envelope rather than an oracle trusted with arbitrary policy synthesis.</li>
     </ul>
 
     <!-- ==================== SECTION 7 ==================== -->
@@ -1535,8 +1516,13 @@ tr:nth-child(even) td {{
                 <td>Does <strong>not</strong> claim unforgeable L2 identity without 802.1X / port-per-host switch isolation.</td>
             </tr>
             <tr>
-                <td><strong>LoRA Fine-Tuning</strong></td>
-                <td>Demonstrates that 15-step and 90-step LoRA SFT+DPO overfit rule templates and regress multi-intent accuracy.</td>
+                <td><strong>Anomaly Detector Generalization</strong></td>
+                <td>Sub-20 ms scan containment on-rack; whole-day CIC-IDS2017 scoring (Tue–Fri: 12.65% benign / 34.2% attack windows).</td>
+                <td>Does <strong>not</strong> claim low-FP general IDS accuracy (Monday excluded by timestamp parser gate); Quarantine Envelope bounds false-positive blast radius.</td>
+            </tr>
+            <tr>
+                <td><strong>LoRA Fine-Tuning &amp; Seed Spread</strong></td>
+                <td>Fresh-seed <code>B3</code> spread (85.0%–88.5%, 521/600) shows 15-step LoRA (+1.0 pp seen) is within seed noise while unseen/90-step LoRA regresses sharply.</td>
                 <td>Does <strong>not</strong> claim full-parameter pretraining on millions of diverse topologies would fail—only that verifier feedback dominates small-corpus LoRA.</td>
             </tr>
         </tbody>

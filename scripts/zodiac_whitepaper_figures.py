@@ -697,319 +697,2268 @@ def svg_figure_6_conformance_funnel() -> str:
 """
 
 
+def fmt(val: float) -> str:
+    return f"{val:.2f}"
+
+
+class IsoProjector:
+    """
+    Projects 3D coordinates (x, y, z) in mm to 2D SVG coordinates (px, py),
+    and computes SVG affine transform matrices for planar text/vector groups.
+    """
+    def __init__(self, ox: float, oy: float, ux: tuple[float, float], uy: tuple[float, float], uz: tuple[float, float]):
+        self.ox = ox
+        self.oy = oy
+        self.ux = ux
+        self.uy = uy
+        self.uz = uz
+
+    def pt(self, x: float, y: float, z: float = 0.0) -> tuple[float, float]:
+        px = self.ox + x * self.ux[0] + y * self.uy[0] + z * self.uz[0]
+        py = self.oy + x * self.ux[1] + y * self.uy[1] + z * self.uz[1]
+        return (px, py)
+
+    def pts(self, coords: list[tuple[float, float, float]]) -> str:
+        return " ".join(f"{fmt(p[0])},{fmt(p[1])}" for p in (self.pt(x, y, z) for x, y, z in coords))
+
+    def plane_matrix(self, x: float, y: float, z: float = 0.0) -> str:
+        """
+        Returns an SVG transform="matrix(a, b, c, d, e, f)" that maps local 2D (dx, dy)
+        in mm directly onto the 3D XY plane at height z, originating at (x, y, z).
+        """
+        e, f = self.pt(x, y, z)
+        a, b = self.ux[0], self.ux[1]
+        c, d = self.uy[0], self.uy[1]
+        return f"matrix({fmt(a)},{fmt(b)},{fmt(c)},{fmt(d)},{fmt(e)},{fmt(f)})"
+
+    def shadow_box(self, x0: float, y0: float, z0: float, w: float, d: float, dx: float = -1.5, dy: float = 2.5, layers: int = 4) -> str:
+        """
+        Pure-vector multi-layered soft shadow on plane z0.
+        """
+        out = []
+        for i in range(layers, 0, -1):
+            pad = i * 0.85
+            alpha = 0.055 * (layers - i + 1)
+            p = self.pts([
+                (x0 + dx - pad, y0 + dy - pad, z0),
+                (x0 + w + dx + pad, y0 + dy - pad, z0),
+                (x0 + w + dx + pad, y0 + d + dy + pad, z0),
+                (x0 + dx - pad, y0 + d + dy + pad, z0),
+            ])
+            out.append(f'<polygon points="{p}" fill="#000000" fill-opacity="{alpha:.2f}"/>')
+        return "\n".join(out)
+
+    def box(
+        self,
+        x0: float, y0: float, z0: float,
+        w: float, d: float, h: float,
+        fill_top: str,
+        fill_front_y: str,
+        fill_side_x: str,
+        stroke: str = "none",
+        stroke_w: float = 0.4,
+        faces: tuple[str, ...] = ("ymin", "ymax", "xmin", "xmax", "top"),
+    ) -> str:
+        """
+        Renders a 3D rectangular prism from (x0, y0, z0) with size (w, d, h).
+        """
+        x1, y1, z1 = x0 + w, y0 + d, z0 + h
+        out = []
+        s_attr = f' stroke="{stroke}" stroke-width="{stroke_w}" stroke-linejoin="round"' if stroke != "none" else ""
+
+        if "ymin" in faces:
+            p = self.pts([(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)])
+            out.append(f'<polygon points="{p}" fill="{fill_front_y}"{s_attr}/>')
+        if "xmin" in faces:
+            p = self.pts([(x0, y0, z0), (x0, y1, z0), (x0, y1, z1), (x0, y0, z1)])
+            out.append(f'<polygon points="{p}" fill="{fill_side_x}"{s_attr}/>')
+        if "ymax" in faces:
+            p = self.pts([(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)])
+            out.append(f'<polygon points="{p}" fill="{fill_front_y}"{s_attr}/>')
+        if "xmax" in faces:
+            p = self.pts([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)])
+            out.append(f'<polygon points="{p}" fill="{fill_side_x}"{s_attr}/>')
+        if "top" in faces:
+            p = self.pts([(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)])
+            out.append(f'<polygon points="{p}" fill="{fill_top}"{s_attr}/>')
+        return "\n".join(out)
+
+
+def render_jetson_orin_group(
+    ox: float = 268.0,
+    oy: float = 64.0,
+    scale: float = 1.0,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    """
+    Returns the <g> element and projector for the NVIDIA Jetson Orin Nano Super Developer Kit.
+    """
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(2.42 * scale, 1.72 * scale),
+        uy=(-2.82 * scale, 2.12 * scale),
+        uz=(0.0, -3.15 * scale),
+    )
+    parts = ['  <g id="jetson-orin-nano-super">']
+
+    # Soft multi-layer vector ground shadow
+    parts.append(iso.shadow_box(-1.5, -1.5, 0.0, 103.0, 83.0, dx=0.5, dy=2.5, layers=4))
+
+    # 1. Base Tray Bottom & Lip
+    parts.append(iso.box(
+        -1.5, -1.5, 0.0, 103.0, 83.0, 3.2,
+        fill_top="#24272c",
+        fill_front_y="#141619",
+        fill_side_x="#0d0e11",
+        stroke="#33373e",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    # Main Carrier PCB (Z = 3.2..5.0mm, X = 0..100, Y = 0..80)
+    parts.append(iso.box(
+        0.0, 0.0, 3.2, 100.0, 80.0, 1.8,
+        fill_top="#22252b",
+        fill_front_y="#181a1f",
+        fill_side_x="#111317",
+        stroke="#3c4048",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    # 2. Carrier PCB Surface Details
+    parts.append(f'  <g transform="{iso.plane_matrix(0, 0, 5.05)}">')
+    parts.append('    <rect x="2" y="2" width="96" height="76" rx="1.5" fill="none" stroke="#4b5563" stroke-width="0.25" stroke-dasharray="6,2"/>')
+
+    for sx, sy in [(6, 72), (88, 74), (94, 14), (8, 8)]:
+        parts.append(f'    <circle cx="{sx}" cy="{sy}" r="2.8" fill="#181a1f" stroke="#6b7280" stroke-width="0.5"/>')
+        parts.append(f'    <circle cx="{sx}" cy="{sy}" r="1.8" fill="#0f1115" stroke="#374151" stroke-width="0.3"/>')
+        parts.append(f'    <line x1="{sx-1}" y1="{sy}" x2="{sx+1}" y2="{sy}" stroke="#4b5563" stroke-width="0.35"/>')
+        parts.append(f'    <line x1="{sx}" y1="{sy-1}" x2="{sx}" y2="{sy+1}" stroke="#4b5563" stroke-width="0.35"/>')
+
+    smd_clusters = [
+        (60, 62, 2.2, 1.4, "#111317"), (63, 62, 1.5, 0.9, "#9ca3af"), (65, 62, 1.5, 0.9, "#b45309"),
+        (58, 65, 3.0, 2.5, "#111317"), (62, 66, 1.4, 0.8, "#d97706"), (64, 66, 1.4, 0.8, "#9ca3af"),
+        (66, 68, 2.5, 2.0, "#111317"), (70, 67, 1.2, 0.8, "#b45309"), (72, 68, 1.2, 0.8, "#9ca3af"),
+        (52, 68, 3.5, 3.5, "#181a1f"), (48, 70, 1.8, 1.0, "#b45309"), (45, 71, 1.8, 1.0, "#9ca3af"),
+        (38, 69, 2.4, 1.8, "#111317"), (35, 70, 1.5, 0.9, "#d97706"), (32, 71, 1.5, 0.9, "#9ca3af"),
+        (62, 48, 2.0, 1.2, "#b45309"), (65, 48, 2.0, 1.2, "#9ca3af"), (68, 44, 2.8, 2.2, "#111317"),
+        (71, 40, 1.6, 1.0, "#d97706"), (73, 36, 2.2, 1.6, "#111317"), (75, 32, 1.5, 0.9, "#9ca3af"),
+        (22, 72, 2.0, 1.2, "#b45309"), (25, 72, 1.5, 0.9, "#9ca3af"), (50, 74, 2.2, 1.2, "#d97706"),
+        (54, 74, 1.6, 1.0, "#9ca3af"), (57, 73, 2.5, 2.0, "#111317"),
+    ]
+    for cx, cy, cw, ch, col in smd_clusters:
+        parts.append(f'    <rect x="{cx}" y="{cy}" width="{cw}" height="{ch}" fill="{col}" stroke="#4b5563" stroke-width="0.15"/>')
+
+    parts.append('    <text x="28" y="78.5" font-family="RobotoMono, monospace" font-size="2.0" fill="#9ca3af">CAM0</text>')
+    parts.append('    <text x="58" y="78.5" font-family="RobotoMono, monospace" font-size="2.0" fill="#9ca3af">CAM1</text>')
+    parts.append('    <text x="89" y="10" font-family="RobotoMono, monospace" font-size="1.8" fill="#9ca3af">J12</text>')
+    parts.append('  </g>')
+
+    # 3. Two MIPI CSI Camera Ribbon Connectors
+    for cam_x in [18.0, 44.0]:
+        parts.append(iso.box(
+            cam_x, 74.5, 5.0, 18.0, 3.2, 2.4,
+            fill_top="#374151",
+            fill_front_y="#111827",
+            fill_side_x="#1f2937",
+            stroke="#4b5563",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(iso.box(
+            cam_x + 1.2, 75.0, 7.4, 15.6, 2.0, 0.5,
+            fill_top="#9ca3af",
+            fill_front_y="#6b7280",
+            fill_side_x="#4b5563",
+            stroke="none",
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 4. 40-Pin GPIO Header (Back-Right Edge)
+    parts.append(iso.box(
+        18.0, 1.5, 5.0, 56.0, 5.0, 2.5,
+        fill_top="#111317",
+        fill_front_y="#090a0d",
+        fill_side_x="#181a1f",
+        stroke="#272a30",
+        stroke_w=0.3 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    for i in range(20):
+        px = 19.5 + i * 2.75
+        for py in [2.6, 5.0]:
+            p_bot = iso.pt(px, py, 7.5)
+            p_top = iso.pt(px, py, 13.8)
+            parts.append(f'  <line x1="{fmt(p_bot[0])}" y1="{fmt(p_bot[1])}" x2="{fmt(p_top[0])}" y2="{fmt(p_top[1])}" stroke="#cbd5e1" stroke-width="{fmt(1.35*scale)}" stroke-linecap="square"/>')
+            parts.append(f'  <line x1="{fmt(p_bot[0])}" y1="{fmt(p_bot[1])}" x2="{fmt(p_top[0])}" y2="{fmt(p_top[1])}" stroke="#94a3b8" stroke-width="{fmt(0.6*scale)}"/>')
+            parts.append(f'  <circle cx="{fmt(p_top[0])}" cy="{fmt(p_top[1])}" r="{fmt(0.65*scale)}" fill="#ffffff"/>')
+
+    # 5. 260-Pin SO-DIMM Connector & Jetson Orin Nano SoM Module
+    parts.append(iso.box(
+        54.5, 11.0, 5.0, 6.5, 55.0, 4.8,
+        fill_top="#1e2024",
+        fill_front_y="#0d0f12",
+        fill_side_x="#15171b",
+        stroke="#374151",
+        stroke_w=0.4 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    for i in range(42):
+        py = 12.5 + i * 1.24
+        p1 = iso.pt(55.0, py, 9.8)
+        p2 = iso.pt(60.5, py, 9.8)
+        p3 = iso.pt(60.5, py, 5.2)
+        parts.append(f'  <polyline points="{fmt(p1[0])},{fmt(p1[1])} {fmt(p2[0])},{fmt(p2[1])} {fmt(p3[0])},{fmt(p3[1])}" fill="none" stroke="#cbd5e1" stroke-width="{fmt(0.55*scale)}" opacity="0.85"/>')
+
+    parts.append(iso.box(
+        8.0, 12.0, 8.2, 47.5, 54.0, 1.6,
+        fill_top="#202329",
+        fill_front_y="#141619",
+        fill_side_x="#1c1f24",
+        stroke="#4b5563",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(f'  <g transform="{iso.plane_matrix(8.0, 12.0, 9.9)}">')
+    for sy in range(4, 50, 3):
+        parts.append(f'    <rect x="44" y="{sy}" width="2.0" height="1.2" fill="#b45309"/>')
+        parts.append(f'    <rect x="41.5" y="{sy+1}" width="1.5" height="0.9" fill="#9ca3af"/>')
+    for sx in range(4, 42, 4):
+        parts.append(f'    <rect x="{sx}" y="50" width="1.8" height="1.1" fill="#9ca3af"/>')
+        parts.append(f'    <rect x="{sx+1.5}" y="48" width="1.4" height="0.9" fill="#d97706"/>')
+    parts.append('    <circle cx="4" cy="50" r="2.2" fill="#181a1f" stroke="#9ca3af" stroke-width="0.5"/>')
+    parts.append('    <line x1="3" y1="50" x2="5" y2="50" stroke="#9ca3af" stroke-width="0.35"/>')
+    parts.append('    <line x1="4" y1="49" x2="4" y2="51" stroke="#9ca3af" stroke-width="0.35"/>')
+    parts.append('  </g>')
+
+    # Silver metal SO-DIMM retention clip at front end of SoM
+    parts.append(iso.box(
+        26.0, 65.5, 6.0, 9.0, 2.2, 4.0,
+        fill_top="#e2e8f0",
+        fill_front_y="#94a3b8",
+        fill_side_x="#64748b",
+        stroke="#475569",
+        stroke_w=0.35 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    # 6. Anodized Aluminum Heatsink & Recessed Axial Fan (Rich gunmetal gray matching Photo 1!)
+    hs_x0, hs_y0, hs_z0 = 10.0, 13.0, 9.8
+    hs_w, hs_d, hs_h = 42.0, 47.0, 20.5
+
+    parts.append(iso.shadow_box(hs_x0, hs_y0, hs_z0, hs_w, hs_d, dx=1.0, dy=1.5, layers=3))
+    parts.append(iso.box(
+        hs_x0, hs_y0, hs_z0, hs_w, hs_d, hs_h,
+        fill_top="#363940",
+        fill_front_y="#272a30",
+        fill_side_x="#1d2025",
+        stroke="#4b5058",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    num_fins = 8
+    slot_w = 3.4
+    slot_gap = (hs_w - 5.0) / num_fins
+    for i in range(num_fins):
+        sx0 = hs_x0 + 2.8 + i * slot_gap
+        sx1 = sx0 + slot_w
+        sz0 = hs_z0 + 0.5
+        sz1 = hs_z0 + hs_h - 4.2
+        y_face = hs_y0 + hs_d
+        slot_pts = iso.pts([
+            (sx0, y_face, sz0),
+            (sx1, y_face, sz0),
+            (sx1, y_face, sz1),
+            (sx0, y_face, sz1),
+        ])
+        parts.append(f'  <polygon points="{slot_pts}" fill="#08090c" stroke="#1f2328" stroke-width="{fmt(0.35*scale)}"/>')
+        in_pts = iso.pts([
+            (sx0 + 0.7, y_face, sz0),
+            (sx0 + 0.7, y_face, sz1 - 0.5),
+        ])
+        parts.append(f'  <polyline points="{in_pts}" fill="none" stroke="#383c44" stroke-width="{fmt(0.45*scale)}"/>')
+
+    parts.append(f'  <g transform="{iso.plane_matrix(hs_x0, hs_y0, hs_z0 + hs_h)}">')
+    parts.append(f'    <rect x="0.8" y="0.8" width="{hs_w-1.6}" height="{hs_d-1.6}" rx="1.2" fill="none" stroke="#525760" stroke-width="0.3"/>')
+    parts.append('    <g transform="translate(23, 6.8) rotate(180)" opacity="0.85">')
+    parts.append('      <text x="0" y="1.8" font-family="GoogleSans, sans-serif" font-weight="700" font-size="5.2" letter-spacing="0.4" fill="#7c828d" text-anchor="middle">nVIDIA</text>')
+    parts.append('    </g>')
+
+    fcx, fcy, fr = 21.0, 27.5, 16.8
+    parts.append(f'    <circle cx="{fcx}" cy="{fcy}" r="{fr+0.7}" fill="#1f2227" stroke="#525760" stroke-width="0.4"/>')
+    parts.append(f'    <circle cx="{fcx}" cy="{fcy}" r="{fr}" fill="#0c0e12" stroke="#050608" stroke-width="0.6"/>')
+    parts.append(f'    <path d="M {fcx-fr},{fcy} A {fr},{fr} 0 1,1 {fcx+fr},{fcy} A {fr},{fr*0.86} 0 1,0 {fcx-fr},{fcy} Z" fill="#25282e" opacity="0.75"/>')
+
+    num_blades = 9
+    for b in range(num_blades):
+        angle = b * (360.0 / num_blades)
+        parts.append(f'    <g transform="translate({fcx}, {fcy}) rotate({angle:.1f})">')
+        parts.append('      <path d="M 5.5,-2.2 C 9.0,-4.5 13.0,-4.0 15.6,-1.2 C 16.0,0.8 15.2,2.8 13.5,3.4 C 10.5,2.0 7.8,1.2 5.2,1.5 Z" fill="#282c33" stroke="#4b5058" stroke-width="0.28"/>')
+        parts.append('      <path d="M 6.0,-1.9 C 9.2,-4.0 12.8,-3.6 15.3,-1.0" fill="none" stroke="#646a73" stroke-width="0.35"/>')
+        parts.append('    </g>')
+
+    parts.append(f'    <circle cx="{fcx}" cy="{fcy}" r="7.4" fill="#2c3038" stroke="#4b5058" stroke-width="0.4"/>')
+    parts.append(f'    <circle cx="{fcx}" cy="{fcy}" r="1.2" fill="#141619" stroke="#525760" stroke-width="0.3"/>')
+    parts.append(f'    <circle cx="{fcx}" cy="{fcy}" r="0.35" fill="#6b7280"/>')
+    parts.append(f'    <path d="M {fcx+2.8},{fcy-3.8} C {fcx+3.8},{fcy-4.2} {fcx+4.4},{fcy-3.2} {fcx+3.4},{fcy-2.6}" fill="none" stroke="#525760" stroke-width="0.35"/>')
+    parts.append('  </g>')
+
+    # 7. Front-Right I/O Port Cluster (Brushed Metallic Silver Shields matching Photo 1!)
+    # 7A. USB Type-C Port
+    parts.append(iso.box(
+        89.0, 5.5, 5.0, 9.5, 8.5, 3.8,
+        fill_top="#e2e8f0",
+        fill_front_y="#94a3b8",
+        fill_side_x="#cbd5e1",
+        stroke="#64748b",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    usbc_cav = iso.pts([(98.5, 7.0, 5.8), (98.5, 12.5, 5.8), (98.5, 12.5, 8.0), (98.5, 7.0, 8.0)])
+    parts.append(f'  <polygon points="{usbc_cav}" fill="#0f172a" stroke="#475569" stroke-width="{fmt(0.4*scale)}"/>')
+    usbc_tongue = iso.pts([(98.5, 8.0, 6.7), (98.5, 11.5, 6.7), (98.5, 11.5, 7.1), (98.5, 8.0, 7.1)])
+    parts.append(f'  <polygon points="{usbc_tongue}" fill="#cbd5e1"/>')
+
+    # 7B. Gigabit Ethernet RJ45 Tower
+    parts.append(iso.shadow_box(76.0, 16.0, 5.0, 21.5, 16.0, dx=-1.0, dy=1.5, layers=2))
+    parts.append(iso.box(
+        76.0, 16.0, 5.0, 21.5, 16.0, 14.5,
+        fill_top="#f1f5f9",
+        fill_front_y="#94a3b8",
+        fill_side_x="#cbd5e1",
+        stroke="#64748b",
+        stroke_w=0.55 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    # Specular sheen on top of GbE shield
+    parts.append(f'  <g transform="{iso.plane_matrix(76.0, 16.0, 19.55)}">')
+    parts.append('    <polygon points="1,1 20.5,1 14,15 1,15" fill="#ffffff" fill-opacity="0.45"/>')
+    parts.append('  </g>')
+    rj_cav = iso.pts([
+        (97.5, 18.2, 6.5),
+        (97.5, 29.8, 6.5),
+        (97.5, 29.8, 15.8),
+        (97.5, 26.8, 15.8),
+        (97.5, 26.8, 17.5),
+        (97.5, 21.2, 17.5),
+        (97.5, 21.2, 15.8),
+        (97.5, 18.2, 15.8),
+    ])
+    parts.append(f'  <polygon points="{rj_cav}" fill="#090d14" stroke="#334155" stroke-width="{fmt(0.45*scale)}"/>')
+    rj_inner = iso.pts([
+        (97.5, 18.5, 6.7),
+        (97.5, 29.5, 6.7),
+        (97.5, 29.5, 9.8),
+        (97.5, 24.5, 11.2),
+        (97.5, 18.5, 8.8),
+    ])
+    parts.append(f'  <polygon points="{rj_inner}" fill="#1e293b"/>')
+    for pin_i in range(6):
+        py = 19.8 + pin_i * 1.6
+        p_a = iso.pt(97.5, py, 15.4)
+        p_b = iso.pt(97.5, py + 0.8, 12.2)
+        parts.append(f'  <line x1="{fmt(p_a[0])}" y1="{fmt(p_a[1])}" x2="{fmt(p_b[0])}" y2="{fmt(p_b[1])}" stroke="#eab308" stroke-width="{fmt(0.6*scale)}"/>')
+
+    # 7C. Two Dual-Stacked USB 3.2 Type-A Towers
+    for usb_y in [34.5, 49.5]:
+        parts.append(iso.shadow_box(79.0, usb_y, 5.0, 18.5, 13.0, dx=-1.0, dy=1.5, layers=2))
+        parts.append(iso.box(
+            79.0, usb_y, 5.0, 18.5, 13.0, 15.5,
+            fill_top="#f1f5f9",
+            fill_front_y="#94a3b8",
+            fill_side_x="#cbd5e1",
+            stroke="#64748b",
+            stroke_w=0.55 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(f'  <g transform="{iso.plane_matrix(79.0, usb_y, 20.55)}">')
+        parts.append('    <polygon points="0.8,0.8 17.5,0.8 11,12.2 0.8,12.2" fill="#ffffff" fill-opacity="0.42"/>')
+        parts.append('    <rect x="3.5" y="2.2" width="4.5" height="2.2" fill="none" stroke="#64748b" stroke-width="0.35"/>')
+        parts.append('    <rect x="3.5" y="8.6" width="4.5" height="2.2" fill="none" stroke="#64748b" stroke-width="0.35"/>')
+        parts.append('    <line x1="11" y1="1.5" x2="11" y2="11.5" stroke="#94a3b8" stroke-width="0.3"/>')
+        parts.append('  </g>')
+        for uz in [6.8, 13.5]:
+            ucav = iso.pts([
+                (97.5, usb_y + 1.6, uz),
+                (97.5, usb_y + 11.4, uz),
+                (97.5, usb_y + 11.4, uz + 4.8),
+                (97.5, usb_y + 1.6, uz + 4.8),
+            ])
+            parts.append(f'  <polygon points="{ucav}" fill="#090d14" stroke="#334155" stroke-width="{fmt(0.4*scale)}"/>')
+            utongue = iso.pts([
+                (97.5, usb_y + 2.2, uz + 2.2),
+                (97.5, usb_y + 10.8, uz + 2.2),
+                (97.5, usb_y + 10.8, uz + 3.4),
+                (97.5, usb_y + 2.2, uz + 3.4),
+            ])
+            parts.append(f'  <polygon points="{utongue}" fill="#1e293b" stroke="#64748b" stroke-width="{fmt(0.3*scale)}"/>')
+            for u_i in range(4):
+                upy = usb_y + 3.2 + u_i * 2.1
+                pa = iso.pt(97.5, upy, uz + 2.1)
+                pb = iso.pt(97.5, upy + 0.5, uz + 1.2)
+                parts.append(f'  <line x1="{fmt(pa[0])}" y1="{fmt(pa[1])}" x2="{fmt(pb[0])}" y2="{fmt(pb[1])}" stroke="#eab308" stroke-width="{fmt(0.5*scale)}"/>')
+
+    # 7D. DisplayPort Connector
+    parts.append(iso.shadow_box(81.0, 64.5, 5.0, 16.5, 11.0, dx=-1.0, dy=1.2, layers=2))
+    parts.append(iso.box(
+        81.0, 64.5, 5.0, 16.5, 11.0, 6.2,
+        fill_top="#f1f5f9",
+        fill_front_y="#94a3b8",
+        fill_side_x="#cbd5e1",
+        stroke="#64748b",
+        stroke_w=0.5 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(f'  <g transform="{iso.plane_matrix(81.0, 64.5, 11.25)}">')
+    parts.append('    <polyline points="5,2.5 11,3.2 11,4.5 5,4.2" fill="none" stroke="#475569" stroke-width="0.45"/>')
+    parts.append('    <polyline points="5,6.8 11,7.5 11,8.8 5,8.5" fill="none" stroke="#475569" stroke-width="0.45"/>')
+    parts.append('  </g>')
+    dp_cav = iso.pts([
+        (97.5, 65.8, 5.8),
+        (97.5, 74.2, 5.8),
+        (97.5, 74.2, 10.2),
+        (97.5, 67.2, 10.2),
+        (97.5, 65.8, 8.8),
+    ])
+    parts.append(f'  <polygon points="{dp_cav}" fill="#090d14" stroke="#334155" stroke-width="{fmt(0.4*scale)}"/>')
+
+    # 7E. Black DC Power Barrel Jack
+    parts.append(iso.box(
+        68.5, 68.5, 5.0, 9.5, 7.5, 8.2,
+        fill_top="#262930",
+        fill_front_y="#14161a",
+        fill_side_x="#1c1f24",
+        stroke="#374151",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(iso.box(
+        69.2, 74.5, 5.0, 8.0, 4.8, 7.6,
+        fill_top="#2d3139",
+        fill_front_y="#111317",
+        fill_side_x="#1f232a",
+        stroke="#374151",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    dc_center = iso.pt(73.2, 79.3, 8.8)
+    parts.append(f'  <ellipse cx="{fmt(dc_center[0])}" cy="{fmt(dc_center[1])}" rx="{fmt(7.5*scale)}" ry="{fmt(9.2*scale)}" transform="rotate(-22 {fmt(dc_center[0])} {fmt(dc_center[1])})" fill="#07080a" stroke="#374151" stroke-width="{fmt(0.7*scale)}"/>')
+    parts.append(f'  <ellipse cx="{fmt(dc_center[0]+1.2*scale)}" cy="{fmt(dc_center[1]-0.8*scale)}" rx="{fmt(2.0*scale)}" ry="{fmt(2.6*scale)}" transform="rotate(-22 {fmt(dc_center[0]+1.2*scale)} {fmt(dc_center[1]-0.8*scale)})" fill="#cbd5e1" stroke="#475569" stroke-width="{fmt(0.4*scale)}"/>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+
+def render_rpi5_hailo_group(
+    ox: float = 28.0,
+    oy: float = 550.0,
+    scale: float = 0.62,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    """
+    Renders the Raspberry Pi 5 + Official AI HAT+ (Hailo-8 26 TOPS M.2 Neural Accelerator)
+    matching Reference Photo 2 & 3:
+      - The 3 metallic port blocks sit side-by-side along the right edge (x = 74..100, y = 4.5..77.5),
+        drawn in strict back-to-front painter's order:
+          1. Back (y = 4.5..25.0): Dual USB 2.0 Tower (black tongues)
+          2. Middle (y = 29.0..49.5): Dual USB 3.0 Tower (bright blue tongues #0284c7 -> O1 Capture NIC)
+          3. Front (y = 53.5..77.5): Shielded Gigabit Ethernet RJ45 Jack (10.0.2.51)
+      - The Hailo-8 AI HAT+ covers the left 68% of the board (x = 0..68, y = 0..80) on 4 brass hex
+        standoffs, leaving all 3 metallic port towers on the right edge 100% uncovered from above!
+    """
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(1.85 * scale, 0.98 * scale),
+        uy=(-2.65 * scale, 1.15 * scale),
+        uz=(0.0, -1.75 * scale),
+    )
+    parts = ['  <g id="rpi5-hailo-assembly">']
+    parts.append(iso.shadow_box(0.0, 0.0, 0.0, 100.0, 80.0, dx=-2.0, dy=3.0, layers=4))
+
+    # 1. Bottom Layer: Raspberry Pi 5 Green PCB Base (100 x 80 x 2.0)
+    parts.append(iso.box(
+        0.0, 0.0, 0.0, 100.0, 80.0, 2.0,
+        fill_top="#15803d",
+        fill_front_y="#0f5128",
+        fill_side_x="#115e2e",
+        stroke="#166534",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    # 2. Brass Hex Standoffs Supporting the AI HAT+ (z = 2.0 to z = 19.5 at x = 5.5 and x = 63.5)
+    for sx, sy in [(5.5, 5.5), (63.5, 5.5), (5.5, 74.5), (63.5, 74.5)]:
+        parts.append(iso.box(
+            sx - 1.8, sy - 1.8, 2.0, 3.6, 3.6, 17.5,
+            fill_top="#fbbf24",
+            fill_front_y="#d97706",
+            fill_side_x="#b45309",
+            stroke="#78350f",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 3. Front-Left Edge of Pi 5 (along y = 69..80): USB-C Power + Dual Micro-HDMI Ports
+    for port_x, port_w in [(12.0, 11.0), (28.0, 9.5), (42.0, 9.5)]:
+        parts.append(iso.box(
+            port_x, 69.0, 2.0, port_w, 11.0, 4.6,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#64748b",
+            stroke="#475569",
+            stroke_w=0.4 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 4. Top Deck (z = 19.5..21.3, x = 0..68, y = 0..80): Official Raspberry Pi M.2 / AI HAT+ Dark Matte PCB
+    parts.append(iso.box(
+        0.0, 0.0, 19.5, 68.0, 80.0, 1.8,
+        fill_top="#1e293b",
+        fill_front_y="#0f172a",
+        fill_side_x="#111827",
+        stroke="#475569",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    parts.append(f'  <g transform="{iso.plane_matrix(0, 0, 21.35)}">')
+    for mx, my in [(5.5, 5.5), (63.5, 5.5), (5.5, 74.5), (63.5, 74.5)]:
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="2.8" fill="#cbd5e1" stroke="#64748b" stroke-width="0.35"/>')
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="1.3" fill="#334155"/>')
+    parts.append('    <rect x="10.0" y="2.5" width="50.0" height="6.0" rx="0.5" fill="#090d16" stroke="#475569" stroke-width="0.35"/>')
+    for p_i in range(20):
+        px = 11.5 + p_i * 2.45
+        parts.append(f'    <circle cx="{px:.1f}" cy="4.0" r="0.55" fill="#fbbf24"/>')
+        parts.append(f'    <circle cx="{px:.1f}" cy="7.0" r="0.55" fill="#fbbf24"/>')
+    parts.append('  </g>')
+
+    # Hailo-8 M.2 2280 AI Accelerator Module Seated on the HAT (x = 10..60, y = 16..64, z = 21.3..25.0)
+    parts.append(iso.box(
+        10.0, 16.0, 21.3, 50.0, 48.0, 1.6,
+        fill_top="#0f172a",
+        fill_front_y="#020617",
+        fill_side_x="#090d16",
+        stroke="#38bdf8",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(iso.box(
+        18.0, 24.0, 22.9, 34.0, 32.0, 3.1,
+        fill_top="#111827",
+        fill_front_y="#090d16",
+        fill_side_x="#1f2937",
+        stroke="#94a3b8",
+        stroke_w=0.5 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(f'  <g transform="{iso.plane_matrix(18.0, 24.0, 26.05)}">')
+    parts.append('    <rect x="1.5" y="1.5" width="31.0" height="29.0" rx="0.8" fill="none" stroke="#38bdf8" stroke-width="0.35"/>')
+    parts.append('    <text x="17.0" y="12.5" font-family="GoogleSans, sans-serif" font-weight="900" font-size="5.2" fill="#f8fafc" letter-spacing="0.4" text-anchor="middle">HAILO-8</text>')
+    parts.append('    <text x="17.0" y="18.5" font-family="RobotoMono, monospace" font-weight="700" font-size="3.1" fill="#38bdf8" text-anchor="middle">26 TOPS · PCIe</text>')
+    parts.append('    <text x="17.0" y="24.2" font-family="RobotoMono, monospace" font-weight="700" font-size="2.7" fill="#cbd5e1" text-anchor="middle">10.0.2.51</text>')
+    parts.append('  </g>')
+
+    # 5. Front-Right Port Edge of Pi 5 (x = 74..100, across y = 4.5..77.5)
+    for usb_y, tongue_col in [(4.5, "#334155"), (29.0, "#0284c7")]:
+        parts.append(iso.box(
+            76.0, usb_y, 2.0, 24.0, 20.5, 16.0,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#cbd5e1",
+            stroke="#475569",
+            stroke_w=0.55 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(f'  <g transform="{iso.plane_matrix(76.0, usb_y, 18.05)}">')
+        parts.append('    <rect x="1.2" y="1.2" width="21.6" height="18.1" fill="none" stroke="#94a3b8" stroke-width="0.25"/>')
+        parts.append('    <path d="M 10,4.5 L 18,4.5 M 10,7.5 L 18,7.5 M 10,13.0 L 18,13.0 M 10,16.0 L 18,16.0" stroke="#475569" stroke-width="0.5"/>')
+        parts.append('  </g>')
+        for slot_z in [4.2, 11.0]:
+            ucav = iso.pts([
+                (100.0, usb_y + 2.2, slot_z),
+                (100.0, usb_y + 18.3, slot_z),
+                (100.0, usb_y + 18.3, slot_z + 4.6),
+                (100.0, usb_y + 2.2, slot_z + 4.6),
+            ])
+            parts.append(f'  <polygon points="{ucav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.35*scale)}"/>')
+            utongue = iso.pts([
+                (100.0, usb_y + 3.0, slot_z + 2.4),
+                (100.0, usb_y + 17.5, slot_z + 2.4),
+                (100.0, usb_y + 17.5, slot_z + 3.8),
+                (100.0, usb_y + 3.0, slot_z + 3.8),
+            ])
+            parts.append(f'  <polygon points="{utongue}" fill="{tongue_col}"/>')
+
+    rj5_y, rj5_d, rj5_h = 53.5, 24.0, 14.0
+    parts.append(iso.box(
+        74.0, rj5_y, 2.0, 26.0, rj5_d, rj5_h,
+        fill_top="#e2e8f0",
+        fill_front_y="#94a3b8",
+        fill_side_x="#cbd5e1",
+        stroke="#475569",
+        stroke_w=0.55 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    rj5_cav = iso.pts([
+        (100.0, rj5_y + 3.2, 4.0),
+        (100.0, rj5_y + rj5_d - 3.2, 4.0),
+        (100.0, rj5_y + rj5_d - 3.2, 13.4),
+        (100.0, rj5_y + 3.2, 13.4),
+    ])
+    parts.append(f'  <polygon points="{rj5_cav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.4*scale)}"/>')
+    led5_g = iso.pt(100.0, rj5_y + rj5_d - 2.8, 4.8)
+    led5_a = iso.pt(100.0, rj5_y + 2.8, 4.8)
+    parts.append(f'  <circle cx="{fmt(led5_g[0])}" cy="{fmt(led5_g[1])}" r="{fmt(1.3*scale)}" fill="#22c55e"/>')
+    parts.append(f'  <circle cx="{fmt(led5_a[0])}" cy="{fmt(led5_a[1])}" r="{fmt(1.3*scale)}" fill="#f59e0b"/>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+def render_zodiac_fx_group(
+    ox: float = 76.0,
+    oy: float = 152.0,
+    scale: float = 1.0,
+    show_usb_cable: bool = True,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    """
+    Returns the <g> element and projector for the Northbound Networks Zodiac FX Rev A OpenFlow Switch.
+    """
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(3.22 * scale, -0.86 * scale),
+        uy=(1.06 * scale, 2.84 * scale),
+        uz=(-0.38 * scale, -2.55 * scale),
+    )
+    parts = ['  <g id="zodiac-fx-board">']
+
+    # Soft multi-layer vector ground shadow
+    parts.append(iso.shadow_box(0.0, 0.0, 0.0, 100.0, 80.0, dx=-2.5, dy=3.5, layers=4))
+
+    # 1. Plugged-in Black Micro-USB Cable
+    if show_usb_cable:
+        p_cab_far = iso.pt(-6.0, -52.0, 3.2)
+        p_cab_mid = iso.pt(1.0, -26.0, 2.8)
+        p_cab_boot = iso.pt(3.8, -10.0, 2.6)
+        parts.append(f'  <path d="M {fmt(p_cab_far[0])},{fmt(p_cab_far[1])} Q {fmt(p_cab_mid[0])},{fmt(p_cab_mid[1])} {fmt(p_cab_boot[0])},{fmt(p_cab_boot[1])}" fill="none" stroke="#181b20" stroke-width="{fmt(10.5*scale)}" stroke-linecap="round"/>')
+        parts.append(f'  <path d="M {fmt(p_cab_far[0]+1.5*scale)},{fmt(p_cab_far[1])} Q {fmt(p_cab_mid[0]+1.5*scale)},{fmt(p_cab_mid[1])} {fmt(p_cab_boot[0]+1.5*scale)},{fmt(p_cab_boot[1])}" fill="none" stroke="#374151" stroke-width="{fmt(2.2*scale)}" stroke-linecap="round"/>')
+        parts.append(iso.box(
+            1.2, -13.5, 1.2, 5.4, 6.5, 3.4,
+            fill_top="#252930",
+            fill_front_y="#16181d",
+            fill_side_x="#0f1115",
+            stroke="#374151",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmin", "top"),
+        ))
+        parts.append(iso.box(
+            0.0, -7.0, 0.9, 7.8, 11.5, 4.2,
+            fill_top="#2c3038",
+            fill_front_y="#181b20",
+            fill_side_x="#111317",
+            stroke="#3f444e",
+            stroke_w=0.45 * scale,
+            faces=("ymax", "xmin", "top"),
+        ))
+
+    # 2. Zodiac FX Deep Cobalt-Blue PCB Substrate (#18325c)
+    parts.append(iso.box(
+        0.0, 0.0, 0.0, 100.0, 80.0, 1.8,
+        fill_top="#18325c",
+        fill_front_y="#1c2826",
+        fill_side_x="#283530",
+        stroke="#2d4a7c",
+        stroke_w=0.65 * scale,
+        faces=("ymax", "xmin", "top"),
+    ))
+
+    # 3. Planar PCB Traces, Silkscreen, Pads, Mounting Holes, SMD Passives
+    parts.append(f'  <g transform="{iso.plane_matrix(0, 0, 1.82)}">')
+    # Subtle sheen on upper-left PCB
+    parts.append('    <polygon points="0,0 75,0 35,80 0,80" fill="#23457a" fill-opacity="0.28"/>')
+
+    parts.append('    <g stroke="#284c85" stroke-width="0.45" fill="none" opacity="0.8">')
+    parts.append('      <polyline points="12,15 24,25 32,34"/>')
+    parts.append('      <polyline points="14,18 28,28 35,34"/>')
+    parts.append('      <polyline points="42,39 52,36 56,33"/>')
+    parts.append('      <polyline points="42,42 54,39 56,35"/>')
+    parts.append('      <polyline points="42,45 55,42 56,37"/>')
+    parts.append('      <polyline points="32,48 24,55"/>')
+    parts.append('      <polyline points="36,48 42,55"/>')
+    parts.append('      <polyline points="40,48 60,55"/>')
+    parts.append('      <polyline points="68,38 80,55"/>')
+    parts.append('      <polyline points="64,20 58,10"/>')
+    parts.append('      <polyline points="72,22 84,14"/>')
+    parts.append('    </g>')
+
+    for mx, my in [(4.8, 5.2), (95.2, 5.2), (4.8, 74.8), (95.2, 74.8)]:
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="3.4" fill="#d49a56" stroke="#f3c68f" stroke-width="0.35"/>')
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="1.9" fill="#18191c"/>')
+        for v_ang in range(0, 360, 45):
+            rad = math.radians(v_ang)
+            vx = mx + 2.65 * math.cos(rad)
+            vy = my + 2.65 * math.sin(rad)
+            parts.append(f'    <circle cx="{vx:.2f}" cy="{vy:.2f}" r="0.22" fill="#0f2244"/>')
+
+    # Regulatory Markings along Left Edge
+    parts.append('    <g fill="#f8fafc" stroke="none" opacity="0.92">')
+    parts.append('      <circle cx="6.2" cy="29.0" r="2.6" fill="none" stroke="#f8fafc" stroke-width="0.45"/>')
+    parts.append('      <polygon points="4.8,29.8 7.6,29.8 6.2,27.2" fill="none" stroke="#f8fafc" stroke-width="0.4"/>')
+    parts.append('      <text x="3.2" y="39.5" font-family="GoogleSans, sans-serif" font-weight="900" font-size="5.6" letter-spacing="-0.4">FC</text>')
+    parts.append('      <text x="3.0" y="47.2" font-family="GoogleSans, sans-serif" font-weight="900" font-size="5.6" letter-spacing="0.2">CE</text>')
+    parts.append('      <rect x="4.5" y="50.5" width="3.2" height="3.8" fill="none" stroke="#f8fafc" stroke-width="0.38"/>')
+    parts.append('      <line x1="3.3" y1="49.8" x2="8.9" y2="55.2" stroke="#f8fafc" stroke-width="0.45"/>')
+    parts.append('      <line x1="8.9" y1="49.8" x2="3.3" y2="55.2" stroke="#f8fafc" stroke-width="0.45"/>')
+    parts.append('      <text x="8.8" y="56.5" font-family="RobotoMono, monospace" font-weight="700" font-size="1.65" transform="rotate(90 8.8 56.5)">CAN ICES-3 (B)/NMB-3(B)</text>')
+    parts.append('    </g>')
+
+    # Center "Northbound NETWORKS" Silkscreen Logo
+    parts.append('    <g transform="translate(25.5, 28.0)" fill="#ffffff">')
+    parts.append('      <rect x="0.0" y="-1.1" width="0.6" height="1.1" rx="0.2"/>')
+    parts.append('      <rect x="1.1" y="-2.0" width="0.6" height="2.0" rx="0.2"/>')
+    parts.append('      <rect x="2.2" y="-3.0" width="0.6" height="3.0" rx="0.2"/>')
+    parts.append('      <rect x="3.3" y="-4.1" width="0.6" height="4.1" rx="0.2"/>')
+    parts.append('      <rect x="4.4" y="-5.3" width="0.6" height="5.3" rx="0.2"/>')
+    parts.append('      <text x="6.0" y="-1.3" font-family="GoogleSans, sans-serif" font-weight="800" font-size="3.1" letter-spacing="0.08">Northbound</text>')
+    parts.append('      <text x="14.2" y="0.5" font-family="GoogleSans, sans-serif" font-weight="700" font-size="1.45" letter-spacing="0.4" fill="#cbd5e1">NETWORKS</text>')
+    parts.append('    </g>')
+
+    parts.append('    <text x="55.5" y="13.8" font-family="RobotoMono, monospace" font-weight="700" font-size="1.6" fill="#ffffff">MASTER</text>')
+    parts.append('    <text x="67.0" y="4.2" font-family="GoogleSans, sans-serif" font-weight="700" font-size="1.55" fill="#ffffff" transform="rotate(180 67.0 4.2)">MADE IN AUSTRALIA</text>')
+    parts.append('    <polygon points="71.5,13.5 79.5,13.5 75.5,6.8" fill="#ffffff"/>')
+    parts.append('    <polygon points="73.2,12.8 77.8,12.8 75.5,8.8" fill="#18325c"/>')
+    parts.append('    <line x1="72.5" y1="10.2" x2="78.5" y2="12.2" stroke="#ffffff" stroke-width="0.6"/>')
+
+    parts.append('    <text x="89.5" y="18.2" font-family="RobotoMono, monospace" font-weight="700" font-size="1.6" fill="#ffffff">JTAG</text>')
+    parts.append('    <text x="80.5" y="38.2" font-family="RobotoMono, monospace" font-weight="700" font-size="1.6" fill="#ffffff">ERASE</text>')
+
+    parts.append('    <text x="92.8" y="44.0" font-family="GoogleSans, sans-serif" font-weight="800" font-size="2.1" fill="#ffffff" transform="rotate(-90 92.8 44.0)">ZODIAC FX - Rev A</text>')
+    parts.append('    <text x="95.2" y="44.0" font-family="GoogleSans, sans-serif" font-weight="700" font-size="1.85" fill="#cbd5e1" transform="rotate(-90 95.2 44.0)">Northbound Networks 2016</text>')
+
+    # SMD Passive Components
+    parts.append('    <rect x="18.0" y="33.0" width="3.4" height="2.4" rx="0.3" fill="#eab308" stroke="#ca8a04" stroke-width="0.2"/>')
+    parts.append('    <rect x="20.6" y="33.0" width="0.7" height="2.4" fill="#a16207"/>')
+    parts.append('    <rect x="21.0" y="45.8" width="4.2" height="2.8" rx="0.4" fill="#cbd5e1" stroke="#64748b" stroke-width="0.25"/>')
+    parts.append('    <rect x="21.6" y="46.2" width="3.0" height="2.0" rx="0.2" fill="#94a3b8"/>')
+    parts.append('    <rect x="51.5" y="16.0" width="3.6" height="2.4" rx="0.4" fill="#cbd5e1" stroke="#64748b" stroke-width="0.25"/>')
+    parts.append('    <rect x="54.0" y="41.5" width="3.2" height="4.2" fill="#e2e8f0" stroke="#475569" stroke-width="0.25"/>')
+    parts.append('    <rect x="54.8" y="42.5" width="1.6" height="2.2" rx="0.4" fill="#b45309"/>')
+
+    smds = [
+        (14, 29), (14, 31), (17, 22), (24, 21), (26, 21), (32, 19), (34, 19),
+        (22, 41), (22, 43), (25, 43), (45, 32), (47, 32), (45, 34), (48, 36),
+        (50, 38), (51, 40), (51, 43), (51, 45), (48, 22), (50, 22), (56, 17),
+        (60, 17), (68, 16), (70, 16), (76, 23), (78, 23), (74, 34), (74, 36),
+    ]
+    for sx, sy in smds:
+        parts.append(f'    <rect x="{sx}" y="{sy}" width="1.8" height="0.95" fill="#cbd5e1"/>')
+        parts.append(f'    <rect x="{sx+0.4}" y="{sy+0.1}" width="1.0" height="0.75" fill="#92400e"/>')
+
+    # 4. Integrated Circuits
+    for soic_x, soic_y in [(17.5, 13.5), (26.5, 13.5), (76.0, 15.5)]:
+        for p_i in range(4):
+            px = soic_x + 0.8 + p_i * 1.25
+            parts.append(f'    <rect x="{px:.2f}" y="{soic_y-1.1:.2f}" width="0.55" height="1.2" fill="#e2e8f0"/>')
+            parts.append(f'    <rect x="{px:.2f}" y="{soic_y+4.4:.2f}" width="0.55" height="1.2" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{soic_x}" y="{soic_y}" width="5.8" height="4.5" rx="0.3" fill="#20242c" stroke="#475569" stroke-width="0.22"/>')
+        parts.append(f'    <circle cx="{soic_x+0.9}" cy="{soic_y+3.6}" r="0.35" fill="#94a3b8"/>')
+
+    # Micrel KSZ8795CLXCC 80-Pin LQFP Switch IC
+    mx0, my0, mw = 28.5, 33.5, 13.0
+    parts.append(f'    <rect x="{mx0-1.4}" y="{my0-1.4}" width="{mw+2.8}" height="{mw+2.8}" fill="none" stroke="#cbd5e1" stroke-width="0.22"/>')
+    for p_i in range(18):
+        ofs = 0.8 + p_i * ((mw - 1.6) / 17.0)
+        parts.append(f'    <rect x="{mx0+ofs-0.18:.2f}" y="{my0-1.2:.2f}" width="0.36" height="1.3" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{mx0+ofs-0.18:.2f}" y="{my0+mw-0.1:.2f}" width="0.36" height="1.3" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{mx0-1.2:.2f}" y="{my0+ofs-0.18:.2f}" width="1.3" height="0.36" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{mx0+mw-0.1:.2f}" y="{my0+ofs-0.18:.2f}" width="1.3" height="0.36" fill="#e2e8f0"/>')
+    parts.append(f'    <rect x="{mx0}" y="{my0}" width="{mw}" height="{mw}" rx="0.5" fill="#20242c" stroke="#475569" stroke-width="0.3"/>')
+    parts.append(f'    <rect x="{mx0+0.6}" y="{my0+0.6}" width="{mw-1.2}" height="{mw-1.2}" fill="none" stroke="#334155" stroke-width="0.2"/>')
+    parts.append(f'    <circle cx="{mx0+1.8}" cy="{my0+mw-1.8}" r="0.55" fill="#94a3b8"/>')
+    parts.append(f'    <text x="{mx0+6.5}" y="{my0+4.5}" font-family="GoogleSans, sans-serif" font-weight="800" font-size="1.95" fill="#e2e8f0" text-anchor="middle">MICREL</text>')
+    parts.append(f'    <text x="{mx0+6.5}" y="{my0+6.6}" font-family="RobotoMono, monospace" font-weight="700" font-size="1.45" fill="#cbd5e1" text-anchor="middle">KSZ8795CLXCC</text>')
+    parts.append(f'    <text x="{mx0+6.5}" y="{my0+8.3}" font-family="RobotoMono, monospace" font-size="1.2" fill="#94a3b8" text-anchor="middle">1529A2T</text>')
+    parts.append(f'    <text x="{mx0+6.5}" y="{my0+9.8}" font-family="RobotoMono, monospace" font-size="1.1" fill="#94a3b8" text-anchor="middle">1529054.1H</text>')
+
+    # Atmel ATSAM4E8C 100-Pin LQFP Microcontroller
+    ax0, ay0, aw = 55.5, 21.5, 17.0
+    parts.append(f'    <rect x="{ax0-1.6}" y="{ay0-1.6}" width="{aw+3.2}" height="{aw+3.2}" fill="none" stroke="#cbd5e1" stroke-width="0.25"/>')
+    for p_i in range(22):
+        ofs = 0.9 + p_i * ((aw - 1.8) / 21.0)
+        parts.append(f'    <rect x="{ax0+ofs-0.18:.2f}" y="{ay0-1.35:.2f}" width="0.36" height="1.45" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{ax0+ofs-0.18:.2f}" y="{ay0+aw-0.1:.2f}" width="0.36" height="1.45" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{ax0-1.35:.2f}" y="{ay0+ofs-0.18:.2f}" width="1.45" height="0.36" fill="#e2e8f0"/>')
+        parts.append(f'    <rect x="{ax0+aw-0.1:.2f}" y="{ay0+ofs-0.18:.2f}" width="1.45" height="0.36" fill="#e2e8f0"/>')
+    parts.append(f'    <rect x="{ax0}" y="{ay0}" width="{aw}" height="{aw}" rx="0.6" fill="#20242c" stroke="#475569" stroke-width="0.35"/>')
+    parts.append(f'    <rect x="{ax0+0.8}" y="{ay0+0.8}" width="{aw-1.6}" height="{aw-1.6}" fill="none" stroke="#334155" stroke-width="0.22"/>')
+    parts.append(f'    <circle cx="{ax0+2.2}" cy="{ay0+2.2}" r="0.65" fill="#94a3b8"/>')
+    parts.append(f'    <g transform="translate({ax0+8.5}, {ay0+8.5}) rotate(90)">')
+    parts.append('      <text x="0" y="-2.2" font-family="GoogleSans, sans-serif" font-weight="800" font-size="3.1" fill="#cbd5e1" text-anchor="middle">Atmel</text>')
+    parts.append('      <text x="-1.5" y="0.5" font-family="RobotoMono, monospace" font-weight="700" font-size="1.45" fill="#94a3b8" text-anchor="middle">ATSAM4E8C</text>')
+    parts.append('      <text x="-2.2" y="2.2" font-family="RobotoMono, monospace" font-size="1.25" fill="#94a3b8" text-anchor="middle">AU</text>')
+    parts.append('      <text x="2.8" y="2.8" font-family="GoogleSans, sans-serif" font-weight="900" font-size="1.6" fill="#cbd5e1" text-anchor="middle">ARM</text>')
+    parts.append('    </g>')
+    parts.append('  </g>')
+
+    # 5. 3D Silver Micro-USB Receptacle + Bright Green LED Glow
+    parts.append(iso.box(
+        0.2, 4.5, 1.8, 7.6, 8.5, 3.2,
+        fill_top="#e2e8f0",
+        fill_front_y="#cbd5e1",
+        fill_side_x="#94a3b8",
+        stroke="#64748b",
+        stroke_w=0.4 * scale,
+        faces=("ymax", "xmin", "top"),
+    ))
+    usb_refl = iso.pts([(0.2, 13.0, 1.8), (7.8, 13.0, 1.8), (7.8, 13.0, 5.0), (0.2, 13.0, 5.0)])
+    parts.append(f'  <polygon points="{usb_refl}" fill="#00e676" fill-opacity="0.58"/>')
+
+    led_pt = iso.pt(5.8, 19.2, 2.0)
+    for r_mult, op in [(22, 0.14), (15, 0.25), (9, 0.55), (5.5, 0.85)]:
+        parts.append(f'  <circle cx="{fmt(led_pt[0])}" cy="{fmt(led_pt[1])}" r="{fmt(r_mult*scale)}" fill="#00e676" fill-opacity="{op}"/>')
+    parts.append(f'  <circle cx="{fmt(led_pt[0])}" cy="{fmt(led_pt[1])}" r="{fmt(3.2*scale)}" fill="#ffffff" stroke="#69f0ae" stroke-width="{fmt(1.0*scale)}"/>')
+
+    # 6. 3D Pin Headers & Black Jumper Shunts
+    parts.append(iso.box(
+        38.0, 2.5, 1.8, 12.5, 5.5, 2.4,
+        fill_top="#1f242d",
+        fill_front_y="#111318",
+        fill_side_x="#0b0d10",
+        stroke="#374151",
+        stroke_w=0.35 * scale,
+        faces=("ymax", "xmin", "top"),
+    ))
+    for h_i in range(5):
+        hx = 39.4 + h_i * 2.4
+        for hy in [3.8, 6.6]:
+            pb = iso.pt(hx, hy, 4.2)
+            pt = iso.pt(hx, hy, 11.5)
+            parts.append(f'  <line x1="{fmt(pb[0])}" y1="{fmt(pb[1])}" x2="{fmt(pt[0])}" y2="{fmt(pt[1])}" stroke="#cbd5e1" stroke-width="{fmt(1.35*scale)}" stroke-linecap="square"/>')
+            parts.append(f'  <circle cx="{fmt(pt[0])}" cy="{fmt(pt[1])}" r="{fmt(0.6*scale)}" fill="#ffffff"/>')
+
+    parts.append(iso.box(
+        56.0, 3.5, 1.8, 3.6, 5.8, 10.5,
+        fill_top="#2d323b",
+        fill_front_y="#16191e",
+        fill_side_x="#0e1014",
+        stroke="#475569",
+        stroke_w=0.4 * scale,
+        faces=("ymax", "xmin", "top"),
+    ))
+
+    parts.append(iso.box(
+        85.0, 4.0, 1.8, 5.2, 11.0, 2.2,
+        fill_top="#1f242d",
+        fill_front_y="#111318",
+        fill_side_x="#0b0d10",
+        stroke="#374151",
+        stroke_w=0.35 * scale,
+        faces=("ymax", "xmin", "top"),
+    ))
+    for j_i in range(5):
+        jy = 5.2 + j_i * 2.1
+        for jx in [86.3, 88.8]:
+            pb = iso.pt(jx, jy, 4.0)
+            pt = iso.pt(jx, jy, 10.8)
+            parts.append(f'  <line x1="{fmt(pb[0])}" y1="{fmt(pb[1])}" x2="{fmt(pt[0])}" y2="{fmt(pt[1])}" stroke="#cbd5e1" stroke-width="{fmt(1.15*scale)}" stroke-linecap="square"/>')
+            parts.append(f'  <circle cx="{fmt(pt[0])}" cy="{fmt(pt[1])}" r="{fmt(0.5*scale)}" fill="#ffffff"/>')
+
+    parts.append(iso.box(
+        81.0, 27.0, 1.8, 3.6, 5.8, 10.2,
+        fill_top="#2d323b",
+        fill_front_y="#16191e",
+        fill_side_x="#0e1014",
+        stroke="#475569",
+        stroke_w=0.4 * scale,
+        faces=("ymax", "xmin", "top"),
+    ))
+
+    # 7. Four Sharevve Shielded Chrome RJ45 Jacks (Brushed Nickel/Silver matching Photo 2!)
+    jack_w = 16.2
+    jack_d = 26.5
+    jack_h = 14.2
+    y_jack0 = 54.2
+
+    for idx in reversed(range(4)):
+        jx0 = 14.5 + idx * 19.6
+        parts.append(f'  <g transform="{iso.plane_matrix(jx0 - 1.2, y_jack0 + 6.0, 1.85)}">')
+        parts.append('    <ellipse cx="0.6" cy="2.0" rx="1.2" ry="2.2" fill="#cbd5e1" stroke="#64748b" stroke-width="0.25"/>')
+        parts.append('    <ellipse cx="0.6" cy="14.0" rx="1.2" ry="2.2" fill="#cbd5e1" stroke="#64748b" stroke-width="0.25"/>')
+        parts.append('  </g>')
+
+        parts.append(iso.shadow_box(jx0, y_jack0, 1.8, jack_w, jack_d, dx=-1.5, dy=1.5, layers=2))
+        parts.append(iso.box(
+            jx0, y_jack0, 1.8, jack_w, jack_d, jack_h,
+            fill_top="#e2e8f0",
+            fill_front_y="#cbd5e1",
+            fill_side_x="#64748b",
+            stroke="#475569",
+            stroke_w=0.55 * scale,
+            faces=("xmin", "ymax", "top"),
+        ))
+
+        parts.append(f'  <g transform="{iso.plane_matrix(jx0, y_jack0, 1.8 + jack_h + 0.05)}">')
+        # Metallic diagonal specular sheen across top of chrome RJ45 housing
+        parts.append(f'    <polygon points="0.6,0.6 {jack_w-0.6},0.6 {jack_w*0.65:.1f},{jack_d-0.6} 0.6,{jack_d-0.6}" fill="#f8fafc" fill-opacity="0.55"/>')
+        parts.append(f'    <rect x="0.8" y="0.8" width="{jack_w-1.6}" height="{jack_d-1.6}" fill="none" stroke="#94a3b8" stroke-width="0.25"/>')
+        parts.append(f'    <text x="{jack_w/2:.1f}" y="6.2" font-family="GoogleSans, sans-serif" font-weight="700" font-size="2.3" fill="#475569" opacity="0.82" text-anchor="middle">Sharevve</text>')
+        parts.append(f'    <text x="{jack_w/2:.1f}" y="9.0" font-family="RobotoMono, monospace" font-weight="600" font-size="1.8" fill="#475569" opacity="0.78" text-anchor="middle">SRJ2118A31</text>')
+        parts.append(f'    <text x="{jack_w/2:.1f}" y="11.4" font-family="RobotoMono, monospace" font-weight="600" font-size="1.75" fill="#475569" opacity="0.75" text-anchor="middle">1612</text>')
+
+        for tab_x in [3.4, 9.8]:
+            parts.append(f'    <path d="M {tab_x},16.5 L {tab_x},25.5 L {tab_x+3.0},25.5 L {tab_x+3.0},16.5" fill="none" stroke="#1e293b" stroke-width="0.65"/>')
+            parts.append(f'    <rect x="{tab_x+0.35}" y="16.5" width="2.3" height="8.6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="0.2"/>')
+        parts.append('  </g>')
+
+        yf = y_jack0 + jack_d
+        cav_pts = iso.pts([
+            (jx0 + 2.0, yf, 4.2),
+            (jx0 + 5.2, yf, 4.2),
+            (jx0 + 5.2, yf, 2.6),
+            (jx0 + jack_w - 5.2, yf, 2.6),
+            (jx0 + jack_w - 5.2, yf, 4.2),
+            (jx0 + jack_w - 2.0, yf, 4.2),
+            (jx0 + jack_w - 2.0, yf, 13.8),
+            (jx0 + 2.0, yf, 13.8),
+        ])
+        parts.append(f'  <polygon points="{cav_pts}" fill="#080c14" stroke="#1e293b" stroke-width="{fmt(0.5*scale)}"/>')
+
+        floor_pts = iso.pts([
+            (jx0 + 2.3, yf, 4.3),
+            (jx0 + jack_w - 2.3, yf, 4.3),
+            (jx0 + jack_w - 3.0, yf - 6.5, 5.5),
+            (jx0 + 3.0, yf - 6.5, 5.5),
+        ])
+        parts.append(f'  <polygon points="{floor_pts}" fill="#1e293b"/>')
+
+        lwall_pts = iso.pts([
+            (jx0 + 2.1, yf, 4.3),
+            (jx0 + 2.1, yf, 13.6),
+            (jx0 + 3.0, yf - 6.5, 12.8),
+            (jx0 + 3.0, yf - 6.5, 5.5),
+        ])
+        parts.append(f'  <polygon points="{lwall_pts}" fill="#111827"/>')
+
+        for ftab_x in [jx0 + 3.4, jx0 + 9.8]:
+            ftab_pts = iso.pts([
+                (ftab_x, yf, 14.0),
+                (ftab_x + 2.8, yf, 14.0),
+                (ftab_x + 2.6, yf - 1.2, 11.8),
+                (ftab_x + 0.2, yf - 1.2, 11.8),
+            ])
+            parts.append(f'  <polygon points="{ftab_pts}" fill="#e2e8f0" stroke="#475569" stroke-width="{fmt(0.3*scale)}"/>')
+
+        for pin_k in range(6):
+            px = jx0 + 4.2 + pin_k * 1.55
+            p1 = iso.pt(px, yf - 1.5, 12.2)
+            p2 = iso.pt(px, yf - 5.5, 9.5)
+            parts.append(f'  <line x1="{fmt(p1[0])}" y1="{fmt(p1[1])}" x2="{fmt(p2[0])}" y2="{fmt(p2[1])}" stroke="#eab308" stroke-width="{fmt(0.45*scale)}" opacity="0.85"/>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+
+def render_rpi5_hailo_group(
+    ox: float = 28.0,
+    oy: float = 550.0,
+    scale: float = 0.62,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    """
+    Renders the Raspberry Pi 5 + Official AI HAT+ (Hailo-8 26 TOPS M.2 Neural Accelerator)
+    matching Reference Photo 2 & 3:
+      - The 3 metallic port blocks sit side-by-side along the right edge (x = 74..100, y = 4.5..77.5),
+        drawn in strict back-to-front painter's order:
+          1. Back (y = 4.5..25.0): Dual USB 2.0 Tower (black tongues)
+          2. Middle (y = 29.0..49.5): Dual USB 3.0 Tower (bright blue tongues #0284c7 -> O1 Capture NIC)
+          3. Front (y = 53.5..77.5): Shielded Gigabit Ethernet RJ45 Jack (10.0.2.51)
+      - The Hailo-8 AI HAT+ covers the left 68% of the board (x = 0..68, y = 0..80) on 4 brass hex
+        standoffs, leaving all 3 metallic port towers on the right edge 100% uncovered from above!
+    """
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(1.85 * scale, 0.98 * scale),
+        uy=(-2.65 * scale, 1.15 * scale),
+        uz=(0.0, -1.75 * scale),
+    )
+    parts = ['  <g id="rpi5-hailo-assembly">']
+    parts.append(iso.shadow_box(0.0, 0.0, 0.0, 100.0, 80.0, dx=-2.0, dy=3.0, layers=4))
+
+    # 1. Bottom Layer: Raspberry Pi 5 Green PCB Base (100 x 80 x 2.0)
+    parts.append(iso.box(
+        0.0, 0.0, 0.0, 100.0, 80.0, 2.0,
+        fill_top="#15803d",
+        fill_front_y="#0f5128",
+        fill_side_x="#115e2e",
+        stroke="#166534",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    # 2. Brass Hex Standoffs Supporting the AI HAT+ (z = 2.0 to z = 19.5 at x = 5.5 and x = 63.5)
+    for sx, sy in [(5.5, 5.5), (63.5, 5.5), (5.5, 74.5), (63.5, 74.5)]:
+        parts.append(iso.box(
+            sx - 1.8, sy - 1.8, 2.0, 3.6, 3.6, 17.5,
+            fill_top="#fbbf24",
+            fill_front_y="#d97706",
+            fill_side_x="#b45309",
+            stroke="#78350f",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 3. Front-Left Edge of Pi 5 (along y = 69..80): USB-C Power + Dual Micro-HDMI Ports
+    for port_x, port_w in [(12.0, 11.0), (28.0, 9.5), (42.0, 9.5)]:
+        parts.append(iso.box(
+            port_x, 69.0, 2.0, port_w, 11.0, 4.6,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#64748b",
+            stroke="#475569",
+            stroke_w=0.4 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 4. Top Deck (z = 19.5..21.3, x = 0..68, y = 0..80): Official Raspberry Pi M.2 / AI HAT+ Dark Matte PCB
+    parts.append(iso.box(
+        0.0, 0.0, 19.5, 68.0, 80.0, 1.8,
+        fill_top="#1e293b",
+        fill_front_y="#0f172a",
+        fill_side_x="#111827",
+        stroke="#475569",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    parts.append(f'  <g transform="{iso.plane_matrix(0, 0, 21.35)}">')
+    for mx, my in [(5.5, 5.5), (63.5, 5.5), (5.5, 74.5), (63.5, 74.5)]:
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="2.8" fill="#cbd5e1" stroke="#64748b" stroke-width="0.35"/>')
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="1.3" fill="#334155"/>')
+    parts.append('    <rect x="10.0" y="2.5" width="50.0" height="6.0" rx="0.5" fill="#090d16" stroke="#475569" stroke-width="0.35"/>')
+    for p_i in range(20):
+        px = 11.5 + p_i * 2.45
+        parts.append(f'    <circle cx="{px:.1f}" cy="4.0" r="0.55" fill="#fbbf24"/>')
+        parts.append(f'    <circle cx="{px:.1f}" cy="7.0" r="0.55" fill="#fbbf24"/>')
+    parts.append('  </g>')
+
+    # Hailo-8 M.2 2280 AI Accelerator Module Seated on the HAT (x = 10..60, y = 16..64, z = 21.3..25.0)
+    parts.append(iso.box(
+        10.0, 16.0, 21.3, 50.0, 48.0, 1.6,
+        fill_top="#0f172a",
+        fill_front_y="#020617",
+        fill_side_x="#090d16",
+        stroke="#38bdf8",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(iso.box(
+        18.0, 24.0, 22.9, 34.0, 32.0, 3.1,
+        fill_top="#111827",
+        fill_front_y="#090d16",
+        fill_side_x="#1f2937",
+        stroke="#94a3b8",
+        stroke_w=0.5 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(f'  <g transform="{iso.plane_matrix(18.0, 24.0, 26.05)}">')
+    parts.append('    <rect x="1.5" y="1.5" width="31.0" height="29.0" rx="0.8" fill="none" stroke="#38bdf8" stroke-width="0.35"/>')
+    parts.append('    <text x="17.0" y="12.5" font-family="GoogleSans, sans-serif" font-weight="900" font-size="5.2" fill="#f8fafc" letter-spacing="0.4" text-anchor="middle">HAILO-8</text>')
+    parts.append('    <text x="17.0" y="18.5" font-family="RobotoMono, monospace" font-weight="700" font-size="3.1" fill="#38bdf8" text-anchor="middle">26 TOPS · PCIe</text>')
+    parts.append('    <text x="17.0" y="24.2" font-family="RobotoMono, monospace" font-weight="700" font-size="2.7" fill="#cbd5e1" text-anchor="middle">10.0.2.51</text>')
+    parts.append('  </g>')
+
+    # 5. Front-Right Port Edge of Pi 5 (x = 74..100, across y = 4.5..77.5)
+    for usb_y, tongue_col in [(4.5, "#334155"), (29.0, "#0284c7")]:
+        parts.append(iso.box(
+            76.0, usb_y, 2.0, 24.0, 20.5, 16.0,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#cbd5e1",
+            stroke="#475569",
+            stroke_w=0.55 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(f'  <g transform="{iso.plane_matrix(76.0, usb_y, 18.05)}">')
+        parts.append('    <rect x="1.2" y="1.2" width="21.6" height="18.1" fill="none" stroke="#94a3b8" stroke-width="0.25"/>')
+        parts.append('    <path d="M 10,4.5 L 18,4.5 M 10,7.5 L 18,7.5 M 10,13.0 L 18,13.0 M 10,16.0 L 18,16.0" stroke="#475569" stroke-width="0.5"/>')
+        parts.append('  </g>')
+        for slot_z in [4.2, 11.0]:
+            ucav = iso.pts([
+                (100.0, usb_y + 2.2, slot_z),
+                (100.0, usb_y + 18.3, slot_z),
+                (100.0, usb_y + 18.3, slot_z + 4.6),
+                (100.0, usb_y + 2.2, slot_z + 4.6),
+            ])
+            parts.append(f'  <polygon points="{ucav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.35*scale)}"/>')
+            utongue = iso.pts([
+                (100.0, usb_y + 3.0, slot_z + 2.4),
+                (100.0, usb_y + 17.5, slot_z + 2.4),
+                (100.0, usb_y + 17.5, slot_z + 3.8),
+                (100.0, usb_y + 3.0, slot_z + 3.8),
+            ])
+            parts.append(f'  <polygon points="{utongue}" fill="{tongue_col}"/>')
+
+    rj5_y, rj5_d, rj5_h = 53.5, 24.0, 14.0
+    parts.append(iso.box(
+        74.0, rj5_y, 2.0, 26.0, rj5_d, rj5_h,
+        fill_top="#e2e8f0",
+        fill_front_y="#94a3b8",
+        fill_side_x="#cbd5e1",
+        stroke="#475569",
+        stroke_w=0.55 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    rj5_cav = iso.pts([
+        (100.0, rj5_y + 3.2, 4.0),
+        (100.0, rj5_y + rj5_d - 3.2, 4.0),
+        (100.0, rj5_y + rj5_d - 3.2, 13.4),
+        (100.0, rj5_y + 3.2, 13.4),
+    ])
+    parts.append(f'  <polygon points="{rj5_cav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.4*scale)}"/>')
+    led5_g = iso.pt(100.0, rj5_y + rj5_d - 2.8, 4.8)
+    led5_a = iso.pt(100.0, rj5_y + 2.8, 4.8)
+    parts.append(f'  <circle cx="{fmt(led5_g[0])}" cy="{fmt(led5_g[1])}" r="{fmt(1.3*scale)}" fill="#22c55e"/>')
+    parts.append(f'  <circle cx="{fmt(led5_a[0])}" cy="{fmt(led5_a[1])}" r="{fmt(1.3*scale)}" fill="#f59e0b"/>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+def generate_jetson_orin_svg(width: int = 560, height: int = 440, bg_color: str | None = "#ffffff") -> str:
+    grp, _ = render_jetson_orin_group(ox=268.0, oy=64.0, scale=1.0)
+    bg = f'  <rect width="{width}" height="{height}" fill="{bg_color}"/>\n' if bg_color else ""
+    return f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">\n{bg}{grp}\n</svg>'
+
+
+def generate_zodiac_fx_svg(width: int = 560, height: int = 440, bg_color: str | None = "#f4f1ea") -> str:
+    grp, _ = render_zodiac_fx_group(ox=76.0, oy=152.0, scale=1.0, show_usb_cable=True)
+    bg = f'  <rect width="{width}" height="{height}" fill="{bg_color}"/>\n' if bg_color else ""
+    return f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">\n{bg}{grp}\n</svg>'
+
+
+def render_netgear_stack_group(
+    ox: float = 28.0,
+    oy: float = 195.0,
+    scale: float = 0.84,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(2.15 * scale, -0.72 * scale),
+        uy=(0.95 * scale, 1.55 * scale),
+        uz=(0.0, -1.65 * scale),
+    )
+    ux_deg = math.degrees(math.atan2(iso.ux[1], iso.ux[0]))
+    uy_deg = math.degrees(math.atan2(iso.uy[1], iso.uy[0]))
+    parts = ['  <g id="netgear-switch-stack">']
+    parts.append(iso.shadow_box(0.0, 0.0, 0.0, 96.0, 62.0, dx=-2.0, dy=3.0, layers=4))
+
+    for tier_idx, (z0, label_tag, role_tag, role_col) in enumerate([
+        (0.0, "GS105Ev2 #1", "TIER 2 · WORKLOAD", "#60a5fa"),
+        (30.0, "GS105Ev2 #2", "TIER 3 · UPLINK", "#34d399"),
+    ]):
+        parts.append(iso.box(
+            0.0, 0.0, z0, 96.0, 62.0, 23.0,
+            fill_top="#263349",
+            fill_front_y="#162032",
+            fill_side_x="#111927",
+            stroke="#475569",
+            stroke_w=0.65 * scale,
+            faces=("xmin", "ymax", "top"),
+        ))
+        # Role label on the visible front-left side face (xmin face) of each switch
+        p_side = iso.pt(0.0, 31.0, z0 + 9.5)
+        parts.append(f'  <text x="{fmt(p_side[0])}" y="{fmt(p_side[1])}" font-family="GoogleSans, sans-serif" font-weight="800" font-size="{fmt(5.8*scale)}" fill="{role_col}" text-anchor="middle" transform="rotate({fmt(uy_deg)} {fmt(p_side[0])} {fmt(p_side[1])})">{role_tag}</text>')
+
+        bezel = iso.pts([
+            (3.0, 62.0, z0 + 2.2),
+            (93.0, 62.0, z0 + 2.2),
+            (93.0, 62.0, z0 + 20.8),
+            (3.0, 62.0, z0 + 20.8),
+        ])
+        parts.append(f'  <polygon points="{bezel}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.45*scale)}"/>')
+
+        p_brand = iso.pt(6.5, 62.0, z0 + 13.8)
+        parts.append(f'  <text x="{fmt(p_brand[0])}" y="{fmt(p_brand[1])}" font-family="GoogleSans, sans-serif" font-weight="800" font-size="{fmt(7.2*scale)}" fill="#cbd5e1" transform="rotate({fmt(ux_deg)} {fmt(p_brand[0])} {fmt(p_brand[1])})">NETGEAR</text>')
+        p_sub = iso.pt(6.5, 62.0, z0 + 7.5)
+        parts.append(f'  <text x="{fmt(p_sub[0])}" y="{fmt(p_sub[1])}" font-family="RobotoMono, monospace" font-weight="600" font-size="{fmt(5.0*scale)}" fill="#64748b" transform="rotate({fmt(ux_deg)} {fmt(p_sub[0])} {fmt(p_sub[1])})">{label_tag}</text>')
+
+        p_pwr = iso.pt(28.0, 62.0, z0 + 14.2)
+        parts.append(f'  <circle cx="{fmt(p_pwr[0])}" cy="{fmt(p_pwr[1])}" r="{fmt(1.6*scale)}" fill="#22c55e"/>')
+
+        for p_i in range(5):
+            px0 = 33.5 + p_i * 11.4
+            pcav = iso.pts([
+                (px0, 62.0, z0 + 5.2),
+                (px0 + 8.8, 62.0, z0 + 5.2),
+                (px0 + 8.8, 62.0, z0 + 15.5),
+                (px0, 62.0, z0 + 15.5),
+            ])
+            parts.append(f'  <polygon points="{pcav}" fill="#020617" stroke="#475569" stroke-width="{fmt(0.45*scale)}"/>')
+            pled = iso.pt(px0 + 2.2, 62.0, z0 + 18.0)
+            led_col = "#22c55e"
+            parts.append(f'  <circle cx="{fmt(pled[0])}" cy="{fmt(pled[1])}" r="{fmt(1.3*scale)}" fill="{led_col}"/>')
+            plbl = iso.pt(px0 + 4.4, 62.0, z0 + 2.5)
+            parts.append(f'  <text x="{fmt(plbl[0])}" y="{fmt(plbl[1])}" font-family="RobotoMono, monospace" font-weight="700" font-size="{fmt(4.6*scale)}" fill="#94a3b8" text-anchor="middle" transform="rotate({fmt(ux_deg)} {fmt(plbl[0])} {fmt(plbl[1])})">P{p_i+1}</text>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+def render_rpi3b_stack_group(
+    ox: float = 28.0,
+    oy: float = 128.0,
+    scale: float = 0.62,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    """
+    Renders a 2-tier stack of Raspberry Pi 3 Model B+ boards (Red Team / Untrusted Workload
+    nodes: agentic-node-01 10.0.2.50 and agentic-node-02 10.0.2.52) matching the exact
+    board geometry of Reference Photo 1 & 3:
+      - Local x (0..100) runs along D_vec (down-right): carries Micro-USB, HDMI, CSI, 3.5mm Audio along y=80,
+        and the 40-pin GPIO header along y=0.
+      - Local y (80..0) runs along W_vec (up-right): carries the 3 side-by-side metallic port housings
+        along x=100: [Ethernet RJ45 (y=54..78)] [Dual USB #1 (y=29..50)] [Dual USB #2 (y=4.5..25.5)],
+        drawn in strict back-to-front painter's order (y=4.5 first, y=29.0 second, y=54.0 last)
+        so they sit cleanly side-by-side with zero overlap.
+    """
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(1.85 * scale, 0.98 * scale),
+        uy=(-2.65 * scale, 1.15 * scale),
+        uz=(0.0, -1.75 * scale),
+    )
+    parts = ['  <g id="rpi3b-redteam-stack">']
+    parts.append(iso.shadow_box(0.0, 0.0, 0.0, 100.0, 80.0, dx=-2.0, dy=3.0, layers=4))
+
+    for tier_idx, (z0, node_tag, ip_tag) in enumerate([
+        (0.0, "RPi 3B+ #2", "10.0.2.52"),
+        (32.0, "RPi 3B+ #1", "10.0.2.50"),
+    ]):
+        # 1. Classic Raspberry Pi Emerald Green PCB Substrate (100 x 80 x 2.0)
+        parts.append(iso.box(
+            0.0, 0.0, z0, 100.0, 80.0, 2.0,
+            fill_top="#15803d",
+            fill_front_y="#0f5128",
+            fill_side_x="#115e2e",
+            stroke="#166534",
+            stroke_w=0.6 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+        # 2. Planar PCB Details (Mounting Holes, Traces, BCM2837B0 Silver SoC, Wi-Fi Shield, Silkscreen)
+        parts.append(f'  <g transform="{iso.plane_matrix(0, 0, z0 + 2.02)}">')
+        parts.append('    <polygon points="0,0 72,0 32,80 0,80" fill="#22c55e" fill-opacity="0.14"/>')
+        parts.append('    <g stroke="#16a34a" stroke-width="0.45" fill="none" opacity="0.85">')
+        parts.append('      <polyline points="18,22 30,32 36,36"/>')
+        parts.append('      <polyline points="48,38 58,34 74,20"/>')
+        parts.append('      <polyline points="48,42 58,40 74,40"/>')
+        parts.append('      <polyline points="48,46 62,54 74,64"/>')
+        parts.append('    </g>')
+        # 4 Gold-Plated Mounting Holes (at x=5.5 and x=68.0, right behind the USB/RJ45 towers)
+        for mx, my in [(5.5, 5.5), (68.0, 5.5), (5.5, 74.5), (68.0, 74.5)]:
+            parts.append(f'    <circle cx="{mx}" cy="{my}" r="3.2" fill="#fbbf24" stroke="#f59e0b" stroke-width="0.35"/>')
+            parts.append(f'    <circle cx="{mx}" cy="{my}" r="1.6" fill="#1e293b"/>')
+
+        # Cypress Dual-Band Wi-Fi / BT Metallic RF Shield Can (top-left of Pi 3B+, x=10..23, y=12..26)
+        parts.append('    <rect x="10.0" y="12.0" width="13.0" height="14.0" rx="0.8" fill="#cbd5e1" stroke="#64748b" stroke-width="0.35"/>')
+        parts.append('    <rect x="10.8" y="12.8" width="11.4" height="12.4" fill="none" stroke="#94a3b8" stroke-width="0.2"/>')
+        parts.append('    <circle cx="16.5" cy="19.0" r="2.6" fill="none" stroke="#64748b" stroke-width="0.35"/>')
+
+        # Broadcom BCM2837B0 SoC with Signature Silver Metal Heat-Spreader Cap (x=28..47, y=30..49)
+        parts.append('    <rect x="28.0" y="30.0" width="19.0" height="19.0" rx="1.0" fill="#e2e8f0" stroke="#475569" stroke-width="0.4"/>')
+        parts.append('    <rect x="29.4" y="31.4" width="16.2" height="16.2" rx="0.5" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.25"/>')
+        parts.append('    <text x="37.5" y="38.8" font-family="GoogleSans, sans-serif" font-weight="800" font-size="2.3" fill="#334155" text-anchor="middle">BROADCOM</text>')
+        parts.append('    <text x="37.5" y="42.2" font-family="RobotoMono, monospace" font-weight="700" font-size="1.8" fill="#475569" text-anchor="middle">BCM2837B0</text>')
+
+        # SMSC/Microchip LAN7515 Ethernet + USB Controller IC (Black QFP at x=54..66, y=28..40)
+        parts.append('    <rect x="54.0" y="28.0" width="12.0" height="12.0" rx="0.6" fill="#1e293b" stroke="#475569" stroke-width="0.3"/>')
+        parts.append('    <text x="60.0" y="35.0" font-family="RobotoMono, monospace" font-weight="700" font-size="1.6" fill="#cbd5e1" text-anchor="middle">LAN7515</text>')
+
+        # Silkscreen Label near GPIO / center-right
+        parts.append(f'    <text x="41.0" y="18.0" font-family="GoogleSans, sans-serif" font-weight="800" font-size="3.2" fill="#f8fafc" text-anchor="middle">{node_tag}</text>')
+        parts.append(f'    <text x="41.0" y="22.5" font-family="RobotoMono, monospace" font-weight="700" font-size="2.6" fill="#bbf7d0" text-anchor="middle">{ip_tag}</text>')
+        parts.append('    <text x="33.0" y="61.5" font-family="GoogleSans, sans-serif" font-weight="800" font-size="2.4" fill="#f8fafc" text-anchor="middle">HDMI</text>')
+        parts.append('  </g>')
+
+        # Back-side brass standoffs drawn before the lower board's tall USB towers so USB towers naturally occlude (68.0, 5.5)
+        if tier_idx == 0:
+            for sx, sy in [(5.5, 5.5), (68.0, 5.5)]:
+                parts.append(iso.box(
+                    sx - 1.8, sy - 1.8, 2.0, 3.6, 3.6, 30.0,
+                    fill_top="#fbbf24",
+                    fill_front_y="#d97706",
+                    fill_side_x="#b45309",
+                    stroke="#78350f",
+                    stroke_w=0.35 * scale,
+                    faces=("ymax", "xmax", "top"),
+                ))
+
+        # 3. 40-Pin (2x20) GPIO Header along the Back-Right Edge (y = 2.0..8.0, x = 10..64)
+        parts.append(iso.box(
+            10.0, 2.0, z0 + 2.0, 54.0, 6.0, 2.8,
+            fill_top="#1f2937",
+            fill_front_y="#111827",
+            fill_side_x="#0f172a",
+            stroke="#374151",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        for p_i in range(20):
+            px = 11.6 + p_i * 2.65
+            for py in [3.4, 6.4]:
+                pb = iso.pt(px, py, z0 + 4.8)
+                pt = iso.pt(px, py, z0 + 9.4)
+                parts.append(f'  <line x1="{fmt(pb[0])}" y1="{fmt(pb[1])}" x2="{fmt(pt[0])}" y2="{fmt(pt[1])}" stroke="#fbbf24" stroke-width="{fmt(0.85*scale)}" stroke-linecap="square"/>')
+
+        # 4. DSI Display Ribbon Connector along Back-Left Edge (x = 2.5..6.2, y = 28..58)
+        parts.append(iso.box(
+            2.5, 28.0, z0 + 2.0, 3.8, 30.0, 4.5,
+            fill_top="#f8fafc",
+            fill_front_y="#cbd5e1",
+            fill_side_x="#94a3b8",
+            stroke="#475569",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(iso.box(
+            2.2, 27.5, z0 + 5.5, 4.4, 31.0, 1.2,
+            fill_top="#1e293b",
+            fill_front_y="#0f172a",
+            fill_side_x="#111827",
+            stroke="#334155",
+            stroke_w=0.3 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+        # 5. Front-Left Edge Components (along y = 64..80, drawn back-to-front in x: Micro-USB -> HDMI -> CSI -> Audio)
+        parts.append(iso.box(
+            9.0, 71.0, z0 + 2.0, 8.5, 9.0, 3.6,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#64748b",
+            stroke="#475569",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(iso.box(
+            23.0, 64.0, z0 + 2.0, 18.0, 16.0, 6.8,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#64748b",
+            stroke="#475569",
+            stroke_w=0.45 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        hdmi_cav = iso.pts([
+            (25.2, 80.0, z0 + 3.2),
+            (38.8, 80.0, z0 + 3.2),
+            (38.8, 80.0, z0 + 7.4),
+            (25.2, 80.0, z0 + 7.4),
+        ])
+        parts.append(f'  <polygon points="{hdmi_cav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.35*scale)}"/>')
+        parts.append(iso.box(
+            45.0, 50.0, z0 + 2.0, 3.8, 28.0, 4.5,
+            fill_top="#f8fafc",
+            fill_front_y="#cbd5e1",
+            fill_side_x="#94a3b8",
+            stroke="#475569",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(iso.box(
+            44.7, 49.5, z0 + 5.5, 4.4, 29.0, 1.2,
+            fill_top="#1e293b",
+            fill_front_y="#0f172a",
+            fill_side_x="#111827",
+            stroke="#334155",
+            stroke_w=0.3 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(iso.box(
+            53.0, 64.0, z0 + 2.0, 11.0, 16.0, 6.2,
+            fill_top="#334155",
+            fill_front_y="#0f172a",
+            fill_side_x="#1e293b",
+            stroke="#475569",
+            stroke_w=0.4 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        aud_pt = iso.pt(58.5, 80.2, z0 + 5.0)
+        parts.append(f'  <circle cx="{fmt(aud_pt[0])}" cy="{fmt(aud_pt[1])}" r="{fmt(2.4*scale)}" fill="#020617" stroke="#475569" stroke-width="{fmt(0.45*scale)}"/>')
+
+        if tier_idx == 0:
+            for sx, sy in [(5.5, 74.5), (68.0, 74.5)]:
+                parts.append(iso.box(
+                    sx - 1.8, sy - 1.8, 2.0, 3.6, 3.6, 30.0,
+                    fill_top="#fbbf24",
+                    fill_front_y="#d97706",
+                    fill_side_x="#b45309",
+                    stroke="#78350f",
+                    stroke_w=0.35 * scale,
+                    faces=("ymax", "xmax", "top"),
+                ))
+
+        # 6. Front-Right Port Edge (x = 75..100, across y = 4..78) in strict back-to-front painter's order
+        for usb_y in [4.5, 29.0]:
+            parts.append(iso.box(
+                76.0, usb_y, z0 + 2.0, 24.0, 20.5, 16.0,
+                fill_top="#e2e8f0",
+                fill_front_y="#94a3b8",
+                fill_side_x="#cbd5e1",
+                stroke="#475569",
+                stroke_w=0.55 * scale,
+                faces=("ymax", "xmax", "top"),
+            ))
+            parts.append(f'  <g transform="{iso.plane_matrix(76.0, usb_y, z0 + 18.05)}">')
+            parts.append('    <rect x="1.2" y="1.2" width="21.6" height="18.1" fill="none" stroke="#94a3b8" stroke-width="0.25"/>')
+            parts.append('    <path d="M 10,4.5 L 18,4.5 M 10,7.5 L 18,7.5 M 10,13.0 L 18,13.0 M 10,16.0 L 18,16.0" stroke="#475569" stroke-width="0.5"/>')
+            parts.append('  </g>')
+            for slot_z in [z0 + 4.2, z0 + 11.0]:
+                ucav = iso.pts([
+                    (100.0, usb_y + 2.2, slot_z),
+                    (100.0, usb_y + 18.3, slot_z),
+                    (100.0, usb_y + 18.3, slot_z + 4.6),
+                    (100.0, usb_y + 2.2, slot_z + 4.6),
+                ])
+                parts.append(f'  <polygon points="{ucav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.35*scale)}"/>')
+                utongue = iso.pts([
+                    (100.0, usb_y + 3.0, slot_z + 2.4),
+                    (100.0, usb_y + 17.5, slot_z + 2.4),
+                    (100.0, usb_y + 17.5, slot_z + 3.8),
+                    (100.0, usb_y + 3.0, slot_z + 3.8),
+                ])
+                parts.append(f'  <polygon points="{utongue}" fill="#f8fafc"/>')
+
+        rj_y, rj_d, rj_h = 53.5, 24.0, 14.0
+        parts.append(iso.box(
+            74.0, rj_y, z0 + 2.0, 26.0, rj_d, rj_h,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#cbd5e1",
+            stroke="#475569",
+            stroke_w=0.55 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        rjcav = iso.pts([
+            (100.0, rj_y + 3.2, z0 + 4.0),
+            (100.0, rj_y + rj_d - 3.2, z0 + 4.0),
+            (100.0, rj_y + rj_d - 3.2, z0 + 13.4),
+            (100.0, rj_y + 3.2, z0 + 13.4),
+        ])
+        parts.append(f'  <polygon points="{rjcav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.4*scale)}"/>')
+        led_g = iso.pt(100.0, rj_y + rj_d - 2.8, z0 + 4.8)
+        led_a = iso.pt(100.0, rj_y + 2.8, z0 + 4.8)
+        parts.append(f'  <circle cx="{fmt(led_g[0])}" cy="{fmt(led_g[1])}" r="{fmt(1.3*scale)}" fill="#22c55e"/>')
+        parts.append(f'  <circle cx="{fmt(led_a[0])}" cy="{fmt(led_a[1])}" r="{fmt(1.3*scale)}" fill="#f59e0b"/>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+def render_rpi5_hailo_group(
+    ox: float = 28.0,
+    oy: float = 550.0,
+    scale: float = 0.62,
+    custom_iso: IsoProjector | None = None,
+) -> tuple[str, IsoProjector]:
+    """
+    Renders the Raspberry Pi 5 + Official AI HAT+ (Hailo-8 26 TOPS M.2 Neural Accelerator)
+    matching Reference Photo 2 & 3:
+      - The 3 metallic port blocks sit side-by-side along the right edge (x = 74..100, y = 4.5..77.5),
+        drawn in strict back-to-front painter's order:
+          1. Back (y = 4.5..25.0): Dual USB 2.0 Tower (black tongues)
+          2. Middle (y = 29.0..49.5): Dual USB 3.0 Tower (bright blue tongues #0284c7 -> O1 Capture NIC)
+          3. Front (y = 53.5..77.5): Shielded Gigabit Ethernet RJ45 Jack (10.0.2.51)
+      - The Hailo-8 AI HAT+ covers the left 68% of the board (x = 0..68, y = 0..80) on 4 brass hex
+        standoffs, leaving all 3 metallic port towers on the right edge 100% uncovered from above!
+    """
+    iso = custom_iso if custom_iso is not None else IsoProjector(
+        ox=ox,
+        oy=oy,
+        ux=(1.85 * scale, 0.98 * scale),
+        uy=(-2.65 * scale, 1.15 * scale),
+        uz=(0.0, -1.75 * scale),
+    )
+    parts = ['  <g id="rpi5-hailo-assembly">']
+    parts.append(iso.shadow_box(0.0, 0.0, 0.0, 100.0, 80.0, dx=-2.0, dy=3.0, layers=4))
+
+    # 1. Bottom Layer: Raspberry Pi 5 Green PCB Base (100 x 80 x 2.0)
+    parts.append(iso.box(
+        0.0, 0.0, 0.0, 100.0, 80.0, 2.0,
+        fill_top="#15803d",
+        fill_front_y="#0f5128",
+        fill_side_x="#115e2e",
+        stroke="#166534",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    # 2. Brass Hex Standoffs Supporting the AI HAT+ (z = 2.0 to z = 19.5 at x = 5.5 and x = 63.5)
+    for sx, sy in [(5.5, 5.5), (63.5, 5.5), (5.5, 74.5), (63.5, 74.5)]:
+        parts.append(iso.box(
+            sx - 1.8, sy - 1.8, 2.0, 3.6, 3.6, 17.5,
+            fill_top="#fbbf24",
+            fill_front_y="#d97706",
+            fill_side_x="#b45309",
+            stroke="#78350f",
+            stroke_w=0.35 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 3. Front-Left Edge of Pi 5 (along y = 69..80): USB-C Power + Dual Micro-HDMI Ports
+    for port_x, port_w in [(12.0, 11.0), (28.0, 9.5), (42.0, 9.5)]:
+        parts.append(iso.box(
+            port_x, 69.0, 2.0, port_w, 11.0, 4.6,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#64748b",
+            stroke="#475569",
+            stroke_w=0.4 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+
+    # 4. Top Deck (z = 19.5..21.3, x = 0..68, y = 0..80): Official Raspberry Pi M.2 / AI HAT+ Dark Matte PCB
+    parts.append(iso.box(
+        0.0, 0.0, 19.5, 68.0, 80.0, 1.8,
+        fill_top="#1e293b",
+        fill_front_y="#0f172a",
+        fill_side_x="#111827",
+        stroke="#475569",
+        stroke_w=0.6 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+
+    parts.append(f'  <g transform="{iso.plane_matrix(0, 0, 21.35)}">')
+    for mx, my in [(5.5, 5.5), (63.5, 5.5), (5.5, 74.5), (63.5, 74.5)]:
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="2.8" fill="#cbd5e1" stroke="#64748b" stroke-width="0.35"/>')
+        parts.append(f'    <circle cx="{mx}" cy="{my}" r="1.3" fill="#334155"/>')
+    parts.append('    <rect x="10.0" y="2.5" width="50.0" height="6.0" rx="0.5" fill="#090d16" stroke="#475569" stroke-width="0.35"/>')
+    for p_i in range(20):
+        px = 11.5 + p_i * 2.45
+        parts.append(f'    <circle cx="{px:.1f}" cy="4.0" r="0.55" fill="#fbbf24"/>')
+        parts.append(f'    <circle cx="{px:.1f}" cy="7.0" r="0.55" fill="#fbbf24"/>')
+    parts.append('  </g>')
+
+    # Hailo-8 M.2 2280 AI Accelerator Module Seated on the HAT (x = 10..60, y = 16..64, z = 21.3..25.0)
+    parts.append(iso.box(
+        10.0, 16.0, 21.3, 50.0, 48.0, 1.6,
+        fill_top="#0f172a",
+        fill_front_y="#020617",
+        fill_side_x="#090d16",
+        stroke="#38bdf8",
+        stroke_w=0.45 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(iso.box(
+        18.0, 24.0, 22.9, 34.0, 32.0, 3.1,
+        fill_top="#111827",
+        fill_front_y="#090d16",
+        fill_side_x="#1f2937",
+        stroke="#94a3b8",
+        stroke_w=0.5 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    parts.append(f'  <g transform="{iso.plane_matrix(18.0, 24.0, 26.05)}">')
+    parts.append('    <rect x="1.5" y="1.5" width="31.0" height="29.0" rx="0.8" fill="none" stroke="#38bdf8" stroke-width="0.35"/>')
+    parts.append('    <text x="17.0" y="12.5" font-family="GoogleSans, sans-serif" font-weight="900" font-size="5.2" fill="#f8fafc" letter-spacing="0.4" text-anchor="middle">HAILO-8</text>')
+    parts.append('    <text x="17.0" y="18.5" font-family="RobotoMono, monospace" font-weight="700" font-size="3.1" fill="#38bdf8" text-anchor="middle">26 TOPS · PCIe</text>')
+    parts.append('    <text x="17.0" y="24.2" font-family="RobotoMono, monospace" font-weight="700" font-size="2.7" fill="#cbd5e1" text-anchor="middle">10.0.2.51</text>')
+    parts.append('  </g>')
+
+    # 5. Front-Right Port Edge of Pi 5 (x = 74..100, across y = 4.5..77.5)
+    for usb_y, tongue_col in [(4.5, "#334155"), (29.0, "#0284c7")]:
+        parts.append(iso.box(
+            76.0, usb_y, 2.0, 24.0, 20.5, 16.0,
+            fill_top="#e2e8f0",
+            fill_front_y="#94a3b8",
+            fill_side_x="#cbd5e1",
+            stroke="#475569",
+            stroke_w=0.55 * scale,
+            faces=("ymax", "xmax", "top"),
+        ))
+        parts.append(f'  <g transform="{iso.plane_matrix(76.0, usb_y, 18.05)}">')
+        parts.append('    <rect x="1.2" y="1.2" width="21.6" height="18.1" fill="none" stroke="#94a3b8" stroke-width="0.25"/>')
+        parts.append('    <path d="M 10,4.5 L 18,4.5 M 10,7.5 L 18,7.5 M 10,13.0 L 18,13.0 M 10,16.0 L 18,16.0" stroke="#475569" stroke-width="0.5"/>')
+        parts.append('  </g>')
+        for slot_z in [4.2, 11.0]:
+            ucav = iso.pts([
+                (100.0, usb_y + 2.2, slot_z),
+                (100.0, usb_y + 18.3, slot_z),
+                (100.0, usb_y + 18.3, slot_z + 4.6),
+                (100.0, usb_y + 2.2, slot_z + 4.6),
+            ])
+            parts.append(f'  <polygon points="{ucav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.35*scale)}"/>')
+            utongue = iso.pts([
+                (100.0, usb_y + 3.0, slot_z + 2.4),
+                (100.0, usb_y + 17.5, slot_z + 2.4),
+                (100.0, usb_y + 17.5, slot_z + 3.8),
+                (100.0, usb_y + 3.0, slot_z + 3.8),
+            ])
+            parts.append(f'  <polygon points="{utongue}" fill="{tongue_col}"/>')
+
+    rj5_y, rj5_d, rj5_h = 53.5, 24.0, 14.0
+    parts.append(iso.box(
+        74.0, rj5_y, 2.0, 26.0, rj5_d, rj5_h,
+        fill_top="#e2e8f0",
+        fill_front_y="#94a3b8",
+        fill_side_x="#cbd5e1",
+        stroke="#475569",
+        stroke_w=0.55 * scale,
+        faces=("ymax", "xmax", "top"),
+    ))
+    rj5_cav = iso.pts([
+        (100.0, rj5_y + 3.2, 4.0),
+        (100.0, rj5_y + rj5_d - 3.2, 4.0),
+        (100.0, rj5_y + rj5_d - 3.2, 13.4),
+        (100.0, rj5_y + 3.2, 13.4),
+    ])
+    parts.append(f'  <polygon points="{rj5_cav}" fill="#090d16" stroke="#334155" stroke-width="{fmt(0.4*scale)}"/>')
+    led5_g = iso.pt(100.0, rj5_y + rj5_d - 2.8, 4.8)
+    led5_a = iso.pt(100.0, rj5_y + 2.8, 4.8)
+    parts.append(f'  <circle cx="{fmt(led5_g[0])}" cy="{fmt(led5_g[1])}" r="{fmt(1.3*scale)}" fill="#22c55e"/>')
+    parts.append(f'  <circle cx="{fmt(led5_a[0])}" cy="{fmt(led5_a[1])}" r="{fmt(1.3*scale)}" fill="#f59e0b"/>')
+
+    parts.append('  </g>')
+    return "\n".join(parts), iso
+
+
+def _arrow_head_polygon(tip: tuple[float, float], prev: tuple[float, float], size: float = 7.5, wing: float = 4.2, color: str = "#38bdf8") -> str:
+    """
+    Returns a crisp SVG <polygon> arrowhead at `tip` pointing along `prev -> tip`.
+    """
+    dx = tip[0] - prev[0]
+    dy = tip[1] - prev[1]
+    length = math.hypot(dx, dy)
+    if length < 1e-6:
+        return ""
+    ux, uy = dx / length, dy / length
+    nx, ny = -uy, ux
+    bx = tip[0] - ux * size
+    by = tip[1] - uy * size
+    p1 = (bx + nx * wing, by + ny * wing)
+    p2 = (bx - nx * wing, by - ny * wing)
+    return f'<polygon points="{fmt(tip[0])},{fmt(tip[1])} {fmt(p1[0])},{fmt(p1[1])} {fmt(p2[0])},{fmt(p2[1])}" fill="{color}"/>'
+
+
+def _draw_orthogonal_arrow(
+    pts: list[tuple[float, float]],
+    color: str,
+    width: float = 2.6,
+    dashed: bool = False,
+    start_arrow: bool = False,
+    end_arrow: bool = True,
+    corner_r: float = 6.0,
+) -> str:
+    """
+    Draws a clean orthogonal/stepped line with rounded 90-degree corners, port anchor dots,
+    and sharp vector arrowheads (100% pure geometry, no <marker> dependencies).
+    """
+    if len(pts) < 2:
+        return ""
+
+    # Shorten start/end segments slightly so the line stops inside the arrowhead base
+    work_pts = [list(p) for p in pts]
+    trim = 5.5
+    if start_arrow:
+        dx = work_pts[1][0] - work_pts[0][0]
+        dy = work_pts[1][1] - work_pts[0][1]
+        L = math.hypot(dx, dy)
+        if L > trim * 2:
+            work_pts[0][0] += (dx / L) * trim
+            work_pts[0][1] += (dy / L) * trim
+    if end_arrow:
+        dx = work_pts[-2][0] - work_pts[-1][0]
+        dy = work_pts[-2][1] - work_pts[-1][1]
+        L = math.hypot(dx, dy)
+        if L > trim * 2:
+            work_pts[-1][0] += (dx / L) * trim
+            work_pts[-1][1] += (dy / L) * trim
+
+    # Build path with subtle quadratic bezier bends at interior vertices
+    d_cmds = [f"M {fmt(work_pts[0][0])},{fmt(work_pts[0][1])}"]
+    for i in range(1, len(work_pts) - 1):
+        p_prev = work_pts[i - 1]
+        p_curr = work_pts[i]
+        p_next = work_pts[i + 1]
+        v1x, v1y = p_curr[0] - p_prev[0], p_curr[1] - p_prev[1]
+        v2x, v2y = p_next[0] - p_curr[0], p_next[1] - p_curr[1]
+        L1 = math.hypot(v1x, v1y)
+        L2 = math.hypot(v2x, v2y)
+        r = min(corner_r, L1 * 0.4, L2 * 0.4)
+        if r > 0.5:
+            in_x = p_curr[0] - (v1x / L1) * r
+            in_y = p_curr[1] - (v1y / L1) * r
+            out_x = p_curr[0] + (v2x / L2) * r
+            out_y = p_curr[1] + (v2y / L2) * r
+            d_cmds.append(f"L {fmt(in_x)},{fmt(in_y)} Q {fmt(p_curr[0])},{fmt(p_curr[1])} {fmt(out_x)},{fmt(out_y)}")
+        else:
+            d_cmds.append(f"L {fmt(p_curr[0])},{fmt(p_curr[1])}")
+    d_cmds.append(f"L {fmt(work_pts[-1][0])},{fmt(work_pts[-1][1])}")
+    path_d = " ".join(d_cmds)
+
+    out = [
+        # White backing halo for crisp contrast
+        f'  <path d="{path_d}" fill="none" stroke="#ffffff" stroke-width="{fmt(width + 3.2)}" stroke-linecap="round" stroke-linejoin="round"/>',
+    ]
+    if dashed:
+        # Emit explicit vector dash segments along each straight run so both PyMuPDF and Chrome render identical dashes
+        dash_len, gap_len = 7.0, 5.0
+        for i in range(len(work_pts) - 1):
+            x0, y0 = work_pts[i]
+            x1, y1 = work_pts[i + 1]
+            seg_len = math.hypot(x1 - x0, y1 - y0)
+            if seg_len < 1e-3:
+                continue
+            ux, uy = (x1 - x0) / seg_len, (y1 - y0) / seg_len
+            pos = 0.0
+            while pos < seg_len:
+                end_pos = min(pos + dash_len, seg_len)
+                sx, sy = x0 + ux * pos, y0 + uy * pos
+                ex, ey = x0 + ux * end_pos, y0 + uy * end_pos
+                out.append(f'  <line x1="{fmt(sx)}" y1="{fmt(sy)}" x2="{fmt(ex)}" y2="{fmt(ey)}" stroke="{color}" stroke-width="{fmt(width)}" stroke-linecap="round"/>')
+                pos += dash_len + gap_len
+    else:
+        out.append(f'  <path d="{path_d}" fill="none" stroke="{color}" stroke-width="{fmt(width)}" stroke-linecap="round" stroke-linejoin="round"/>')
+    if not start_arrow:
+        out.append(f'  <circle cx="{fmt(pts[0][0])}" cy="{fmt(pts[0][1])}" r="3.2" fill="{color}" stroke="#ffffff" stroke-width="1.2"/>')
+    else:
+        out.append("  " + _arrow_head_polygon(pts[0], pts[1], size=8.2, wing=4.6, color=color))
+
+    if end_arrow:
+        out.append("  " + _arrow_head_polygon(pts[-1], pts[-2], size=8.2, wing=4.6, color=color))
+    else:
+        out.append(f'  <circle cx="{fmt(pts[-1][0])}" cy="{fmt(pts[-1][1])}" r="3.2" fill="{color}" stroke="#ffffff" stroke-width="1.2"/>')
+
+    return "\n".join(out)
+
+
+def generate_composed_testbed_svg(width: int = 900, height: int = 470) -> str:
+    """
+    Symmetrical 3-column hardware layout on a clean white background where all three devices
+    share the EXACT SAME isometric footprint and projection angles (`W_vec`, `D_vec`, `uz`),
+    connected by clean, defined orthogonal arrow lines along parallel horizontal routing tracks.
+    """
+    parts = [f'''<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">
+  <!-- Clean White Paper Background -->
+  <rect width="{width}" height="{height}" fill="#ffffff"/>''']
+
+    # Shared isometric footprint basis vectors for all three devices:
+    # W_vec: Front-right port edge vector (152 px right, 66 px up -> -23.5 deg)
+    # D_vec: Front-left depth edge vector (102 px right, 54 px down -> +27.9 deg)
+    W_vec = (152.0, -66.0)
+    D_vec = (102.0, 54.0)
+
+    # Shared vertical baseline for the left-most corner of all three devices
+    Y_base = 224.0
+    # Horizontally symmetrical X positions for the 3 footprints (each 254 px wide: 152 + 102 = 254)
+    # Left margin = 28, Gap = 41 -> X1 = 28..282, X2 = 323..577 (center 450), X3 = 618..872, Right margin = 28
+    X1_left = 28.0
+    X2_left = 323.0
+    X3_left = 618.0
+
+    # 1. Left Column: 2-Tier Netgear Switch Stack (96 x 62 mm mapped onto W_vec x D_vec)
+    ng_custom_iso = IsoProjector(
+        ox=X1_left,
+        oy=Y_base,
+        ux=(W_vec[0] / 96.0, W_vec[1] / 96.0),
+        uy=(D_vec[0] / 62.0, D_vec[1] / 62.0),
+        uz=(0.0, -1.55),
+    )
+    ng_grp, ng_iso = render_netgear_stack_group(scale=0.62, custom_iso=ng_custom_iso)
+    parts.append(ng_grp)
+
+    # 2. Center Column: Zodiac FX OpenFlow 1.3 Switch (100 x 80 mm mapped onto W_vec x D_vec)
+    zfx_custom_iso = IsoProjector(
+        ox=X2_left,
+        oy=Y_base,
+        ux=(W_vec[0] / 100.0, W_vec[1] / 100.0),
+        uy=(D_vec[0] / 80.0, D_vec[1] / 80.0),
+        uz=(0.0, -1.65),
+    )
+    zfx_grp, zfx_iso = render_zodiac_fx_group(scale=0.60, show_usb_cable=False, custom_iso=zfx_custom_iso)
+    parts.append(zfx_grp)
+
+    # 3. Right Column: NVIDIA Jetson Orin Nano Super (100 x 80 mm mapped onto D_vec x (-W_vec)
+    #    so its left corner (x=0, y=80) is at (X3_left, Y_base) and its port edge (x=100, y=80..0)
+    #    has the exact same W_vec angle and position as the Switch Stack and Zodiac FX!)
+    orin_custom_iso = IsoProjector(
+        ox=X3_left + W_vec[0],
+        oy=Y_base + W_vec[1],
+        ux=(D_vec[0] / 100.0, D_vec[1] / 100.0),
+        uy=(-W_vec[0] / 80.0, -W_vec[1] / 80.0),
+        uz=(0.0, -1.85),
+    )
+    orin_grp, orin_iso = render_jetson_orin_group(scale=0.60, custom_iso=orin_custom_iso)
+    parts.append(orin_grp)
+
+    # 4. Compute exact screen coordinates of hardware ports along the aligned front-right edges
+    # Left Switch Stack ports:
+    # - Tier 3 Uplink Switch (top, z0=30): P4 at x = 33.5 + 3*11.4 + 4.4 = 72.1
+    # - Tier 2 Workload Switch (bottom, z0=0): P5 at x = 33.5 + 4*11.4 + 4.4 = 83.5
+    p_up_p4 = ng_iso.pt(72.1, 62.0, 36.0)
+    p_wl_p5 = ng_iso.pt(83.5, 62.0, 6.0)
+
+    # Center Zodiac FX ports P1..P4 (front bottom of RJ45 opening at y=80.7, z=4.5)
+    p_zfx_p1 = zfx_iso.pt(14.5 + 0 * 19.6 + 8.1, 80.7, 4.5)
+    p_zfx_p2 = zfx_iso.pt(14.5 + 1 * 19.6 + 8.1, 80.7, 4.5)
+    p_zfx_p3 = zfx_iso.pt(14.5 + 2 * 19.6 + 8.1, 80.7, 4.5)
+    p_zfx_p4 = zfx_iso.pt(14.5 + 3 * 19.6 + 8.1, 80.7, 4.5)
+
+    # Port P1..P4 badges positioned on the upper-front lip of each RJ45 housing (z=16.5) so the dark cavity & pins remain 100% visible
+    for p_idx in range(4):
+        p_lbl = zfx_iso.pt(14.5 + p_idx * 19.6 + 8.1, 76.0, 16.5)
+        parts.append(f'''
+  <rect x="{fmt(p_lbl[0]-9)}" y="{fmt(p_lbl[1]-6)}" width="18" height="11.5" rx="2.5" fill="#0f172a" stroke="#64748b" stroke-width="0.8"/>
+  <text x="{fmt(p_lbl[0])}" y="{fmt(p_lbl[1]+2.2)}" font-family="RobotoMono, monospace" font-weight="700" font-size="7.8" fill="#f8fafc" text-anchor="middle">P{p_idx+1}</text>''')
+
+    # Right Jetson Orin ports (along x=97.5 face):
+    # - USB 3.2 capture interface at y=48.0, z=8.0
+    # - GbE RJ45 control interface at y=24.0, z=8.0
+    p_orin_usb = orin_iso.pt(97.5, 48.0, 8.0)
+    p_orin_gbe = orin_iso.pt(97.5, 24.0, 8.0)
+
+    # 5. Symmetrical Orthogonal Arrow Connections along Two Parallel Tracks (Y_upper = 328, Y_lower = 374)
+    # Notice:
+    # Left Data Plane:
+    #   - Inner pair (Workload Switch P5 -> Zodiac FX P1): uses Upper Track (Y = 328) -> 0 crossings!
+    #   - Outer pair (Zodiac FX P2 -> Uplink Switch P4): uses Lower Track (Y = 374) -> 0 crossings!
+    # Right Control & Telemetry Plane:
+    #   - Inner pair (Zodiac FX P3 -> Jetson Orin USB 3.2): uses Upper Track (Y = 328) -> 0 crossings!
+    #   - Outer pair (Zodiac FX P4 <-> Jetson Orin GbE): uses Lower Track (Y = 374) -> 0 crossings!
+    Y_track_top = 328.0
+    Y_track_bot = 374.0
+
+    # 5A. Untrusted Ingress (VLAN 1): Workload Switch P5 -> Zodiac FX P1 (Blue directional arrow)
+    parts.append(_draw_orthogonal_arrow(
+        [p_wl_p5, (p_wl_p5[0], Y_track_top), (p_zfx_p1[0], Y_track_top), p_zfx_p1],
+        color="#2563eb",
+        width=2.6,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    # 5B. Filtered Egress: Zodiac FX P2 -> Uplink Switch P4 (Emerald green directional arrow)
+    parts.append(_draw_orthogonal_arrow(
+        [p_zfx_p2, (p_zfx_p2[0], Y_track_bot), (p_up_p4[0], Y_track_bot), p_up_p4],
+        color="#059669",
+        width=2.6,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    # 5C. Mirror Taps [O1, O2, O3]: Zodiac FX P3 -> Jetson Orin USB 3.2 (Dashed cyan directional arrow)
+    parts.append(_draw_orthogonal_arrow(
+        [p_zfx_p3, (p_zfx_p3[0], Y_track_top), (p_orin_usb[0], Y_track_top), p_orin_usb],
+        color="#0284c7",
+        width=2.2,
+        dashed=True,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    # 5D. OpenFlow 1.3 Control (:6633): Zodiac FX P4 <-> Jetson Orin GbE (Bidirectional amber arrow)
+    parts.append(_draw_orthogonal_arrow(
+        [p_zfx_p4, (p_zfx_p4[0], Y_track_bot), (p_orin_gbe[0], Y_track_bot), p_orin_gbe],
+        color="#d97706",
+        width=2.6,
+        dashed=False,
+        start_arrow=True,
+        end_arrow=True,
+    ))
+
+    # 6. Inline Pill Labels Centered on the 4 Symmetric Horizontal Arrow Tracks (Crisp Light Paper Palette)
+    x_mid_left_top = 0.5 * (p_wl_p5[0] + p_zfx_p1[0])
+    x_mid_left_bot = 0.5 * (p_up_p4[0] + p_zfx_p2[0])
+    x_mid_right_top = 0.5 * (p_zfx_p3[0] + p_orin_usb[0])
+    x_mid_right_bot = 0.5 * (p_zfx_p4[0] + p_orin_gbe[0])
+
+    parts.append(f'''
+  <!-- Left Track Pill 1: Untrusted Ingress -->
+  <g transform="translate({fmt(x_mid_left_top - 72)}, {fmt(Y_track_top - 11)})">
+    <rect x="0" y="0" width="144" height="22" rx="4" fill="#eff6ff" stroke="#2563eb" stroke-width="1.3"/>
+    <text x="72" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#1d4ed8" text-anchor="middle">Untrusted Ingress →</text>
+  </g>
+
+  <!-- Left Track Pill 2: Filtered Egress -->
+  <g transform="translate({fmt(x_mid_left_bot - 68)}, {fmt(Y_track_bot - 11)})">
+    <rect x="0" y="0" width="136" height="22" rx="4" fill="#ecfdf5" stroke="#059669" stroke-width="1.3"/>
+    <text x="68" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#047857" text-anchor="middle">← Filtered Egress</text>
+  </g>
+
+  <!-- Right Track Pill 1: Mirror Taps -->
+  <g transform="translate({fmt(x_mid_right_top - 78)}, {fmt(Y_track_top - 11)})">
+    <rect x="0" y="0" width="156" height="22" rx="4" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.3"/>
+    <text x="78" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#0369a1" text-anchor="middle">Mirror Taps [O1..O3] →</text>
+  </g>
+
+  <!-- Right Track Pill 2: OF 1.3 Control -->
+  <g transform="translate({fmt(x_mid_right_bot - 82)}, {fmt(Y_track_bot - 11)})">
+    <rect x="0" y="0" width="164" height="22" rx="4" fill="#fffbeb" stroke="#d97706" stroke-width="1.3"/>
+    <text x="82" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#b45309" text-anchor="middle">↔ OF 1.3 Control (:6633)</text>
+  </g>''')
+
+    # 7. Three Symmetrical Top Header Callout Cards (Y = 22, Width = 254 matching each column's footprint!)
+    parts.append('''
+  <!-- Column 1 Header Card: 2-Tier Switch Stack (X = 28..282) -->
+  <g transform="translate(28, 22)">
+    <line x1="127" y1="48" x2="127" y2="78" stroke="#059669" stroke-width="1.5"/>
+    <circle cx="127" cy="78" r="2.8" fill="#059669"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#059669" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#047857" text-anchor="middle">TIER 2 &amp; 3 · WORKLOAD / UPLINK STACK</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">2× Netgear GS105Ev2 · Mirror [O1, O3]</text>
+  </g>
+
+  <!-- Column 2 Header Card: Zodiac FX OpenFlow DUT (X = 323..577) -->
+  <g transform="translate(323, 22)">
+    <line x1="127" y1="48" x2="127" y2="128" stroke="#d97706" stroke-width="1.5"/>
+    <circle cx="127" cy="128" r="2.8" fill="#d97706"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#d97706" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#b45309" text-anchor="middle">TIER 1 · ZODIAC FX (OPENFLOW 1.3 DUT)</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">Atmel SAM4E + KSZ8795 · 128-Rule Budget</text>
+  </g>
+
+  <!-- Column 3 Header Card: SDN Controller & Verifier (X = 618..872) -->
+  <g transform="translate(618, 22)">
+    <line x1="127" y1="48" x2="127" y2="95" stroke="#0284c7" stroke-width="1.5"/>
+    <circle cx="127" cy="95" r="2.8" fill="#0284c7"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#0369a1" text-anchor="middle">SDN CONTROLLER &amp; VERIFIER</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">NVIDIA Jetson Orin Nano Super</text>
+  </g>
+
+  <!-- Bottom Legend Banner (Centered at X = 450) -->
+  <g transform="translate(225, 420)">
+    <rect x="0" y="0" width="450" height="32" rx="16" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="225" y="20" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11.5" letter-spacing="0.6" fill="#0f172a" text-anchor="middle">PHYSICAL 3-TIER SDN TESTBED &amp; DETERMINISTIC VERIFIER LOOP</text>
+  </g>
+</svg>''')
+    return "\n".join(parts)
+
+
+def generate_composed_testbed_with_pis_svg(width: int = 900, height: int = 748) -> str:
+    """
+    Extended symmetrical hardware layout preserving the exact 3-column core
+    ([Netgear Switch Stack] <-> [Zodiac FX] <-> [Jetson Orin Nano Super]) in the middle row,
+    while stacking the 2x Raspberry Pi 3B+ (Red Team) directly ABOVE the Netgear stack in
+    Column 1 and the Raspberry Pi 5 + Hailo-8 (26 TOPS) directly BELOW the Netgear stack in
+    Column 1, all sharing the exact same isometric projection vectors (`W_vec`, `D_vec`, `uz`)
+    and with arrows plugging directly into the actual Ethernet and USB port cavities.
+    """
+    parts = [f'''<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">
+  <!-- Clean White Paper Background -->
+  <rect width="{width}" height="{height}" fill="#ffffff"/>''']
+
+    # Shared isometric footprint basis vectors for every device in the diagram:
+    W_vec = (152.0, -66.0)
+    D_vec = (102.0, 54.0)
+
+    # Horizontally symmetrical X positions for the 3 columns (each 254 px wide: 152 + 102 = 254)
+    X1_left = 28.0
+    X2_left = 323.0
+    X3_left = 618.0
+
+    # Vertical baselines:
+    # - Top-Left (Column 1): 2x Raspberry Pi 3B+ Red Team Stack at Y_rpi3 = 176.0
+    # - Middle Row (Columns 1, 2, 3): Netgear Stack, Zodiac FX, Jetson Orin at Y_base = 382.0
+    # - Bottom-Left (Column 1): Raspberry Pi 5 + Hailo-8 at Y_rpi5 = 596.0
+    Y_rpi3 = 176.0
+    Y_base = 382.0
+    Y_rpi5 = 596.0
+
+    # 1A. Top-Left (Column 1): 2-Tier Raspberry Pi 3B+ Red Team Stack (100 x 80 mapped onto D_vec x (-W_vec))
+    rpi3_custom_iso = IsoProjector(
+        ox=X1_left + W_vec[0],
+        oy=Y_rpi3 + W_vec[1],
+        ux=(D_vec[0] / 100.0, D_vec[1] / 100.0),
+        uy=(-W_vec[0] / 80.0, -W_vec[1] / 80.0),
+        uz=(0.0, -1.45),
+    )
+    rpi3_grp, rpi3_iso = render_rpi3b_stack_group(scale=0.60, custom_iso=rpi3_custom_iso)
+    parts.append(rpi3_grp)
+
+    # 1B. Middle-Left (Column 1): 2-Tier Netgear Switch Stack (96 x 62 mapped onto W_vec x D_vec)
+    ng_custom_iso = IsoProjector(
+        ox=X1_left,
+        oy=Y_base,
+        ux=(W_vec[0] / 96.0, W_vec[1] / 96.0),
+        uy=(D_vec[0] / 62.0, D_vec[1] / 62.0),
+        uz=(0.0, -1.55),
+    )
+    ng_grp, ng_iso = render_netgear_stack_group(scale=0.62, custom_iso=ng_custom_iso)
+    parts.append(ng_grp)
+
+    # 1C. Bottom-Left (Column 1): Raspberry Pi 5 + Hailo-8 (100 x 80 mapped onto D_vec x (-W_vec))
+    rpi5_custom_iso = IsoProjector(
+        ox=X1_left + W_vec[0],
+        oy=Y_rpi5 + W_vec[1],
+        ux=(D_vec[0] / 100.0, D_vec[1] / 100.0),
+        uy=(-W_vec[0] / 80.0, -W_vec[1] / 80.0),
+        uz=(0.0, -1.45),
+    )
+    rpi5_grp, rpi5_iso = render_rpi5_hailo_group(scale=0.60, custom_iso=rpi5_custom_iso)
+    parts.append(rpi5_grp)
+
+    # 2. Middle-Center (Column 2): Zodiac FX OpenFlow 1.3 Switch (100 x 80 mapped onto W_vec x D_vec)
+    zfx_custom_iso = IsoProjector(
+        ox=X2_left,
+        oy=Y_base,
+        ux=(W_vec[0] / 100.0, W_vec[1] / 100.0),
+        uy=(D_vec[0] / 80.0, D_vec[1] / 80.0),
+        uz=(0.0, -1.65),
+    )
+    zfx_grp, zfx_iso = render_zodiac_fx_group(scale=0.60, show_usb_cable=False, custom_iso=zfx_custom_iso)
+    parts.append(zfx_grp)
+
+    # 3. Middle-Right (Column 3): NVIDIA Jetson Orin Nano Super (100 x 80 mapped onto D_vec x (-W_vec))
+    orin_custom_iso = IsoProjector(
+        ox=X3_left + W_vec[0],
+        oy=Y_base + W_vec[1],
+        ux=(D_vec[0] / 100.0, D_vec[1] / 100.0),
+        uy=(-W_vec[0] / 80.0, -W_vec[1] / 80.0),
+        uz=(0.0, -1.85),
+    )
+    orin_grp, orin_iso = render_jetson_orin_group(scale=0.60, custom_iso=orin_custom_iso)
+    parts.append(orin_grp)
+
+    # 4. Port Coordinates for Core Horizontal Connections
+    p_up_p4 = ng_iso.pt(72.1, 62.0, 36.0)
+    p_wl_p5 = ng_iso.pt(83.5, 62.0, 6.0)
+
+    p_zfx_p1 = zfx_iso.pt(14.5 + 0 * 19.6 + 8.1, 80.7, 4.5)
+    p_zfx_p2 = zfx_iso.pt(14.5 + 1 * 19.6 + 8.1, 80.7, 4.5)
+    p_zfx_p3 = zfx_iso.pt(14.5 + 2 * 19.6 + 8.1, 80.7, 4.5)
+    p_zfx_p4 = zfx_iso.pt(14.5 + 3 * 19.6 + 8.1, 80.7, 4.5)
+
+    for p_idx in range(4):
+        p_lbl = zfx_iso.pt(14.5 + p_idx * 19.6 + 8.1, 76.0, 16.5)
+        parts.append(f'''
+  <rect x="{fmt(p_lbl[0]-9)}" y="{fmt(p_lbl[1]-6)}" width="18" height="11.5" rx="2.5" fill="#0f172a" stroke="#64748b" stroke-width="0.8"/>
+  <text x="{fmt(p_lbl[0])}" y="{fmt(p_lbl[1]+2.2)}" font-family="RobotoMono, monospace" font-weight="700" font-size="7.8" fill="#f8fafc" text-anchor="middle">P{p_idx+1}</text>''')
+
+    p_orin_usb = orin_iso.pt(97.5, 48.0, 8.0)
+    p_orin_gbe = orin_iso.pt(97.5, 24.0, 8.0)
+
+    # 5. Core Horizontal Tracks (Y_track_top = 486, Y_track_bot = 530)
+    Y_track_top = Y_base + 104.0
+    Y_track_bot = Y_base + 148.0
+
+    # 5A. Untrusted Ingress: Workload Switch P5 -> Zodiac FX P1
+    parts.append(_draw_orthogonal_arrow(
+        [p_wl_p5, (p_wl_p5[0], Y_track_top), (p_zfx_p1[0], Y_track_top), p_zfx_p1],
+        color="#2563eb",
+        width=2.6,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    # 5B. Filtered Egress: Zodiac FX P2 -> Uplink Switch P4
+    parts.append(_draw_orthogonal_arrow(
+        [p_zfx_p2, (p_zfx_p2[0], Y_track_bot), (p_up_p4[0], Y_track_bot), p_up_p4],
+        color="#059669",
+        width=2.6,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    # 5C. Mirror Taps [O1, O2, O3]: Zodiac FX P3 -> Jetson Orin USB 3.2
+    parts.append(_draw_orthogonal_arrow(
+        [p_zfx_p3, (p_zfx_p3[0], Y_track_top), (p_orin_usb[0], Y_track_top), p_orin_usb],
+        color="#0284c7",
+        width=2.2,
+        dashed=True,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    # 5D. OpenFlow 1.3 Control (:6633): Zodiac FX P4 <-> Jetson Orin GbE
+    parts.append(_draw_orthogonal_arrow(
+        [p_zfx_p4, (p_zfx_p4[0], Y_track_bot), (p_orin_gbe[0], Y_track_bot), p_orin_gbe],
+        color="#d97706",
+        width=2.6,
+        dashed=False,
+        start_arrow=True,
+        end_arrow=True,
+    ))
+
+    # 6. Direct Port-to-Port Orthogonal Arrows for Column 1 (RPi 3B+ RJ45 -> Netgear RJ45 <- RPi 5 RJ45 & USB 3.0)
+    p_rpi3_top_rj = rpi3_iso.pt(100.0, 62.0, 40.5)
+    p_rpi3_bot_rj = rpi3_iso.pt(100.0, 68.0, 8.5)
+    p_ng_top_p1 = ng_iso.pt(37.9, 62.0, 40.0)
+    p_ng_top_p3 = ng_iso.pt(60.7, 62.0, 40.0)
+    y_rpi3_mid = 238.0
+    x_rpi3_top_escape = 186.0
+
+    parts.append(_draw_orthogonal_arrow(
+        [p_rpi3_bot_rj, (p_rpi3_bot_rj[0], y_rpi3_mid), (p_ng_top_p1[0], y_rpi3_mid), p_ng_top_p1],
+        color="#dc2626",
+        width=2.4,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+    parts.append(_draw_orthogonal_arrow(
+        [p_rpi3_top_rj, (x_rpi3_top_escape, p_rpi3_top_rj[1]), (x_rpi3_top_escape, y_rpi3_mid - 14.0), (p_ng_top_p3[0], y_rpi3_mid - 14.0), p_ng_top_p3],
+        color="#dc2626",
+        width=2.4,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    parts.append(f'''
+  <g transform="translate(115, {fmt(y_rpi3_mid - 11)})">
+    <rect x="0" y="0" width="154" height="22" rx="4" fill="#fef2f2" stroke="#dc2626" stroke-width="1.3"/>
+    <text x="77" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#b91c1c" text-anchor="middle">Red Team GbE [P1, P3] ↓</text>
+  </g>''')
+
+    p_rpi5_rj = rpi5_iso.pt(100.0, 65.5, 8.5)
+    p_rpi5_usb = rpi5_iso.pt(100.0, 39.2, 8.5)
+    p_ng_wl_p1 = ng_iso.pt(37.9, 62.0, 10.0)
+    p_ng_wl_p2 = ng_iso.pt(49.3, 62.0, 10.0)
+    y_rpi5_top_step = 442.0
+    y_rpi5_bot_step = 482.0
+
+    parts.append(_draw_orthogonal_arrow(
+        [p_rpi5_rj, (p_ng_wl_p1[0], p_rpi5_rj[1]), p_ng_wl_p1],
+        color="#2563eb",
+        width=2.4,
+        dashed=False,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    parts.append(_draw_orthogonal_arrow(
+        [p_ng_wl_p2, (p_ng_wl_p2[0], p_rpi5_usb[1])],
+        color="#0284c7",
+        width=2.2,
+        dashed=True,
+        start_arrow=False,
+        end_arrow=True,
+    ))
+
+    parts.append(f'''
+  <g transform="translate(88, {fmt(y_rpi5_top_step - 11)})">
+    <rect x="0" y="0" width="146" height="22" rx="4" fill="#eff6ff" stroke="#2563eb" stroke-width="1.3"/>
+    <text x="73" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="8.8" fill="#1d4ed8" text-anchor="middle">↑ GbE Workload [P4]</text>
+  </g>
+  <g transform="translate(88, {fmt(y_rpi5_bot_step - 11)})">
+    <rect x="0" y="0" width="146" height="22" rx="4" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.3"/>
+    <text x="73" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="8.8" fill="#0369a1" text-anchor="middle">↓ O1 Mirror Tap [P2]</text>
+  </g>''')
+
+    # 7. Inline Pill Labels Centered on the 4 Symmetric Horizontal Arrow Tracks
+    x_mid_left_top = 0.5 * (p_wl_p5[0] + p_zfx_p1[0])
+    x_mid_left_bot = 0.5 * (p_up_p4[0] + p_zfx_p2[0])
+    x_mid_right_top = 0.5 * (p_zfx_p3[0] + p_orin_usb[0])
+    x_mid_right_bot = 0.5 * (p_zfx_p4[0] + p_orin_gbe[0])
+
+    parts.append(f'''
+  <!-- Left Track Pill 1: Untrusted Ingress -->
+  <g transform="translate({fmt(x_mid_left_top - 68)}, {fmt(Y_track_top - 11)})">
+    <rect x="0" y="0" width="136" height="22" rx="4" fill="#eff6ff" stroke="#2563eb" stroke-width="1.3"/>
+    <text x="68" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#1d4ed8" text-anchor="middle">Untrusted Ingress →</text>
+  </g>
+
+  <!-- Left Track Pill 2: Filtered Egress -->
+  <g transform="translate({fmt(x_mid_left_bot - 66)}, {fmt(Y_track_bot - 11)})">
+    <rect x="0" y="0" width="132" height="22" rx="4" fill="#ecfdf5" stroke="#059669" stroke-width="1.3"/>
+    <text x="66" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#047857" text-anchor="middle">← Filtered Egress</text>
+  </g>
+
+  <!-- Right Track Pill 1: Mirror Taps -->
+  <g transform="translate({fmt(x_mid_right_top - 78)}, {fmt(Y_track_top - 11)})">
+    <rect x="0" y="0" width="156" height="22" rx="4" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.3"/>
+    <text x="78" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#0369a1" text-anchor="middle">Mirror Taps [O1..O3] →</text>
+  </g>
+
+  <!-- Right Track Pill 2: OF 1.3 Control -->
+  <g transform="translate({fmt(x_mid_right_bot - 82)}, {fmt(Y_track_bot - 11)})">
+    <rect x="0" y="0" width="164" height="22" rx="4" fill="#fffbeb" stroke="#d97706" stroke-width="1.3"/>
+    <text x="82" y="14.5" font-family="RobotoMono, monospace" font-weight="700" font-size="9" fill="#b45309" text-anchor="middle">↔ OF 1.3 Control (:6633)</text>
+  </g>''')
+
+    # 8. Symmetrical Callout Cards for Every Hardware Node
+    parts.append('''
+  <!-- Column 1 Top Header Card: 2x Raspberry Pi 3B+ Red Team (X = 28..282, Y = 16) -->
+  <g transform="translate(28, 16)">
+    <line x1="127" y1="48" x2="127" y2="68" stroke="#dc2626" stroke-width="1.5"/>
+    <circle cx="127" cy="68" r="2.8" fill="#dc2626"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#b91c1c" text-anchor="middle">RED TEAM · UNTRUSTED WORKLOADS</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">2× Raspberry Pi 3B+ (10.0.2.50, .52)</text>
+  </g>
+
+  <!-- Column 1 Bottom Card: Raspberry Pi 5 + Hailo-8 (X = 28..282, Y = 680) -->
+  <g transform="translate(28, 680)">
+    <line x1="127" y1="0" x2="127" y2="-24" stroke="#2563eb" stroke-width="1.5"/>
+    <circle cx="127" cy="-24" r="2.8" fill="#2563eb"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#1d4ed8" text-anchor="middle">ADVERSARIAL WORKLOAD &amp; O1 CAPTURE</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">RPi 5 + Hailo-8 (26 TOPS) · 10.0.2.51</text>
+  </g>
+
+  <!-- Column 2 Header Card: Zodiac FX OpenFlow DUT (X = 323..577, Y = 180) -->
+  <g transform="translate(323, 180)">
+    <line x1="127" y1="48" x2="127" y2="128" stroke="#d97706" stroke-width="1.5"/>
+    <circle cx="127" cy="128" r="2.8" fill="#d97706"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#d97706" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#b45309" text-anchor="middle">TIER 1 · ZODIAC FX (OPENFLOW 1.3 DUT)</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">Atmel SAM4E + KSZ8795 · 128-Rule Budget</text>
+  </g>
+
+  <!-- Column 3 Header Card: SDN Controller & Verifier (X = 618..872, Y = 180) -->
+  <g transform="translate(618, 180)">
+    <line x1="127" y1="48" x2="127" y2="95" stroke="#0284c7" stroke-width="1.5"/>
+    <circle cx="127" cy="95" r="2.8" fill="#0284c7"/>
+    <rect x="0" y="0" width="254" height="48" rx="6" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="127" y="19" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11" fill="#0369a1" text-anchor="middle">SDN CONTROLLER &amp; VERIFIER</text>
+    <text x="127" y="36" font-family="RobotoMono, monospace" font-weight="600" font-size="9" fill="#334155" text-anchor="middle">NVIDIA Jetson Orin Nano Super</text>
+  </g>
+
+  <!-- Bottom Legend Banner (Aligned across Columns 2 & 3 at X = 323..872, Y = 688) -->
+  <g transform="translate(323, 688)">
+    <rect x="0" y="0" width="549" height="32" rx="16" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="274.5" y="20" font-family="GoogleSans, sans-serif" font-weight="800" font-size="11.5" letter-spacing="0.6" fill="#0f172a" text-anchor="middle">COMPLETE PHYSICAL SDN TESTBED &amp; DETERMINISTIC VERIFIER LOOP</text>
+  </g>
+</svg>''')
+    return "\n".join(parts)
+
+
 def svg_cover_artwork() -> str:
     """
-    Cover Artwork: Enlarged 3D isometric representation of the Zodiac physical testbed stack
-    (Uplink Switch GS105Ev2 #2, Workload Switch GS105Ev2 #1, Zodiac FX OpenFlow 1.3 DUT)
-    and adjacent SDN Controller (NVIDIA Jetson Orin Nano Super).
-    Features RJ45 port cutouts, active link LEDs, dedicated OpenFlow 1.3 control cable,
-    VLAN 1 ingress, filtered egress, and triple mirror tap conduits [O1, O2, O3].
-    Pure scalable SVG, zero Type 3 bitmap fonts.
+    Cover Artwork: Symmetrical 3D isometric CAD representation of the Zodiac physical testbed:
+      - Left Column:
+        * Top: 2x Raspberry Pi 3 Model B+ (Red Team / Untrusted Workloads: 10.0.2.50, 10.0.2.52)
+        * Middle: 2-tier Netgear GS105Ev2 switch stack (Tier 3 Uplink #2 on top, Tier 2 Workload #1 on bottom)
+        * Bottom: Raspberry Pi 5 + Official AI HAT+ (Hailo-8 26 TOPS, 10.0.2.51 & O1 Mirror Capture)
+      - Center Column: Northbound Networks Zodiac FX Rev A bare-board OpenFlow 1.3 switch
+      - Right Column: NVIDIA Jetson Orin Nano Super SDN Controller & Verifier
+    All devices share the exact same isometric basis vectors and footprint geometry,
+    connected by direct port-to-port orthogonal arrow lines.
+    Centered on Page 1 with balanced white space above and below.
     """
-    cos30 = math.cos(math.radians(30))  # ~0.8660
-    sin30 = math.sin(math.radians(30))  # 0.5
-
-    def pt(cx, cy, x, y, z):
-        px = cx + (x - y) * cos30
-        py = cy - (x + y) * sin30 - z
-        return round(px, 1), round(py, 1)
-
-    def poly_pts(pts):
-        return " ".join(f"{p[0]},{p[1]}" for p in pts)
-
-    sw_w = 125  # front face length
-    sw_d = 75   # side face depth
-    sw_h = 22   # chassis height
-    gap = 9     # gap between stacked switches
-
-    st_cx = 175
-    st_cy = 248
-
-    ctrl_cx = 380
-    ctrl_cy = 218
-    ctrl_w = 75
-    ctrl_d = 65
-    ctrl_h = 24
-
-    svg = []
-    svg.append('<svg viewBox="0 0 540 280" width="504pt" height="261pt" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:54pt;top:184pt;z-index:5;">')
-    
-    # Gradients & Filters
-    svg.append("""  <defs>
-    <!-- Metallic Netgear Slate-Blue Shading -->
-    <linearGradient id="ngTop" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#3b4252" />
-      <stop offset="50%" stop-color="#2e3440" />
-      <stop offset="100%" stop-color="#252a34" />
-    </linearGradient>
-    <linearGradient id="ngFront" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#1e222a" />
-      <stop offset="100%" stop-color="#282c37" />
-    </linearGradient>
-    <linearGradient id="ngSide" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#16181f" />
-      <stop offset="100%" stop-color="#0f1015" />
-    </linearGradient>
-
-    <!-- Zodiac FX Matte Charcoal Shading -->
-    <linearGradient id="zfxTop" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2d3748" />
-      <stop offset="50%" stop-color="#1a202c" />
-      <stop offset="100%" stop-color="#171923" />
-    </linearGradient>
-    <linearGradient id="zfxFront" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#12141a" />
-      <stop offset="100%" stop-color="#1a202c" />
-    </linearGradient>
-    <linearGradient id="zfxSide" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#0d0e12" />
-      <stop offset="100%" stop-color="#050608" />
-    </linearGradient>
-
-    <!-- Jetson Orin Industrial Shading -->
-    <linearGradient id="jetTop" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4a5568" />
-      <stop offset="100%" stop-color="#2d3748" />
-    </linearGradient>
-    <linearGradient id="jetFront" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#1a202c" />
-      <stop offset="100%" stop-color="#2d3748" />
-    </linearGradient>
-    <linearGradient id="jetSide" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#111318" />
-      <stop offset="100%" stop-color="#0a0b0e" />
-    </linearGradient>
-  </defs>""")
-
-    # Ambient Bench Shadow
-    svg.append(f'  <ellipse cx="270" cy="256" rx="230" ry="24" fill="#000000" fill-opacity="0.04" />')
-    svg.append(f'  <ellipse cx="175" cy="248" rx="100" ry="20" fill="#000000" fill-opacity="0.07" />')
-    svg.append(f'  <ellipse cx="380" cy="218" rx="60" ry="15" fill="#000000" fill-opacity="0.06" />')
-
-    # Bench Isometric Grid Lines
-    svg.append('  <!-- Bench Grid -->')
-    svg.append('  <g stroke="#dadce0" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.5">')
-    for y_off in range(-20, 110, 30):
-        p1 = pt(st_cx, st_cy, -60, y_off, 0)
-        p2 = pt(st_cx, st_cy, 310, y_off, 0)
-        svg.append(f'    <line x1="{p1[0]}" y1="{p1[1]}" x2="{p2[0]}" y2="{p2[1]}" />')
-    for x_off in range(-40, 320, 40):
-        p1 = pt(st_cx, st_cy, x_off, -20, 0)
-        p2 = pt(st_cx, st_cy, x_off, 110, 0)
-        svg.append(f'    <line x1="{p1[0]}" y1="{p1[1]}" x2="{p2[0]}" y2="{p2[1]}" />')
-    svg.append('  </g>')
-
-    def draw_chassis(cx, cy, w, d, h, z_base, top_grad, front_grad, side_grad, border_col="#4b5563"):
-        res = []
-        b_c = pt(cx, cy, 0, 0, z_base)
-        b_r = pt(cx, cy, w, 0, z_base)
-        b_b = pt(cx, cy, w, d, z_base)
-        b_l = pt(cx, cy, 0, d, z_base)
-        t_c = pt(cx, cy, 0, 0, z_base + h)
-        t_r = pt(cx, cy, w, 0, z_base + h)
-        t_b = pt(cx, cy, w, d, z_base + h)
-        t_l = pt(cx, cy, 0, d, z_base + h)
-
-        side_pts = poly_pts([b_c, b_l, t_l, t_c])
-        res.append(f'    <polygon points="{side_pts}" fill="url({side_grad})" stroke="{border_col}" stroke-width="0.6" />')
-
-        front_pts = poly_pts([b_c, b_r, t_r, t_c])
-        res.append(f'    <polygon points="{front_pts}" fill="url({front_grad})" stroke="{border_col}" stroke-width="0.6" />')
-
-        top_pts = poly_pts([t_c, t_r, t_b, t_l])
-        res.append(f'    <polygon points="{top_pts}" fill="url({top_grad})" stroke="{border_col}" stroke-width="0.8" />')
-
-        return "\n".join(res)
-
-    def draw_feet(cx, cy, w, d, z_base, foot_h):
-        res = []
-        coords = [(12, 10), (w - 18, 10), (12, d - 15), (w - 18, d - 15)]
-        for fx, fy in coords:
-            p_top = pt(cx, cy, fx, fy, z_base + foot_h)
-            res.append(f'    <rect x="{p_top[0]-3}" y="{p_top[1]}" width="6" height="{foot_h}" rx="1" fill="#111827" />')
-        return "\n".join(res)
-
-    # 1. CONTROLLER: Jetson Orin Nano Super
-    svg.append('  <!-- ==================== SDN CONTROLLER (JETSON ORIN NANO SUPER) ==================== -->')
-    svg.append('  <g id="sdn-controller">')
-    svg.append(draw_chassis(ctrl_cx, ctrl_cy, ctrl_w, ctrl_d, ctrl_h, 0, "#jetTop", "#jetFront", "#jetSide", "#374151"))
-
-    for fin_i in range(5):
-        fin_y = 10 + fin_i * 10
-        p_l = pt(ctrl_cx, ctrl_cy, 8, fin_y, ctrl_h)
-        p_r = pt(ctrl_cx, ctrl_cy, ctrl_w - 8, fin_y, ctrl_h)
-        p_lt = pt(ctrl_cx, ctrl_cy, 8, fin_y, ctrl_h + 5)
-        p_rt = pt(ctrl_cx, ctrl_cy, ctrl_w - 8, fin_y, ctrl_h + 5)
-        fin_poly = poly_pts([p_l, p_r, p_rt, p_lt])
-        svg.append(f'    <polygon points="{fin_poly}" fill="#1f2937" stroke="#4b5563" stroke-width="0.5" />')
-
-    led_p = pt(ctrl_cx, ctrl_cy, 12, 0, ctrl_h - 6)
-    svg.append(f'    <circle cx="{led_p[0]}" cy="{led_p[1]}" r="1.8" fill="#34a853" />')
-    svg.append(f'    <circle cx="{led_p[0]}" cy="{led_p[1]}" r="3.6" fill="#34a853" fill-opacity="0.3" />')
-
-    c_top_p = pt(ctrl_cx, ctrl_cy, 28, 32, ctrl_h + 8)
-    svg.append(f'    <rect x="{c_top_p[0]-54}" y="{c_top_p[1]-20}" width="108" height="19" rx="3" fill="#ffffff" stroke="#202124" stroke-width="0.8" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))" />')
-    svg.append(f'    <text x="{c_top_p[0]}" y="{c_top_p[1]-11}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="7" fill="#1a73e8" text-anchor="middle">SDN CONTROLLER &amp; VERIFIER</text>')
-    svg.append(f'    <text x="{c_top_p[0]}" y="{c_top_p[1]-2}" font-family="RobotoMono, monospace" font-size="5.5" fill="#5f6368" text-anchor="middle">NVIDIA Jetson Orin Nano Super</text>')
-
-    cp_port = pt(ctrl_cx, ctrl_cy, 24, 0, 6)
-    svg.append(f'    <rect x="{cp_port[0]-4}" y="{cp_port[1]-4}" width="8" height="7" rx="1" fill="#111827" stroke="#fbbc04" stroke-width="0.8" />')
-    tap2_port = pt(ctrl_cx, ctrl_cy, 42, 0, 6)
-    svg.append(f'    <rect x="{tap2_port[0]-3}" y="{tap2_port[1]-4}" width="7" height="6" rx="1" fill="#111827" stroke="#4285f4" stroke-width="0.6" />')
-    tap3_port = pt(ctrl_cx, ctrl_cy, 56, 0, 6)
-    svg.append(f'    <rect x="{tap3_port[0]-3}" y="{tap3_port[1]-4}" width="7" height="6" rx="1" fill="#111827" stroke="#00bcd4" stroke-width="0.6" />')
-    svg.append('  </g>')
-
-    # 2. PHYSICAL SWITCH STACK (3 TIERS)
-    # TIER 1: Zodiac FX (DUT) at Base (z=0)
-    svg.append('  <!-- ==================== TIER 1: ZODIAC FX OPENFLOW 1.3 DUT ==================== -->')
-    svg.append('  <g id="switch-zodiac-fx">')
-    svg.append(draw_chassis(st_cx, st_cy, sw_w, sw_d, sw_h, 0, "#zfxTop", "#zfxFront", "#zfxSide", "#374151"))
-
-    z_bez = pt(st_cx, st_cy, 6, 0, sw_h - 6)
-    svg.append(f'    <text x="{z_bez[0]}" y="{z_bez[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.2" fill="#fbbc04">ZODIAC FX</text>')
-
-    z_ports = []
-    for i, p_num in enumerate([1, 2, 3, 4]):
-        px_pos = 18 + i * 26
-        p_pt = pt(st_cx, st_cy, px_pos, 0, 5)
-        led_pt = pt(st_cx, st_cy, px_pos, 0, 15)
-        z_ports.append(p_pt)
-        svg.append(f'    <rect x="{p_pt[0]-4}" y="{p_pt[1]-4}" width="8.5" height="7.5" rx="1" fill="#000000" stroke="#9ca3af" stroke-width="0.7" />')
-        led_color = "#34a853" if p_num in [1, 2] else ("#4285f4" if p_num == 3 else "#fbbc04")
-        svg.append(f'    <circle cx="{led_pt[0]}" cy="{led_pt[1]}" r="1.3" fill="{led_color}" />')
-        p_lbl = pt(st_cx, st_cy, px_pos - 1, 0, 1)
-        svg.append(f'    <text x="{p_lbl[0]}" y="{p_lbl[1]+6}" font-family="RobotoMono, monospace" font-size="5" fill="#9ca3af" text-anchor="middle">P{p_num}</text>')
-
-    z_tag_p = pt(st_cx, st_cy, -8, 40, 6)
-    svg.append(f'    <rect x="{z_tag_p[0]-125}" y="{z_tag_p[1]-9}" width="125" height="18" rx="3" fill="#ffffff" stroke="#fbbc04" stroke-width="0.8" />')
-    svg.append(f'    <text x="{z_tag_p[0]-6}" y="{z_tag_p[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.8" fill="#202124" text-anchor="end">TIER 1: ZODIAC FX DUT</text>')
-    svg.append(f'    <text x="{z_tag_p[0]-6}" y="{z_tag_p[1]+7}" font-family="RobotoMono, monospace" font-size="5.4" fill="#b06000" text-anchor="end">OpenFlow 1.3 · Table 0 (128 rules)</text>')
-    svg.append(f'    <line x1="{z_tag_p[0]}" y1="{z_tag_p[1]}" x2="{z_tag_p[0]+12}" y2="{z_tag_p[1]}" stroke="#fbbc04" stroke-width="0.8" />')
-    svg.append('  </g>')
-
-    svg.append(draw_feet(st_cx, st_cy, sw_w, sw_d, sw_h, gap))
-
-    # TIER 2: NETGEAR GS105Ev2 #1 (Workload Switch) - Middle
-    z2 = sw_h + gap
-    svg.append('  <!-- ==================== TIER 2: NETGEAR GS105Ev2 #1 (WORKLOAD) ==================== -->')
-    svg.append('  <g id="switch-netgear-workload">')
-    svg.append(draw_chassis(st_cx, st_cy, sw_w, sw_d, sw_h, z2, "#ngTop", "#ngFront", "#ngSide", "#4b5563"))
-
-    w_bez = pt(st_cx, st_cy, 6, 0, z2 + sw_h - 6)
-    svg.append(f'    <text x="{w_bez[0]}" y="{w_bez[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.2" fill="#8ab4f8">NETGEAR</text>')
-
-    w_ports = []
-    for i in range(5):
-        p_num = i + 1
-        px_pos = 14 + i * 22
-        p_pt = pt(st_cx, st_cy, px_pos, 0, z2 + 5)
-        led_pt = pt(st_cx, st_cy, px_pos, 0, z2 + 15)
-        w_ports.append(p_pt)
-        svg.append(f'    <rect x="{p_pt[0]-4}" y="{p_pt[1]-4}" width="7.5" height="7" rx="0.8" fill="#0b0f19" stroke="#cbd5e1" stroke-width="0.6" />')
-        led_color = "#34a853" if p_num in [1, 3, 4, 5] else "#fbbc04"
-        svg.append(f'    <circle cx="{led_pt[0]}" cy="{led_pt[1]}" r="1.3" fill="{led_color}" />')
-
-    # Workload Switch P2 [O1] Pre-DUT Mirror Tag
-    o1_p = (w_ports[1][0], w_ports[1][1])
-    svg.append(f'    <rect x="{o1_p[0]-16}" y="{o1_p[1]-15}" width="50" height="12" rx="2" fill="#ffffff" stroke="#b06000" stroke-width="0.7" />')
-    svg.append(f'    <text x="{o1_p[0]+9}" y="{o1_p[1]-7}" font-family="RobotoMono, monospace" font-size="5.2" fill="#b06000" text-anchor="middle">[O1] Pre-DUT</text>')
-
-    w_tag_p = pt(st_cx, st_cy, -8, 40, z2 + 6)
-    svg.append(f'    <rect x="{w_tag_p[0]-125}" y="{w_tag_p[1]-9}" width="125" height="18" rx="3" fill="#ffffff" stroke="#1a73e8" stroke-width="0.8" />')
-    svg.append(f'    <text x="{w_tag_p[0]-6}" y="{w_tag_p[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.8" fill="#202124" text-anchor="end">TIER 2: WORKLOAD SWITCH</text>')
-    svg.append(f'    <text x="{w_tag_p[0]-6}" y="{w_tag_p[1]+7}" font-family="RobotoMono, monospace" font-size="5.4" fill="#1967d2" text-anchor="end">GS105Ev2 #1 · Untrusted VLAN 1</text>')
-    svg.append(f'    <line x1="{w_tag_p[0]}" y1="{w_tag_p[1]}" x2="{w_tag_p[0]+12}" y2="{w_tag_p[1]}" stroke="#1a73e8" stroke-width="0.8" />')
-    svg.append('  </g>')
-
-    z3 = z2 + sw_h + gap
-    svg.append(draw_feet(st_cx, st_cy, sw_w, sw_d, z2 + sw_h, gap))
-
-    # TIER 3: NETGEAR GS105Ev2 #2 (Uplink Switch) - Top
-    svg.append('  <!-- ==================== TIER 3: NETGEAR GS105Ev2 #2 (UPLINK) ==================== -->')
-    svg.append('  <g id="switch-netgear-uplink">')
-    svg.append(draw_chassis(st_cx, st_cy, sw_w, sw_d, sw_h, z3, "#ngTop", "#ngFront", "#ngSide", "#4b5563"))
-
-    u_bez = pt(st_cx, st_cy, 6, 0, z3 + sw_h - 6)
-    svg.append(f'    <text x="{u_bez[0]}" y="{u_bez[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.2" fill="#81c995">NETGEAR</text>')
-
-    u_ports = []
-    for i in range(5):
-        p_num = i + 1
-        px_pos = 14 + i * 22
-        p_pt = pt(st_cx, st_cy, px_pos, 0, z3 + 5)
-        led_pt = pt(st_cx, st_cy, px_pos, 0, z3 + 15)
-        u_ports.append(p_pt)
-        svg.append(f'    <rect x="{p_pt[0]-4}" y="{p_pt[1]-4}" width="7.5" height="7" rx="0.8" fill="#0b0f19" stroke="#cbd5e1" stroke-width="0.6" />')
-        led_color = "#34a853" if p_num in [1, 4] else "#fbbc04"
-        svg.append(f'    <circle cx="{led_pt[0]}" cy="{led_pt[1]}" r="1.3" fill="{led_color}" />')
-
-    u_tag_p = pt(st_cx, st_cy, -8, 40, z3 + 6)
-    svg.append(f'    <rect x="{u_tag_p[0]-125}" y="{u_tag_p[1]-9}" width="125" height="18" rx="3" fill="#ffffff" stroke="#137333" stroke-width="0.8" />')
-    svg.append(f'    <text x="{u_tag_p[0]-6}" y="{u_tag_p[1]}" font-family="GoogleSans, sans-serif" font-weight="700" font-size="6.8" fill="#202124" text-anchor="end">TIER 3: UPLINK SWITCH</text>')
-    svg.append(f'    <text x="{u_tag_p[0]-6}" y="{u_tag_p[1]+7}" font-family="RobotoMono, monospace" font-size="5.4" fill="#137333" text-anchor="end">GS105Ev2 #2 · Protected Transit</text>')
-    svg.append(f'    <line x1="{u_tag_p[0]}" y1="{u_tag_p[1]}" x2="{u_tag_p[0]+12}" y2="{u_tag_p[1]}" stroke="#137333" stroke-width="0.8" />')
-    svg.append('  </g>')
-
-    # 3. INTERCONNECTING PATCH CABLES
-    svg.append('  <!-- ==================== PHYSICAL PATCH CABLES & SDN FLOWS ==================== -->')
-    c1_start = (cp_port[0], cp_port[1])
-    c1_end = (z_ports[3][0], z_ports[3][1])
-    c1_ctrl1 = (c1_start[0] - 30, c1_start[1] + 28)
-    c1_ctrl2 = (c1_end[0] + 35, c1_end[1] + 26)
-    svg.append(f'    <path d="M {c1_start[0]} {c1_start[1]+7} C {c1_ctrl1[0]} {c1_ctrl1[1]+7}, {c1_ctrl2[0]} {c1_ctrl2[1]+7}, {c1_end[0]} {c1_end[1]+7}" fill="none" stroke="#000000" stroke-width="3" stroke-opacity="0.10" />')
-    svg.append(f'    <path d="M {c1_start[0]} {c1_start[1]} C {c1_ctrl1[0]} {c1_ctrl1[1]}, {c1_ctrl2[0]} {c1_ctrl2[1]}, {c1_end[0]} {c1_end[1]}" fill="none" stroke="#f9ab00" stroke-width="2.6" stroke-linecap="round" />')
-    svg.append(f'    <path d="M {c1_start[0]} {c1_start[1]} C {c1_ctrl1[0]} {c1_ctrl1[1]}, {c1_ctrl2[0]} {c1_ctrl2[1]}, {c1_end[0]} {c1_end[1]}" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="3 5" opacity="0.8" />')
-
-    c2_start = (w_ports[4][0], w_ports[4][1])
-    c2_end = (z_ports[0][0], z_ports[0][1])
-    c2_ctrl1 = (c2_start[0] + 22, c2_start[1] + 15)
-    c2_ctrl2 = (c2_end[0] - 20, c2_end[1] - 8)
-    svg.append(f'    <path d="M {c2_start[0]} {c2_start[1]} C {c2_ctrl1[0]} {c2_ctrl1[1]}, {c2_ctrl2[0]} {c2_ctrl2[1]}, {c2_end[0]} {c2_end[1]}" fill="none" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" />')
-
-    c3_start = (z_ports[1][0], z_ports[1][1])
-    c3_end = (u_ports[3][0], u_ports[3][1])
-    c3_ctrl1 = (c3_start[0] + 18, c3_start[1] - 15)
-    c3_ctrl2 = (c3_end[0] + 24, c3_end[1] + 18)
-    svg.append(f'    <path d="M {c3_start[0]} {c3_start[1]} C {c3_ctrl1[0]} {c3_ctrl1[1]}, {c3_ctrl2[0]} {c3_ctrl2[1]}, {c3_end[0]} {c3_end[1]}" fill="none" stroke="#137333" stroke-width="2.4" stroke-linecap="round" />')
-
-    # Cable 4: Mirror Tap [O2] (Blue dotted) from Zodiac FX P3 to Jetson tap2_port
-    c4_start = (z_ports[2][0], z_ports[2][1])
-    c4_end = (tap2_port[0], tap2_port[1])
-    c4_ctrl1 = (c4_start[0] + 22, c4_start[1] + 16)
-    c4_ctrl2 = (c4_end[0] - 16, c4_end[1] + 18)
-    svg.append(f'    <path d="M {c4_start[0]} {c4_start[1]} C {c4_ctrl1[0]} {c4_ctrl1[1]}, {c4_ctrl2[0]} {c4_ctrl2[1]}, {c4_end[0]} {c4_end[1]}" fill="none" stroke="#4285f4" stroke-width="1.6" stroke-dasharray="2 2" stroke-linecap="round" />')
-
-    # Cable 5: Mirror Tap [O3] (Cyan dotted) from Uplink Switch P3 to Jetson tap3_port
-    c5_start = (u_ports[2][0], u_ports[2][1])
-    c5_end = (tap3_port[0], tap3_port[1])
-    c5_ctrl1 = (c5_start[0] + 32, c5_start[1] + 12)
-    c5_ctrl2 = (c5_end[0] - 22, c5_end[1] - 26)
-    svg.append(f'    <path d="M {c5_start[0]} {c5_start[1]} C {c5_ctrl1[0]} {c5_ctrl1[1]}, {c5_ctrl2[0]} {c5_ctrl2[1]}, {c5_end[0]} {c5_end[1]}" fill="none" stroke="#00bcd4" stroke-width="1.5" stroke-dasharray="2 2" stroke-linecap="round" />')
-
-    # Cable Badges
-    mid_c1 = (c1_start[0] - 44, c1_start[1] + 32)
-    svg.append(f'    <rect x="{mid_c1[0]-50}" y="{mid_c1[1]-8}" width="100" height="16" rx="3" fill="#ffffff" stroke="#fbbc04" stroke-width="0.8" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))" />')
-    svg.append(f'    <text x="{mid_c1[0]}" y="{mid_c1[1]+3}" font-family="RobotoMono, monospace" font-size="6.5" font-weight="700" fill="#b06000" text-anchor="middle">OF 1.3 Control (:6633)</text>')
-
-    svg.append(f'    <rect x="{c2_start[0]+14}" y="{c2_start[1]+2}" width="84" height="14" rx="2" fill="#ffffff" stroke="#1a73e8" stroke-width="0.8" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))" />')
-    svg.append(f'    <text x="{c2_start[0]+56}" y="{c2_start[1]+12}" font-family="RobotoMono, monospace" font-size="6" fill="#1967d2" text-anchor="middle">Data Ingress (VLAN 1)</text>')
-
-    svg.append(f'    <rect x="{c3_end[0]+14}" y="{c3_end[1]+2}" width="78" height="14" rx="2" fill="#ffffff" stroke="#137333" stroke-width="0.8" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))" />')
-    svg.append(f'    <text x="{c3_end[0]+53}" y="{c3_end[1]+12}" font-family="RobotoMono, monospace" font-size="6" fill="#137333" text-anchor="middle">Filtered Egress</text>')
-
-    # Mirror Tap Badges on Jetson side
-    svg.append(f'    <rect x="{tap2_port[0]-10}" y="{tap2_port[1]+18}" width="82" height="13" rx="2" fill="#ffffff" stroke="#4285f4" stroke-width="0.8" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))" />')
-    svg.append(f'    <text x="{tap2_port[0]+31}" y="{tap2_port[1]+27}" font-family="RobotoMono, monospace" font-size="5.6" fill="#1a73e8" text-anchor="middle">Mirror Taps [O2,O3]</text>')
-
-    # Bottom Pill Banner
-    svg.append('    <rect x="150" y="260" width="240" height="17" rx="8.5" fill="#f8f9fa" stroke="#dadce0" stroke-width="0.8" />')
-    svg.append('    <text x="270" y="271.5" font-family="GoogleSans, sans-serif" font-weight="600" font-size="7.5" fill="#3c4043" text-anchor="middle">PHYSICAL 3-TIER TESTBED STACK &amp; SDN CONTROL PLANE</text>')
-
-    svg.append('</svg>')
-    return "\n".join(svg)
-
-
+    raw_svg = generate_composed_testbed_with_pis_svg(width=900, height=748)
+    return raw_svg.replace(
+        "<svg viewBox=\"0 0 900 748\" width=\"900\" height=\"748\" xmlns=\"http://www.w3.org/2000/svg\">",
+        "<svg viewBox=\"0 0 900 748\" width=\"486pt\" height=\"404pt\" xmlns=\"http://www.w3.org/2000/svg\" style=\"position:absolute;left:63pt;top:234pt;z-index:5;display:block;\">",
+        1,
+    )
 
 
 def svg_closed_loop_architecture() -> str:
