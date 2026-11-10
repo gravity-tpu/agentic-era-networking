@@ -709,7 +709,7 @@ tr:nth-child(even) td {{
         <div class="toc-row major"><span class="toc-title">Executive Summary</span><span class="toc-leader"></span><span class="toc-page">{pg('exec', 4)}</span></div>
 
         <div class="toc-row major"><span class="toc-title">1. Introduction &amp; Research Thesis</span><span class="toc-leader"></span><span class="toc-page">{pg('sec1', 4)}</span></div>
-        <div class="toc-row sub"><span class="toc-title">1.1 Why Constrained Hardware Exposes Agent Failure Modes</span><span class="toc-leader"></span><span class="toc-page">{pg('sec1_1', 4)}</span></div>
+        <div class="toc-row sub"><span class="toc-title">1.1 Why Physical Hardware Matters: Four Simulator Blindspots</span><span class="toc-leader"></span><span class="toc-page">{pg('sec1_1', 4)}</span></div>
         <div class="toc-row sub"><span class="toc-title">1.2 Summary of Contributions Across Tracks A, B, and C</span><span class="toc-leader"></span><span class="toc-page">{pg('sec1_2', 5)}</span></div>
 
         <div class="toc-row major"><span class="toc-title">2. Physical Testbed Architecture &amp; Topology Breakdown</span><span class="toc-leader"></span><span class="toc-page">{pg('sec2', 5)}</span></div>
@@ -775,14 +775,15 @@ tr:nth-child(even) td {{
         Network configuration synthesis has long separated into two camps: formal control-plane verifiers that analyze static forwarding graphs (Header Space Analysis [2], VeriFlow [3], NetKAT [4], Batfish [5]) and machine-learning systems that translate operator intent into configuration stanzas. In the agentic era, where LLM agents are increasingly asked to propose low-level policy updates in response to operational tickets or anomaly alerts, a dangerous gap emerges between <em>syntactic validity</em> and <em>physical data-plane admissibility</em>.
     </p>
 
-    <h2 id="sec1_1">1.1 Why Constrained Hardware Exposes Agent Failure Modes</h2>
+    <h2 id="sec1_1">1.1 Why Physical Hardware Matters: Four Simulator Blindspots</h2>
     <p>
-        Software switches such as Open vSwitch (OVS) running on multi-gigahertz server CPUs mask poorly structured flow tables behind megaflow caches and gigabytes of DRAM. Real embedded silicon and microcontroller-driven OpenFlow switches offer no such forgiveness:
+        The premise that agent-proposed network configuration requires rigorous verification appears intuitive on its surface. However, most contemporary literature evaluates neural configuration synthesis inside software emulators (e.g., Mininet) or abstract graph solvers (e.g., Batfish) where flow-table space is infinite, lookup latency is zero, and rule actuation occurs instantaneously. Transitioning from software simulation to physical silicon reveals four non-obvious reality gaps that abstract models cannot capture:
     </p>
     <ul>
-        <li><strong>Linear software table walk:</strong> On the Northbound Networks Zodiac FX (Atmel SAM4E8E 120 MHz ARM Cortex-M4), every frame traverses the software flow table sequentially. Each additional non-matching rule evaluated before a forwarding match adds microsecond-scale CPU overhead that directly reduces wire-rate packet capacity.</li>
-        <li><strong>Silent firmware quirks:</strong> Unlike reference specifications [1], embedded OpenFlow 1.3 firmware exhibits undocumented behaviors. On Firmware 0.86, installing a priority-0 flow entry causes the switch to record the match fields in its flow table while <em>silently stripping the <code>OFPIT_APPLY_ACTIONS</code> instruction list</em>—turning an intended catch-all forwarding rule into a silent blackhole.</li>
-        <li><strong>Adversarial untrusted segments:</strong> When an anomaly detector can trigger automatic host quarantine rules, an attacker on a shared L2 segment can forge source IPv4/MAC headers to trick the detector into quarantining the legitimate workload or exhausting the 128-rule table budget.</li>
+        <li><strong>Verification without hardware cost models is blind:</strong> In software, flow tables are frictionless boolean graphs. On physical microcontrollers (e.g., the Zodiac FX's 120 MHz Cortex-M4), frames traverse a sequential software flow table where each additional rule adds a measured <strong>4.24 µs</strong> of per-packet processing delay (<code>t_pkt = 80.0 µs + 5.42 µs · k</code>). A policy that is mathematically loop-free and reachability-correct can still exhaust microcontroller cycles or induce queue-drop cliffs at wire rate. Zodiac's verifier formally checks capacity and latency budgets (<code>A7</code>, <code>A8</code>) alongside logical invariants.</li>
+        <li><strong>The Millisecond Paradox (Human Approval vs. Wire-Speed Defense):</strong> Standard governance requires human-in-the-loop sign-off for agent-generated policy changes. However, while human review operates on human timescales (minutes), adversarial saturation attacks collapse switch queues in milliseconds. Conversely, granting an autonomous agent open write access allows attackers to forge headers and steer the model into isolating critical infrastructure. Zodiac resolves this paradox through <strong>pre-approved quarantine envelopes</strong> (Invariant 4): strictly bounded, time-limited, fail-closed containment that acts at wire speed without autonomous policy synthesis.</li>
+        <li><strong>The "Edge AI Switch" empirical reality:</strong> Industry roadmaps frequently advocate co-locating compact language models directly on switches or CPE routers. When tested directly on embedded hardware (NVIDIA Jetson Orin Nano, 3B parameter models), the admissible policy rate was <strong>0% across 200 trials</strong>. Compact models consistently fail OpenFlow priority precedence, CIDR arithmetic, and structural syntax. Reliable SDN synthesis requires &ge; 27B reasoning models operating on dedicated control-plane hosts.</li>
+        <li><strong>Silicon truth vs. specification assumptions:</strong> Physical devices exhibit undocumented firmware behaviors absent from reference specifications and emulators. On Zodiac FX Firmware 0.86, installing a priority-0 rule causes the switch to record the match fields while <em>silently dropping the action list</em>—turning an intended catch-all rule into an unexpected blackhole (<code>A3</code>). Furthermore, the switch requires ~73 ms per flow installation and clears its entire flow table upon controller disconnect. Verifiers must model how silicon actually fails, not how standards dictate it should behave.</li>
     </ul>
 
     <h2 id="sec1_2">1.2 Summary of Contributions Across Tracks A, B, and C</h2>
@@ -1636,7 +1637,7 @@ def detect_toc_pages(pdf_path: Path) -> dict[str, int]:
     markers = {
         "exec": "Executive Summary",
         "sec1": "1. Introduction & Research Thesis",
-        "sec1_1": "1.1 Why Constrained Hardware Exposes Agent Failure Modes",
+        "sec1_1": "1.1 Why Physical Hardware Matters: Four Simulator Blindspots",
         "sec1_2": "1.2 Summary of Contributions Across Tracks A, B, and C",
         "sec2": "2. Physical Testbed Architecture & Topology Breakdown",
         "sec2_1": "2.1 Three-Tier Switch Stack & Compute/Sensor Nodes",
