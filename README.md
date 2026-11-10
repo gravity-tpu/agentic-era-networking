@@ -29,6 +29,17 @@ Prior research tackles isolated pieces of this challenge without connecting them
 4. **A live hardware adversary** (Raspberry Pi red team) testing evasion, spoofing, and control-plane flooding;
 5. **Strict epistemic provenance** (Invariant 6) ensuring no synthetic or simulated data is ever passed off as live hardware telemetry.
 
+### Isn't "don't trust AI blindly" obvious?
+
+Yes, but **knowing you need a seatbelt is different from crash-testing the car against concrete.**
+
+Most academic and industry literature evaluates LLM networking proposals inside software emulators (Mininet) or abstract graph solvers (Batfish) where table space is infinite and rules install instantaneously. Moving from software simulation to physical silicon reveals four non-obvious traps that abstract verification misses:
+
+1. **Verification without hardware cost models is blind.** On real switches, table capacity is strictly limited (128 rules on the Zodiac FX), and packet lookup is bounded by microcontroller CPU speed. Each rule in the table adds a measured **4.24 µs** of forwarding latency. An agent proposal that is mathematically correct in logic can still exhaust the hardware table budget or degrade data-plane throughput. Zodiac's verifier checks physical capacity budgets alongside boolean reachability.
+2. **The Millisecond Paradox (Safety vs. Reaction Time).** Waiting for human sign-off during a live denial-of-service attack takes minutes, but line-rate attacks saturate queues in milliseconds. Conversely, granting an autonomous agent open write access allows attackers to forge source addresses and steer the model into isolating critical infrastructure. Zodiac resolves this with **pre-approved quarantine envelopes** (Invariant 4): bounded, time-limited, fail-closed containment that acts at wire speed without autonomous policy synthesis.
+3. **The "Edge AI Switch" myth.** Industry proposals frequently suggest hosting compact language models directly on switches or customer-premises routers. Zodiac tested this directly on embedded hardware (NVIDIA Jetson, 3B models): the resulting admissible rate was **0% across 200 trials**. Models at that parameter scale cannot reliably synthesize OpenFlow priority orderings or CIDR masks. Practical SDN generation requires ≥27B reasoning models operating on dedicated control-plane hosts.
+4. **Hardware truth vs. simulator assumptions.** Readback verification on physical wire reveals behaviors absent from emulators: the Zodiac FX clears its entire flow table upon controller disconnection and exhibits a ~73 ms rule-installation latency. Models and controllers must be designed for how silicon actually fails, not how software emulators behave.
+
 A comprehensive survey of prior art is documented in [docs/research/prior-art.md](docs/research/prior-art.md). The pre-registered experimental methodology is in [docs/research/evaluation-plan.md](docs/research/evaluation-plan.md).
 
 ## 2. Approach
