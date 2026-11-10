@@ -633,7 +633,34 @@ async function main(): Promise<void> {
       process.stderr.write(`[batch] completed: ${results.length} results scored\n`);
     }
   } else {
-    const seedsToRun = args.shard === null ? trialSeeds(args.n, args.seedStart) : shardSeeds(args.n, args.shard, args.seedStart);
+    const allSeeds = args.shard === null ? trialSeeds(args.n, args.seedStart) : shardSeeds(args.n, args.shard, args.seedStart);
+    const partialPath = path.join(args.out, 'trials.partial.jsonl');
+    const doneSeeds = new Set<number>();
+    const existingRaw = await fs.readFile(partialPath, 'utf-8').catch((err: unknown) => {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return '';
+      throw err;
+    });
+    if (existingRaw !== '') {
+      for (const rawLine of existingRaw.split('\n')) {
+        const trimmed = rawLine.trim();
+        if (trimmed === '') continue;
+        try {
+          const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+          const s = Number(parsed['seed']);
+          const cat = String(parsed['category'] ?? '');
+          if (Number.isInteger(s) && allSeeds.includes(s) && cat !== '' && !doneSeeds.has(s)) {
+            doneSeeds.add(s);
+            lines.push(trimmed);
+            counts.set(cat, (counts.get(cat) ?? 0) + 1);
+          }
+        } catch {
+          // Ignore a torn trailing line from an interrupted scp pull; it will be re-run below.
+        }
+      }
+      await fs.writeFile(partialPath, lines.length > 0 ? lines.join('\n') + '\n' : '');
+      process.stderr.write(`[resume] loaded ${doneSeeds.size}/${allSeeds.length} completed trials from ${partialPath}\n`);
+    }
+    const seedsToRun = allSeeds.filter((s) => !doneSeeds.has(s));
     for (const seed of seedsToRun) {
       if (overCap()) { capHit = true; break; }
       const t0 = process.hrtime.bigint();

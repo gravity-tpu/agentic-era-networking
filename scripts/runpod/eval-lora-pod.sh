@@ -44,24 +44,26 @@ curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="$OLLAMA_VERSION" sh
 OLLAMA_NUM_PARALLEL="$PARALLEL" OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=24h nohup ollama serve > "$W/ollama.log" 2>&1 &
 for _ in $(seq 1 60); do curl -sf http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 2; done
 # Merge environment: the image's CUDA torch plus a transformers new enough to know qwen3_5. -U matters: pip leaves an
-# already-installed (older) transformers alone otherwise.
-pip install -q -U transformers peft accelerate huggingface_hub sentencepiece
-git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
-(cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize llama-export-lora -j"$(nproc)")
-# Converter environment, isolated: llama.cpp's requirements pin transformers<5 and replace torch with a CPU build, which
-# broke the merge environment on the first full launch.
-python3 -m venv "$W/convenv"
-"$W/convenv/bin/pip" install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt"
-# Fail fast, before any 55 GB download: both environments must be able to do their job.
-python3 - <<'PY'
+# already-installed (older) transformers alone otherwise. Only needed when building GGUF arms (L3/C3/L4).
+if [[ " $ARMS " =~ [[:space:]][LC][34][[:space:]] ]]; then
+  pip install -q -U transformers peft accelerate huggingface_hub sentencepiece
+  git clone -q https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
+  (cd "$W/llama.cpp" && git rev-parse HEAD > "$OUT/llama-cpp-commit.txt" && cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF >/dev/null && cmake --build build --target llama-quantize llama-export-lora -j"$(nproc)")
+  # Converter environment, isolated: llama.cpp's requirements pin transformers<5 and replace torch with a CPU build, which
+  # broke the merge environment on the first full launch.
+  python3 -m venv "$W/convenv"
+  "$W/convenv/bin/pip" install -q -r "$W/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt"
+  # Fail fast, before any 55 GB download: both environments must be able to do their job.
+  python3 - <<'PY'
 import torch, transformers
 from transformers import AutoConfig
 assert torch.cuda.is_available(), "torch in the merge environment has no CUDA"
 c = AutoConfig.from_pretrained("Qwen/Qwen3.8-27B", trust_remote_code=True)
 print("merge env ok: transformers", transformers.__version__, "torch", torch.__version__, "model_type", c.model_type)
 PY
-"$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" --help > /dev/null
-{ python3 -m pip list 2>/dev/null | grep -iE '^(transformers|peft|torch|accelerate) '; echo --- convenv; "$W/convenv/bin/pip" list 2>/dev/null | grep -iE '^(transformers|torch|gguf) '; } > "$OUT/pip-versions.txt"
+  "$W/convenv/bin/python" "$W/llama.cpp/convert_hf_to_gguf.py" --help > /dev/null
+  { python3 -m pip list 2>/dev/null | grep -iE '^(transformers|peft|torch|accelerate) '; echo --- convenv; "$W/convenv/bin/pip" list 2>/dev/null | grep -iE '^(transformers|torch|gguf) '; } > "$OUT/pip-versions.txt"
+fi
 
 # 2. Repo at the pinned commit (bundle keeps the commit hash; agent-eval refuses a dirty tree).
 git clone -q "$IN/repo.bundle" "$W/repo"

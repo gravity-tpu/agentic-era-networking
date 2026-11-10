@@ -96,6 +96,9 @@ if [[ " $ARMS " =~ [[:space:]]L[34][[:space:]] ]]; then
 else
   "${SSH[@]}" 'mkdir -p /workspace/in/proposer-adapter'
 fi
+if [ -d "$OUT/shards" ]; then
+  scp -P "$PORT" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15 -r "$OUT/shards" "root@$IP:/workspace/out/"
+fi
 git show HEAD:scripts/runpod/eval-lora-pod.sh | "${SSH[@]}" 'cat > /workspace/in/eval-lora-pod.sh && chmod +x /workspace/in/eval-lora-pod.sh'
 "${SSH[@]}" "INTENTS='$INTENTS' N='$N' ARMS='$ARMS' STOP_AFTER='$STOP_AFTER' WAIT_FOR_GO='$WAIT_FOR_GO' PROTOCOL='$PROTOCOL' SEED_START='$SEED_START' nohup /workspace/in/eval-lora-pod.sh > /workspace/out-boot.log 2>&1 &"
 
