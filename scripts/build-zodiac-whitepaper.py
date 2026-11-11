@@ -1020,37 +1020,37 @@ tr:nth-child(even) td {{
             <tr>
                 <td><strong>A6</strong></td>
                 <td>Match-Field Prerequisite Hygiene</td>
-                <td>Enforces OpenFlow 1.3 Section 7.2.3.8 prerequisites (e.g., <code>ipv4_src</code>/<code>ipv4_dst</code> require <code>eth_type=0x0800</code>; <code>tcp_dst</code> requires <code>ip_proto=6</code>; <code>arp_spa</code> requires <code>eth_type=0x0806</code>).</td>
+                <td>Enforces OF 1.3 prerequisites (e.g., <code>ipv4_src</code> requires <code>eth_type=0x0800</code>; <code>tcp_dst</code> requires <code>ip_proto=6</code>; <code>arp_spa</code> requires <code>eth_type=0x0806</code>).</td>
                 <td>Prevents silent switch rejection or wildcard widening on Firmware 0.86.</td>
             </tr>
             <tr>
                 <td><strong>A7</strong></td>
                 <td>128-Rule Hardware Table Budget</td>
-                <td>Rejects any table where user rules + implicit priority-0 drop + reserved quarantine slots exceed <code>128</code> entries.</td>
-                <td>Bounds memory footprint; CPU traversal time is checked separately by <code>A8</code>.</td>
+                <td>Rejects any table where user rules + priority-0 drop + reserved quarantine slots exceed <code>128</code> entries.</td>
+                <td>Bounds memory footprint; CPU traversal is checked separately by <code>A8</code>.</td>
             </tr>
             <tr>
                 <td><strong>A8</strong></td>
                 <td>Hardware Traversal Cost Budget</td>
-                <td>Bounds worst-case per-packet lookup latency using measured slopes (<code>4.24 us/rule</code> general; <code>80.0 + 5.42k us</code> deployed 6-rule shape) against <code>targetRatePps</code> (<code>6,000 pps</code> live).</td>
-                <td>Evaluates steady-state 572-byte UDP saturation; 2x overload bursts are handled by Scenario 4 recovery.</td>
+                <td>Bounds per-packet lookup latency via measured slopes (<code>80.0 + 5.42k us</code> deployed; <code>4.24 us/rule</code> general) against <code>targetRatePps</code> (<code>6,000 pps</code> live).</td>
+                <td>Evaluates steady-state 572-byte UDP saturation; overload bursts handled by Scenario 4.</td>
             </tr>
             <tr>
                 <td><strong>A9</strong></td>
                 <td>Non-Redundancy &amp; Shadowing Hygiene</td>
                 <td>Detects lower-priority rules completely shadowed by higher-priority superset rules with identical or conflicting actions.</td>
-                <td>Surfaces dead rules so agent-proposed policies remain minimal on a 128-entry switch.</td>
+                <td>Surfaces dead rules so agent policies remain minimal on a 128-entry switch.</td>
             </tr>
             <tr>
                 <td><strong>A10</strong></td>
                 <td>Port-2 ARP Source IP Confinement</td>
-                <td>Requires any rule permitting ARP (<code>0x0806</code>) on Port 2 to specify <code>arp_spa</code> in the declared peer allowlist (<code>allowedPort2ArpPeers=[]</code> in confinement mode).</td>
-                <td>Prevents wildcard ARP rules on Port 2 from leaking spoofed uplink ARP frames across the DUT.</td>
+                <td>Requires rules permitting ARP (<code>0x0806</code>) on Port 2 to declare <code>arp_spa</code> in the peer allowlist (<code>allowedPort2ArpPeers=[]</code> in confinement mode).</td>
+                <td>Prevents wildcard ARP rules on Port 2 from leaking spoofed uplink ARP across the DUT.</td>
             </tr>
             <tr>
                 <td><strong>A11</strong></td>
                 <td>Intent-to-Rule Semantic Conformance</td>
-                <td>Evaluates the candidate flow table over every concrete packet class in the operator's <code>IntentSpec</code> (highest-priority winning rule per packet class). Acts as an efficient semantic equivalence oracle, while the LLM discovers minimal priority-ordered prefix encodings that NP-hard deterministic compilers struggle to compress into 128 slots.</td>
+                <td>Evaluates the flow table over all concrete packet classes in <code>IntentSpec</code> (highest-priority winning rule per class). Verifies semantic equivalence, while the LLM discovers compact prefix encodings that NP-hard compilers struggle to compress into 128 slots.</td>
                 <td>Proves exact semantic equivalence on all declared traffic classes (<code>requiredOutcomes</code>).</td>
             </tr>
         </tbody>
