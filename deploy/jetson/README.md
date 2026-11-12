@@ -272,7 +272,7 @@ Contents reflect what was running on the Jetson on 2026-11-07, exported from the
 | `oled.service`, `oled_sysinfo.py` | Optional | SSD1306 status display (I2C bus 7, 0x3c). Script goes in `/home/zodiac/`. |
 | `sysctl.d/99-tailscale.conf`, `sysctl.d/99-jetson-ai-memory.conf` | Current | `/etc/sysctl.d/` (IP forwarding for the Tailscale subnet router; memory tuning). |
 | `modprobe.d/openvswitch.conf` | Optional | `/etc/modprobe.d/`; see the Open vSwitch note below. |
-| `requirements/` | Reference | `pip freeze` of `trt-venv` (Python 3.10), `coral-venv` (Python 3.9) and the user site used by `oled.service`. |
+| `requirements/` | Reference | What pip installed into `trt-venv` (Python 3.10), the one package the sentinel needs (`sentinel-venv.txt`), and the user site used by `oled.service`. OS packages (apt) and the retired Coral stack are deliberately not pinned here; see "Security notes". |
 | `backup/` | Current (timer disabled) | Encrypted restic backup and restore drill; see [`backup/README.md`](backup/README.md). |
 | `zodiac-coral.service`, `99-coral-usb-power.rules` | Historical | For the Coral Edge TPUs, removed 2026-10-11. Do not install unless you have Corals. |
 
@@ -286,6 +286,13 @@ Contents reflect what was running on the Jetson on 2026-11-07, exported from the
 | O3 NIC (switch #2 P3) | none | Managed by `zodiac-o3-nic*`, not NetworkManager. |
 
 Tailscale 1.104.4 is installed; the Jetson offers an exit node and, per `network-context.md`, advertises the lab and control subnets as a subnet router. The exact `tailscale up` flags were not captured; the live preferences could not be read without root.
+
+### Security notes (2026-11-11)
+
+The first export listed a full `pip freeze` of `trt-venv`, which is created with `--system-site-packages`, so it included Ubuntu 22.04's own Python packages (for example cryptography 3.4.8, Pillow 9.0.1, urllib3 1.26.5, PyJWT 2.3.0, requests 2.25.1) as if they were pip dependencies, and GitHub raised 166 advisories against them. The requirements files now list only what pip installed into each venv, which has no known advisory in the OSV database (checked 2026-11-11). What that leaves on the device:
+
+- **OS Python packages (apt).** They are Ubuntu builds, which carry security fixes backported without changing the upstream version number, so a version-based advisory overstates the exposure; this was not checked CVE by CVE. Keep them current with `sudo apt update && sudo apt upgrade`. On 2026-11-11 one security update was pending (`python3-pil` 9.0.1-1ubuntu0.5 to 0.6, used by `oled.service`); it was not applied.
+- **Pillow in `coral-venv`.** Pillow 11.3.0 is pip-installed there (Python 3.9), pulled in by `pycoral`. The patched Pillow (13.0.0) needs Python 3.11 or newer, so it cannot be installed in that venv. None of the services that run from it (the sentinel, the retired Coral daemon) imports Pillow. The exposure is closed by retiring the Coral stack or uninstalling Pillow from that venv; neither was done on the device.
 
 ### Things this export did not capture
 
