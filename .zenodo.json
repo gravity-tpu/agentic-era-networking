@@ -1,0 +1,24 @@
+{
+  "title": "Zodiac: A Real-Hardware Testbed and Deterministic Verifier for Agent-Proposed SDN Policy",
+  "upload_type": "software",
+  "description": "<p><strong>Zodiac (v3.0.0 Close-Out Release &amp; Technical Whitepaper)</strong>: A real-hardware testbed and deterministic verifier for agent-proposed Software-Defined Networking (SDN) policy on physical OpenFlow 1.3 silicon.</p><p>This archive contains the complete TypeScript deterministic verifier (checks <code>A1</code>–<code>A11</code>), measured microcontroller forwarding cost model (<code>38.5 µs + 34.8 ns/B + 4.24 µs/rule</code> unquarantined; <code>80.0 µs + 5.42 µs × k</code> under priority-65535 quarantine rules), three-vantage-point passive wire conformance harness (<code>O1</code>, <code>O2</code>, <code>O3</code>), live hardware adversarial suite, 2,920-trial LLM evaluation dataset (<code>Qwen3.8-27B</code>, <code>Gemma 4 26B</code>, <code>Claude Haiku 5.5</code>, and 3B embedded models), and the 26-page technical whitepaper (<code>docs/design/zodiac-whitepaper.pdf</code>).</p>",
+  "creators": [
+    {
+      "name": "Gravity TPU Infrastructure & Agentic Networking Group"
+    }
+  ],
+  "access_right": "open",
+  "license": "MIT",
+  "keywords": [
+    "software-defined-networking",
+    "openflow",
+    "formal-verification",
+    "hardware-in-the-loop",
+    "network-security",
+    "llm-evaluation",
+    "empirical-measurement"
+  ],
+  "version": "3.0.0",
+  "language": "eng"
+}
+

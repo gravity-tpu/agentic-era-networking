@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+title: "Zodiac: A Real-Hardware Testbed and Deterministic Verifier for Agent-Proposed SDN Policy"
+message: "If you use this testbed, deterministic verifier, hardware cost model, or evaluation dataset, please cite both the software release and the technical whitepaper."
+type: software
+authors:
+  - name: "Gravity TPU Infrastructure & Agentic Networking Group"
+repository-code: "https://github.com/gravity-tpu/agentic-era-networking"
+url: "https://github.com/gravity-tpu/agentic-era-networking"
+version: "3.0.0"
+date-released: "2026-11-11"
+license: MIT
+keywords:
+  - software-defined-networking
+  - openflow
+  - formal-verification
+  - hardware-in-the-loop
+  - network-security
+  - llm-evaluation
+  - empirical-measurement
+preferred-citation:
+  type: report
+  title: "Zodiac: A Real-Hardware Testbed and Deterministic Verifier for Agent-Proposed SDN Policy — Closed-Loop Verification of Language Model Flow Policies Against Physical OpenFlow Silicon, Deterministic Safety Invariants, and Live Network Adversaries"
+  authors:
+    - name: "Gravity TPU Infrastructure & Agentic Networking Group"
+  institution:
+    name: "Gravity TPU"
+  year: 2026
+  month: 11
+  version: "3.0.0"
+  url: "https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/zodiac-whitepaper.pdf"
+
