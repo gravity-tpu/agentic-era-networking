@@ -1,0 +1,4 @@
+# GPU sentinel (scripts/gpu-sdn-anomaly-sentinel.py): the one pip package it needs, as deployed 2026-11-07.
+# The native CUDA kernel is loaded with ctypes; PyTorch is only an optional fallback and comes from JetPack, not from here.
+# The service unit currently runs it from /home/zodiac/coral-venv (Python 3.9); any venv with numpy works.
+numpy==1.26.4
