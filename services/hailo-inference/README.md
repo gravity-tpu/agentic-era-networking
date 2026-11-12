@@ -6,7 +6,7 @@ Neural inference microservice exposing the **Raspberry Pi 5 + Hailo-8 M.2 (26 TO
 
 ## 1. Repository Invariants
 
-The microservice strictly enforces the governing principles defined in [`AGENTS.md`](file:///Users/andymorven/git/agentic-era-networking/AGENTS.md):
+The microservice strictly enforces the governing principles defined in [`AGENTS.md`](https://github.com/gravity-tpu/agentic-era-networking/blob/main/AGENTS.md):
 
 1. **No suppression of errors (INV-1)**:
    All errors (corrupted images, missing model files, hardware PCIe timeouts) are handled deterministically at protocol boundaries and mapped to explicit HTTP status codes (`400`, `404`, `500`, `503`). No empty exception handlers.

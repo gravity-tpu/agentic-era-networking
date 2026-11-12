@@ -25,8 +25,8 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
   const originalEnv = process.env['ALLOWED_GOOGLE_EMAILS'];
 
   const testUser: GoogleUserClaims = {
-    email: 'sekyereandy@gmail.com',
-    name: 'Andy Sekyere',
+    email: 'operator@gravity-tpu.local',
+    name: 'Gravity TPU Operator',
     sub: 'google-sub-123456789',
     issuedAt: Math.floor(Date.now() / 1000),
   };
@@ -44,14 +44,14 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
   });
 
   describe('isEmailAllowed', () => {
-    it('approves operators on the default approved list (sekyereandy, natborks, and encompassdevelopmentinc)', () => {
-      expect(isEmailAllowed('sekyereandy@gmail.com')).toBe(true);
-      expect(isEmailAllowed('SEKYEREANDY@GMAIL.COM')).toBe(true); // Case-insensitive
-      expect(isEmailAllowed('  sekyereandy@gmail.com  ')).toBe(true); // Trims whitespace
-      expect(isEmailAllowed('natborks@gmail.com')).toBe(true);
-      expect(isEmailAllowed('NATBORKS@GMAIL.COM')).toBe(true);
-      expect(isEmailAllowed('encompassdevelopmentinc@gmail.com')).toBe(true);
-      expect(isEmailAllowed('ENCOMPASSDEVELOPMENTINC@GMAIL.COM')).toBe(true);
+    it('approves operators on the default approved list (operator, admin, and audit)', () => {
+      expect(isEmailAllowed('operator@gravity-tpu.local')).toBe(true);
+      expect(isEmailAllowed('OPERATOR@GRAVITY-TPU.LOCAL')).toBe(true); // Case-insensitive
+      expect(isEmailAllowed('  operator@gravity-tpu.local  ')).toBe(true); // Trims whitespace
+      expect(isEmailAllowed('admin@gravity-tpu.local')).toBe(true);
+      expect(isEmailAllowed('ADMIN@GRAVITY-TPU.LOCAL')).toBe(true);
+      expect(isEmailAllowed('audit@gravity-tpu.local')).toBe(true);
+      expect(isEmailAllowed('AUDIT@GRAVITY-TPU.LOCAL')).toBe(true);
     });
 
     it('rejects unauthorized emails by default (Fail-Closed Invariant)', () => {
@@ -80,8 +80,8 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
 
       const verified = verifySessionToken(token);
       expect(verified).not.toBeNull();
-      expect(verified?.email).toBe('sekyereandy@gmail.com');
-      expect(verified?.name).toBe('Andy Sekyere');
+      expect(verified?.email).toBe('operator@gravity-tpu.local');
+      expect(verified?.name).toBe('Gravity TPU Operator');
     });
 
     it('rejects tampered token payload (Fail-Closed)', () => {
@@ -227,7 +227,7 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
 
       const user = requireOperatorAuth(mockReq, mockRes);
       expect(user).not.toBeNull();
-      expect(user?.email).toBe('sekyereandy@gmail.com');
+      expect(user?.email).toBe('operator@gravity-tpu.local');
     });
 
     it('authenticates valid operator session token from remote IP', () => {
@@ -249,7 +249,7 @@ describe('Google SSO Authentication Guard (Council Invariant 3)', () => {
 
       const user = requireOperatorAuth(mockReq, mockRes);
       expect(user).not.toBeNull();
-      expect(user?.email).toBe('sekyereandy@gmail.com');
+      expect(user?.email).toBe('operator@gravity-tpu.local');
     });
   });
 });

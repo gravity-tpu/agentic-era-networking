@@ -121,7 +121,7 @@ The testbed grounds the Zodiac controller and verifier in **physical hardware**:
 ### 2.1 Physical Interconnect & Interface Mapping Matrix
 
 > [!NOTE]
-> **Ground-Truth Device Registry**: Exact static IP allocations, hardware MAC addresses, and persistent device identifiers are managed exclusively in the local persistent context manager ([.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md)) to prevent credential/network leakage in public repositories.
+> **Ground-Truth Device Registry**: Exact static IP allocations, hardware MAC addresses, and persistent device identifiers are managed exclusively in the local persistent context manager ([.agents/devices.local.md](https://github.com/gravity-tpu/agentic-era-networking/blob/main/.agents/devices.local.md)) to prevent credential/network leakage in public repositories.
 
 | Node | Interface / Medium | Hardware Identity | Logical Network | Target / Destination | Role & Invariant |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -170,10 +170,10 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 >
 > If `eth0` were assigned an address on the same subnet as the management network, Linux kernel route selection and Reverse Path Forwarding (rp_filter) would route SSH return packets destined for the operator workstation out through `eth0` into Zodiac Port 1 instead of returning over `wlan0`. Because OpenFlow has no active forwarding rule for unclassified host traffic, this immediately blackholes the SSH session.
 >
-> By strictly partitioning the data plane to an isolated subnet, operator SSH access over `wlan0` remains 100% immune to OpenFlow table flushes, flow timeouts, quarantine rules, and switch reboots. Exact subnet definitions and routes are documented in [.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md).
+> By strictly partitioning the data plane to an isolated subnet, operator SSH access over `wlan0` remains 100% immune to OpenFlow table flushes, flow timeouts, quarantine rules, and switch reboots. Exact subnet definitions and routes are documented in [.agents/devices.local.md](https://github.com/gravity-tpu/agentic-era-networking/blob/main/.agents/devices.local.md).
 
 > [!TIP]
-> **Physical Chassis & Display Subsystem**: For full mechanical assembly, 4-pin I2C OLED pinouts, button jumper wiring, and the 5-screen physical telemetry daemon, see the dedicated [Jetson Orin & Panini Case Architecture](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/README.md).
+> **Physical Chassis & Display Subsystem**: For full mechanical assembly, 4-pin I2C OLED pinouts, button jumper wiring, and the 5-screen physical telemetry daemon, see the dedicated [Jetson Orin & Panini Case Architecture](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/jetson-orin/README.md).
 
 ---
 

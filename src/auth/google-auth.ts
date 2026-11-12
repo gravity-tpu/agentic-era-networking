@@ -23,9 +23,9 @@ export interface GoogleUserClaims {
 
 // Approved baseline operator allowlist
 export const DEFAULT_ALLOWED_EMAILS: readonly string[] = Object.freeze([
-  'sekyereandy@gmail.com',
-  'natborks@gmail.com',
-  'encompassdevelopmentinc@gmail.com',
+  'operator@gravity-tpu.local',
+  'admin@gravity-tpu.local',
+  'audit@gravity-tpu.local',
 ]);
 
 // Static environment flags hoisted to module scope per Jeff Dean Latency Invariant (Eliminates getenv C++ proxy crossing in hot path)
@@ -254,8 +254,8 @@ export function requireOperatorAuth(
   if (isLoopback && !hasGoogleOauth) {
     return {
       sub: 'local-loopback',
-      email: 'sekyereandy@gmail.com',
-      name: 'Andy Sekyere (Local Operator)',
+      email: 'operator@gravity-tpu.local',
+      name: 'Gravity TPU (Local Operator)',
       issuedAt: Math.floor(Date.now() / 1000),
     };
   }
@@ -275,8 +275,8 @@ export function requireOperatorAuth(
 
   return user ?? (isLoopback ? {
     sub: 'local-loopback',
-    email: 'sekyereandy@gmail.com',
-    name: 'Andy Sekyere (Local Operator)',
+    email: 'operator@gravity-tpu.local',
+    name: 'Gravity TPU (Local Operator)',
     issuedAt: Math.floor(Date.now() / 1000),
   } : null);
 }

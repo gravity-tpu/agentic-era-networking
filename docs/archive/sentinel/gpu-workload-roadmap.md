@@ -50,21 +50,21 @@ The `gpu-workload` initiative establishes a structured progression to harness th
 * **Status**: `COMPLETED` (Verified on Silicon)
 * **Goal**: Enable operator and automated stress testing of the Jetson Ampere GPU via `npm run burst -- --target jetson` (or `--target gpu`).
 * **Implementation Details**:
-  * Implemented in [scripts/hardware-burst-daemon.py](file:///Users/andymorven/git/agentic-era-networking/scripts/hardware-burst-daemon.py) with dedicated `jetson_gpu_worker` thread.
+  * Implemented in [scripts/hardware-burst-daemon.py](https://github.com/gravity-tpu/agentic-era-networking/blob/main/scripts/hardware-burst-daemon.py) with dedicated `jetson_gpu_worker` thread.
   * Successfully validated in a live 10-minute multi-accelerator burst on the Jetson Orin Nano Super.
   * Generates continuous, controlled CUDA matrix operations with physical thermal and load tracking.
 * **Telemetry & Provenance**:
   * Live load verified via sysfs (`/sys/devices/platform/bus@0/17000000.gpu/load`).
-  * Monitored power consumption and thermals in [src/sdn/hardware-probe.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/hardware-probe.ts).
+  * Monitored power consumption and thermals in [src/sdn/hardware-probe.ts](https://github.com/gravity-tpu/agentic-era-networking/blob/main/src/sdn/hardware-probe.ts).
 
 ---
 
 ### Item 2: `gpu-workload-2` — Standalone Full-Stack Deep Traffic Anomaly Autoencoder & Fail-Closed Quarantine
 
 * **Status**: `COMPLETED` (Verified on Live Wire & Silicon)
-* **Goal**: Deploy an independent, end-to-end GPU anomaly detection and quarantine pipeline on the Jetson. Originally described as "Stage 2 of the Split-Inference pipeline" (Coral Stage 1 → GPU Stage 2), the deployed implementation runs **standalone** — the GPU captures its own packet stream via `hardware-burst-daemon.py` and does not consume Coral output. The Coral (`zodiac-coral.service`) operates as a parallel independent inference path on the mirror tap. See [docs/design/physical-sdn-edge-tpu.md Role 1](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md#role-1-real-time-flow-anomaly-detection--fail-closed-quarantine) for the deployed topology and the Phase 2 staged-pipeline target.
+* **Goal**: Deploy an independent, end-to-end GPU anomaly detection and quarantine pipeline on the Jetson. Originally described as "Stage 2 of the Split-Inference pipeline" (Coral Stage 1 → GPU Stage 2), the deployed implementation runs **standalone** — the GPU captures its own packet stream via `hardware-burst-daemon.py` and does not consume Coral output. The Coral (`zodiac-coral.service`) operates as a parallel independent inference path on the mirror tap. See [docs/design/physical-sdn-edge-tpu.md Role 1](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/physical-sdn-edge-tpu.md#role-1-real-time-flow-anomaly-detection--fail-closed-quarantine) for the deployed topology and the Phase 2 staged-pipeline target.
 * **Architecture & Verification**:
-  1. **Native CUDA Kernel**: [src/gpu/gpu_anomaly_kernel.cu](file:///Users/andymorven/git/agentic-era-networking/src/gpu/gpu_anomaly_kernel.cu) compiled for Ampere (`sm_87`) executing 1D-CNN autoencoder reconstruction with parallel CUDA warp reductions directly on the 1024 CUDA cores.
+  1. **Native CUDA Kernel**: [src/gpu/gpu_anomaly_kernel.cu](https://github.com/gravity-tpu/agentic-era-networking/blob/main/src/gpu/gpu_anomaly_kernel.cu) compiled for Ampere (`sm_87`) executing 1D-CNN autoencoder reconstruction with parallel CUDA warp reductions directly on the 1024 CUDA cores.
   2. **Sub-Millisecond Inference**: Achieved **0.271 ms** average inference latency (Dean latency budget: < 1.0 ms) across 174 live inferences.
   3. **Adaptive Threshold**: `AdaptiveThresholdController` dynamically tracks baseline variance via EMA and adapts $\tau$ to prevent route flap storms (Council Invariant 5).
   4. **Live Wire Anomaly Quarantine**: Verified on physical interface `enP8p1s0` with coordinated microburst exploit injection: 24 anomalies detected and 24 OpenFlow 1.3 `FLOW_MOD` (Priority 65535, action `DROP`) rules successfully installed on the Zodiac FX hardware switch via `POST /api/sdn/quarantine`.

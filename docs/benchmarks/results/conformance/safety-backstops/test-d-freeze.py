@@ -5,10 +5,10 @@ FREEZE the bridge with SIGSTOP (its OpenFlow connection stays up, but its restor
 for 70 s, and capture at O2 with epoch timestamps. While the rule exists the datagrams are copied to the tap (seen at O2); once it is gone the
 table-miss drops them. The last second a datagram is seen at O2 is when the rule was removed. About 40 s after the install = the hard timeout;
 earlier = something else (for example the switch flushing its table when the controller stops answering). The bridge is resumed afterwards."""
-import json, subprocess, sys, time, urllib.request
+import json, os, subprocess, sys, time, urllib.request
 
 BRIDGE = 'http://127.0.0.1:13003'
-TOKEN = open('/Users/andymorven/.zodiac-experiment-token').read().strip()
+TOKEN = open(os.path.expanduser('~/.zodiac-experiment-token')).read().strip()
 O2 = 'enx9c69d39dd0a6'
 TAG = 41999
 SECONDS = 70

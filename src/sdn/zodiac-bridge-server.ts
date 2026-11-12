@@ -1815,8 +1815,8 @@ export class ZodiacBridgeServer {
       res.end(JSON.stringify({
         authenticated: true,
         user: {
-          email: 'sekyereandy@gmail.com',
-          name: 'Andy Sekyere (Local Operator)',
+          email: 'operator@gravity-tpu.local',
+          name: 'Gravity TPU (Local Operator)',
           picture: '',
         },
       }));

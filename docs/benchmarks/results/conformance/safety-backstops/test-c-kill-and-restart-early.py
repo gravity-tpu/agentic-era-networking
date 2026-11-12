@@ -3,10 +3,10 @@
 experiment endpoint with a 10 s limit (so every experimental rule carries hard_timeout 40 s), kill the bridge so its own restore cannot run,
 wait past the hard timeout, restart the bridge and read its startup readback: it re-adds table-miss + the six rules WITHOUT a wipe, so a total of
 7 entries means the marker expired on its own and 8 means it did not."""
-import json, subprocess, sys, time, urllib.request
+import json, os, subprocess, sys, time, urllib.request
 
 BRIDGE = 'http://127.0.0.1:13003'
-TOKEN = open('/Users/andymorven/.zodiac-experiment-token').read().strip()
+TOKEN = open(os.path.expanduser('~/.zodiac-experiment-token')).read().strip()
 
 
 def post(path, body):
@@ -32,7 +32,7 @@ print('killing the bridge pid', pid, 'at +%.0f s after the install (its own 10 s
 ssh(f'kill {pid}')
 time.sleep(max(0, 20 - (time.time() - t_install)))  # BEFORE the 40 s switch-side hard timeout
 print('restarting the bridge at +%.0f s after the install' % (time.time() - t_install), flush=True)
-with open('/Users/andymorven/.zodiac-experiment-token') as tf:
+with open(os.path.expanduser('~/.zodiac-experiment-token')) as tf:
     ssh('read -r T; cd ~/agentic-era-networking && set -a && . /etc/zodiac/zodiac-bridge.env && set +a && export NODE_ENV=production WORKSTATION_AGENT_LAN_URL=http://10.0.0.119:11435 ZODIAC_EXPERIMENT_ENDPOINTS=1 ZODIAC_EXPERIMENT_TOKEN="$T" && unset T && (setsid nohup /usr/bin/env node --max-old-space-size=128 dist/sdn/zodiac-bridge-server.js serve 3003 >> /tmp/zodiac-bridge-manual.log 2>&1 < /dev/null &)', stdin=tf)
 def entries():
     out = ssh('curl -s -m 10 localhost:3003/api/zodiac/flows/probe | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get(\'entryCount\'), d.get(\'finding\'))"').strip()

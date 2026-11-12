@@ -3,8 +3,8 @@
 **Custodian:** network engineering review skill (a review aid, not a certified review)  
 **Repository:** `gravity-tpu/agentic-era-networking`  
 **Governing Invariants:** Council Invariants 1–6, `NET-001` through `NET-009`  
-**Corresponding Physical Artifact:** [`docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json`](file:///Users/andymorven/git/agentic-era-networking/docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json)  
-**Companion Design Specification:** [`docs/design/zodiac-fx-dataplane-benchmark.md`](file:///Users/andymorven/git/agentic-era-networking/docs/design/zodiac-fx-dataplane-benchmark.md)  
+**Corresponding Physical Artifact:** [`docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json`](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json)  
+**Companion Design Specification:** [`docs/design/zodiac-fx-dataplane-benchmark.md`](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/zodiac-fx-dataplane-benchmark.md)  
 **Execution Timestamp:** `2026-10-03T23:26:49.149Z` (Monotonic span: `433,627,406,766 ns` / ~7.23 minutes)
 
 ---
@@ -187,6 +187,6 @@ This document and its companion artifact represent verified physical telemetry g
 - **No Synthetic Data**: Every throughput, PPS, and loss value originates from physical sysfs registers, live iperf3 execution, and Zodiac FX serial `show ports` MIB counters.
 - **Plan check (correction 2026-10-09)**: Every installed flow plan passed `SymbolicRouteVerifier.verifyLoopFree()` before touching switch silicon. That check ran over fixed hop lists and could not fail, so it did not prove loop-freedom; it was removed and replaced by `verifyPlanAdmissible` (table budget, hairpin, DROP semantics). The measurements in this report do not depend on it.
 - **Cryptographic Ground Truth**: The raw telemetry JSON artifact is archived at:
-  [`docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json`](file:///Users/andymorven/git/agentic-era-networking/docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json)  
+  [`docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json`](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/benchmarks/results/dataplane-2026-10-03T23-26-49-149Z.json)  
   - SHA-256 Digest: `dbd4babd04fdd766`
   - Git Commit: [`177338c`](https://github.com/gravity-tpu/agentic-era-networking/commit/177338c)

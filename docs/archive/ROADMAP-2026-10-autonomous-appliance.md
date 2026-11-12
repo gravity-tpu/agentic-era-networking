@@ -107,7 +107,7 @@ Governed by the **Technical Staff Council Invariants**:
 ```
 
 > [!NOTE]
-> Detailed private IP allocations, hardware MAC addresses, and physical port assignments are documented in the local persistent context manager ([.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md)).
+> Detailed private IP allocations, hardware MAC addresses, and physical port assignments are documented in the local persistent context manager ([.agents/devices.local.md](https://github.com/gravity-tpu/agentic-era-networking/blob/main/.agents/devices.local.md)).
 
 **Role separation:**
 
@@ -303,7 +303,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 
 - [x] **Milestone 0.5A: Google SSO Authentication Guard**:
   - OpenID Connect / OAuth 2.0 serverless auth flow (`/api/auth/login`, `/api/auth/callback`, `/api/auth/me`, `/api/auth/logout`).
-  - Strict operator allowlist: `sekyereandy@gmail.com`, `natborks@gmail.com` with `ALLOWED_GOOGLE_EMAILS` wildcard and domain support.
+  - Strict operator allowlist: `operator@gravity-tpu.local`, `admin@gravity-tpu.local` with `ALLOWED_GOOGLE_EMAILS` wildcard and domain support.
   - Fail-Closed isolation: session cookie defaults to `; Secure` flag, constant-time HMAC-SHA256 session token verification.
   - Zero-overhead hoisted environment constants (`IS_VERCEL`, `IS_PRODUCTION`) per Jeff Dean Latency Invariant.
   - Dual authentication boundary: Machine-to-machine hardware relay via `X-Zodiac-Bridge-Secret` + Operator SSO for dashboard operators.
@@ -317,7 +317,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Automated 30-day data retention pruning via daily scheduled cron (`/api/cron/prune-telemetry`).
   - Sub-millisecond monotonic clock calculation preserving microsecond precision (`performance.now() * 1000000`).
   - UI historical time range selector with explicit canvas watermark on database degradation/unreachable state (Anti-Shortcut / Anti-Simulation Law).
-  - Multi-tier storage architecture documented in [docs/design/physical-sdn-edge-tpu.md (Section 6)](file:///Users/andymorven/git/agentic-era-networking/docs/design/physical-sdn-edge-tpu.md#6-telemetry-ingestion-multi-tier-storage--query-routing-architecture): Local Jetson RAM (<10ms) vs. Cloud Vercel RAM (<20ms) vs. Neon Postgres historical downsampling (<150ms).
+  - Multi-tier storage architecture documented in [docs/design/physical-sdn-edge-tpu.md (Section 6)](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/physical-sdn-edge-tpu.md#6-telemetry-ingestion-multi-tier-storage--query-routing-architecture): Local Jetson RAM (<10ms) vs. Cloud Vercel RAM (<20ms) vs. Neon Postgres historical downsampling (<150ms).
 - [x] **Milestone 0.5C: Content-Addressable Asset Pipeline & Edge Caching**:
   - Automated content-addressed asset build script (`scripts/build-assets.ts`) generating SHA-256 asset hashes (`zodiac.[hash].css`, `zodiac-app.[hash].js`).
   - Immutable edge cache headers (`Cache-Control: public, max-age=31536000, immutable`) on Vercel and local bridge server.
@@ -437,16 +437,16 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
   - Filter backend: `iptables-legacy` (coexisting correctly with Docker & Tailscale kernel chains).
   - Config file: `/etc/sysctl.d/99-tailscale.conf` (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`) — required for Tailscale exit-node routing. SDN interface leakage is blocked per-interface: `net.ipv4.conf.enP8p1s0.forwarding = 0`, `net.ipv4.conf.l4tbr0.forwarding = 0` in `/etc/sysctl.d/99-zodiac-sdn.conf`, plus nftables forward-chain DROP on SDN bridge interfaces.
 - [x] **Milestone 0.11B: Tailscale SSH ACL (Hardened Remote Access)**:
-  - Strict Tailscale ACL enforces `zodiac` user for all SSH sessions to Jetson (rejects username `andymorven`).
+  - Strict Tailscale ACL enforces `zodiac` user for all SSH sessions to Jetson (rejects personal workstation usernames).
   - Remote command: `ssh zodiac@jetson-orin` — globally routable, WireGuard-encrypted, zero knowledge of lab ISP IP required.
 - [x] **Milestone 0.11C: 4-Tier Management Hierarchy Formalized**:
   - Tier 1 (USB-C Tether, Metric 50) → Tier 2 (Tailscale WireGuard mesh) → Tier 3 (Wi-Fi, Metric 200) → Tier 4 (Hardware Serial CDC-ACM).
   - Tailscale mesh makes Tier 2 globally routable; eliminates dependency on lab DHCP/IP for remote work sessions and CI/CD deployments.
-  - Documented in [.agents/devices.local.md](file:///Users/andymorven/git/agentic-era-networking/.agents/devices.local.md) with full mesh peer table.
+  - Documented in [.agents/devices.local.md](https://github.com/gravity-tpu/agentic-era-networking/blob/main/.agents/devices.local.md) with full mesh peer table.
 
 ### Phase 0.12: Jetson Ampere GPU — Stage-2 Anomaly Autoencoder & Live Wire Quarantine
 
-*Status: Complete (Tracked via [Jetson Orin GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*
+*Status: Complete (Tracked via [Jetson Orin GPU Workload Mini-Roadmap](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/gpu-workload-roadmap.md))*
 
 - [x] **Milestone 0.12A (`gpu-workload-1`): GPU Neural Stress & Verification Burst Worker**:
   - `jetson_gpu_worker` thread in `hardware-burst-daemon.py` driving CUDA matrix operations on 1024 Ampere CUDA cores.
@@ -496,7 +496,7 @@ To eliminate routing ambiguity, split-brain conditions, and non-deterministic in
 
 *Status: Milestone 2A substantially complete via Phase 0.12 — Milestone 2B remaining*
 
-- [x] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection** *(Substantially complete — see Phase 0.12 & [GPU Workload Mini-Roadmap](file:///Users/andymorven/git/agentic-era-networking/docs/design/gpu-workload-roadmap.md))*:
+- [x] **Milestone 2A: Coral + Jetson Split-Inference Line-Rate Anomaly Detection** *(Substantially complete — see Phase 0.12 & [GPU Workload Mini-Roadmap](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/gpu-workload-roadmap.md))*:
   - [x] Google Coral Edge TPU: live Port 3 tap frames ingested and executed on-silicon at ~450 inf/s peak across dual TPUs (Phase 0.8/0.13). **Caveat**: the loaded model is the stock MobileNet V2 and `coral-inference-daemon.py` does not read the output tensor, so this verifies accelerator throughput/latency only; no trained packet classifier exists yet (see Milestone 2C).
   - [x] NVIDIA Jetson Ampere GPU: 1D-CNN deep anomaly autoencoder at **0.271 ms** avg inference on `sm_87` — operational (Phase 0.12).
   - [x] Fail-closed FlowMod quarantine (Priority 65535 DROP) — 24 live anomalies detected and quarantined (Phase 0.12).

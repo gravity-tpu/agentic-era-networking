@@ -22,7 +22,7 @@ Establish secure, deterministic out-of-band operator access from the local works
 1. **Subnet & Gateway Isolation:**
    - The lab LAN and operator workstations operate on `10.0.0.0/24`. The upstream ISP gateway (`10.0.0.1`) does not route `192.168.0.0/24`.
 2. **SDN Policy Fail-Closed Isolation (Invariant 3):**
-   - The Zodiac OpenFlow Port 1 Isolation Policy ([port1-isolation.ts](file:///Users/andymorven/git/agentic-era-networking/src/sdn/port1-isolation.ts)) explicitly quarantines traffic destined to `192.168.0.0/24` entering Zodiac Port 1 (`in_port=1, dst 192.168.0.x → [P3]` mirror tap only). Management frames cannot cross to Zodiac Port 2.
+   - The Zodiac OpenFlow Port 1 Isolation Policy ([port1-isolation.ts](https://github.com/gravity-tpu/agentic-era-networking/blob/main/src/sdn/port1-isolation.ts)) explicitly quarantines traffic destined to `192.168.0.0/24` entering Zodiac Port 1 (`in_port=1, dst 192.168.0.x → [P3]` mirror tap only). Management frames cannot cross to Zodiac Port 2.
 3. **Dual-Homed Interface Ambiguity:**
    - Both switches reside in the same `192.168.0.0/24` logical subnet, but connect to two distinct physical interfaces on the pivot host: `eth0` (isolated workload segment) and `wlan0` (bridged home extender segment).
    - Assigning naive `/24` aliases to both interfaces causes routing table conflicts. Explicit `/32` host routes with `src` bindings are required.
@@ -52,7 +52,7 @@ npm run switch:service:uninstall
 ```
 
 ### Architecture of Permanent Persistence (Invariant 3 Compliant)
-- **macOS (`com.zodiac.netgear-tunnels` LaunchAgent):** Runs in the operator user domain via `~/Library/LaunchAgents/com.zodiac.netgear-tunnels.plist`. Supervised by [deploy/mac/zodiac-netgear-tunnel-supervisor.sh](file:///Users/andymorven/git/agentic-era-networking/deploy/mac/zodiac-netgear-tunnel-supervisor.sh). Multiplexes both ports `:8888` and `:8889` over resilient SSH with TCP keepalives (`ServerAliveInterval 15`). Automatically reconnects on login, sleep/wake, or network reconnects.
+- **macOS (`com.zodiac.netgear-tunnels` LaunchAgent):** Runs in the operator user domain via `~/Library/LaunchAgents/com.zodiac.netgear-tunnels.plist`. Supervised by [deploy/mac/zodiac-netgear-tunnel-supervisor.sh](https://github.com/gravity-tpu/agentic-era-networking/blob/main/deploy/mac/zodiac-netgear-tunnel-supervisor.sh). Multiplexes both ports `:8888` and `:8889` over resilient SSH with TCP keepalives (`ServerAliveInterval 15`). Automatically reconnects on login, sleep/wake, or network reconnects.
 - **Pivot Host Zero Standing Routes (Fail-Closed Isolation):** To uphold Invariant 3, the Raspberry Pi 5 workload host boots with zero permanent routes or systemd units to `192.168.0.0/24`. The supervisor script executes an inline trapped remote session (`trap cleanup EXIT INT TERM HUP`). Routes and aliases are only bound for the lifetime of the authenticated SSH connection; if the Mac disconnects, sleeps, or reboots, the remote trap immediately deletes the routes and aliases on the pivot.
 
 ---

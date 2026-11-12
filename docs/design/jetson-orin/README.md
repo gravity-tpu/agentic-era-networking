@@ -230,7 +230,7 @@ The `docs/design/jetson-orin/` folder contains all source files required to buil
 
 | File | Purpose |
 | :--- | :--- |
-| [README.md](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/README.md) | Complete hardware wiring, jumper configuration, and telemetry architecture |
-| [oled_sysinfo.py](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/oled_sysinfo.py) | Standalone 6-page OLED telemetry rotation daemon |
-| [oled.service](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/oled.service) | Systemd unit file for autostart and supervision |
-| [install.sh](file:///Users/andymorven/git/agentic-era-networking/docs/design/jetson-orin/install.sh) | Automated idempotent deployment script |
+| [README.md](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/jetson-orin/README.md) | Complete hardware wiring, jumper configuration, and telemetry architecture |
+| [oled_sysinfo.py](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/jetson-orin/oled_sysinfo.py) | Standalone 6-page OLED telemetry rotation daemon |
+| [oled.service](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/jetson-orin/oled.service) | Systemd unit file for autostart and supervision |
+| [install.sh](https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/jetson-orin/install.sh) | Automated idempotent deployment script |

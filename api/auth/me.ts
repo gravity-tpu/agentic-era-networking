@@ -51,7 +51,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       authenticated: true,
       isLocalDev: true,
       user: {
-        email: 'sekyereandy@gmail.com',
+        email: 'operator@gravity-tpu.local',
         name: 'Local Operator (Dev Mode)',
         picture: null,
       },
