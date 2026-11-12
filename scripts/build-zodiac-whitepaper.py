@@ -614,8 +614,9 @@ tr:nth-child(even) td {{
         Gravity TPU Infrastructure &amp; Agentic Networking Group<br>
         <span style="font-weight:400;font-size:9.2pt;color:#5f6368;">Hardware Verification, Systems Telemetry &amp; Adversarial Evaluation</span>
     </div>
-    <div class="cover-meta" style="position:absolute;bottom:42pt;left:54pt;width:370pt;border-top:0.75pt solid #dadce0;padding-top:6pt;">
-        DUT: Northbound Networks Zodiac FX (120 MHz, FW 0.86) · Controller: NVIDIA Jetson Orin Nano Super
+    <div class="cover-meta" style="position:absolute;bottom:42pt;left:54pt;width:390pt;border-top:0.75pt solid #dadce0;padding-top:6pt;">
+        DUT: Northbound Networks Zodiac FX (120 MHz, FW 0.86) · Controller: NVIDIA Jetson Orin Nano Super<br>
+        <span style="font-size:8.2pt;color:#5f6368;">DOI: <a href="https://doi.org/10.5281/zenodo.24149084" style="color:#1967d2;text-decoration:none;">10.5281/zenodo.24149084</a> · Repository: <a href="https://github.com/gravity-tpu/agentic-era-networking" style="color:#1967d2;text-decoration:none;">github.com/gravity-tpu/agentic-era-networking</a></span>
     </div>
     <div class="cover-date" style="position:absolute;bottom:42pt;right:54pt;text-align:right;">
         November 2026<br><span style="font-size:8.5pt;font-weight:500;color:#5f6368;">v3.0 Close-Out</span>
@@ -1701,7 +1702,7 @@ def stamp_headers_and_footers(raw_pdf: Path, final_pdf: Path) -> int:
             width=0.5,
         )
         # Running footer: repo provenance on left, page number on right
-        footer_left = "gravity-tpu/agentic-era-networking · v3.0 (November 2026)"
+        footer_left = "gravity-tpu/agentic-era-networking · DOI: 10.5281/zenodo.24149084 · v3.0 (November 2026)"
         page.insert_text(
             fitz.Point(54, 792 - 30),
             footer_left,
