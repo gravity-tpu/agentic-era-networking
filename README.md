@@ -1,11 +1,13 @@
 # Zodiac
 
+[![DOI](https://zenodo.org/badge/1367749673.svg)](https://doi.org/10.5281/zenodo.24149084)
+
 > **A real-hardware testbed and verifier for agent-proposed SDN policy.**
 > Measure what a cheap OpenFlow switch can actually do, prove proposed rules are safe against that model, and test them against a live adversary.
 
 Software-driven networking, approached as a software engineering problem: network policy is code, so it should be typed, tested, verified before it ships, and measured against real hardware instead of assumed.
 
-Hosted at: [github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking)
+Hosted at: [github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking) · Technical Whitepaper (v3.0): [docs/design/zodiac-whitepaper.pdf](docs/design/zodiac-whitepaper.pdf) · Permanent Archive: [doi.org/10.5281/zenodo.24149084](https://doi.org/10.5281/zenodo.24149084)
 
 ---
 

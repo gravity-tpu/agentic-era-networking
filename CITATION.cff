@@ -6,6 +6,7 @@ authors:
   - name: "Gravity TPU Infrastructure & Agentic Networking Group"
 repository-code: "https://github.com/gravity-tpu/agentic-era-networking"
 url: "https://github.com/gravity-tpu/agentic-era-networking"
+doi: "10.5281/zenodo.24149084"
 version: "3.0.0"
 date-released: "2026-11-11"
 license: MIT
@@ -27,5 +28,6 @@ preferred-citation:
   year: 2026
   month: 11
   version: "3.0.0"
-  url: "https://github.com/gravity-tpu/agentic-era-networking/blob/main/docs/design/zodiac-whitepaper.pdf"
+  doi: "10.5281/zenodo.24149084"
+  url: "https://doi.org/10.5281/zenodo.24149084"
 
