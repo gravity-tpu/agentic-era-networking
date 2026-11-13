@@ -9,6 +9,8 @@ Software-driven networking, approached as a software engineering problem: networ
 
 Hosted at: [github.com/gravity-tpu/agentic-era-networking](https://github.com/gravity-tpu/agentic-era-networking) · Technical Whitepaper (v3.0): [docs/design/zodiac-whitepaper.pdf](docs/design/zodiac-whitepaper.pdf) · Permanent Archive: [doi.org/10.5281/zenodo.24149084](https://doi.org/10.5281/zenodo.24149084)
 
+> **Project Status — Research Concluded (`v3.0.0`, November 2026):** All experimental tracks ([`docs/ROADMAP.md`](docs/ROADMAP.md): static verifier `A1`–`A11`, hardware cost model, 611-check wire conformance probe, live adversarial suite, and 2,920-trial LLM evaluation) have met their exit criteria. This repository is maintained as a permanent, reproducible artifact archive supporting the [v3.0 Technical Whitepaper](docs/design/zodiac-whitepaper.pdf) ([`10.5281/zenodo.24149084`](https://doi.org/10.5281/zenodo.24149084)).
+
 ---
 
 ## 1. Why this exists
