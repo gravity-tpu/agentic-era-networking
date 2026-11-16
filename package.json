@@ -92,12 +92,12 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.2.0",
+    "@neondatabase/serverless": "^1.2.1",
     "@prisma/adapter-neon": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.1.0",
-    "ws": "^8.22.2"
+    "ws": "^8.23.0"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2",
